@@ -147,6 +147,7 @@ assert.equal(diagnostics.profileDiagnostics.length, 2);
 assert.equal(diagnostics.profileDiagnostics.find((entry) => entry.profileId === "mm-tight").metrics.fillCount.avg, 1);
 assert.equal(diagnostics.profileDiagnostics.find((entry) => entry.profileId === "npc-toxic").metrics.submittedCommands.avg, 6);
 assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "aggression").observedValueCount, 2);
+assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "aggression").byProfile.find((entry) => entry.profileId === "npc-toxic").values[0].value, "0.95");
 assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "quoteSpreadBps").values[0].metrics.medianQuotedSpreadBps.avg, 20);
 assert.equal(diagnostics.caveats.includes("low-run-count"), true);
 
@@ -155,5 +156,6 @@ assert.equal(summary.schemaVersion, "reef.arena.actorDiagnosticsCliSummary.v1");
 assert.equal(summary.outPath, "/tmp/actor-diagnostics.json");
 assert.equal(summary.profiles.find((entry) => entry.profileId === "npc-toxic").fillCountAvg, 2);
 assert.equal(summary.knobs.find((entry) => entry.knob === "aggression").observedValueCount, 2);
+assert.equal(summary.knobs.find((entry) => entry.knob === "aggression").byProfile.find((entry) => entry.profileId === "npc-toxic").values[0].value, "0.95");
 
 console.log("arena actor diagnostics checks passed");

@@ -252,6 +252,8 @@ record what each actor/persona knob appears to influence. It emits:
 - knob-level metric groups for aggression, order rate, spread crossing,
   cancel discipline, quote size, quote spread, inventory skew, panic threshold,
   latency jitter, and risk discipline
+- per-profile knob groups so shared knob names such as `aggression` can be
+  read for a specific persona without mixing NPC, MM, and competitor effects
 - instrumentation gaps such as `no-fills-observed`, `no-pnl-observed`, and
   `no-pnl-per-executed-notional`
 - caveats when run count or parameter variation is too low for confident
@@ -260,6 +262,54 @@ record what each actor/persona knob appears to influence. It emits:
 The actor diagnostics report is observational. Treat it as a map of which
 knobs are worth varying in matched scenario matrices, not as causal proof from
 a single run.
+
+Use `scripts/dev/run-arena-actor-calibration-matrix.mjs` when a knob needs a
+matched run set. It generates temporary mode/catalog overlays, varies one
+actor-profile knob at a time, runs compact arena reports, and writes
+`actor-diagnostics.json` beside the matrix manifest. Initial behavior-backed
+groups are:
+
+- `mm-quote-spread`
+- `mm-quote-size`
+- `npc-aggression`
+- `npc-spread-cross`
+- `npc-order-rate`
+
+Example live slice:
+
+```sh
+bun scripts/dev/run-arena-actor-calibration-matrix.mjs \
+  --out-dir=/tmp/reef-arena-actor-calibration-live \
+  --submit-mode=live \
+  --venue-url=http://127.0.0.1:8080 \
+  --arena-admin-url=http://127.0.0.1:8080 \
+  --seed-reference \
+  --duration-seconds=30 \
+  --group=npc-aggression
+```
+
+Initial local live calibration notes from 15-second matched slices:
+
+- `npc-bad-aggressive-retail.aggression` at `0.35`, `0.65`, and `0.95`
+  produced the same result: average `10` submitted commands, `10` fills,
+  `1.0` fill ratio, `$2400` executed notional, `-10` PnL bps, and `-2.4`
+  total PnL. In the current mode this knob is saturated and should not drive
+  difficulty scoring until paired with wider markets or lower spread-cross
+  settings.
+- `npc-bad-aggressive-retail.maxSpreadCrossBps` at `50`, `150`, and `250`
+  also produced the same result: average `10` fills and `1.0` fill ratio. The
+  current venue conditions are already crossable at `50` bps.
+- `npc-bad-aggressive-retail.orderRate` is behavior-backed: `low` produced
+  average `3` submitted commands and fills, `medium` produced `5`, and `high`
+  produced `10`, with executed notional scaling from about `$719` to `$1199`
+  to `$2400`.
+- `mm-tight-bluechip.quoteSpreadBps` has useful liquidity signal: `10` bps
+  produced market maker fills and positive average MM PnL, while `20` and `40`
+  bps produced no MM fills in the slice. Quote-quality spread metrics are still
+  market-level, so per-provider quote attribution remains a follow-up.
+- `mm-tight-bluechip.quoteSize` is behavior-backed for displayed depth:
+  average submitted quantity scaled roughly `23.3`, `46.7`, `116.7` for
+  `5`, `10`, `25` quote size values. It did not produce fills in that slice.
 
 Why partition plus small multiplier:
 

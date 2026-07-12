@@ -7,7 +7,7 @@ const DEFAULT_PROFILE_CATALOG = "packages/scenario-definitions/arena/actor-profi
 const KNOB_METRIC_MAP = {
   aggression: {
     expectedEffect: "Higher values should generally increase participation, spread crossing, fill pressure, and inventory/PnL variance.",
-    metrics: ["submittedCommands", "submittedLimitOrders", "grossSubmittedNotional", "fillCount", "fillRatio", "marketInteractionScore", "inventoryExposureRatio"],
+    metrics: ["submittedCommands", "submittedLimitOrders", "grossSubmittedNotional", "fillCount", "fillRatio", "grossExecutedNotional", "pnlPerExecutedNotionalBps", "totalPnl", "marketInteractionScore", "inventoryExposureRatio"],
   },
   cancelDiscipline: {
     expectedEffect: "Lower discipline should increase cancel/replace pressure, invalid intent risk, and venue stress.",
@@ -27,7 +27,7 @@ const KNOB_METRIC_MAP = {
   },
   orderRate: {
     expectedEffect: "Higher rates should increase commands, submitted notional, market interaction score, and burst pressure.",
-    metrics: ["submittedCommands", "submittedLimitOrders", "grossSubmittedNotional", "maxVenueCommandsPerTick", "marketInteractionScore"],
+    metrics: ["submittedCommands", "submittedLimitOrders", "grossSubmittedNotional", "fillCount", "fillRatio", "grossExecutedNotional", "maxVenueCommandsPerTick", "marketInteractionScore"],
   },
   panicThreshold: {
     expectedEffect: "Lower thresholds should increase bursty taker behavior during stress regimes.",
@@ -122,6 +122,16 @@ export function actorDiagnosticsCliSummary(report, outPath = "") {
         value: value.value,
         observationCount: value.observationCount,
         profileIds: value.profileIds,
+      })),
+      byProfile: (knob.byProfile ?? []).map((profile) => ({
+        profileId: profile.profileId,
+        actorClass: profile.actorClass,
+        observedValueCount: profile.observedValueCount,
+        inferenceQuality: profile.inferenceQuality,
+        values: (profile.values ?? []).map((value) => ({
+          value: value.value,
+          observationCount: value.observationCount,
+        })),
       })),
     })),
     caveats: report.caveats ?? [],
@@ -259,7 +269,30 @@ function summarizeKnobs(observations) {
         metricsToWatch: spec.metrics,
         observedValueCount: values.length,
         values,
+        byProfile: summarizeKnobByProfile(withKnob, knob, spec.metrics),
         inferenceQuality: values.length < 2 ? "insufficient-variation" : "directional-diagnostic-only",
+      };
+    });
+}
+
+function summarizeKnobByProfile(observations, knob, metrics) {
+  return Array.from(groupBy(observations, (entry) => entry.profileId).entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([profileId, profileEntries]) => {
+      const valueGroups = groupBy(profileEntries, (entry) => String(entry.params[knob]));
+      return {
+        profileId,
+        actorClass: profileEntries[0]?.actorClass ?? "",
+        scoreEffect: profileEntries[0]?.scoreEffect ?? "",
+        observedValueCount: valueGroups.size,
+        values: Array.from(valueGroups.entries())
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([value, entries]) => ({
+            value,
+            observationCount: entries.length,
+            metrics: metricStats(entries, metrics),
+          })),
+        inferenceQuality: valueGroups.size < 2 ? "insufficient-variation" : "directional-diagnostic-only",
       };
     });
 }
