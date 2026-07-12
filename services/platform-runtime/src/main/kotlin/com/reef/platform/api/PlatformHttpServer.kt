@@ -1544,6 +1544,10 @@ class PlatformHttpServer(
         return localDevAdminAuthBypass && isLoopback(exchange.remoteAddress.address)
     }
 
+    private fun allowLocalDevAdminAuthBypass(request: PlatformHotPathRequest): Boolean {
+        return localDevAdminAuthBypass && isLoopback(request.remoteAddress)
+    }
+
     private fun writeLocalDevAdminSession(exchange: HttpExchange) {
         writeJson(
             exchange,
@@ -1562,7 +1566,11 @@ class PlatformHttpServer(
     }
 
     private fun adminSessionCookie(exchange: HttpExchange): String {
-        return headerValue(exchange, "Cookie")
+        return adminSessionCookie(exchange.requestHeaders)
+    }
+
+    private fun adminSessionCookie(headers: Headers): String {
+        return headerValue(headers, "Cookie")
             .split(";")
             .asSequence()
             .map { it.trim() }
@@ -1621,6 +1629,24 @@ class PlatformHttpServer(
                 )
                 ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
             writeHotPathResponse(exchange, response)
+        }
+    }
+
+    private fun handleAdminGatewayRequest(request: PlatformHotPathRequest): PlatformHotPathResponse {
+        val route = adminGatewayRouteFor(request.path, request.method)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
+        val principal = authorizeAdminGateway(request, route)
+            ?: return unauthorizedAdminGatewayResponse(route)
+        val body = if (request.method in setOf("POST", "PUT", "PATCH")) request.body else ""
+        return withAdminRequestPrincipal(principal) {
+            settlementAdminGatewayResponse(request.method, route.internalPath, body)
+                ?: diagnosticRoutes.handle(
+                    method = request.method,
+                    path = route.internalPath,
+                    query = request.query,
+                    body = body
+                )
+                ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
         }
     }
 
@@ -1697,18 +1723,88 @@ class PlatformHttpServer(
         return null
     }
 
+    private fun authorizeAdminGateway(request: PlatformHotPathRequest, route: AdminGatewayRoute): AdminRequestPrincipal? {
+        if (allowLocalDevAdminAuthBypass(request)) {
+            return adminPrincipalForActor(request.headers, localDevAdminActorId)
+        }
+
+        val auth = adminAuthService
+        if (auth != null) {
+            val sessionToken = adminSessionCookie(request.headers)
+            if (sessionToken.isNotBlank()) {
+                try {
+                    val session = auth.authenticateSession(sessionToken)
+                    return adminPrincipalForActor(request.headers, session.reefUserId)
+                } catch (_: IllegalArgumentException) {
+                    return null
+                }
+            }
+            bearerToken(request.headers)?.let { token ->
+                route.serviceTokenFamilies.forEach { family ->
+                    try {
+                        val serviceToken = auth.authenticateServiceToken(token, family)
+                        return adminPrincipalForActor(request.headers, serviceToken.subjectActorId)
+                    } catch (_: AuthorizationException) {
+                        // Unknown DB-issued service tokens may still be valid
+                        // static gateway fallback tokens configured in env.
+                    } catch (_: IllegalArgumentException) {
+                        // Try the next permitted service-token family for this route.
+                    }
+                }
+            }
+        }
+
+        val envName = adminGatewayFallbackTokenEnv(route)
+        val token = RuntimeEnv.string(envName, "")
+        val expected = "Bearer $token"
+        if (token.isNotBlank() && headerValue(request.headers, "Authorization") == expected) {
+            return adminPrincipal(request.headers)
+        }
+        return null
+    }
+
+    private fun unauthorizedAdminGatewayResponse(route: AdminGatewayRoute): PlatformHotPathResponse {
+        if (adminAuthService != null) {
+            return PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized"))
+        }
+        val envName = adminGatewayFallbackTokenEnv(route)
+        if (RuntimeEnv.string(envName, "").isBlank()) {
+            return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "$envName is not configured"))
+        }
+        return PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized"))
+    }
+
+    private fun adminGatewayFallbackTokenEnv(route: AdminGatewayRoute): String {
+        return when (route.fallbackTokenFamily) {
+            "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
+            "admin" -> "ADMIN_API_TOKEN"
+            else -> "ARENA_ADMIN_API_TOKEN"
+        }
+    }
+
     private fun bearerToken(exchange: HttpExchange): String? {
-        val authorization = headerValue(exchange, "Authorization")
+        return bearerToken(exchange.requestHeaders)
+    }
+
+    private fun bearerToken(headers: Headers): String? {
+        val authorization = headerValue(headers, "Authorization")
         if (!authorization.startsWith("Bearer ")) return null
         return authorization.removePrefix("Bearer ").trim().ifBlank { null }
     }
 
     private fun adminPrincipalForActor(exchange: HttpExchange, actorId: String): AdminRequestPrincipal {
-        val headerPrincipal = adminPrincipal(exchange)
+        return adminPrincipalForActor(exchange.requestHeaders, actorId)
+    }
+
+    private fun adminPrincipalForActor(headers: Headers, actorId: String): AdminRequestPrincipal {
+        val headerPrincipal = adminPrincipal(headers)
         return headerPrincipal.copy(actorId = actorId)
     }
 
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
+        if (request.path.startsWith("/admin/v1/")) {
+            return handleAdminGatewayRequest(request)
+        }
         if (request.path.startsWith("/internal/")) {
             when (internalHttpExposureMode) {
                 InternalHttpExposureMode.Disabled -> return PlatformHotPathResponse(404, "")
@@ -1869,7 +1965,7 @@ class PlatformHttpServer(
             commandProcessingMode == CommandProcessingMode.StreamAck
         ) {
             return handleApiV1MutationResponseAsync(request, request.path)
-                .thenApply { it as PlatformHotPathResponse? }
+                .thenApply<PlatformHotPathResponse?> { it }
         }
         return CompletableFuture.completedFuture(handleHotPathRequest(request))
     }
