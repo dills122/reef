@@ -308,20 +308,34 @@ function validateArenaArtifacts(jsonFiles) {
 function arenaEvidenceSummary(report) {
   const totals = report.totals ?? {};
   const health = report.healthSummary ?? {};
+  const projected = Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0);
+  const lag = Number(report.venueReadback?.availability?.body?.projections?.[0]?.lag ?? 0);
+  const acceptedToProjectedGap = Math.max(Number(totals.submittedCommands ?? 0) - projected, 0);
   return {
     attempted: Number(totals.venueCommands ?? 0),
     accepted: Number(totals.submittedCommands ?? 0),
     directAcked: Number(totals.completedCommands ?? 0),
-    materialized: Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0),
-    projected: Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0),
-    lag: Number(report.venueReadback?.availability?.body?.projections?.[0]?.lag ?? 0),
+    materialized: projected,
+    projected,
+    lag,
     p95LatencyMs: Number(report.botResults?.reduce((max, bot) => Math.max(max, Number(bot.latencyP95Ms ?? 0)), 0) ?? 0),
     p99LatencyMs: 0,
     healthStatus: health.status ?? "unknown",
     topOfBookPct: Number(health.topOfBookPct ?? 0),
     medianQuotedSpreadBps: Number(health.medianQuotedSpreadBps ?? 0),
     gaps: {
-      acceptedToMaterialized: Number(totals.submittedCommands ?? 0) - Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0),
+      acceptedToMaterialized: acceptedToProjectedGap,
+      materializedToProjected: 0,
+    },
+    projectionFreshness: {
+      source: "venue-readback-data-availability",
+      freshnessModel: "read-surface availability projection evidence",
+      materialized: projected,
+      projected,
+      materializedToProjectedGap: 0,
+      lag,
+      projectedPerSecond: 0,
+      caughtUp: projected > 0 && lag === 0 && acceptedToProjectedGap === 0,
     },
   };
 }
@@ -639,6 +653,8 @@ function printEvidenceSummary(write) {
         `p95=${formatNumber(evidence.p95LatencyMs)}ms`,
         `p99=${formatNumber(evidence.p99LatencyMs)}ms`,
         `acceptedMaterializedGap=${evidence.gaps.acceptedToMaterialized}`,
+        `materializedProjectedGap=${evidence.gaps.materializedToProjected}`,
+        `projectionFreshness=${evidence.projectionFreshness?.caughtUp ? "caught-up" : "not-caught-up"}`,
       ].join(" "),
     );
   }

@@ -1497,6 +1497,8 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
     const directPublishedOutcomes = Number(report.streamDirect?.delta?.publishedDelta ?? 0);
     const projectedWorkItems = Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
     const durableCanonicalCompletedItems = Number(report.venueEventMaterializer?.delta?.materializedDelta ?? 0);
+    const projectionLagAfter = Number(report.streamAckProjector?.delta?.afterLag ?? 0);
+    const materializedToProjectedGap = Math.max(durableCanonicalCompletedItems - projectedWorkItems, 0);
     report.unitMetrics = {
       units: {
         attemptedCommands: "commands submitted by the load generator",
@@ -1529,7 +1531,18 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
       durableCanonicalCompletedToAcceptedRatio: ratio(durableCanonicalCompletedItems, acceptedCommands),
       durableCanonicalCompletionGap: Math.max(acceptedCommands - durableCanonicalCompletedItems, 0),
       projectedToCompletedRatio: ratio(projectedWorkItems, workerCompletedCommands),
-      projectionLagAfter: Number(report.streamAckProjector?.delta?.afterLag ?? 0),
+      materializedToProjectedGap,
+      projectionLagAfter,
+    };
+    report.projectionFreshness = {
+      source: "venue-event-batch-projector",
+      freshnessModel: "async read-model projection from durable canonical venue-event materialization",
+      materialized: durableCanonicalCompletedItems,
+      projected: projectedWorkItems,
+      materializedToProjectedGap,
+      lag: projectionLagAfter,
+      projectedPerSecond: perSecond(projectedWorkItems, durationSeconds),
+      caughtUp: materializedToProjectedGap === 0 && projectionLagAfter === 0 && projectedWorkItems > 0,
     };
     report.partitionSkew = buildPartitionSkew(report.streamAckWorkers?.delta);
     report.streamDirectPartitionSkew = buildStreamDirectPartitionSkew(report.streamDirect?.delta);

@@ -17,6 +17,8 @@ export function canonicalEvidenceSummary(report) {
   const materialized =
     unitMetrics.durableCanonicalCompletedItems ?? report?.venueEventMaterializer?.delta?.materializedDelta;
   const projected = unitMetrics.projectedWorkItems ?? report?.streamAckProjector?.delta?.projectedDelta;
+  const lag = unitMetrics.projectionLagAfter ?? report?.streamAckProjector?.delta?.afterLag;
+  const materializedToProjectedGap = nonNegativeGap(materialized, projected);
   const throughput = canonicalThroughput(report);
   return {
     attempted: numberOrZero(attempted),
@@ -24,7 +26,7 @@ export function canonicalEvidenceSummary(report) {
     directAcked: numberOrZero(directAcked),
     materialized: numberOrZero(materialized),
     projected: numberOrZero(projected),
-    lag: numberOrZero(unitMetrics.projectionLagAfter ?? report?.streamAckProjector?.delta?.afterLag),
+    lag: numberOrZero(lag),
     p95LatencyMs: numberOrZero(report?.latencyMs?.p95),
     p99LatencyMs: numberOrZero(report?.latencyMs?.p99),
     rates: {
@@ -37,7 +39,21 @@ export function canonicalEvidenceSummary(report) {
     gaps: {
       acceptedToDirectAcked: nonNegativeGap(accepted, directAcked),
       acceptedToMaterialized: nonNegativeGap(accepted, materialized),
-      materializedToProjected: nonNegativeGap(materialized, projected),
+      materializedToProjected: materializedToProjectedGap,
+    },
+    projectionFreshness: {
+      source: report?.projectionFreshness?.source ?? "venue-event-batch-projector",
+      freshnessModel:
+        report?.projectionFreshness?.freshnessModel ??
+        "async read-model projection from durable canonical venue-event materialization",
+      materialized: numberOrZero(materialized),
+      projected: numberOrZero(projected),
+      materializedToProjectedGap,
+      lag: numberOrZero(lag),
+      projectedPerSecond: numberOrZero(unitMetrics.projectedWorkItemsPerSecond ?? throughput.projectedPerSecond),
+      caughtUp:
+        Boolean(report?.projectionFreshness?.caughtUp) ||
+        (materializedToProjectedGap === 0 && numberOrZero(lag) === 0 && numberOrZero(projected) > 0),
     },
   };
 }

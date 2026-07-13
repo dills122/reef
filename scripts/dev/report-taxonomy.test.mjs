@@ -53,6 +53,16 @@ assert.deepEqual(canonicalEvidenceSummary(report), {
     acceptedToMaterialized: 2,
     materializedToProjected: 1,
   },
+  projectionFreshness: {
+    source: "venue-event-batch-projector",
+    freshnessModel: "async read-model projection from durable canonical venue-event materialization",
+    materialized: 7,
+    projected: 6,
+    materializedToProjectedGap: 1,
+    lag: 2,
+    projectedPerSecond: 0,
+    caughtUp: false,
+  },
 });
 
 assert.deepEqual(
@@ -92,6 +102,16 @@ assert.deepEqual(
       acceptedToDirectAcked: 1,
       acceptedToMaterialized: 2,
       materializedToProjected: 1,
+    },
+    projectionFreshness: {
+      source: "venue-event-batch-projector",
+      freshnessModel: "async read-model projection from durable canonical venue-event materialization",
+      materialized: 97,
+      projected: 96,
+      materializedToProjectedGap: 1,
+      lag: 3,
+      projectedPerSecond: 960,
+      caughtUp: false,
     },
   },
 );
