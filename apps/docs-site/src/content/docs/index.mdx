@@ -27,6 +27,7 @@ Reef is built to make market plumbing visible. Orders go through a real command 
 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">
 	<Badge text="Kotlin runtime" variant="note" />
 	<Badge text="Go matching engine" variant="note" />
+	<Badge text="Redpanda direct stream" variant="note" />
 	<Badge text="Postgres" variant="note" />
 	<Badge text="Protobuf contracts" variant="note" />
 	<Badge text="Settlement facts: first slice" variant="note" />
@@ -55,8 +56,9 @@ Reef is built to make market plumbing visible. Orders go through a real command 
 Two layers, one command path. The **core platform** owns the business behavior: order intake, matching, trades, settlement evidence, and audit trails. The **simulation control plane** supplies scripted scenarios, participant bots, seeded randomness, and Bot Arena runs. Both layers use the same public commands, so a replayed scenario and a manual user leave comparable evidence.
 
 ```text
-order intake -> hidden-book matching engine -> executions & trades
-             -> settlement obligations/facts -> ledger proof -> audit trail
+durable order intake -> hidden-book matching engine -> venue event batches
+                     -> canonical facts & projections -> settlement facts
+                     -> ledger proof -> audit trail
 ```
 
 <Card title="Read The Architecture" icon="puzzle">

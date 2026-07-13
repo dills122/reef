@@ -40,6 +40,8 @@ Bot code is never trusted. Minimum controls: isolated execution context per bot,
 
 `ArenaControlPlaneService` is the first arena-owned registry boundary in the platform runtime, backed by `PostgresArenaBotRegistryStore` for durable registry/qualification/operator-decision/run-record facts. Bot versions carry explicit states (`draft`, `submitted`, `checks_passed`, `approved`, `active`, `suspended`, `quarantined`, `banned`, `archived`); a quarantined or non-approved bot version is rejected before order acceptance. Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
 
+Local run evidence now covers positive and negative persisted arena gates, static operator report rendering, report-index rendering, shared-time multi-instrument runs, and hosted/local report metadata that records whether reads came from fixtures or live platform read APIs. Public submission and hosted/backbone scale still need their own named smoke before the arena is described as open.
+
 ## Learn More
 
 - `docs/BOT_ARENA_PLAN.md` — full plan: game-mode module contract, infrastructure/scale-out design, open questions (source for this page)

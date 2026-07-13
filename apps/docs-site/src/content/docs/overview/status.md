@@ -20,14 +20,17 @@ Inspection and replay:
 
 - Runtime query surfaces for orders, trades, events, trace timelines, public trade tape, intraday bars, own-order reads, and data-availability inventory.
 - Explicit runtime, boundary, auth, admin, orchestration, analytics, and command-log schemas through local migrations.
-- Go simulator/load tester with persona sessions, deterministic replay checks, stress reports, and intake benchmarks.
-- Docker-first setup, reset, smoke, stress, replay, and benchmark automation.
+- Go simulator/load tester with persona sessions, deterministic replay checks, stress reports, local intake/materializer/projection gates, and DigitalOcean benchmark automation.
+- Docker-first setup, reset, smoke, stress, replay, venue-event replay, and benchmark automation.
+- Redpanda/Kafka-compatible direct-stream ingestion plus durable venue event batch materialization is the canonical `10k` venue-core baseline after the July 12 `soak-5m` DigitalOcean gate.
+- Kafka-compatible publish retries handle retriable broker callback/send failures inside the existing publish-ack timeout; `202 Accepted` still requires durable producer acknowledgement.
 
 Early product slices:
 
 - Arena control plane: bot registry, bot-version approval lifecycle, operator decisions, run records, and bot-originated order flow through real venue risk checks.
 - Settlement evidence: scenario facts API, obligation materializer, instant-post-trade instructions/attempts, cash/security leg outcomes, append-only ledger proof, `SETTLED` finality facts, break/repair paths, and replayable balance/proof reads.
 - `stock-data` seed service: seed-once Tiingo/fake provider boundary, normalized snapshots, batch seed hash, Postgres or in-memory persistence, and `/v1/seed-snapshots`.
+- Bot SDK live read clients for market data, bars, own orders, and data availability; hosted/local reports can distinguish `fixture` versus `live` read mode.
 - Bot Arena local gates: persisted positive/negative smoke, static operator reports, and shared-time multi-instrument simulation proof with 5 active symbols and 18 bots.
 
 ## Still Planned
@@ -37,12 +40,12 @@ Early product slices:
 - Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
 - Broader analytics facts, dashboards, and reports beyond initial run export.
 - Public bot submission flow, hosted sandbox execution at scale, production leaderboard service, and full scoring policies.
-- Kafka-compatible durable command log as default hot-ingress path. Local proof exists; default promotion still needs longer evidence.
-- Complete scenario locking for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+- Projection/read-model freshness under the same durable venue-event load. A short July 12 `2.5k rps` DigitalOcean projection gate passed; it is not yet the same claim as the `10k` venue-core materializer baseline.
+- Complete scenario locking for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`, even though local live assertions now exist for both paths.
 
 ## Active Architecture Direction
 
-The high-throughput path is being tightened around one promise: if Reef says `202 Accepted`, the command has reached durable intake. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. Speed work must not weaken audit, replay, or acceptance semantics.
+The high-throughput path is organized around one promise: if Reef says `202 Accepted`, the configured durable ingress producer acknowledged the command. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. The direct-stream plus venue-event-materializer path is now the canonical `10k` venue-core baseline; the active promotion work is proving projection/read-model freshness and replay under that same durable load. Speed work must not weaken audit, replay, or acceptance semantics.
 
 The first deterministic scenarios now have clear target stories. P1 proves a hidden-cross trade lifecycle. P2 proves a settlement break and repair path. The assertion surfaces exist; the remaining work is making live gates prove those stories consistently from platform facts.
 

@@ -71,6 +71,23 @@ Immediate implications:
 3. The next performance risk is projection/read-model freshness and replay under the same durable venue-event load, not canonical materialization throughput.
 4. Keep `soak-15m` as aged-state confirmation before raising the venue-core target above `10k`, and track WAL/table bytes per command plus Kafka producer queue/request latency in every longer run.
 
+## DigitalOcean Projection Freshness Short Gate (July 12, 2026)
+
+The first projection-freshness promotion run proved the read-model path can catch up cleanly at a lower rate after partitioning projector work across direct-stream partitions. This evidence is intentionally narrower than the `10k` venue-core materializer claim.
+
+Evidence: `reports/do-benchmark/do-benchmark-20260712T172412Z/`.
+
+- configuration: c-16, Redpanda direct-stream plus venue-event materializer, venue-event-batch projection, order-lifecycle projection, and market-data projection enabled, with four projector instances split across active direct-stream partitions `0-15`.
+- result: `149,976` accepted, `149,976` materialized, `149,976` projected.
+- throughput and latency: projected rps `2499.56`, p95 `35.98ms`, p99 `82.06ms`.
+- correctness/freshness checks: projection lag `0`, materialized/projected gap `0`, projection Postgres deadlocks `0`.
+
+Immediate implications:
+
+1. Projection partitioning is the right near-term direction; one generic projector path should not be assumed to keep up with venue-core materialization.
+2. The next gate should raise read-model freshness toward the `10k` materializer baseline while preserving separate reporting for accepted, materialized, projected, lag, and replay checks.
+3. Do not use this short `2.5k` run as a UI/control-room capacity claim until the named projection freshness gate also proves drain/replay behavior at the target duration and rate.
+
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.

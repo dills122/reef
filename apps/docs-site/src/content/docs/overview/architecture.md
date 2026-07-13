@@ -20,7 +20,7 @@ Reef is split by job, not by ceremony. One runtime handles the public API and wo
 
 ## Deployment Shape (Current)
 
-Current local shape is deliberately simple:
+Current local development can still run in a deliberately simple shape:
 
 ```text
 Kotlin platform runtime  (one process)
@@ -28,7 +28,18 @@ Kotlin platform runtime  (one process)
   -> Go matching engine  (one process)
 ```
 
-The target high-throughput path moves the hot lane away from synchronous database writes: commands land in a durable log, the matching engine consumes them by partition, event batches are published durably, and Postgres materializes facts afterward.
+The promoted high-throughput venue-core path moves the hot lane away from synchronous database writes:
+
+```text
+API durable publish ack
+  -> matching-engine direct partition consume
+  -> durable VenueEventBatch
+  -> command offset commit
+  -> canonical Postgres materialization
+  -> asynchronous projection/replay verification
+```
+
+Redpanda/Kafka-compatible direct-stream ingestion plus venue-event materialization is the current `10k` accepted/direct-acked/materialized baseline. Projection and read-model freshness are measured separately so UI/control-room lag does not redefine venue-core acceptance.
 
 ## Bounded Contexts
 
@@ -46,7 +57,7 @@ Reef uses explicit business contexts so the code keeps its shape as features gro
 - simulation-control
 - audit-and-analytics
 
-Orders-and-execution, market-data reads, and the first settlement evidence/finality slice have meaningful implementation today; the rest remain architecture targets. See [Current Status](../status/) for the built/planned split.
+Orders-and-execution, command status, market-data/own-order reads, durable venue event materialization, Bot SDK live-read wiring, and the first settlement evidence/finality slice have meaningful implementation today. The broader post-trade and operator UI surfaces remain architecture targets. See [Current Status](../status/) for the built/planned split.
 
 ## Core Rules
 

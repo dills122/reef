@@ -35,16 +35,16 @@ The matching engine does not need special arena behavior. The arena adapter turn
 Built:
 
 - `ReefBotV1` SDK contract and TypeScript authoring model (see [Bot SDK Quickstart](../bot-sdk-quickstart/))
-- Registration/qualification harness, deterministic tick runner, SES-compatible hosted runner
+- Registration/qualification harness, deterministic tick runner, SES-compatible hosted runner, and opt-in live read clients for market data, bars, own orders, and data availability
 - Arena control-plane registry: bot identity, bot versions, artifact hashes, approval lifecycle (`draft` → `submitted` → `checks_passed` → `approved` → `active` / `suspended` / `quarantined` / `banned` / `archived`), operator decisions, run records
 - Bot-originated orders can flow through the real venue command boundary with bot client identity and pre-acceptance risk checks (a quarantined bot version is rejected before order acceptance)
-- Local positive/negative persisted smoke gates, static operator report rendering, report-index rendering, and a shared-time multi-instrument simulation proof with 5 active symbols and 18 bots
+- Local positive/negative persisted smoke gates, static operator report rendering, report-index rendering, hosted/local report `readMode` evidence, and a shared-time multi-instrument simulation proof with 5 active symbols and 18 bots
 
 Not yet built:
 
 - Sandboxed execution at scale connected to a dedicated arena runtime protocol (gRPC/protobuf)
 - Production-grade modular game-mode loading, scoring policies, and leaderboard service
-- Public bot submission flow, UI (registry, run monitor, leaderboard, replay)
+- Public bot submission flow, public leaderboard, replay UI, and a named hosted/backbone smoke gate for public-submission claims
 
 ## Learn More
 

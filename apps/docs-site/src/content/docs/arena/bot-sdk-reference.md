@@ -16,6 +16,8 @@ await ctx.historical.intradayBarsBatch([{ instrumentId: "AAPL", interval: "1m", 
 
 Read clients return structured `BotResultV1<T>` values — rate limits, policy denials, stale data, and temporary unavailability come back as denials (`{ ok: false, ... }`) rather than throwing, so bots can adapt without crashing. Historical windows may be cached client-side since they don't change after finalization; live/current reads respect freshness/TTL/rate-limit policy.
 
+Fixture reads remain the default for deterministic local SDK tests. The SDK also has live HTTP clients for platform market data, historical bars, own-order reads, and data availability; hosted/local run reports record `readMode` so evidence can distinguish fixture-only behavior from live projection/read-surface behavior.
+
 ## Order Actions
 
 ```ts
