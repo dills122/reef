@@ -50,11 +50,14 @@ const result = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs"
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /DO benchmark evidence summary:/);
 assert.match(result.stdout, /rate=2500 attempted=100 accepted=100 directAcked=99 materialized=98 projected=97/);
+assert.match(result.stdout, /materializedProjectedGap=1 projectionFreshness=not-caught-up/);
 assert.match(result.stdout, /DO benchmark report gates passed/);
 
 const summary = JSON.parse(readFileSync(join(artifactDir, "do-benchmark-evidence-summary.json"), "utf8"));
 assert.equal(summary.reports.length, 2);
 assert.equal(summary.reports[0].evidence.gaps.acceptedToMaterialized, 2);
+assert.equal(summary.reports[0].evidence.projectionFreshness.materializedToProjectedGap, 1);
+assert.equal(summary.reports[0].evidence.projectionFreshness.caughtUp, false);
 assert.equal(summary.reports[1].evidence.p99LatencyMs, 28.1);
 
 const materializerArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-materializer-"));
@@ -95,6 +98,7 @@ const projectionResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-
 });
 assert.equal(projectionResult.status, 0, projectionResult.stderr);
 assert.match(projectionResult.stdout, /projected=2500 lag=0/);
+assert.match(projectionResult.stdout, /materializedProjectedGap=0 projectionFreshness=caught-up/);
 
 const projectionDiagnosticsArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-diagnostics-"));
 writeMaterializerProjectionReport(projectionDiagnosticsArtifactDir, "rate-2500.json", 2500, 2500, {

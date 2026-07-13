@@ -87,6 +87,16 @@ Local and DigitalOcean gates should include this normalized evidence block when 
     "acceptedToDirectAcked": 0,
     "acceptedToMaterialized": 0,
     "materializedToProjected": 0
+  },
+  "projectionFreshness": {
+    "source": "venue-event-batch-projector",
+    "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+    "materialized": 0,
+    "projected": 0,
+    "materializedToProjectedGap": 0,
+    "lag": 0,
+    "projectedPerSecond": 0,
+    "caughtUp": false
   }
 }
 ```
@@ -102,6 +112,7 @@ Field sources:
 7. `p95LatencyMs`, `p99LatencyMs`: `latencyMs.p95`, `latencyMs.p99`.
 8. `rates`: matching `unitMetrics.*PerSecond` values, with legacy throughput fallbacks for attempted/accepted/projected.
 9. `gaps`: non-negative differences for accepted to direct-acked, accepted to materialized, and materialized to projected.
+10. `projectionFreshness`: explicit read-model freshness evidence. `caughtUp=true` requires nonzero projected work, `materializedToProjectedGap=0`, and `lag=0`; it is not part of the durable `202` acceptance contract.
 
 Local gate:
 
