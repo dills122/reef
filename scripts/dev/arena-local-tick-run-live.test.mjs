@@ -23,7 +23,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/health") {
     return json(res, 200, { ok: true });
   }
-  if (req.method === "POST" && ["/reference/instruments", "/reference/participants", "/reference/accounts", "/auth/roles", "/auth/actor-roles"].includes(url.pathname)) {
+  if (req.method === "POST" && [
+    "/admin/v1/reference/instruments",
+    "/admin/v1/reference/participants",
+    "/admin/v1/reference/accounts",
+    "/admin/v1/auth/roles",
+    "/admin/v1/auth/actor-roles",
+  ].includes(url.pathname)) {
     referenceWrites.push({ path: url.pathname, body: await readJson(req) });
     return json(res, 200, { ok: true });
   }
@@ -116,7 +122,7 @@ const server = http.createServer(async (req, res) => {
       fills,
     });
   }
-  if (url.pathname.startsWith("/internal/admin/arena/")) {
+  if (url.pathname.startsWith("/admin/v1/arena/")) {
     return await handleArenaAdmin(req, res, url);
   }
   return json(res, 404, { error: "not found", path: url.pathname });
@@ -156,7 +162,7 @@ try {
     "--out=/tmp/reef-arena-local-tick-run-live-test.json",
   ]);
 
-  assert.equal(referenceWrites.filter((write) => write.path === "/reference/instruments").length, 4);
+  assert.equal(referenceWrites.filter((write) => write.path === "/admin/v1/reference/instruments").length, 4);
   assert.equal(referenceWrites.some((write) => JSON.stringify(write.body).includes("undefined")), false);
   assert.ok(referenceWrites.some((write) => String(write.body.participantId ?? "").endsWith("-builtin-mm-simple")));
   assert.ok(referenceWrites.some((write) => String(write.body.accountId ?? "").endsWith("-custom-technical-indicator")));
@@ -256,57 +262,57 @@ try {
 }
 
 async function handleArenaAdmin(req, res, url) {
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bots") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/bots") {
     const body = await readJson(req);
     if (arena.bots.has(body.botId)) return json(res, 400, { error: `botId already exists: ${body.botId}` });
     arena.bots.set(body.botId, body);
     return json(res, 200, { bot: body });
   }
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bot-versions") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/bot-versions") {
     const body = await readJson(req);
     const key = `${body.botId}/${body.versionId}`;
     if (arena.versions.has(key)) return json(res, 400, { error: `versionId already exists for botId: ${key}` });
     arena.versions.set(key, { ...body, status: "draft" });
     return json(res, 200, { version: arena.versions.get(key) });
   }
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bot-versions/transition") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/bot-versions/transition") {
     const body = await readJson(req);
     const key = `${body.botId}/${body.versionId}`;
     const version = arena.versions.get(key);
     if (version !== undefined) version.status = body.status;
     return json(res, 200, { version });
   }
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/runs") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/runs") {
     const body = await readJson(req);
     if (arena.runs.has(body.runId)) return json(res, 400, { error: `runId already exists: ${body.runId}` });
     arena.runs.set(body.runId, { ...body, status: "planned" });
     return json(res, 200, { run: arena.runs.get(body.runId) });
   }
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/runs/status") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/runs/status") {
     const body = await readJson(req);
     const run = arena.runs.get(body.runId);
     if (run !== undefined) run.status = body.status;
     return json(res, 200, { run });
   }
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/run-bot-results") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/run-bot-results") {
     const body = await readJson(req);
     arena.results.push(body);
     return json(res, 200, { result: body });
   }
-  if (req.method === "POST" && url.pathname === "/internal/admin/arena/run-enforcement-events") {
+  if (req.method === "POST" && url.pathname === "/admin/v1/arena/run-enforcement-events") {
     const body = await readJson(req);
     arena.enforcementEvents.push(body);
     return json(res, 200, { event: body });
   }
-  if (req.method === "GET" && url.pathname === "/internal/admin/arena/run-bot-results") {
+  if (req.method === "GET" && url.pathname === "/admin/v1/arena/run-bot-results") {
     const runId = url.searchParams.get("runId");
     return json(res, 200, { results: arena.results.filter((result) => result.runId === runId) });
   }
-  if (req.method === "GET" && url.pathname === "/internal/admin/arena/run-enforcement-events") {
+  if (req.method === "GET" && url.pathname === "/admin/v1/arena/run-enforcement-events") {
     const runId = url.searchParams.get("runId");
     return json(res, 200, { events: arena.enforcementEvents.filter((event) => event.runId === runId) });
   }
-  if (req.method === "GET" && url.pathname === "/internal/admin/arena/leaderboard") {
+  if (req.method === "GET" && url.pathname === "/admin/v1/arena/leaderboard") {
     const modeId = url.searchParams.get("modeId");
     const scoringPolicyVersion = url.searchParams.get("scoringPolicyVersion");
     const entries = arena.results

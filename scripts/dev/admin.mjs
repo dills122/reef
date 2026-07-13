@@ -2,14 +2,13 @@ import { deriveDevUrls, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 const { runtimeUrl } = deriveDevUrls();
-const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
 
 async function post(path, payload) {
   const res = await fetch(`${runtimeUrl}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(path.startsWith("/admin/v1/") ? adminGatewayHeaders(path) : internalRouteHeaders),
+      ...adminGatewayHeaders(path),
     },
     body: JSON.stringify(payload),
   });
@@ -29,7 +28,9 @@ function adminGatewayHeaders(path) {
 }
 
 async function get(path) {
-  const res = await fetch(`${runtimeUrl}${path}`);
+  const res = await fetch(`${runtimeUrl}${path}`, {
+    headers: adminGatewayHeaders(path),
+  });
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`${path} failed (${res.status}): ${text}`);
@@ -112,7 +113,7 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    await post("/reference/instruments", {
+    await post("/admin/v1/reference/instruments", {
       instrumentId: args[0],
       symbol: args[1],
       assetClass: "US_EQ",
@@ -124,14 +125,14 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    await post("/reference/participants", { participantId: args[0], name: args[1] });
+    await post("/admin/v1/reference/participants", { participantId: args[0], name: args[1] });
     break;
   case "account-upsert":
     if (args.length < 2) {
       usage();
       process.exit(1);
     }
-    await post("/reference/accounts", {
+    await post("/admin/v1/reference/accounts", {
       accountId: args[0],
       participantId: args[1],
       accountType: "HOUSE",
@@ -142,14 +143,14 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    await post("/auth/roles", { roleId: args[0], permissions: args[1] });
+    await post("/admin/v1/auth/roles", { roleId: args[0], permissions: args[1] });
     break;
   case "role-assign":
     if (args.length < 2) {
       usage();
       process.exit(1);
     }
-    await post("/auth/actor-roles", { actorId: args[0], roleId: args[1] });
+    await post("/admin/v1/auth/actor-roles", { actorId: args[0], roleId: args[1] });
     break;
   case "account-risk-set":
     if (args.length < 3) {

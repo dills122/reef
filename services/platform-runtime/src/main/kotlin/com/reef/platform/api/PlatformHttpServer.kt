@@ -129,6 +129,31 @@ internal data class AdminGatewayRoute(
 )
 
 internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminGatewayRoute? = when (path) {
+    "/admin/v1/reference/instruments" -> if (method in setOf("GET", "POST")) {
+        AdminGatewayRoute("/reference/instruments", "admin", setOf(AdminServiceTokenFamily.Admin))
+    } else {
+        null
+    }
+    "/admin/v1/reference/participants" -> if (method in setOf("GET", "POST")) {
+        AdminGatewayRoute("/reference/participants", "admin", setOf(AdminServiceTokenFamily.Admin))
+    } else {
+        null
+    }
+    "/admin/v1/reference/accounts" -> if (method in setOf("GET", "POST")) {
+        AdminGatewayRoute("/reference/accounts", "admin", setOf(AdminServiceTokenFamily.Admin))
+    } else {
+        null
+    }
+    "/admin/v1/auth/roles" -> if (method in setOf("GET", "POST")) {
+        AdminGatewayRoute("/auth/roles", "admin", setOf(AdminServiceTokenFamily.Admin))
+    } else {
+        null
+    }
+    "/admin/v1/auth/actor-roles" -> if (method in setOf("GET", "POST")) {
+        AdminGatewayRoute("/auth/actor-roles", "admin", setOf(AdminServiceTokenFamily.Admin))
+    } else {
+        null
+    }
     "/admin/v1/arena/bots" -> AdminGatewayRoute(
         "/internal/admin/arena/bots",
         "arena",
@@ -754,6 +779,11 @@ class PlatformHttpServer(
             "/admin/v1/arena/leaderboard",
             "/admin/v1/analytics/run-exports",
             "/admin/v1/analytics/run-bot-summaries",
+            "/admin/v1/reference/instruments",
+            "/admin/v1/reference/participants",
+            "/admin/v1/reference/accounts",
+            "/admin/v1/auth/roles",
+            "/admin/v1/auth/actor-roles",
             "/admin/v1/risk/account-controls",
             "/admin/v1/risk/circuit-breakers",
             "/admin/v1/risk/price-collars",
@@ -1400,7 +1430,8 @@ class PlatformHttpServer(
             ""
         }
         withAdminRequestPrincipal(principal) {
-            val response = settlementAdminGatewayResponse(exchange.requestMethod, route.internalPath, body)
+            val response = adminSetupGatewayResponse(exchange.requestMethod, route.internalPath, exchange.requestURI.query, body)
+                ?: settlementAdminGatewayResponse(exchange.requestMethod, route.internalPath, body)
                 ?: adminDataRoutes.handle(
                     method = exchange.requestMethod,
                     path = route.internalPath,
@@ -1419,7 +1450,8 @@ class PlatformHttpServer(
             ?: return unauthorizedAdminGatewayResponse(route)
         val body = if (request.method in setOf("POST", "PUT", "PATCH")) request.body else ""
         return withAdminRequestPrincipal(principal) {
-            settlementAdminGatewayResponse(request.method, route.internalPath, body)
+            adminSetupGatewayResponse(request.method, route.internalPath, request.query, body)
+                ?: settlementAdminGatewayResponse(request.method, route.internalPath, body)
                 ?: adminDataRoutes.handle(
                     method = request.method,
                     path = route.internalPath,
@@ -1445,6 +1477,46 @@ class PlatformHttpServer(
             "/internal/admin/settlement/reverse-ledger-entry" -> settlementAdminGateway.reverseSettlementLedgerEntryResponse(body)
             "/internal/admin/settlement/obligations/materialize" -> settlementAdminGateway.materializeSettlementObligationsResponse(body)
             else -> null
+        }
+    }
+
+    private fun adminSetupGatewayResponse(
+        method: String,
+        path: String,
+        query: String?,
+        body: String
+    ): PlatformHotPathResponse? {
+        return when (path) {
+            "/reference/instruments" -> getOrPostSetupGateway(method, { api.instruments() }, { api.createInstrument(body) })
+            "/reference/participants" -> getOrPostSetupGateway(method, { api.participants() }, { api.createParticipant(body) })
+            "/reference/accounts" -> getOrPostSetupGateway(method, { api.accounts() }, { api.createAccount(body) })
+            "/auth/roles" -> getOrPostSetupGateway(method, { api.roles() }, { api.createRole(body) })
+            "/auth/actor-roles" -> getOrPostSetupGateway(
+                method,
+                { api.actorRoles(queryValue(query, "actorId")) },
+                { api.assignRole(body) }
+            )
+            else -> null
+        }
+    }
+
+    private fun getOrPostSetupGateway(
+        method: String,
+        getOperation: () -> String,
+        postOperation: () -> String
+    ): PlatformHotPathResponse {
+        return when (method) {
+            "GET" -> adminSetupGatewayOperation(getOperation)
+            "POST" -> adminSetupGatewayOperation(postOperation)
+            else -> methodNotAllowedResponse()
+        }
+    }
+
+    private fun adminSetupGatewayOperation(operation: () -> String): PlatformHotPathResponse {
+        return try {
+            PlatformHotPathResponse(200, operation())
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, runtimeUnavailableJson(ex))
         }
     }
 

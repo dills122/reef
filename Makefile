@@ -10,7 +10,7 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test lint check-scripts check-js-runtime
+.PHONY: test lint check-scripts check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
@@ -71,34 +71,35 @@ test-platform-runtime:
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew test
 
 test-bot-sdk:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	@$(MAKE) check-bun-runtime
+	@$(MAKE) check-bot-sdk-js-deps
 	bunx --bun tsc -p packages/bot-sdk/tsconfig.json --noEmit
-	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-batch-clients.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-client.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-live-client.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-strategy-runner.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-runner.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-worker.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-runtime-config.test.mjs
-	$(JS_RUNTIME) scripts/dev/openbao-runtime-config.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-submission-provision-openbao.test.mjs
-	$(JS_RUNTIME) scripts/dev/bot-sdk-test-bot.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-ingest-bot-run-result.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-render-report-index.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-render-report.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-execution-diagnostics.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-actor-profile-behavior.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-local-hardening-summary.test.mjs
-	$(JS_RUNTIME) scripts/dev/large-json-writer.test.mjs
-	$(JS_RUNTIME) scripts/dev/arena-local-tick-report-writer.test.mjs
+	bun scripts/dev/bot-sdk-contract.test.mjs
+	bun scripts/dev/bot-sdk-batch-clients.test.mjs
+	bun scripts/dev/bot-sdk-venue-adapter.test.mjs
+	bun scripts/dev/bot-sdk-venue-client.test.mjs
+	bun scripts/dev/bot-sdk-live-client.test.mjs
+	bun scripts/dev/bot-sdk-runner.test.mjs
+	bun scripts/dev/bot-sdk-strategy-runner.test.mjs
+	bun scripts/dev/bot-sdk-hosted-runner.test.mjs
+	bun scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
+	bun scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
+	bun scripts/dev/bot-sdk-hosted-worker.test.mjs
+	bun scripts/dev/bot-sdk-sandbox-policy.test.mjs
+	bun scripts/dev/bot-sdk-preflight.test.mjs
+	bun scripts/dev/bot-sdk-runtime-config.test.mjs
+	bun scripts/dev/openbao-runtime-config.test.mjs
+	bun scripts/dev/bot-submission-provision-openbao.test.mjs
+	bun scripts/dev/bot-sdk-test-bot.test.mjs
+	bun scripts/dev/arena-ingest-bot-run-result.test.mjs
+	bun scripts/dev/arena-persist-report-local.test.mjs
+	bun scripts/dev/arena-render-report-index.test.mjs
+	bun scripts/dev/arena-render-report.test.mjs
+	bun scripts/dev/arena-execution-diagnostics.test.mjs
+	bun scripts/dev/arena-actor-profile-behavior.test.mjs
+	bun scripts/dev/arena-local-hardening-summary.test.mjs
+	bun scripts/dev/large-json-writer.test.mjs
+	bun scripts/dev/arena-local-tick-report-writer.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
@@ -113,22 +114,28 @@ test-bot-sdk:
 	node --check scripts/dev/arena-render-report.mjs
 	node --check scripts/dev/arena-run-result-ingestion-smoke.mjs
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
-	node scripts/dev/report-taxonomy.test.mjs
-	node scripts/dev/stream-partition-spread.test.mjs
-	node scripts/dev/lib/stress-run-guard.test.mjs
-	node scripts/dev/lib/dev-profiles.test.mjs
-	node scripts/dev/do-benchmark-check.test.mjs
-	node scripts/dev/do-materializer-10k-gate.test.mjs
-	node scripts/dev/do-projection-freshness-gate.test.mjs
-	node scripts/dev/projection-replay-proof.test.mjs
-	node scripts/dev/scenario-drift.test.mjs
-	node scripts/dev/scenario-golden.test.mjs
+	bun scripts/dev/report-taxonomy.test.mjs
+	bun scripts/dev/stream-partition-spread.test.mjs
+	bun scripts/dev/lib/stress-run-guard.test.mjs
+	bun scripts/dev/lib/dev-profiles.test.mjs
+	bun scripts/dev/do-benchmark-check.test.mjs
+	bun scripts/dev/do-materializer-10k-gate.test.mjs
+	bun scripts/dev/do-projection-freshness-gate.test.mjs
+	bun test scripts/dev/projection-replay-proof.test.mjs
+	bun scripts/dev/scenario-drift.test.mjs
+	bun scripts/dev/scenario-golden.test.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal
 
 check-js-runtime:
-	@command -v $(JS_RUNTIME) >/dev/null 2>&1 || (echo "missing JS runtime: $(JS_RUNTIME). install bun (preferred) or run with JS_RUNTIME=node." && exit 1)
+	@command -v $(JS_RUNTIME) >/dev/null 2>&1 || (echo "missing JS runtime: $(JS_RUNTIME). install Bun for repo automation; JS_RUNTIME=node is only supported for plain Node-compatible dev scripts." && exit 1)
+
+check-bun-runtime:
+	@command -v bun >/dev/null 2>&1 || (echo "missing Bun runtime. Install Bun before running bot SDK and arena tests." && exit 1)
+
+check-bot-sdk-js-deps:
+	@test -d node_modules/typescript -a -d node_modules/trading-signals -a -d node_modules/ses || (echo "missing JS dependencies for bot SDK and arena tests. Run: bun install --frozen-lockfile" && exit 1)
 
 dev-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

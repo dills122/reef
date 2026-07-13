@@ -96,6 +96,18 @@ if (unwiredTests.length > 0) {
   ].join("\n"));
 }
 
+const rawInternalArenaScriptCallers = scriptFiles
+  .filter((path) => !path.includes("/db/migrations/"))
+  .filter((path) => path !== "scripts/dev/script-surface-check.mjs")
+  .filter((path) => (repoText.get(path) ?? "").includes("/internal/admin/arena"))
+  .sort();
+if (rawInternalArenaScriptCallers.length > 0) {
+  failures.push([
+    "script callers must use /admin/v1/arena/... instead of raw /internal/admin/arena/...:",
+    ...rawInternalArenaScriptCallers.map((path) => `  - ${path}`),
+  ].join("\n"));
+}
+
 if (failures.length > 0) {
   console.error(failures.join("\n\n"));
   process.exit(1);

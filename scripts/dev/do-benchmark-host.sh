@@ -535,7 +535,8 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     export PATH="$BUN_INSTALL/bin:$PATH"
   fi
 
-  run_stage bun-install bun install
+  export JS_RUNTIME=bun
+  run_stage bun-install bun install --frozen-lockfile
   run_stage make-dev-up-stream-ack make dev-up-stream-ack
   run_stage make-dev-smoke make dev-smoke
   run_stage arena-local-tick-run timeout --preserve-status "${arena_timeout_seconds}s" bun scripts/dev/arena-local-tick-run.mjs \
@@ -555,10 +556,10 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --projection-drain-timeout-ms=30000 \
     --require-projection-drain \
     --out="$arena_report"
-  run_stage arena-persist-report-local node scripts/dev/arena-persist-report-local.mjs \
+  run_stage arena-persist-report-local bun scripts/dev/arena-persist-report-local.mjs \
     --report="$arena_report" \
     --out="$arena_persisted_report"
-  run_stage arena-export node scripts/dev/export-simulation-run.mjs \
+  run_stage arena-export bun scripts/dev/export-simulation-run.mjs \
     --report "$arena_persisted_report" \
     --artifact-root "$artifact_dir" \
     --run-kind arena-do \

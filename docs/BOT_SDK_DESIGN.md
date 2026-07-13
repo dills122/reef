@@ -379,20 +379,17 @@ Completed runtime bridge coverage:
 - Deterministic runtime tests cover stream-ack bot intake, worker processing, canonical outcome persistence, projection, and projector replay idempotency.
 - Local live smoke covers adapter-owned HTTP submission into a running Reef stack with `stream-ack` acceptance; see [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md).
 - `runner.ts`, `strategy-runner.ts`, and `hosted-runner.ts` accept opt-in live read clients. Hosted artifact runs report `readMode` and include `/api/v1/data/availability` evidence when live reads are enabled.
-- Local/internal operator read APIs expose persisted arena control-plane state. These `/internal/*` routes are not bot/public contracts; hosted or CI access must use `/admin/v1/...`, CLI, gRPC, or another gateway-backed contract:
-  - `GET /internal/admin/arena/bots?botId=...`
-  - `GET /internal/admin/arena/bot-versions?botId=...&versionId=...`
-  - `GET /internal/admin/arena/qualification-reports?botId=...&versionId=...`
-  - `GET /internal/admin/arena/operator-decisions?botId=...&versionId=...`
-  - `GET /internal/admin/arena/runtime-config-descriptors?botId=...&versionId=...`
-  - `GET /internal/admin/arena/runs?runId=...`
-  - `POST /internal/admin/arena/runs`
-  - `POST /internal/admin/arena/runs/status`
-  - `GET /internal/admin/arena/run-bot-results?runId=...`
-  - `POST /internal/admin/arena/run-bot-results`
+- Gateway-backed operator read APIs expose persisted arena control-plane state. Raw `/internal/*` routes remain migration/local adapters only; hosted or CI access must use `/admin/v1/...`, CLI, gRPC, or another gateway-backed contract:
+  - `GET /admin/v1/arena/bots?botId=...`
+  - `GET /admin/v1/arena/bot-versions?botId=...&versionId=...`
+  - `GET /admin/v1/arena/runs?runId=...`
+  - `POST /admin/v1/arena/runs`
+  - `POST /admin/v1/arena/runs/status`
+  - `GET /admin/v1/arena/run-bot-results?runId=...`
+  - `POST /admin/v1/arena/run-bot-results`
 - Postgres schema-placement CI validates the migrated `arena-postgres` schema with `PostgresArenaBotRegistryStore` in `Validate` mode and round-trips bot versions, qualification reports, operator decisions, runtime config descriptors, and run records.
 - `resolveBotRuntimeConfigV1` defines runner preflight resolution for immutable `OpenBao` descriptors. It fetches through a platform-owned provider, validates required values and types, freezes resolved config for the run, and keeps fetch capability out of bot code.
-- `arena.run_bot_results` stores first bot/run scoring facts outside the trading hot path. `GET /internal/admin/arena/run-bot-results?runId=...` exposes raw persisted scoring facts, while `GET /internal/admin/arena/leaderboard?modeId=...&scoringPolicyVersion=...` exposes a rebuildable leaderboard read model ranked by disqualification, final equity, realized PnL, drawdown, run ID, and bot ID.
+- `arena.run_bot_results` stores first bot/run scoring facts outside the trading hot path. `GET /admin/v1/arena/run-bot-results?runId=...` exposes raw persisted scoring facts, while `GET /admin/v1/arena/leaderboard?modeId=...&scoringPolicyVersion=...` exposes a rebuildable leaderboard read model ranked by disqualification, final equity, realized PnL, drawdown, run ID, and bot ID.
 - `scripts/dev/arena-ingest-bot-run-result.mjs` maps hosted simulation/test-bot summary counters into `arena.run_bot_results`; score fields such as final equity, realized PnL, and drawdown stay explicit ingestion inputs until scoring policy is finalized.
 - `make dev-smoke-arena-run-results` proves the local-stack path from arena run registration through hosted-summary result ingestion to leaderboard readback.
 

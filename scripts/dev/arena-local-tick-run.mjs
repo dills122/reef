@@ -34,6 +34,7 @@ const config = {
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
   arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
+  adminApiToken: stringOption("--admin-api-token", env("ADMIN_API_TOKEN", "")),
   arenaAdminApiToken: stringOption("--arena-admin-api-token", env("ARENA_ADMIN_API_TOKEN", "")),
   openBaoAddr: stringOption("--openbao-addr", env("OPENBAO_ADDR", env("VAULT_ADDR", ""))),
   openBaoToken: stringOption("--openbao-token", env("OPENBAO_TOKEN", env("VAULT_TOKEN", ""))),
@@ -2053,55 +2054,31 @@ async function ensureArenaBotVersion(baseUrl, bot, correlationId) {
 }
 
 async function postArenaOk(baseUrl, path, payload, options = {}) {
-  let response = await postJson(`${baseUrl}${path}`, payload, adminHeaders(payload.correlationId, false));
-  let responsePath = path;
-  if (canFallbackToInternalArena(baseUrl, path, response)) {
-    responsePath = internalArenaPath(path);
-    response = await postJson(`${baseUrl}${responsePath}`, payload, adminHeaders(payload.correlationId, true));
-  }
+  const response = await postJson(`${baseUrl}${path}`, payload, arenaAdminHeaders(payload.correlationId));
   const body = safeJson(response.body);
   if (response.statusCode >= 200 && response.statusCode < 300) {
-    return { path: responsePath, requestedPath: path, statusCode: response.statusCode, ok: true };
+    return { path, statusCode: response.statusCode, ok: true };
   }
   const text = JSON.stringify(body);
   if (options.allowAlreadyExists && text.includes("already exists")) {
-    return { path: responsePath, requestedPath: path, statusCode: response.statusCode, ok: true, ignored: "already_exists" };
+    return { path, statusCode: response.statusCode, ok: true, ignored: "already_exists" };
   }
   if (options.allowInvalidTransition && (text.includes("invalid bot version transition") || text.includes("invalid arena run transition"))) {
-    return { path: responsePath, requestedPath: path, statusCode: response.statusCode, ok: true, ignored: "invalid_transition" };
+    return { path, statusCode: response.statusCode, ok: true, ignored: "invalid_transition" };
   }
   throw new Error(`arena admin POST ${path} failed (${response.statusCode}): ${response.body}`);
 }
 
 async function getArenaJson(baseUrl, path) {
-  let response = await getJson(`${baseUrl}${path}`, adminHeaders(`${config.runId}-persist`, false));
-  if (canFallbackToInternalArena(baseUrl, path, { statusCode: response.statusCode, body: JSON.stringify(response.body) })) {
-    response = await getJson(`${baseUrl}${internalArenaPath(path)}`, adminHeaders(`${config.runId}-persist`, true));
-  }
-  return response;
+  return getJson(`${baseUrl}${path}`, arenaAdminHeaders(`${config.runId}-persist`));
 }
 
-function adminHeaders(correlationId, internalRoute = false) {
+function arenaAdminHeaders(correlationId) {
   return {
-    ...(config.arenaAdminApiToken.trim() !== "" && !internalRoute ? { Authorization: `Bearer ${config.arenaAdminApiToken}` } : {}),
-    ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
+    ...(config.arenaAdminApiToken.trim() !== "" ? { Authorization: `Bearer ${config.arenaAdminApiToken}` } : {}),
     "X-Reef-Actor-Id": config.actorId,
     "X-Correlation-Id": correlationId,
   };
-}
-
-function canFallbackToInternalArena(baseUrl, path, response) {
-  const host = new URL(baseUrl).hostname;
-  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
-  if (!loopback || config.arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
-  const body = typeof response.body === "string" ? response.body : JSON.stringify(response.body ?? {});
-  return response.statusCode === 404 ||
-    response.statusCode === 401 ||
-    (response.statusCode === 503 && body.includes("ARENA_ADMIN_API_TOKEN"));
-}
-
-function internalArenaPath(path) {
-  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
 }
 
 async function submitVenueCommands(commands) {
@@ -2256,35 +2233,43 @@ async function waitForCommandStatus(command) {
 }
 
 async function seedReferenceData(bots) {
-  const internal = { "X-Reef-Internal-Route": "true" };
+  const headers = setupAdminHeaders(`${config.runId}-reference-seed`);
   for (const instrumentId of mode.instruments ?? ["AAPL"]) {
-    await postSetupOk("/reference/instruments", {
+    await postSetupOk("/admin/v1/reference/instruments", {
       instrumentId,
       symbol: instrumentId,
       assetClass: "US_EQ",
       currency: "USD",
-    }, internal);
+    }, headers);
   }
   for (const bot of bots) {
     const identityKey = venueIdentityKey(bot);
-    await postSetupOk("/reference/participants", {
+    await postSetupOk("/admin/v1/reference/participants", {
       participantId: participantIdForIdentity(identityKey),
       name: `Arena ${bot.botId}`,
-    }, internal);
-    await postSetupOk("/reference/accounts", {
+    }, headers);
+    await postSetupOk("/admin/v1/reference/accounts", {
       accountId: accountIdForIdentity(identityKey),
       participantId: participantIdForIdentity(identityKey),
       accountType: bot.riskProfile.assetLedgerMode === "bypass" ? "HOUSE" : "CUSTOMER",
-    }, internal);
-    await postSetupOk("/auth/roles", {
+    }, headers);
+    await postSetupOk("/admin/v1/auth/roles", {
       roleId: "order_trader",
       permissions: "order.submit,order.cancel,order.modify",
-    }, internal);
-    await postSetupOk("/auth/actor-roles", {
+    }, headers);
+    await postSetupOk("/admin/v1/auth/actor-roles", {
       actorId: actorIdForIdentity(identityKey),
       roleId: "order_trader",
-    }, internal);
+    }, headers);
   }
+}
+
+function setupAdminHeaders(correlationId) {
+  return {
+    ...(config.adminApiToken.trim() !== "" ? { Authorization: `Bearer ${config.adminApiToken}` } : {}),
+    "X-Reef-Actor-Id": config.actorId,
+    "X-Correlation-Id": correlationId,
+  };
 }
 
 async function postSetupOk(path, payload, headers) {

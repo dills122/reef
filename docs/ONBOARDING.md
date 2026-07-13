@@ -23,8 +23,9 @@ go version
 java -version
 ```
 
-If Bun is not available yet, you can temporarily run dev automation with:
-- `JS_RUNTIME=node`
+Install Bun before running bot SDK, arena, or package-dependent repo automation.
+`JS_RUNTIME=node` is only a temporary fallback for plain Node-compatible dev
+scripts.
 
 ## 2. Clone And Enter Repo
 
@@ -94,7 +95,9 @@ make dev-compose-config ARGS="--services"
 bun scripts/dev/reef-dev.mjs stack compose-config --services
 ```
 
-If Bun is missing locally:
+If Bun is missing locally, install it before running bot SDK, arena, or
+package-dependent repo automation. Plain Node-compatible stack commands can
+temporarily run with:
 
 ```bash
 JS_RUNTIME=node make dev-up
@@ -208,7 +211,9 @@ make dev-smoke
 ## 10. Troubleshooting
 
 `bun: command not found`
-- Install Bun or run commands with `JS_RUNTIME=node` temporarily.
+- Install Bun. `JS_RUNTIME=node` only works for plain Node-compatible dev scripts;
+  bot SDK and arena test flows require Bun plus dependencies from
+  `bun install --frozen-lockfile`.
 
 `bind: address already in use`
 - Use host port overrides (see section 7).
@@ -219,6 +224,7 @@ make dev-smoke
   - `curl http://localhost:8080/readyz`
   - `curl http://localhost:8081/health`
 - Ensure reference seeding endpoints are reachable.
+  - Current setup callers should use `/admin/v1/reference/...` and `/admin/v1/auth/...` with `ADMIN_API_TOKEN`; legacy `/reference/*` and `/auth/*` paths are local migration adapters only.
 
 Docker build failure
 - Run `make dev-down` and retry `make dev-up`.

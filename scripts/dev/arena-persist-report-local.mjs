@@ -157,29 +157,23 @@ function request(method, path, payload, options = {}) {
     };
   }
 
-  let result = curlRequest(method, path, payload, false);
-  let responsePath = path;
+  const result = curlRequest(method, path, payload);
   let parsed = parseCurlResponse(result, method, path);
-  if (canFallbackToInternal(path, parsed.statusCode, parsed.text)) {
-    responsePath = internalArenaPath(path);
-    result = curlRequest(method, responsePath, payload, true);
-    parsed = parseCurlResponse(result, method, responsePath);
-  }
   const { statusCode, text, body } = parsed;
   if (statusCode >= 200 && statusCode < 300) {
-    return { path: responsePath, requestedPath: path, method, statusCode, ok: true, body };
+    return { path, method, statusCode, ok: true, body };
   }
   const encoded = JSON.stringify(body);
   if (options.allowAlreadyExists && encoded.includes("already exists")) {
-    return { path: responsePath, requestedPath: path, method, statusCode, ok: true, ignored: "already_exists", body };
+    return { path, method, statusCode, ok: true, ignored: "already_exists", body };
   }
   if (options.allowInvalidTransition && (encoded.includes("invalid bot version transition") || encoded.includes("invalid arena run transition"))) {
-    return { path: responsePath, requestedPath: path, method, statusCode, ok: true, ignored: "invalid_transition", body };
+    return { path, method, statusCode, ok: true, ignored: "invalid_transition", body };
   }
   throw new Error(`arena local persist ${method} ${path} failed (${statusCode}): ${text}`);
 }
 
-function curlRequest(method, path, payload, internalRoute) {
+function curlRequest(method, path, payload) {
   const command = [
     "compose",
     "exec",
@@ -198,9 +192,7 @@ function curlRequest(method, path, payload, internalRoute) {
     "-H",
     `X-Correlation-Id: ${correlationId}`,
   ];
-  if (internalRoute) {
-    command.push("-H", "X-Reef-Internal-Route: true");
-  } else if (arenaAdminApiToken.trim() !== "") {
+  if (arenaAdminApiToken.trim() !== "") {
     command.push("-H", `Authorization: Bearer ${arenaAdminApiToken}`);
   }
   if (method === "POST") {
@@ -224,17 +216,6 @@ function parseCurlResponse(result, method, path) {
   const text = lines.join("\n");
   const body = safeJson(text);
   return { statusCode, text, body };
-}
-
-function canFallbackToInternal(path, statusCode, text) {
-  if (arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
-  return statusCode === 404 ||
-    statusCode === 401 ||
-    (statusCode === 503 && text.includes("ARENA_ADMIN_API_TOKEN"));
-}
-
-function internalArenaPath(path) {
-  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
 }
 
 function dryRunBody(path, payload) {
