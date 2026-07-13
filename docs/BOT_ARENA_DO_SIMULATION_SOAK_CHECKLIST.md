@@ -521,10 +521,9 @@ Findings:
   projection database: availability reported about `1.2M` lag from prior data.
   Use a clean local stack or run-scoped projection-drain accounting before
   treating this as a pass/fail gate.
-- Host-to-container calls to `/internal/admin/arena/*` are rejected by the
-  internal route guard (`internal HTTP route requires loopback access`), so local
-  host-runner persistence needs a public/admin route, in-container execution, or
-  a loopback-safe local operator path.
+- Host-runner persistence now uses `/admin/v1/arena/*` gateway routes; raw
+  `/internal/admin/arena/*` remains a local migration adapter and should not be
+  used for hosted or CI workflows.
 
 Follow-up verification after rebuilding `reef-platform-runtime` from the current
 source:

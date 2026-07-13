@@ -11,15 +11,15 @@ const actorId = env("ADMIN_ACTOR_ID", "admin-cli");
 const runId = env("DEV_ARENA_BOT_RISK_SMOKE_RUN_ID", `arena-risk-smoke-${suffix}`);
 const venueSessionId = env("DEV_ARENA_BOT_RISK_SMOKE_VENUE_SESSION_ID", `arena-risk-session-${suffix}`);
 const traderActorId = "arena-risk-smoke-user";
+const adminApiToken = env("ADMIN_API_TOKEN", "");
 const arenaAdminApiToken = env("ARENA_ADMIN_API_TOKEN", "");
 
-async function request(method, path, payload = undefined, headers = {}, internalRoute = false) {
+async function request(method, path, payload = undefined, headers = {}) {
   const response = await fetch(`${runtimeUrl}${path}`, {
     method,
     headers: {
       "content-type": "application/json",
-      ...(arenaAdminApiToken.trim() !== "" && !internalRoute && path.startsWith("/admin/v1/") ? { Authorization: `Bearer ${arenaAdminApiToken}` } : {}),
-      ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
+      ...adminAuthorizationHeader(path),
       "X-Reef-Actor-Id": actorId,
       "X-Correlation-Id": `arena-risk-smoke-${suffix}`,
       ...headers,
@@ -28,6 +28,12 @@ async function request(method, path, payload = undefined, headers = {}, internal
   });
   const text = await response.text();
   return { status: response.status, text, json: parseJson(text) };
+}
+
+function adminAuthorizationHeader(path) {
+  if (!path.startsWith("/admin/v1/")) return {};
+  const token = path.startsWith("/admin/v1/arena/") ? arenaAdminApiToken : adminApiToken;
+  return token.trim() === "" ? {} : { Authorization: `Bearer ${token}` };
 }
 
 function parseJson(text) {
@@ -53,30 +59,29 @@ function assertArenaAdminConfigured(response, operation) {
 }
 
 async function seedReferenceData() {
-  const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
-  await expectOk("POST", "/reference/instruments", {
+  await expectOk("POST", "/admin/v1/reference/instruments", {
     instrumentId: "AAPL",
     symbol: "AAPL",
     assetClass: "US_EQ",
     currency: "USD",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/reference/participants", {
+  });
+  await expectOk("POST", "/admin/v1/reference/participants", {
     participantId: "participant-1",
     name: "Participant 1",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/reference/accounts", {
+  });
+  await expectOk("POST", "/admin/v1/reference/accounts", {
     accountId: "account-1",
     participantId: "participant-1",
     accountType: "HOUSE",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/auth/roles", {
+  });
+  await expectOk("POST", "/admin/v1/auth/roles", {
     roleId: "order_trader",
     permissions: "order.submit,order.cancel,order.modify",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/auth/actor-roles", {
+  });
+  await expectOk("POST", "/admin/v1/auth/actor-roles", {
     actorId: traderActorId,
     roleId: "order_trader",
-  }, internalRouteHeaders);
+  });
 }
 
 async function registerArenaBot() {
@@ -127,24 +132,7 @@ async function quarantineBotVersion() {
 }
 
 async function arenaRequest(method, path, payload = undefined) {
-  let response = await request(method, path, payload);
-  if (canFallbackToInternal(path, response)) {
-    response = await request(method, internalArenaPath(path), payload, {}, true);
-  }
-  return response;
-}
-
-function canFallbackToInternal(path, response) {
-  const host = new URL(runtimeUrl).hostname;
-  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
-  if (!loopback || arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
-  return response.status === 404 ||
-    response.status === 401 ||
-    (response.status === 503 && response.text.includes("ARENA_ADMIN_API_TOKEN"));
-}
-
-function internalArenaPath(path) {
-  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
+  return request(method, path, payload);
 }
 
 async function submitBotOrder() {

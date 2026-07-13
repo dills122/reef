@@ -44,7 +44,7 @@
     "arena:local-run": "bun scripts/dev/arena-local-run.mjs",
     "arena:local-tick-run": "bun scripts/dev/arena-local-tick-run.mjs",
     "arena:local-hardening-run": "bun scripts/dev/arena-local-hardening-run.mjs",
-    "arena:test:local-tick-live": "node scripts/dev/arena-local-tick-run-live.test.mjs",
+    "arena:test:local-tick-live": "bun scripts/dev/arena-local-tick-run-live.test.mjs",
     "arena:smoke:run-results": "bun scripts/dev/arena-run-result-ingestion-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/reef-dev.mjs sim run",

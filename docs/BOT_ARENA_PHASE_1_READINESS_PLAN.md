@@ -432,9 +432,8 @@ make dev-smoke-bot-arena-local-persist
 ```
 
 The persisted local gate first runs the same live arena path through `/api/v1`,
-then posts the resulting report from inside the `platform-api` container through
-loopback-only `/internal/admin/arena/*` routes. This keeps raw internal routes
-off the host/public surface while still proving arena run-result persistence,
+then posts the resulting report through gateway-backed `/admin/v1/arena/*`
+routes. This keeps raw internal routes out of the workflow while still proving arena run-result persistence,
 enforcement-event persistence, and leaderboard readback.
 
 Expected proof:
@@ -482,7 +481,7 @@ Existing compact reports can be summarized again with:
 ```bash
 ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
 MARKET_DATA_PROJECTOR_ENABLED=true \
-node scripts/dev/arena-local-hardening-run.mjs \
+bun scripts/dev/arena-local-hardening-run.mjs \
   --input-report=/tmp/reef-arena-local-hardening.json \
   --summary-out=/tmp/reef-arena-local-hardening.summary.json
 ```

@@ -721,8 +721,8 @@ bun run arena:local-tick-run --submit-mode=live \
 
 The persist path registers catalog bot metadata and versions when needed,
 registers the arena run, posts all `botResults` to
-`/internal/admin/arena/run-bot-results`, then reads back raw run results and
-`/internal/admin/arena/leaderboard` into the report.
+`/admin/v1/arena/run-bot-results`, then reads back raw run results and
+`/admin/v1/arena/leaderboard` into the report.
 
 Observed persisted smoke:
 

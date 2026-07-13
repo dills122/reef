@@ -146,7 +146,8 @@ EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=1 \
 make dev-smoke-arena-bot-risk
 ```
 
-The smoke registers a bot and bot version, quarantines that version through the hosted internal admin route, then submits a bot-versioned order and expects a pre-acceptance `BOT_DISABLED` rejection.
+The smoke registers a bot and bot version, quarantines that version through the admin gateway route, then submits a bot-versioned order and expects a pre-acceptance `BOT_DISABLED` rejection.
+The setup and arena control-plane calls use `/admin/v1/reference/...`, `/admin/v1/auth/...`, and `/admin/v1/arena/...`; local runs need matching `ADMIN_API_TOKEN` and `ARENA_ADMIN_API_TOKEN` values unless `LOCAL_DEV_ADMIN_AUTH_BYPASS=true` is enabled for loopback-only development.
 
 ## Agreed Direction
 

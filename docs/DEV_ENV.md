@@ -63,11 +63,19 @@ REEF_COMPOSE_FILES=docker-compose.yml make dev-compose-config ARGS="--services"
 REEF_COMPOSE_FILES=docker-compose.yml bun scripts/dev/reef-dev.mjs stack compose-config --services
 ```
 
-If Bun is not available locally yet, you can temporarily run with Node:
+Install Bun before running bot SDK, arena, or package-dependent repo automation.
+Plain Node-compatible stack commands can temporarily run with Node:
 
 ```bash
 JS_RUNTIME=node make dev-up
 JS_RUNTIME=node make dev-smoke
+```
+
+Bot SDK and arena tests are Bun-only. If they fail before execution with missing
+package imports, install the pinned JS dependencies first:
+
+```bash
+bun install --frozen-lockfile
 ```
 
 If default host ports are already in use, override them at runtime:
@@ -933,11 +941,16 @@ make dev-stress-diagnostics JS_RUNTIME=node
 Admin operations against the active runtime API:
 
 ```bash
+export ADMIN_API_TOKEN=local-admin
+make dev-admin CMD="role-upsert order_trader order.submit,order.cancel,order.modify"
 make dev-admin CMD="instrument-upsert AAPL AAPL"
 make dev-admin CMD="participant-upsert participant-1 'Participant 1'"
 make dev-admin CMD="account-upsert account-1 participant-1"
 make dev-admin CMD="traces trace-1-1"
 ```
+
+Reference-data and auth setup commands use the `/admin/v1/reference/...` and `/admin/v1/auth/...` gateway routes. Set `ADMIN_API_TOKEN` to the same value used when the runtime was started, unless `LOCAL_DEV_ADMIN_AUTH_BYPASS=true` is enabled for loopback-only local development.
+Arena control-plane scripts use `/admin/v1/arena/...` and require `ARENA_ADMIN_API_TOKEN` when the runtime is not using local-dev admin auth bypass.
 
 Reports are written to `/tmp` as:
 - `/tmp/reef-load-report-dev-stress-rate-100.json`
@@ -972,7 +985,7 @@ Compose sets:
 - accepted-async tuning: `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW`, `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS`, `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS`, and `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_TTL_MS` tune the in-memory no-DB accepted-async isolation path.
 - DB pool stats: `GET /internal/perf/db-pools` returns Hikari pool name plus active/idle/total/waiter counts for runtime-managed pools.
 - DB pool sizing: `RUNTIME_DB_POOL_MAX` and `RUNTIME_DB_POOL_MIN_IDLE` are global defaults. Named hot-path pools apply conservative role defaults so those values do not multiply directly across every pool. Override individual pools with `RUNTIME_DB_POOL_<POOL>_MAX` and `RUNTIME_DB_POOL_<POOL>_MIN_IDLE`, where `<POOL>` is the uppercase pool id with punctuation converted to underscores, such as `COMMAND_LOG` or `ASYNC_RUNTIME`.
-- legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`
+- legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and old setup paths such as `/reference/*` must include `X-Reef-Internal-Route: true`. New setup callers should use `/admin/v1/reference/...` and `/admin/v1/auth/...` instead.
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 - stream-ack partition workers: `platform-worker-0` through `platform-worker-3` default to four explicit non-overlapping `16`-partition ranges over the default `STREAM_ACK_PARTITION_COUNT=64`.
 - venue event materializer: `PLATFORM_RUNTIME_ROLE=materializer`, `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`, and `STREAM_ACK_LOG_PROVIDER=redpanda` starts the Kafka-compatible event-batch materializer. `VENUE_EVENT_MATERIALIZER_ENABLED=true` can also start it in another background-capable role for local experiments.

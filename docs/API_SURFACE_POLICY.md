@@ -81,7 +81,7 @@ Current implementation checkpoint:
 - raw `/internal/*` HTTP registration is controlled by `PLATFORM_INTERNAL_HTTP_MODE`
 - local development may use `PLATFORM_INTERNAL_HTTP_MODE=local` for loopback tooling
 - hosted/non-local profiles must set boundary modes explicitly and must not expose raw `/internal/*` externally
-- admin/data adapters use versioned gateway paths such as `/admin/v1/...`; the runtime currently has arena, analytics export, risk-control, and settlement gateway routes, and the Netty hot-path adapter dispatches these gateway reads/writes instead of returning `404`
+- admin/data adapters use versioned gateway paths such as `/admin/v1/...`; the runtime currently has reference/auth setup, arena, analytics export, risk-control, and settlement gateway routes, and the Netty hot-path adapter dispatches these gateway reads/writes instead of returning `404`
 - hosted Caddy exposes only narrow `/admin/v1/arena/...` and `/admin/v1/analytics/...` paths today; raw `/internal/*` is not proxied
 - admin HTTP actor identity is bound from request principal headers/token context, not request body or query fields
 - `/healthz` remains cheap liveness; `/readyz` reports runtime role, internal HTTP mode, DB pool pressure, and stream availability

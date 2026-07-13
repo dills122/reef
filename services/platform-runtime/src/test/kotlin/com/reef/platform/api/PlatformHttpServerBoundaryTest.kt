@@ -84,6 +84,46 @@ class PlatformHttpServerBoundaryTest {
     fun adminGatewayRouteMapIncludesRiskControlAliases() {
         assertEquals(
             AdminGatewayRoute(
+                "/reference/instruments",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/reference/instruments", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/reference/participants",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/reference/participants", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/reference/accounts",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/reference/accounts", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/auth/roles",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/auth/roles", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/auth/actor-roles",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/auth/actor-roles", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/account-risk/controls",
                 "admin",
                 setOf(AdminServiceTokenFamily.Admin)
@@ -371,6 +411,76 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, allowedByServiceToken.status)
             assertContains(allowedByServiceToken.body, "account risk control store unavailable")
             assertEquals(401, deniedByWrongFamily.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayReferenceAndAuthSetupBypassesLegacyMutationRouteGate() {
+        val auth = testAdminAuth()
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Admin,
+            subjectActorId = "setup-admin",
+            ttl = null
+        )
+        val headers = mapOf("Authorization" to "Bearer ${serviceToken.token}")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            legacyMutationRoutesEnabled = false
+        )
+        try {
+            val legacyReference = post(
+                port = server.address.port,
+                path = "/reference/instruments",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"instrumentId":"MSFT","symbol":"MSFT"}"""
+            )
+            val instrument = post(
+                server.address.port,
+                "/admin/v1/reference/instruments",
+                headers,
+                """{"instrumentId":"MSFT","symbol":"MSFT","assetClass":"US_EQ","currency":"USD"}"""
+            )
+            val participant = post(
+                server.address.port,
+                "/admin/v1/reference/participants",
+                headers,
+                """{"participantId":"participant-gateway","name":"Gateway Participant"}"""
+            )
+            val account = post(
+                server.address.port,
+                "/admin/v1/reference/accounts",
+                headers,
+                """{"accountId":"account-gateway","participantId":"participant-gateway","accountType":"HOUSE"}"""
+            )
+            val role = post(
+                server.address.port,
+                "/admin/v1/auth/roles",
+                headers,
+                """{"roleId":"gateway_trader","permissions":"order.submit"}"""
+            )
+            val actorRole = post(
+                server.address.port,
+                "/admin/v1/auth/actor-roles",
+                headers,
+                """{"actorId":"gateway-user","roleId":"gateway_trader"}"""
+            )
+            val instruments = get(server.address.port, "/admin/v1/reference/instruments", headers)
+            val actorRoles = get(server.address.port, "/admin/v1/auth/actor-roles?actorId=gateway-user", headers)
+
+            assertEquals(403, legacyReference.status)
+            assertEquals(200, instrument.status)
+            assertEquals(200, participant.status)
+            assertEquals(200, account.status)
+            assertEquals(200, role.status)
+            assertEquals(200, actorRole.status)
+            assertContains(instruments.body, "\"instrumentId\":\"MSFT\"")
+            assertContains(actorRoles.body, "\"actorId\":\"gateway-user\"")
+            assertContains(actorRoles.body, "\"roleId\":\"gateway_trader\"")
         } finally {
             server.stop(0)
         }

@@ -22,8 +22,8 @@ const finalEquity = Number(env("DEV_ARENA_RUN_RESULT_SMOKE_FINAL_EQUITY", "10250
 const replacementFinalEquity = finalEquity + 1500;
 const arenaAdminApiToken = env("ARENA_ADMIN_API_TOKEN", "");
 
-async function request(method, path, payload = undefined, internalRoute = false) {
-  const response = await requestJson(`${runtimeUrl}${path}`, method, payload, internalRoute);
+async function request(method, path, payload = undefined) {
+  const response = await requestJson(`${runtimeUrl}${path}`, method, payload);
   return { status: response.status, text: response.text, json: parseJson(response.text) };
 }
 
@@ -42,10 +42,7 @@ function assertArenaAdminConfigured(response, operation) {
 }
 
 async function expectOk(method, path, payload = undefined) {
-  let response = await request(method, path, payload);
-  if (canFallbackToInternal(path, response)) {
-    response = await request(method, internalArenaPath(path), payload, true);
-  }
+  const response = await request(method, path, payload);
   assertArenaAdminConfigured(response, `${method} ${path}`);
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`${method} ${path} failed (${response.status}): ${response.text}`);
@@ -124,7 +121,7 @@ writeFileSync(summaryPath, JSON.stringify({
   signalsGenerated: 4,
 }, null, 2));
 
-const ingest = spawnSync("node", [
+const ingest = spawnSync("bun", [
   "scripts/dev/arena-ingest-bot-run-result.mjs",
   `--summary=${summaryPath}`,
   `--bot-id=${botId}`,
@@ -141,7 +138,7 @@ if (ingest.status !== 0) {
   throw new Error(`arena result ingestion failed (${ingest.status}): ${ingest.stdout}${ingest.stderr}`);
 }
 
-const retryIngest = spawnSync("node", [
+const retryIngest = spawnSync("bun", [
   "scripts/dev/arena-ingest-bot-run-result.mjs",
   `--summary=${summaryPath}`,
   `--bot-id=${botId}`,
@@ -191,20 +188,7 @@ if (entry.finalEquity !== replacementFinalEquity) {
 console.log("arena run result ingestion smoke passed");
 console.log(JSON.stringify({ botId, versionId, runId, modeId, scoringPolicyVersion, finalEquity: replacementFinalEquity }, null, 2));
 
-function canFallbackToInternal(path, response) {
-  const host = new URL(runtimeUrl).hostname;
-  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
-  if (!loopback || arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
-  return response.status === 404 ||
-    response.status === 401 ||
-    (response.status === 503 && response.text.includes("ARENA_ADMIN_API_TOKEN"));
-}
-
-function internalArenaPath(path) {
-  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
-}
-
-function requestJson(url, method, payload = undefined, internalRoute = false) {
+function requestJson(url, method, payload = undefined) {
   const parsed = new URL(url);
   const transport = parsed.protocol === "https:" ? https : http;
   const body = payload === undefined ? undefined : JSON.stringify(payload);
@@ -213,8 +197,7 @@ function requestJson(url, method, payload = undefined, internalRoute = false) {
       method,
       headers: {
         "content-type": "application/json",
-        ...(arenaAdminApiToken.trim() !== "" && !internalRoute ? { Authorization: `Bearer ${arenaAdminApiToken}` } : {}),
-        ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
+        ...(arenaAdminApiToken.trim() !== "" ? { Authorization: `Bearer ${arenaAdminApiToken}` } : {}),
         "X-Reef-Actor-Id": actorId,
         "X-Correlation-Id": `arena-result-smoke-${suffix}`,
         ...(body === undefined ? {} : { "content-length": Buffer.byteLength(body) }),

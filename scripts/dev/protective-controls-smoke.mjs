@@ -106,30 +106,29 @@ async function submitOrder(label, extra = {}) {
 }
 
 async function seedReferenceData() {
-  const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
-  await expectOk("POST", "/reference/instruments", {
+  await expectOk("POST", "/admin/v1/reference/instruments", {
     instrumentId: "AAPL",
     symbol: "AAPL",
     assetClass: "US_EQ",
     currency: "USD",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/reference/participants", {
+  });
+  await expectOk("POST", "/admin/v1/reference/participants", {
     participantId: "participant-1",
     name: "Participant 1",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/reference/accounts", {
+  });
+  await expectOk("POST", "/admin/v1/reference/accounts", {
     accountId: "account-1",
     participantId: "participant-1",
     accountType: "HOUSE",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/auth/roles", {
+  });
+  await expectOk("POST", "/admin/v1/auth/roles", {
     roleId: "order_trader",
     permissions: "order.submit,order.cancel,order.modify",
-  }, internalRouteHeaders);
-  await expectOk("POST", "/auth/actor-roles", {
+  });
+  await expectOk("POST", "/admin/v1/auth/actor-roles", {
     actorId: "protective-smoke-user",
     roleId: "order_trader",
-  }, internalRouteHeaders);
+  });
 }
 
 async function setAccountRisk(scopeType, scopeId, decision, reason, limits = {}) {
