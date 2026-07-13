@@ -2927,6 +2927,28 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun cancelByClientOrderReturns400WhenJsonMalformed() {
+        val server = testServerWithGateway(gateway = EchoOrderEngineGateway())
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel-by-client-order",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-cancel-by-client-order-malformed"
+                ),
+                body = """{"participantId":"""
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "invalid json payload")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun cancelByClientOrderReturns400WhenMissingRequiredFields() {
         val server = testServerWithGateway(gateway = EchoOrderEngineGateway())
         try {

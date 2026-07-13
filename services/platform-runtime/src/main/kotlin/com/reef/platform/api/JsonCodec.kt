@@ -21,20 +21,12 @@ object JsonCodec {
         return JsonDocument(root)
     }
 
-    fun parseObjectOrEmpty(body: String): JsonDocument {
+    fun parseLegacyObjectOrEmpty(body: String): JsonDocument {
         return try {
             parseObject(body)
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
             JsonDocument(JsonNodeFactory.instance.objectNode())
         }
-    }
-
-    fun fieldAsString(body: String, key: String): String {
-        return parseObjectOrEmpty(body).string(key)
-    }
-
-    fun objectArrayElements(body: String, key: String): List<String> {
-        return parseObjectOrEmpty(body).objectArray(key)
     }
 
     fun escapeString(value: String): String {

@@ -56,8 +56,9 @@ internal class SettlementAdminGateway(
     fun appendSettlementFactsResponse(body: String): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
-            val facts = parseSettlementFactBundle(JsonCodec.parseObject(body))
+            val facts = parseSettlementFactBundle(json)
             store.appendFacts(facts)
             PlatformHotPathResponse(
                 200,
@@ -108,8 +109,8 @@ internal class SettlementAdminGateway(
     ): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
-            val json = JsonCodec.parseObject(body)
             val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
             require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
             val settlementBreakId = json.string("settlementBreakId")
@@ -190,8 +191,8 @@ internal class SettlementAdminGateway(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
         val materializer = settlementObligationMaterializer
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
-            val json = JsonCodec.parseObject(body)
             val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
             require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
             val settlementBreakId = json.string("settlementBreakId")
@@ -310,8 +311,8 @@ internal class SettlementAdminGateway(
     fun reverseSettlementLedgerEntryResponse(body: String): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
-            val json = JsonCodec.parseObject(body)
             val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
             require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
             val targetLedgerEntryId = json.string("ledgerEntryId").ifBlank { json.string("targetLedgerEntryId") }
@@ -435,8 +436,8 @@ internal class SettlementAdminGateway(
     fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
         val materializer = settlementObligationMaterializer
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
-            val json = JsonCodec.parseObject(body)
             val result = materializer.materialize(
                 scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") },
                 venueSessionId = json.string("venueSessionId")

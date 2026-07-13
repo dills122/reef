@@ -52,7 +52,7 @@ internal class ArenaAdminGateway(
     fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val botId = json.string("botId")
         val versionId = json.string("versionId")
         val status = normalizeArenaBotVersionStatus(json.string("status"))
@@ -91,7 +91,7 @@ internal class ArenaAdminGateway(
     fun registerArenaBotResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val actor = arenaAdminActor(json)
         return try {
             val bot = service.registerArenaBot(
@@ -124,7 +124,7 @@ internal class ArenaAdminGateway(
     fun registerArenaBotVersionResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val actor = arenaAdminActor(json)
         return try {
             val version = service.registerArenaBotVersion(
@@ -159,7 +159,7 @@ internal class ArenaAdminGateway(
         if (arenaAdminService == null) {
             return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         }
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val githubOidcToken = json.string("githubOidcToken")
         val submitterIdentity = json.string("submitterIdentity")
         val botId = json.string("botId")
@@ -202,7 +202,7 @@ internal class ArenaAdminGateway(
     fun assignArenaBotOwnershipResponse(body: String): PlatformHotPathResponse {
         val identity = adminIdentityService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val botId = json.string("botId")
         val githubLogin = json.string("githubLogin")
         val displayName = json.string("displayName")
@@ -302,11 +302,7 @@ internal class ArenaAdminGateway(
         service: AdminApplicationService,
         body: String
     ): PlatformHotPathResponse {
-        val json = try {
-            JsonCodec.parseObject(body)
-        } catch (ex: IllegalArgumentException) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid json payload"))
-        }
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val botId = json.string("botId")
         val configJson = json.raw("config")
         if (botId.isBlank() || configJson.isBlank()) {
@@ -533,7 +529,7 @@ internal class ArenaAdminGateway(
     fun registerArenaRunResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
             val run = service.registerArenaRun(
                 arenaAdminActor(json),
@@ -559,7 +555,7 @@ internal class ArenaAdminGateway(
     fun updateArenaRunStatusResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val runId = json.string("runId")
         val status = normalizeArenaRunStatus(json.string("status"))
             ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid arena run status"))
@@ -599,7 +595,7 @@ internal class ArenaAdminGateway(
     fun recordArenaRunBotResultResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
             val command = ArenaRunBotResultIngestionCommand(
                 runId = json.string("runId"),
@@ -652,7 +648,7 @@ internal class ArenaAdminGateway(
     fun recordArenaRunEnforcementEventResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
             val command = ArenaRunEnforcementEventIngestionCommand(
                 runId = json.string("runId"),
@@ -721,7 +717,7 @@ internal class ArenaAdminGateway(
     fun recordAnalyticsRunExportResponse(body: String): PlatformHotPathResponse {
         val service = analyticsRunExportService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val counts = json.obj("counts")
         val latency = json.obj("latencyMs")
         val summaryJson = analyticsExportSummaryJson(json)

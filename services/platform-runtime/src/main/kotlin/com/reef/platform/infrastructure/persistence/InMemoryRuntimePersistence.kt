@@ -198,6 +198,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return orders[orderId]
     }
 
+    override fun acceptedOrders(orderIds: Set<String>): Map<String, PersistedOrder> {
+        return orderIds.mapNotNull { orderId ->
+            orders[orderId]?.let { orderId to it }
+        }.toMap()
+    }
+
     override fun acceptedOrders(): List<PersistedOrder> {
         return orders.values.toList()
     }
@@ -271,6 +277,19 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return trades.filter { it.buyOrderId == orderId || it.sellOrderId == orderId }
     }
 
+    override fun tradesForSettlementMaterialization(scenarioRunId: String, venueSessionId: String): List<TradeCreated> {
+        return trades.filter { trade ->
+            val buyOrder = orders[trade.buyOrderId] ?: return@filter false
+            val sellOrder = orders[trade.sellOrderId] ?: return@filter false
+            val tradeRunId = sharedSettlementMetadata(buyOrder.runId, sellOrder.runId) ?: return@filter false
+            val effectiveScenarioRunId = tradeRunId.ifBlank { scenarioRunId }
+            if (effectiveScenarioRunId != scenarioRunId) return@filter false
+            val orderVenueSessionId = sharedSettlementMetadata(buyOrder.venueSessionId, sellOrder.venueSessionId)
+                ?: return@filter false
+            venueSessionId.isBlank() || orderVenueSessionId.isBlank() || orderVenueSessionId == venueSessionId
+        }
+    }
+
     override fun trades(): List<TradeCreated> {
         return trades.toList()
     }
@@ -280,6 +299,15 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         val boundedLimit = limit.coerceAtMost(500)
         val from = (trades.size - boundedLimit).coerceAtLeast(0)
         return trades.subList(from, trades.size).toList()
+    }
+
+    private fun sharedSettlementMetadata(first: String, second: String): String? {
+        val values = listOf(first, second).filter { it.isNotBlank() }.toSet()
+        return when (values.size) {
+            0 -> ""
+            1 -> values.single()
+            else -> null
+        }
     }
 
     override fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long?): List<PublicTradeTapeEntry> {
@@ -813,7 +841,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     private fun jsonString(json: String, key: String): String {
-        val document = JsonCodec.parseObjectOrEmpty(json)
+        val document = JsonCodec.parseLegacyObjectOrEmpty(json)
         return document.string(key)
             .ifBlank { document.obj("accepted").string(key) }
             .ifBlank { document.obj("rejected").string(key) }

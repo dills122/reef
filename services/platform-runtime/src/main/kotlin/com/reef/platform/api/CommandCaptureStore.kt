@@ -104,6 +104,32 @@ class NoopCommandCaptureStore : CommandCaptureStore {
     }
 }
 
+private fun commandIdFromPayloadOrKey(
+    clientId: String,
+    route: String,
+    idempotencyKey: String,
+    requestPayload: String
+): String {
+    val parsedPayload = try {
+        JsonCodec.parseObject(requestPayload)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+    return commandIdFromParsedPayloadOrKey(clientId, route, idempotencyKey, parsedPayload)
+}
+
+private fun commandIdFromParsedPayloadOrKey(
+    clientId: String,
+    route: String,
+    idempotencyKey: String,
+    payload: JsonDocument?
+): String {
+    val parsedCommandId = payload?.string("commandId").orEmpty()
+    if (parsedCommandId.isNotBlank()) return parsedCommandId
+    val source = "$clientId|$route|$idempotencyKey"
+    return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+}
+
 class InMemoryCommandCaptureStore : CommandCaptureStore, CommandStatusLookup {
     private data class CapturedCommand(
         val commandId: String,
@@ -224,14 +250,7 @@ class InMemoryCommandCaptureStore : CommandCaptureStore, CommandStatusLookup {
     }
 
     private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
-        val parsedCommandId = try {
-            JsonCodec.parseObject(requestPayload).string("commandId")
-        } catch (_: Exception) {
-            ""
-        }
-        if (parsedCommandId.isNotBlank()) return parsedCommandId
-        val source = "$clientId|$route|$idempotencyKey"
-        return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+        return commandIdFromPayloadOrKey(clientId, route, idempotencyKey, requestPayload)
     }
 
     private fun CapturedCommand.toStatusView(): CommandStatusView {
@@ -361,10 +380,7 @@ class CommandLogCommandCaptureStore(
     }
 
     private fun commandId(clientId: String, route: String, idempotencyKey: String, payload: JsonDocument?): String {
-        val parsedCommandId = payload?.string("commandId").orEmpty()
-        if (parsedCommandId.isNotBlank()) return parsedCommandId
-        val source = "$clientId|$route|$idempotencyKey"
-        return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+        return commandIdFromParsedPayloadOrKey(clientId, route, idempotencyKey, payload)
     }
 
     private fun newCommandLogRecord(
@@ -396,7 +412,7 @@ class CommandLogCommandCaptureStore(
     private fun parsePayloadOrNull(requestPayload: String): JsonDocument? {
         return try {
             JsonCodec.parseObject(requestPayload)
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -659,14 +675,7 @@ class PostgresCommandCaptureStore(
     }
 
     private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
-        val parsedCommandId = try {
-            JsonCodec.parseObject(requestPayload).string("commandId")
-        } catch (_: Exception) {
-            ""
-        }
-        if (parsedCommandId.isNotBlank()) return parsedCommandId
-        val source = "$clientId|$route|$idempotencyKey"
-        return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+        return commandIdFromPayloadOrKey(clientId, route, idempotencyKey, requestPayload)
     }
 
     private fun connection() = dataSource.connection

@@ -195,7 +195,7 @@ class StreamCommandWorker(
         delivery: StreamCommandDelivery,
         outcome: PersistableSubmitOutcome
     ): CanonicalSubmitOutcome {
-        val payload = JsonCodec.parseObjectOrEmpty(delivery.payloadJson)
+        val payload = JsonCodec.parseLegacyObjectOrEmpty(delivery.payloadJson)
         val accepted = outcome.result.accepted
         val rejected = outcome.result.rejected
         val occurredAt = accepted?.occurredAt ?: rejected?.occurredAt.orEmpty()

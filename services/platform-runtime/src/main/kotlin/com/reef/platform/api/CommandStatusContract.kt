@@ -254,7 +254,7 @@ fun VenueEventBatchCommandReference.toStatusView(): CommandStatusView {
 }
 
 internal fun commandStatusParticipantId(payloadJson: String): String {
-    val root = JsonCodec.parseObjectOrEmpty(payloadJson)
+    val root = JsonCodec.parseLegacyObjectOrEmpty(payloadJson)
     return root.string("participantId")
         .ifBlank { root.obj("acceptedOrder").string("participantId") }
         .ifBlank { root.obj("accepted").string("participantId") }
@@ -262,7 +262,7 @@ internal fun commandStatusParticipantId(payloadJson: String): String {
 }
 
 private fun commandStatusOrderId(payloadJson: String): String {
-    val root = JsonCodec.parseObjectOrEmpty(payloadJson)
+    val root = JsonCodec.parseLegacyObjectOrEmpty(payloadJson)
     return root.string("orderId")
         .ifBlank { root.obj("acceptedOrder").string("orderId") }
         .ifBlank { root.obj("accepted").string("orderId") }

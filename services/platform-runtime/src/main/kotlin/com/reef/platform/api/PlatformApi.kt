@@ -28,6 +28,7 @@ import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandRefere
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.time.Duration
 import java.time.Instant
+import java.time.format.DateTimeParseException
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
@@ -624,16 +625,8 @@ class PlatformApi(
     }
 
     private fun intradayBarsRangeError(interval: String, start: String, end: String): String? {
-        val startInstant = try {
-            Instant.parse(start)
-        } catch (_: Exception) {
-            return "invalid time range"
-        }
-        val endInstant = try {
-            Instant.parse(end)
-        } catch (_: Exception) {
-            return "invalid time range"
-        }
+        val startInstant = parseInstantOrNull(start) ?: return "invalid time range"
+        val endInstant = parseInstantOrNull(end) ?: return "invalid time range"
         if (!endInstant.isAfter(startInstant)) return "invalid time range"
         val intervalDuration = when (interval) {
             "1m" -> Duration.ofMinutes(1)
@@ -645,12 +638,20 @@ class PlatformApi(
         }
         val rangeMillis = try {
             Duration.between(startInstant, endInstant).toMillis()
-        } catch (_: Exception) {
+        } catch (_: ArithmeticException) {
             return "invalid time range"
         }
         val intervalMillis = intervalDuration.toMillis()
         val bucketCount = (rangeMillis + intervalMillis - 1) / intervalMillis
         return if (bucketCount > MaxIntradayBarBuckets) "intraday bars range too large" else null
+    }
+
+    private fun parseInstantOrNull(value: String): Instant? {
+        return try {
+            Instant.parse(value)
+        } catch (_: DateTimeParseException) {
+            null
+        }
     }
 
     fun ownOrders(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): String {
