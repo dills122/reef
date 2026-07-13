@@ -262,9 +262,15 @@ fallbacks:
 ARENA_ADMIN_API_TOKEN
 ANALYTICS_EXPORT_API_TOKEN
 ADMIN_API_TOKEN
+ARENA_ADMIN_API_ACTOR_ID
+ANALYTICS_EXPORT_API_ACTOR_ID
+ADMIN_API_ACTOR_ID
 ```
 
-Bot-submission CI uses the scoped `ci` token path:
+Bot-submission provisioning uses the scoped `ci` token path from the trusted
+`Bot Submission Provision` `workflow_run` workflow. The pull-request workflow
+that checks out submitted bot code does not receive these secrets or OIDC token
+minting permission:
 
 ```text
 ARENA_ADMIN_API_URL
@@ -294,10 +300,20 @@ GitHub OIDC audience requested by the provisioner is `reef-bot-submission-ci`,
 matching the OpenBao `auth/jwt/role/reef-bot-submission-ci` bound audience seeded
 by `infra/hetzner-core/server/scripts/configure-openbao.sh`.
 
+The hosted Admin API does not trust the request body alone for the OpenBao path.
+For `/admin/v1/arena/bots/openbao-provision`, `submitterIdentity` must exactly
+match the GitHub Actions OIDC `actor` claim before any OpenBao write/delete is
+attempted. If the target bot already has ownership metadata, that actor must be
+an active owner or maintainer; add flows for new bots may create only a slice
+under the OIDC actor's own submitter namespace.
+
 When the Admin DB auth layer is configured, authenticated session and service
 tokens bind the internal admin actor id from the trusted token record instead of
-from caller-controlled headers. The static fallback preserves the older header
-behavior for legacy scripts until those callers move to service tokens.
+from caller-controlled headers. Static fallback tokens also bind the internal
+admin actor server-side from `ARENA_ADMIN_API_ACTOR_ID`,
+`ANALYTICS_EXPORT_API_ACTOR_ID`, or `ADMIN_API_ACTOR_ID`, falling back to
+`ADMIN_ACTOR_ID` when a family-specific actor is not configured. They do not
+trust `X-Reef-Actor-Id` from the caller.
 
 ## Participant Bot Config
 
@@ -459,7 +475,7 @@ Required before merge:
 - configured bot ownership limits pass
 - OpenBao slice exists or has been provisioned
 
-The bot-submission workflow posts or updates a PR comment after the hosted
+The trusted provisioning workflow posts or updates a PR comment after the hosted
 OpenBao step. That comment includes only non-secret metadata: bot ID, submitter
 identity, provisioning flow, the OpenBao slice path, and the next user/operator
 action. It must never include token values, GitHub OIDC tokens, OpenBao tokens,

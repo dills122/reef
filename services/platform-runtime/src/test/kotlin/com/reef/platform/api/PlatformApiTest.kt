@@ -585,6 +585,29 @@ class PlatformApiTest {
     }
 
     @Test
+    fun intradayBarsWithStatusRejectsOversizedAndInvalidRanges() {
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence()))
+
+        val oversized = api.intradayBarsWithStatus(
+            "AAPL",
+            interval = "1m",
+            start = "2026-03-14T00:00:00Z",
+            end = "2026-03-16T00:00:00Z"
+        )
+        val invalid = api.intradayBarsWithStatus(
+            "AAPL",
+            interval = "1m",
+            start = "2026-03-14T18:02:00Z",
+            end = "2026-03-14T18:00:00Z"
+        )
+
+        assertEquals(false, oversized.found)
+        assertContains(oversized.body, "\"error\":\"intraday bars range too large\"")
+        assertEquals(false, invalid.found)
+        assertContains(invalid.body, "\"error\":\"invalid time range\"")
+    }
+
+    @Test
     fun ownOrdersApiScopesToParticipantAndOpenStatusOnly() {
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))

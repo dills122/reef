@@ -2422,6 +2422,9 @@ class RunnerWorker {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
+        if (this.child !== undefined && !this.child.killed) {
+          this.child.kill("SIGKILL");
+        }
         reject(new Error(`${this.workerId} request ${message.type} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       this.pending.set(id, {

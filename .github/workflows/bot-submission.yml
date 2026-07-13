@@ -12,20 +12,10 @@ name: Bot Submission
 # scripts/dev/bot-submission-validate.mjs), alongside the bot's TypeScript entry
 # file, added/changed in the same PR.
 #
-# Stage 4 (registry-diff + OpenBao provisioning) calls the real, always-on
-# hosted platform-runtime admin API over HTTPS (ARENA_ADMIN_API_URL secret) -
-# it does NOT spin up an ephemeral `make dev-up` stack like stages 1-3 do.
-# A fresh per-run stack has an empty registry DB and a throwaway OpenBao
-# container, so a registry diff or secret provisioning against it would be
-# meaningless (every bot would look "new"; nothing provisioned would persist).
-# CI stays a plain HTTP client here - no JVM/Gradle runs in this workflow at
-# all; the Kotlin OpenBao client code runs only on the always-on server.
-#
-# The admin API is loopback-only by default (SSH-tunnel access per
-# infra/hetzner-core/server/README.md). GitHub Actions reaches only the
-# narrowly-scoped Caddy gateway routes for registry lookup and
-# /admin/v1/arena/bots/openbao-provision, using ARENA_ADMIN_API_TOKEN plus
-# GitHub Actions OIDC. The script never talks to OpenBao directly.
+# Hosted registry diff and OpenBao provisioning run in the separate
+# Bot Submission Provision workflow_run workflow. This pull_request workflow
+# intentionally has no hosted admin API secrets and no id-token permission
+# because it checks out and executes PR-controlled bot code/scripts.
 
 on:
   pull_request:
@@ -35,7 +25,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   detect-flow:
@@ -46,8 +35,10 @@ jobs:
     steps:
       - name: Parse branch convention
         id: parse
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          branch="${{ github.head_ref }}"
+          branch="$HEAD_REF"
           case "$branch" in
             bots/add/*) flow="add" ;;
             bots/update/*) flow="update" ;;
@@ -57,7 +48,21 @@ jobs:
               flow="skip"
               ;;
           esac
-          bot_name="${branch#bots/*/}"
+          if [ "$flow" = "skip" ]; then
+            bot_name=""
+          else
+            bot_name="${branch#bots/*/}"
+            case "$bot_name" in
+              *[!a-z0-9._-]* | [!a-z0-9]* | ? | ??)
+                echo "bot submission branch bot name must be 3-64 chars matching [a-z0-9][a-z0-9._-]*: $bot_name" >&2
+                exit 1
+                ;;
+            esac
+            if [ "${#bot_name}" -gt 64 ]; then
+              echo "bot submission branch bot name is too long: $bot_name" >&2
+              exit 1
+            fi
+          fi
           echo "flow=$flow" >> "$GITHUB_OUTPUT"
           echo "bot-name=$bot_name" >> "$GITHUB_OUTPUT"
 
@@ -72,9 +77,11 @@ jobs:
         with:
           node-version: '22'
       - name: Validate bot manifest
+        env:
+          BOT_NAME: ${{ needs.detect-flow.outputs.bot-name }}
         run: |
           node scripts/dev/bot-submission-validate.mjs \
-            "bots/${{ needs.detect-flow.outputs.bot-name }}/bot.json"
+            "bots/${BOT_NAME}/bot.json"
 
   # Stages 2+3: security/static analysis (approved-import scan) and sandboxed
   # test run both happen inside bot-sdk-test-bot.mjs's existing SES-based gate
@@ -95,94 +102,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Security scan + sandboxed test run
+        env:
+          BOT_NAME: ${{ needs.detect-flow.outputs.bot-name }}
         run: |
           bun scripts/dev/bot-sdk-test-bot.mjs \
-            "bots/${{ needs.detect-flow.outputs.bot-name }}/index.ts"
-
-  # Stage 4: registry diff (add vs update, by registry state not branch name)
-  # plus OpenBao provisioning, against the real hosted admin API. Only
-  # reached if 1-3 pass. No local stack is started here (see header note).
-  registry-diff-and-provision:
-    needs: [detect-flow, validate-manifest, scan-and-sandbox-test]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      issues: write
-      pull-requests: write
-    # `always()` + explicit check lets bots/remove skip the 1-3 gate (no bot
-    # code to scan/test) while still requiring validate/scan to have passed
-    # for add/update flows.
-    if: |
-      always() &&
-      needs.detect-flow.result == 'success' &&
-      needs.detect-flow.outputs.flow != 'skip' &&
-      (needs.detect-flow.outputs.flow == 'remove' ||
-        (needs.validate-manifest.result == 'success' && needs.scan-and-sandbox-test.result == 'success'))
-    env:
-      ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
-      ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Registry diff (new bot vs existing bot)
-        id: registry-diff
-        if: needs.detect-flow.outputs.flow != 'remove'
-        run: node scripts/dev/bot-submission-registry-diff.mjs "${{ needs.detect-flow.outputs.bot-name }}"
-      - name: OpenBao provisioning
-        id: openbao-provision
-        continue-on-error: true
-        env:
-          BOT_SUBMISSION_OPENBAO_MODE: real
-        run: |
-          flow="${{ needs.detect-flow.outputs.flow }}"
-          if [ "$flow" = "remove" ]; then
-            provision_flow="remove"
-          else
-            provision_flow="${{ steps.registry-diff.outputs.flow }}"
-          fi
-          slice_path="secret/bots/${{ github.actor }}/${{ needs.detect-flow.outputs.bot-name }}"
-          echo "flow=$provision_flow" >> "$GITHUB_OUTPUT"
-          echo "slice-path=$slice_path" >> "$GITHUB_OUTPUT"
-          set +e
-          output=$(node scripts/dev/bot-submission-provision-openbao.mjs \
-            "${{ needs.detect-flow.outputs.bot-name }}" \
-            "$provision_flow" \
-            "${{ github.actor }}" 2>&1)
-          status=$?
-          set -e
-          printf '%s\n' "$output"
-          if [ "$status" -eq 0 ]; then
-            result="success"
-          else
-            result="failure"
-          fi
-          message=$(printf '%s\n' "$output" | tail -n 1)
-          {
-            echo "result=$result"
-            echo "exit-code=$status"
-            echo "message<<EOF"
-            printf '%s\n' "$message"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          exit "$status"
-      - name: Comment OpenBao provisioning result
-        if: always() && steps.openbao-provision.outputs.result != ''
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BOT_ID: ${{ needs.detect-flow.outputs.bot-name }}
-          SUBMITTER_IDENTITY: ${{ github.actor }}
-          PROVISION_FLOW: ${{ steps.openbao-provision.outputs.flow }}
-          PROVISION_RESULT: ${{ steps.openbao-provision.outputs.result }}
-          PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
-          OPENBAO_SLICE_PATH: ${{ steps.openbao-provision.outputs['slice-path'] }}
-        run: node scripts/dev/bot-submission-pr-comment.mjs
-      - name: Fail on OpenBao provisioning failure
-        if: steps.openbao-provision.outputs['exit-code'] != '0'
-        run: exit 1
+            "bots/${BOT_NAME}/index.ts"
 
   # Off-convention PRs skip the pipeline above entirely (see detect-flow).
   # This job catches the case that would otherwise slip through silently:
@@ -199,13 +123,15 @@ jobs:
       - name: Warn if bot files changed off-convention
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          changed=$(git diff --name-only "$base" "$head" -- 'bots/**')
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 'bots/**')
           if [ -n "$changed" ]; then
-            echo "::warning::Bot files changed on branch '${{ github.head_ref }}', which doesn't match bots/add|update|remove/<bot-name>. This PR skipped manifest validation, security scan, and sandbox test. Rename the branch to run the bot-submission pipeline."
+            echo "::error::Bot files changed on branch '${HEAD_REF}', which does not match bots/add|update|remove/<bot-name>. Rename the branch so manifest validation, security scan, and sandbox test run."
             echo "$changed" | while read -r f; do
-              echo "::warning file=$f::Changed on non-bot-submission branch; not validated/scanned/tested."
+              echo "::error file=$f::Changed on non-bot-submission branch; not validated/scanned/tested."
             done
+            exit 1
           fi

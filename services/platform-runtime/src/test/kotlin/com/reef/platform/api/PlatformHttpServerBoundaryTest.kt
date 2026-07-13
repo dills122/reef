@@ -56,7 +56,9 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
+import com.sun.net.httpserver.Headers
 import java.net.HttpURLConnection
+import java.util.Base64
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -124,9 +126,28 @@ class PlatformHttpServerBoundaryTest {
         )
         assertEquals(
             AdminGatewayRoute(
+                "/internal/admin/analytics/run-exports",
+                "analytics",
+                setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/analytics/run-exports")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/analytics/run-bot-summaries",
+                "analytics",
+                setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/analytics/run-bot-summaries")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/account-risk/controls",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/risk/account-controls")
         )
@@ -134,7 +155,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/circuit-breakers",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/risk/circuit-breakers")
         )
@@ -142,7 +164,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/price-collars",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/risk/price-collars")
         )
@@ -151,7 +174,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/boundary/account-risk/controls",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/risk/account-controls", "GET")
         )
@@ -159,7 +183,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/boundary/circuit-breakers",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/risk/circuit-breakers", "GET")
         )
@@ -167,7 +192,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/boundary/price-collars",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/risk/price-collars", "GET")
         )
@@ -231,7 +257,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/settlement/facts",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/settlement/facts")
         )
@@ -239,9 +266,19 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/settlement/obligations/materialize",
                 "admin",
-                setOf(AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/settlement/obligations/materialize")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/arena/bots/openbao-provision",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleSecretAdmin, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/bots/openbao-provision")
         )
     }
 
@@ -362,7 +399,7 @@ class PlatformHttpServerBoundaryTest {
     fun adminGatewayAcceptsSessionCookieAndServiceToken() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
+        grantTrustedPlatformAdmin(auth, user.reefUserId)
         auth.identityService.assignBotOwnership(
             "admin-cli",
             AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = "bot-1")
@@ -487,6 +524,208 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayStaticFallbackTokenBindsActorFromConfig() {
+        val route = adminGatewayRouteFor("/admin/v1/arena/bots", "POST")
+            ?: error("expected arena admin gateway route")
+        val auth = AdminSessionAuth(
+            arenaAdminService = null,
+            adminAuthService = null,
+            adminIdentityService = null,
+            adminGitHubOAuthClient = null,
+            adminSessionCookieName = "reef_admin_session",
+            adminSessionCookieSecure = true,
+            localDevAdminAuthBypass = false,
+            internalHttpExposureMode = InternalHttpExposureMode.LocalOnly,
+            envLookup = mapOf(
+                "ARENA_ADMIN_API_TOKEN" to "arena-token",
+                "ARENA_ADMIN_API_ACTOR_ID" to "bot-submission-ci",
+                "ADMIN_ACTOR_ID" to "admin-cli"
+            )::get
+        )
+        val headers = Headers().apply {
+            add("Authorization", "Bearer arena-token")
+            add("X-Reef-Actor-Id", "admin-cli")
+            add("X-Correlation-Id", "corr-static-token")
+        }
+
+        val principal = auth.authorizeGateway(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/admin/v1/arena/bots",
+                query = null,
+                headers = headers,
+                remoteAddress = "203.0.113.10",
+                body = "{}"
+            ),
+            route
+        )
+
+        assertEquals("bot-submission-ci", principal?.actorId)
+        assertEquals("corr-static-token", principal?.correlationId)
+    }
+
+    @Test
+    fun adminGatewaySensitiveSessionRoutesRequireTrustedRouteRole() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            settlementFactStore = InMemorySettlementFactStore()
+        )
+        try {
+            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            val accountRisk = post(server.address.port, "/admin/v1/risk/account-controls", headers, "{}")
+            val priceCollar = post(server.address.port, "/admin/v1/risk/price-collars", headers, "{}")
+            val circuitBreaker = post(server.address.port, "/admin/v1/risk/circuit-breakers", headers, "{}")
+            val settlementFacts = post(
+                server.address.port,
+                "/admin/v1/settlement/facts",
+                headers,
+                p2SettlementFactsBody("p2-denied-admin-gateway")
+            )
+            val settlementMaterialize = post(
+                server.address.port,
+                "/admin/v1/settlement/obligations/materialize",
+                headers,
+                """{"scenarioRunId":"p2-denied-admin-gateway"}"""
+            )
+            val openBaoProvision = post(
+                server.address.port,
+                "/admin/v1/arena/bots/openbao-provision",
+                headers,
+                """
+                    {
+                      "githubOidcToken": "token",
+                      "submitterIdentity": "attacker",
+                      "botId": "bot-1",
+                      "flow": "add"
+                    }
+                """.trimIndent()
+            )
+
+            listOf(accountRisk, priceCollar, circuitBreaker, settlementFacts, settlementMaterialize).forEach { response ->
+                assertEquals(403, response.status, response.body)
+                assertContains(response.body, "trusted admin identity is required")
+            }
+            assertEquals(403, openBaoProvision.status, openBaoProvision.body)
+            assertContains(openBaoProvision.body, "trusted admin identity is required")
+
+            auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
+            val trustedWithoutRole = post(server.address.port, "/admin/v1/risk/account-controls", headers, "{}")
+            assertEquals(403, trustedWithoutRole.status, trustedWithoutRole.body)
+            assertContains(trustedWithoutRole.body, "admin role required")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayAnalyticsReadsRequireTrustedPlatformAdminSession() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val analyticsService = SimulationRunExportService(InMemorySimulationRunExportStore())
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            analyticsRunExportService = analyticsService
+        )
+        try {
+            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            val exportDenied = get(server.address.port, "/admin/v1/analytics/run-exports?limit=5", headers)
+            val summariesDenied = get(server.address.port, "/admin/v1/analytics/run-bot-summaries?runId=run-1", headers)
+
+            assertEquals(403, exportDenied.status, exportDenied.body)
+            assertContains(exportDenied.body, "trusted admin identity is required")
+            assertEquals(403, summariesDenied.status, summariesDenied.body)
+            assertContains(summariesDenied.body, "trusted admin identity is required")
+
+            grantTrustedPlatformAdmin(auth, user.reefUserId)
+            val exportAllowed = get(server.address.port, "/admin/v1/analytics/run-exports?limit=5", headers)
+            assertEquals(200, exportAllowed.status, exportAllowed.body)
+            assertContains(exportAllowed.body, "\"exportsCount\":0")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayOpenBaoProvisioningBindsSubmitterToOidcActorAndBotOwner() {
+        val auth = testAdminAuth()
+        val owner = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        auth.identityService.assignBotOwnership(
+            "admin-cli",
+            AdminBotOwnershipCommand(reefUserId = owner.reefUserId, botId = "bot-1")
+        )
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Ci,
+            subjectActorId = "bot-submission-ci",
+            ttl = null
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = InMemoryArenaBotRegistryStore()
+            )
+        )
+        try {
+            val headers = mapOf("Authorization" to "Bearer ${serviceToken.token}")
+            val submitterMismatch = post(
+                server.address.port,
+                "/admin/v1/arena/bots/openbao-provision",
+                headers,
+                openBaoProvisionBody(
+                    githubOidcToken = githubOidcToken(actor = "octo"),
+                    submitterIdentity = "attacker",
+                    botId = "bot-1",
+                    flow = "remove"
+                )
+            )
+            val wrongOwner = post(
+                server.address.port,
+                "/admin/v1/arena/bots/openbao-provision",
+                headers,
+                openBaoProvisionBody(
+                    githubOidcToken = githubOidcToken(actor = "attacker"),
+                    submitterIdentity = "attacker",
+                    botId = "bot-1",
+                    flow = "remove"
+                )
+            )
+            val ownerAllowedUntilOpenBaoConfig = post(
+                server.address.port,
+                "/admin/v1/arena/bots/openbao-provision",
+                headers,
+                openBaoProvisionBody(
+                    githubOidcToken = githubOidcToken(actor = "octo"),
+                    submitterIdentity = "octo",
+                    botId = "bot-1",
+                    flow = "remove"
+                )
+            )
+
+            assertEquals(400, submitterMismatch.status, submitterMismatch.body)
+            assertContains(submitterMismatch.body, "submitterIdentity must match GitHub OIDC actor")
+            assertEquals(403, wrongOwner.status, wrongOwner.body)
+            assertContains(wrongOwner.body, "not authorized for OpenBao bot secret slice")
+            assertEquals(503, ownerAllowedUntilOpenBaoConfig.status, ownerAllowedUntilOpenBaoConfig.body)
+            assertContains(ownerAllowedUntilOpenBaoConfig.body, "BAO_ADDR is not configured")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun adminGatewayUnknownBearerTokenReturnsCleanUnauthorizedWhenAdminAuthEnabled() {
         val auth = testAdminAuth()
         val server = testServerWithGateway(
@@ -541,7 +780,7 @@ class PlatformHttpServerBoundaryTest {
                 headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
                 body = p2SettlementFactsBody("p2-admin-gateway")
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-admin-gateway")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-admin-gateway")
 
             assertEquals(401, denied.status)
             assertEquals(200, posted.status)
@@ -821,6 +1060,7 @@ class PlatformHttpServerBoundaryTest {
     fun adminGatewayRiskAccountControlsGetReturnsCurrentState() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        grantTrustedPlatformAdmin(auth, user.reefUserId)
         val session = auth.authService.createSession(user.reefUserId)
         val accountRiskStore = RecordingAccountRiskStore()
         accountRiskStore.upsertControl(
@@ -1346,6 +1586,73 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1ParticipantOrderReadsUseAuthenticatedTokenScopeBeforeParticipantHeader() {
+        val boundary = ExternalApiBoundary(
+            authHook = StaticTokenAuthHook(
+                mapOf(
+                    "client-1" to StaticTokenClientConfig(
+                        token = "token-1",
+                        principal = ExternalApiPrincipal(
+                            clientId = "client-1",
+                            participantIds = setOf("participant-1")
+                        )
+                    )
+                )
+            )
+        )
+        val server = testServer(boundary = boundary)
+        try {
+            val allowed = get(
+                server.address.port,
+                "/api/v1/orders/current?participantId=participant-1",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Authorization" to "Bearer token-1"
+                )
+            )
+            val denied = get(
+                server.address.port,
+                "/api/v1/orders/current?participantId=participant-2",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Authorization" to "Bearer token-1",
+                    "X-Participant-Id" to "participant-2"
+                )
+            )
+
+            assertEquals(200, allowed.status)
+            assertContains(allowed.body, "\"orders\"")
+            assertEquals(403, denied.status)
+            assertContains(denied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun legacyGlobalReadEndpointsRequireApiBoundaryIdentity() {
+        val server = testServerWithGateway(EchoOrderEngineGateway())
+        try {
+            listOf(
+                "/orders",
+                "/orders/ord-legacy-read",
+                "/orders/ord-legacy-read/events",
+                "/trades",
+                "/events"
+            ).forEach { path ->
+                val denied = get(server.address.port, path)
+                val allowed = get(server.address.port, path, headers = apiReadHeaders())
+
+                assertEquals(401, denied.status, path)
+                assertContains(denied.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+                assertTrue(allowed.status == 200 || allowed.status == 404, path)
+            }
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1SubmitReturnsRateLimitedFromHook() {
         val server = testServer(
             boundary = ExternalApiBoundary(
@@ -1629,6 +1936,44 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun legacyMutationRoutesRejectRemoteSpoofedInternalMarker() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = EchoOrderEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val server = PlatformHttpServer(
+            port = 0,
+            api = api,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            legacyMutationRoutesEnabled = true,
+            internalHttpExposureMode = InternalHttpExposureMode.Enabled
+        )
+        val headers = Headers().apply {
+            add("X-Reef-Internal-Route", "true")
+        }
+
+        val response = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/auth/roles",
+                query = null,
+                headers = headers,
+                remoteAddress = "203.0.113.10",
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+        )
+
+        assertEquals(403, response?.status)
+        assertContains(response?.body.orEmpty(), "\"error\":\"legacy mutation route requires loopback access\"")
+    }
+
+    @Test
     fun internalAuthSeedRoutesAllowExplicitOrderActors() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
@@ -1651,6 +1996,114 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"accepted\"")
             assertContains(response.body, "\"orderId\":\"ord-auth-seeded\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1SubmitRejectsParticipantAndAccountOutsideAuthenticatedScopeBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val boundary = ExternalApiBoundary(
+            authHook = StaticTokenAuthHook(
+                mapOf(
+                    "client-1" to StaticTokenClientConfig(
+                        token = "token-1",
+                        principal = ExternalApiPrincipal(
+                            clientId = "client-1",
+                            participantIds = setOf("participant-1"),
+                            accountIds = setOf("account-1")
+                        )
+                    )
+                )
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            boundary = boundary,
+            captureStore = captureStore
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Authorization" to "Bearer token-1",
+                "Idempotency-Key" to "idem-scope-submit"
+            )
+            val participantSpoof = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = validSubmitBody("cmd-scope-participant", "trace-scope-participant", "ord-scope-participant")
+                    .replace("\"participantId\":\"participant-1\"", "\"participantId\":\"participant-2\"")
+            )
+            val accountSpoof = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-scope-account"),
+                body = validSubmitBody("cmd-scope-account", "trace-scope-account", "ord-scope-account")
+                    .replace("\"accountId\":\"account-1\"", "\"accountId\":\"account-2\"")
+            )
+
+            assertEquals(403, participantSpoof.status)
+            assertContains(participantSpoof.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertContains(participantSpoof.body, "participant scope")
+            assertEquals(403, accountSpoof.status)
+            assertContains(accountSpoof.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertContains(accountSpoof.body, "account scope")
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectActorOutsideAuthenticatedScopeBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val boundary = ExternalApiBoundary(
+            authHook = StaticTokenAuthHook(
+                mapOf(
+                    "client-1" to StaticTokenClientConfig(
+                        token = "token-1",
+                        principal = ExternalApiPrincipal(
+                            clientId = "client-1",
+                            actorIds = setOf("bot-capture-1")
+                        )
+                    )
+                )
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            boundary = boundary,
+            captureStore = captureStore
+        )
+        try {
+            val cases = listOf(
+                "/api/v1/orders/submit" to validSubmitBody("cmd-scope-submit", "trace-scope-submit", "ord-scope-submit"),
+                "/api/v1/orders/cancel" to validCancelBody("cmd-scope-cancel", "trace-scope-cancel", "ord-scope-cancel"),
+                "/api/v1/orders/modify" to validModifyBody("cmd-scope-modify", "trace-scope-modify", "ord-scope-modify")
+            )
+            cases.forEachIndexed { index, (route, body) ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Authorization" to "Bearer token-1",
+                        "Idempotency-Key" to "idem-scope-actor-$index"
+                    ),
+                    body = body.replace("\"actorId\":\"bot-capture-1\"", "\"actorId\":\"bot-capture-2\"")
+                )
+
+                assertEquals(403, response.status, route)
+                assertContains(response.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+                assertContains(response.body, "actor scope")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
         } finally {
             server.stop(0)
         }
@@ -2113,6 +2566,106 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1CommandStatusRejectsScopeLessStreamReference() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-status-stream-scope"
+                ),
+                body = validSubmitBody("cmd-status-stream-scope", "trace-status-stream-scope", "ord-status-stream-scope", extra = streamRoutingExtra())
+            )
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-stream-scope",
+                headers = apiReadHeaders()
+            )
+
+            assertEquals(202, submit.status)
+            assertEquals(403, status.status)
+            assertContains(status.body, "\"code\":\"OBJECT_AUTH_REQUIRED\"")
+            assertContains(status.body, "command status scope is unavailable")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusUsesAuthenticatedTokenScopeForParticipantStatus() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val boundary = ExternalApiBoundary(
+            authHook = StaticTokenAuthHook(
+                mapOf(
+                    "client-1" to StaticTokenClientConfig(
+                        token = "token-1",
+                        principal = ExternalApiPrincipal(
+                            clientId = "client-1",
+                            participantIds = setOf("participant-1")
+                        )
+                    )
+                )
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            boundary = boundary,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Authorization" to "Bearer token-1",
+                    "Idempotency-Key" to "idem-status-token-scope"
+                ),
+                body = validSubmitBody("cmd-status-token-scope", "trace-status-token-scope", "ord-status-token-scope")
+            )
+            val allowed = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-token-scope",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Authorization" to "Bearer token-1"
+                )
+            )
+            val denied = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-token-scope",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Authorization" to "Bearer token-1",
+                    "X-Participant-Id" to "participant-2"
+                )
+            )
+
+            assertEquals(200, submit.status)
+            assertEquals(200, allowed.status)
+            assertContains(allowed.body, "\"commandId\":\"cmd-status-token-scope\"")
+            assertEquals(200, denied.status)
+            assertContains(denied.body, "\"commandId\":\"cmd-status-token-scope\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1CommandStatusEndpointExposesCanonicalRejectMetadata() {
         val persistence = InMemoryRuntimePersistence()
         persistence.materializeVenueEventBatch(
@@ -2138,7 +2691,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(status.body, "\"resultStatus\":\"rejected\"")
             assertContains(status.body, "\"rejectCode\":\"ORDER_NOT_FOUND\"")
             assertContains(status.body, "\"responseStatus\":422")
-            assertContains(status.body, "\"resultPayloadJson\":\"{\\\"rejected\\\":{\\\"code\\\":\\\"ORDER_NOT_FOUND\\\"}}\"")
+            assertContains(status.body, "\"resultPayloadJson\":\"{\\\"rejected\\\":{\\\"code\\\":\\\"ORDER_NOT_FOUND\\\",\\\"participantId\\\":\\\"participant-1\\\",\\\"orderId\\\":\\\"ord-cmd-status-rejected\\\"}}\"")
         } finally {
             server.stop(0)
         }
@@ -2194,6 +2747,76 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"orderId\":\"ord-resolved-1\"")
             assertEquals(1, gateway.cancelCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun cancelByClientOrderAuthenticatesBeforeClientOrderLookup() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ord-auth-before-lookup",
+                engineOrderId = "eng-ord-auth-before-lookup",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "100000000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-07-06T00:00:00Z",
+                clientOrderId = "co-auth-before-lookup",
+                runId = "run-1",
+                venueSessionId = "session-1"
+            )
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            boundary = ExternalApiBoundary(
+                authHook = StaticTokenAuthHook(
+                    mapOf(
+                        "client-1" to StaticTokenClientConfig(
+                            token = "token-1",
+                            principal = ExternalApiPrincipal(
+                                clientId = "client-1",
+                                actorIds = setOf("bot-1"),
+                                participantIds = setOf("participant-1"),
+                                accountIds = setOf("account-1")
+                            )
+                        )
+                    )
+                )
+            ),
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel-by-client-order",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Authorization" to "Bearer wrong",
+                    "Idempotency-Key" to "idem-cancel-by-client-order-auth"
+                ),
+                body = JsonCodec.writeObject(
+                    "commandId" to "cmd-cancel-by-client-order-auth",
+                    "traceId" to "trace-cancel-by-client-order-auth",
+                    "correlationId" to "corr-cancel-by-client-order-auth",
+                    "actorId" to "bot-1",
+                    "participantId" to "participant-1",
+                    "clientOrderId" to "co-auth-before-lookup",
+                    "reason" to "test cancel"
+                )
+            )
+
+            assertEquals(401, response.status)
+            assertContains(response.body, "\"code\":\"UNAUTHORIZED\"")
+            assertEquals(0, gateway.cancelCalls)
         } finally {
             server.stop(0)
         }
@@ -3124,6 +3747,73 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1SettlementReadEndpointsRequireApiBoundaryIdentity() {
+        val server = testServerWithGateway(StaticAcceptedEngineGateway())
+        try {
+            listOf(
+                "/api/v1/settlement/facts/run-public-denied",
+                "/api/v1/settlement/obligations/run-public-denied",
+                "/api/v1/settlement/ledger/run-public-denied",
+                "/api/v1/settlement/proof/run-public-denied",
+                "/api/v1/settlement/score/run-public-denied"
+            ).forEach { path ->
+                val response = get(server.address.port, path)
+
+                assertEquals(401, response.status, path)
+                assertContains(response.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+            }
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1ProjectionMutationEndpointsRequireApiWriteBoundary() {
+        val server = testServerWithGateway(StaticAcceptedEngineGateway())
+        try {
+            val lifecycleDenied = post(
+                server.address.port,
+                "/api/v1/orders/lifecycle-state",
+                emptyMap(),
+                ""
+            )
+            val snapshotsDenied = post(
+                server.address.port,
+                "/api/v1/market-data/snapshots",
+                emptyMap(),
+                ""
+            )
+            val lifecycleAllowed = post(
+                server.address.port,
+                "/api/v1/orders/lifecycle-state",
+                mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-lifecycle-rebuild"
+                ),
+                ""
+            )
+            val snapshotsAllowed = post(
+                server.address.port,
+                "/api/v1/market-data/snapshots",
+                mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-snapshot-refresh"
+                ),
+                ""
+            )
+
+            assertEquals(401, lifecycleDenied.status)
+            assertContains(lifecycleDenied.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+            assertEquals(401, snapshotsDenied.status)
+            assertContains(snapshotsDenied.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+            assertEquals(200, lifecycleAllowed.status)
+            assertEquals(200, snapshotsAllowed.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun settlementFactsEndpointAppendsAndReadsP2FactsByScenarioRunId() {
         val settlementStore = InMemorySettlementFactStore()
         val server = testServerWithGateway(
@@ -3137,7 +3827,7 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 p2SettlementFactsBody("p2-run-api")
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-api")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-api")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"status\":\"ok\"")
@@ -3178,7 +3868,7 @@ class PlatformHttpServerBoundaryTest {
                 mapOf("Authorization" to "Bearer ${serviceToken.token}"),
                 p2SettlementFactsBody("p2-run-admin-gateway")
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-admin-gateway")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-admin-gateway")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"status\":\"ok\"")
@@ -3207,7 +3897,7 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 p2SettlementFactsBody("p2-run-default", includePostTradeProfile = false)
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-default")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-default")
 
             assertEquals(200, posted.status)
             assertEquals(200, fetched.status)
@@ -3246,7 +3936,7 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 p2SettlementFactsBody("p2-run-persisted-default", includePostTradeProfile = false)
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-persisted-default")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-persisted-default")
 
             assertEquals(200, posted.status)
             assertEquals(200, fetched.status)
@@ -3295,7 +3985,7 @@ class PlatformHttpServerBoundaryTest {
                     venueSessionId = "session-fast"
                 )
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-venue-override")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-venue-override")
 
             assertEquals(200, posted.status)
             assertEquals(200, fetched.status)
@@ -3343,7 +4033,7 @@ class PlatformHttpServerBoundaryTest {
                     includePostTradeProfile = false
                 )
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-scenario-override")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-scenario-override")
 
             assertEquals(200, posted.status)
             assertEquals(200, fetched.status)
@@ -3388,7 +4078,7 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 p2SettlementFactsBody("p2-run-explicit-wins", includePostTradeProfile = true)
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-explicit-wins")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/p2-run-explicit-wins")
 
             assertEquals(200, posted.status)
             assertEquals(200, fetched.status)
@@ -3456,11 +4146,11 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 """{"scenarioRunId":"run-materialize"}"""
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
-            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize")
-            val ledger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize")
-            val proof = get(server.address.port, "/api/v1/settlement/proof/run-materialize")
-            val score = get(server.address.port, "/api/v1/settlement/score/run-materialize")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/run-materialize")
+            val obligations = apiGet(server.address.port, "/api/v1/settlement/obligations/run-materialize")
+            val ledger = apiGet(server.address.port, "/api/v1/settlement/ledger/run-materialize")
+            val proof = apiGet(server.address.port, "/api/v1/settlement/proof/run-materialize")
+            val score = apiGet(server.address.port, "/api/v1/settlement/score/run-materialize")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"materializedObligations\":1")
@@ -3525,8 +4215,8 @@ class PlatformHttpServerBoundaryTest {
                 }
                 """.trimIndent()
             )
-            val reversedFacts = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
-            val reversedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize")
+            val reversedFacts = apiGet(server.address.port, "/api/v1/settlement/facts/run-materialize")
+            val reversedLedger = apiGet(server.address.port, "/api/v1/settlement/ledger/run-materialize")
 
             assertEquals(200, reversed.status)
             assertContains(reversed.body, "\"action\":\"REVERSE_LEDGER_ENTRY\"")
@@ -3617,8 +4307,8 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 """{"scenarioRunId":"run-materialize-fail"}"""
             )
-            val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize-fail")
-            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
+            val fetched = apiGet(server.address.port, "/api/v1/settlement/facts/run-materialize-fail")
+            val obligations = apiGet(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
 
             assertEquals(200, seeded.status)
             assertEquals(200, posted.status)
@@ -3687,9 +4377,9 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 """{"scenarioRunId":"run-materialize-fail"}"""
             )
-            val repairedFetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize-fail")
-            val repairedObligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
-            val repairedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize-fail")
+            val repairedFetched = apiGet(server.address.port, "/api/v1/settlement/facts/run-materialize-fail")
+            val repairedObligations = apiGet(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
+            val repairedLedger = apiGet(server.address.port, "/api/v1/settlement/ledger/run-materialize-fail")
 
             assertEquals(400, missingOccurredAtRepair.status)
             assertContains(missingOccurredAtRepair.body, "\"error\":\"occurredAt is required\"")
@@ -3794,7 +4484,7 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 """{"scenarioRunId":"run-materialize-security-fail"}"""
             )
-            val brokenObligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-security-fail")
+            val brokenObligations = apiGet(server.address.port, "/api/v1/settlement/obligations/run-materialize-security-fail")
 
             assertEquals(200, seeded.status)
             assertEquals(200, posted.status)
@@ -3841,9 +4531,9 @@ class PlatformHttpServerBoundaryTest {
                 emptyMap(),
                 """{"scenarioRunId":"run-materialize-security-fail"}"""
             )
-            val repairedFetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize-security-fail")
-            val repairedObligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-security-fail")
-            val repairedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize-security-fail")
+            val repairedFetched = apiGet(server.address.port, "/api/v1/settlement/facts/run-materialize-security-fail")
+            val repairedObligations = apiGet(server.address.port, "/api/v1/settlement/obligations/run-materialize-security-fail")
+            val repairedLedger = apiGet(server.address.port, "/api/v1/settlement/ledger/run-materialize-security-fail")
 
             assertEquals(400, wrongRepairRoute.status)
             assertContains(wrongRepairRoute.body, "\"error\":\"settlementBreakId is not a cash break\"")
@@ -3974,9 +4664,9 @@ class PlatformHttpServerBoundaryTest {
                 }
                 """.trimIndent()
             )
-            val facts = get(server.address.port, "/api/v1/settlement/facts/run-force-settle")
-            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-force-settle")
-            val proof = get(server.address.port, "/api/v1/settlement/proof/run-force-settle")
+            val facts = apiGet(server.address.port, "/api/v1/settlement/facts/run-force-settle")
+            val obligations = apiGet(server.address.port, "/api/v1/settlement/obligations/run-force-settle")
+            val proof = apiGet(server.address.port, "/api/v1/settlement/proof/run-force-settle")
 
             assertEquals(200, seeded.status)
             assertEquals(200, broken.status)
@@ -4839,12 +5529,9 @@ class PlatformHttpServerBoundaryTest {
                 headers = apiReadHeaders()
             )
 
-            assertEquals(200, status.status)
-            assertContains(status.body, "\"commandId\":\"cmd-stream-status-pending\"")
-            assertContains(status.body, "\"source\":\"stream_reference\"")
-            assertContains(status.body, "\"status\":\"ACCEPTED\"")
-            assertContains(status.body, "\"internalStatus\":\"RECEIVED\"")
-            assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
+            assertEquals(403, status.status)
+            assertContains(status.body, "\"code\":\"OBJECT_AUTH_REQUIRED\"")
+            assertContains(status.body, "command status scope is unavailable")
         } finally {
             server.stop(0)
         }
@@ -5532,6 +6219,46 @@ class PlatformHttpServerBoundaryTest {
         )
     }
 
+    private fun grantTrustedPlatformAdmin(auth: TestAdminAuth, reefUserId: String) {
+        auth.identityService.updateTrustState("admin-cli", reefUserId, AdminTrustState.Trusted)
+        auth.identityService.assignRole("admin-cli", reefUserId, AdminIdentityService.RolePlatformAdmin)
+    }
+
+    private fun openBaoProvisionBody(
+        githubOidcToken: String,
+        submitterIdentity: String,
+        botId: String,
+        flow: String
+    ): String {
+        return JsonCodec.writeObject(
+            "githubOidcToken" to githubOidcToken,
+            "submitterIdentity" to submitterIdentity,
+            "botId" to botId,
+            "flow" to flow
+        )
+    }
+
+    private fun githubOidcToken(
+        actor: String,
+        repository: String = "reef/reef",
+        audience: String = "reef-bot-submission-ci"
+    ): String {
+        fun encode(raw: String): String {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
+        }
+        val header = encode("""{"alg":"none","typ":"JWT"}""")
+        val payload = encode(
+            """
+                {
+                  "actor": "$actor",
+                  "repository": "$repository",
+                  "aud": "$audience"
+                }
+            """.trimIndent()
+        )
+        return "$header.$payload.signature"
+    }
+
     private class FakeAdminGitHubOAuthClient : AdminGitHubOAuthClient {
         override fun authorizationUrl(stateToken: String): String {
             return "https://github.test/oauth?state=$stateToken"
@@ -5750,6 +6477,10 @@ class PlatformHttpServerBoundaryTest {
         return HttpResponse(connection.responseCode, text, responseHeaders(connection))
     }
 
+    private fun apiGet(port: Int, path: String, headers: Map<String, String> = apiReadHeaders()): HttpResponse {
+        return get(port, path, headers)
+    }
+
     private fun responseHeaders(connection: HttpURLConnection): Map<String, List<String>> {
         return connection.headerFields.entries.mapNotNull { (key, value) ->
             key?.let { it to value.toList() }
@@ -5948,9 +6679,9 @@ class PlatformHttpServerBoundaryTest {
         rejectCode: String = ""
     ): VenueEventBatchFact {
         val resultPayload = if (resultStatus == "rejected") {
-            """{"rejected":{"code":"$rejectCode"}}"""
+            """{"rejected":{"code":"$rejectCode","participantId":"participant-1","orderId":"ord-$commandId"}}"""
         } else {
-            """{"accepted":{"eventId":"evt-$commandId"}}"""
+            """{"accepted":{"eventId":"evt-$commandId","participantId":"participant-1","orderId":"ord-$commandId"}}"""
         }
         return VenueEventBatchFact(
             batchId = batchId,

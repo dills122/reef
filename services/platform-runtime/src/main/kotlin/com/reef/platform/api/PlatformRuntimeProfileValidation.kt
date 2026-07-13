@@ -68,6 +68,7 @@ data class PlatformRuntimeProfileConfig(
         fun fromEnv(lookup: (String) -> String? = { key -> System.getenv(key) }): PlatformRuntimeProfileConfig {
             return PlatformRuntimeProfileConfig(
                 deploymentProfileRaw = listOf(
+                    "EXTERNAL_API_DEPLOYMENT_PROFILE",
                     "PLATFORM_RUNTIME_PROFILE",
                     "REEF_ENV",
                     "REEF_DEPLOYMENT_ENV",

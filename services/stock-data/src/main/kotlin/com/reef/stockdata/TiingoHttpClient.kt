@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.math.BigDecimal
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -58,7 +59,7 @@ class JdkTiingoHttpClient(
     private val mapper = ObjectMapper()
 
     override fun getIexCurrent(symbol: String): TiingoIexQuote {
-        val uri = URI.create("${config.baseUrl}/iex/${symbol}?token=${config.apiToken}")
+        val uri = URI.create("${config.baseUrl}/iex/${urlEncode(symbol)}?token=${urlEncode(config.apiToken)}")
         val body = sendWithRetries(uri, symbol)
         val root = parseJson(body)
         val node = (if (root.isArray) root.firstOrNull() else root)
@@ -81,8 +82,8 @@ class JdkTiingoHttpClient(
     override fun getEodOnOrBefore(symbol: String, onOrBefore: LocalDate): TiingoEodRow {
         val startDate = onOrBefore.minusDays(10)
         val uri = URI.create(
-            "${config.baseUrl}/tiingo/daily/${symbol}/prices" +
-                "?startDate=$startDate&endDate=$onOrBefore&token=${config.apiToken}",
+            "${config.baseUrl}/tiingo/daily/${urlEncode(symbol)}/prices" +
+                "?startDate=$startDate&endDate=$onOrBefore&token=${urlEncode(config.apiToken)}",
         )
         val body = sendWithRetries(uri, symbol)
         val root = parseJson(body)
@@ -157,6 +158,9 @@ class JdkTiingoHttpClient(
         } catch (ex: Exception) {
             throw TiingoInvalidPayloadException("could not parse provider payload", ex)
         }
+
+    private fun urlEncode(value: String): String =
+        URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 
     private fun JsonNode.decimalOrNull(field: String): BigDecimal? =
         path(field).takeIf { it.isNumber }?.let { BigDecimal(it.asText()) }

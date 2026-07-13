@@ -26,8 +26,12 @@ import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+
+private const val MaxIntradayBarBuckets = 1_500L
 
 class PlatformApi(
     private val orderService: OrderApplicationService = OrderApplicationService()
@@ -591,6 +595,17 @@ class PlatformApi(
                 )
             )
         }
+        val rangeError = intradayBarsRangeError(interval, start, end)
+        if (rangeError != null) {
+            return ApiLookupResult(
+                found = false,
+                body = JsonCodec.writeObject(
+                    "error" to rangeError,
+                    "instrumentId" to instrumentId,
+                    "interval" to interval
+                )
+            )
+        }
         val bars = orderService.intradayBars(instrumentId, interval, start, end)
         return ApiLookupResult(
             found = true,
@@ -606,6 +621,36 @@ class PlatformApi(
                 "bars" to bars.map { it.toMap() }
             )
         )
+    }
+
+    private fun intradayBarsRangeError(interval: String, start: String, end: String): String? {
+        val startInstant = try {
+            Instant.parse(start)
+        } catch (_: Exception) {
+            return "invalid time range"
+        }
+        val endInstant = try {
+            Instant.parse(end)
+        } catch (_: Exception) {
+            return "invalid time range"
+        }
+        if (!endInstant.isAfter(startInstant)) return "invalid time range"
+        val intervalDuration = when (interval) {
+            "1m" -> Duration.ofMinutes(1)
+            "5m" -> Duration.ofMinutes(5)
+            "15m" -> Duration.ofMinutes(15)
+            "1h" -> Duration.ofHours(1)
+            "1d" -> Duration.ofDays(1)
+            else -> return "unsupported interval"
+        }
+        val rangeMillis = try {
+            Duration.between(startInstant, endInstant).toMillis()
+        } catch (_: Exception) {
+            return "invalid time range"
+        }
+        val intervalMillis = intervalDuration.toMillis()
+        val bucketCount = (rangeMillis + intervalMillis - 1) / intervalMillis
+        return if (bucketCount > MaxIntradayBarBuckets) "intraday bars range too large" else null
     }
 
     fun ownOrders(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): String {

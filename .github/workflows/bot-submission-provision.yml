@@ -1,0 +1,127 @@
+name: Bot Submission Provision
+
+# Runs hosted registry diff and OpenBao provisioning from trusted base-branch
+# workflow code after the unprivileged Bot Submission PR workflow succeeds.
+
+on:
+  workflow_run:
+    workflows:
+      - Bot Submission
+    types:
+      - completed
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.pull_requests[0].number != ''
+    env:
+      ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
+      ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      SUBMITTER_IDENTITY: ${{ github.event.workflow_run.actor.login }}
+      PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse trusted provisioning inputs
+        id: parse
+        run: |
+          branch="$HEAD_BRANCH"
+          case "$branch" in
+            bots/add/*) flow="add" ;;
+            bots/update/*) flow="update" ;;
+            bots/remove/*) flow="remove" ;;
+            *)
+              echo "not a bot-submission branch (bots/add|update|remove/<name>): $branch" >&2
+              exit 1
+              ;;
+          esac
+          bot_name="${branch#bots/*/}"
+          case "$bot_name" in
+            *[!a-z0-9._-]* | [!a-z0-9]* | ? | ??)
+              echo "bot submission branch bot name must be 3-64 chars matching [a-z0-9][a-z0-9._-]*: $bot_name" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${#bot_name}" -gt 64 ]; then
+            echo "bot submission branch bot name is too long: $bot_name" >&2
+            exit 1
+          fi
+          {
+            echo "flow=$flow"
+            echo "bot-name=$bot_name"
+          } >> "$GITHUB_OUTPUT"
+      - name: Registry diff (new bot vs existing bot)
+        id: registry-diff
+        if: steps.parse.outputs.flow != 'remove'
+        env:
+          BOT_NAME: ${{ steps.parse.outputs.bot-name }}
+        run: node scripts/dev/bot-submission-registry-diff.mjs "$BOT_NAME"
+      - name: OpenBao provisioning
+        id: openbao-provision
+        continue-on-error: true
+        env:
+          BOT_SUBMISSION_OPENBAO_MODE: real
+          BOT_NAME: ${{ steps.parse.outputs.bot-name }}
+          REQUESTED_FLOW: ${{ steps.parse.outputs.flow }}
+          REGISTRY_FLOW: ${{ steps.registry-diff.outputs.flow }}
+        run: |
+          if [ "$REQUESTED_FLOW" = "remove" ]; then
+            provision_flow="remove"
+          else
+            provision_flow="$REGISTRY_FLOW"
+          fi
+          slice_path="secret/bots/${SUBMITTER_IDENTITY}/${BOT_NAME}"
+          {
+            echo "flow=$provision_flow"
+            echo "slice-path=$slice_path"
+          } >> "$GITHUB_OUTPUT"
+          set +e
+          output=$(node scripts/dev/bot-submission-provision-openbao.mjs \
+            "$BOT_NAME" \
+            "$provision_flow" \
+            "$SUBMITTER_IDENTITY" 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            result="success"
+          else
+            result="failure"
+          fi
+          message=$(printf '%s\n' "$output" | tail -n 1)
+          {
+            echo "result=$result"
+            echo "exit-code=$status"
+            echo "message<<EOF"
+            printf '%s\n' "$message"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Comment OpenBao provisioning result
+        if: always() && steps.openbao-provision.outputs.result != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOT_ID: ${{ steps.parse.outputs.bot-name }}
+          PROVISION_FLOW: ${{ steps.openbao-provision.outputs.flow }}
+          PROVISION_RESULT: ${{ steps.openbao-provision.outputs.result }}
+          PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
+          OPENBAO_SLICE_PATH: ${{ steps.openbao-provision.outputs['slice-path'] }}
+        run: node scripts/dev/bot-submission-pr-comment.mjs
+      - name: Fail on OpenBao provisioning failure
+        if: steps.openbao-provision.outputs['exit-code'] != '0'
+        run: exit 1

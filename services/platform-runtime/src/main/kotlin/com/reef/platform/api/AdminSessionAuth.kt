@@ -4,6 +4,7 @@ import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.AdminAuthService
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
+import com.reef.platform.application.admin.AdminTrustState
 import com.reef.platform.application.admin.AuthorizationException
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.sun.net.httpserver.Headers
@@ -21,14 +22,14 @@ internal data class AdminRequestPrincipal(
 
 private const val localDevAdminActorId = "admin-cli"
 
-internal enum class InternalHttpExposureMode {
+enum class InternalHttpExposureMode {
     Disabled,
     LocalOnly,
     Enabled;
 
     companion object {
-        fun fromEnv(): InternalHttpExposureMode {
-            return when (RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local").trim().lowercase()) {
+        fun fromEnv(lookup: (String) -> String? = System::getenv): InternalHttpExposureMode {
+            return when (RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local", lookup).trim().lowercase()) {
                 "disabled", "off", "false", "0" -> Disabled
                 "enabled", "all", "raw-external" -> Enabled
                 else -> LocalOnly
@@ -51,7 +52,8 @@ internal class AdminSessionAuth(
     private val adminSessionCookieName: String,
     private val adminSessionCookieSecure: Boolean,
     private val localDevAdminAuthBypass: Boolean,
-    private val internalHttpExposureMode: InternalHttpExposureMode
+    private val internalHttpExposureMode: InternalHttpExposureMode,
+    private val envLookup: (String) -> String? = System::getenv
 ) {
     private val adminRequestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
 
@@ -275,6 +277,9 @@ internal class AdminSessionAuth(
             if (sessionToken.isNotBlank()) {
                 try {
                     val session = auth.authenticateSession(sessionToken)
+                    if (!authorizeSessionForRoute(exchange, session.reefUserId, route)) {
+                        return null
+                    }
                     return adminPrincipalForActor(exchange, session.reefUserId)
                 } catch (_: IllegalArgumentException) {
                     clearAdminSessionCookie(exchange)
@@ -302,10 +307,10 @@ internal class AdminSessionAuth(
             "admin" -> "ADMIN_API_TOKEN"
             else -> "ARENA_ADMIN_API_TOKEN"
         }
-        val token = RuntimeEnv.string(envName, "")
+        val token = RuntimeEnv.string(envName, "", envLookup)
         val expected = "Bearer $token"
         if (token.isNotBlank() && headerValue(exchange, "Authorization") == expected) {
-            return principal(exchange)
+            return staticFallbackPrincipal(exchange, route)
         }
         if (auth != null) {
             writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
@@ -330,6 +335,9 @@ internal class AdminSessionAuth(
             if (sessionToken.isNotBlank()) {
                 try {
                     val session = auth.authenticateSession(sessionToken)
+                    if (!authorizeSessionForRoute(session.reefUserId, route)) {
+                        return null
+                    }
                     return adminPrincipalForActor(request.headers, session.reefUserId)
                 } catch (_: IllegalArgumentException) {
                     return null
@@ -351,10 +359,10 @@ internal class AdminSessionAuth(
         }
 
         val envName = adminGatewayFallbackTokenEnv(route)
-        val token = RuntimeEnv.string(envName, "")
+        val token = RuntimeEnv.string(envName, "", envLookup)
         val expected = "Bearer $token"
         if (token.isNotBlank() && headerValue(request.headers, "Authorization") == expected) {
-            return principal(request.headers)
+            return staticFallbackPrincipal(request.headers, route)
         }
         return null
     }
@@ -364,10 +372,31 @@ internal class AdminSessionAuth(
             return PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized"))
         }
         val envName = adminGatewayFallbackTokenEnv(route)
-        if (RuntimeEnv.string(envName, "").isBlank()) {
+        if (RuntimeEnv.string(envName, "", envLookup).isBlank()) {
             return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "$envName is not configured"))
         }
         return PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized"))
+    }
+
+    private fun staticFallbackPrincipal(exchange: HttpExchange, route: AdminGatewayRoute): AdminRequestPrincipal {
+        return staticFallbackPrincipal(exchange.requestHeaders, route)
+    }
+
+    private fun staticFallbackPrincipal(headers: Headers, route: AdminGatewayRoute): AdminRequestPrincipal {
+        return adminPrincipalForActor(headers, staticFallbackActorId(route))
+    }
+
+    private fun staticFallbackActorId(route: AdminGatewayRoute): String {
+        val familyActorEnv = when (route.fallbackTokenFamily) {
+            "analytics" -> "ANALYTICS_EXPORT_API_ACTOR_ID"
+            "admin" -> "ADMIN_API_ACTOR_ID"
+            else -> "ARENA_ADMIN_API_ACTOR_ID"
+        }
+        return RuntimeEnv.string(
+            familyActorEnv,
+            RuntimeEnv.string("ADMIN_ACTOR_ID", localDevAdminActorId, envLookup),
+            envLookup
+        ).trim().ifBlank { localDevAdminActorId }
     }
 
     private fun adminGatewayFallbackTokenEnv(route: AdminGatewayRoute): String {
@@ -376,6 +405,44 @@ internal class AdminSessionAuth(
             "admin" -> "ADMIN_API_TOKEN"
             else -> "ARENA_ADMIN_API_TOKEN"
         }
+    }
+
+    private fun authorizeSessionForRoute(
+        exchange: HttpExchange,
+        reefUserId: String,
+        route: AdminGatewayRoute
+    ): Boolean {
+        val error = sessionRouteAuthorizationError(reefUserId, route)
+        if (error == null) return true
+        writeHotPathResponse(exchange, error)
+        return false
+    }
+
+    private fun authorizeSessionForRoute(reefUserId: String, route: AdminGatewayRoute): Boolean {
+        return sessionRouteAuthorizationError(reefUserId, route) == null
+    }
+
+    private fun sessionRouteAuthorizationError(
+        reefUserId: String,
+        route: AdminGatewayRoute
+    ): PlatformHotPathResponse? {
+        if (route.sessionRoles.isEmpty()) return null
+        val identity = adminIdentityService
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "admin identity service is required"))
+        val user = identity.user(reefUserId)
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "admin identity is required"))
+        if (user.trustState != AdminTrustState.Trusted) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "trusted admin identity is required"))
+        }
+        val roles = identity.rolesForUser(reefUserId).map { it.roleId }.toSet()
+        if (roles.any { it in route.sessionRoles }) return null
+        return PlatformHotPathResponse(
+            403,
+            JsonCodec.writeObject(
+                "error" to "admin role required",
+                "requiredRoles" to route.sessionRoles.sorted()
+            )
+        )
     }
 
     private fun bearerToken(exchange: HttpExchange): String? {

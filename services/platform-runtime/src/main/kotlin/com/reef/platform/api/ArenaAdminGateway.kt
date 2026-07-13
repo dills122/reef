@@ -173,6 +173,12 @@ internal class ArenaAdminGateway(
         if (flow !in setOf("add", "update", "remove")) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "flow must be add, update, or remove"))
         }
+        val claims = try {
+            OpenBaoProvisioningService.requireSubmitterIdentity(githubOidcToken, submitterIdentity)
+        } catch (ex: IllegalArgumentException) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid GitHub OIDC token")))
+        }
+        openBaoProvisioningAuthorizationError(flow, claims.actor, botId)?.let { return it }
         val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
             .ifBlank { return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "BAO_ADDR is not configured")) }
         val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig(baoAddr = baoAddr))
@@ -931,6 +937,30 @@ internal class ArenaAdminGateway(
         return identityService.botOwnerMetadata(botId).any { owner ->
             owner.reefUserId == actorId && owner.ownershipState.dbValue in setOf("owner", "maintainer")
         }
+    }
+
+    private fun openBaoProvisioningAuthorizationError(
+        flow: String,
+        submitterIdentity: String,
+        botId: String
+    ): PlatformHotPathResponse? {
+        val identityService = adminIdentityService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
+        val owners = identityService.botOwnerMetadata(botId)
+        if (owners.isEmpty()) {
+            return if (flow == "add") {
+                null
+            } else {
+                PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "bot has no linked owner for OpenBao provisioning"))
+            }
+        }
+        val authorizedOwner = owners.any { owner ->
+            owner.githubLogin.equals(submitterIdentity, ignoreCase = true) &&
+                owner.trustState.dbValue != "banned" &&
+                owner.ownershipState.dbValue in setOf("owner", "maintainer")
+        }
+        if (authorizedOwner) return null
+        return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for OpenBao bot secret slice"))
     }
 
     private fun recordAdminControlPlaneAudit(

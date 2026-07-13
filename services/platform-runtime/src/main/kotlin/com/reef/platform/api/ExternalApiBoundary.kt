@@ -18,8 +18,25 @@ data class BoundaryError(
     val message: String
 )
 
+data class ExternalApiPrincipal(
+    val clientId: String,
+    val actorIds: Set<String> = emptySet(),
+    val participantIds: Set<String> = emptySet(),
+    val accountIds: Set<String> = emptySet(),
+    val botIds: Set<String> = emptySet()
+) {
+    fun hasIdentityScope(): Boolean {
+        return actorIds.isNotEmpty() || participantIds.isNotEmpty() || accountIds.isNotEmpty() || botIds.isNotEmpty()
+    }
+
+    fun hasOrderMutationScopes(): Boolean {
+        return actorIds.isNotEmpty() && participantIds.isNotEmpty() && accountIds.isNotEmpty()
+    }
+}
+
 interface AuthHook {
     fun authorize(clientId: String, token: String?): BoundaryError?
+    fun principal(clientId: String): ExternalApiPrincipal = ExternalApiPrincipal(clientId)
 }
 
 interface RateLimitHook {
@@ -1196,17 +1213,26 @@ class AllowAllAuthHook : AuthHook {
     override fun authorize(clientId: String, token: String?): BoundaryError? = null
 }
 
+data class StaticTokenClientConfig(
+    val token: String,
+    val principal: ExternalApiPrincipal
+)
+
 class StaticTokenAuthHook(
-    private val tokensByClientId: Map<String, String>
+    private val clientsById: Map<String, StaticTokenClientConfig>
 ) : AuthHook {
     override fun authorize(clientId: String, token: String?): BoundaryError? {
-        val expected = tokensByClientId[clientId]
+        val expected = clientsById[clientId]?.token
             ?: return BoundaryError(401, "UNAUTHORIZED", "unknown client id")
         val provided = token?.removePrefix("Bearer ")?.trim()
         if (provided.isNullOrBlank() || provided != expected) {
             return BoundaryError(401, "UNAUTHORIZED", "invalid token")
         }
         return null
+    }
+
+    override fun principal(clientId: String): ExternalApiPrincipal {
+        return clientsById[clientId]?.principal ?: ExternalApiPrincipal(clientId)
     }
 }
 
@@ -1628,12 +1654,46 @@ class ExternalApiBoundary(
         val baseError = checkRead(headers, route)
         if (baseError != null) return baseError
 
-        val principalParticipant = headers.firstValue("X-Participant-Id").orEmpty()
-        if (principalParticipant.isBlank()) {
+        return checkParticipantScope(headers, participantId)
+    }
+
+    fun checkParticipantScope(headers: Headers, participantId: String): BoundaryError? {
+        val clientId = clientId(headers)
+            ?: return BoundaryError(401, "CLIENT_ID_REQUIRED", "missing X-Client-Id header")
+        val principal = authHook.principal(clientId)
+        if (principal.participantIds.isNotEmpty()) {
+            return requireScope("participant", participantId, principal.participantIds)
+        }
+
+        val headerParticipant = headers.firstValue("X-Participant-Id").orEmpty()
+        if (headerParticipant.isBlank()) {
             return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "missing X-Participant-Id header")
         }
-        if (participantId.isBlank() || participantId != principalParticipant) {
+        if (participantId.isBlank() || participantId != headerParticipant) {
             return BoundaryError(403, "OBJECT_AUTH_DENIED", "participant scope does not match authenticated principal")
+        }
+        return null
+    }
+
+    fun checkOrderMutationIdentity(headers: Headers, route: String, command: JsonDocument): BoundaryError? {
+        val clientId = clientId(headers)
+            ?: return BoundaryError(401, "CLIENT_ID_REQUIRED", "missing X-Client-Id header")
+        val principal = authHook.principal(clientId)
+
+        val actorError = requireScope("actor", command.string("actorId"), principal.actorIds)
+        if (actorError != null) return actorError
+
+        if (route == "/api/v1/orders/submit") {
+            val participantError = requireScope("participant", command.string("participantId"), principal.participantIds)
+            if (participantError != null) return participantError
+            val accountError = requireScope("account", command.string("accountId"), principal.accountIds)
+            if (accountError != null) return accountError
+        }
+
+        val botId = command.string("botId")
+        if (botId.isNotBlank()) {
+            val botError = requireScope("bot", botId, principal.botIds)
+            if (botError != null) return botError
         }
         return null
     }
@@ -1650,6 +1710,17 @@ class ExternalApiBoundary(
 
     fun clientId(headers: Headers): String? = headers.firstValue("X-Client-Id")
     fun idempotencyKey(headers: Headers): String? = headers.firstValue("Idempotency-Key")
+
+    private fun requireScope(name: String, value: String, allowed: Set<String>): BoundaryError? {
+        if (allowed.isEmpty()) return null
+        if (value.isBlank()) {
+            return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "missing $name identity")
+        }
+        if (!allowed.contains(value)) {
+            return BoundaryError(403, "OBJECT_AUTH_DENIED", "$name scope does not match authenticated principal")
+        }
+        return null
+    }
 }
 
 private fun Headers.firstValue(name: String): String? {
@@ -1694,6 +1765,15 @@ internal fun validateBoundaryDeploymentModes(lookup: (String) -> String? = Syste
     require(internalHttpMode in setOf("disabled", "off", "false", "0", "local", "local-only", "loopback")) {
         "non-local runtime must not expose raw internal HTTP routes externally"
     }
+    if (authMode == "static-token") {
+        val unscopedClients = parseStaticTokenClientConfigs(lookup("EXTERNAL_API_TOKENS"))
+            .filterValues { !it.principal.hasOrderMutationScopes() }
+            .keys
+            .sorted()
+        require(unscopedClients.isEmpty()) {
+            "non-local runtime requires actor, participant, and account scoped EXTERNAL_API_TOKENS entries for clients: ${unscopedClients.joinToString(",")}"
+        }
+    }
 }
 
 private fun isLocalBoundaryProfile(lookup: (String) -> String?): Boolean {
@@ -1716,7 +1796,7 @@ fun defaultBoundaryHooks(lookup: (String) -> String? = System::getenv): Boundary
     validateBoundaryDeploymentModes(lookup)
     val authMode = (lookup("EXTERNAL_API_AUTH_MODE") ?: "allow-all").lowercase()
     val authHook = when (authMode) {
-        "static-token" -> StaticTokenAuthHook(parseStaticTokens(lookup("EXTERNAL_API_TOKENS")))
+        "static-token" -> StaticTokenAuthHook(parseStaticTokenClientConfigs(lookup("EXTERNAL_API_TOKENS")))
         else -> AllowAllAuthHook()
     }
 
@@ -1899,17 +1979,80 @@ fun defaultInstrumentPriceCollarStore(): InstrumentPriceCollarStore {
 }
 
 internal fun parseStaticTokens(raw: String?): Map<String, String> {
+    return parseStaticTokenClientConfigs(raw).mapValues { (_, config) -> config.token }
+}
+
+internal fun parseStaticTokenClientConfigs(raw: String?): Map<String, StaticTokenClientConfig> {
     if (raw.isNullOrBlank()) return emptyMap()
     return raw.split(",")
         .mapNotNull { pair ->
             val parts = pair.split(":", limit = 2)
             if (parts.size != 2) return@mapNotNull null
             val clientId = parts[0].trim()
-            val token = parts[1].trim()
+            val tokenAndScopes = parseStaticTokenAndScopes(parts[1])
+            val token = tokenAndScopes.firstOrNull()?.trim().orEmpty()
             if (clientId.isBlank() || token.isBlank()) return@mapNotNull null
-            clientId to token
+            val scopes = tokenAndScopes.drop(1)
+            clientId to StaticTokenClientConfig(
+                token = token,
+                principal = ExternalApiPrincipal(
+                    clientId = clientId,
+                    actorIds = parseStaticTokenScope(scopes, setOf("actor", "actors", "actorid", "actorids")),
+                    participantIds = parseStaticTokenScope(scopes, setOf("participant", "participants", "participantid", "participantids")),
+                    accountIds = parseStaticTokenScope(scopes, setOf("account", "accounts", "accountid", "accountids")),
+                    botIds = parseStaticTokenScope(scopes, setOf("bot", "bots", "botid", "botids"))
+                )
+            )
         }
         .toMap()
+}
+
+private fun parseStaticTokenAndScopes(raw: String): List<String> {
+    if (raw.contains(";")) return raw.split(";")
+    val parts = raw.split(":")
+    val firstScopeIndex = parts.indexOfFirst { it.substringBefore("=").trim().isStaticTokenScopeKey() }
+    if (firstScopeIndex <= 0) return listOf(raw)
+    return listOf(parts.take(firstScopeIndex).joinToString(":")) + parts.drop(firstScopeIndex)
+}
+
+private fun parseStaticTokenScope(parts: List<String>, keys: Set<String>): Set<String> {
+    return parts.asSequence()
+        .mapNotNull { raw ->
+            val pair = raw.split("=", limit = 2)
+            if (pair.size != 2) return@mapNotNull null
+            val key = pair[0].trim().normalizedStaticTokenScopeKey()
+            if (key !in keys) return@mapNotNull null
+            pair[1]
+        }
+        .flatMap { value -> value.split("|").asSequence() }
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toSet()
+}
+
+private fun String.isStaticTokenScopeKey(): Boolean {
+    return normalizedStaticTokenScopeKey() in setOf(
+        "actor",
+        "actors",
+        "actorid",
+        "actorids",
+        "participant",
+        "participants",
+        "participantid",
+        "participantids",
+        "account",
+        "accounts",
+        "accountid",
+        "accountids",
+        "bot",
+        "bots",
+        "botid",
+        "botids"
+    )
+}
+
+private fun String.normalizedStaticTokenScopeKey(): String {
+    return trim().lowercase().replace("-", "").replace("_", "")
 }
 
 internal fun parseCsvSet(raw: String?): Set<String> {

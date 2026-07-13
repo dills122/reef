@@ -38,19 +38,43 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Detect merged bot manifests
         id: manifests
+        env:
+          REQUESTED_MANIFEST: ${{ inputs.manifest_path || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
         run: |
-          requested="${{ inputs.manifest_path || '' }}"
+          requested="$REQUESTED_MANIFEST"
+          if [ -n "$requested" ]; then
+            case "$requested" in
+              bots/*/bot.json) ;;
+              *)
+                echo "manifest_path must match bots/<bot-id>/bot.json with a safe bot id: $requested" >&2
+                exit 1
+                ;;
+            esac
+            requested_bot="${requested#bots/}"
+            requested_bot="${requested_bot%/bot.json}"
+            case "$requested_bot" in
+              *[!a-z0-9._-]* | [!a-z0-9]* | ? | ??)
+                echo "manifest_path bot id must be 3-64 chars matching [a-z0-9][a-z0-9._-]*: $requested_bot" >&2
+                exit 1
+                ;;
+            esac
+            if [ "${#requested_bot}" -gt 64 ]; then
+              echo "manifest_path bot id is too long: $requested_bot" >&2
+              exit 1
+            fi
+          fi
           if [ -n "$requested" ]; then
             changed="$requested"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             changed="$(git ls-files 'bots/*/bot.json')"
           else
-            before="${{ github.event.before }}"
-            after="${{ github.sha }}"
-            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
               changed="$(git ls-files 'bots/*/bot.json')"
             else
-              changed="$(git diff --name-only "$before" "$after" -- 'bots/*/bot.json')"
+              changed="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- 'bots/*/bot.json')"
             fi
           fi
           if [ -z "$changed" ]; then
@@ -60,13 +84,32 @@ jobs:
             echo "Requested manifest does not exist: $requested" >&2
             exit 1
           fi
-          if [ -z "$requested" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ -z "$requested" ] && [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             changed="$(git ls-files 'bots/*/bot.json')"
           fi
 
           manifests=""
           while IFS= read -r path; do
             [ -n "$path" ] || continue
+            case "$path" in
+              bots/*/bot.json) ;;
+              *)
+                echo "Ignoring unsafe bot manifest path: $path" >&2
+                continue
+                ;;
+            esac
+            bot_id="${path#bots/}"
+            bot_id="${bot_id%/bot.json}"
+            case "$bot_id" in
+              *[!a-z0-9._-]* | [!a-z0-9]* | ? | ??)
+                echo "Ignoring unsafe bot manifest path: $path" >&2
+                continue
+                ;;
+            esac
+            if [ "${#bot_id}" -gt 64 ]; then
+              echo "Ignoring overlong bot manifest path: $path" >&2
+              continue
+            fi
             [ -f "$path" ] || continue
             manifests="${manifests}${path}"$'\n'
           done <<EOF
@@ -80,6 +123,8 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - name: Register merged bot metadata
         if: steps.manifests.outputs.paths != ''
+        env:
+          MANIFEST_PATHS: ${{ steps.manifests.outputs.paths }}
         run: |
-          printf '%s' "${{ steps.manifests.outputs.paths }}" \
+          printf '%s' "$MANIFEST_PATHS" \
             | xargs node scripts/dev/bot-submission-register-merged.mjs
