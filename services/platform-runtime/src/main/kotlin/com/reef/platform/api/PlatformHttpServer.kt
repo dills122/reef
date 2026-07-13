@@ -628,7 +628,8 @@ class PlatformHttpServer(
             roles = { api.roles() },
             assignRole = { body -> api.assignRole(body) },
             actorRoles = { actorId -> api.actorRoles(actorId) },
-            isLoopback = { address -> isLoopback(address) }
+            isLoopback = { address -> isLoopback(address) },
+            internalHttpExposureMode = internalHttpExposureMode
         )
     }
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
@@ -1851,16 +1852,26 @@ class PlatformHttpServer(
             writeJson(exchange, 403, simpleErrorJson("legacy mutation route disabled"))
             return false
         }
-        if (!isLoopback(exchange.remoteAddress.address?.hostAddress)) {
-            writeJson(
-                exchange,
-                403,
-                JsonCodec.writeObject(
-                    "error" to "legacy mutation route requires loopback access",
-                    "mode" to "local"
-                )
-            )
-            return false
+        when (internalHttpExposureMode) {
+            InternalHttpExposureMode.Disabled -> {
+                exchange.sendResponseHeaders(404, -1)
+                exchange.close()
+                return false
+            }
+            InternalHttpExposureMode.LocalOnly -> {
+                if (!isLoopback(exchange.remoteAddress.address?.hostAddress)) {
+                    writeJson(
+                        exchange,
+                        403,
+                        JsonCodec.writeObject(
+                            "error" to "legacy mutation route requires loopback access",
+                            "mode" to "local"
+                        )
+                    )
+                    return false
+                }
+            }
+            InternalHttpExposureMode.Enabled -> Unit
         }
         val internalMarker = exchange.requestHeaders[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
         if (internalMarker != "true") {

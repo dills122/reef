@@ -1936,7 +1936,45 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun legacyMutationRoutesRejectRemoteSpoofedInternalMarker() {
+    fun legacyMutationRoutesRejectRemoteSpoofedInternalMarkerWhenLocalOnly() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = EchoOrderEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val server = PlatformHttpServer(
+            port = 0,
+            api = api,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            legacyMutationRoutesEnabled = true,
+            internalHttpExposureMode = InternalHttpExposureMode.LocalOnly
+        )
+        val headers = Headers().apply {
+            add("X-Reef-Internal-Route", "true")
+        }
+
+        val response = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/auth/roles",
+                query = null,
+                headers = headers,
+                remoteAddress = "203.0.113.10",
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+        )
+
+        assertEquals(403, response?.status)
+        assertContains(response?.body.orEmpty(), "\"error\":\"legacy mutation route requires loopback access\"")
+    }
+
+    @Test
+    fun legacyMutationRoutesAllowRemoteInternalMarkerWhenExplicitlyEnabled() {
         val persistence = InMemoryRuntimePersistence()
         seedOrderReferenceData(persistence)
         val api = PlatformApi(
@@ -1969,8 +2007,46 @@ class PlatformHttpServerBoundaryTest {
             )
         )
 
-        assertEquals(403, response?.status)
-        assertContains(response?.body.orEmpty(), "\"error\":\"legacy mutation route requires loopback access\"")
+        assertEquals(200, response?.status)
+        assertContains(response?.body.orEmpty(), "\"roleId\":\"order_trader\"")
+    }
+
+    @Test
+    fun legacyMutationRoutesReturnNotFoundWhenInternalHttpDisabled() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = EchoOrderEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val server = PlatformHttpServer(
+            port = 0,
+            api = api,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            legacyMutationRoutesEnabled = true,
+            internalHttpExposureMode = InternalHttpExposureMode.Disabled
+        )
+        val headers = Headers().apply {
+            add("X-Reef-Internal-Route", "true")
+        }
+
+        val response = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/auth/roles",
+                query = null,
+                headers = headers,
+                remoteAddress = "127.0.0.1",
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+        )
+
+        assertEquals(404, response?.status)
+        assertEquals("", response?.body)
     }
 
     @Test

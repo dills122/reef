@@ -17,7 +17,8 @@ internal class PlatformLegacySetupRoutes(
     private val roles: () -> String,
     private val assignRole: (String) -> String,
     private val actorRoles: (String) -> String,
-    private val isLoopback: (String?) -> Boolean
+    private val isLoopback: (String?) -> Boolean,
+    private val internalHttpExposureMode: InternalHttpExposureMode
 ) {
     fun handle(request: PlatformHotPathRequest): PlatformHotPathResponse? {
         return when (request.path) {
@@ -82,14 +83,20 @@ internal class PlatformLegacySetupRoutes(
         if (!legacyMutationRoutesEnabled) {
             return PlatformHotPathResponse(403, simpleErrorJson("legacy mutation route disabled"))
         }
-        if (!isLoopback(remoteAddress)) {
-            return PlatformHotPathResponse(
-                403,
-                JsonCodec.writeObject(
-                    "error" to "legacy mutation route requires loopback access",
-                    "mode" to "local"
-                )
-            )
+        when (internalHttpExposureMode) {
+            InternalHttpExposureMode.Disabled -> return PlatformHotPathResponse(404, "")
+            InternalHttpExposureMode.LocalOnly -> {
+                if (!isLoopback(remoteAddress)) {
+                    return PlatformHotPathResponse(
+                        403,
+                        JsonCodec.writeObject(
+                            "error" to "legacy mutation route requires loopback access",
+                            "mode" to "local"
+                        )
+                    )
+                }
+            }
+            InternalHttpExposureMode.Enabled -> Unit
         }
         val internalMarker = headers[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
         if (internalMarker != "true") {
