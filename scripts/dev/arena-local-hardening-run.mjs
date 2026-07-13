@@ -130,6 +130,15 @@ function hardeningSummary(report) {
     startedAt: report.startedAt,
     completedAt: report.completedAt,
     elapsedMs: report.elapsedMs,
+    pacing: report.pacingSummary ?? {
+      schemaVersion: "reef.arena.pacingSummary.v0",
+      enabled: false,
+      scheduler: "unavailable",
+      scheduledDurationMs: 0,
+      scheduledEventCount: 0,
+      finalCompletionLagMs: null,
+      maxCompletionLagMs: null,
+    },
     runPlan: {
       modeId: report.modeId,
       selectedBotCount: report.runPlan?.selectedBotCount,

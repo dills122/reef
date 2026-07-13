@@ -142,7 +142,8 @@ async function main() {
     }
 
     const healthSamples = [];
-    const sessionReports = await runArenaSessions(bots, healthSamples);
+    const arenaRun = await runArenaSessions(bots, healthSamples);
+    const sessionReports = arenaRun.sessionReports;
     const enforcementEvents = sessionReports.flatMap((result) => enforceBot(result.bot, result));
 
     const baseBotResults = scoreBots(sessionReports, enforcementEvents);
@@ -157,6 +158,7 @@ async function main() {
       sessionReports,
       healthSamples,
       venueReadback,
+      pacingSamples: arenaRun.pacingSamples,
       startedAt: startedAtIso,
       completedAt: completedAtIso,
       elapsedMs: performance.now() - startedAt,
@@ -187,7 +189,11 @@ async function runArenaSessions(bots, healthSamples) {
     sessions.push(await startBotSession(bot));
   }
 
+  const pacingSamples = [];
+  const schedulerStartedAt = performance.now();
   for (const event of schedulerEvents(sessions)) {
+    const eventStartedAt = performance.now();
+    const startLagMs = eventStartedAt - schedulerStartedAt - event.offsetMs;
     const scheduledTicks = event.sessions.flatMap((session) => {
       if (!session.start.ok || session.stoppedForPolicy) {
         return [];
@@ -208,9 +214,26 @@ async function runArenaSessions(bots, healthSamples) {
     if (event.sampleHealth) {
       await maybeCollectHealthSample(healthSamples, event.healthSampleIndex, tickReports.map((result) => result.tickReport), event.offsetMs);
     }
+    const eventCompletedAt = performance.now();
+    let sleepMs = 0;
     if (config.paceTicks && event.nextOffsetMs !== null) {
-      await sleep(event.nextOffsetMs - event.offsetMs);
+      sleepMs = Math.max(0, schedulerStartedAt + event.nextOffsetMs - performance.now());
+      if (sleepMs > 0) {
+        await sleep(sleepMs);
+      }
     }
+    pacingSamples.push({
+      offsetMs: event.offsetMs,
+      nextOffsetMs: event.nextOffsetMs,
+      scheduledSessionCount: event.sessions.length,
+      executedTickCount: tickReports.length,
+      sampleHealth: event.sampleHealth,
+      startLagMs,
+      completionLagMs: eventCompletedAt - schedulerStartedAt - event.offsetMs,
+      workElapsedMs: eventCompletedAt - eventStartedAt,
+      sleepMs,
+      wallElapsedMs: eventCompletedAt - schedulerStartedAt,
+    });
   }
 
   for (const session of sessions) {
@@ -220,7 +243,10 @@ async function runArenaSessions(bots, healthSamples) {
     console.log(`arena bot complete ${sessions.indexOf(session) + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
   }
 
-  return sessions.map(({ scheduled, stoppedForPolicy, ...session }) => session);
+  return {
+    sessionReports: sessions.map(({ scheduled, stoppedForPolicy, ...session }) => session),
+    pacingSamples,
+  };
 }
 
 async function startBotSession(bot) {
@@ -776,7 +802,7 @@ function summarizeConductMetrics(session, counters, enforcement) {
   };
 }
 
-function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {
+function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, pacingSamples, startedAt, completedAt, elapsedMs }) {
   const tickResults = sessionReports.flatMap((session) => session.ticks);
   const commandStatusSummary = summarizeCommandStatuses(tickResults);
   const totals = tickResults.reduce(
@@ -843,6 +869,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     },
     commandStatusSummary,
     latencySummary: summarizeReportLatency(tickResults),
+    pacingSummary: summarizePacing(pacingSamples ?? [], elapsedMs),
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
     marketQualitySummary,
@@ -890,6 +917,7 @@ function compactArenaReport(report) {
     commandAccounting: report.commandAccounting,
     commandStatusSummary: report.commandStatusSummary,
     latencySummary: report.latencySummary,
+    pacingSummary: report.pacingSummary,
     activityBySchedulingClass: report.activityBySchedulingClass,
     healthSummary: report.healthSummary,
     marketQualitySummary: report.marketQualitySummary,
@@ -995,6 +1023,53 @@ function summarizeReportLatency(tickResults) {
       p99: percentile(tickElapsedMs, 0.99),
       max: tickElapsedMs.length === 0 ? null : tickElapsedMs[tickElapsedMs.length - 1],
     },
+  };
+}
+
+function summarizePacing(samples, elapsedMs) {
+  const startLagMs = sortedFinite(samples.map((sample) => sample.startLagMs));
+  const completionLagMs = sortedFinite(samples.map((sample) => sample.completionLagMs));
+  const workElapsedMs = sortedFinite(samples.map((sample) => sample.workElapsedMs));
+  const sleepMs = sortedFinite(samples.map((sample) => sample.sleepMs));
+  const lastSample = samples[samples.length - 1];
+  const finalOffsetMs = samples.reduce((max, sample) => Math.max(max, Number(sample.offsetMs ?? 0)), 0);
+  const finalCompletionLagMs = lastSample === undefined ? 0 : Number(lastSample.completionLagMs ?? 0);
+  return {
+    schemaVersion: "reef.arena.pacingSummary.v0",
+    enabled: config.paceTicks,
+    scheduler: config.paceTicks ? "absolute-offset-from-run-start" : "unpaced",
+    scheduledDurationMs: runPlan.durationMs,
+    scheduledEventCount: samples.length,
+    finalOffsetMs,
+    elapsedMs,
+    eventSpanWallMs: lastSample === undefined ? 0 : Number(lastSample.wallElapsedMs ?? 0),
+    finalCompletionLagMs,
+    maxStartLagMs: startLagMs.length === 0 ? 0 : startLagMs[startLagMs.length - 1],
+    maxCompletionLagMs: completionLagMs.length === 0 ? 0 : completionLagMs[completionLagMs.length - 1],
+    eventsBehindSchedule: samples.filter((sample) => Number(sample.startLagMs ?? 0) > 0).length,
+    eventsCompletedBehindSchedule: samples.filter((sample) => Number(sample.completionLagMs ?? 0) > 0).length,
+    totalSleepMs: sum(sleepMs),
+    startLagMs: distributionFromSorted(startLagMs),
+    completionLagMs: distributionFromSorted(completionLagMs),
+    workElapsedMs: distributionFromSorted(workElapsedMs),
+    sleepMs: distributionFromSorted(sleepMs),
+  };
+}
+
+function sortedFinite(values) {
+  return values
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right);
+}
+
+function distributionFromSorted(sortedValues) {
+  return {
+    count: sortedValues.length,
+    p50: percentile(sortedValues, 0.5),
+    p95: percentile(sortedValues, 0.95),
+    p99: percentile(sortedValues, 0.99),
+    max: sortedValues.length === 0 ? 0 : sortedValues[sortedValues.length - 1],
   };
 }
 

@@ -33,6 +33,26 @@ writeFileSync(reportPath, JSON.stringify({
   },
   status: "completed",
   elapsedMs: 1200,
+  pacingSummary: {
+    schemaVersion: "reef.arena.pacingSummary.v0",
+    enabled: true,
+    scheduler: "absolute-offset-from-run-start",
+    scheduledDurationMs: 60000,
+    scheduledEventCount: 60,
+    finalOffsetMs: 59000,
+    elapsedMs: 61000,
+    eventSpanWallMs: 60050,
+    finalCompletionLagMs: 50,
+    maxStartLagMs: 25,
+    maxCompletionLagMs: 75,
+    eventsBehindSchedule: 60,
+    eventsCompletedBehindSchedule: 60,
+    totalSleepMs: 58000,
+    startLagMs: { count: 60, p50: 10, p95: 20, p99: 25, max: 25 },
+    completionLagMs: { count: 60, p50: 30, p95: 60, p99: 75, max: 75 },
+    workElapsedMs: { count: 60, p50: 20, p95: 40, p99: 50, max: 50 },
+    sleepMs: { count: 60, p50: 950, p95: 980, p99: 990, max: 990 },
+  },
   totals: {
     ticks: 120,
     failedTicks: 0,
@@ -197,6 +217,10 @@ const result = spawnSync(
 assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 const summary = JSON.parse(readFileSync(summaryPath, "utf8"));
 assert.equal(summary.status, "pass");
+assert.equal(summary.pacing.enabled, true);
+assert.equal(summary.pacing.scheduler, "absolute-offset-from-run-start");
+assert.equal(summary.pacing.scheduledDurationMs, 60000);
+assert.equal(summary.pacing.maxCompletionLagMs, 75);
 assert.equal(summary.commands.rejects.count, 5);
 assert.equal(summary.commands.rejects.byCode.SELF_TRADE_PREVENTION, 5);
 assert.equal(summary.commandPressure.totals.cancelCommands, 12);
