@@ -362,6 +362,80 @@ matching/fill/readback path during short local hardening. The next quality slice
 should turn these execution facts into better scoring and market-quality metrics
 instead of treating all successfully active bots as roughly equal.
 
+## Paced Local Gate Runner Prep
+
+Update: 2026-07-13.
+
+- [x] Paced runner sleeps are now anchored to absolute arena offsets from
+      scheduler start instead of sleeping each configured offset delta after
+      work completes.
+- [x] Local tick reports include `pacingSummary` with scheduled duration,
+      event count, wall/event span, sleep time, start lag, completion lag, and
+      per-event work timing.
+- [x] Compact reports and local hardening summaries preserve `pacingSummary`
+      so multi-minute artifacts can be checked without retaining per-tick
+      payloads.
+- [x] No-stack report tests cover full, compact, and short paced dry-run
+      artifacts.
+
+This is runner and artifact validation progress only. The real local
+`3-5m` wall-clock gate still needs to be rerun against the local venue stack
+with terminal command waits, projection drain, fill/cancel pressure, and the
+new pacing drift fields reviewed in the artifact.
+
+## Latest Paced Local Gate
+
+Run artifact: `/tmp/reef-arena-local-hardening-paced-3m.json`
+
+- [x] Isolated local `reef-paced-gate` stream-ack stack started on shifted host
+      ports, leaving the existing local Reef stack untouched.
+- [x] Stack readiness reported `commandProcessingMode=stream-ack`,
+      `marketDataProjectorEnabled=true`, and
+      `orderLifecycleProjectorEnabled=true`.
+- [x] Local smoke passed against isolated API port `18080`.
+- [x] Real paced duration was `180s` with `--pace-ticks`.
+- [x] Mode covered `5` active symbols: `AAPL`, `MSFT`, `NVDA`, `TSLA`,
+      `AMZN`.
+- [x] Projection drain required and passed.
+- [x] Market-health summary passed.
+- [x] Controlled taker/fill pressure produced fills on every active symbol.
+- [x] Cancel pressure remained present through house LP quote refresh.
+- [x] Rendered operator HTML report completed.
+
+Evidence:
+
+- report: `/tmp/reef-arena-local-hardening-paced-3m.json`
+- summary: `/tmp/reef-arena-local-hardening-paced-3m.summary.json`
+- rendered report: `/tmp/reef-arena-local-hardening-paced-3m.html`
+- run id: `arena-local-tick-1783904620224`
+- wall elapsed: `189.062s`
+- pacing summary: enabled, absolute-offset scheduler, scheduled duration
+  `180000ms`, event span wall `181450ms`, final completion lag `1700ms`,
+  max completion lag `2318ms`
+- total ticks/wakes: `7380`
+- submitted venue commands: `1385`
+- route mix: `1181` submit, `204` cancel
+- terminal statuses: `1385` `COMPLETED`
+- command accounting gap: `0`
+- `0` timed-out commands
+- `0` failed/rejected commands
+- `0` freezes
+- projection drained: `true`
+- top-of-book availability: `96.133333%`
+- depth availability: `96.133333%`
+- median quoted spread: `20` bps
+- p95 quoted spread: `20.00000000000076` bps
+- crossed/locked book samples: `0`
+- total fills: `1750`
+- per-instrument fills: `350` each for `AAPL`, `MSFT`, `NVDA`, `TSLA`, and
+  `AMZN`
+- command pressure: `204` cancel commands, `500` house commands
+
+Finding: the local multi-instrument arena now has real paced `3m` wall-clock
+proof with terminal command accounting, projection drain, market health,
+fill/cancel pressure, and pacing drift captured in compact artifacts. The
+remaining promotion gap is the longer hosted/backbone `15m` run and export.
+
 ## Previous Local Multi-Instrument Attempt
 
 Run: `arena-local-tick-1783610020341`

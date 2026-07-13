@@ -8,6 +8,7 @@ const repoRoot = new URL("../../", import.meta.url).pathname;
 const dir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-report-writer-"));
 const reportPath = join(dir, "arena-local-tick-run.json");
 const compactReportPath = join(dir, "arena-local-tick-run-compact.json");
+const pacedReportPath = join(dir, "arena-local-tick-run-paced.json");
 
 const result = spawnSync(
   "bun",
@@ -29,6 +30,11 @@ assert.equal(report.status, "completed");
 assert.equal(report.runPlan.durationSeconds, 1);
 assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
 assert.equal(report.totals.ticks, 16);
+assert.equal(report.pacingSummary.schemaVersion, "reef.arena.pacingSummary.v0");
+assert.equal(report.pacingSummary.enabled, false);
+assert.equal(report.pacingSummary.scheduler, "unpaced");
+assert.equal(report.pacingSummary.scheduledDurationMs, 1000);
+assert.equal(report.pacingSummary.scheduledEventCount, 4);
 assert.equal(report.sessionReports.length, 5);
 assert.equal(report.sessionReports.flatMap((session) => session.ticks).length, report.totals.ticks);
 assert.equal(report.healthSamples.length, 2);
@@ -121,6 +127,9 @@ assert.equal(compactReport.schemaVersion, "reef.arena.localTickRun.v0");
 assert.equal(compactReport.reportShape, "compact");
 assert.equal(compactReport.status, "completed");
 assert.equal(compactReport.totals.ticks, 16);
+assert.equal(compactReport.pacingSummary.schemaVersion, "reef.arena.pacingSummary.v0");
+assert.equal(compactReport.pacingSummary.enabled, false);
+assert.equal(compactReport.pacingSummary.scheduledEventCount, 4);
 assert.equal(compactReport.policyEnvelopeHash, report.policyEnvelopeHash);
 assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
 assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
@@ -147,5 +156,33 @@ assert.deepEqual(compactReport.commandStatusSummary.rejectedByCode, {});
 assert.deepEqual(compactReport.commandStatusSummary.rejectedByBotId, {});
 assert.equal(compactReport.marketQualitySummary.schemaVersion, "reef.arena.marketQualitySummary.v0");
 assert.ok(compactReport.marketQualitySummary.instruments.some((instrument) => instrument.instrumentId === "AAPL"));
+
+const pacedStartedAt = Date.now();
+const pacedResult = spawnSync(
+  "bun",
+  [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=1",
+    "--tick-interval-ms=500",
+    "--pace-ticks",
+    "--report-shape=compact",
+    `--out=${pacedReportPath}`,
+  ],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+const pacedWallElapsedMs = Date.now() - pacedStartedAt;
+
+assert.equal(pacedResult.status, 0, `${pacedResult.stdout}\n${pacedResult.stderr}`);
+const pacedReport = JSON.parse(readFileSync(pacedReportPath, "utf8"));
+assert.equal(pacedReport.pacingSummary.enabled, true);
+assert.equal(pacedReport.pacingSummary.scheduler, "absolute-offset-from-run-start");
+assert.equal(pacedReport.pacingSummary.scheduledDurationMs, 1000);
+assert.equal(pacedReport.pacingSummary.scheduledEventCount, 4);
+assert.equal(pacedReport.pacingSummary.totalSleepMs >= 700, true);
+assert.equal(pacedReport.pacingSummary.totalSleepMs <= 1000, true);
+assert.equal(pacedWallElapsedMs >= 700, true);
+assert.equal(pacedWallElapsedMs < 2500, true);
 
 console.log("arena local tick report writer checks passed");
