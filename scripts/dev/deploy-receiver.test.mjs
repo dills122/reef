@@ -10,6 +10,7 @@ import {
   installRelease,
   safeRelativePath,
   validateArchiveEntryNames,
+  validateArchiveEntryMetadata,
   validateClaims,
 } from "../../infra/hetzner-core/server/deploy-receiver/server.mjs";
 
@@ -63,6 +64,8 @@ assert.throws(() => safeRelativePath("../outside"), /unsafe archive path/);
 assert.throws(() => safeRelativePath("/absolute"), /unsafe archive path/);
 assert.deepEqual(validateArchiveEntryNames("./index.html\n./_app/app.js\n"), ["index.html", "_app/app.js"]);
 assert.throws(() => validateArchiveEntryNames("./_app/app.js\n"), /missing index.html/);
+assert.doesNotThrow(() => validateArchiveEntryMetadata("-rw-r--r-- user/group 5 2026-01-01 00:00 index.html\n"));
+assert.throws(() => validateArchiveEntryMetadata("lrwxrwxrwx user/group 6 2026-01-01 00:00 index.html -> /srv/arena-admin/index.html\n"), /unsupported entry type/);
 
 assert.deepEqual(
   deployMetadataFromClaims({
@@ -168,6 +171,47 @@ try {
   assert.ok(!retainedReleases.includes("old-release-0"));
 } finally {
   await rm(deployRoot, { recursive: true, force: true });
+}
+
+const symlinkRoot = await mkdtemp(join(tmpdir(), "reef-deploy-symlink-test-"));
+try {
+  const source = join(symlinkRoot, "source");
+  const archive = join(symlinkRoot, "arena-admin-symlink.tar.gz");
+  const live = join(symlinkRoot, "live");
+  const releases = join(symlinkRoot, "releases");
+  await mkdir(source, { recursive: true });
+  await writeFile(join(source, "target.html"), "target\n");
+  await writeFile(join(source, "index.html"), "index\n");
+  const link = spawnSync("ln", ["-s", "target.html", join(source, "link.html")], { encoding: "utf8" });
+  assert.equal(link.status, 0, link.stderr);
+  const tar = spawnSync("tar", ["-czf", archive, "-C", source, "."], { encoding: "utf8" });
+  assert.equal(tar.status, 0, tar.stderr);
+
+  await assert.rejects(
+    () =>
+      deployArchive(
+        archive,
+        {
+          artifactSha256: "c".repeat(64),
+          bytes: 12,
+          gitSha: "d".repeat(40),
+          runId: "124",
+          runAttempt: "1",
+          repository: "dills122/reef",
+          ref: "refs/heads/master",
+          workflow: "Admin UI Deploy",
+        },
+        {
+          liveDir: live,
+          releasesDir: releases,
+          releaseRetentionCount: 2,
+        },
+      ),
+    /unsupported entry type/,
+  );
+  await assert.rejects(() => readFile(join(live, "index.html"), "utf8"), /ENOENT/);
+} finally {
+  await rm(symlinkRoot, { recursive: true, force: true });
 }
 
 console.log("deploy receiver tests passed");

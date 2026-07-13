@@ -184,6 +184,20 @@ function validateArchiveEntryNames(output) {
   return files;
 }
 
+function validateArchiveEntryMetadata(output) {
+  for (const raw of output.split(/\r?\n/)) {
+    if (!raw.trim()) continue;
+    const permissions = raw.trimStart().split(/\s+/, 1)[0] || "";
+    if (!permissions) {
+      throw new Error("archive entry metadata is invalid");
+    }
+    const type = permissions[0];
+    if (type !== "-" && type !== "d") {
+      throw new Error("archive contains unsupported entry type");
+    }
+  }
+}
+
 async function assertExtractedTreeSafe(root) {
   const entries = await walk(root);
   for (const entry of entries) {
@@ -265,6 +279,11 @@ async function deployArchive(archivePath, metadata, config = defaultConfig) {
     throw new Error(`tar list failed: ${(list.stderr || "").trim()}`);
   }
   validateArchiveEntryNames(list.stdout);
+  const metadataList = spawnSync("tar", ["-tvzf", archivePath], { encoding: "utf8" });
+  if (metadataList.status !== 0) {
+    throw new Error(`tar metadata list failed: ${(metadataList.stderr || "").trim()}`);
+  }
+  validateArchiveEntryMetadata(metadataList.stdout);
 
   const releaseId = `${metadata.gitSha}-${metadata.artifactSha256.slice(0, 12)}`.replace(/[^a-zA-Z0-9_.-]/g, "-");
   const staging = join(config.releasesDir, `${releaseId}.staging-${process.pid}-${Date.now()}`);
@@ -458,6 +477,7 @@ export {
   parseJwt,
   safeRelativePath,
   validateArchiveEntryNames,
+  validateArchiveEntryMetadata,
   validateClaims,
   verifyJwt,
 };

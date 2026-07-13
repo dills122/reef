@@ -12,7 +12,7 @@ await assertHostedScenarioRunsInCompartment();
 await assertHostedScenarioUsesLiveReadClients();
 await assertHostedScenarioReportsDataAvailabilityDenial();
 await assertDeniedNetworkSourceDoesNotEvaluate();
-await assertCompartmentOmitsAmbientProcess();
+await assertSandboxRejectsAmbientGlobalProbe();
 await assertHostedTickTimeoutReturnsDoNotMerge();
 
 console.log("bot SDK hosted runner checks passed");
@@ -186,7 +186,7 @@ module.exports.default = class BadNetworkBot extends ReefBotV1 { async onTick(ct
   assert.ok(result.issues.some((issue) => issue.code === "sandbox_denied_global"));
 }
 
-async function assertCompartmentOmitsAmbientProcess() {
+async function assertSandboxRejectsAmbientGlobalProbe() {
   const source = `
 const { ReefBotV1 } = __reefBotSdk;
 const processKey = "pro" + "cess";
@@ -199,7 +199,8 @@ module.exports.default = class HostedNoAmbientBot extends ReefBotV1 { async onTi
     compartmentFactory: createVmCompartmentFactory(),
   });
 
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => issue.code === "sandbox_denied_global"));
 }
 
 async function assertHostedTickTimeoutReturnsDoNotMerge() {

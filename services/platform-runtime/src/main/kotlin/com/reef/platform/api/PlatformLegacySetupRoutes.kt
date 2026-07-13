@@ -16,7 +16,8 @@ internal class PlatformLegacySetupRoutes(
     private val createRole: (String) -> String,
     private val roles: () -> String,
     private val assignRole: (String) -> String,
-    private val actorRoles: (String) -> String
+    private val actorRoles: (String) -> String,
+    private val isLoopback: (String?) -> Boolean
 ) {
     fun handle(request: PlatformHotPathRequest): PlatformHotPathResponse? {
         return when (request.path) {
@@ -40,7 +41,7 @@ internal class PlatformLegacySetupRoutes(
     ): PlatformHotPathResponse {
         return when (request.method) {
             "POST" -> handlePost(request, postOperation)
-            "GET" -> handleGet(request.headers, getOperation)
+            "GET" -> handleGet(request.headers, request.remoteAddress, getOperation)
             else -> methodNotAllowedResponse()
         }
     }
@@ -49,7 +50,7 @@ internal class PlatformLegacySetupRoutes(
         request: PlatformHotPathRequest,
         postOperation: (String) -> String
     ): PlatformHotPathResponse {
-        allowLegacyMutationRoute(request.headers)?.let { return it }
+        allowLegacyMutationRoute(request.headers, request.remoteAddress)?.let { return it }
         if (request.body.toByteArray().size > maxRequestBodyBytes) {
             return PlatformHotPathResponse(
                 413,
@@ -65,10 +66,11 @@ internal class PlatformLegacySetupRoutes(
 
     private fun handleGet(
         headers: Headers,
+        remoteAddress: String?,
         getOperation: (() -> String)?
     ): PlatformHotPathResponse {
         val operation = getOperation ?: return methodNotAllowedResponse()
-        allowLegacyMutationRoute(headers)?.let { return it }
+        allowLegacyMutationRoute(headers, remoteAddress)?.let { return it }
         return try {
             PlatformHotPathResponse(200, operation())
         } catch (ex: Exception) {
@@ -76,9 +78,18 @@ internal class PlatformLegacySetupRoutes(
         }
     }
 
-    private fun allowLegacyMutationRoute(headers: Headers): PlatformHotPathResponse? {
+    private fun allowLegacyMutationRoute(headers: Headers, remoteAddress: String?): PlatformHotPathResponse? {
         if (!legacyMutationRoutesEnabled) {
             return PlatformHotPathResponse(403, simpleErrorJson("legacy mutation route disabled"))
+        }
+        if (!isLoopback(remoteAddress)) {
+            return PlatformHotPathResponse(
+                403,
+                JsonCodec.writeObject(
+                    "error" to "legacy mutation route requires loopback access",
+                    "mode" to "local"
+                )
+            )
         }
         val internalMarker = headers[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
         if (internalMarker != "true") {

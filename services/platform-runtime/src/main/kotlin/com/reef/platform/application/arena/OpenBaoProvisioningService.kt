@@ -6,6 +6,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.Base64
 
 /**
  * Server-side client for the bot-submission CI provisioning flow (D-046,
@@ -24,6 +25,12 @@ data class OpenBaoProvisioningConfig(
     val jwtRole: String = "reef-bot-submission-ci"
 )
 
+data class GitHubActionsOidcClaims(
+    val actor: String,
+    val repository: String,
+    val audience: String
+)
+
 class OpenBaoProvisioningService(
     private val config: OpenBaoProvisioningConfig,
     private val httpClient: HttpClient = HttpClient.newBuilder()
@@ -38,6 +45,7 @@ class OpenBaoProvisioningService(
     ) {
         secretPathSegment(submitterIdentity)
         secretPathSegment(botId)
+        requireSubmitterIdentity(githubOidcToken, submitterIdentity)
         val baoToken = exchangeJwtForToken(githubOidcToken)
         writeSecret(baoToken, submitterIdentity, botId, secretData)
     }
@@ -45,8 +53,45 @@ class OpenBaoProvisioningService(
     fun revokeBotSecretSlice(githubOidcToken: String, submitterIdentity: String, botId: String) {
         secretPathSegment(submitterIdentity)
         secretPathSegment(botId)
+        requireSubmitterIdentity(githubOidcToken, submitterIdentity)
         val baoToken = exchangeJwtForToken(githubOidcToken)
         deleteSecret(baoToken, submitterIdentity, botId)
+    }
+
+    companion object {
+        fun requireSubmitterIdentity(githubOidcToken: String, submitterIdentity: String): GitHubActionsOidcClaims {
+            val claims = githubActionsOidcClaims(githubOidcToken)
+            require(claims.actor == submitterIdentity) {
+                "submitterIdentity must match GitHub OIDC actor"
+            }
+            return claims
+        }
+
+        fun githubActionsOidcClaims(jwt: String): GitHubActionsOidcClaims {
+            val segments = jwt.split(".")
+            require(segments.size >= 2) { "invalid GitHub OIDC token" }
+            val payload = try {
+                String(Base64.getUrlDecoder().decode(segments[1]))
+            } catch (_: IllegalArgumentException) {
+                throw IllegalArgumentException("invalid GitHub OIDC token payload")
+            }
+            val json = try {
+                JsonCodec.parseObject(payload)
+            } catch (ex: IllegalArgumentException) {
+                throw IllegalArgumentException("invalid GitHub OIDC token payload: ${ex.message ?: "invalid json payload"}")
+            }
+            val actor = json.string("actor")
+            val repository = json.string("repository")
+            val audience = json.string("aud")
+            require(actor.isNotBlank()) { "GitHub OIDC token missing actor claim" }
+            require(repository.isNotBlank()) { "GitHub OIDC token missing repository claim" }
+            require(audience.isNotBlank()) { "GitHub OIDC token missing aud claim" }
+            return GitHubActionsOidcClaims(actor = actor, repository = repository, audience = audience)
+        }
+
+        // Rejects "/", "..", and anything else that could escape the intended
+        // secret/data/bots/<submitter>/<bot> prefix scoped by the jwt role's policy.
+        private val secretPathSegmentPattern = Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}")
     }
 
     private fun exchangeJwtForToken(jwt: String): String {
@@ -111,9 +156,4 @@ class OpenBaoProvisioningService(
         return value
     }
 
-    private companion object {
-        // Rejects "/", "..", and anything else that could escape the intended
-        // secret/data/bots/<submitter>/<bot> prefix scoped by the jwt role's policy.
-        val secretPathSegmentPattern = Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}")
-    }
 }

@@ -54,12 +54,29 @@ jobs:
 
       - name: Set image ref
         id: ref
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          IMAGE_TAG: ${{ inputs.tag }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_NAME: ${{ matrix.name }}
         run: |
-          if [ "${{ inputs.provider }}" = "ghcr" ]; then
-            echo "image=ghcr.io/${{ github.repository_owner }}/reef-${{ matrix.name }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "image=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/reef-${{ matrix.name }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          case "$IMAGE_TAG" in
+            *[!A-Za-z0-9_.-]* | [.-]* | "")
+              echo "image tag must be 1-128 chars, start with [A-Za-z0-9_], and contain only [A-Za-z0-9_.-]" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${#IMAGE_TAG}" -gt 128 ]; then
+            echo "image tag is too long" >&2
+            exit 1
           fi
+          if [ "$PROVIDER" = "ghcr" ]; then
+            image="ghcr.io/${REPOSITORY_OWNER}/reef-${IMAGE_NAME}:${IMAGE_TAG}"
+          else
+            image="docker.io/${DOCKERHUB_NAMESPACE}/reef-${IMAGE_NAME}:${IMAGE_TAG}"
+          fi
+          printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
 
       - name: Build and push ${{ matrix.name }}
         uses: docker/build-push-action@v6

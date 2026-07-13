@@ -12,7 +12,7 @@ const source = readFileSync(join(repoRoot, "packages/bot-sdk/examples/hosted-sim
 const hostedRunner = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/src/hosted-runner.ts")).href);
 
 await assertSesHostedScenarioRuns();
-await assertSesCompartmentDoesNotExposeAmbientNetwork();
+await assertSesSandboxRejectsAmbientNetworkProbe();
 
 console.log("bot SDK hosted SES E2E checks passed");
 
@@ -32,7 +32,7 @@ async function assertSesHostedScenarioRuns() {
   assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99000000000");
 }
 
-async function assertSesCompartmentDoesNotExposeAmbientNetwork() {
+async function assertSesSandboxRejectsAmbientNetworkProbe() {
   const noNetworkSource = `
 const { ReefBotV1 } = __reefBotSdk;
 const fetchKey = "fet" + "ch";
@@ -44,5 +44,6 @@ module.exports.default = class HostedNoNetworkBot extends ReefBotV1 { async onTi
     fileName: "hosted-no-network-bot.js",
   });
 
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => issue.code === "sandbox_denied_global"));
 }

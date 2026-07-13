@@ -78,6 +78,7 @@ on the Hetzner host.
 | `/opt/reef/secrets/matching-engine.env` | Matching engine bind settings | Matching engine |
 | `/opt/reef/secrets/simulator.env` | Simulator API bearer token, client id prefix, optional Bao AppRole credentials | Hosted smoke/soak simulator |
 | `/opt/reef/secrets/caddy.env` | `ARENA_ADMIN_API_TOKEN`, `ANALYTICS_EXPORT_API_TOKEN` | Caddy public admin gateway and platform runtime route checks |
+| `/opt/reef/secrets/platform-runtime.env` | `ARENA_ADMIN_API_ACTOR_ID`, `ANALYTICS_EXPORT_API_ACTOR_ID`, optional `ADMIN_API_ACTOR_ID` | Server-side actor binding for static fallback tokens; request headers cannot override it |
 | `/opt/reef/secrets/backup.env` | `AGE_RECIPIENT` and optional R2 settings | Host backup job |
 | `/opt/reef/secrets/platform-runtime.env` | `BAO_BOT_CONFIG_ROLE_ID`, `BAO_BOT_CONFIG_SECRET_ID` | Dedicated OpenBao AppRole used by the Admin API for participant bot config writes |
 
@@ -152,8 +153,9 @@ default. Keep that aligned with OpenBao role
 changes.
 
 The bot-submission workflow authenticates as service actor `bot-submission-ci`
-through `ARENA_ADMIN_API_TOKEN`. That actor must have `arena.admin` in runtime
-role bindings before registry diff and OpenBao provisioning can pass:
+through `ARENA_ADMIN_API_TOKEN` with `ARENA_ADMIN_API_ACTOR_ID=bot-submission-ci`
+on the platform runtime. That actor must have `arena.admin` in runtime role
+bindings before registry diff and OpenBao provisioning can pass:
 
 ```bash
 ADMIN_ACTOR_ID=bot-submission-ci make hetzner-core ARGS=admin-actor-role-grant

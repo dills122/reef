@@ -2,6 +2,7 @@ package com.reef.platform.application.arena
 
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
@@ -23,7 +24,7 @@ class OpenBaoProvisioningServiceTest {
 
             val error = assertFailsWith<OpenBaoClientException> {
                 service.provisionBotSecretSlice(
-                    githubOidcToken = "oidc",
+                    githubOidcToken = githubOidcToken(actor = "submitter-1"),
                     submitterIdentity = "submitter-1",
                     botId = "bot-1",
                     secretData = mapOf("key" to "value")
@@ -34,6 +35,22 @@ class OpenBaoProvisioningServiceTest {
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun rejectsSubmitterIdentityThatDoesNotMatchOidcActor() {
+        val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig("http://127.0.0.1:1"))
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            service.provisionBotSecretSlice(
+                githubOidcToken = githubOidcToken(actor = "octocat"),
+                submitterIdentity = "attacker",
+                botId = "bot-1",
+                secretData = mapOf("key" to "value")
+            )
+        }
+
+        assertContains(error.message ?: "", "submitterIdentity must match GitHub OIDC actor")
     }
 
     @Test
@@ -63,5 +80,26 @@ class OpenBaoProvisioningServiceTest {
                 botId = "bot/../other"
             )
         }
+    }
+
+    private fun githubOidcToken(
+        actor: String,
+        repository: String = "reef/reef",
+        audience: String = "reef-bot-submission-ci"
+    ): String {
+        fun encode(raw: String): String {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
+        }
+        val header = encode("""{"alg":"none","typ":"JWT"}""")
+        val payload = encode(
+            """
+                {
+                  "actor": "$actor",
+                  "repository": "$repository",
+                  "aud": "$audience"
+                }
+            """.trimIndent()
+        )
+        return "$header.$payload.signature"
     }
 }

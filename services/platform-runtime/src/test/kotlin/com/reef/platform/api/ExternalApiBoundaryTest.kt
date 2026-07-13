@@ -140,7 +140,14 @@ class ExternalApiBoundaryTest {
 
     @Test
     fun staticTokenAuthHookRequiresMatchingClientToken() {
-        val hook = StaticTokenAuthHook(mapOf("client-1" to "token-1"))
+        val hook = StaticTokenAuthHook(
+            mapOf(
+                "client-1" to StaticTokenClientConfig(
+                    token = "token-1",
+                    principal = ExternalApiPrincipal("client-1")
+                )
+            )
+        )
         assertNull(hook.authorize("client-1", "Bearer token-1"))
         assertEquals("UNAUTHORIZED", hook.authorize("client-1", "Bearer wrong")?.code)
         assertEquals("UNAUTHORIZED", hook.authorize("unknown", "Bearer token-1")?.code)
@@ -321,6 +328,20 @@ class ExternalApiBoundaryTest {
     }
 
     @Test
+    fun parseStaticTokenClientConfigsParsesIdentityScopes() {
+        val parsed = parseStaticTokenClientConfigs(
+            "client-1:token-1:participants=participant-1|participant-2:accounts=account-1:actors=actor-1|actor-2:bots=bot-1"
+        )
+
+        val config = parsed.getValue("client-1")
+        assertEquals("token-1", config.token)
+        assertEquals(setOf("participant-1", "participant-2"), config.principal.participantIds)
+        assertEquals(setOf("account-1"), config.principal.accountIds)
+        assertEquals(setOf("actor-1", "actor-2"), config.principal.actorIds)
+        assertEquals(setOf("bot-1"), config.principal.botIds)
+    }
+
+    @Test
     fun nonLocalBoundaryValidationRequiresExplicitSafeModes() {
         val ex = assertFailsWith<IllegalArgumentException> {
             validateBoundaryDeploymentModes(mapLookup("EXTERNAL_API_DEPLOYMENT_PROFILE" to "production"))
@@ -338,11 +359,31 @@ class ExternalApiBoundaryTest {
             mapLookup(
                 "EXTERNAL_API_DEPLOYMENT_PROFILE" to "production",
                 "EXTERNAL_API_AUTH_MODE" to "static-token",
+                "EXTERNAL_API_TOKENS" to "client-1:token-1:actors=actor-1:participants=participant-1:accounts=account-1",
                 "EXTERNAL_API_RATE_LIMIT_MODE" to "fixed-window",
                 "EXTERNAL_API_IDEMPOTENCY_STORE" to "postgres",
                 "PLATFORM_INTERNAL_HTTP_MODE" to "disabled"
             )
         )
+    }
+
+    @Test
+    fun nonLocalBoundaryValidationRejectsUnscopedStaticTokens() {
+        val ex = assertFailsWith<IllegalArgumentException> {
+            validateBoundaryDeploymentModes(
+                mapLookup(
+                    "EXTERNAL_API_DEPLOYMENT_PROFILE" to "production",
+                    "EXTERNAL_API_AUTH_MODE" to "static-token",
+                    "EXTERNAL_API_TOKENS" to "client-1:token-1,client-2:token-2;participants=participant-2",
+                    "EXTERNAL_API_RATE_LIMIT_MODE" to "fixed-window",
+                    "EXTERNAL_API_IDEMPOTENCY_STORE" to "postgres",
+                    "PLATFORM_INTERNAL_HTTP_MODE" to "disabled"
+                )
+            )
+        }
+
+        assertContains(ex.message.orEmpty(), "requires actor, participant, and account scoped EXTERNAL_API_TOKENS")
+        assertContains(ex.message.orEmpty(), "client-1")
     }
 
     @Test

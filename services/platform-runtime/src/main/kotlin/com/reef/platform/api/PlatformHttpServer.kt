@@ -125,7 +125,14 @@ private data class CachedStreamCommandDrainBackpressureSnapshot(
 internal data class AdminGatewayRoute(
     val internalPath: String,
     val fallbackTokenFamily: String,
-    val serviceTokenFamilies: Set<AdminServiceTokenFamily>
+    val serviceTokenFamilies: Set<AdminServiceTokenFamily>,
+    val sessionRoles: Set<String> = emptySet()
+)
+
+private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
+private val adminGatewaySecretAdminRoles = setOf(
+    AdminIdentityService.RoleSecretAdmin,
+    AdminIdentityService.RolePlatformAdmin
 )
 
 internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminGatewayRoute? = when (path) {
@@ -163,7 +170,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         AdminGatewayRoute(
             "/internal/admin/arena/bots/openbao-provision",
             "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+            adminGatewaySecretAdminRoles
         )
     "/admin/v1/arena/bots/ownership" -> AdminGatewayRoute(
         "/internal/admin/arena/bots/ownership",
@@ -233,59 +241,70 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     "/admin/v1/analytics/run-exports" -> AdminGatewayRoute(
         "/internal/admin/analytics/run-exports",
         "analytics",
-        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/analytics/run-bot-summaries" -> AdminGatewayRoute(
         "/internal/admin/analytics/run-bot-summaries",
         "analytics",
-        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     // GET reads the boundary's read-only mirror; POST writes through the admin
     // mutation path. Same public path, two different internal targets.
     "/admin/v1/risk/account-controls" -> AdminGatewayRoute(
         if (method == "GET") "/internal/boundary/account-risk/controls" else "/internal/admin/account-risk/controls",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/risk/circuit-breakers" -> AdminGatewayRoute(
         if (method == "GET") "/internal/boundary/circuit-breakers" else "/internal/admin/circuit-breakers",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/risk/price-collars" -> AdminGatewayRoute(
         if (method == "GET") "/internal/boundary/price-collars" else "/internal/admin/price-collars",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/settlement/facts" -> AdminGatewayRoute(
         "/internal/admin/settlement/facts",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/settlement/repairs/cash" -> AdminGatewayRoute(
         "/internal/admin/settlement/repairs/cash",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/settlement/repairs/security" -> AdminGatewayRoute(
         "/internal/admin/settlement/repairs/security",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/settlement/force-settle" -> AdminGatewayRoute(
         "/internal/admin/settlement/force-settle",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/settlement/reverse-ledger-entry" -> AdminGatewayRoute(
         "/internal/admin/settlement/reverse-ledger-entry",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     "/admin/v1/settlement/obligations/materialize" -> AdminGatewayRoute(
         "/internal/admin/settlement/obligations/materialize",
         "admin",
-        setOf(AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Admin),
+        adminGatewayPlatformAdminRoles
     )
     else -> null
 }
@@ -440,7 +459,8 @@ class PlatformHttpServer(
     private val commandIntakeBackpressureSampleMs: Long =
         RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false),
-    private val localDevAdminAuthBypass: Boolean = localDevAdminAuthBypassEnabled()
+    private val localDevAdminAuthBypass: Boolean = localDevAdminAuthBypassEnabled(),
+    private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv()
 ) {
     companion object {
         private val streamPublishTimeoutExecutor = ScheduledThreadPoolExecutor(1) { runnable ->
@@ -454,7 +474,6 @@ class PlatformHttpServer(
 
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
-    private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv()
     private val adminSessionCookieName: String =
         RuntimeEnv.string("ADMIN_SESSION_COOKIE_NAME", "reef_admin_session").trim().ifBlank { "reef_admin_session" }
     private val adminSessionCookieSecure: Boolean = RuntimeEnv.bool("ADMIN_SESSION_COOKIE_SECURE", true)
@@ -608,7 +627,8 @@ class PlatformHttpServer(
             createRole = { body -> api.createRole(body) },
             roles = { api.roles() },
             assignRole = { body -> api.assignRole(body) },
-            actorRoles = { actorId -> api.actorRoles(actorId) }
+            actorRoles = { actorId -> api.actorRoles(actorId) },
+            isLoopback = { address -> isLoopback(address) }
         )
     }
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
@@ -940,6 +960,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/orders/{orderId}")) {
+                return@createContext
+            }
 
             val path = exchange.requestURI.path.removePrefix("/orders/")
             if (path.endsWith("/events")) {
@@ -958,12 +981,18 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/orders")) {
+                return@createContext
+            }
             writeJson(exchange, 200, api.orders())
         }
 
         server.createContext("/api/v1/orders/lifecycle-state") { exchange ->
             if (exchange.requestMethod != "POST") {
                 methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Write(exchange, "/api/v1/orders/lifecycle-state")) {
                 return@createContext
             }
             writeJson(exchange, 200, api.rebuildOrderLifecycleState())
@@ -986,6 +1015,9 @@ class PlatformHttpServer(
         server.createContext("/api/v1/market-data/snapshots") { exchange ->
             if (exchange.requestMethod != "POST") {
                 methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Write(exchange, "/api/v1/market-data/snapshots")) {
                 return@createContext
             }
             val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
@@ -1012,6 +1044,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/settlement/facts/{scenarioRunId}")) {
+                return@createContext
+            }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/facts/").trimEnd('/')
             writeHotPathResponse(exchange, settlementAdminGateway.settlementFactsResponse(scenarioRunId))
         }
@@ -1019,6 +1054,9 @@ class PlatformHttpServer(
         server.createContext("/api/v1/settlement/obligations/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Read(exchange, "/api/v1/settlement/obligations/{scenarioRunId}")) {
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/obligations/").trimEnd('/')
@@ -1030,6 +1068,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/settlement/ledger/{scenarioRunId}")) {
+                return@createContext
+            }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/ledger/").trimEnd('/')
             writeHotPathResponse(exchange, settlementAdminGateway.settlementLedgerResponse(scenarioRunId))
         }
@@ -1039,6 +1080,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/settlement/proof/{scenarioRunId}")) {
+                return@createContext
+            }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/proof/").trimEnd('/')
             writeHotPathResponse(exchange, settlementAdminGateway.settlementProofResponse(scenarioRunId))
         }
@@ -1046,6 +1090,9 @@ class PlatformHttpServer(
         server.createContext("/api/v1/settlement/score/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Read(exchange, "/api/v1/settlement/score/{scenarioRunId}")) {
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/score/").trimEnd('/')
@@ -1163,6 +1210,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/trades")) {
+                return@createContext
+            }
             val limit = queryLimit(exchange, 0)
             if (limit > 0) {
                 writeJson(exchange, 200, api.recentTrades(limit))
@@ -1174,6 +1224,9 @@ class PlatformHttpServer(
         server.createContext("/events") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Read(exchange, "/events")) {
                 return@createContext
             }
             val limit = queryLimit(exchange, 0)
@@ -1408,14 +1461,6 @@ class PlatformHttpServer(
 
     private fun currentAdminPrincipal(): AdminRequestPrincipal = adminSessionAuth.currentPrincipal()
 
-    private fun headerValue(exchange: HttpExchange, name: String): String {
-        return headerValue(exchange.requestHeaders, name)
-    }
-
-    private fun headerValue(headers: Headers, name: String): String {
-        return headers[name]?.firstOrNull().orEmpty()
-    }
-
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
         val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod)
         if (route == null) {
@@ -1560,15 +1605,18 @@ class PlatformHttpServer(
             request.path == "/api/v1/orders/cancel" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/cancel") { body -> api.cancelOrder(body) }
             request.path == "/api/v1/orders/lifecycle-state" && request.method == "POST" ->
-                PlatformHotPathResponse(status = 200, body = api.rebuildOrderLifecycleState())
-            request.path == "/api/v1/market-data/snapshots" && request.method == "POST" ->
-                PlatformHotPathResponse(
+                apiV1WriteErrorResponse(request, "/api/v1/orders/lifecycle-state")
+                    ?: PlatformHotPathResponse(status = 200, body = api.rebuildOrderLifecycleState())
+            request.path == "/api/v1/market-data/snapshots" && request.method == "POST" -> {
+                val writeError = apiV1WriteErrorResponse(request, "/api/v1/market-data/snapshots")
+                if (writeError != null) writeError else PlatformHotPathResponse(
                     status = 200,
                     body = api.refreshMarketDataSnapshots(
                         queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" },
                         queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
                     )
                 )
+            }
             request.path == "/api/v1/data/availability" && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/data/availability")
                 if (readError != null) readError else PlatformHotPathResponse(
@@ -1759,6 +1807,15 @@ class PlatformHttpServer(
         return true
     }
 
+    private fun allowApiV1Write(exchange: HttpExchange, route: String): Boolean {
+        val boundaryError = boundary.checkWrite(exchange.requestHeaders, route)
+        if (boundaryError != null) {
+            writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+            return false
+        }
+        return true
+    }
+
     private fun apiV1ReadErrorResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse? {
         val boundaryError = boundary.checkRead(request.headers, route) ?: return null
         return PlatformHotPathResponse(
@@ -1767,27 +1824,42 @@ class PlatformHttpServer(
         )
     }
 
+    private fun apiV1WriteErrorResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse? {
+        val boundaryError = boundary.checkWrite(request.headers, route) ?: return null
+        return PlatformHotPathResponse(
+            boundaryError.status,
+            boundary.toErrorJson(boundaryError, correlationId(request.headers))
+        )
+    }
+
     private fun commandStatusReadScopeError(headers: Headers, status: CommandStatusView): BoundaryError? {
         val clientId = boundary.clientId(headers).orEmpty()
+        if (status.clientId.isBlank() && status.participantId.isBlank()) {
+            return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "command status scope is unavailable")
+        }
         if (status.clientId.isNotBlank() && status.clientId != clientId) {
             return BoundaryError(403, "OBJECT_AUTH_DENIED", "command scope does not match authenticated client")
         }
         if (status.participantId.isBlank()) {
             return null
         }
-        val principalParticipant = headerValue(headers, "X-Participant-Id")
-        if (principalParticipant.isBlank()) {
-            return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "missing X-Participant-Id header")
-        }
-        if (status.participantId != principalParticipant) {
-            return BoundaryError(403, "OBJECT_AUTH_DENIED", "command participant does not match authenticated principal")
-        }
-        return null
+        return boundary.checkParticipantScope(headers, status.participantId)
     }
 
     private fun allowLegacyMutationRoute(exchange: HttpExchange): Boolean {
         if (!legacyMutationRoutesEnabled) {
             writeJson(exchange, 403, simpleErrorJson("legacy mutation route disabled"))
+            return false
+        }
+        if (!isLoopback(exchange.remoteAddress.address?.hostAddress)) {
+            writeJson(
+                exchange,
+                403,
+                JsonCodec.writeObject(
+                    "error" to "legacy mutation route requires loopback access",
+                    "mode" to "local"
+                )
+            )
             return false
         }
         val internalMarker = exchange.requestHeaders[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
@@ -1809,11 +1881,12 @@ class PlatformHttpServer(
         exchange: HttpExchange,
         route: String,
         presetBody: String? = null,
+        boundaryPrechecked: Boolean = false,
         operation: (String) -> String
     ) {
         val started = System.nanoTime()
         try {
-            handleApiV1MutationMeasured(exchange, route, presetBody, operation)
+            handleApiV1MutationMeasured(exchange, route, presetBody, boundaryPrechecked, operation)
         } finally {
             HotPathMetrics.record("api.mutation.total", System.nanoTime() - started)
         }
@@ -1823,6 +1896,7 @@ class PlatformHttpServer(
         exchange: HttpExchange,
         route: String,
         presetBody: String? = null,
+        boundaryPrechecked: Boolean = false,
         operation: (String) -> String
     ) {
         if (exchange.requestMethod != "POST") {
@@ -1830,8 +1904,12 @@ class PlatformHttpServer(
             return
         }
 
-        val violation = HotPathMetrics.time("api.boundary.checkWrite") {
-            boundary.checkWrite(exchange.requestHeaders, route)
+        val violation = if (boundaryPrechecked) {
+            null
+        } else {
+            HotPathMetrics.time("api.boundary.checkWrite") {
+                boundary.checkWrite(exchange.requestHeaders, route)
+            }
         }
         if (violation != null) {
             writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
@@ -1853,6 +1931,13 @@ class PlatformHttpServer(
                 return
             }
             is ApiV1CommandValidation.Valid -> validation.json
+        }
+        val identityViolation = HotPathMetrics.time("api.boundary.checkOrderMutationIdentity") {
+            boundary.checkOrderMutationIdentity(exchange.requestHeaders, route, parsedBody)
+        }
+        if (identityViolation != null) {
+            writeJson(exchange, identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
+            return
         }
 
         if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
@@ -2275,6 +2360,14 @@ class PlatformHttpServer(
                 )
             }
             is ApiV1CommandValidation.Valid -> validation.json
+        }
+        val identityViolation = HotPathMetrics.time("api.boundary.checkOrderMutationIdentity") {
+            boundary.checkOrderMutationIdentity(request.headers, route, parsedBody)
+        }
+        if (identityViolation != null) {
+            return PreparedApiV1MutationResult.Rejected(
+                PlatformHotPathResponse(identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
+            )
         }
 
         return PreparedApiV1MutationResult.Prepared(
@@ -2925,6 +3018,13 @@ class PlatformHttpServer(
             methodNotAllowed(exchange)
             return
         }
+        val boundaryViolation = HotPathMetrics.time("api.boundary.checkWrite") {
+            boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/cancel")
+        }
+        if (boundaryViolation != null) {
+            writeJson(exchange, boundaryViolation.status, boundary.toErrorJson(boundaryViolation, correlationId(exchange)))
+            return
+        }
         val requestBody = readRequestBody(exchange) ?: return
         val request = JsonCodec.parseObjectOrEmpty(requestBody)
         val correlationId = correlationId(exchange)
@@ -2961,7 +3061,7 @@ class PlatformHttpServer(
             "instrumentId" to resolved.instrumentId,
             "clientOrderId" to clientOrderId
         )
-        handleApiV1Mutation(exchange, "/api/v1/orders/cancel", presetBody = synthesizedCancelBody) { body ->
+        handleApiV1Mutation(exchange, "/api/v1/orders/cancel", presetBody = synthesizedCancelBody, boundaryPrechecked = true) { body ->
             api.cancelOrder(body)
         }
     }

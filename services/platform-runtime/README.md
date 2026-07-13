@@ -60,7 +60,7 @@ Transport config:
 External boundary config:
 
 - `EXTERNAL_API_AUTH_MODE=allow-all|static-token` (default `allow-all`)
-- `EXTERNAL_API_TOKENS=client-1:token-1,client-2:token-2` (used by `static-token`)
+- `EXTERNAL_API_TOKENS=client-1:token-1:actors=bot-1:participants=participant-1:accounts=account-1` (used by `static-token`; non-local deployments require actor, participant, and account scopes per client)
 - `EXTERNAL_API_RATE_LIMIT_MODE=allow-all|fixed-window` (default `allow-all`)
 - `EXTERNAL_API_RATE_LIMIT_MAX` (default `120`)
 - `EXTERNAL_API_RATE_LIMIT_WINDOW_SECONDS` (default `60`)

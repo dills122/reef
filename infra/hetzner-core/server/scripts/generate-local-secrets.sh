@@ -34,13 +34,16 @@ static_client_tokens() {
   local prefix="$1"
   local count="$2"
   local token="$3"
+  local participants="$4"
+  local accounts="$5"
+  local actor_prefix="$6"
   local out=""
 
   for ((i = 0; i < count; i++)); do
     if [[ -n "$out" ]]; then
       out+=","
     fi
-    out+="${prefix}-${i}:${token}"
+    out+="${prefix}-${i}:${token}:actors=${actor_prefix}-${i}:participants=${participants}:accounts=${accounts}"
   done
   printf '%s\n' "$out"
 }
@@ -157,7 +160,9 @@ if [[ -z "$SIMULATOR_API_TOKEN" ]]; then
 fi
 SIMULATOR_CLIENT_ID_PREFIX="${SIMULATOR_CLIENT_ID_PREFIX:-sim-client}"
 SIMULATOR_STATIC_CLIENT_COUNT="${SIMULATOR_STATIC_CLIENT_COUNT:-512}"
-SIMULATOR_API_TOKENS="$(static_client_tokens "$SIMULATOR_CLIENT_ID_PREFIX" "$SIMULATOR_STATIC_CLIENT_COUNT" "$SIMULATOR_API_TOKEN")"
+SIMULATOR_PARTICIPANT_ID="${SIMULATOR_PARTICIPANT_ID:-${REEF_PARTICIPANT_ID:-participant-1}}"
+SIMULATOR_ACCOUNT_ID="${SIMULATOR_ACCOUNT_ID:-${REEF_ACCOUNT_ID:-account-1}}"
+SIMULATOR_API_TOKENS="$(static_client_tokens "$SIMULATOR_CLIENT_ID_PREFIX" "$SIMULATOR_STATIC_CLIENT_COUNT" "$SIMULATOR_API_TOKEN" "$SIMULATOR_PARTICIPANT_ID" "$SIMULATOR_ACCOUNT_ID" "bot")"
 
 cat > "$SECRETS/openbao.env" <<EOF
 BAO_ADDR=http://127.0.0.1:8200
@@ -212,6 +217,8 @@ ANALYTICS_POSTGRES_USER=analytics_app
 ANALYTICS_POSTGRES_PASSWORD=${ANALYTICS_APP_DB_PASSWORD}
 ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
+ARENA_ADMIN_API_ACTOR_ID=${ARENA_ADMIN_API_ACTOR_ID:-bot-submission-ci}
+ANALYTICS_EXPORT_API_ACTOR_ID=${ANALYTICS_EXPORT_API_ACTOR_ID:-analytics-export-ci}
 EOF
 append_env_if_set "$SECRETS/platform-runtime.env" BAO_ROLE_ID "$PLATFORM_BAO_ROLE_ID"
 append_env_if_set "$SECRETS/platform-runtime.env" BAO_SECRET_ID "$PLATFORM_BAO_SECRET_ID"
@@ -231,6 +238,8 @@ LOAD_TESTER_BASE_URL=http://platform-runtime:8080
 BAO_ADDR=http://openbao:8200
 REEF_CLIENT_ID_PREFIX=${SIMULATOR_CLIENT_ID_PREFIX}
 REEF_API_BEARER_TOKEN=${SIMULATOR_API_TOKEN}
+REEF_PARTICIPANT_ID=${SIMULATOR_PARTICIPANT_ID}
+REEF_ACCOUNT_ID=${SIMULATOR_ACCOUNT_ID}
 EOF
 append_env_if_set "$SECRETS/simulator.env" BAO_ROLE_ID "$SIMULATOR_BAO_ROLE_ID"
 append_env_if_set "$SECRETS/simulator.env" BAO_SECRET_ID "$SIMULATOR_BAO_SECRET_ID"

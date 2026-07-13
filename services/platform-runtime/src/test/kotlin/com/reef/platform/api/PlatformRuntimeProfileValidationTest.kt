@@ -34,6 +34,17 @@ class PlatformRuntimeProfileValidationTest {
     }
 
     @Test
+    fun externalApiDeploymentProfileMarksRuntimeNonLocal() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup("EXTERNAL_API_DEPLOYMENT_PROFILE" to "production")
+        )
+
+        val issues = PlatformRuntimeProfileValidator.violations(config)
+        assertEquals(1, issues.size)
+        assertTrue(issues.single().contains("POST_TRADE_PROFILE"))
+    }
+
+    @Test
     fun nonLocalRuntimeAcceptsExplicitPostTradeProfile() {
         val config = PlatformRuntimeProfileConfig.fromEnv(
             envLookup(

@@ -33,6 +33,44 @@ assert.ok(violations.some((violation) => violation.pattern === "setTimeout"));
 assert.ok(violations.some((violation) => violation.pattern === "node:fs"));
 assert.ok(codes.includes("sandbox_dynamic_require"));
 
+const computedGlobal = `
+  const proc = globalThis["process"];
+  proc.env.SECRET;
+`;
+const computedGlobalViolations = scanBotSourceForSandboxViolationsV1(computedGlobal);
+assert.ok(computedGlobalViolations.some((violation) => violation.code === "sandbox_denied_global" && violation.pattern === "globalThis"));
+assert.ok(computedGlobalViolations.some((violation) => violation.code === "sandbox_denied_global" && violation.pattern === "process"));
+
+const constructorChain = `
+  const getProcess = ({}).constructor.constructor("return process");
+  getProcess().env.SECRET;
+`;
+const constructorChainViolations = scanBotSourceForSandboxViolationsV1(constructorChain);
+assert.ok(
+  constructorChainViolations.some(
+    (violation) => violation.code === "sandbox_denied_property" && violation.pattern === "constructor",
+  ),
+);
+
+const bracketConstructorChain = `
+  const getProcess = ({})["constructor"]["constructor"]("return process");
+  getProcess().env.SECRET;
+`;
+assert.ok(
+  scanBotSourceForSandboxViolationsV1(bracketConstructorChain).some(
+    (violation) => violation.code === "sandbox_denied_property" && violation.pattern === "constructor",
+  ),
+);
+
+const normalClassConstructor = `
+  export default class ExampleBot {
+    constructor() {
+      this.ready = true;
+    }
+  }
+`;
+assert.deepEqual(scanBotSourceForSandboxViolationsV1(normalClassConstructor), []);
+
 const inertText = `
   // fetch("https://example.com");
   const message = "setTimeout and process are words here";

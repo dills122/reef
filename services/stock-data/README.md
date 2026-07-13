@@ -37,6 +37,9 @@ API below directly with an explicit `gameSeedId` and symbol list.
 | `STOCK_DATA_POSTGRES_JDBC_URL` | `jdbc:postgresql://localhost:5432/reef?currentSchema=stock_data` | only used when persistence is `postgres` |
 | `STOCK_DATA_POSTGRES_USER` / `STOCK_DATA_POSTGRES_PASSWORD` | `reef` / `reef` | Postgres credentials |
 | `STOCK_DATA_HTTP_PORT` | `8081` | HTTP listen port |
+| `STOCK_DATA_API_TOKEN` | (empty) | bearer token required for non-loopback `POST /v1/seed-snapshots`; blank is local-loopback only |
+| `STOCK_DATA_HTTP_MAX_REQUEST_BYTES` | `65536` | max seed request body size |
+| `STOCK_DATA_MAX_SEED_SYMBOLS` | `100` | max symbols per seed request |
 
 Run the schema migration before using `postgres` persistence:
 `scripts/dev/db/migrations/stock_data/0001_seed_snapshots.sql` (applied via
@@ -57,6 +60,12 @@ seed - see the plan doc's "Failure Behavior" section for the full list of
 `category` values. Calling again with the same `gameSeedId` always replays
 the persisted batch and never re-calls the provider, even if a different
 symbol list is passed.
+
+Non-loopback callers must send `Authorization: Bearer $STOCK_DATA_API_TOKEN`.
+Requests are rejected before provider/database work when the body exceeds
+`STOCK_DATA_HTTP_MAX_REQUEST_BYTES`, the symbol list exceeds
+`STOCK_DATA_MAX_SEED_SYMBOLS`, or a symbol fails the service's conservative
+uppercase ticker syntax.
 
 `GET /health` returns `{"status": "ok"}`.
 

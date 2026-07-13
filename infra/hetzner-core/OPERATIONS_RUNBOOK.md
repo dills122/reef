@@ -428,7 +428,8 @@ creates `arena-operator` with `arena.admin`, assigns it to
 `user-gh-<numeric-id>`, then disables the route again.
 
 Grant the bot-submission CI service actor before enabling the real hosted
-OpenBao provisioning workflow:
+OpenBao provisioning workflow, and set `ARENA_ADMIN_API_ACTOR_ID` to the same
+actor on the platform runtime:
 
 ```bash
 ADMIN_ACTOR_ID=bot-submission-ci make hetzner-core ARGS=admin-actor-role-grant

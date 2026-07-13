@@ -2,6 +2,7 @@ export type BotSandboxViolationSeverityV1 = "error" | "warning";
 
 export interface BotSandboxPolicyV1 {
   readonly deniedGlobals: readonly string[];
+  readonly deniedPropertyNames: readonly string[];
   readonly deniedImportSpecifiers: readonly string[];
   readonly allowedImportSpecifiers: readonly string[];
   readonly allowDynamicImport: boolean;
@@ -58,7 +59,21 @@ export const reefBotApprovedPackagesV1: readonly BotApprovedPackageV1[] = [
 ];
 
 export const reefBotHostedSandboxPolicyV1: BotSandboxPolicyV1 = {
-  deniedGlobals: ["fetch", "WebSocket", "setTimeout", "setInterval", "process", "Buffer", "Function", "eval"],
+  deniedGlobals: [
+    "fetch",
+    "WebSocket",
+    "setTimeout",
+    "setInterval",
+    "process",
+    "Buffer",
+    "Function",
+    "eval",
+    "globalThis",
+    "global",
+    "window",
+    "self",
+  ],
+  deniedPropertyNames: ["constructor", "__proto__"],
   deniedImportSpecifiers: [
     "node:",
     "fs",
@@ -105,12 +120,23 @@ export function scanBotSourceForSandboxViolationsV1(
       continue;
     }
 
-    if (scan.globalReferences.has(deniedGlobal)) {
+    if (scan.globalReferences.has(deniedGlobal) || scan.globalPropertyReferences.has(deniedGlobal)) {
       violations.push({
         code: "sandbox_denied_global",
         message: `Hosted bot source references denied global ${deniedGlobal}.`,
         severity: "error",
         pattern: deniedGlobal,
+      });
+    }
+  }
+
+  for (const deniedPropertyName of policy.deniedPropertyNames) {
+    if (scan.propertyReferences.has(deniedPropertyName)) {
+      violations.push({
+        code: "sandbox_denied_property",
+        message: `Hosted bot source references denied property ${deniedPropertyName}.`,
+        severity: "error",
+        pattern: deniedPropertyName,
       });
     }
   }
@@ -157,6 +183,8 @@ export function scanBotSourceForSandboxViolationsV1(
 interface SandboxSourceSyntaxScan {
   readonly moduleSpecifiers: readonly string[];
   readonly globalReferences: ReadonlySet<string>;
+  readonly globalPropertyReferences: ReadonlySet<string>;
+  readonly propertyReferences: ReadonlySet<string>;
   readonly usesDynamicImport: boolean;
   readonly usesDynamicRequire: boolean;
 }
@@ -166,6 +194,8 @@ function scanSourceSyntax(source: string): SandboxSourceSyntaxScan {
   const executableSource = stripComments(source, true);
   const moduleSpecifiers: string[] = [];
   const globalReferences = new Set<string>();
+  const globalPropertyReferences = new Set<string>();
+  const propertyReferences = new Set<string>();
 
   const importPattern = /\bimport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?["']([^"']+)["']/g;
   for (const match of commentFreeSource.matchAll(importPattern)) {
@@ -192,9 +222,27 @@ function scanSourceSyntax(source: string): SandboxSourceSyntaxScan {
     }
   }
 
+  for (const match of executableSource.matchAll(/\.\s*([A-Za-z_$][\w$]*)\b/g)) {
+    const propertyName = match[1];
+    if (propertyName !== undefined) propertyReferences.add(propertyName);
+  }
+
+  for (const match of commentFreeSource.matchAll(/\[\s*["']([^"']+)["']\s*\]/g)) {
+    const propertyName = match[1];
+    if (propertyName !== undefined) propertyReferences.add(propertyName);
+  }
+
+  const globalObjectPropertyPattern = /\b(?:globalThis|global|window|self)\s*(?:\.\s*([A-Za-z_$][\w$]*)|\[\s*["']([^"']+)["']\s*\])/g;
+  for (const match of commentFreeSource.matchAll(globalObjectPropertyPattern)) {
+    const propertyName = match[1] ?? match[2];
+    if (propertyName !== undefined) globalPropertyReferences.add(propertyName);
+  }
+
   return {
     moduleSpecifiers,
     globalReferences,
+    globalPropertyReferences,
+    propertyReferences,
     usesDynamicImport: /\bimport\s*\(/.test(executableSource),
     usesDynamicRequire: /\brequire\s*\((?!\s*["'][^"']+["']\s*\))/.test(commentFreeSource),
   };
