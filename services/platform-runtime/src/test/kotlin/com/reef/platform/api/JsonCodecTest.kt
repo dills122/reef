@@ -36,8 +36,9 @@ class JsonCodecTest {
             }
         """.trimIndent()
 
-        val objects = JsonCodec.objectArrayElements(body, "executions")
-        val docs = JsonCodec.parseObject(body).objectDocuments("executions")
+        val document = JsonCodec.parseObject(body)
+        val objects = document.objectArray("executions")
+        val docs = document.objectDocuments("executions")
 
         assertEquals(2, objects.size)
         assertEquals(2, docs.size)

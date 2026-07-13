@@ -1936,7 +1936,45 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun legacyMutationRoutesRejectRemoteSpoofedInternalMarker() {
+    fun legacyMutationRoutesRejectRemoteSpoofedInternalMarkerWhenLocalOnly() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = EchoOrderEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val server = PlatformHttpServer(
+            port = 0,
+            api = api,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            legacyMutationRoutesEnabled = true,
+            internalHttpExposureMode = InternalHttpExposureMode.LocalOnly
+        )
+        val headers = Headers().apply {
+            add("X-Reef-Internal-Route", "true")
+        }
+
+        val response = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/auth/roles",
+                query = null,
+                headers = headers,
+                remoteAddress = "203.0.113.10",
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+        )
+
+        assertEquals(403, response?.status)
+        assertContains(response?.body.orEmpty(), "\"error\":\"legacy mutation route requires loopback access\"")
+    }
+
+    @Test
+    fun legacyMutationRoutesAllowRemoteInternalMarkerWhenExplicitlyEnabled() {
         val persistence = InMemoryRuntimePersistence()
         seedOrderReferenceData(persistence)
         val api = PlatformApi(
@@ -1969,8 +2007,46 @@ class PlatformHttpServerBoundaryTest {
             )
         )
 
-        assertEquals(403, response?.status)
-        assertContains(response?.body.orEmpty(), "\"error\":\"legacy mutation route requires loopback access\"")
+        assertEquals(200, response?.status)
+        assertContains(response?.body.orEmpty(), "\"roleId\":\"order_trader\"")
+    }
+
+    @Test
+    fun legacyMutationRoutesReturnNotFoundWhenInternalHttpDisabled() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = EchoOrderEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val server = PlatformHttpServer(
+            port = 0,
+            api = api,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            legacyMutationRoutesEnabled = true,
+            internalHttpExposureMode = InternalHttpExposureMode.Disabled
+        )
+        val headers = Headers().apply {
+            add("X-Reef-Internal-Route", "true")
+        }
+
+        val response = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/auth/roles",
+                query = null,
+                headers = headers,
+                remoteAddress = "127.0.0.1",
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+        )
+
+        assertEquals(404, response?.status)
+        assertEquals("", response?.body)
     }
 
     @Test
@@ -2845,6 +2921,28 @@ class PlatformHttpServerBoundaryTest {
             )
 
             assertEquals(404, response.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun cancelByClientOrderReturns400WhenJsonMalformed() {
+        val server = testServerWithGateway(gateway = EchoOrderEngineGateway())
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel-by-client-order",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-cancel-by-client-order-malformed"
+                ),
+                body = """{"participantId":"""
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "invalid json payload")
         } finally {
             server.stop(0)
         }

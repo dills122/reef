@@ -31,8 +31,9 @@ class TradeSettlementObligationMaterializer(
 ) {
     fun materialize(scenarioRunId: String, venueSessionId: String = ""): SettlementObligationMaterializationResult {
         require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
-        val trades = runtimePersistence.trades().sortedWith(compareBy<TradeCreated> { it.occurredAt }.thenBy { it.tradeId })
-        val eventsById = runtimePersistence.events().associateBy { it.eventId }
+        val trades = runtimePersistence.tradesForSettlementMaterialization(scenarioRunId, venueSessionId)
+            .sortedWith(compareBy<TradeCreated> { it.occurredAt }.thenBy { it.tradeId })
+        val eventsById by lazy { runtimePersistence.events().associateBy { it.eventId } }
         val obligations = mutableListOf<SettlementObligationCreatedFact>()
         val allocations = mutableListOf<SettlementAllocationProposedFact>()
         val confirmations = mutableListOf<SettlementConfirmationGeneratedFact>()
@@ -45,12 +46,21 @@ class TradeSettlementObligationMaterializer(
         val breaks = mutableListOf<SettlementBreakOpenedFact>()
         val resolutions = mutableListOf<SettlementResolvedFact>()
         val existingFacts = settlementFactStore.factsByScenarioRunId(scenarioRunId)
+        val materializedObligationIds = existingFacts.obligations.mapTo(mutableSetOf()) { it.settlementObligationId }
+        val materializedAllocationIds = existingFacts.allocations.mapTo(mutableSetOf()) { it.settlementAllocationId }
+        val materializedConfirmationIds = existingFacts.confirmations.mapTo(mutableSetOf()) { it.settlementConfirmationId }
+        val materializedAffirmationIds = existingFacts.affirmations.mapTo(mutableSetOf()) { it.settlementAffirmationId }
         val resourceChecksEnabled = existingFacts.resourcePositions.isNotEmpty()
+        val scenarioRunProfileId = runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId).orEmpty()
+        val venueSessionProfileIds = mutableMapOf<String, String>()
+        val acceptedOrdersById = runtimePersistence.acceptedOrders(
+            trades.flatMap { listOf(it.buyOrderId, it.sellOrderId) }.toSet()
+        )
         var skipped = 0
 
         trades.forEach { trade ->
-            val buyOrder = runtimePersistence.acceptedOrder(trade.buyOrderId)
-            val sellOrder = runtimePersistence.acceptedOrder(trade.sellOrderId)
+            val buyOrder = acceptedOrdersById[trade.buyOrderId]
+            val sellOrder = acceptedOrdersById[trade.sellOrderId]
             if (buyOrder == null || sellOrder == null) {
                 skipped += 1
                 return@forEach
@@ -75,11 +85,16 @@ class TradeSettlementObligationMaterializer(
                 return@forEach
             }
             val tradeVenueSessionId = venueSessionId.ifBlank { orderVenueSessionId }
+            val venueSessionProfileId = if (tradeVenueSessionId.isBlank()) {
+                ""
+            } else {
+                venueSessionProfileIds.getOrPut(tradeVenueSessionId) {
+                    runtimePersistence.venueSessionPostTradeProfileId(tradeVenueSessionId).orEmpty()
+                }
+            }
             val selection = postTradeProfileResolver.resolve(
-                scenarioRunProfileId = runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId).orEmpty(),
-                venueSessionProfileId = tradeVenueSessionId.takeIf { it.isNotBlank() }
-                    ?.let { runtimePersistence.venueSessionPostTradeProfileId(it) }
-                    .orEmpty()
+                scenarioRunProfileId = scenarioRunProfileId,
+                venueSessionProfileId = venueSessionProfileId
             )
             val event = eventsById[trade.eventId]
             val obligation = obligationFact(
@@ -91,26 +106,20 @@ class TradeSettlementObligationMaterializer(
                 profileId = selection.profileId,
                 policyVersion = selection.policyVersion
             )
-            if (existingFacts.obligations.none { it.settlementObligationId == obligation.settlementObligationId }) {
+            if (materializedObligationIds.add(obligation.settlementObligationId)) {
                 obligations += obligation
             }
             if (selection.mode == InstantPostTradeMode) {
                 val allocation = allocationFact(obligation, buyOrder, sellOrder)
-                if (existingFacts.allocations.none { it.settlementAllocationId == allocation.settlementAllocationId } &&
-                    allocations.none { it.settlementAllocationId == allocation.settlementAllocationId }
-                ) {
+                if (materializedAllocationIds.add(allocation.settlementAllocationId)) {
                     allocations += allocation
                 }
                 val confirmation = confirmationFact(obligation, allocation)
-                if (existingFacts.confirmations.none { it.settlementConfirmationId == confirmation.settlementConfirmationId } &&
-                    confirmations.none { it.settlementConfirmationId == confirmation.settlementConfirmationId }
-                ) {
+                if (materializedConfirmationIds.add(confirmation.settlementConfirmationId)) {
                     confirmations += confirmation
                 }
                 val affirmation = affirmationFact(obligation, allocation, confirmation)
-                if (existingFacts.affirmations.none { it.settlementAffirmationId == affirmation.settlementAffirmationId } &&
-                    affirmations.none { it.settlementAffirmationId == affirmation.settlementAffirmationId }
-                ) {
+                if (materializedAffirmationIds.add(affirmation.settlementAffirmationId)) {
                     affirmations += affirmation
                 }
                 val plan = instantSettlementPlan(existingFacts, obligation) ?: return@forEach

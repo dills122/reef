@@ -16,3 +16,15 @@ internal data class PlatformHotPathResponse(
     val body: String = "",
     val contentType: String? = "application/json"
 )
+
+internal fun parseGatewayJson(body: String): JsonDocument? {
+    return try {
+        JsonCodec.parseObject(body)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+}
+
+internal fun invalidJsonPayloadResponse(): PlatformHotPathResponse {
+    return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid json payload"))
+}

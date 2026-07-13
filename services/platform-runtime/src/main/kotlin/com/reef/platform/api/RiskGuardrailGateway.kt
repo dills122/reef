@@ -122,7 +122,7 @@ internal class RiskGuardrailGateway(
     fun setAccountRiskControlResponse(body: String): PlatformHotPathResponse {
         val store = accountRiskControlStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "account risk control store unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val scopeType = normalizeAccountRiskScope(json.string("scopeType").ifBlank { json.string("scope") })
             ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk scope"))
         val scopeId = json.string("scopeId").ifBlank { json.string("id") }
@@ -192,7 +192,7 @@ internal class RiskGuardrailGateway(
     fun setCommandCircuitBreakerResponse(body: String): PlatformHotPathResponse {
         val store = commandCircuitBreakerStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "command circuit breaker store unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val scopeType = normalizeCircuitBreakerScope(json.string("scopeType").ifBlank { json.string("scope") })
             ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker scope"))
         val scopeId = if (scopeType == "GLOBAL") {
@@ -249,7 +249,7 @@ internal class RiskGuardrailGateway(
     fun setInstrumentPriceCollarResponse(body: String): PlatformHotPathResponse {
         val store = instrumentPriceCollarStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "instrument price collar store unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val instrumentId = json.string("instrumentId").ifBlank { json.string("id") }
         if (instrumentId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "instrumentId is required"))

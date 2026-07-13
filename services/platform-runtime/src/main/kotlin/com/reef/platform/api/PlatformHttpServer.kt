@@ -628,7 +628,8 @@ class PlatformHttpServer(
             roles = { api.roles() },
             assignRole = { body -> api.assignRole(body) },
             actorRoles = { actorId -> api.actorRoles(actorId) },
-            isLoopback = { address -> isLoopback(address) }
+            isLoopback = { address -> isLoopback(address) },
+            internalHttpExposureMode = internalHttpExposureMode
         )
     }
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
@@ -1851,16 +1852,26 @@ class PlatformHttpServer(
             writeJson(exchange, 403, simpleErrorJson("legacy mutation route disabled"))
             return false
         }
-        if (!isLoopback(exchange.remoteAddress.address?.hostAddress)) {
-            writeJson(
-                exchange,
-                403,
-                JsonCodec.writeObject(
-                    "error" to "legacy mutation route requires loopback access",
-                    "mode" to "local"
-                )
-            )
-            return false
+        when (internalHttpExposureMode) {
+            InternalHttpExposureMode.Disabled -> {
+                exchange.sendResponseHeaders(404, -1)
+                exchange.close()
+                return false
+            }
+            InternalHttpExposureMode.LocalOnly -> {
+                if (!isLoopback(exchange.remoteAddress.address?.hostAddress)) {
+                    writeJson(
+                        exchange,
+                        403,
+                        JsonCodec.writeObject(
+                            "error" to "legacy mutation route requires loopback access",
+                            "mode" to "local"
+                        )
+                    )
+                    return false
+                }
+            }
+            InternalHttpExposureMode.Enabled -> Unit
         }
         val internalMarker = exchange.requestHeaders[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
         if (internalMarker != "true") {
@@ -2707,7 +2718,7 @@ class PlatformHttpServer(
         envelope: StreamCommandEnvelope?,
         preParsedJson: JsonDocument? = null
     ): AccountRiskCheckRequest {
-        val json = preParsedJson ?: JsonCodec.parseObjectOrEmpty(body)
+        val json = preParsedJson ?: JsonCodec.parseObject(body)
         val commandType = envelope?.commandType ?: commandType(route)
         return AccountRiskCheckRequest(
             clientId = clientId,
@@ -3026,7 +3037,19 @@ class PlatformHttpServer(
             return
         }
         val requestBody = readRequestBody(exchange) ?: return
-        val request = JsonCodec.parseObjectOrEmpty(requestBody)
+        val request = try {
+            JsonCodec.parseObject(requestBody)
+        } catch (_: IllegalArgumentException) {
+            writeJson(
+                exchange,
+                400,
+                boundary.toErrorJson(
+                    BoundaryError(400, "VALIDATION_ERROR", "invalid json payload"),
+                    correlationId(exchange)
+                )
+            )
+            return
+        }
         val correlationId = correlationId(exchange)
         val participantId = request.string("participantId")
         val clientOrderId = request.string("clientOrderId")
@@ -3167,7 +3190,7 @@ class PlatformHttpServer(
 
     private fun rejectCode(payload: String): String? {
         if (!payload.contains("\"rejected\"")) return null
-        return JsonCodec.parseObjectOrEmpty(payload).obj("rejected").string("code").ifBlank { null }
+        return JsonCodec.parseLegacyObjectOrEmpty(payload).obj("rejected").string("code").ifBlank { null }
     }
 
     // Account-risk/circuit-breaker/price-collar admin routes and protective-control

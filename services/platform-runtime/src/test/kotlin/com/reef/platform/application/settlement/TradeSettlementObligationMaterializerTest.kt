@@ -78,6 +78,38 @@ class TradeSettlementObligationMaterializerTest {
     }
 
     @Test
+    fun materializationScansOnlyCandidateTradesForScenarioRun() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-1", venueSessionId = "session-1")
+        persistence.saveAcceptedOrder(order("buy-order-other", "buyer-1", "run-other", "session-other"))
+        persistence.saveAcceptedOrder(order("sell-order-other", "seller-1", "run-other", "session-other"))
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-trade-other",
+                    tradeId = "trade-other",
+                    executionId = "exec-other",
+                    buyOrderId = "buy-order-other",
+                    sellOrderId = "sell-order-other",
+                    instrumentId = "AAPL",
+                    quantityUnits = "100",
+                    price = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-01-01T00:00:01Z"
+                )
+            )
+        )
+        val materializer = TradeSettlementObligationMaterializer(persistence, store)
+
+        val result = materializer.materialize("run-1")
+        val facts = store.factsByScenarioRunId("run-1")
+
+        assertEquals(1, result.scannedTrades)
+        assertEquals(listOf("trade-1"), facts.obligations.map { it.tradeId })
+    }
+
+    @Test
     fun fallsBackToVenueSessionProfileWhenScenarioRunProfileIsAbsent() {
         val persistence = InMemoryRuntimePersistence()
         val store = InMemorySettlementFactStore()

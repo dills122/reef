@@ -4113,26 +4113,25 @@ class PostgresRuntimePersistence(
                 ps.setString(1, orderId)
                 ps.executeQuery().use { rs ->
                     if (!rs.next()) return null
-                    return PersistedOrder(
-                        orderId = rs.getString("order_id"),
-                        engineOrderId = rs.getString("engine_order_id"),
-                        instrumentId = rs.getString("instrument_id"),
-                        participantId = rs.getString("participant_id"),
-                        accountId = rs.getString("account_id"),
-                        side = rs.getString("side"),
-                        orderType = rs.getString("order_type"),
-                        quantityUnits = rs.getString("quantity_units"),
-                        limitPrice = rs.getString("limit_price"),
-                        currency = rs.getString("currency"),
-                        timeInForce = rs.getString("time_in_force"),
-                        acceptedAt = rs.getString("accepted_at"),
-                        clientOrderId = rs.getString("client_order_id"),
-                        runId = rs.getString("run_id"),
-                        venueSessionId = rs.getString("venue_session_id")
-                    )
+                    return rs.toPersistedOrder()
                 }
             }
         }
+    }
+
+    override fun acceptedOrders(orderIds: Set<String>): Map<String, PersistedOrder> {
+        if (orderIds.isEmpty()) return emptyMap()
+        val placeholders = orderIds.joinToString(",") { "?" }
+        return projectionQueryList(
+            """
+            SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
+            FROM ${names.orders}
+            WHERE order_id IN ($placeholders)
+            """.trimIndent(),
+            *orderIds.toTypedArray()
+        ) {
+            toPersistedOrder()
+        }.associateBy { it.orderId }
     }
 
     override fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
@@ -4149,23 +4148,7 @@ class PostgresRuntimePersistence(
                 ps.setString(2, clientOrderId)
                 ps.executeQuery().use { rs ->
                     if (!rs.next()) return null
-                    return PersistedOrder(
-                        orderId = rs.getString("order_id"),
-                        engineOrderId = rs.getString("engine_order_id"),
-                        instrumentId = rs.getString("instrument_id"),
-                        participantId = rs.getString("participant_id"),
-                        accountId = rs.getString("account_id"),
-                        side = rs.getString("side"),
-                        orderType = rs.getString("order_type"),
-                        quantityUnits = rs.getString("quantity_units"),
-                        limitPrice = rs.getString("limit_price"),
-                        currency = rs.getString("currency"),
-                        timeInForce = rs.getString("time_in_force"),
-                        acceptedAt = rs.getString("accepted_at"),
-                        clientOrderId = rs.getString("client_order_id"),
-                        runId = rs.getString("run_id"),
-                        venueSessionId = rs.getString("venue_session_id")
-                    )
+                    return rs.toPersistedOrder()
                 }
             }
         }
@@ -4177,7 +4160,11 @@ class PostgresRuntimePersistence(
         FROM ${names.orders} ORDER BY accepted_at_ts NULLS LAST, accepted_at, order_id
         """.trimIndent()
     ) {
-        PersistedOrder(
+        toPersistedOrder()
+    }
+
+    private fun java.sql.ResultSet.toPersistedOrder(): PersistedOrder {
+        return PersistedOrder(
             orderId = getString("order_id"),
             engineOrderId = getString("engine_order_id"),
             instrumentId = getString("instrument_id"),
@@ -4330,36 +4317,14 @@ class PostgresRuntimePersistence(
     override fun trades(): List<TradeCreated> = projectionQueryList(
         "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id"
     ) {
-        TradeCreated(
-            eventId = getString("event_id"),
-            tradeId = getString("trade_id"),
-            executionId = getString("execution_id"),
-            buyOrderId = getString("buy_order_id"),
-            sellOrderId = getString("sell_order_id"),
-            instrumentId = getString("instrument_id"),
-            quantityUnits = getString("quantity_units"),
-            price = getString("price"),
-            currency = getString("currency"),
-            occurredAt = getString("occurred_at")
-        )
+        toTradeCreated()
     }
 
     override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
         "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
         limit.coerceIn(0, 500).toString()
     ) {
-        TradeCreated(
-            eventId = getString("event_id"),
-            tradeId = getString("trade_id"),
-            executionId = getString("execution_id"),
-            buyOrderId = getString("buy_order_id"),
-            sellOrderId = getString("sell_order_id"),
-            instrumentId = getString("instrument_id"),
-            quantityUnits = getString("quantity_units"),
-            price = getString("price"),
-            currency = getString("currency"),
-            occurredAt = getString("occurred_at")
-        )
+        toTradeCreated()
     }.asReversed()
 
     override fun tradesForOrder(orderId: String): List<TradeCreated> = projectionQueryList(
@@ -4370,7 +4335,56 @@ class PostgresRuntimePersistence(
         orderId,
         orderId
     ) {
-        TradeCreated(
+        toTradeCreated()
+    }
+
+    override fun tradesForSettlementMaterialization(scenarioRunId: String, venueSessionId: String): List<TradeCreated> {
+        val venueSessionFilter = if (venueSessionId.isBlank()) {
+            ""
+        } else {
+            """
+            AND (
+                COALESCE(NULLIF(buy_order.venue_session_id, ''), NULLIF(sell_order.venue_session_id, ''), ?) = ?
+                AND (
+                    buy_order.venue_session_id = ''
+                    OR sell_order.venue_session_id = ''
+                    OR buy_order.venue_session_id = sell_order.venue_session_id
+                )
+            )
+            """.trimIndent()
+        }
+        val params = buildList {
+            add(scenarioRunId)
+            add(scenarioRunId)
+            if (venueSessionId.isNotBlank()) {
+                add(venueSessionId)
+                add(venueSessionId)
+            }
+        }
+        return projectionQueryList(
+            """
+            SELECT trade.event_id, trade.trade_id, trade.execution_id, trade.buy_order_id, trade.sell_order_id,
+                   trade.instrument_id, trade.quantity_units, trade.price, trade.currency, trade.occurred_at
+            FROM ${names.trades} trade
+            JOIN ${names.orders} buy_order ON buy_order.order_id = trade.buy_order_id
+            JOIN ${names.orders} sell_order ON sell_order.order_id = trade.sell_order_id
+            WHERE COALESCE(NULLIF(buy_order.run_id, ''), NULLIF(sell_order.run_id, ''), ?) = ?
+              AND (
+                  buy_order.run_id = ''
+                  OR sell_order.run_id = ''
+                  OR buy_order.run_id = sell_order.run_id
+              )
+              $venueSessionFilter
+            ORDER BY trade.occurred_at_ts NULLS LAST, trade.occurred_at, trade.event_id
+            """.trimIndent(),
+            *params.toTypedArray()
+        ) {
+            toTradeCreated()
+        }
+    }
+
+    private fun java.sql.ResultSet.toTradeCreated(): TradeCreated {
+        return TradeCreated(
             eventId = getString("event_id"),
             tradeId = getString("trade_id"),
             executionId = getString("execution_id"),
@@ -4568,9 +4582,9 @@ class PostgresRuntimePersistence(
         commandPayloadJson: String = "{}",
         includeFills: Boolean = true
     ): PersistableSubmitOutcome {
-        val resultPayload = JsonCodec.parseObjectOrEmpty(resultPayloadJson)
+        val resultPayload = JsonCodec.parseLegacyObjectOrEmpty(resultPayloadJson)
         val embeddedAcceptedOrder = resultPayload.obj("acceptedOrder")
-        val commandPayload = JsonCodec.parseObjectOrEmpty(commandPayloadJson)
+        val commandPayload = JsonCodec.parseLegacyObjectOrEmpty(commandPayloadJson)
         val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
         val occurredAt = jsonString(resultPayloadJson, "occurredAt")
         val rejected = resultStatus == "rejected" || resultStatus == "failed"
@@ -4663,7 +4677,7 @@ class PostgresRuntimePersistence(
     }
 
     private fun executionsFromResultPayload(json: String): List<ExecutionCreated> {
-        return JsonCodec.parseObjectOrEmpty(json).objectDocuments("executions").map { execution ->
+        return JsonCodec.parseLegacyObjectOrEmpty(json).objectDocuments("executions").map { execution ->
             ExecutionCreated(
                 eventId = execution.string("eventId"),
                 executionId = execution.string("executionId"),
@@ -4678,7 +4692,7 @@ class PostgresRuntimePersistence(
     }
 
     private fun tradesFromResultPayload(json: String): List<TradeCreated> {
-        return JsonCodec.parseObjectOrEmpty(json).objectDocuments("trades").map { trade ->
+        return JsonCodec.parseLegacyObjectOrEmpty(json).objectDocuments("trades").map { trade ->
             TradeCreated(
                 eventId = trade.string("eventId"),
                 tradeId = trade.string("tradeId"),
@@ -4695,7 +4709,7 @@ class PostgresRuntimePersistence(
     }
 
     private fun jsonString(json: String, key: String): String {
-        val document = JsonCodec.parseObjectOrEmpty(json)
+        val document = JsonCodec.parseLegacyObjectOrEmpty(json)
         return document.string(key)
             .ifBlank { document.obj("accepted").string(key) }
             .ifBlank { document.obj("rejected").string(key) }

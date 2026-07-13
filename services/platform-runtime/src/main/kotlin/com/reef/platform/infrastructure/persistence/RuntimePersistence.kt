@@ -339,12 +339,20 @@ interface RuntimePersistence {
         return null
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
+    fun acceptedOrders(orderIds: Set<String>): Map<String, PersistedOrder> {
+        return orderIds.mapNotNull { orderId ->
+            acceptedOrder(orderId)?.let { orderId to it }
+        }.toMap()
+    }
     fun acceptedOrders(): List<PersistedOrder>
     fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? = null
     fun executionsForOrder(orderId: String): List<ExecutionCreated>
     fun trades(): List<TradeCreated>
     fun recentTrades(limit: Int): List<TradeCreated>
     fun tradesForOrder(orderId: String): List<TradeCreated>
+    fun tradesForSettlementMaterialization(scenarioRunId: String, venueSessionId: String = ""): List<TradeCreated> {
+        return trades()
+    }
     fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long? = null): List<PublicTradeTapeEntry> {
         return emptyList()
     }
