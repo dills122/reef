@@ -63,7 +63,7 @@ The path should ramp in this order:
 - [x] DigitalOcean arena shakedown completes with an arena report.
 - [x] DigitalOcean shakedown export includes arena health evidence.
 - [x] Local 3-5 minute live run completes with full arena health evidence.
-- [ ] Local 3-5 minute shared-time multi-instrument run covers 5-10 tickers with at least
+- [x] Local 3-5 minute shared-time multi-instrument run covers 5-10 tickers with at least
       one liquidity provider per active ticker and 10+ non-house/non-NPC bots.
   - mode and catalog coverage exist for `5` tickers and `11` non-house/non-NPC
     score-eligible bots
@@ -74,10 +74,9 @@ The path should ramp in this order:
   - shared-time local live `180s` simulated gate passed unpaced with full
     terminal command waits, projection drain, persistence, rendered report, and
     export
-  - real paced `3-5m` wall-clock gate remains open because the first paced
-    attempt showed same-offset bot/session execution and status polling still
-    stretch wall time beyond the target window
-- [ ] DigitalOcean 15 minute run completes with full arena health evidence.
+  - real paced `5m` wall-clock reset-to-reset gate passed twice with
+    projection drain required after live command submissions
+- [x] DigitalOcean 15 minute run completes with full arena health evidence.
 
 ## Local-First Hardening Plan
 
@@ -126,6 +125,106 @@ explicit rate/cancel/open-order budgets, and fully visible in command,
 execution, and audit artifacts.
 
 ## Latest Local Live Hardening
+
+Run pair: `reef-score-v1-drained-5m-a` and `reef-score-v1-drained-5m-b`
+
+- [x] Clean local Docker stack reset before each run.
+- [x] Order-lifecycle and market-data projectors enabled.
+- [x] Projection drain required after live command submissions.
+- [x] Arena reports completed.
+- [x] Hardening summaries passed.
+- [x] Score-v1 proof comparison passed.
+- [x] Public leaderboard was identical across reset-to-reset runs.
+- [x] Command accounting, route mix, final command statuses, execution summaries,
+      scoring calibration, and per-bot command activity were identical.
+- [x] Live health samples remained within tolerance and above mode targets.
+
+Evidence:
+
+- reports:
+  - `/tmp/reef-score-v1-drained-5m-a.json`
+  - `/tmp/reef-score-v1-drained-5m-b.json`
+- summaries:
+  - `/tmp/reef-score-v1-drained-5m-a.summary.json`
+  - `/tmp/reef-score-v1-drained-5m-b.summary.json`
+- duration: `300s` per run
+- selected bots: `23`
+- ticks: `12300`
+- submitted commands: `2321`
+- terminal `COMPLETED` commands: `2321`
+- timed-out commands: `0`
+- freezes: `0`
+- route mix: `1979` submit, `342` cancel
+- fills: `2010` total, `402` per active instrument
+- scoring proof hash:
+  `fcac0f8a6f0a3612cc4fd69c2c0734fee57e8b507dec7bd9b84da1b00d30cfb3`
+- health sampling note: one empty-book sample differed across the two live
+  runs (`55` vs `54` out of `1350` samples), but both health summaries passed
+  and both had zero crossed/locked book samples.
+
+Current conclusion: the local multi-instrument score-v1 gate is green. The next
+promotion gate is the DigitalOcean/hosted `15m` run with the same score-v1 proof
+comparison applied to repeated hosted artifacts when available.
+
+## Hosted DigitalOcean Arena Gate
+
+Run: `do-benchmark-20260714T010045Z`
+
+- [x] Disposable DigitalOcean `c-8` worker provisioned.
+- [x] Source checkout synced and remote stream-ack stack built.
+- [x] Remote stack smoke passed.
+- [x] Arena ran with `score-v1`, compact report output, projection drain, and
+      hardening summary.
+- [x] Arena report persisted and exported.
+- [x] Artifacts fetched locally.
+- [x] DO worker and firewall destroyed.
+- [x] Arena-profile artifact checker passed with health pass required.
+
+Evidence:
+
+- artifact root: `reports/do-benchmark/do-benchmark-20260714T010045Z/`
+- report:
+  `reports/do-benchmark/do-benchmark-20260714T010045Z/arena-local-tick-run.json`
+- hardening summary:
+  `reports/do-benchmark/do-benchmark-20260714T010045Z/arena-local-tick-run.summary.json`
+- export:
+  `reports/do-benchmark/do-benchmark-20260714T010045Z/arena-export.json`
+- scheduled duration: `900s`
+- arena stage elapsed: `1017s`
+- ticks: `36900`
+- submitted commands: `6985`
+- terminal `COMPLETED` commands: `6985`
+- accounting gap: `0`
+- timed-out commands: `0`
+- rejected commands: `0`
+- failed ticks: `0`
+- health: `pass`
+  - top-of-book availability: `95.931034%`
+  - depth availability: `95.931034%`
+  - median quoted spread: `20` bps
+  - p95 quoted spread: `20.00000000000076` bps
+  - crossed books: `0`
+  - empty-book samples: `177` of `4350`
+- projection freshness: caught up, lag `0`
+- fills: `2010` total, `402` per active instrument
+- leaderboard: identical ranking and scores to local score-v1 proof
+
+Follow-up story: hosted arena pacing lag cleanup.
+
+- Problem: correctness and score-v1 promotion evidence passed, but hosted arena
+  pacing lag was material on the `c-8` source-built worker.
+- Observed: scheduled duration `900s`, arena stage elapsed `1017s`,
+  `finalCompletionLagMs ~= 107s`, all scheduler events behind schedule, total
+  scheduler sleep `0`.
+- Classification: performance cleanup, not a score-v1 correctness blocker.
+- Acceptance: repeat the hosted arena profile with hardening `pass`, stable
+  score-v1 leaderboard/execution summary, projection lag `0`, zero command
+  accounting gaps/timeouts/rejects/freezes, and `finalCompletionLagMs < 30000`.
+- Candidate knobs: Docker Hub image mode for arena, c-16 worker, less frequent
+  projection drain, hosted-specific polling intervals, and remote arena-stage
+  profiling.
+
+## Prior Local Live Hardening
 
 Run: `local-live-3m-clean`
 
@@ -435,6 +534,12 @@ Finding: the local multi-instrument arena now has real paced `3m` wall-clock
 proof with terminal command accounting, projection drain, market health,
 fill/cancel pressure, and pacing drift captured in compact artifacts. The
 remaining promotion gap is the longer hosted/backbone `15m` run and export.
+
+Scoring update: `equity-multi-local.v1` now uses `score-v1`, which ranks public
+eligible competitors by final equity minus inventory-risk, command-quality, and
+enforcement penalties. The DigitalOcean arena bridge defaults to this
+multi-instrument mode, so the hosted `15m` gate should produce leaderboard
+entries from `score-v1` rather than the old participation-only `score-v0`.
 
 ## Previous Local Multi-Instrument Attempt
 

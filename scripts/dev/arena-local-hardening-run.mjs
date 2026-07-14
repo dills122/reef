@@ -35,6 +35,7 @@ const passthrough = args.filter((arg) =>
   && !arg.startsWith("--projection-drain-poll-ms="),
 );
 const hasReportShapeOverride = passthrough.some((arg) => arg.startsWith("--report-shape="));
+const hasCommandWaitModeOverride = passthrough.some((arg) => arg.startsWith("--command-wait-mode="));
 
 const runArgs = [
   "scripts/dev/arena-local-tick-run.mjs",
@@ -45,7 +46,7 @@ const runArgs = [
   `--arena-admin-url=${config.arenaAdminUrl}`,
   "--seed-reference",
   `--compartment=${config.compartment}`,
-  "--command-wait-mode=terminal",
+  ...(hasCommandWaitModeOverride ? [] : ["--command-wait-mode=terminal"]),
   `--projection-drain-timeout-ms=${config.projectionDrainTimeoutMs}`,
   `--projection-drain-poll-ms=${config.projectionDrainPollMs}`,
   "--require-projection-drain",

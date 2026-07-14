@@ -312,6 +312,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
 private data class PreparedApiV1Mutation(
     val route: String,
     val clientId: String,
+    val participantId: String,
     val idempotencyKey: String,
     val correlationId: String,
     val body: String,
@@ -611,7 +612,7 @@ class PlatformHttpServer(
             maxRequestBodyBytes = maxRequestBodyBytes,
             commandProcessingMode = commandProcessingMode
         ) { route, clientId, idempotencyKey, correlationId, body ->
-            handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+            handleStreamAckMutationResponse(route, clientId, "", idempotencyKey, correlationId, body)
         }
     }
     private val legacySetupRoutes: PlatformLegacySetupRoutes by lazy {
@@ -1799,6 +1800,10 @@ class PlatformHttpServer(
         return headers["X-Correlation-Id"]?.firstOrNull() ?: ""
     }
 
+    private fun participantId(headers: Headers): String {
+        return headers["X-Participant-Id"]?.firstOrNull() ?: ""
+    }
+
     private fun allowApiV1Read(exchange: HttpExchange, route: String): Boolean {
         val boundaryError = boundary.checkRead(exchange.requestHeaders, route)
         if (boundaryError != null) {
@@ -1957,7 +1962,7 @@ class PlatformHttpServer(
         }
 
         if (commandProcessingMode == CommandProcessingMode.StreamAck) {
-            handleStreamAckMutation(exchange, route, clientId, idempotencyKey, correlationId, body)
+            handleStreamAckMutation(exchange, route, clientId, participantId(exchange.requestHeaders), idempotencyKey, correlationId, body)
             return
         }
 
@@ -2142,6 +2147,7 @@ class PlatformHttpServer(
             is PreparedApiV1MutationResult.Rejected -> return result.response
         }
         val clientId = prepared.clientId
+        val participantId = prepared.participantId
         val idempotencyKey = prepared.idempotencyKey
         val correlationId = prepared.correlationId
         val body = prepared.body
@@ -2151,7 +2157,7 @@ class PlatformHttpServer(
         }
 
         if (commandProcessingMode == CommandProcessingMode.StreamAck) {
-            return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+            return handleStreamAckMutationResponse(route, clientId, participantId, idempotencyKey, correlationId, body)
                 .get()
         }
 
@@ -2323,6 +2329,7 @@ class PlatformHttpServer(
         return handleStreamAckMutationResponse(
             prepared.route,
             prepared.clientId,
+            prepared.participantId,
             prepared.idempotencyKey,
             prepared.correlationId,
             prepared.body
@@ -2385,6 +2392,7 @@ class PlatformHttpServer(
             PreparedApiV1Mutation(
                 route = route,
                 clientId = clientId,
+                participantId = participantId(request.headers),
                 idempotencyKey = idempotencyKey,
                 correlationId = correlationId,
                 body = body,
@@ -2397,12 +2405,13 @@ class PlatformHttpServer(
         exchange: HttpExchange,
         route: String,
         clientId: String,
+        participantId: String,
         idempotencyKey: String,
         correlationId: String,
         body: String
     ) {
         try {
-            val response = handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body).get()
+            val response = handleStreamAckMutationResponse(route, clientId, participantId, idempotencyKey, correlationId, body).get()
             HotPathMetrics.time("api.streamAck.writeResponse") {
                 writeJson(exchange, response.status, response.body)
             }
@@ -2414,6 +2423,7 @@ class PlatformHttpServer(
     private fun handleStreamAckMutationResponse(
         route: String,
         clientId: String,
+        participantId: String,
         idempotencyKey: String,
         correlationId: String,
         body: String
@@ -2428,6 +2438,7 @@ class PlatformHttpServer(
         val envelopeResult = HotPathMetrics.time("api.streamAck.envelope") {
             StreamCommandEnvelopeBuilder.fromRequest(
                 clientId = clientId,
+                participantId = participantId,
                 route = route,
                 idempotencyKey = idempotencyKey,
                 body = body,
@@ -3140,8 +3151,15 @@ class PlatformHttpServer(
     }
 
     private fun commandStatus(commandId: String): CommandStatusView? {
-        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-        val capturedStatus = lookup?.findCommandStatus(commandId)
+        val streamReferenceStatus = streamCommandReferenceStatus(commandId)
+        val commandCaptureStatus = commandStatusLookup
+            ?.findCommandStatus(commandId)
+            ?.withReadScopeFrom(streamReferenceStatus)
+            ?: streamReferenceStatus
+        val capturedStatus = acceptedAsyncCommandIntake
+            ?.findCommandStatus(commandId)
+            ?.withReadScopeFrom(commandCaptureStatus)
+            ?: commandCaptureStatus
         try {
             api.canonicalCommandOutcome(commandId)?.let { outcome ->
                 return outcome.toStatusView().withReadScopeFrom(capturedStatus)
@@ -3156,14 +3174,14 @@ class PlatformHttpServer(
             System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
         }
         capturedStatus?.let { return it }
-        if (commandProcessingMode == CommandProcessingMode.StreamAck) {
-            streamCommandIntakeStore?.findByCommandId(commandId)?.let { reference ->
-                if (reference.streamSequence > 0L) {
-                    return reference.toStatusView()
-                }
-            }
-        }
         return null
+    }
+
+    private fun streamCommandReferenceStatus(commandId: String): CommandStatusView? {
+        if (commandProcessingMode != CommandProcessingMode.StreamAck) return null
+        val reference = streamCommandIntakeStore?.findByCommandId(commandId) ?: return null
+        if (reference.streamSequence <= 0L) return null
+        return reference.toStatusView()
     }
 
     private fun CommandStatusView.withReadScopeFrom(fallback: CommandStatusView?): CommandStatusView {

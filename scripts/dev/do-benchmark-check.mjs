@@ -253,6 +253,10 @@ function validateArenaArtifacts(jsonFiles) {
     .map((path) => readJson(path))
     .filter((entry) => entry.ok && entry.json?.runKind === "arena-do")
     .map((entry) => ({ path: entry.path, report: entry.json }));
+  const hardeningSummaries = jsonFiles
+    .map((path) => readJson(path))
+    .filter((entry) => entry.ok && entry.json?.schemaVersion === "reef.arena.localHardeningSummary.v0")
+    .map((entry) => ({ path: entry.path, summary: entry.json }));
 
   if (arenaReports.length === 0) {
     failures.push("missing arena local tick report");
@@ -260,6 +264,14 @@ function validateArenaArtifacts(jsonFiles) {
   }
   if (exports.length === 0) {
     failures.push("missing arena simulation export");
+  }
+  if (hardeningSummaries.length === 0) {
+    failures.push("missing arena hardening summary");
+  }
+  for (const { path, summary } of hardeningSummaries) {
+    if (summary.status !== "pass") {
+      failures.push(`${path}: hardening summary status must be pass, got ${summary.status}: ${(summary.failures ?? []).join("; ")}`);
+    }
   }
 
   for (const { path, report } of arenaReports) {

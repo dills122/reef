@@ -1,12 +1,29 @@
 # Bot Arena Scoring And Reporting Next Steps
 
-Status: draft for local hardening after the first 5 minute fill-pressure gate.
+Status: score-v1 is ready for the current arena promotion path after local
+reset-to-reset proof and hosted DigitalOcean 15 minute hardening evidence.
 
 ## Current State
 
-`score-v0` is still a participation and policy-compliance score. It is useful
-for proving run ingestion, deterministic leaderboard ordering, freeze exclusion,
-and report plumbing, but it is not yet a competitive trading-performance score.
+`score-v0` is still a participation and policy-compliance score. It remains
+available for the small sprint fixture and backward-compatible report plumbing.
+
+`score-v1` is now available in the arena tick runner and is the default policy
+for `packages/scenario-definitions/arena/equity-multi-local.v1.json`. It ranks
+eligible public competitors on a simple final-equity formula:
+
+```text
+scoreV1 = startingEquity
+        + pnlComponent
+        - inventoryRiskPenalty
+        - commandQualityPenalty
+        - enforcementPenalty
+```
+
+The formula is exposed in `scoreBreakdown.componentDetails.publicScoreV1`.
+`scoreBreakdown.shadowScore` remains as calibration-only diagnostics, so older
+market-interaction and difficulty tuning signals are still visible without
+silently driving the public leaderboard.
 
 Local arena reports now include enough execution diagnostics to start designing
 the next policy:
@@ -25,10 +42,129 @@ explicitly opts them into public scoring. They can and should report P&L,
 inventory, fills, and quote behavior for operator tuning, but their goal is
 market health, not public competition.
 
+## Score V1 Promotion Baseline
+
+Current public scoring policy:
+
+- policy id: `score-v1`
+- mode default: `packages/scenario-definitions/arena/equity-multi-local.v1.json`
+- public scope: score-eligible public competitor bots only
+- non-public actors: house liquidity providers and NPC flow remain diagnostic
+- formula: final equity minus inventory-risk, command-quality, and enforcement
+  penalties
+- shadow score: still emitted for calibration, not public leaderboard ordering
+
+Promotion evidence requires:
+
+- hardening summary `status=pass`
+- command accounting gap `0`
+- no timed-out, failed, or rejected commands unless explicitly allowed by mode
+- no freeze events in the positive gate
+- execution readback present for filled bots
+- `scoringCalibration.dataQuality.publicScoreMismatchCount=0`
+- public leaderboard contains only eligible public competitors
+- local reset-to-reset proof has exact deterministic score/accounting equality
+- hosted 15 minute run passes arena artifact checks with health pass required
+
+## Local Ready Evidence
+
+Score-v1 passed local reset-to-reset proof on 2026-07-14 with projection drain
+required after live command submissions.
+
+Artifacts:
+
+- `/tmp/reef-score-v1-drained-5m-a.json`
+- `/tmp/reef-score-v1-drained-5m-a.summary.json`
+- `/tmp/reef-score-v1-drained-5m-b.json`
+- `/tmp/reef-score-v1-drained-5m-b.summary.json`
+
+Both 5 minute runs completed with:
+
+- `2321` submitted commands
+- `2321` terminal `COMPLETED` commands
+- `0` timed-out commands
+- `0` freezes
+- hardening summary `status=pass`
+- market health `status=pass`
+- identical execution fill totals by instrument and role
+- identical public score-v1 leaderboard
+
+The reusable proof comparison is:
+
+```sh
+node scripts/dev/compare-arena-score-v1-proof.mjs \
+  /tmp/reef-score-v1-drained-5m-a.json \
+  /tmp/reef-score-v1-drained-5m-b.json
+```
+
+Current proof hash for deterministic scoring/accounting fields:
+
+```text
+fcac0f8a6f0a3612cc4fd69c2c0734fee57e8b507dec7bd9b84da1b00d30cfb3
+```
+
+The comparison intentionally treats live health sampling as tolerance-based:
+the two runs differed by one empty-book sample out of `1350` samples
+(`95.925926%` vs `96%` top-of-book/depth availability), while both remained
+above mode health targets and had zero crossed or locked book samples. Do not
+use exact health-sample equality as a score-v1 promotion gate.
+
+Hosted follow-up passed on 2026-07-14:
+
+- artifact root: `reports/do-benchmark/do-benchmark-20260714T010045Z/`
+- duration: `900s`
+- hardening summary: `status=pass`
+- submitted commands: `6985`
+- terminal `COMPLETED` commands: `6985`
+- command accounting gap: `0`
+- timed-out commands: `0`
+- public score-v1 mismatch count: `0`
+- execution fill count: `2010`
+- public score-v1 leaderboard matched the local proof ranking and scores
+
+The 15 minute hosted run is promotion evidence for score-v1 correctness. It is
+not yet evidence that c-8/source-build hosted pacing is optimal. Track pacing
+cleanup separately from score-v1 correctness.
+
+## Cleanup Story: Hosted Arena Pacing Lag
+
+Problem: the hosted DigitalOcean `15m` arena gate passed correctness and scoring
+checks, but the arena stage took `1017s` for a `900s` schedule. The final
+completion lag was about `107s`; every scheduler event completed behind
+schedule and total scheduler sleep was `0`.
+
+Initial hypothesis: c-8 source-build hosted shape plus per-batch projection
+drain/status polling leaves the arena loop CPU or I/O saturated enough that it
+cannot recover to the nominal tick schedule, even though all commands complete
+correctly and projections catch up.
+
+Acceptance criteria for cleanup:
+
+- rerun the same hosted arena profile with hardening summary `status=pass`
+- keep score-v1 leaderboard and execution summary stable
+- keep accounting gap, timeouts, rejects, failed ticks, and freezes at `0`
+- keep projection freshness caught up with lag `0`
+- reduce `finalCompletionLagMs` below `30000`
+- show non-zero scheduler sleep time, or document why the configured tick
+  cadence intentionally saturates the worker
+- capture stage timing and artifact paths in this doc and the soak checklist
+
+Candidate fixes to test one at a time:
+
+- use Docker Hub image mode for the arena profile once images include the arena
+  runtime dependencies
+- increase worker size from `c-8` to `c-16`
+- reduce per-command projection-drain frequency by draining at deterministic
+  tick/session boundaries instead of after every live command batch
+- tune command status polling and projection drain polling intervals for hosted
+  runs
+- profile the remote arena stage to separate bot runtime, HTTP command waits,
+  projection drain, and persistence/readback costs
+
 ## Score V1 Policy Direction
 
 `score-v1` should remain simple enough to explain from one report artifact. The
-first version should rank only score-eligible public competitor bots.
+first version ranks only score-eligible public competitor bots.
 
 Proposed headline:
 
@@ -40,18 +176,18 @@ scoreV1 = startingEquity
         - enforcementPenalty
 ```
 
-Recommended initial components:
+Implemented initial components:
 
-- **P&L component**: zero-fee cash plus marked inventory. Start with the
-  diagnostic total already in `tradingMetrics.pnl.total`.
-- **Inventory risk penalty**: mild configurable penalty on gross marked
-  inventory relative to starting equity or mode limit. The first goal is to
-  discourage one-way hoarding without punishing normal liquidity provision.
-- **Command quality penalty**: rejects, timeouts, and extreme cancel/fill ratios.
-  Keep self-trade-prevention rejects configurable because early house/NPC flow
-  may intentionally collide while we tune scenarios.
-- **Enforcement penalty**: disqualification remains a hard public leaderboard
-  exclusion. Non-disqualifying warnings can become small score penalties later.
+- **P&L component**: zero-fee cash plus marked inventory from
+  `tradingMetrics.pnl.finalEquityDiagnostic` when available, otherwise
+  baseline plus diagnostic P&L, with legacy score fallback for dry-run reports.
+- **Inventory risk penalty**: gross terminal marked inventory, exposure ratio,
+  and terminal concentration penalties reused from the existing score-breakdown
+  risk component.
+- **Command quality penalty**: timeout rate, invalid intent rate, and excessive
+  cancel/replace pressure reused from the conduct component.
+- **Enforcement penalty**: run freezes and operational pauses reduce score;
+  disqualified bots are still excluded from the public leaderboard.
 - **Liquidity/impact components**: descriptive first. Do not rank on quote
   quality or price impact until attribution can distinguish useful price
   discovery from destabilizing behavior.
@@ -134,6 +270,8 @@ Before reset/start:
 
 - Use the rebased `codex/bot-arena-5m-tuning` branch.
 - Start from a clean local stack if comparing market data or projection drain.
+- Use the default `equity-multi-local.v1` mode for `score-v1`, or pass
+  `--scoring-policy-version=score-v1` to override older mode files.
 - Enable both projector loops at stack startup:
   - `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true`
   - `MARKET_DATA_PROJECTOR_ENABLED=true`
@@ -164,6 +302,7 @@ Minimum pass checks:
 - every primary instrument at or above `healthTargets.minFillsPerInstrument`
 - bot-level `tradingMetrics.executions`, `inventory`, and `pnl` present for bots
   with fills
+- score-v1 proof comparison `status=pass` when comparing two clean reset runs
 
 Useful inspection fields:
 
@@ -216,3 +355,4 @@ Current static coverage:
 - `scripts/dev/arena-render-report.test.mjs`
 - `scripts/dev/arena-local-hardening-summary.test.mjs`
 - `scripts/dev/arena-local-tick-report-writer.test.mjs`
+- `scripts/dev/compare-arena-score-v1-proof.test.mjs`

@@ -178,7 +178,9 @@ class PostgresStreamCommandIntakeStore(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.streamCommandIntake} (
                       scope TEXT NOT NULL,
+                      client_id TEXT NOT NULL DEFAULT '',
                       idempotency_key TEXT NOT NULL,
+                      participant_id TEXT NOT NULL DEFAULT '',
                       payload_hash TEXT NOT NULL,
                       command_id TEXT NOT NULL,
                       route TEXT NOT NULL,
@@ -194,6 +196,8 @@ class PostgresStreamCommandIntakeStore(
                     )
                     """.trimIndent()
                 )
+                stmt.execute("ALTER TABLE ${names.streamCommandIntake} ADD COLUMN IF NOT EXISTS client_id TEXT NOT NULL DEFAULT ''")
+                stmt.execute("ALTER TABLE ${names.streamCommandIntake} ADD COLUMN IF NOT EXISTS participant_id TEXT NOT NULL DEFAULT ''")
             }
         }
     }
@@ -203,21 +207,23 @@ class PostgresStreamCommandIntakeStore(
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.streamCommandIntake}(
-                  scope, idempotency_key, payload_hash, command_id, route, subject,
+                  scope, client_id, idempotency_key, participant_id, payload_hash, command_id, route, subject,
                   stream_name, partition, stream_sequence, published
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, FALSE)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, FALSE)
                 ON CONFLICT DO NOTHING
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, envelope.scope)
-                ps.setString(2, envelope.idempotencyKey)
-                ps.setString(3, envelope.payloadHash)
-                ps.setString(4, reference.commandId)
-                ps.setString(5, reference.route)
-                ps.setString(6, reference.subject)
-                ps.setString(7, reference.streamName)
-                ps.setInt(8, reference.partition)
+                ps.setString(2, envelope.clientId)
+                ps.setString(3, envelope.idempotencyKey)
+                ps.setString(4, envelope.participantId)
+                ps.setString(5, envelope.payloadHash)
+                ps.setString(6, reference.commandId)
+                ps.setString(7, reference.route)
+                ps.setString(8, reference.subject)
+                ps.setString(9, reference.streamName)
+                ps.setInt(10, reference.partition)
                 if (ps.executeUpdate() == 1) {
                     return StreamCommandReservation.Reserved(reference)
                 }
@@ -341,7 +347,7 @@ class PostgresStreamCommandIntakeStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                SELECT payload_hash, command_id, route, subject, stream_name, partition, stream_sequence
+                SELECT payload_hash, command_id, client_id, route, idempotency_key, participant_id, subject, stream_name, partition, stream_sequence
                 FROM ${names.streamCommandIntake}
                 WHERE command_id = ?
                 """.trimIndent()
@@ -353,7 +359,10 @@ class PostgresStreamCommandIntakeStore(
                         payloadHash = rs.getString("payload_hash"),
                         reference = StreamCommandReference(
                             commandId = rs.getString("command_id"),
+                            clientId = rs.getString("client_id"),
                             route = rs.getString("route"),
+                            idempotencyKey = rs.getString("idempotency_key"),
+                            participantId = rs.getString("participant_id"),
                             subject = rs.getString("subject"),
                             streamName = rs.getString("stream_name"),
                             partition = rs.getInt("partition"),
@@ -369,7 +378,7 @@ class PostgresStreamCommandIntakeStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                SELECT payload_hash, command_id, route, subject, stream_name, partition, stream_sequence
+                SELECT payload_hash, command_id, client_id, route, idempotency_key, participant_id, subject, stream_name, partition, stream_sequence
                 FROM ${names.streamCommandIntake}
                 WHERE scope = ? AND idempotency_key = ?
                 """.trimIndent()
@@ -382,7 +391,10 @@ class PostgresStreamCommandIntakeStore(
                         payloadHash = rs.getString("payload_hash"),
                         reference = StreamCommandReference(
                             commandId = rs.getString("command_id"),
+                            clientId = rs.getString("client_id"),
                             route = rs.getString("route"),
+                            idempotencyKey = rs.getString("idempotency_key"),
+                            participantId = rs.getString("participant_id"),
                             subject = rs.getString("subject"),
                             streamName = rs.getString("stream_name"),
                             partition = rs.getInt("partition"),

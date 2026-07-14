@@ -673,7 +673,9 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "boundary.stream_command_intake.scope",
+                "boundary.stream_command_intake.client_id",
                 "boundary.stream_command_intake.idempotency_key",
+                "boundary.stream_command_intake.participant_id",
                 "boundary.stream_command_intake.payload_hash",
                 "boundary.stream_command_intake.command_id",
                 "boundary.stream_command_intake.route",

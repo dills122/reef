@@ -100,6 +100,7 @@ test-bot-sdk:
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
 	bun scripts/dev/large-json-writer.test.mjs
 	bun scripts/dev/arena-local-tick-report-writer.test.mjs
+	bun scripts/dev/compare-arena-score-v1-proof.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs

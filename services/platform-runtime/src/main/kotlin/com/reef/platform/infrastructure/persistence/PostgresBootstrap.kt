@@ -389,7 +389,9 @@ object PostgresSchemaRequirements {
             tables = listOf(table),
             columns = listOf(
                 "scope",
+                "client_id",
                 "idempotency_key",
+                "participant_id",
                 "payload_hash",
                 "command_id",
                 "route",

@@ -198,6 +198,19 @@ const arenaHealthGateResult = spawnSync(process.execPath, ["scripts/dev/do-bench
 assert.equal(arenaHealthGateResult.status, 1);
 assert.match(arenaHealthGateResult.stderr, /healthSummary\.status must be pass/);
 
+const arenaMissingSummaryDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-no-summary-"));
+writeArenaReport(arenaMissingSummaryDir, { healthStatus: "pass", includeHardeningSummary: false });
+const arenaMissingSummaryResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaMissingSummaryDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "arena",
+  },
+  encoding: "utf8",
+});
+assert.equal(arenaMissingSummaryResult.status, 1);
+assert.match(arenaMissingSummaryResult.stderr, /missing arena hardening summary/);
+
 const blockedArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-blocked-"));
 writeBlockedStreamAckReport(blockedArtifactDir, "rate-2500.json", 2500);
 writeTelemetry(blockedArtifactDir);
@@ -341,7 +354,7 @@ function writeReport(name, rate, values) {
   );
 }
 
-function writeArenaReport(dir, { healthStatus }) {
+function writeArenaReport(dir, { healthStatus, includeHardeningSummary = true }) {
   writeFileSync(
     join(dir, "arena-local-tick-run.json"),
     JSON.stringify({
@@ -387,6 +400,16 @@ function writeArenaReport(dir, { healthStatus }) {
       status: "completed",
     }),
   );
+  if (includeHardeningSummary) {
+    writeFileSync(
+      join(dir, "arena-local-tick-run.summary.json"),
+      JSON.stringify({
+        schemaVersion: "reef.arena.localHardeningSummary.v0",
+        status: "pass",
+        failures: [],
+      }),
+    );
+  }
 }
 
 function writeTelemetry(dir) {

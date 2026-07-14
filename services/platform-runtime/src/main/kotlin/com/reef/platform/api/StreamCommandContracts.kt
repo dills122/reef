@@ -31,7 +31,10 @@ enum class StreamCommandLogProvider(val configValue: String) {
 
 data class StreamCommandReference(
     val commandId: String,
+    val clientId: String = "",
     val route: String,
+    val idempotencyKey: String = "",
+    val participantId: String = "",
     val subject: String,
     val streamName: String,
     val partition: Int,
@@ -48,6 +51,7 @@ data class StreamCommandEnvelope(
     val runId: String,
     val venueSessionId: String,
     val instrumentId: String,
+    val participantId: String,
     val orderId: String,
     val clientOrderId: String,
     val actorId: String,
@@ -66,7 +70,10 @@ data class StreamCommandEnvelope(
     fun reference(streamName: String, streamSequence: Long = 0L): StreamCommandReference {
         return StreamCommandReference(
             commandId = commandId,
+            clientId = clientId,
             route = route,
+            idempotencyKey = idempotencyKey,
+            participantId = participantId,
             subject = subject,
             streamName = streamName,
             partition = partition,
@@ -93,6 +100,7 @@ object StreamCommandEnvelopeBuilder {
 
     fun fromRequest(
         clientId: String,
+        participantId: String = "",
         route: String,
         idempotencyKey: String,
         body: String,
@@ -149,6 +157,7 @@ object StreamCommandEnvelopeBuilder {
                 runId = runId,
                 venueSessionId = venueSessionId,
                 instrumentId = instrumentId,
+                participantId = json.string("participantId").ifBlank { participantId },
                 orderId = orderId,
                 clientOrderId = json.string("clientOrderId"),
                 actorId = actorId,

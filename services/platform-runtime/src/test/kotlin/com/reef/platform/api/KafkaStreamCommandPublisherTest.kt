@@ -87,6 +87,7 @@ class KafkaStreamCommandPublisherTest {
             runId = "run-1",
             venueSessionId = "session-1",
             instrumentId = "AAPL",
+            participantId = "participant-1",
             orderId = "order-1",
             clientOrderId = "clord-1",
             actorId = "actor-1",

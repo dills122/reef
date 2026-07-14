@@ -159,6 +159,7 @@ try {
     "--seed-reference",
     "--persist-results",
     "--command-wait-mode=accepted",
+    "--require-projection-drain",
     "--out=/tmp/reef-arena-local-tick-run-live-test.json",
   ]);
 
@@ -218,6 +219,12 @@ try {
   assert.ok(submittedCommands.every((command) => command.statusPollCount >= 1));
   assert.ok(submittedCommands.every((command) => command.firstStatus === "COMPLETED"));
   assert.ok(submittedCommands.every((command) => Number.isFinite(command.intakeElapsedMs)));
+  const submissionsWithCommands = report.sessionReports
+    .flatMap((session) => session.ticks.map((tick) => tick.submission))
+    .filter((submission) => Number(submission?.submitted ?? 0) > 0);
+  assert.ok(submissionsWithCommands.length > 0);
+  assert.ok(submissionsWithCommands.every((submission) => submission.projectionDrain?.required === true));
+  assert.ok(submissionsWithCommands.every((submission) => submission.projectionDrain?.drained === true));
 
   const statusReadsBeforeSyncResultRun = commandStatusReads.length;
   syncResultMode = true;
