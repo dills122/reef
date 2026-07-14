@@ -66,6 +66,8 @@ export const reefBotHostedSandboxPolicyV1: BotSandboxPolicyV1 = {
     "setInterval",
     "process",
     "Buffer",
+    "Bun",
+    "Deno",
     "Function",
     "eval",
     "globalThis",
@@ -227,14 +229,14 @@ function scanSourceSyntax(source: string): SandboxSourceSyntaxScan {
     if (propertyName !== undefined) propertyReferences.add(propertyName);
   }
 
-  for (const match of commentFreeSource.matchAll(/\[\s*["']([^"']+)["']\s*\]/g)) {
-    const propertyName = match[1];
+  for (const match of commentFreeSource.matchAll(/\[\s*((?:"[^"]*"|'[^']*')(?:\s*\+\s*(?:"[^"]*"|'[^']*'))*)\s*\]/g)) {
+    const propertyName = joinedStringLiteral(match[1]);
     if (propertyName !== undefined) propertyReferences.add(propertyName);
   }
 
-  const globalObjectPropertyPattern = /\b(?:globalThis|global|window|self)\s*(?:\.\s*([A-Za-z_$][\w$]*)|\[\s*["']([^"']+)["']\s*\])/g;
+  const globalObjectPropertyPattern = /\b(?:globalThis|global|window|self)\s*(?:\.\s*([A-Za-z_$][\w$]*)|\[\s*((?:"[^"]*"|'[^']*')(?:\s*\+\s*(?:"[^"]*"|'[^']*'))*)\s*\])/g;
   for (const match of commentFreeSource.matchAll(globalObjectPropertyPattern)) {
-    const propertyName = match[1] ?? match[2];
+    const propertyName = match[1] ?? joinedStringLiteral(match[2]);
     if (propertyName !== undefined) globalPropertyReferences.add(propertyName);
   }
 
@@ -246,6 +248,19 @@ function scanSourceSyntax(source: string): SandboxSourceSyntaxScan {
     usesDynamicImport: /\bimport\s*\(/.test(executableSource),
     usesDynamicRequire: /\brequire\s*\((?!\s*["'][^"']+["']\s*\))/.test(commentFreeSource),
   };
+}
+
+function joinedStringLiteral(expression: string | undefined): string | undefined {
+  if (expression === undefined) return undefined;
+  let output = "";
+  const literalPattern = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/g;
+  let consumed = "";
+  for (const match of expression.matchAll(literalPattern)) {
+    consumed += match[0];
+    output += match[1] ?? match[2] ?? "";
+  }
+  const operatorsOnly = expression.replace(literalPattern, "").replace(/\s|\+/g, "");
+  return consumed.length > 0 && operatorsOnly.length === 0 ? output : undefined;
 }
 
 function stripComments(source: string, blankStrings: boolean): string {

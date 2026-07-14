@@ -1,27 +1,36 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, isAbsolute, resolve } from "node:path";
+import { hostedBotContainerArgs, hostedWorkerProcessEnv } from "./lib/bot-isolation.mjs";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const args = process.argv.slice(2);
 const artifactPathArg = args.find((arg) => !arg.startsWith("--"));
 const fixturePathArg = args.filter((arg) => !arg.startsWith("--"))[1] ?? "packages/bot-sdk/fixtures/aapl-multi-tick.json";
+const isolation = optionValue("--isolation") ?? "worker";
 const wallTimeoutMs = numberOption("--wall-timeout-ms", 5000);
 const maxOutputBytes = numberOption("--max-output-bytes", 1024 * 1024);
 const tickTimeoutMs = optionalNumberOption("--tick-timeout-ms");
 const lifecycleTimeoutMs = optionalNumberOption("--lifecycle-timeout-ms");
 
 if (!artifactPathArg) {
-  console.error("usage: bun scripts/dev/bot-sdk-hosted-worker-run.mjs <compiled-bot.js> [fixture.json] [--wall-timeout-ms=5000] [--max-output-bytes=1048576]");
+  console.error("usage: bun scripts/dev/bot-sdk-hosted-worker-run.mjs <compiled-bot.js> [fixture.json] [--isolation=worker|container] [--wall-timeout-ms=5000] [--max-output-bytes=1048576]");
   process.exit(2);
+}
+if (!["worker", "container"].includes(isolation)) {
+  throw new Error(`--isolation must be worker or container; got ${isolation}`);
 }
 
 const artifactPath = isAbsolute(artifactPathArg) ? artifactPathArg : resolve(repoRoot, artifactPathArg);
 const fixturePath = isAbsolute(fixturePathArg) ? fixturePathArg : resolve(repoRoot, fixturePathArg);
+const rawFixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 const payload = {
   source: readFileSync(artifactPath, "utf8"),
   fileName: basename(artifactPath),
-  fixture: JSON.parse(readFileSync(fixturePath, "utf8")),
+  fixture: {
+    ...rawFixture,
+    botId: rawFixture.botId ?? basename(artifactPath, ".js"),
+  },
   executionLimits: {
     ...(tickTimeoutMs === undefined ? {} : { tickTimeoutMs }),
     ...(lifecycleTimeoutMs === undefined ? {} : { lifecycleTimeoutMs }),
@@ -39,9 +48,10 @@ if (report.status !== "completed") {
 
 function runHostedWorker(payloadValue) {
   return new Promise((resolve) => {
-    const child = spawn("bun", ["scripts/dev/bot-sdk-hosted-worker-child.mjs"], {
+    const child = spawn(workerCommand(), workerArgs(), {
       cwd: repoRoot,
       stdio: ["pipe", "pipe", "pipe"],
+      env: isolation === "container" ? process.env : hostedWorkerProcessEnv(),
     });
     let stdout = "";
     let stderr = "";
@@ -100,6 +110,17 @@ function runHostedWorker(payloadValue) {
       resolve(report);
     }
   });
+}
+
+function workerCommand() {
+  return isolation === "container" ? "docker" : "bun";
+}
+
+function workerArgs() {
+  const command = ["bun", "scripts/dev/bot-sdk-hosted-worker-child.mjs"];
+  return isolation === "container"
+    ? hostedBotContainerArgs({ repoRoot, command })
+    : command.slice(1);
 }
 
 function parseLastJsonLine(output) {

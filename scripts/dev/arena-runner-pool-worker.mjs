@@ -2,6 +2,7 @@ import vm from "node:vm";
 import { stdin } from "node:process";
 import { pathToFileURL } from "node:url";
 import { performance } from "node:perf_hooks";
+import { hostedSesLockdownOptions } from "./lib/bot-isolation.mjs";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const hostedRunner = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/hosted-runner.ts`).href);
@@ -21,7 +22,7 @@ if (!["vm", "ses"].includes(compartment)) {
 
 if (compartment === "ses") {
   await import("ses");
-  lockdown({ errorTaming: "unsafe", stackFiltering: "verbose" });
+  lockdown(hostedSesLockdownOptions);
 }
 
 stdin.setEncoding("utf8");

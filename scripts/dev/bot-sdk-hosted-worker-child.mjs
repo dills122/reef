@@ -1,8 +1,9 @@
 import "ses";
 import { stdin } from "node:process";
 import { pathToFileURL } from "node:url";
+import { hostedSesLockdownOptions } from "./lib/bot-isolation.mjs";
 
-lockdown({ errorTaming: "unsafe", stackFiltering: "verbose" });
+lockdown(hostedSesLockdownOptions);
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const hostedRunner = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/hosted-runner.ts`).href);

@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+import { hostedBotContainerArgs, hostedWorkerProcessEnv } from "./lib/bot-isolation.mjs";
 import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
 import {
@@ -31,6 +32,9 @@ const config = {
   extraBots: csvOption("--extra-bots", ""),
   expectFreezeBots: csvOption("--expect-freeze-bots", ""),
   compartment: stringOption("--compartment", "ses"),
+  runnerIsolation: stringOption("--runner-isolation", "process"),
+  runnerWorkerScope: stringOption("--runner-worker-scope", "shared"),
+  runnerMaxOutputBytes: numberOption("--runner-max-output-bytes", 1024 * 1024),
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
   arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
@@ -61,6 +65,12 @@ const config = {
 
 if (!["vm", "ses"].includes(config.compartment)) {
   throw new Error(`unsupported --compartment=${config.compartment}; expected vm or ses`);
+}
+if (!["process", "container"].includes(config.runnerIsolation)) {
+  throw new Error(`unsupported --runner-isolation=${config.runnerIsolation}; expected process or container`);
+}
+if (!["shared", "per-bot"].includes(config.runnerWorkerScope)) {
+  throw new Error(`unsupported --runner-worker-scope=${config.runnerWorkerScope}; expected shared or per-bot`);
 }
 if (!["dry-run", "live"].includes(config.submitMode)) {
   throw new Error(`unsupported --submit-mode=${config.submitMode}; expected dry-run or live`);
@@ -105,14 +115,17 @@ const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
 const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots);
 
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
-let worker;
+const workers = [];
+let sharedWorker;
 
 async function main() {
-  worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
   const startedAt = performance.now();
   const startedAtIso = new Date().toISOString();
 
   try {
+    if (config.runnerWorkerScope === "shared") {
+      sharedWorker = await startRunnerWorker("arena-tick-worker-0");
+    }
     if (config.submitMode === "live") {
       await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
       await assertLiveMarketQualityProjectors();
@@ -120,18 +133,21 @@ async function main() {
         await seedReferenceData(selectedBots);
       }
     }
-    await worker.start();
     const bots = [];
     for (const bot of selectedBots) {
+      const botWorker = config.runnerWorkerScope === "per-bot"
+        ? await startRunnerWorker(`arena-tick-worker-${safeWorkerId(bot.botId)}`)
+        : sharedWorker;
       bots.push({
         ...bot,
+        worker: botWorker,
         identityKey: botIdentityKey(bot),
         artifact: buildArtifact(bot.entryPath, bot.botId),
         runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
       });
     }
     for (const bot of bots) {
-      const load = await worker.request({
+      const load = await bot.worker.request({
         type: "loadBot",
         botKey: bot.botId,
         source: bot.artifact.source,
@@ -179,10 +195,21 @@ async function main() {
       console.log(`rank=${entry.rank} bot=${entry.botId} score=${entry.score} disqualified=${entry.disqualified}`);
     }
   } finally {
-    if (worker !== undefined) {
-      await worker.shutdown();
+    for (const runnerWorker of workers.reverse()) {
+      await runnerWorker.shutdown();
     }
   }
+}
+
+async function startRunnerWorker(workerId) {
+  const runnerWorker = new RunnerWorker(workerId, config.compartment, config.runnerIsolation);
+  workers.push(runnerWorker);
+  await runnerWorker.start();
+  return runnerWorker;
+}
+
+function safeWorkerId(value) {
+  return String(value).replace(/[^a-zA-Z0-9_.-]/g, "-").slice(0, 64);
 }
 
 async function runArenaSessions(bots, healthSamples) {
@@ -243,7 +270,7 @@ async function runArenaSessions(bots, healthSamples) {
 
   for (const session of sessions) {
     if (session.start.ok) {
-      session.stop = await worker.request({ type: "stopSession", sessionId: session.sessionId });
+      session.stop = await session.worker.request({ type: "stopSession", sessionId: session.sessionId });
     }
     console.log(`arena bot complete ${sessions.indexOf(session) + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
   }
@@ -260,12 +287,12 @@ async function startBotSession(bot) {
   const tickCount = ticksForSchedulingClass(schedulingClass, intervalMs);
   const fixture = fixtureForBot(bot, { tickCount, tickIntervalMs: intervalMs });
   const sessionId = `${mode.modeId}-${bot.identityKey}-${Date.now()}`;
-  const start = await worker.request({ type: "startSession", botKey: bot.botId, sessionId, fixture });
+  const start = await bot.worker.request({ type: "startSession", botKey: bot.botId, sessionId, fixture });
   if (!start.ok) {
-    return { bot, sessionId, schedulingClass, intervalMs, start, scheduled: [], ticks: [], stop: undefined, stoppedForPolicy: true };
+    return { bot, worker: bot.worker, sessionId, schedulingClass, intervalMs, start, scheduled: [], ticks: [], stop: undefined, stoppedForPolicy: true };
   }
   const scheduled = fixture.ticks.slice(0, tickCount);
-  return { bot, sessionId, schedulingClass, intervalMs, start, scheduled, ticks: [], stop: undefined, stoppedForPolicy: false };
+  return { bot, worker: bot.worker, sessionId, schedulingClass, intervalMs, start, scheduled, ticks: [], stop: undefined, stoppedForPolicy: false };
 }
 
 function schedulerEvents(sessions) {
@@ -350,7 +377,7 @@ async function runSessionTick(session, tick, tickIndex, offsetMs) {
       submission: emptySubmission("live_order_refresh_failed"),
     };
   }
-  const tickResult = await worker.request({ type: "runTick", sessionId: session.sessionId, tick });
+  const tickResult = await session.worker.request({ type: "runTick", sessionId: session.sessionId, tick });
   const policyViolation = tickPolicyViolation(session, tickResult, offsetMs);
   if (policyViolation !== undefined) {
     session.stoppedForPolicy = true;
@@ -476,7 +503,7 @@ async function refreshLiveSessionOrders(session) {
     };
   }
   const orders = Array.isArray(response.body?.orders) ? response.body.orders.map(toOwnOrder) : [];
-  const replace = await worker.request({ type: "replaceOrders", sessionId: session.sessionId, orders });
+  const replace = await session.worker.request({ type: "replaceOrders", sessionId: session.sessionId, orders });
   if (!replace.ok) {
     return {
       ok: false,
@@ -866,7 +893,13 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     expectations: {
       freezeBots: config.expectFreezeBots,
     },
-    runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
+    runnerProfile: {
+      compartment: config.compartment,
+      isolation: config.runnerIsolation,
+      workerScope: config.runnerWorkerScope,
+      workerCount: workers.length,
+      submitMode: config.submitMode,
+    },
     commandWaitMode: config.commandWaitMode,
     scoringAssumptions: scoringAssumptions(),
     status,
@@ -2421,25 +2454,38 @@ function sessionCounters(session) {
 }
 
 class RunnerWorker {
-  constructor(workerId, compartment) {
+  constructor(workerId, compartment, isolation) {
     this.workerId = workerId;
     this.compartment = compartment;
+    this.isolation = isolation;
     this.nextId = 1;
     this.pending = new Map();
     this.buffer = "";
+    this.outputBytes = 0;
   }
 
   async start() {
     const workerScript = new URL("./arena-runner-pool-worker.mjs", import.meta.url).pathname;
+    const workerCommand = ["bun", "scripts/dev/arena-runner-pool-worker.mjs", `--worker-id=${this.workerId}`, `--compartment=${this.compartment}`];
+    const command = this.isolation === "container" ? "docker" : "bun";
+    const commandArgs = this.isolation === "container"
+      ? hostedBotContainerArgs({ repoRoot, command: workerCommand })
+      : [workerScript, `--worker-id=${this.workerId}`, `--compartment=${this.compartment}`];
     this.child = spawn(
-      "bun",
-      [workerScript, `--worker-id=${this.workerId}`, `--compartment=${this.compartment}`],
-      { cwd: repoRoot, stdio: ["pipe", "pipe", "pipe"] },
+      command,
+      commandArgs,
+      { cwd: repoRoot, stdio: ["pipe", "pipe", "pipe"], env: this.isolation === "container" ? process.env : hostedWorkerProcessEnv() },
     );
     this.child.stdout.setEncoding("utf8");
     this.child.stderr.setEncoding("utf8");
-    this.child.stdout.on("data", (chunk) => this.handleStdout(chunk));
-    this.child.stderr.on("data", (chunk) => process.stderr.write(`[${this.workerId}] ${chunk}`));
+    this.child.stdout.on("data", (chunk) => {
+      if (!this.recordOutput(chunk)) return;
+      this.handleStdout(chunk);
+    });
+    this.child.stderr.on("data", (chunk) => {
+      if (!this.recordOutput(chunk)) return;
+      process.stderr.write(`[${this.workerId}] ${chunk}`);
+    });
     this.child.on("close", (code) => {
       for (const pending of this.pending.values()) {
         pending.reject(new Error(`${this.workerId} exited with code ${code ?? "unknown"}`));
@@ -2447,6 +2493,21 @@ class RunnerWorker {
       this.pending.clear();
     });
     await this.request({ type: "heartbeat" });
+  }
+
+  recordOutput(chunk) {
+    this.outputBytes += Buffer.byteLength(chunk);
+    if (this.outputBytes <= config.runnerMaxOutputBytes) {
+      return true;
+    }
+    if (this.child !== undefined && !this.child.killed) {
+      this.child.kill("SIGKILL");
+    }
+    for (const pending of this.pending.values()) {
+      pending.reject(new Error(`${this.workerId} exceeded output limit ${config.runnerMaxOutputBytes} bytes`));
+    }
+    this.pending.clear();
+    return false;
   }
 
   request(message, timeoutMs = 10000) {
