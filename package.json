@@ -27,6 +27,8 @@
     "bot-sdk:test:tester": "bun scripts/dev/bot-sdk-test-bot.test.mjs",
     "bot-sdk:test:preflight": "bun scripts/dev/bot-sdk-preflight.test.mjs",
     "bot-sdk:test:arena-result-ingest": "bun scripts/dev/arena-ingest-bot-run-result.test.mjs",
+    "bot-sdk:test:submission-validate": "bun scripts/dev/bot-submission-validate.test.mjs",
+    "bot-sdk:test:submission-status": "bun scripts/dev/bot-submission-commit-status.test.mjs",
     "bot-sdk:test:openbao-provision": "bun scripts/dev/bot-submission-provision-openbao.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
     "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",

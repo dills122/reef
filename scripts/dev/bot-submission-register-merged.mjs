@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import {
+  assertManifestPathMatchesBotId,
+  assertSafeBotSourceFileName,
+  assertValidBotId,
+} from "./lib/bot-submission-contract.mjs";
 
 loadDotEnv();
 
@@ -181,13 +186,20 @@ function validateManifest(manifest, manifestPath) {
   for (const field of ["botId", "fileName", "metadata"]) {
     if (!(field in manifest)) fail(`${manifestPath}: missing required field ${field}`);
   }
+  if (!manifest.metadata || typeof manifest.metadata !== "object" || Array.isArray(manifest.metadata)) {
+    fail(`${manifestPath}: metadata must be an object`);
+  }
   for (const field of ["name", "publisher", "email", "version", "sdkVersion", "botApiVersion"]) {
     if (String(manifest.metadata[field] ?? "").trim() === "") {
       fail(`${manifestPath}: metadata.${field} is required`);
     }
   }
-  if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(manifest.botId)) {
-    fail(`${manifestPath}: invalid botId ${manifest.botId}`);
+  try {
+    assertValidBotId(manifest.botId, "manifest.botId");
+    assertManifestPathMatchesBotId(manifestPath, manifest.botId);
+    assertSafeBotSourceFileName(manifest.fileName);
+  } catch (error) {
+    fail(`${manifestPath}: ${error.message}`);
   }
 }
 

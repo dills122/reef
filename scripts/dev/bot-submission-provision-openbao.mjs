@@ -1,4 +1,5 @@
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { assertValidBotId, assertValidOpenBaoPathSegment } from "./lib/bot-submission-contract.mjs";
 
 loadDotEnv();
 
@@ -8,6 +9,13 @@ if (!botId || !validFlows.includes(flow) || !submitterIdentity) {
   console.error(
     "usage: node scripts/dev/bot-submission-provision-openbao.mjs <botId> <add|update|remove> <submitterIdentity>",
   );
+  process.exit(1);
+}
+try {
+  assertValidBotId(botId);
+  assertValidOpenBaoPathSegment(submitterIdentity, "submitterIdentity");
+} catch (error) {
+  console.error(`bot-submission-provision-openbao: user-fixable failure: ${error.message}`);
   process.exit(1);
 }
 

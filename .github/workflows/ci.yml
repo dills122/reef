@@ -180,7 +180,8 @@ jobs:
             packages/bot-sdk/examples/technical-indicator-strategy-bot.ts \
             packages/bot-sdk/fixtures/aapl-technical-indicator.json \
             --summary-only \
-            --isolation=container
+            --isolation=container \
+            --wall-timeout-ms=15000
 
   arena-admin:
     runs-on: ubuntu-latest

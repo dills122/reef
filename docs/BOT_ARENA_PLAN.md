@@ -80,7 +80,15 @@ Submission and update path is PR-based:
 - post-merge registry sync: `.github/workflows/bot-registry-sync.yml` runs on pushes to `master`/`main` that change `bots/**`. It registers merged bot metadata and version facts in the durable hosted arena registry through `/admin/v1/arena/bots` and `/admin/v1/arena/bot-versions`, using `scripts/dev/bot-submission-register-merged.mjs`. The sync builds the hosted artifact after merge to record real source/artifact hashes.
 - **stage 4 must call the real, always-on hosted admin API, never an ephemeral per-run stack.** Registry-diff and OpenBao provisioning both depend on durable state (the actual bot registry, the actual OpenBao instance) that a fresh `make dev-up` container does not have — every bot would incorrectly look "new" against an empty throwaway registry, and any "provisioned" secret would vanish when the ephemeral stack tears down. `bot-submission-registry-diff.mjs` and `bot-submission-provision-openbao.mjs` take `ARENA_ADMIN_API_URL` (a GitHub Actions secret) for this reason, not a derived localhost URL. The secret is scoped to the trusted `workflow_run` provisioning workflow, not to the pull-request workflow that checks out and executes PR-controlled bot code. Because CI only ever makes HTTP calls to this API, no JVM/Gradle runs in the bot-submission workflow at all — the Kotlin OpenBao client and the GitHub OIDC → `auth/jwt` exchange both run server-side, on the always-on host, never in a CI runner.
 - raw `/internal/*` routes stay private. GitHub Actions and the admin UI reach only narrowly-scoped, authenticated admin gateway routes through Caddy: `/admin/v1/arena/bots`, `/admin/v1/arena/bots/openbao-provision`, `/admin/v1/arena/bots/config`, `/admin/v1/arena/bot-versions`, `/admin/v1/arena/runs`, `/admin/v1/arena/run-bot-results`, `/admin/v1/arena/run-enforcement-events`, and `/admin/v1/arena/leaderboard`. Runtime binds the admin actor from request headers/token context, not body/query fields.
-- outstanding manual step: GitHub branch protection on `master`/`main` must require the `validate-manifest`, `scan-and-sandbox-test`, and `registry-diff-and-provision` status checks plus at least one human reviewer approval before merge (see "Merge gate" below) — this is a repo-settings change, not something a commit can express.
+- outstanding manual step: GitHub branch protection on `master` must require
+  `validate-manifest`, `scan-and-sandbox-test`, and the explicit
+  `registry-diff-and-provision` commit status plus at least one human reviewer
+  approval before merge (see "Merge gate" below) — this is a repo-settings
+  change, not something a commit can express. The
+  `registry-diff-and-provision` context is published by the trusted
+  `Bot Submission Provision` `workflow_run` workflow against the PR head SHA,
+  so branch protection should require that context rather than relying on the
+  workflow-run job name.
 
 PR pipeline, in order, each stage blocking the next:
 
@@ -102,7 +110,7 @@ Failure handling: any pipeline stage failing (1-4) hard-blocks the PR merge via 
 
 Merge gate: branch protection requires both all automated stages (1-4) passing AND at least one human operator approval before merge — automated checks alone do not auto-merge. This matches the operator-decision-driven pattern already used for lifecycle transitions (`ArenaOperatorDecision` records actor, reason, correlation ID for state changes elsewhere in the control plane); the PR reviewer approval is the equivalent operator checkpoint for the submission path.
 
-Security invariant: the pull-request workflow that checks out and executes submitted bot code must not receive hosted Admin API secrets or GitHub OIDC token minting permission. OpenBao provisioning remains a pre-merge gate, but it runs from a trusted `workflow_run` workflow after the unprivileged PR workflow succeeds. The trusted workflow checks out base-branch scripts, validates the branch-derived bot id, rejects forked workflow runs, and then calls the hosted Admin API.
+Security invariant: the pull-request workflow that checks out and executes submitted bot code must not receive hosted Admin API secrets or GitHub OIDC token minting permission. OpenBao provisioning remains a pre-merge gate, but it runs from a trusted `workflow_run` workflow after the unprivileged PR workflow succeeds. The trusted workflow checks out base-branch scripts, validates the branch-derived bot id, rejects forked bot-submission workflow runs, publishes the `registry-diff-and-provision` commit status on the PR head SHA, and then calls the hosted Admin API only for trusted same-repository bot branches.
 
 ## Next Control-Plane Slice
 

@@ -1,11 +1,23 @@
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { assertValidBotId } from "./lib/bot-submission-contract.mjs";
 
 loadDotEnv();
 
-const [, , botId] = process.argv;
+const [, , botId, ...flags] = process.argv;
+const validateOnly = flags.includes("--validate-only");
 if (!botId) {
-  console.error("usage: node scripts/dev/bot-submission-registry-diff.mjs <botId>");
+  console.error("usage: node scripts/dev/bot-submission-registry-diff.mjs <botId> [--validate-only]");
   process.exit(1);
+}
+try {
+  assertValidBotId(botId);
+} catch (error) {
+  console.error(`bot-submission-registry-diff: ${error.message}`);
+  process.exit(1);
+}
+if (validateOnly) {
+  console.log(`bot-submission-registry-diff: botId=${botId} valid`);
+  process.exit(0);
 }
 
 // Must point at the real, always-on hosted admin API, not a per-run

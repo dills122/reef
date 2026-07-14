@@ -1,4 +1,9 @@
 import { readFileSync } from "node:fs";
+import {
+  assertManifestPathMatchesBotId,
+  assertSafeBotSourceFileName,
+  assertValidBotId,
+} from "./lib/bot-submission-contract.mjs";
 
 const BASIC_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REQUIRED_FIELDS = ["botId", "fileName", "metadata"];
@@ -28,18 +33,26 @@ for (const field of REQUIRED_FIELDS) {
   }
 }
 
+if (!manifest.metadata || typeof manifest.metadata !== "object" || Array.isArray(manifest.metadata)) {
+  fail("manifest.metadata must be an object");
+}
+
 for (const field of REQUIRED_METADATA_FIELDS) {
   if (!(field in manifest.metadata)) {
     fail(`manifest.metadata missing required field "${field}"`);
   }
 }
 
-if (!BASIC_EMAIL_REGEX.test(manifest.metadata.email)) {
+if (!BASIC_EMAIL_REGEX.test(String(manifest.metadata.email))) {
   fail(`manifest.metadata.email is not a valid email: ${manifest.metadata.email}`);
 }
 
-if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(manifest.botId)) {
-  fail(`manifest.botId "${manifest.botId}" must be lowercase alphanumeric/hyphen, 2-64 chars`);
+try {
+  assertValidBotId(manifest.botId, "manifest.botId");
+  assertManifestPathMatchesBotId(manifestPath, manifest.botId);
+  assertSafeBotSourceFileName(manifest.fileName);
+} catch (error) {
+  fail(error.message);
 }
 
 console.log(`bot-submission-validate: ok (botId=${manifest.botId})`);
