@@ -97,7 +97,7 @@ bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js
 
 The container runner uses `BOT_SDK_SES_CONTAINER_IMAGE` when set, otherwise `oven/bun:1.1.38`. Resource defaults are `BOT_SDK_CONTAINER_CPUS=1`, `BOT_SDK_CONTAINER_MEMORY=256m`, and `BOT_SDK_CONTAINER_PIDS_LIMIT=64`. When a worktree does not have its own `node_modules`, set `REEF_NODE_MODULES_DIR` or `NODE_PATH` to an existing dependency directory; the container runner mounts that directory read-only at `/node_modules`.
 
-Container networking defaults to `none` for fixture runs and `bridge` when `--venue-url` is passed to the worker runner. For local live runs, use a venue URL reachable from the container, such as `host.docker.internal` on Docker Desktop, or pass `--container-network=host` where supported.
+Container networking defaults to `none` for fixture runs and `bridge` when `--venue-url` is passed to the worker runner. `--container-network` is intentionally limited to `none`, `bridge`, and `host`; arbitrary Docker network names are rejected before container startup. For local live runs, use a venue URL reachable from the container, such as `host.docker.internal` on Docker Desktop, or pass `--container-network=host` where supported.
 
 For a server-shaped local smoke, run:
 

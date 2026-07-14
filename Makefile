@@ -83,6 +83,7 @@ test-bot-sdk:
 	bun scripts/dev/bot-sdk-strategy-runner.test.mjs
 	bun scripts/dev/bot-sdk-hosted-runner.test.mjs
 	bun scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
+	bun scripts/dev/bot-isolation.test.mjs
 	bun scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
 	bun scripts/dev/bot-sdk-hosted-worker.test.mjs
 	bun scripts/dev/bot-sdk-sandbox-policy.test.mjs

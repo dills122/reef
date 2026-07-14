@@ -1,6 +1,8 @@
 import { existsSync, realpathSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
+export const hostedBotContainerNetworks = Object.freeze(["none", "bridge", "host"]);
+
 export const hostedSesLockdownOptions = Object.freeze({
   errorTaming: "safe",
   stackFiltering: "concise",
@@ -36,13 +38,14 @@ export function hostedBotContainerArgs({
     throw new Error("container command is required");
   }
 
+  const validatedNetwork = validateHostedBotContainerNetwork(network);
   const normalizedRepoRoot = repoRoot.replace(/\/$/, "");
   const nodeModulesMount = resolvedNodeModulesMount(normalizedRepoRoot);
   return [
     "run",
     "--rm",
     "--interactive",
-    `--network=${network}`,
+    `--network=${validatedNetwork}`,
     `--cpus=${cpus}`,
     `--memory=${memory}`,
     `--pids-limit=${pidsLimit}`,
@@ -66,6 +69,13 @@ export function hostedBotContainerArgs({
     image,
     ...command,
   ];
+}
+
+export function validateHostedBotContainerNetwork(network) {
+  if (hostedBotContainerNetworks.includes(network)) {
+    return network;
+  }
+  throw new Error(`container network must be one of ${hostedBotContainerNetworks.join(", ")}; got ${network}`);
 }
 
 function resolvedNodeModulesMount(repoRoot) {

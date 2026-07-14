@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, isAbsolute, resolve } from "node:path";
-import { hostedBotContainerArgs, hostedWorkerProcessEnv } from "./lib/bot-isolation.mjs";
+import { hostedBotContainerArgs, hostedWorkerProcessEnv, validateHostedBotContainerNetwork } from "./lib/bot-isolation.mjs";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const args = process.argv.slice(2);
@@ -29,6 +29,9 @@ if (!["fixture", "live"].includes(readMode)) {
 }
 if (readMode === "live" && venueUrl === undefined) {
   throw new Error("--read-mode=live requires --venue-url");
+}
+if (isolation === "container") {
+  validateHostedBotContainerNetwork(containerNetwork);
 }
 
 const artifactPath = isAbsolute(artifactPathArg) ? artifactPathArg : resolve(repoRoot, artifactPathArg);
