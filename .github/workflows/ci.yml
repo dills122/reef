@@ -139,6 +139,7 @@ jobs:
             scripts/dev/deploy-receiver.test.mjs \
             scripts/dev/analyze-arena-actor-diagnostics.test.mjs \
             scripts/dev/arena-score-breakdown.test.mjs \
+            scripts/dev/compare-arena-score-v1-proof.test.mjs \
             scripts/dev/compare-arena-scoring-calibration.test.mjs \
             scripts/dev/run-arena-actor-calibration-matrix.test.mjs \
             scripts/dev/run-arena-scoring-calibration-matrix.test.mjs \

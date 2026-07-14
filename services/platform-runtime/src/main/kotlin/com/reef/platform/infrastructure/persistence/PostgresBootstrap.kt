@@ -387,12 +387,12 @@ object PostgresSchemaRequirements {
         val table = PostgresSchemaObject.parse(streamCommandIntake)
         return PostgresSchemaRequirement(
             tables = listOf(table),
-	            columns = listOf(
-	                "scope",
-	                "client_id",
-	                "idempotency_key",
-	                "participant_id",
-	                "payload_hash",
+            columns = listOf(
+                "scope",
+                "client_id",
+                "idempotency_key",
+                "participant_id",
+                "payload_hash",
                 "command_id",
                 "route",
                 "subject",
