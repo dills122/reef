@@ -17,12 +17,13 @@ const venueUrl = optionValue("--venue-url");
 const readMode = optionValue("--read-mode") ?? "fixture";
 const isolation = optionValue("--isolation") ?? "ses";
 const participantId = optionValue("--participant-id") ?? undefined;
+const containerNetwork = optionValue("--container-network");
 const unsafeVmForLocalDev = args.includes("--unsafe-vm-for-local-dev");
 const tickTimeoutMs = numberOption("--tick-timeout-ms");
 const lifecycleTimeoutMs = numberOption("--lifecycle-timeout-ms");
 
 if (!artifactPathArg) {
-  console.error("usage: bun scripts/dev/bot-sdk-hosted-run.mjs <compiled-bot.js> [fixture.json] [--isolation=ses|worker|container] [--unsafe-vm-for-local-dev] [--venue-url=http://127.0.0.1:8080] [--read-mode=fixture|live] [--participant-id=participant-1] [--tick-timeout-ms=1000] [--lifecycle-timeout-ms=1000]");
+  console.error("usage: bun scripts/dev/bot-sdk-hosted-run.mjs <compiled-bot.js> [fixture.json] [--isolation=ses|worker|container] [--unsafe-vm-for-local-dev] [--venue-url=http://127.0.0.1:8080] [--read-mode=fixture|live] [--participant-id=participant-1] [--container-network=none|bridge|host] [--tick-timeout-ms=1000] [--lifecycle-timeout-ms=1000]");
   process.exit(2);
 }
 
@@ -43,14 +44,15 @@ if (isolation !== "ses") {
   if (unsafeVmForLocalDev) {
     throw new Error("--unsafe-vm-for-local-dev is only valid with --isolation=ses");
   }
-  if (venueUrl !== undefined || readMode === "live") {
-    throw new Error("--isolation=worker|container currently supports fixture-only hosted runs; use --isolation=ses for live venue transport");
-  }
   const forwardedArgs = [
     "scripts/dev/bot-sdk-hosted-worker-run.mjs",
     artifactPath,
     fixturePath,
     `--isolation=${isolation === "container" ? "container" : "worker"}`,
+    `--read-mode=${readMode}`,
+    ...(venueUrl === undefined ? [] : [`--venue-url=${venueUrl}`]),
+    ...(participantId === undefined ? [] : [`--participant-id=${participantId}`]),
+    ...(containerNetwork === undefined ? [] : [`--container-network=${containerNetwork}`]),
     ...(tickTimeoutMs === undefined ? [] : [`--tick-timeout-ms=${tickTimeoutMs}`]),
     ...(lifecycleTimeoutMs === undefined ? [] : [`--lifecycle-timeout-ms=${lifecycleTimeoutMs}`]),
   ];

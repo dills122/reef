@@ -9,6 +9,7 @@ const hostedRunner = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src
 const strategyRunner = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/strategy-runner.ts`).href);
 const harness = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/harness.ts`).href);
 const venueAdapter = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/venue-adapter.ts`).href);
+const liveClient = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/live-client.ts`).href);
 const args = process.argv.slice(2);
 const workerId = stringOption("--worker-id", "worker-0");
 const compartment = stringOption("--compartment", "vm");
@@ -215,6 +216,7 @@ async function handleRunScenario(message) {
     const report = await strategyRunner.runBotStrategyScenarioV1({
       BotClass: loaded.BotClass,
       fixture: message.fixture,
+      ...(message.liveClientOptions === undefined ? {} : { readClients: readClientsForLiveOptions(message.liveClientOptions) }),
     });
     const elapsedMs = performance.now() - started;
     const cpuUsage = process.cpuUsage(beforeCpu);
@@ -282,6 +284,7 @@ async function handleStartSession(message) {
     denials: [],
     orderState,
     orderHistory,
+    readClients: message.liveClientOptions === undefined ? undefined : readClientsForLiveOptions(message.liveClientOptions),
     commandSequence: 1,
     tickIndex: 0,
     counters: {
@@ -525,7 +528,16 @@ function contextForSession(session, tick, counters = { dataCalls: 0, dataCallsTh
     logs: session.logs,
     denials: session.denials,
     counters,
+    readClients: session.readClients,
   });
+}
+
+function readClientsForLiveOptions(options) {
+  return {
+    marketData: liveClient.createLiveMarketDataClientV1(options),
+    historical: liveClient.createLiveHistoricalDataClientV1(options),
+    orders: liveClient.createLiveOwnOrdersReadClientV1(options),
+  };
 }
 
 function venueContextForSession(session, tick, startingSequence) {

@@ -27,6 +27,7 @@ export function hostedBotContainerArgs({
   cpus = process.env.BOT_SDK_CONTAINER_CPUS || "1",
   memory = process.env.BOT_SDK_CONTAINER_MEMORY || "256m",
   pidsLimit = process.env.BOT_SDK_CONTAINER_PIDS_LIMIT || "64",
+  network = process.env.BOT_SDK_CONTAINER_NETWORK || "none",
 } = {}) {
   if (!repoRoot) {
     throw new Error("repoRoot is required");
@@ -41,7 +42,7 @@ export function hostedBotContainerArgs({
     "run",
     "--rm",
     "--interactive",
-    "--network=none",
+    `--network=${network}`,
     `--cpus=${cpus}`,
     `--memory=${memory}`,
     `--pids-limit=${pidsLimit}`,

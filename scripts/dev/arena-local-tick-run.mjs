@@ -373,7 +373,20 @@ async function startBotSession(bot) {
   let start;
   try {
     start = await bot.worker.request(
-      { type: "startSession", botKey: bot.botId, sessionId, fixture },
+      {
+        type: "startSession",
+        botKey: bot.botId,
+        sessionId,
+        fixture,
+        ...(config.submitMode === "live"
+          ? {
+              liveClientOptions: {
+                baseUrl: config.venueUrl,
+                participantId: participantIdForBot(bot),
+              },
+            }
+          : {}),
+      },
       config.runnerRequestTimeoutMs,
     );
   } catch (error) {
