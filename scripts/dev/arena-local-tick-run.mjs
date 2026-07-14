@@ -35,6 +35,7 @@ const config = {
   runnerIsolation: stringOption("--runner-isolation", "process"),
   runnerWorkerScope: stringOption("--runner-worker-scope", "shared"),
   runnerMaxOutputBytes: numberOption("--runner-max-output-bytes", 1024 * 1024),
+  runnerRequestTimeoutMs: numberOption("--runner-request-timeout-ms", 10000),
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
   arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
@@ -147,19 +148,7 @@ async function main() {
       });
     }
     for (const bot of bots) {
-      const load = await bot.worker.request({
-        type: "loadBot",
-        botKey: bot.botId,
-        source: bot.artifact.source,
-        fileName: bot.artifact.fileName,
-        executionLimits: {
-          tickTimeoutMs: bot.riskProfile.maxTickLatencyMs,
-          lifecycleTimeoutMs: bot.riskProfile.maxTickLatencyMs,
-        },
-      });
-      if (!load.ok) {
-        throw new Error(`loadBot failed for ${bot.botId}: ${JSON.stringify(load.issues ?? load.error)}`);
-      }
+      bot.loadResult = await loadBotInWorker(bot);
     }
 
     const healthSamples = [];
@@ -201,6 +190,31 @@ async function main() {
   }
 }
 
+async function loadBotInWorker(bot) {
+  try {
+    return await bot.worker.request(
+      {
+        type: "loadBot",
+        botKey: bot.botId,
+        source: bot.artifact.source,
+        fileName: bot.artifact.fileName,
+        executionLimits: {
+          tickTimeoutMs: bot.riskProfile.maxTickLatencyMs,
+          lifecycleTimeoutMs: bot.riskProfile.maxTickLatencyMs,
+        },
+      },
+      config.runnerRequestTimeoutMs,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      type: "loadBotResult",
+      botKey: bot.botId,
+      error: runnerIssue("runner_worker_load_failed", error),
+    };
+  }
+}
+
 async function startRunnerWorker(workerId) {
   const runnerWorker = new RunnerWorker(workerId, config.compartment, config.runnerIsolation);
   workers.push(runnerWorker);
@@ -210,6 +224,25 @@ async function startRunnerWorker(workerId) {
 
 function safeWorkerId(value) {
   return String(value).replace(/[^a-zA-Z0-9_.-]/g, "-").slice(0, 64);
+}
+
+function runnerIssue(code, error) {
+  return {
+    code,
+    message: error instanceof Error ? error.message : String(error),
+    runnerIsolation: config.runnerIsolation,
+    runnerWorkerScope: config.runnerWorkerScope,
+  };
+}
+
+function runnerIssueFromWorkerResult(fallbackCode, result) {
+  const issue = result.error ?? result.issues?.[0];
+  return {
+    code: issue?.code ?? fallbackCode,
+    message: issue?.message ?? JSON.stringify(result),
+    runnerIsolation: config.runnerIsolation,
+    runnerWorkerScope: config.runnerWorkerScope,
+  };
 }
 
 async function runArenaSessions(bots, healthSamples) {
@@ -269,8 +302,38 @@ async function runArenaSessions(bots, healthSamples) {
   }
 
   for (const session of sessions) {
-    if (session.start.ok) {
-      session.stop = await session.worker.request({ type: "stopSession", sessionId: session.sessionId });
+    if (session.start.ok && !session.workerFailed) {
+      try {
+        session.stop = await session.worker.request(
+          { type: "stopSession", sessionId: session.sessionId },
+          config.runnerRequestTimeoutMs,
+        );
+      } catch (error) {
+        session.stop = {
+          ok: false,
+          type: "stopSessionResult",
+          sessionId: session.sessionId,
+          botKey: session.bot.botId,
+          error: runnerIssue("runner_worker_stop_failed", error),
+        };
+        session.ticks.push({
+          tick: session.ticks.length,
+          schedulingClass: session.schedulingClass,
+          offsetMs: null,
+          ok: false,
+          issues: [session.stop.error],
+          venueCommands: [],
+          submission: emptySubmission(session.stop.error.code),
+        });
+      }
+    } else if (session.start.ok && session.workerFailed) {
+      session.stop = {
+        ok: false,
+        type: "stopSessionResult",
+        sessionId: session.sessionId,
+        botKey: session.bot.botId,
+        error: runnerIssue("runner_worker_stop_skipped", "worker already failed"),
+      };
     }
     console.log(`arena bot complete ${sessions.indexOf(session) + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
   }
@@ -287,7 +350,41 @@ async function startBotSession(bot) {
   const tickCount = ticksForSchedulingClass(schedulingClass, intervalMs);
   const fixture = fixtureForBot(bot, { tickCount, tickIntervalMs: intervalMs });
   const sessionId = `${mode.modeId}-${bot.identityKey}-${Date.now()}`;
-  const start = await bot.worker.request({ type: "startSession", botKey: bot.botId, sessionId, fixture });
+  if (bot.loadResult !== undefined && !bot.loadResult.ok) {
+    return {
+      bot,
+      worker: bot.worker,
+      sessionId,
+      schedulingClass,
+      intervalMs,
+      start: {
+        ok: false,
+        type: "startSessionResult",
+        botKey: bot.botId,
+        sessionId,
+        error: runnerIssueFromWorkerResult("runner_worker_load_failed", bot.loadResult),
+      },
+      scheduled: [],
+      ticks: [],
+      stop: undefined,
+      stoppedForPolicy: true,
+    };
+  }
+  let start;
+  try {
+    start = await bot.worker.request(
+      { type: "startSession", botKey: bot.botId, sessionId, fixture },
+      config.runnerRequestTimeoutMs,
+    );
+  } catch (error) {
+    start = {
+      ok: false,
+      type: "startSessionResult",
+      botKey: bot.botId,
+      sessionId,
+      error: runnerIssue("runner_worker_start_failed", error),
+    };
+  }
   if (!start.ok) {
     return { bot, worker: bot.worker, sessionId, schedulingClass, intervalMs, start, scheduled: [], ticks: [], stop: undefined, stoppedForPolicy: true };
   }
@@ -377,7 +474,26 @@ async function runSessionTick(session, tick, tickIndex, offsetMs) {
       submission: emptySubmission("live_order_refresh_failed"),
     };
   }
-  const tickResult = await session.worker.request({ type: "runTick", sessionId: session.sessionId, tick });
+  let tickResult;
+  try {
+    tickResult = await session.worker.request(
+      { type: "runTick", sessionId: session.sessionId, tick },
+      config.runnerRequestTimeoutMs,
+    );
+  } catch (error) {
+    session.stoppedForPolicy = true;
+    session.workerFailed = true;
+    const issue = runnerIssue("runner_worker_tick_failed", error);
+    return {
+      tick,
+      schedulingClass: session.schedulingClass,
+      offsetMs,
+      ok: false,
+      issues: [issue],
+      venueCommands: [],
+      submission: emptySubmission(issue.code),
+    };
+  }
   const policyViolation = tickPolicyViolation(session, tickResult, offsetMs);
   if (policyViolation !== undefined) {
     session.stoppedForPolicy = true;
@@ -503,7 +619,18 @@ async function refreshLiveSessionOrders(session) {
     };
   }
   const orders = Array.isArray(response.body?.orders) ? response.body.orders.map(toOwnOrder) : [];
-  const replace = await session.worker.request({ type: "replaceOrders", sessionId: session.sessionId, orders });
+  let replace;
+  try {
+    replace = await session.worker.request(
+      { type: "replaceOrders", sessionId: session.sessionId, orders },
+      config.runnerRequestTimeoutMs,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      issue: runnerIssue("runner_worker_replace_orders_failed", error),
+    };
+  }
   if (!replace.ok) {
     return {
       ok: false,
@@ -593,7 +720,7 @@ function enforceBot(bot, session) {
   }
   const reasons = [];
   if (!session.start.ok) {
-    reasons.push("session_start_failed");
+    reasons.push(`session_start_failed: ${session.start.error?.message ?? JSON.stringify(session.start.error ?? session.start)}`);
   }
   if (counters.failedTicks > 0) {
     reasons.push(`failedTicks ${counters.failedTicks} > 0`);
@@ -613,19 +740,39 @@ function enforceBot(bot, session) {
   if (reasons.length === 0) {
     return events;
   }
+  const runnerFailure = sessionRunnerFailure(session);
   events.push({
     type: "arena.enforcement.v0",
     runId: config.runId,
     botId: bot.botId,
     versionId: bot.versionId,
     decision: "freeze",
-    reasonCode: "tick_policy_violation",
+    reasonCode: runnerFailure === undefined ? "tick_policy_violation" : "runner_isolation_failure",
     reason: reasons.join("; "),
     policyVersion: mode.riskPolicyVersion,
     counters,
+    ...(runnerFailure === undefined ? {} : { runnerFailure }),
     occurredAt: new Date().toISOString(),
   });
   return events;
+}
+
+function sessionRunnerFailure(session) {
+  const startIssue = session.start?.error;
+  if (isRunnerIssue(startIssue)) {
+    return startIssue;
+  }
+  for (const tick of session.ticks) {
+    const issue = (tick.issues ?? []).find(isRunnerIssue);
+    if (issue !== undefined) {
+      return issue;
+    }
+  }
+  return undefined;
+}
+
+function isRunnerIssue(issue) {
+  return typeof issue?.code === "string" && issue.code.startsWith("runner_worker_");
 }
 
 function scoreBots(sessionReports, enforcementEvents) {

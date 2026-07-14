@@ -117,6 +117,8 @@ Use `--runner-worker-scope=per-bot` when you want each arena bot loaded into a s
 bun scripts/dev/arena-local-tick-run.mjs --compartment=ses --runner-isolation=container --runner-worker-scope=per-bot
 ```
 
+Worker load/start/tick/stop failures are reported as arena enforcement events. A bot that trips the worker timeout, output limit, or container/process failure is frozen with `reasonCode: "runner_isolation_failure"` and a `runnerFailure` payload.
+
 ## Target Hosted Sandbox
 
 Hosted execution should combine JavaScript-level confinement with an outer process or container boundary.

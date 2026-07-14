@@ -98,6 +98,7 @@ test-bot-sdk:
 	bun scripts/dev/arena-execution-diagnostics.test.mjs
 	bun scripts/dev/arena-actor-profile-behavior.test.mjs
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
+	bun scripts/dev/arena-runner-isolation-failure.test.mjs
 	bun scripts/dev/large-json-writer.test.mjs
 	bun scripts/dev/arena-local-tick-report-writer.test.mjs
 	bun scripts/dev/compare-arena-score-v1-proof.test.mjs
@@ -109,6 +110,7 @@ test-bot-sdk:
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
+	node --check scripts/dev/arena-runner-isolation-failure.test.mjs
 	node --check scripts/dev/arena-ingest-bot-run-result.mjs
 	node --check scripts/dev/arena-persist-report-local.mjs
 	node --check scripts/dev/arena-render-report-index.mjs
