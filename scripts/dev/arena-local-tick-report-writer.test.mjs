@@ -36,6 +36,7 @@ assert.equal(report.pacingSummary.enabled, false);
 assert.equal(report.pacingSummary.scheduler, "unpaced");
 assert.equal(report.pacingSummary.scheduledDurationMs, 1000);
 assert.equal(report.pacingSummary.scheduledEventCount, 4);
+assert.equal(report.projectionDrainCadence, "per-submission");
 assert.equal(report.sessionReports.length, 5);
 assert.equal(report.sessionReports.flatMap((session) => session.ticks).length, report.totals.ticks);
 assert.equal(report.healthSamples.length, 2);
@@ -168,6 +169,7 @@ const pacedResult = spawnSync(
     "--duration-seconds=1",
     "--tick-interval-ms=500",
     "--pace-ticks",
+    "--projection-drain-cadence=scheduled-event",
     "--report-shape=compact",
     `--out=${pacedReportPath}`,
   ],
@@ -181,6 +183,7 @@ assert.equal(pacedReport.pacingSummary.enabled, true);
 assert.equal(pacedReport.pacingSummary.scheduler, "absolute-offset-from-run-start");
 assert.equal(pacedReport.pacingSummary.scheduledDurationMs, 1000);
 assert.equal(pacedReport.pacingSummary.scheduledEventCount, 4);
+assert.equal(pacedReport.projectionDrainCadence, "scheduled-event");
 assert.equal(pacedReport.pacingSummary.totalSleepMs >= 700, true);
 assert.equal(pacedReport.pacingSummary.totalSleepMs <= 1000, true);
 assert.equal(pacedWallElapsedMs >= 700, true);

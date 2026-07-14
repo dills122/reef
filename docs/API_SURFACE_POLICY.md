@@ -84,7 +84,7 @@ Current implementation checkpoint:
 - admin/data adapters use versioned gateway paths such as `/admin/v1/...`; the runtime currently has reference/auth setup, arena, analytics export, risk-control, and settlement gateway routes, and the Netty hot-path adapter dispatches these gateway reads/writes instead of returning `404`
 - hosted Caddy exposes only narrow `/admin/v1/arena/...` and `/admin/v1/analytics/...` paths today; raw `/internal/*` is not proxied
 - admin HTTP actor identity is bound from request principal headers/token context, not request body or query fields
-- `/healthz` remains cheap liveness; `/readyz` reports runtime role, internal HTTP mode, DB pool pressure, and stream availability
+- `/healthz` remains cheap liveness; `/readyz` reports runtime role, internal HTTP mode, DB pool pressure, stream availability, and enabled-dependency readiness for this runtime role
 - remaining raw internal callers are tracked in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 
 Migration target:

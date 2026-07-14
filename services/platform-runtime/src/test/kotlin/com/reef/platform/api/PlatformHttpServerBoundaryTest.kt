@@ -1483,6 +1483,10 @@ class PlatformHttpServerBoundaryTest {
             assertContains(readiness.body, "\"pipeline\"")
             assertContains(readiness.body, "\"commandProcessingMode\":\"sync-result\"")
             assertContains(readiness.body, "\"dependencies\"")
+            assertContains(readiness.body, "\"enabledDependencies\"")
+            assertContains(readiness.body, "\"dbPools\":{\"enabled\":true,\"ready\":true")
+            assertContains(readiness.body, "\"streamIngress\":{\"enabled\":false,\"ready\":true")
+            assertContains(readiness.body, "\"adminStore\":{\"enabled\":false,\"ready\":true")
         } finally {
             server.stop(0)
         }
@@ -1503,6 +1507,8 @@ class PlatformHttpServerBoundaryTest {
             assertContains(readiness.body, "\"streamAckRequired\":true")
             assertContains(readiness.body, "\"streamPipelineConfigured\":false")
             assertContains(readiness.body, "\"streamReady\":false")
+            assertContains(readiness.body, "\"streamIngress\":{\"enabled\":true,\"ready\":false")
+            assertContains(readiness.body, "stream-ack pipeline is not fully configured or healthy")
         } finally {
             server.stop(0)
         }

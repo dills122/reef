@@ -220,6 +220,21 @@ Follow-up story: hosted arena pacing lag cleanup.
 - Acceptance: repeat the hosted arena profile with hardening `pass`, stable
   score-v1 leaderboard/execution summary, projection lag `0`, zero command
   accounting gaps/timeouts/rejects/freezes, and `finalCompletionLagMs < 30000`.
+- Short-run pacing gate: use `make do-arena-pacing-lag-gate ARGS=run-destroy`
+  to run `5m`, `5m`, and `7.5m` hosted arena samples before spending another
+  full `15m` soak. This is acceptable for the pacing cleanup because the prior
+  `15m` hosted run already proved score-v1 correctness; these samples isolate
+  scheduler lag, projection-drain cadence, and polling changes.
+- Result: 2026-07-14 short hosted pacing gate passed on c-8 source-built
+  workers with scheduled-event projection drain:
+  `do-benchmark-20260714T021445Z` (`5m`, final completion lag `4.19ms`,
+  `2313` completed commands), `do-benchmark-20260714T022948Z` (`5m`,
+  `277.68ms`, `2321` completed), and `do-benchmark-20260714T024455Z`
+  (`7.5m`, `7.64ms`, `3491` completed). All three had hardening `pass`,
+  health `pass`, projection lag `0`, zero timeouts, zero failed ticks, and
+  zero command accounting gaps. The hosted pacing-lag cleanup gate is closed;
+  keep a later full `15m` run as soak confidence, not the immediate scoring
+  correctness blocker.
 - Candidate knobs: Docker Hub image mode for arena, c-16 worker, less frequent
   projection drain, hosted-specific polling intervals, and remote arena-stage
   profiling.
