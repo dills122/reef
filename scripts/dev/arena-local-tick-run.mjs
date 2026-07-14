@@ -7,7 +7,12 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
-import { hostedBotContainerArgs, hostedWorkerProcessEnv } from "./lib/bot-isolation.mjs";
+import {
+  hostedBotContainerArgs,
+  hostedBotContainerReachableUrl,
+  hostedWorkerProcessEnv,
+  validateHostedBotContainerNetwork,
+} from "./lib/bot-isolation.mjs";
 import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
 import {
@@ -34,6 +39,7 @@ const config = {
   compartment: stringOption("--compartment", "ses"),
   runnerIsolation: stringOption("--runner-isolation", "process"),
   runnerWorkerScope: stringOption("--runner-worker-scope", "shared"),
+  runnerContainerNetwork: stringOption("--runner-container-network", ""),
   runnerMaxOutputBytes: numberOption("--runner-max-output-bytes", 1024 * 1024),
   runnerRequestTimeoutMs: numberOption("--runner-request-timeout-ms", 10000),
   submitMode: stringOption("--submit-mode", "dry-run"),
@@ -73,6 +79,11 @@ if (!["process", "container"].includes(config.runnerIsolation)) {
 if (!["shared", "per-bot"].includes(config.runnerWorkerScope)) {
   throw new Error(`unsupported --runner-worker-scope=${config.runnerWorkerScope}; expected shared or per-bot`);
 }
+const runnerContainerNetwork = config.runnerContainerNetwork.length > 0
+  ? validateHostedBotContainerNetwork(config.runnerContainerNetwork)
+  : config.runnerIsolation === "container" && config.submitMode === "live"
+    ? "bridge"
+    : "none";
 if (!["dry-run", "live"].includes(config.submitMode)) {
   throw new Error(`unsupported --submit-mode=${config.submitMode}; expected dry-run or live`);
 }
@@ -232,6 +243,7 @@ function runnerIssue(code, error) {
     message: error instanceof Error ? error.message : String(error),
     runnerIsolation: config.runnerIsolation,
     runnerWorkerScope: config.runnerWorkerScope,
+    ...(config.runnerIsolation === "container" ? { runnerContainerNetwork } : {}),
   };
 }
 
@@ -242,6 +254,7 @@ function runnerIssueFromWorkerResult(fallbackCode, result) {
     message: issue?.message ?? JSON.stringify(result),
     runnerIsolation: config.runnerIsolation,
     runnerWorkerScope: config.runnerWorkerScope,
+    ...(config.runnerIsolation === "container" ? { runnerContainerNetwork } : {}),
   };
 }
 
@@ -381,7 +394,7 @@ async function startBotSession(bot) {
         ...(config.submitMode === "live"
           ? {
               liveClientOptions: {
-                baseUrl: config.venueUrl,
+                baseUrl: workerVenueUrl(),
                 participantId: participantIdForBot(bot),
               },
             }
@@ -1057,8 +1070,10 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       compartment: config.compartment,
       isolation: config.runnerIsolation,
       workerScope: config.runnerWorkerScope,
+      ...(config.runnerIsolation === "container" ? { containerNetwork: runnerContainerNetwork } : {}),
       workerCount: workers.length,
       submitMode: config.submitMode,
+      ...(config.runnerIsolation === "container" && config.submitMode === "live" ? { workerVenueUrl: workerVenueUrl() } : {}),
     },
     commandWaitMode: config.commandWaitMode,
     scoringAssumptions: scoringAssumptions(),
@@ -2629,7 +2644,7 @@ class RunnerWorker {
     const workerCommand = ["bun", "scripts/dev/arena-runner-pool-worker.mjs", `--worker-id=${this.workerId}`, `--compartment=${this.compartment}`];
     const command = this.isolation === "container" ? "docker" : "bun";
     const commandArgs = this.isolation === "container"
-      ? hostedBotContainerArgs({ repoRoot, command: workerCommand })
+      ? hostedBotContainerArgs({ repoRoot, command: workerCommand, network: runnerContainerNetwork })
       : [workerScript, `--worker-id=${this.workerId}`, `--compartment=${this.compartment}`];
     this.child = spawn(
       command,
@@ -2999,6 +3014,13 @@ function accountIdForIdentity(identityKey) {
 
 function participantIdForBot(bot) {
   return participantIdForIdentity(venueIdentityKey(bot));
+}
+
+function workerVenueUrl() {
+  if (config.runnerIsolation !== "container") {
+    return config.venueUrl;
+  }
+  return hostedBotContainerReachableUrl(config.venueUrl);
 }
 
 async function resolveRuntimeConfigForBot(bot) {

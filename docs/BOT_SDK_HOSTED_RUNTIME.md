@@ -121,6 +121,8 @@ For arena local tick runs, combine SES with an outer container worker boundary:
 bun scripts/dev/arena-local-tick-run.mjs --compartment=ses --runner-isolation=container
 ```
 
+In live submit mode, arena container workers use `--runner-container-network=bridge` by default so worker-owned live read clients can reach the venue. If `--venue-url` points at `127.0.0.1`, `localhost`, or `::1`, the worker read-client URL is rewritten to `host.docker.internal` for the container while host-side command submission keeps using the original venue URL. `--runner-container-network` accepts the same `none`, `bridge`, and `host` allowlist as hosted worker containers.
+
 Use `--runner-worker-scope=per-bot` when you want each arena bot loaded into a separate worker process/container instead of one shared runner. This costs more startup time, but narrows crash, output, and policy blast radius to one bot:
 
 ```bash

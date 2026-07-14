@@ -78,6 +78,18 @@ export function validateHostedBotContainerNetwork(network) {
   throw new Error(`container network must be one of ${hostedBotContainerNetworks.join(", ")}; got ${network}`);
 }
 
+export function hostedBotContainerReachableUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (["127.0.0.1", "localhost", "::1", "[::1]"].includes(parsed.hostname)) {
+      parsed.hostname = "host.docker.internal";
+    }
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return value;
+  }
+}
+
 function resolvedNodeModulesMount(repoRoot) {
   for (const nodeModules of candidateNodeModulesDirs(repoRoot)) {
     if (existsSync(nodeModules)) {
