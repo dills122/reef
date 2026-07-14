@@ -90,6 +90,8 @@ test-bot-sdk:
 	bun scripts/dev/bot-sdk-preflight.test.mjs
 	bun scripts/dev/bot-sdk-runtime-config.test.mjs
 	bun scripts/dev/openbao-runtime-config.test.mjs
+	bun scripts/dev/bot-submission-validate.test.mjs
+	bun scripts/dev/bot-submission-commit-status.test.mjs
 	bun scripts/dev/bot-submission-provision-openbao.test.mjs
 	bun scripts/dev/bot-sdk-test-bot.test.mjs
 	bun scripts/dev/arena-ingest-bot-run-result.test.mjs

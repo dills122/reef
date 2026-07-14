@@ -726,6 +726,44 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayOpenBaoProvisioningRejectsWrongServiceTokenFamily() {
+        val auth = testAdminAuth()
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Sim,
+            subjectActorId = "sim-runner",
+            ttl = null
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = InMemoryArenaBotRegistryStore()
+            )
+        )
+        try {
+            val response = post(
+                server.address.port,
+                "/admin/v1/arena/bots/openbao-provision",
+                headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
+                body = openBaoProvisionBody(
+                    githubOidcToken = githubOidcToken(actor = "octo"),
+                    submitterIdentity = "octo",
+                    botId = "bot-1",
+                    flow = "add"
+                )
+            )
+
+            assertEquals(401, response.status, response.body)
+            assertContains(response.body, "unauthorized")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun adminGatewayUnknownBearerTokenReturnsCleanUnauthorizedWhenAdminAuthEnabled() {
         val auth = testAdminAuth()
         val server = testServerWithGateway(

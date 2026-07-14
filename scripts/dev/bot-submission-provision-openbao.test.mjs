@@ -13,6 +13,18 @@ const dryRun = await runProvisioner(["bot-1", "add", "octocat"], {
 assert.equal(dryRun.status, 0, dryRun.stderr);
 assert.match(dryRun.stdout, /dry-run ok, would provision secret\/bots\/octocat\/bot-1/);
 
+const invalidBotId = await runProvisioner(["bot/../other", "add", "octocat"], {
+  BOT_SUBMISSION_OPENBAO_MODE: "dry-run",
+});
+assert.equal(invalidBotId.status, 1);
+assert.match(invalidBotId.stderr, /botId must be lowercase alphanumeric\/hyphen/);
+
+const invalidSubmitter = await runProvisioner(["bot-1", "add", "../octocat"], {
+  BOT_SUBMISSION_OPENBAO_MODE: "dry-run",
+});
+assert.equal(invalidSubmitter.status, 1);
+assert.match(invalidSubmitter.stderr, /submitterIdentity must match/);
+
 const successRequests = [];
 const successServer = await fakeAdminApi((req, body, res) => {
   successRequests.push({ req, body });
