@@ -120,9 +120,9 @@ fun CommandLogRecord.toStatusView(processingMode: CommandProcessingMode): Comman
 fun StreamCommandReference.toStatusView(): CommandStatusView {
     return CommandStatusView(
         commandId = commandId,
-        clientId = "",
+        clientId = clientId,
         route = route,
-        idempotencyKey = "",
+        idempotencyKey = idempotencyKey,
         status = CommandLogStatus.RECEIVED,
         processingMode = CommandProcessingMode.StreamAck,
         responseStatus = 202,
@@ -135,6 +135,7 @@ fun StreamCommandReference.toStatusView(): CommandStatusView {
         eventStream = "",
         streamSequence = streamSequence,
         commandType = streamReferenceCommandType(route),
+        participantId = participantId,
         source = "stream_reference"
     )
 }

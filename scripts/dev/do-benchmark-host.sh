@@ -379,6 +379,8 @@ remote_run_benchmark() {
   local arena_tick_interval_ms="${REEF_DO_ARENA_TICK_INTERVAL_MS:-1000}"
   local arena_warmup_seconds="${REEF_DO_ARENA_WARMUP_SECONDS:-30}"
   local arena_health_sample_interval_ms="${REEF_DO_ARENA_HEALTH_SAMPLE_INTERVAL_MS:-1000}"
+  local arena_mode="${REEF_DO_ARENA_MODE:-packages/scenario-definitions/arena/equity-multi-local.v1.json}"
+  local arena_scoring_policy_version="${REEF_DO_ARENA_SCORING_POLICY_VERSION:-}"
   local stage_log_tail="${REEF_DO_STAGE_LOG_TAIL:-80}"
 
   echo "running remote benchmark profile=$profile run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers repeat_samples=$repeat_samples duration=$duration drain_backpressure_policy=$drain_backpressure_policy image_mode=$image_mode"
@@ -402,6 +404,8 @@ remote_run_benchmark() {
     REEF_BENCHMARK_ARENA_TICK_INTERVAL_MS="$arena_tick_interval_ms" \
     REEF_BENCHMARK_ARENA_WARMUP_SECONDS="$arena_warmup_seconds" \
     REEF_BENCHMARK_ARENA_HEALTH_SAMPLE_INTERVAL_MS="$arena_health_sample_interval_ms" \
+    REEF_BENCHMARK_ARENA_MODE="$arena_mode" \
+    REEF_BENCHMARK_ARENA_SCORING_POLICY_VERSION="$arena_scoring_policy_version" \
     REEF_BENCHMARK_STAGE_LOG_TAIL="$stage_log_tail" \
     REEF_BENCHMARK_IMAGE_MODE="$image_mode" \
     STREAM_ACK_PROJECTOR_0_PARTITIONS="${STREAM_ACK_PROJECTOR_0_PARTITIONS:-}" \
@@ -519,6 +523,7 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   arena_report="$artifact_dir/arena-local-tick-run.json"
+  arena_summary="$artifact_dir/arena-local-tick-run.summary.json"
   arena_persisted_report="$artifact_dir/arena-local-tick-run.persisted.json"
   arena_export="$artifact_dir/arena-export.json"
   arena_command_timeout_ms="${REEF_BENCHMARK_ARENA_COMMAND_TIMEOUT_MS:-3000}"
@@ -527,6 +532,8 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   export MARKET_DATA_PROJECTOR_ENABLED="${MARKET_DATA_PROJECTOR_ENABLED:-true}"
   export ORDER_LIFECYCLE_PROJECTOR_POLL_MS="${ORDER_LIFECYCLE_PROJECTOR_POLL_MS:-100}"
   export MARKET_DATA_PROJECTOR_POLL_MS="${MARKET_DATA_PROJECTOR_POLL_MS:-100}"
+  export ADMIN_API_TOKEN="${ADMIN_API_TOKEN:-local-admin}"
+  export ARENA_ADMIN_API_TOKEN="${ARENA_ADMIN_API_TOKEN:-local-arena}"
 
   if ! command -v bun >/dev/null 2>&1; then
     run_stage install-bun curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
@@ -543,6 +550,7 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --run-id="$REEF_BENCHMARK_RUN_ID" \
     --compartment=ses \
     --submit-mode=live \
+    --mode="$REEF_BENCHMARK_ARENA_MODE" \
     --venue-url=http://127.0.0.1:8080 \
     --arena-admin-url=http://127.0.0.1:8080 \
     --seed-reference \
@@ -552,10 +560,15 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --health-sample-interval-ms="$REEF_BENCHMARK_ARENA_HEALTH_SAMPLE_INTERVAL_MS" \
     --command-timeout-ms="$arena_command_timeout_ms" \
     --command-wait-mode="${REEF_BENCHMARK_ARENA_COMMAND_WAIT_MODE:-accepted}" \
+    ${REEF_BENCHMARK_ARENA_SCORING_POLICY_VERSION:+--scoring-policy-version=$REEF_BENCHMARK_ARENA_SCORING_POLICY_VERSION} \
     --pace-ticks \
+    --report-shape=compact \
     --projection-drain-timeout-ms=30000 \
     --require-projection-drain \
     --out="$arena_report"
+  run_stage arena-hardening-summary bun scripts/dev/arena-local-hardening-run.mjs \
+    --input-report="$arena_report" \
+    --summary-out="$arena_summary"
   run_stage arena-persist-report-local bun scripts/dev/arena-persist-report-local.mjs \
     --report="$arena_report" \
     --out="$arena_persisted_report"

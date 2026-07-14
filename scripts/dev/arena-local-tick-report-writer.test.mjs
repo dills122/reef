@@ -9,6 +9,7 @@ const dir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-report-writer-"));
 const reportPath = join(dir, "arena-local-tick-run.json");
 const compactReportPath = join(dir, "arena-local-tick-run-compact.json");
 const pacedReportPath = join(dir, "arena-local-tick-run-paced.json");
+const scoreV1ReportPath = join(dir, "arena-local-tick-run-score-v1.json");
 
 const result = spawnSync(
   "bun",
@@ -184,5 +185,33 @@ assert.equal(pacedReport.pacingSummary.totalSleepMs >= 700, true);
 assert.equal(pacedReport.pacingSummary.totalSleepMs <= 1000, true);
 assert.equal(pacedWallElapsedMs >= 700, true);
 assert.equal(pacedWallElapsedMs < 2500, true);
+
+const scoreV1Result = spawnSync(
+  "bun",
+  [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=1",
+    "--tick-interval-ms=500",
+    "--scoring-policy-version=score-v1",
+    "--report-shape=compact",
+    `--out=${scoreV1ReportPath}`,
+  ],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+
+assert.equal(scoreV1Result.status, 0, `${scoreV1Result.stdout}\n${scoreV1Result.stderr}`);
+const scoreV1Report = JSON.parse(readFileSync(scoreV1ReportPath, "utf8"));
+assert.equal(scoreV1Report.mode.scoringPolicyVersion, "score-v1");
+assert.equal(scoreV1Report.policyEnvelope.scoringPolicyVersion, "score-v1");
+assert.equal(scoreV1Report.scoringAssumptions.pnl.status, "ranked-input");
+assert.equal(scoreV1Report.scoringCalibration.mode, "public-score-v1-with-shadow-calibration");
+assert.equal(scoreV1Report.scoringCalibration.dataQuality.publicScoreUnchanged, false);
+const scoreV1Competitor = scoreV1Report.botResults.find((entry) => entry.botId === "custom-technical-indicator");
+assert.equal(scoreV1Competitor.scoreBreakdown.scoringMode, "public-score-v1");
+assert.equal(scoreV1Competitor.score, scoreV1Competitor.scoreBreakdown.publicScore);
+assert.equal(scoreV1Competitor.scoreBreakdown.componentDetails.publicScoreV1.formulaVersion, "score-v1-final-equity-risk-conduct");
+assert.equal(scoreV1Report.leaderboard[0].score, scoreV1Competitor.score);
 
 console.log("arena local tick report writer checks passed");

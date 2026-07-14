@@ -2642,7 +2642,7 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun apiV1CommandStatusRejectsScopeLessStreamReference() {
+    fun apiV1CommandStatusUsesStreamReferenceScope() {
         val publisher = RecordingStreamCommandPublisher()
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
@@ -2667,9 +2667,113 @@ class PlatformHttpServerBoundaryTest {
             )
 
             assertEquals(202, submit.status)
-            assertEquals(403, status.status)
-            assertContains(status.body, "\"code\":\"OBJECT_AUTH_REQUIRED\"")
-            assertContains(status.body, "command status scope is unavailable")
+            assertEquals(200, status.status, status.body)
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"clientId\":\"client-1\"")
+            assertContains(status.body, "\"participantId\":\"participant-1\"")
+            assertContains(status.body, "\"source\":\"stream_reference\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusUsesHeaderScopeForStreamCancelReference() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.StreamAck
+        )
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val extra = ""","instrumentId":"AAPL"${streamRoutingExtra()}"""
+            val cancel = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1",
+                    "Idempotency-Key" to "idem-status-stream-cancel-scope"
+                ),
+                body = validCancelBody("cmd-status-stream-cancel-scope", "trace-status-stream-cancel-scope", "ord-status-stream-cancel-scope", extra = extra)
+            )
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-stream-cancel-scope",
+                headers = apiReadHeaders()
+            )
+
+            assertEquals(202, cancel.status)
+            assertEquals(200, status.status, status.body)
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"commandType\":\"CancelOrder\"")
+            assertContains(status.body, "\"participantId\":\"participant-1\"")
+            assertContains(status.body, "\"source\":\"stream_reference\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusUsesStreamReferenceScopeForCanonicalCancelOutcome() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.materializeVenueEventBatch(
+            venueEventBatch(
+                batchId = "batch-status-stream-cancel-canonical",
+                commandId = "cmd-status-stream-cancel-canonical",
+                resultStatus = "accepted",
+                commandType = "CancelOrder",
+                orderId = "ord-status-stream-cancel-canonical",
+                resultPayloadJson = """{"resultType":"accepted","acceptedOrder":null,"commandId":"cmd-status-stream-cancel-canonical","orderId":"ord-status-stream-cancel-canonical"}"""
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore().also { intake ->
+                val envelope = when (val envelopeResult = StreamCommandEnvelopeBuilder.fromRequest(
+                    clientId = "client-1",
+                    participantId = "participant-1",
+                    route = "/api/v1/orders/cancel",
+                    idempotencyKey = "idem-status-stream-cancel-canonical",
+                    body = validCancelBody(
+                        "cmd-status-stream-cancel-canonical",
+                        "trace-status-stream-cancel-canonical",
+                        "ord-status-stream-cancel-canonical",
+                        extra = ""","instrumentId":"AAPL"${streamRoutingExtra()}"""
+                    )
+                )) {
+                    is EitherBoundaryError.Envelope -> envelopeResult.envelope
+                    is EitherBoundaryError.Error -> error(envelopeResult.error.message)
+                }
+                val reference = envelope.reference("REEF_COMMANDS", streamSequence = 7001)
+                assertTrue(intake.reserve(envelope, reference) is StreamCommandReservation.Reserved)
+                assertTrue(intake.markPublished(envelope.scope, envelope.idempotencyKey, 7001))
+            },
+            streamCommandPublisher = RecordingStreamCommandPublisher(),
+            runtimePersistence = persistence
+        )
+        try {
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-stream-cancel-canonical",
+                headers = apiReadHeaders()
+            )
+
+            assertEquals(200, status.status, status.body)
+            assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"commandType\":\"CancelOrder\"")
+            assertContains(status.body, "\"canonicalMaterialized\":true")
+            assertContains(status.body, "\"participantId\":\"participant-1\"")
+            assertContains(status.body, "\"clientId\":\"client-1\"")
         } finally {
             server.stop(0)
         }
@@ -5601,7 +5705,7 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun streamAckCommandStatusFallsBackToStreamReferenceBeforeMaterialization() {
+    fun streamAckCommandStatusReturnsScopedStreamReferenceBeforeMaterialization() {
         val publisher = RecordingStreamCommandPublisher()
         val server = testServerWithGateway(
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
@@ -5627,9 +5731,11 @@ class PlatformHttpServerBoundaryTest {
                 headers = apiReadHeaders()
             )
 
-            assertEquals(403, status.status)
-            assertContains(status.body, "\"code\":\"OBJECT_AUTH_REQUIRED\"")
-            assertContains(status.body, "command status scope is unavailable")
+            assertEquals(200, status.status, status.body)
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
+            assertContains(status.body, "\"participantId\":\"participant-1\"")
+            assertContains(status.body, "\"source\":\"stream_reference\"")
         } finally {
             server.stop(0)
         }
@@ -6774,12 +6880,15 @@ class PlatformHttpServerBoundaryTest {
         batchId: String,
         commandId: String,
         resultStatus: String,
-        rejectCode: String = ""
+        rejectCode: String = "",
+        commandType: String = "SubmitOrder",
+        orderId: String = "ord-$commandId",
+        resultPayloadJson: String? = null
     ): VenueEventBatchFact {
-        val resultPayload = if (resultStatus == "rejected") {
-            """{"rejected":{"code":"$rejectCode","participantId":"participant-1","orderId":"ord-$commandId"}}"""
+        val resultPayload = resultPayloadJson ?: if (resultStatus == "rejected") {
+            """{"rejected":{"code":"$rejectCode","participantId":"participant-1","orderId":"$orderId"}}"""
         } else {
-            """{"accepted":{"eventId":"evt-$commandId","participantId":"participant-1","orderId":"ord-$commandId"}}"""
+            """{"accepted":{"eventId":"evt-$commandId","participantId":"participant-1","orderId":"$orderId"}}"""
         }
         return VenueEventBatchFact(
             batchId = batchId,
@@ -6795,12 +6904,12 @@ class PlatformHttpServerBoundaryTest {
             outcomes = listOf(
                 VenueCommandOutcomeFact(
                     commandId = commandId,
-                    commandType = "SubmitOrder",
+                    commandType = commandType,
                     streamSequence = 7001,
                     deliveredCount = 1,
                     payloadHash = "payload-hash-$commandId",
                     instrumentId = "AAPL",
-                    orderId = "ord-$commandId",
+                    orderId = orderId,
                     resultStatus = resultStatus,
                     rejectCode = rejectCode,
                     resultPayloadJson = resultPayload

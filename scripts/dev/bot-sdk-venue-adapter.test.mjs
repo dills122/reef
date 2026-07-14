@@ -172,6 +172,28 @@ assert.equal(expandedCancelAll.length, 1);
 assert.equal(expandedCancelAll[0].type, "cancel_order");
 assert.equal(expandedCancelAll[0].order.orderId, "open-aapl");
 
+const cancelCommand = toVenueCommandRequestsV1(expandedCancelAll, {
+  scenarioId: "scenario-1",
+  runId: "run-1",
+  runKind: "scenario",
+  venueSessionId: "session-1",
+  actorId: "bot-actor-1",
+  participantId: "participant-1",
+  accountId: "account-1",
+  botId: "simple-market-maker",
+  botVersion: "1.0.0",
+  correlationId: "corr-1",
+  occurredAt: "2026-07-04T14:30:00.000Z",
+  commandIdPrefix: "cmd-simple-mm-cancel",
+  traceIdPrefix: "trace-simple-mm-cancel",
+  idempotencyKeyPrefix: "idem-simple-mm-cancel",
+});
+assert.equal(cancelCommand.ok, true);
+assert.equal(cancelCommand.value[0].route, "/api/v1/orders/cancel");
+assert.equal(cancelCommand.value[0].headers["X-Participant-Id"], "participant-1");
+assert.equal(Object.hasOwn(cancelCommand.value[0].body, "participantId"), false);
+assert.equal(Object.hasOwn(cancelCommand.value[0].body, "accountId"), false);
+
 const badSubmitPrice = toVenueCommandRequestsV1(
   [{ type: "submit_limit", order: { instrumentId: "AAPL", side: "BUY", quantity: 10, limitPrice: Number.NaN } }],
   {

@@ -177,7 +177,7 @@ The current gaps are:
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
-- Bot Arena hosted/backbone gate is not locked yet: local persisted gates are proven, but always-on backbone OpenBao/registry/export/backup flow still needs a named hosted smoke before public submission claims
+- Bot Arena score-v1 correctness gate is locked locally and on DigitalOcean: local reset-to-reset `5m` proof passed and hosted run `do-benchmark-20260714T010045Z` passed the `15m` arena artifact gate. The active follow-up is hosted arena pacing lag cleanup, not score-v1 correctness.
 
 ## Active Execution Ladder
 
@@ -221,13 +221,19 @@ The current gaps are:
    - `packages/bot-sdk/src/live-client.ts` wires `marketData`/`historical`/`orders.current()`/`history()` plus data availability to real HTTP instead of fixtures; `runner.ts`, `strategy-runner.ts`, and `hosted-runner.ts` accept those clients through opt-in `readClients` while fixture mode remains the default. The hosted artifact CLI exposes this as `--read-mode=fixture|live`; live mode records `dataAvailability` in the hosted report. The venue adapter converts bot dollar-denominated `limitPrice` values to fixed-point nanos before submit/modify commands.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
-5. Lock first lifecycle scenarios.
+5. Clean up hosted arena pacing lag.
+   - Current score-v1 correctness evidence is sufficient for promotion: local reset-to-reset proof and hosted `15m` run `do-benchmark-20260714T010045Z` both passed with zero command accounting gaps, timeouts, rejects, failed ticks, or freezes; hosted projection lag was `0` and public score-v1 mismatch count was `0`.
+   - Problem statement: the hosted `900s` arena schedule took `1017s` on a `c-8` source-built DigitalOcean worker, with final completion lag near `107s` and total scheduler sleep `0`.
+   - Acceptance criteria: rerun the hosted arena profile with hardening `pass`, stable score-v1 leaderboard and execution summary, projection lag `0`, zero command accounting gaps/timeouts/rejects/freezes, and `finalCompletionLagMs < 30000`.
+   - Test one knob at a time: Docker Hub image mode for arena, c-16 worker, projection-drain cadence, command-status/projection-drain polling intervals, and remote arena-stage profiling.
+
+6. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
    - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures now encode the target scenario shape; they are locked only after live replay, lifecycle, visibility, trade-tape, and settlement-fact assertions pass against platform facts.
    - Assert ordered events, final state, replay consistency, and visible timeline causation.
 
-6. Start post-trade expansion.
+7. Start post-trade expansion.
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
    - First allowed slice is P2-only settlement exception facts from [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md): obligation, cash-leg break, manual repair, resolved exception, and transition tests.
    - Full allocation, confirmation, clearing, account-ledger mutation, and UI work stay deferred until P2-only facts prove causation.

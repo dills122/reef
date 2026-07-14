@@ -171,6 +171,7 @@ private fun envelope(sequence: Long, config: StreamPublishBenchConfig, warmup: B
         runId = config.runId,
         venueSessionId = config.venueSessionId,
         instrumentId = instrument,
+        participantId = "bench-participant",
         orderId = "ord-$sequence",
         clientOrderId = "client-ord-$sequence",
         actorId = "bench-actor",
@@ -186,7 +187,7 @@ private fun envelope(sequence: Long, config: StreamPublishBenchConfig, warmup: B
 }
 
 private fun payloadJson(commandId: String, sequence: Long, config: StreamPublishBenchConfig, instrument: String): String {
-    val base = """{"commandId":"$commandId","runId":"${config.runId}","venueSessionId":"${config.venueSessionId}","instrumentId":"$instrument","orderId":"ord-$sequence","actorId":"bench-actor","side":"BUY","quantity":100,"priceNanos":101000000000"""
+    val base = """{"commandId":"$commandId","runId":"${config.runId}","venueSessionId":"${config.venueSessionId}","instrumentId":"$instrument","participantId":"bench-participant","orderId":"ord-$sequence","actorId":"bench-actor","side":"BUY","quantity":100,"priceNanos":101000000000"""
     val fillerSize = max(0, config.payloadBytes - base.length - 14)
     val filler = if (fillerSize == 0) "" else ""","filler":"${"x".repeat(fillerSize)}""""
     return "$base$filler}"

@@ -27,7 +27,7 @@
   "visibleDataPolicyVersion": "visible-data-v0",
   "actionPolicyVersion": "arena-action-v0",
   "riskPolicyVersion": "arena-risk-v0",
-  "scoringPolicyVersion": "score-v0",
+  "scoringPolicyVersion": "score-v1",
   "economicPolicyVersion": "economic-v0",
   "liquidityPolicyVersion": "liquidity-v0",
   "backgroundFlowPolicyVersion": "background-flow-v0",

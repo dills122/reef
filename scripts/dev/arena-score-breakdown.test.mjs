@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  attachScoreBreakdowns,
   buildScoreBreakdown,
   buildScoreContext,
   summarizeScoreCalibration,
@@ -79,6 +80,8 @@ assert.equal(eligibleBreakdown.diagnostics.inventoryExposureRatio, 0.1);
 assert.equal(eligibleBreakdown.diagnostics.inventoryConcentration, 0.5);
 assert.equal(eligibleBreakdown.componentDetails.risk.inventoryExposurePenalty, 1_500);
 assert.equal(eligibleBreakdown.componentDetails.marketInteraction.fillEfficiencyScore, 2_500);
+assert.equal(eligibleBreakdown.componentDetails.publicScoreV1.formulaVersion, "score-v1-final-equity-risk-conduct");
+assert.equal(eligibleBreakdown.componentDetails.publicScoreV1.inventoryRiskPenalty, 1_502);
 
 const diagnosticOnly = buildScoreBreakdown({
   ...eligible,
@@ -109,5 +112,35 @@ assert.deepEqual(calibration.difficultyContext.npcDifficultyBuckets, ["benign-no
 assert.equal(calibration.scoreDistribution.shadowScore.avg, 1_006_130);
 assert.equal(calibration.scoreDistribution.components.marketInteraction.max, 7_025);
 assert.equal(calibration.scoreDistribution.diagnostics.fillRatio.avg, 0.5);
+
+const scoreV0Attached = attachScoreBreakdowns([eligible], context);
+assert.equal(scoreV0Attached[0].score, eligible.score);
+assert.equal(scoreV0Attached[0].scoreBreakdown.publicScore, eligible.score);
+assert.equal(scoreV0Attached[0].scoreBreakdown.scoringMode, "shadow-report-only");
+
+const scoreV1Context = buildScoreContext({
+  scoringPolicyVersion: "score-v1",
+  npcDifficultyBuckets: ["benign-noise"],
+});
+const scoreV1Breakdown = buildScoreBreakdown(eligible, scoreV1Context);
+assert.equal(scoreV1Breakdown.scoringMode, "public-score-v1");
+assert.equal(scoreV1Breakdown.publicScore, 998_548);
+assert.equal(scoreV1Breakdown.shadowScore, 1_005_573);
+assert.equal(scoreV1Breakdown.componentDetails.publicScoreV1.rawFinalEquity, 1_000_050);
+assert.equal(scoreV1Breakdown.componentDetails.publicScoreV1.pnlComponent, 50);
+assert.equal(scoreV1Breakdown.componentDetails.publicScoreV1.inventoryRiskPenalty, 1_502);
+assert.equal(scoreV1Breakdown.componentDetails.publicScoreV1.commandQualityPenalty, 0);
+assert.equal(scoreV1Breakdown.componentDetails.publicScoreV1.enforcementPenalty, 0);
+
+const scoreV1Attached = attachScoreBreakdowns([eligible], scoreV1Context);
+assert.equal(scoreV1Attached[0].score, 998_548);
+assert.equal(scoreV1Attached[0].scoreBreakdown.publicScore, 998_548);
+assert.equal(scoreV1Attached[0].finalEquityDiagnostic, 1_000_050);
+
+const scoreV1Calibration = summarizeScoreCalibration(scoreV1Attached);
+assert.equal(scoreV1Calibration.mode, "public-score-v1-with-shadow-calibration");
+assert.deepEqual(scoreV1Calibration.dataQuality.flags, ["low-eligible-competitor-count"]);
+assert.equal(scoreV1Calibration.dataQuality.publicScoreMismatchCount, 0);
+assert.equal(scoreV1Calibration.dataQuality.publicScoreUnchanged, false);
 
 console.log("arena score breakdown checks passed");

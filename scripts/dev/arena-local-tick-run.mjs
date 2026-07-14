@@ -51,6 +51,7 @@ const config = {
   tickIntervalMs: numberOption("--tick-interval-ms", 0),
   warmupSeconds: numberOption("--warmup-seconds", 0),
   healthSampleIntervalMs: numberOption("--health-sample-interval-ms", 0),
+  scoringPolicyVersion: stringOption("--scoring-policy-version", ""),
   requireProjectionDrain: args.includes("--require-projection-drain"),
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
@@ -81,6 +82,9 @@ if (config.persistResults && config.arenaAdminUrl.length === 0) {
 }
 
 const mode = readJson(config.mode);
+if (config.scoringPolicyVersion.length > 0) {
+  mode.scoringPolicyVersion = config.scoringPolicyVersion;
+}
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
 const actorProfileCatalog = readJson(mode.actorProfileCatalogPath ?? "packages/scenario-definitions/arena/actor-profiles.v1.json");
@@ -373,12 +377,13 @@ async function runSessionTick(session, tick, tickIndex, offsetMs) {
       submission: emptySubmission("policy_violation"),
     };
   }
+  const submission = await submitVenueCommands(tickResult.venueCommands ?? []);
   const tickReport = {
     ...tickResult,
     tick,
     schedulingClass: session.schedulingClass,
     offsetMs,
-    submission: await submitVenueCommands(tickResult.venueCommands ?? []),
+    submission: await drainProjectionsAfterSubmission(submission),
   };
   if (tickIndex === 0 || (tickIndex + 1) % 10 === 0 || tickIndex + 1 === session.scheduled.length) {
     console.log(`arena bot progress ${session.bot.botId}: tick=${tickIndex + 1}/${session.scheduled.length} commands=${tickReport.submission?.submitted ?? 0} timedOut=${tickReport.submission?.timedOut ?? 0}`);
@@ -641,25 +646,32 @@ function displayNameForBot(bot) {
 }
 
 function scoringAssumptions() {
+  const scoreV1Enabled = mode.scoringPolicyVersion === "score-v1";
   return {
     schemaVersion: "reef.arena.scoringAssumptions.v0",
     scoringPolicyVersion: mode.scoringPolicyVersion,
     npcDifficultyMode: "leaderboard-partition-plus-shadow-multiplier",
     npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     economicPolicyLock: "run-scoped; final scoring must use the report policyEnvelopeHash",
-    scoreBasis: "public score remains participation-and-policy-compliance; scoreBreakdown.shadowScore reports score-v0 tuning inputs",
+    scoreBasis: scoreV1Enabled
+      ? "public score uses score-v1 final-equity minus inventory-risk, command-quality, and enforcement penalties; shadowScore remains calibration-only"
+      : "public score remains participation-and-policy-compliance; scoreBreakdown.shadowScore reports score-v0 tuning inputs",
     leaderboardScope: "score-eligible public competitor bots only",
     houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
     pnl: {
-      status: "diagnostic-not-ranked",
-      basis: "zero-fee cash/inventory diagnostics from participant-scoped fill readback; public score remains participation/policy-compliance",
+      status: scoreV1Enabled ? "ranked-input" : "diagnostic-not-ranked",
+      basis: scoreV1Enabled
+        ? "zero-fee cash plus marked inventory from participant-scoped fill readback is the headline public score input"
+        : "zero-fee cash/inventory diagnostics from participant-scoped fill readback; public score remains participation/policy-compliance",
       markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
       fees: "zero placeholder until maker/taker fee policy is configured",
     },
     tradingMetrics: {
       status: "command-mix plus execution diagnostics v0",
       source: "runner pre-submit venue commands, command status summaries, and participant-scoped order-fill readback",
-      fillsAndExecutions: "scoreBreakdown.shadowScore uses fill ratio, completion rate, and execution notional as report-only tuning inputs",
+      fillsAndExecutions: scoreV1Enabled
+        ? "score-v1 uses PnL/final equity and penalties; fill ratio, completion rate, and execution notional remain shadow calibration inputs"
+        : "scoreBreakdown.shadowScore uses fill ratio, completion rate, and execution notional as report-only tuning inputs",
     },
   };
 }
@@ -1869,6 +1881,27 @@ async function waitForDataAvailability(baseUrl) {
     throw new Error(`projection drain requirement failed: ${JSON.stringify(latest.body)}`);
   }
   return latest;
+}
+
+async function drainProjectionsAfterSubmission(submission) {
+  if (
+    config.submitMode !== "live" ||
+    !config.requireProjectionDrain ||
+    Number(submission?.submitted ?? 0) === 0
+  ) {
+    return submission;
+  }
+  const startedAt = performance.now();
+  const availability = await waitForDataAvailability(config.venueUrl.replace(/\/$/, ""));
+  return {
+    ...submission,
+    projectionDrain: {
+      required: true,
+      drained: availabilityDrained(availability),
+      statusCode: availability.statusCode,
+      elapsedMs: performance.now() - startedAt,
+    },
+  };
 }
 
 function availabilityDrained(availability) {

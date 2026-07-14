@@ -1,10 +1,19 @@
 export const SHADOW_SCORE_FORMULA_VERSION = "shadow-score-v1";
+export const PUBLIC_SCORE_FORMULA_VERSION = "score-v1-final-equity-risk-conduct";
 
 export function attachScoreBreakdowns(botResults, context) {
-  return botResults.map((result) => ({
-    ...result,
-    scoreBreakdown: buildScoreBreakdown(result, context),
-  }));
+  return botResults.map((result) => {
+    const scoreBreakdown = buildScoreBreakdown(result, context);
+    const publicScore = context.publicScoringEnabled && scoreBreakdown.scoreEligible === true
+      ? scoreBreakdown.publicScore
+      : result.score;
+    return {
+      ...result,
+      score: publicScore,
+      finalEquityDiagnostic: scoreBreakdown.diagnostics?.finalEquity ?? null,
+      scoreBreakdown,
+    };
+  });
 }
 
 export function buildScoreContext({ scoringPolicyVersion, npcDifficultyBuckets = [] } = {}) {
@@ -15,6 +24,8 @@ export function buildScoreContext({ scoringPolicyVersion, npcDifficultyBuckets =
     npcDifficultyBuckets,
     difficultyMultiplier: Number(multiplier.toFixed(4)),
     formulaVersion: SHADOW_SCORE_FORMULA_VERSION,
+    publicScoringEnabled: scoringPolicyVersion === "score-v1",
+    publicFormulaVersion: PUBLIC_SCORE_FORMULA_VERSION,
   };
 }
 
@@ -30,6 +41,7 @@ export function buildScoreBreakdown(result, context = buildScoreContext()) {
   const risk = riskComponent(result, inputs);
   const conduct = conductComponent(result);
   const marketInteraction = marketInteractionComponent(result, inputs);
+  const publicFormula = publicScoreV1(result, context, inputs, risk, conduct);
   const components = {
     baseline: context.baseline,
     equity: equity.score,
@@ -48,9 +60,9 @@ export function buildScoreBreakdown(result, context = buildScoreContext()) {
     scoreEligible: true,
     actorClass: result.actorClass,
     scoreEffect,
-    publicScore: result.score,
+    publicScore: context.publicScoringEnabled ? publicFormula.score : result.score,
     shadowScore,
-    scoringMode: "shadow-report-only",
+    scoringMode: context.publicScoringEnabled ? "public-score-v1" : "shadow-report-only",
     components,
     componentDetails: {
       equity: equity.details,
@@ -62,9 +74,12 @@ export function buildScoreBreakdown(result, context = buildScoreContext()) {
         variableScoreBeforeDifficulty: variableBeforeDifficulty,
         appliedScore: components.difficulty,
       },
+      publicScoreV1: publicFormula.details,
     },
     diagnostics: scoreDiagnostics(result, context, inputs, variableBeforeDifficulty),
-    notes: "shadowScore is report-only; public leaderboard still uses top-level score",
+    notes: context.publicScoringEnabled
+      ? "publicScore uses score-v1 final-equity minus risk/conduct penalties; shadowScore remains calibration-only"
+      : "shadowScore is report-only; public leaderboard still uses top-level score",
   };
 }
 
@@ -72,7 +87,8 @@ export function summarizeScoreCalibration(botResults) {
   const results = Array.isArray(botResults) ? botResults : [];
   const eligible = results.filter((result) => result.scoreBreakdown?.scoreEligible === true);
   const scoreBreakdowns = eligible.map((result) => result.scoreBreakdown);
-  const firstBreakdown = results.find((result) => result.scoreBreakdown !== undefined)?.scoreBreakdown;
+  const firstEligibleBreakdown = scoreBreakdowns[0];
+  const firstBreakdown = firstEligibleBreakdown ?? results.find((result) => result.scoreBreakdown !== undefined)?.scoreBreakdown;
   const actorCounts = {};
   const scoreEffectCounts = {};
   for (const result of results) {
@@ -91,13 +107,15 @@ export function summarizeScoreCalibration(botResults) {
   if (eligible.length > 0 && fillCount === 0) flags.push("no-eligible-fills");
   if (eligible.length > 0 && pnlAvailableCount === 0) flags.push("no-pnl-attribution");
   if (pnlAvailableCount > 0 && pnlAvailableCount < eligible.length) flags.push("partial-pnl-attribution");
-  if (publicScoreMismatchCount > 0) flags.push("public-score-mismatch");
+  if (firstBreakdown?.scoringMode !== "public-score-v1" && publicScoreMismatchCount > 0) flags.push("public-score-mismatch");
 
   return {
     schemaVersion: "reef.arena.scoringCalibration.v1",
     formulaVersion: firstBreakdown?.formulaVersion ?? SHADOW_SCORE_FORMULA_VERSION,
     scoringPolicyVersion: firstBreakdown?.scoringPolicyVersion ?? "",
-    mode: "report-only-shadow-score-calibration",
+    mode: firstBreakdown?.scoringMode === "public-score-v1"
+      ? "public-score-v1-with-shadow-calibration"
+      : "report-only-shadow-score-calibration",
     eligibility: {
       totalBots: results.length,
       eligibleCompetitors: eligible.length,
@@ -132,7 +150,7 @@ export function summarizeScoreCalibration(botResults) {
       fillCount,
       pnlAvailableCount,
       publicScoreMismatchCount,
-      publicScoreUnchanged: publicScoreMismatchCount === 0,
+      publicScoreUnchanged: firstBreakdown?.scoringMode === "public-score-v1" ? false : publicScoreMismatchCount === 0,
     },
   };
 }
@@ -167,6 +185,51 @@ function nonScoringBreakdown(result, context, scoreEffect) {
     notes: scoreEffect === "difficulty-bucket"
       ? "NPC profile contributes difficulty context but is not ranked"
       : "liquidity/house actor diagnostics do not create point gains or losses",
+  };
+}
+
+function publicScoreV1(result, context, inputs, risk, conduct) {
+  const finalEquity = nullableNumber(result.tradingMetrics?.pnl?.finalEquityDiagnostic);
+  const totalPnl = nullableNumber(result.tradingMetrics?.pnl?.total);
+  const fallbackFinalEquity = totalPnl === null ? nullableNumber(result.score) : context.baseline + totalPnl;
+  const rawFinalEquity = finalEquity ?? fallbackFinalEquity ?? context.baseline;
+  const pnlComponent = Math.round(clamp(rawFinalEquity - context.baseline, -100_000, 100_000));
+  const inventoryRiskPenalty = Math.min(
+    100_000,
+    numberValue(risk.details.inventorySizePenalty)
+      + numberValue(risk.details.inventoryExposurePenalty)
+      + numberValue(risk.details.concentrationPenalty),
+  );
+  const commandQualityPenalty = Math.min(
+    100_000,
+    numberValue(conduct.details.timeoutPenalty)
+      + numberValue(conduct.details.invalidPenalty)
+      + numberValue(conduct.details.cancelPenalty),
+  );
+  const enforcementPenalty = Math.min(
+    250_000,
+    numberValue(result.freezeCount) * 250_000 + numberValue(result.operationalPauseCount) * 5_000,
+  );
+  const score = Math.max(
+    0,
+    Math.round(context.baseline + pnlComponent - inventoryRiskPenalty - commandQualityPenalty - enforcementPenalty),
+  );
+  return {
+    score,
+    details: {
+      formulaVersion: context.publicFormulaVersion ?? PUBLIC_SCORE_FORMULA_VERSION,
+      baseline: context.baseline,
+      finalEquitySource: finalEquity !== null ? "tradingMetrics.pnl.finalEquityDiagnostic" : totalPnl !== null ? "baseline-plus-pnl" : "legacy-score-fallback",
+      rawFinalEquity,
+      pnlComponent,
+      inventoryRiskPenalty,
+      commandQualityPenalty,
+      enforcementPenalty,
+      inventoryExposureRatio: inputs.inventoryExposureRatio,
+      cancelReplaceRatio: numberValue(result.conductMetrics?.cancelReplaceRatio),
+      timeoutRate: numberValue(result.conductMetrics?.timeoutRate),
+      invalidIntentRate: numberValue(result.conductMetrics?.invalidIntentRate),
+    },
   };
 }
 
