@@ -107,6 +107,14 @@ make dev-smoke-bot-sdk-hosted-ses-container
 
 That wrapper runs the same SES E2E in an `oven/bun` container with no network, a read-only repository mount, tmpfs `/tmp`, and CPU, memory, and PID caps. It assumes dependencies have already been installed on the host or baked into the image.
 
+For the live worker/container path, run:
+
+```bash
+make dev-smoke-bot-sdk-hosted-live-container
+```
+
+That smoke builds the simple market maker artifact, starts a local HTTP venue stub, and runs the hosted worker inside Docker with `--read-mode=live`, `--isolation=container`, and `--container-network=bridge`. It skips cleanly when Docker is unavailable. When Docker is running, host reachability and live read/submit behavior are enforced.
+
 For arena local tick runs, combine SES with an outer container worker boundary:
 
 ```bash

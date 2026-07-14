@@ -19,7 +19,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-hardening-bot-arena-local
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
-.PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check
+.PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-smoke-bot-sdk-hosted-live-container dev-venue-event-replay-check
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
@@ -111,6 +111,7 @@ test-bot-sdk:
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
+	node --check scripts/dev/bot-sdk-hosted-live-container-smoke.mjs
 	node --check scripts/dev/arena-runner-isolation-failure.test.mjs
 	node --check scripts/dev/arena-ingest-bot-run-result.mjs
 	node --check scripts/dev/arena-persist-report-local.mjs
@@ -329,6 +330,10 @@ dev-smoke-bot-sdk-live:
 dev-smoke-bot-sdk-hosted-ses-container:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
+
+dev-smoke-bot-sdk-hosted-live-container:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-live-container-smoke.mjs
 
 dev-venue-event-replay-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
