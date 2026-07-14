@@ -155,6 +155,8 @@ bun scripts/dev/bot-sdk-runtime-config.test.mjs
 
 `bot-sdk-test-bot.mjs` is the pre-merge hosted simulation gate. It builds the hosted artifact, scans approved imports, runs the bot through SES against the fixture market, and exits nonzero when the bot should be marked `do_not_merge`.
 
+Use `--isolation=container` when testing untrusted artifacts locally. That runs the SES worker in Docker with no network, a read-only repository mount, tmpfs `/tmp`, and CPU, memory, and PID caps.
+
 Before submitting a bot:
 
 - run `bot-sdk-test-bot.mjs` against the intended fixture

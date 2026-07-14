@@ -106,7 +106,8 @@ jobs:
           BOT_NAME: ${{ needs.detect-flow.outputs.bot-name }}
         run: |
           bun scripts/dev/bot-sdk-test-bot.mjs \
-            "bots/${BOT_NAME}/index.ts"
+            "bots/${BOT_NAME}/index.ts" \
+            --isolation=container
 
   # Off-convention PRs skip the pipeline above entirely (see detect-flow).
   # This job catches the case that would otherwise slip through silently:

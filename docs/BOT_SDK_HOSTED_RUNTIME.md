@@ -20,8 +20,10 @@ Implemented now:
 - action and data-call limit checks
 - proposed-action to venue-command mapping tests
 - typed hosted sandbox policy and source scanner
+- process worker isolation with sanitized environment, wall-time, and output caps
+- optional Docker worker isolation with no network, read-only repo mount, tmpfs `/tmp`, CPU, memory, and PID caps
 
-This is enough to reject obvious bad submissions and prove SDK shape. It is not enough to safely run arbitrary public code by itself.
+This is enough to reject obvious bad submissions and prove SDK shape. Container mode is the local hardening path for untrusted artifacts; it still needs production runner-host operational controls before arbitrary public code should run outside a controlled environment.
 
 ## Current Hosted Runner Slice
 
@@ -37,7 +39,7 @@ const { ReefBotV1 } = __reefBotSdk;
 
 They do not receive Reef transports, network clients, filesystem APIs, timers, child processes, worker threads, or ambient process access. The runner/orchestrator owns venue communication and injects only SDK capabilities.
 
-The hosted runner wraps loaded bot classes with host-owned execution guards. Current defaults are `1000ms` for lifecycle hooks and `1000ms` for each tick, overrideable through `executionLimits`. These guards catch async hangs and report `do_not_merge`; they do not replace worker/container CPU isolation for synchronous infinite loops.
+The hosted runner wraps loaded bot classes with host-owned execution guards. Current defaults are `1000ms` for lifecycle hooks and `1000ms` for each tick, overrideable through `executionLimits`. These guards catch async hangs and report `do_not_merge`; synchronous infinite loops require the worker or container parent to kill the process.
 
 ## Local Hosted Artifact Runner
 
@@ -48,6 +50,14 @@ bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-m
 ```
 
 Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible path and expects `globalThis.Compartment` to be available after SES lockdown/bootstrap. The unsafe VM flag is local-only test plumbing; it is not a hosted security boundary.
+
+Use `--isolation=worker` to execute the artifact through the SES worker process. Use `--isolation=container` to run that worker inside Docker:
+
+```bash
+bun scripts/dev/bot-sdk-hosted-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --isolation=container
+```
+
+The worker/container path supports fixture mode and live mode. In live mode, the worker process owns the venue HTTP transport and live read clients; bot code still only receives SDK context capabilities.
 
 Add `--venue-url=http://127.0.0.1:8080` to submit approved actions through the adapter-owned venue client, just like the deterministic runner and live smoke wrapper.
 
@@ -69,7 +79,7 @@ To run the pre-merge hosted simulation tester directly from a TypeScript bot ent
 bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicator-strategy-bot.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --summary-only
 ```
 
-The tester builds the artifact, applies source and final-artifact scanner gates, executes the bot through SES, and emits `approved_for_merge` or `do_not_merge`.
+The tester builds the artifact, applies source and final-artifact scanner gates, executes the bot through the SES worker, and emits `approved_for_merge` or `do_not_merge`. Add `--isolation=container` to run the same hosted simulation gate inside Docker.
 
 To run a built artifact through a separate hosted worker process:
 
@@ -79,6 +89,16 @@ bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js
 
 The worker process runs SES lockdown and the hosted scenario runner in a child process. The parent enforces a wall-clock timeout, output cap, and structured `do_not_merge` report for child failures. This catches synchronous hangs that in-process SES execution cannot interrupt.
 
+To run the same worker in Docker:
+
+```bash
+bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --isolation=container
+```
+
+The container runner uses `BOT_SDK_SES_CONTAINER_IMAGE` when set, otherwise `oven/bun:1.1.38`. Resource defaults are `BOT_SDK_CONTAINER_CPUS=1`, `BOT_SDK_CONTAINER_MEMORY=256m`, and `BOT_SDK_CONTAINER_PIDS_LIMIT=64`. When a worktree does not have its own `node_modules`, set `REEF_NODE_MODULES_DIR` or `NODE_PATH` to an existing dependency directory; the container runner mounts that directory read-only at `/node_modules`.
+
+Container networking defaults to `none` for fixture runs and `bridge` when `--venue-url` is passed to the worker runner. `--container-network` is intentionally limited to `none`, `bridge`, and `host`; arbitrary Docker network names are rejected before container startup. For local live runs, use a venue URL reachable from the container, such as `host.docker.internal` on Docker Desktop, or pass `--container-network=host` where supported.
+
 For a server-shaped local smoke, run:
 
 ```bash
@@ -86,6 +106,30 @@ make dev-smoke-bot-sdk-hosted-ses-container
 ```
 
 That wrapper runs the same SES E2E in an `oven/bun` container with no network, a read-only repository mount, tmpfs `/tmp`, and CPU, memory, and PID caps. It assumes dependencies have already been installed on the host or baked into the image.
+
+For the live worker/container path, run:
+
+```bash
+make dev-smoke-bot-sdk-hosted-live-container
+```
+
+That smoke builds the simple market maker artifact, starts a local HTTP venue stub, and runs the hosted worker inside Docker with `--read-mode=live`, `--isolation=container`, and `--container-network=bridge`. It skips cleanly when Docker is unavailable. When Docker is running, host reachability and live read/submit behavior are enforced.
+
+For arena local tick runs, combine SES with an outer container worker boundary:
+
+```bash
+bun scripts/dev/arena-local-tick-run.mjs --compartment=ses --runner-isolation=container
+```
+
+In live submit mode, arena container workers use `--runner-container-network=bridge` by default so worker-owned live read clients can reach the venue. If `--venue-url` points at `127.0.0.1`, `localhost`, or `::1`, the worker read-client URL is rewritten to `host.docker.internal` for the container while host-side command submission keeps using the original venue URL. `--runner-container-network` accepts the same `none`, `bridge`, and `host` allowlist as hosted worker containers.
+
+Use `--runner-worker-scope=per-bot` when you want each arena bot loaded into a separate worker process/container instead of one shared runner. This costs more startup time, but narrows crash, output, and policy blast radius to one bot:
+
+```bash
+bun scripts/dev/arena-local-tick-run.mjs --compartment=ses --runner-isolation=container --runner-worker-scope=per-bot
+```
+
+Worker load/start/tick/stop failures are reported as arena enforcement events. A bot that trips the worker timeout, output limit, or container/process failure is frozen with `reasonCode: "runner_isolation_failure"` and a `runnerFailure` payload.
 
 ## Target Hosted Sandbox
 

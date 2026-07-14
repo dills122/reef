@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -11,13 +11,17 @@ const tickTimeoutMs = optionalNumberOption("--tick-timeout-ms");
 const lifecycleTimeoutMs = optionalNumberOption("--lifecycle-timeout-ms");
 const wallTimeoutMs = numberOption("--wall-timeout-ms", 5000);
 const maxOutputBytes = numberOption("--max-output-bytes", 1024 * 1024);
+const isolation = optionValue("--isolation") ?? "worker";
 const summaryOnly = args.includes("--summary-only");
 
 if (!botPathArg) {
   console.error(
-    "usage: bun scripts/dev/bot-sdk-test-bot.mjs <bot-file.ts> [fixture.json] [--summary-only] [--tick-timeout-ms=1000] [--lifecycle-timeout-ms=1000] [--wall-timeout-ms=5000] [--max-output-bytes=1048576]",
+    "usage: bun scripts/dev/bot-sdk-test-bot.mjs <bot-file.ts> [fixture.json] [--summary-only] [--isolation=worker|container] [--tick-timeout-ms=1000] [--lifecycle-timeout-ms=1000] [--wall-timeout-ms=5000] [--max-output-bytes=1048576]",
   );
   process.exit(2);
+}
+if (!["worker", "container"].includes(isolation)) {
+  throw new Error(`--isolation must be worker or container; got ${isolation}`);
 }
 
 const botPath = isAbsolute(botPathArg) ? botPathArg : resolve(repoRoot, botPathArg);
@@ -61,20 +65,7 @@ if (build.error || build.status !== 0) {
 
 const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-const source = readFileSync(artifactPath, "utf8");
-const executionLimits = {
-  ...(tickTimeoutMs === undefined ? {} : { tickTimeoutMs }),
-  ...(lifecycleTimeoutMs === undefined ? {} : { lifecycleTimeoutMs }),
-};
-const report = await runHostedWorker({
-  source,
-  fileName: basename(artifactPath),
-  fixture: {
-    ...fixture,
-    botId: fixture.botId ?? basename(botPath, ".ts"),
-  },
-  ...(Object.keys(executionLimits).length === 0 ? {} : { executionLimits }),
-});
+const report = runHostedArtifact(artifactPath, fixturePath);
 
 const summary = {
   approvalStatus: report.status === "completed" ? "approved_for_merge" : "do_not_merge",
@@ -85,6 +76,7 @@ const summary = {
     sourceHash: manifest.sourceHash,
     artifactHash: manifest.artifactHash,
     approvedPackages: manifest.approvedPackages ?? [],
+    isolation,
   },
   scenarioId: report.scenarioId,
   runId: report.runId,
@@ -133,74 +125,46 @@ function relativeToRepo(pathValue) {
   return pathValue.startsWith(repoRoot) ? pathValue.slice(repoRoot.length) : pathValue;
 }
 
-function runHostedWorker(payloadValue) {
-  return new Promise((resolve) => {
-    const child = spawn("bun", ["scripts/dev/bot-sdk-hosted-worker-child.mjs"], {
-      cwd: repoRoot,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    let outputBytes = 0;
-    let settled = false;
-    const timeout = setTimeout(() => {
-      finish(errorReport(payloadValue, "hosted_worker_timeout", `Hosted worker exceeded wall timeout ${wallTimeoutMs}ms.`));
-      child.kill("SIGKILL");
-    }, wallTimeoutMs);
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => appendOutput("stdout", chunk));
-    child.stderr.on("data", (chunk) => appendOutput("stderr", chunk));
-    child.on("error", (error) => finish(errorReport(payloadValue, "hosted_worker_spawn_failed", error.message)));
-    child.on("close", (code) => {
-      if (settled) return;
-      const parsed = parseLastJsonLine(stdout);
-      if (parsed !== undefined) {
-        finish(parsed);
-        return;
-      }
-      finish(errorReport(payloadValue, "hosted_worker_failed", `Hosted worker exited with code ${code ?? "unknown"}: ${stderr || stdout}`));
-    });
-    child.stdin.end(JSON.stringify(payloadValue));
-
-    function appendOutput(stream, chunk) {
-      outputBytes += Buffer.byteLength(chunk);
-      if (outputBytes > maxOutputBytes) {
-        finish(errorReport(payloadValue, "hosted_worker_output_limit_exceeded", `Hosted worker exceeded output limit ${maxOutputBytes} bytes.`));
-        child.kill("SIGKILL");
-        return;
-      }
-      if (stream === "stdout") stdout += chunk;
-      else stderr += chunk;
-    }
-
-    function finish(reportValue) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      resolve(reportValue);
-    }
-  });
-}
-
-function parseLastJsonLine(output) {
-  for (const line of output.trim().split(/\r?\n/).reverse()) {
-    if (!line.trim().startsWith("{")) continue;
-    try {
-      return JSON.parse(line);
-    } catch {
-      return undefined;
-    }
+function runHostedArtifact(artifactPathValue, fixturePathValue) {
+  const run = spawnSync(
+    "bun",
+    [
+      "scripts/dev/bot-sdk-hosted-worker-run.mjs",
+      artifactPathValue,
+      fixturePathValue,
+      `--isolation=${isolation}`,
+      `--wall-timeout-ms=${wallTimeoutMs}`,
+      `--max-output-bytes=${maxOutputBytes}`,
+      ...(tickTimeoutMs === undefined ? [] : [`--tick-timeout-ms=${tickTimeoutMs}`]),
+      ...(lifecycleTimeoutMs === undefined ? [] : [`--lifecycle-timeout-ms=${lifecycleTimeoutMs}`]),
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  const parsed = parseJson(run.stdout);
+  if (parsed !== undefined) {
+    return parsed;
   }
-  return undefined;
+  return errorReport(
+    fixture,
+    "hosted_worker_failed",
+    run.error?.message || run.stderr?.trim() || run.stdout?.trim() || `hosted worker exited with ${run.status ?? "unknown"}`,
+  );
 }
 
-function errorReport(payloadValue, code, message) {
+function parseJson(output) {
+  if (output.trim().length === 0) return undefined;
+  try {
+    return JSON.parse(output);
+  } catch {
+    return undefined;
+  }
+}
+
+function errorReport(fixtureValue, code, message) {
   return {
     status: "do_not_merge",
-    scenarioId: payloadValue.fixture.scenarioId,
-    runId: payloadValue.fixture.runId,
+    scenarioId: fixtureValue.scenarioId,
+    runId: fixtureValue.runId,
     ticksRun: 0,
     actionsProposed: 0,
     orderActionsProposed: 0,

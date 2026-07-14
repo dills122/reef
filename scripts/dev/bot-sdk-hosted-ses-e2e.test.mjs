@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { hostedSesLockdownOptions } from "./lib/bot-isolation.mjs";
 
-lockdown({ errorTaming: "unsafe", stackFiltering: "verbose" });
+lockdown(hostedSesLockdownOptions);
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const fixture = JSON.parse(readFileSync(join(repoRoot, "packages/bot-sdk/fixtures/aapl-multi-tick.json"), "utf8"));

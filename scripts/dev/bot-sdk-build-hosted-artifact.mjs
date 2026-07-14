@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const sandboxPolicyUrl = new URL("../../packages/bot-sdk/src/sandbox-policy.ts", import.meta.url);
@@ -67,11 +68,9 @@ writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(JSON.stringify(manifest, null, 2));
 
 async function bundleHostedArtifactJavaScript(sourceText, entryPathValue) {
-  const buildTmpRoot = process.env.BOT_SDK_BUILD_TMP_ROOT;
-  const buildDir = mkdtempSync(buildTmpRoot === undefined ? resolve(repoRoot, ".bot-sdk-build-") : join(buildTmpRoot, "reef-bot-sdk-build-"));
-  if (buildTmpRoot !== undefined) {
-    linkRepoNodeModules(buildDir);
-  }
+  const buildTmpRoot = process.env.BOT_SDK_BUILD_TMP_ROOT ?? tmpdir();
+  const buildDir = mkdtempSync(join(buildTmpRoot, "reef-bot-sdk-build-"));
+  linkRepoNodeModules(buildDir);
   const buildEntry = join(buildDir, `${relativeToRepo(entryPathValue).replace(/[^a-zA-Z0-9_.-]/g, "_")}.ts`);
   writeFileSync(buildEntry, sourceText);
 
@@ -103,11 +102,20 @@ async function bundleHostedArtifactJavaScript(sourceText, entryPathValue) {
 }
 
 function linkRepoNodeModules(buildDir) {
-  const repoNodeModules = join(repoRoot, "node_modules");
-  if (!existsSync(repoNodeModules)) {
-    return;
+  for (const nodeModules of candidateNodeModulesDirs()) {
+    if (existsSync(nodeModules)) {
+      symlinkSync(nodeModules, join(buildDir, "node_modules"), "dir");
+      return;
+    }
   }
-  symlinkSync(repoNodeModules, join(buildDir, "node_modules"), "dir");
+}
+
+function candidateNodeModulesDirs() {
+  return [
+    process.env.REEF_NODE_MODULES_DIR,
+    ...(process.env.NODE_PATH?.split(delimiter) ?? []),
+    join(repoRoot, "node_modules"),
+  ].filter((candidate) => candidate !== undefined && candidate.length > 0);
 }
 
 function toHostedArtifactTypeScript(sourceText) {

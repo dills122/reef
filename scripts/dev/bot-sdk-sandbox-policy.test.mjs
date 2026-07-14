@@ -41,6 +41,14 @@ const computedGlobalViolations = scanBotSourceForSandboxViolationsV1(computedGlo
 assert.ok(computedGlobalViolations.some((violation) => violation.code === "sandbox_denied_global" && violation.pattern === "globalThis"));
 assert.ok(computedGlobalViolations.some((violation) => violation.code === "sandbox_denied_global" && violation.pattern === "process"));
 
+const splitComputedGlobal = `
+  const proc = globalThis["pro" + "cess"];
+  proc.env.SECRET;
+`;
+const splitComputedGlobalViolations = scanBotSourceForSandboxViolationsV1(splitComputedGlobal);
+assert.ok(splitComputedGlobalViolations.some((violation) => violation.code === "sandbox_denied_global" && violation.pattern === "globalThis"));
+assert.ok(splitComputedGlobalViolations.some((violation) => violation.code === "sandbox_denied_global" && violation.pattern === "process"));
+
 const constructorChain = `
   const getProcess = ({}).constructor.constructor("return process");
   getProcess().env.SECRET;
@@ -61,6 +69,19 @@ assert.ok(
     (violation) => violation.code === "sandbox_denied_property" && violation.pattern === "constructor",
   ),
 );
+
+const splitBracketConstructorChain = `
+  const getProcess = ({})["con" + "structor"]["con" + "structor"]("return process");
+  getProcess().env.SECRET;
+`;
+assert.ok(
+  scanBotSourceForSandboxViolationsV1(splitBracketConstructorChain).some(
+    (violation) => violation.code === "sandbox_denied_property" && violation.pattern === "constructor",
+  ),
+);
+
+assert.ok(scanBotSourceForSandboxViolationsV1("Bun.spawn([]);").some((violation) => violation.pattern === "Bun"));
+assert.ok(scanBotSourceForSandboxViolationsV1("Deno.readTextFile('/tmp/x');").some((violation) => violation.pattern === "Deno"));
 
 const normalClassConstructor = `
   export default class ExampleBot {
