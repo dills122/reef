@@ -527,6 +527,10 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   arena_persisted_report="$artifact_dir/arena-local-tick-run.persisted.json"
   arena_export="$artifact_dir/arena-export.json"
   arena_command_timeout_ms="${REEF_BENCHMARK_ARENA_COMMAND_TIMEOUT_MS:-3000}"
+  arena_command_poll_ms="${REEF_BENCHMARK_ARENA_COMMAND_POLL_MS:-100}"
+  arena_projection_drain_timeout_ms="${REEF_BENCHMARK_ARENA_PROJECTION_DRAIN_TIMEOUT_MS:-30000}"
+  arena_projection_drain_poll_ms="${REEF_BENCHMARK_ARENA_PROJECTION_DRAIN_POLL_MS:-100}"
+  arena_projection_drain_cadence="${REEF_BENCHMARK_ARENA_PROJECTION_DRAIN_CADENCE:-scheduled-event}"
   arena_timeout_seconds="${REEF_BENCHMARK_ARENA_TIMEOUT_SECONDS:-$((REEF_BENCHMARK_ARENA_DURATION_SECONDS + 900))}"
   export ORDER_LIFECYCLE_PROJECTOR_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_ENABLED:-true}"
   export MARKET_DATA_PROJECTOR_ENABLED="${MARKET_DATA_PROJECTOR_ENABLED:-true}"
@@ -559,11 +563,14 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --warmup-seconds="$REEF_BENCHMARK_ARENA_WARMUP_SECONDS" \
     --health-sample-interval-ms="$REEF_BENCHMARK_ARENA_HEALTH_SAMPLE_INTERVAL_MS" \
     --command-timeout-ms="$arena_command_timeout_ms" \
+    --command-poll-ms="$arena_command_poll_ms" \
     --command-wait-mode="${REEF_BENCHMARK_ARENA_COMMAND_WAIT_MODE:-accepted}" \
     ${REEF_BENCHMARK_ARENA_SCORING_POLICY_VERSION:+--scoring-policy-version=$REEF_BENCHMARK_ARENA_SCORING_POLICY_VERSION} \
     --pace-ticks \
     --report-shape=compact \
-    --projection-drain-timeout-ms=30000 \
+    --projection-drain-timeout-ms="$arena_projection_drain_timeout_ms" \
+    --projection-drain-poll-ms="$arena_projection_drain_poll_ms" \
+    --projection-drain-cadence="$arena_projection_drain_cadence" \
     --require-projection-drain \
     --out="$arena_report"
   run_stage arena-hardening-summary bun scripts/dev/arena-local-hardening-run.mjs \

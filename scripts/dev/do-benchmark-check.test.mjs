@@ -198,6 +198,20 @@ const arenaHealthGateResult = spawnSync(process.execPath, ["scripts/dev/do-bench
 assert.equal(arenaHealthGateResult.status, 1);
 assert.match(arenaHealthGateResult.stderr, /healthSummary\.status must be pass/);
 
+const arenaLagGateDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-lag-"));
+writeArenaReport(arenaLagGateDir, { healthStatus: "pass", finalCompletionLagMs: 31000 });
+const arenaLagGateResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaLagGateDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "arena",
+    REEF_DO_ARENA_MAX_FINAL_COMPLETION_LAG_MS: "30000",
+  },
+  encoding: "utf8",
+});
+assert.equal(arenaLagGateResult.status, 1);
+assert.match(arenaLagGateResult.stderr, /finalCompletionLagMs 31000\.00 > required 30000\.00/);
+
 const arenaMissingSummaryDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-no-summary-"));
 writeArenaReport(arenaMissingSummaryDir, { healthStatus: "pass", includeHardeningSummary: false });
 const arenaMissingSummaryResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaMissingSummaryDir], {
@@ -354,7 +368,7 @@ function writeReport(name, rate, values) {
   );
 }
 
-function writeArenaReport(dir, { healthStatus, includeHardeningSummary = true }) {
+function writeArenaReport(dir, { healthStatus, includeHardeningSummary = true, finalCompletionLagMs = 50 }) {
   writeFileSync(
     join(dir, "arena-local-tick-run.json"),
     JSON.stringify({
@@ -381,6 +395,11 @@ function writeArenaReport(dir, { healthStatus, includeHardeningSummary = true })
         topOfBookPct: 100,
         medianQuotedSpreadBps: 99.5,
         failures: healthStatus === "pass" ? [] : ["medianQuotedSpreadBps 99.50 > 25"],
+      },
+      pacingSummary: {
+        schemaVersion: "reef.arena.pacingSummary.v0",
+        enabled: true,
+        finalCompletionLagMs,
       },
       botResults: [{ botId: "builtin-mm-simple", latencyP95Ms: 1 }],
       venueReadback: {

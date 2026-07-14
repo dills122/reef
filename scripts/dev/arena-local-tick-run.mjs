@@ -57,6 +57,7 @@ const config = {
   commandWaitMode: stringOption("--command-wait-mode", "terminal"),
   projectionDrainTimeoutMs: numberOption("--projection-drain-timeout-ms", 0),
   projectionDrainPollMs: numberOption("--projection-drain-poll-ms", 500),
+  projectionDrainCadence: stringOption("--projection-drain-cadence", "per-submission"),
   projectorPreflight: stringOption("--projector-preflight", env("ARENA_PROJECTOR_PREFLIGHT", "auto")),
   durationSeconds: numberOption("--duration-seconds", 0),
   tickIntervalMs: numberOption("--tick-interval-ms", 0),
@@ -89,6 +90,9 @@ if (!["dry-run", "live"].includes(config.submitMode)) {
 }
 if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
   throw new Error(`unsupported --command-wait-mode=${config.commandWaitMode}; expected terminal, accepted, or none`);
+}
+if (!["per-submission", "scheduled-event", "final"].includes(config.projectionDrainCadence)) {
+  throw new Error(`unsupported --projection-drain-cadence=${config.projectionDrainCadence}; expected per-submission, scheduled-event, or final`);
 }
 if (!["full", "compact"].includes(config.reportShape)) {
   throw new Error(`unsupported --report-shape=${config.reportShape}; expected full or compact`);
@@ -292,6 +296,7 @@ async function runArenaSessions(bots, healthSamples) {
     if (event.sampleHealth) {
       await maybeCollectHealthSample(healthSamples, event.healthSampleIndex, tickReports.map((result) => result.tickReport), event.offsetMs);
     }
+    const projectionDrain = await drainProjectionsAfterScheduledEvent(tickReports.map((result) => result.tickReport));
     const eventCompletedAt = performance.now();
     let sleepMs = 0;
     if (config.paceTicks && event.nextOffsetMs !== null) {
@@ -306,6 +311,7 @@ async function runArenaSessions(bots, healthSamples) {
       scheduledSessionCount: event.sessions.length,
       executedTickCount: tickReports.length,
       sampleHealth: event.sampleHealth,
+      projectionDrain,
       startLagMs,
       completionLagMs: eventCompletedAt - schedulerStartedAt - event.offsetMs,
       workElapsedMs: eventCompletedAt - eventStartedAt,
@@ -1076,6 +1082,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       ...(config.runnerIsolation === "container" && config.submitMode === "live" ? { workerVenueUrl: workerVenueUrl() } : {}),
     },
     commandWaitMode: config.commandWaitMode,
+    projectionDrainCadence: config.projectionDrainCadence,
     scoringAssumptions: scoringAssumptions(),
     status,
     elapsedMs,
@@ -1131,6 +1138,7 @@ function compactArenaReport(report) {
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
     commandWaitMode: report.commandWaitMode,
+    projectionDrainCadence: report.projectionDrainCadence,
     scoringAssumptions: report.scoringAssumptions,
     status: report.status,
     elapsedMs: report.elapsedMs,
@@ -2095,6 +2103,7 @@ async function drainProjectionsAfterSubmission(submission) {
   if (
     config.submitMode !== "live" ||
     !config.requireProjectionDrain ||
+    config.projectionDrainCadence !== "per-submission" ||
     Number(submission?.submitted ?? 0) === 0
   ) {
     return submission;
@@ -2109,6 +2118,29 @@ async function drainProjectionsAfterSubmission(submission) {
       statusCode: availability.statusCode,
       elapsedMs: performance.now() - startedAt,
     },
+  };
+}
+
+async function drainProjectionsAfterScheduledEvent(tickReports) {
+  if (
+    config.submitMode !== "live" ||
+    !config.requireProjectionDrain ||
+    config.projectionDrainCadence !== "scheduled-event" ||
+    !tickReports.some((tick) => Number(tick.submission?.submitted ?? 0) > 0)
+  ) {
+    return {
+      required: false,
+      drained: null,
+      elapsedMs: 0,
+    };
+  }
+  const startedAt = performance.now();
+  const availability = await waitForDataAvailability(config.venueUrl.replace(/\/$/, ""));
+  return {
+    required: true,
+    drained: availabilityDrained(availability),
+    statusCode: availability.statusCode,
+    elapsedMs: performance.now() - startedAt,
   };
 }
 

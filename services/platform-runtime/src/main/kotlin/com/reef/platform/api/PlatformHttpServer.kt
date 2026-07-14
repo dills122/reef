@@ -1355,7 +1355,52 @@ class PlatformHttpServer(
             streamSnapshot?.available == true
         }
         val streamReady = streamPipelineConfigured && streamHealthReady
-        val status = if (dbPoolsReady && streamReady) "ok" else "degraded"
+        fun readinessDetail(enabled: Boolean, ready: Boolean, reason: String = ""): Map<String, Any> {
+            return mapOf(
+                "enabled" to enabled,
+                "ready" to (!enabled || ready),
+                "reason" to if (!enabled || ready) "" else reason
+            )
+        }
+        val streamWorkerRequired = runtimeRole.backgroundWorkersEnabled &&
+            streamCommandWorkerEnabled &&
+            commandProcessingMode == CommandProcessingMode.StreamAck
+        val streamWorkerReady = streamCommandIntakeStore != null &&
+            streamCommandHealthCheck != null &&
+            runtimeLoopStarter.streamWorkerPartitions().isNotEmpty()
+        val canonicalProjectorRequired = runtimeRole == PlatformRuntimeRole.Projector &&
+            streamAckProjectorEnabled &&
+            commandProcessingMode == CommandProcessingMode.StreamAck
+        val canonicalProjectorReady = runtimeLoopStarter.projectorPartitions().isNotEmpty()
+        val venueEventMaterializerRequired = runtimeLoopStarter.venueEventMaterializerShouldStart()
+        val venueEventMaterializerReady = try {
+            StreamCommandLogProvider.fromEnv() == StreamCommandLogProvider.Redpanda
+        } catch (_: IllegalArgumentException) {
+            false
+        }
+        val marketDataProjectorRequired = runtimeLoopStarter.marketDataProjectorShouldStart()
+        val orderLifecycleProjectorRequired = runtimeLoopStarter.orderLifecycleProjectorShouldStart()
+        val adminStoreRequired = runtimeRole.publicHttpEnabled && (
+            arenaAdminService != null ||
+                analyticsRunExportService != null ||
+                settlementFactStore != null ||
+                accountRiskControlStore != null ||
+                commandCircuitBreakerStore != null ||
+                instrumentPriceCollarStore != null
+            )
+        val adminStoreReady = !adminStoreRequired || dbPoolsReady
+        val enabledDependencies = mapOf(
+            "dbPools" to readinessDetail(true, dbPoolsReady, "database pool has waiting threads"),
+            "streamIngress" to readinessDetail(streamAckRequired, streamReady, "stream-ack pipeline is not fully configured or healthy"),
+            "streamWorker" to readinessDetail(streamWorkerRequired, streamWorkerReady, "stream worker requires intake store, stream health, and partitions"),
+            "venueEventMaterializer" to readinessDetail(venueEventMaterializerRequired, venueEventMaterializerReady, "venue event materializer requires Redpanda log provider"),
+            "canonicalProjector" to readinessDetail(canonicalProjectorRequired, canonicalProjectorReady, "canonical projector has no configured partitions"),
+            "orderLifecycleProjector" to readinessDetail(orderLifecycleProjectorRequired, true),
+            "marketDataProjector" to readinessDetail(marketDataProjectorRequired, true),
+            "adminStore" to readinessDetail(adminStoreRequired, adminStoreReady, "admin/data gateway stores require ready database pools")
+        )
+        val enabledDependenciesReady = enabledDependencies.values.all { it["ready"] == true }
+        val status = if (enabledDependenciesReady) "ok" else "degraded"
         return JsonCodec.writeObject(
             "status" to status,
             "role" to runtimeRole.configValue,
@@ -1395,6 +1440,7 @@ class PlatformHttpServer(
                 "streamHealthReady" to streamHealthReady,
                 "streamAvailable" to (streamSnapshot?.available ?: false),
                 "streamHealthError" to (streamSnapshot?.error ?: ""),
+                "enabledDependencies" to enabledDependencies,
                 "accountRiskControlStore" to (accountRiskControlStore != null),
                 "commandCircuitBreakerStore" to (commandCircuitBreakerStore != null),
                 "instrumentPriceCollarStore" to (instrumentPriceCollarStore != null),

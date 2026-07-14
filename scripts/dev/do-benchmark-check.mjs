@@ -23,6 +23,7 @@ const maxMaterializedToProjectedGap = parseOptionalNonNegativeNumber(process.env
 const maxProjectionDbDeadlocks = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_DB_DEADLOCKS);
 const minStreamDirectActivePartitions = parseOptionalNumber(process.env.REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS);
 const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW);
+const maxArenaFinalCompletionLagMs = parseOptionalNonNegativeNumber(process.env.REEF_DO_ARENA_MAX_FINAL_COMPLETION_LAG_MS);
 const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
 const requirePgStatIo = process.env.REEF_DO_REQUIRE_PG_STAT_IO === "1";
 const failures = [];
@@ -314,6 +315,14 @@ function validateArenaArtifacts(jsonFiles) {
     if (process.env.REEF_DO_ARENA_REQUIRE_HEALTH_PASS === "1" && health.status !== "pass") {
       failures.push(`${label}: healthSummary.status must be pass, got ${health.status}: ${(health.failures ?? []).join("; ")}`);
     }
+    if (maxArenaFinalCompletionLagMs !== undefined) {
+      const finalCompletionLagMs = Number(report.pacingSummary?.finalCompletionLagMs ?? 0);
+      if (finalCompletionLagMs > maxArenaFinalCompletionLagMs) {
+        failures.push(
+          `${label}: finalCompletionLagMs ${formatNumber(finalCompletionLagMs)} > required ${formatNumber(maxArenaFinalCompletionLagMs)}`,
+        );
+      }
+    }
   }
 }
 
@@ -332,6 +341,7 @@ function arenaEvidenceSummary(report) {
     lag,
     p95LatencyMs: Number(report.botResults?.reduce((max, bot) => Math.max(max, Number(bot.latencyP95Ms ?? 0)), 0) ?? 0),
     p99LatencyMs: 0,
+    finalCompletionLagMs: Number(report.pacingSummary?.finalCompletionLagMs ?? 0),
     healthStatus: health.status ?? "unknown",
     topOfBookPct: Number(health.topOfBookPct ?? 0),
     medianQuotedSpreadBps: Number(health.medianQuotedSpreadBps ?? 0),
