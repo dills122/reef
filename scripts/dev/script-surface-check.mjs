@@ -195,6 +195,24 @@ function checkWorkflowSecurity() {
     "github.event.workflow_run.head_repository.full_name == github.repository",
     "trusted provisioning workflow must reject forked PR workflow runs",
   );
+  requireIncludes(
+    ".github/workflows/bot-submission-provision.yml",
+    botProvision,
+    "startsWith(github.event.workflow_run.head_branch, 'bots/add/')",
+    "trusted provisioning workflow must skip successful non-bot PR workflow runs",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-provision.yml",
+    botProvision,
+    "startsWith(github.event.workflow_run.head_branch, 'bots/update/')",
+    "trusted provisioning workflow must skip successful non-bot PR workflow runs",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-provision.yml",
+    botProvision,
+    "startsWith(github.event.workflow_run.head_branch, 'bots/remove/')",
+    "trusted provisioning workflow must skip successful non-bot PR workflow runs",
+  );
   requireNotIncludes(
     ".github/workflows/bot-registry-sync.yml",
     registrySync,
