@@ -143,21 +143,23 @@ make dev-scenario-plan
 
 `cmd/scenario-smoke` builds on the same compiled plan. By default it is a dry-run that emits seed requests and executable `/api/v1/orders/submit` requests without sending them. Add `ARGS="--live --base-url http://127.0.0.1:8080"` to seed reference/auth data, send executable submit requests, and wait for command status visibility.
 
+Live seeding uses the admin gateway routes under `/admin/v1/reference/...` and `/admin/v1/auth/...`. If the local stack was started with an admin token, set `ADMIN_API_TOKEN` before running the smoke command; generated reports redact the `Authorization` header. When submit, command-status, and read APIs are split across local roles, keep `--base-url` pointed at command submit and set `--status-base-url` and `--read-base-url` for `GET /api/v1/commands/{commandId}` and assertion reads. For durable replay lock runs against retained streams, add `--run-scoped-command-ids` so executable command ids and idempotency keys are prefixed with the current scenario run id while order ids, trade ids, and scenario metadata remain contract-stable. On clean stacks where `/api/v1/data/availability` is expected to be globally drained, add `--require-zero-projection-lag` to make nonzero required read-surface lag fail the P1 assertion report.
+
 ```bash
 make dev-scenario-smoke ARGS="--pretty"
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --pretty"
 ```
 
-For the P1 live assertion path, add `--assertions`. The report records command completion, own-order final lifecycle and filled quantities, participant-scoped fill proof from `/api/v1/orders/fills`, public trade tape facts, public depth non-leak proof, `/api/v1/data/availability` source/freshness metadata, and projection lag rows.
+For the P1 live assertion path, add `--assertions`. The report records command completion, a public-depth visibility timeline captured after the hidden sell is accepted and before the first visible buy is submitted, own-order final lifecycle and filled quantities, participant-scoped fill proof from `/api/v1/orders/fills`, public trade tape facts, end-state public depth non-leak proof, `/api/v1/data/availability` source/freshness metadata, and projection lag rows.
 
 ```bash
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --pretty"
 ```
 
-For a P1 lock gate, attach replay/checksum evidence and require it so a live report cannot pass without the replay proof. Strict P1 mode also requires the replay artifact to carry `visibilityTimeline.publicDepthHiddenRestingExposed=false` with at least one `visibilityTimeline.publicDepthChecks` row, because the live depth endpoint only proves current depth. `scripts/dev/venue-event-replay-check.mjs` can bundle that proof from `DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_JSON` or `DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_PATH`.
+For a P1 lock gate, attach replay/checksum evidence and require it so a live report cannot pass without the replay proof. Strict P1 mode also requires `visibilityTimeline.publicDepthHiddenRestingExposed=false` with at least one `visibilityTimeline.publicDepthChecks` row; `scenario-smoke` records this in the live report and folds it into `replayChecksum` when the replay artifact omits it. `scripts/dev/venue-event-replay-check.mjs` can also bundle that proof from `DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_JSON` or `DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_PATH`, write the replay artifact with `DEV_VENUE_EVENT_REPLAY_CHECK_REPORT_OUT`, and narrow the replay query with `DEV_VENUE_EVENT_REPLAY_CHECK_COMMAND_IDS`. Use `--attach-replay-to-report` with `--replay-check-report` to attach a replay artifact to an existing smoke report without resubmitting deterministic commands.
 
 ```bash
-make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --replay-check-report /tmp/reef-replay-check.json --require-replay-check --pretty"
+make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --run-scoped-command-ids --replay-check-report /tmp/reef-replay-check.json --require-replay-check --pretty"
 ```
 
 For the P2 settlement assertion path, seed the narrow settlement fact bundle before the assertion smoke so the report reads the runtime API rather than an offline artifact:

@@ -8,10 +8,11 @@
   "seedRequests": [
     {
       "method": "POST",
-      "path": "/reference/instruments",
-      "url": "http://localhost:8080/reference/instruments",
+      "path": "/admin/v1/reference/instruments",
+      "url": "http://localhost:8080/admin/v1/reference/instruments",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "instrumentId": "XYZ",
@@ -20,10 +21,11 @@
     },
     {
       "method": "POST",
-      "path": "/reference/participants",
-      "url": "http://localhost:8080/reference/participants",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://localhost:8080/admin/v1/reference/participants",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "name": "HIDDEN_SELLER_A",
@@ -32,10 +34,11 @@
     },
     {
       "method": "POST",
-      "path": "/reference/participants",
-      "url": "http://localhost:8080/reference/participants",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://localhost:8080/admin/v1/reference/participants",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "name": "VISIBLE_BUYER_B",
@@ -44,10 +47,11 @@
     },
     {
       "method": "POST",
-      "path": "/reference/participants",
-      "url": "http://localhost:8080/reference/participants",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://localhost:8080/admin/v1/reference/participants",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "name": "VISIBLE_BUYER_C",
@@ -56,10 +60,11 @@
     },
     {
       "method": "POST",
-      "path": "/reference/accounts",
-      "url": "http://localhost:8080/reference/accounts",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://localhost:8080/admin/v1/reference/accounts",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "accountId": "HIDDEN_SELLER_A_MAIN",
@@ -68,10 +73,11 @@
     },
     {
       "method": "POST",
-      "path": "/reference/accounts",
-      "url": "http://localhost:8080/reference/accounts",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://localhost:8080/admin/v1/reference/accounts",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "accountId": "VISIBLE_BUYER_B_MAIN",
@@ -80,10 +86,11 @@
     },
     {
       "method": "POST",
-      "path": "/reference/accounts",
-      "url": "http://localhost:8080/reference/accounts",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://localhost:8080/admin/v1/reference/accounts",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "accountId": "VISIBLE_BUYER_C_MAIN",
@@ -92,10 +99,11 @@
     },
     {
       "method": "POST",
-      "path": "/auth/roles",
-      "url": "http://localhost:8080/auth/roles",
+      "path": "/admin/v1/auth/roles",
+      "url": "http://localhost:8080/admin/v1/auth/roles",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "permissions": "order.submit,order.cancel,order.modify",
@@ -104,10 +112,11 @@
     },
     {
       "method": "POST",
-      "path": "/auth/actor-roles",
-      "url": "http://localhost:8080/auth/actor-roles",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://localhost:8080/admin/v1/auth/actor-roles",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "actorId": "HIDDEN_SELLER_A_MAIN",
@@ -116,10 +125,11 @@
     },
     {
       "method": "POST",
-      "path": "/auth/actor-roles",
-      "url": "http://localhost:8080/auth/actor-roles",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://localhost:8080/admin/v1/auth/actor-roles",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "actorId": "VISIBLE_BUYER_B_MAIN",
@@ -128,10 +138,11 @@
     },
     {
       "method": "POST",
-      "path": "/auth/actor-roles",
-      "url": "http://localhost:8080/auth/actor-roles",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://localhost:8080/admin/v1/auth/actor-roles",
       "headers": {
-        "X-Reef-Internal-Route": "true"
+        "X-Correlation-Id": "p1-golden-hidden-cross-golden-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
       },
       "payload": {
         "actorId": "VISIBLE_BUYER_C_MAIN",

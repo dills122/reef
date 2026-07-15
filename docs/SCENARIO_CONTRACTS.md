@@ -10,7 +10,7 @@ These contracts are stricter than the current YAML fixtures where noted. If a YA
 
 ## P1_GOLDEN_HIDDEN_CROSS_T1
 
-Status: fixture-aligned contract. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden now model the hidden-resting-order path. P1 is not fully locked until live replay, lifecycle, trade tape, and visibility assertions pass under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+Status: live-asserted and replay evidence exists locally, not locked. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden model the hidden-resting-order path. The 2026-07-14 local live assertion report at `reports/scenario-assertions/p1-golden-hidden-cross-live-20260714.json` passed with 25 assertions: command completion, lifecycle/fill reads, scenario-scoped trade tape checks from the instrument tape, public depth non-leakage, read-surface inventory, and zero projection lag. The 2026-07-14 direct-stream replay check at `reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json` passed exact counters for three run-scoped P1 commands. The harness now captures native `visibilityTimeline` proof between hidden-resting acceptance and the first execution, but P1 is not fully locked until a same-run report is promoted with run-scoped command status, clean exact replay counters, native hidden-depth timeline proof, and acceptable projection-lag evidence under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
 
 Purpose: prove core venue lifecycle with hidden liquidity, partial fill, full fill, public market-data visibility rules, and deterministic replay.
 
@@ -66,7 +66,7 @@ P1 is a hard correctness gate. It must not rely on stubbed settlement or post-tr
 
 ## P2_SETTLEMENT_BREAK_REPAIR
 
-Status: target contract. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. P2 is not fully locked until settlement fact assertions pass under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+Status: live-asserted locally for the original exception chain, not locked. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. The 2026-07-14 local command smoke report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json` passed, and the 2026-07-14 local assertion report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json` passed with 18 assertions covering command completion, one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping. P2 is not fully locked until replay/checksum evidence is attached for the exception chain and a live settled instant-post-trade chain report is promoted when those facts are present under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
 
 Purpose: prove post-match causation from canonical trade fact through settlement obligation, cash-leg break, manual repair, and resolved exception without building full post-trade/account-ledger modules yet.
 
@@ -115,7 +115,7 @@ Post-trade implementation may resume only through the P2-only settlement excepti
 
 ## Implementation Alignment Tasks
 
-1. Implement [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md) report generation.
-2. Add P1 live assertions for final order lifecycle states, execution/trade count, total executed quantity, public depth visibility, own-order visibility, trade tape contents, and replay checksum identity.
-3. Add P2 replay assertions for final `RESOLVED` settlement state, one `CASH_LEG_FAILED` break, one manual repair, and no direct failed-to-resolved transition.
+1. Promote one same-run P1 report that combines run-scoped command status, exact replay counters, native historical hidden-depth visibility proof, and acceptable projection-lag evidence.
+2. Attach and promote P2 replay/checksum evidence for the exception chain.
+3. Promote a P2 live settled instant-post-trade chain report when those facts are present; the assertion harness already checks exact intermediate/finality states for that chain.
 4. Keep these scenarios on public command/API paths where platform functionality exists; any stubbed post-trade action must be clearly marked in the scenario and report.

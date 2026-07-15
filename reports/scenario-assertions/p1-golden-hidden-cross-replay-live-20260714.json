@@ -1,0 +1,798 @@
+{
+  "mode": "live",
+  "pass": true,
+  "pathId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+  "scenarioRunId": "p1-golden-hidden-cross-live-20260714",
+  "seed": 424242,
+  "baseUrl": "http://127.0.0.1:8080",
+  "seedRequests": [
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/instruments",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/instruments",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "instrumentId": "XYZ",
+        "symbol": "XYZ"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/participants",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "name": "HIDDEN_SELLER_A",
+        "participantId": "HIDDEN_SELLER_A"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/participants",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "name": "VISIBLE_BUYER_B",
+        "participantId": "VISIBLE_BUYER_B"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/participants",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "name": "VISIBLE_BUYER_C",
+        "participantId": "VISIBLE_BUYER_C"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/accounts",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "accountId": "HIDDEN_SELLER_A_MAIN",
+        "participantId": "HIDDEN_SELLER_A"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/accounts",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "accountId": "VISIBLE_BUYER_B_MAIN",
+        "participantId": "VISIBLE_BUYER_B"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/accounts",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "accountId": "VISIBLE_BUYER_C_MAIN",
+        "participantId": "VISIBLE_BUYER_C"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/roles",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "permissions": "order.submit,order.cancel,order.modify",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/actor-roles",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "actorId": "HIDDEN_SELLER_A_MAIN",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/actor-roles",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "actorId": "VISIBLE_BUYER_B_MAIN",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/actor-roles",
+      "headers": {
+        "X-Correlation-Id": "p1-golden-hidden-cross-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "actorId": "VISIBLE_BUYER_C_MAIN",
+        "roleId": "order_trader"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-001",
+        "X-Client-Id": "scenario-smoke-1",
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-001",
+        "X-Participant-Id": "HIDDEN_SELLER_A",
+        "X-Reef-Actor-Id": "HIDDEN_SELLER_A_MAIN"
+      },
+      "payload": {
+        "accountId": "HIDDEN_SELLER_A_MAIN",
+        "actorId": "HIDDEN_SELLER_A_MAIN",
+        "actorType": "BOT",
+        "causationId": "p1_golden_hidden_cross_t1-cause-001",
+        "clientOrderId": "p1_golden_hidden_cross_t1-ord-001",
+        "commandId": "p1_golden_hidden_cross_t1-cmd-001",
+        "correlationId": "p1_golden_hidden_cross_t1-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "100000000000",
+        "occurredAt": "2026-03-14T18:00:01Z",
+        "orderId": "p1_golden_hidden_cross_t1-ord-001",
+        "orderType": "LIMIT",
+        "participantId": "HIDDEN_SELLER_A",
+        "quantityUnits": "100",
+        "runId": "p1-golden-hidden-cross-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+        "scenarioRunId": "p1-golden-hidden-cross-live-20260714",
+        "seed": "424242",
+        "side": "SELL",
+        "timeInForce": "DAY",
+        "traceId": "p1_golden_hidden_cross_t1-trace-001",
+        "venueSessionId": "P1_GOLDEN_HIDDEN_CROSS_T1"
+      }
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-002",
+        "X-Client-Id": "scenario-smoke-2",
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-002",
+        "X-Participant-Id": "VISIBLE_BUYER_B",
+        "X-Reef-Actor-Id": "VISIBLE_BUYER_B_MAIN"
+      },
+      "payload": {
+        "accountId": "VISIBLE_BUYER_B_MAIN",
+        "actorId": "VISIBLE_BUYER_B_MAIN",
+        "actorType": "BOT",
+        "causationId": "p1_golden_hidden_cross_t1-cause-001",
+        "clientOrderId": "p1_golden_hidden_cross_t1-ord-002",
+        "commandId": "p1_golden_hidden_cross_t1-cmd-002",
+        "correlationId": "p1_golden_hidden_cross_t1-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "101000000000",
+        "occurredAt": "2026-03-14T18:00:02Z",
+        "orderId": "p1_golden_hidden_cross_t1-ord-002",
+        "orderType": "LIMIT",
+        "participantId": "VISIBLE_BUYER_B",
+        "quantityUnits": "40",
+        "runId": "p1-golden-hidden-cross-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+        "scenarioRunId": "p1-golden-hidden-cross-live-20260714",
+        "seed": "424242",
+        "side": "BUY",
+        "timeInForce": "DAY",
+        "traceId": "p1_golden_hidden_cross_t1-trace-002",
+        "venueSessionId": "P1_GOLDEN_HIDDEN_CROSS_T1"
+      }
+    },
+    {
+      "sequence": 3,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-003",
+        "X-Client-Id": "scenario-smoke-3",
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-003",
+        "X-Participant-Id": "VISIBLE_BUYER_C",
+        "X-Reef-Actor-Id": "VISIBLE_BUYER_C_MAIN"
+      },
+      "payload": {
+        "accountId": "VISIBLE_BUYER_C_MAIN",
+        "actorId": "VISIBLE_BUYER_C_MAIN",
+        "actorType": "BOT",
+        "causationId": "p1_golden_hidden_cross_t1-cause-002",
+        "clientOrderId": "p1_golden_hidden_cross_t1-ord-003",
+        "commandId": "p1_golden_hidden_cross_t1-cmd-003",
+        "correlationId": "p1_golden_hidden_cross_t1-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "100000000000",
+        "occurredAt": "2026-03-14T18:00:03Z",
+        "orderId": "p1_golden_hidden_cross_t1-ord-003",
+        "orderType": "LIMIT",
+        "participantId": "VISIBLE_BUYER_C",
+        "quantityUnits": "60",
+        "runId": "p1-golden-hidden-cross-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+        "scenarioRunId": "p1-golden-hidden-cross-live-20260714",
+        "seed": "424242",
+        "side": "BUY",
+        "timeInForce": "DAY",
+        "traceId": "p1_golden_hidden_cross_t1-trace-003",
+        "venueSessionId": "P1_GOLDEN_HIDDEN_CROSS_T1"
+      }
+    }
+  ],
+  "results": [
+    {
+      "path": "/admin/v1/reference/instruments",
+      "statusCode": 200,
+      "body": "{\"instrumentId\":\"XYZ\"}"
+    },
+    {
+      "path": "/admin/v1/reference/participants",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"HIDDEN_SELLER_A\"}"
+    },
+    {
+      "path": "/admin/v1/reference/participants",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"VISIBLE_BUYER_B\"}"
+    },
+    {
+      "path": "/admin/v1/reference/participants",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"VISIBLE_BUYER_C\"}"
+    },
+    {
+      "path": "/admin/v1/reference/accounts",
+      "statusCode": 200,
+      "body": "{\"accountId\":\"HIDDEN_SELLER_A_MAIN\"}"
+    },
+    {
+      "path": "/admin/v1/reference/accounts",
+      "statusCode": 200,
+      "body": "{\"accountId\":\"VISIBLE_BUYER_B_MAIN\"}"
+    },
+    {
+      "path": "/admin/v1/reference/accounts",
+      "statusCode": 200,
+      "body": "{\"accountId\":\"VISIBLE_BUYER_C_MAIN\"}"
+    },
+    {
+      "path": "/admin/v1/auth/roles",
+      "statusCode": 200,
+      "body": "{\"roleId\":\"order_trader\"}"
+    },
+    {
+      "path": "/admin/v1/auth/actor-roles",
+      "statusCode": 200,
+      "body": "{\"actorId\":\"HIDDEN_SELLER_A_MAIN\",\"roleId\":\"order_trader\"}"
+    },
+    {
+      "path": "/admin/v1/auth/actor-roles",
+      "statusCode": 200,
+      "body": "{\"actorId\":\"VISIBLE_BUYER_B_MAIN\",\"roleId\":\"order_trader\"}"
+    },
+    {
+      "path": "/admin/v1/auth/actor-roles",
+      "statusCode": 200,
+      "body": "{\"actorId\":\"VISIBLE_BUYER_C_MAIN\",\"roleId\":\"order_trader\"}"
+    },
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-001\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"engineOrderId\":\"eng-p1_golden_hidden_cross_t1-ord-001\",\"occurredAt\":\"2026-03-14T18:00:01Z\"},\"executions\":[],\"trades\":[]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p1_golden_hidden_cross_t1-cmd-001\",\"clientId\":\"scenario-smoke-1\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p1_golden_hidden_cross_t1-cmd-001\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-001\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"engineOrderId\\\":\\\"eng-p1_golden_hidden_cross_t1-ord-001\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:01Z\\\"},\\\"executions\\\":[],\\\"trades\\\":[]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"HIDDEN_SELLER_A\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-002\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-002\",\"engineOrderId\":\"eng-p1_golden_hidden_cross_t1-ord-002\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},\"executions\":[{\"eventId\":\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\",\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-002\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"40\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},{\"eventId\":\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\",\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"40\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}],\"trades\":[{\"eventId\":\"evt-trade-trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\",\"tradeId\":\"trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\",\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\",\"buyOrderId\":\"p1_golden_hidden_cross_t1-ord-002\",\"sellOrderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"40\",\"price\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p1_golden_hidden_cross_t1-cmd-002\",\"clientId\":\"scenario-smoke-2\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p1_golden_hidden_cross_t1-cmd-002\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-002\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-002\\\",\\\"engineOrderId\\\":\\\"eng-p1_golden_hidden_cross_t1-ord-002\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"40\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"40\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"tradeId\\\":\\\"trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"buyOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-002\\\",\\\"sellOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"40\\\",\\\"price\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"VISIBLE_BUYER_B\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 3,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-003\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-003\",\"engineOrderId\":\"eng-p1_golden_hidden_cross_t1-ord-003\",\"occurredAt\":\"2026-03-14T18:00:03Z\"},\"executions\":[{\"eventId\":\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\",\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-003\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"60\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:03Z\"},{\"eventId\":\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\",\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"60\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:03Z\"}],\"trades\":[{\"eventId\":\"evt-trade-trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\",\"tradeId\":\"trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\",\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\",\"buyOrderId\":\"p1_golden_hidden_cross_t1-ord-003\",\"sellOrderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"60\",\"price\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:03Z\"}]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p1_golden_hidden_cross_t1-cmd-003\",\"clientId\":\"scenario-smoke-3\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p1_golden_hidden_cross_t1-cmd-003\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-003\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-003\\\",\\\"engineOrderId\\\":\\\"eng-p1_golden_hidden_cross_t1-ord-003\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-003\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"60\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"60\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"tradeId\\\":\\\"trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"buyOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-003\\\",\\\"sellOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"60\\\",\\\"price\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"VISIBLE_BUYER_C\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    }
+  ],
+  "commands": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "commandId": "p1_golden_hidden_cross_t1-cmd-001",
+      "route": "/api/v1/orders/submit",
+      "status": "COMPLETED",
+      "resultStatus": "accepted",
+      "source": "command_capture",
+      "statusCode": 200,
+      "body": "{\"commandId\":\"p1_golden_hidden_cross_t1-cmd-001\",\"clientId\":\"scenario-smoke-1\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p1_golden_hidden_cross_t1-cmd-001\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-001\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"engineOrderId\\\":\\\"eng-p1_golden_hidden_cross_t1-ord-001\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:01Z\\\"},\\\"executions\\\":[],\\\"trades\\\":[]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"HIDDEN_SELLER_A\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "commandId": "p1_golden_hidden_cross_t1-cmd-002",
+      "route": "/api/v1/orders/submit",
+      "status": "COMPLETED",
+      "resultStatus": "accepted",
+      "source": "command_capture",
+      "statusCode": 200,
+      "body": "{\"commandId\":\"p1_golden_hidden_cross_t1-cmd-002\",\"clientId\":\"scenario-smoke-2\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p1_golden_hidden_cross_t1-cmd-002\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-002\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-002\\\",\\\"engineOrderId\\\":\\\"eng-p1_golden_hidden_cross_t1-ord-002\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"40\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"40\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"tradeId\\\":\\\"trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"buyOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-002\\\",\\\"sellOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"40\\\",\\\"price\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"VISIBLE_BUYER_B\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 3,
+      "command": "SubmitOrder",
+      "commandId": "p1_golden_hidden_cross_t1-cmd-003",
+      "route": "/api/v1/orders/submit",
+      "status": "COMPLETED",
+      "resultStatus": "accepted",
+      "source": "command_capture",
+      "statusCode": 200,
+      "body": "{\"commandId\":\"p1_golden_hidden_cross_t1-cmd-003\",\"clientId\":\"scenario-smoke-3\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p1_golden_hidden_cross_t1-cmd-003\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p1_golden_hidden_cross_t1-ord-003\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-003\\\",\\\"engineOrderId\\\":\\\"eng-p1_golden_hidden_cross_t1-ord-003\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-003\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"60\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\\\",\\\"orderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"60\\\",\\\"executionPrice\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"tradeId\\\":\\\"trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"executionId\\\":\\\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\\\",\\\"buyOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-003\\\",\\\"sellOrderId\\\":\\\"p1_golden_hidden_cross_t1-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"60\\\",\\\"price\\\":\\\"100000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:03Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"VISIBLE_BUYER_C\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    }
+  ],
+  "reads": [
+    {
+      "endpoint": "/api/v1/orders/history",
+      "filters": {
+        "instrumentId": "XYZ",
+        "limit": "50",
+        "participantId": "HIDDEN_SELLER_A"
+      },
+      "sourceType": "runtime.order_lifecycle_state",
+      "freshnessModel": "dirty-tracked lifecycle projection",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"HIDDEN_SELLER_A\",\"meta\":{\"source\":\"runtime.order_lifecycle_state\",\"freshness\":\"dirty-tracked lifecycle projection\",\"scope\":\"participant\",\"openOnly\":false,\"instrumentId\":\"XYZ\",\"limit\":50},\"orders\":[{\"orderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"side\":\"SELL\",\"quantityUnits\":\"100\",\"remainingQuantityUnits\":\"0\",\"limitPrice\":\"100000000000\",\"status\":\"FILLED\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/orders/fills",
+      "filters": {
+        "instrumentId": "XYZ",
+        "limit": "50",
+        "participantId": "HIDDEN_SELLER_A"
+      },
+      "sourceType": "runtime.orders + runtime.executions",
+      "freshnessModel": "durable execution rows scoped by participant order ownership",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"HIDDEN_SELLER_A\",\"meta\":{\"source\":\"runtime.orders + runtime.executions\",\"freshness\":\"durable execution rows scoped by participant order ownership\",\"scope\":\"participant\",\"instrumentId\":\"XYZ\",\"limit\":50},\"fills\":[{\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-sell\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"side\":\"SELL\",\"quantityUnits\":\"40\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},{\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-sell\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-001\",\"instrumentId\":\"XYZ\",\"side\":\"SELL\",\"quantityUnits\":\"60\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:03Z\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/orders/history",
+      "filters": {
+        "instrumentId": "XYZ",
+        "limit": "50",
+        "participantId": "VISIBLE_BUYER_B"
+      },
+      "sourceType": "runtime.order_lifecycle_state",
+      "freshnessModel": "dirty-tracked lifecycle projection",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"VISIBLE_BUYER_B\",\"meta\":{\"source\":\"runtime.order_lifecycle_state\",\"freshness\":\"dirty-tracked lifecycle projection\",\"scope\":\"participant\",\"openOnly\":false,\"instrumentId\":\"XYZ\",\"limit\":50},\"orders\":[{\"orderId\":\"p1_golden_hidden_cross_t1-ord-002\",\"instrumentId\":\"XYZ\",\"side\":\"BUY\",\"quantityUnits\":\"40\",\"remainingQuantityUnits\":\"0\",\"limitPrice\":\"101000000000\",\"status\":\"FILLED\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/orders/fills",
+      "filters": {
+        "instrumentId": "XYZ",
+        "limit": "50",
+        "participantId": "VISIBLE_BUYER_B"
+      },
+      "sourceType": "runtime.orders + runtime.executions",
+      "freshnessModel": "durable execution rows scoped by participant order ownership",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"VISIBLE_BUYER_B\",\"meta\":{\"source\":\"runtime.orders + runtime.executions\",\"freshness\":\"durable execution rows scoped by participant order ownership\",\"scope\":\"participant\",\"instrumentId\":\"XYZ\",\"limit\":50},\"fills\":[{\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1-buy\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-002\",\"instrumentId\":\"XYZ\",\"side\":\"BUY\",\"quantityUnits\":\"40\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/orders/history",
+      "filters": {
+        "instrumentId": "XYZ",
+        "limit": "50",
+        "participantId": "VISIBLE_BUYER_C"
+      },
+      "sourceType": "runtime.order_lifecycle_state",
+      "freshnessModel": "dirty-tracked lifecycle projection",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"VISIBLE_BUYER_C\",\"meta\":{\"source\":\"runtime.order_lifecycle_state\",\"freshness\":\"dirty-tracked lifecycle projection\",\"scope\":\"participant\",\"openOnly\":false,\"instrumentId\":\"XYZ\",\"limit\":50},\"orders\":[{\"orderId\":\"p1_golden_hidden_cross_t1-ord-003\",\"instrumentId\":\"XYZ\",\"side\":\"BUY\",\"quantityUnits\":\"60\",\"remainingQuantityUnits\":\"0\",\"limitPrice\":\"100000000000\",\"status\":\"FILLED\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/orders/fills",
+      "filters": {
+        "instrumentId": "XYZ",
+        "limit": "50",
+        "participantId": "VISIBLE_BUYER_C"
+      },
+      "sourceType": "runtime.orders + runtime.executions",
+      "freshnessModel": "durable execution rows scoped by participant order ownership",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"VISIBLE_BUYER_C\",\"meta\":{\"source\":\"runtime.orders + runtime.executions\",\"freshness\":\"durable execution rows scoped by participant order ownership\",\"scope\":\"participant\",\"instrumentId\":\"XYZ\",\"limit\":50},\"fills\":[{\"executionId\":\"exec-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1-buy\",\"orderId\":\"p1_golden_hidden_cross_t1-ord-003\",\"instrumentId\":\"XYZ\",\"side\":\"BUY\",\"quantityUnits\":\"60\",\"executionPrice\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:03Z\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/data/availability",
+      "sourceType": "runtime availability report",
+      "freshnessModel": "live diagnostic snapshot",
+      "statusCode": 200,
+      "body": "{\"generatedAt\":\"2026-07-14T23:03:06.680678133Z\",\"source\":\"venue-event-batch\",\"projections\":[{\"projectionName\":\"runtime-normalized-venue-outcomes\",\"role\":\"canonical venue outcome projection\",\"projectedCount\":2326,\"lag\":0,\"watermarks\":[]},{\"projectionName\":\"market-data-top-of-book\",\"role\":\"top-of-book market data projection\",\"projectedCount\":2326,\"lag\":0,\"watermarks\":[]}],\"surfaces\":[{\"name\":\"marketDataSnapshots\",\"endpoint\":\"/api/v1/market-data/snapshots/{instrumentId}\",\"source\":\"runtime.market_data_snapshots\",\"freshness\":\"projection-watermark\",\"scope\":\"public-market-data\",\"requiredQuery\":[],\"optionalQuery\":[\"projectionName\"],\"projectionName\":\"market-data-top-of-book\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"marketDataDepth\",\"endpoint\":\"/api/v1/market-data/depth/{instrumentId}\",\"source\":\"runtime.order_lifecycle_state\",\"freshness\":\"read-time bounded aggregation\",\"scope\":\"public-market-data\",\"requiredQuery\":[],\"optionalQuery\":[\"levels\",\"projectionName\",\"sourceProjectionName\"],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"venueSessionId filtering is not exposed until runtime.orders or order_lifecycle_state persist venue_session_id\"},{\"name\":\"tradeTape\",\"endpoint\":\"/api/v1/market-data/trades/{instrumentId}\",\"source\":\"runtime.trades\",\"freshness\":\"durable fact rows\",\"scope\":\"public-market-data\",\"requiredQuery\":[],\"optionalQuery\":[\"limit\",\"before\"],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"intradayBars\",\"endpoint\":\"/api/v1/market-data/bars/{instrumentId}\",\"source\":\"runtime.trades\",\"freshness\":\"durable fact row aggregation\",\"scope\":\"public-market-data\",\"requiredQuery\":[\"interval\",\"start\",\"end\"],\"optionalQuery\":[],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"currentOrders\",\"endpoint\":\"/api/v1/orders/current\",\"source\":\"runtime.order_lifecycle_state\",\"freshness\":\"dirty-tracked lifecycle projection\",\"scope\":\"participant-own-orders\",\"requiredQuery\":[\"participantId\"],\"optionalQuery\":[\"instrumentId\",\"limit\"],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"orderHistory\",\"endpoint\":\"/api/v1/orders/history\",\"source\":\"runtime.order_lifecycle_state\",\"freshness\":\"dirty-tracked lifecycle projection\",\"scope\":\"participant-own-orders\",\"requiredQuery\":[\"participantId\"],\"optionalQuery\":[\"instrumentId\",\"limit\"],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"orderFills\",\"endpoint\":\"/api/v1/orders/fills\",\"source\":\"runtime.orders + runtime.executions\",\"freshness\":\"durable execution rows scoped by participant order ownership\",\"scope\":\"participant-own-orders\",\"requiredQuery\":[\"participantId\"],\"optionalQuery\":[\"instrumentId\",\"limit\"],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"settlementFacts\",\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\",\"source\":\"settlement append-only fact store\",\"freshness\":\"durable fact rows\",\"scope\":\"scenario-settlement-evidence\",\"requiredQuery\":[],\"optionalQuery\":[],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"settlementObligations\",\"endpoint\":\"/api/v1/settlement/obligations/{scenarioRunId}\",\"source\":\"settlement obligation projection over append-only facts\",\"freshness\":\"derived from durable settlement facts\",\"scope\":\"scenario-settlement-evidence\",\"requiredQuery\":[],\"optionalQuery\":[],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"settlementLedger\",\"endpoint\":\"/api/v1/settlement/ledger/{scenarioRunId}\",\"source\":\"append-only settlement ledger entry facts\",\"freshness\":\"replayable participant/account/asset balances derived from ledger facts\",\"scope\":\"scenario-settlement-evidence\",\"requiredQuery\":[],\"optionalQuery\":[],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"settlementProof\",\"endpoint\":\"/api/v1/settlement/proof/{scenarioRunId}\",\"source\":\"settlement append-only fact store + replayable ledger projection\",\"freshness\":\"rebuildable proof projection\",\"scope\":\"scenario-settlement-evidence\",\"requiredQuery\":[],\"optionalQuery\":[],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"settlementScore\",\"endpoint\":\"/api/v1/settlement/score/{scenarioRunId}\",\"source\":\"settlement append-only fact store + ledger/obligation projections\",\"freshness\":\"rebuildable scoring projection\",\"scope\":\"scenario-settlement-score\",\"requiredQuery\":[],\"optionalQuery\":[],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"\"},{\"name\":\"arenaLeaderboard\",\"endpoint\":\"/api/v1/arena/leaderboard\",\"source\":\"arena.run_bot_results + arena.bots\",\"freshness\":\"durable rows written after run completion\",\"scope\":\"public-game-data\",\"requiredQuery\":[\"modeId\",\"scoringPolicyVersion\"],\"optionalQuery\":[\"limit\"],\"projectionName\":\"runtime-normalized-venue-outcomes\",\"lag\":0,\"lastPartitionSequence\":0,\"lastUpdatedAt\":\"\",\"notes\":\"rows are pre-filtered by score_eligible/public_leaderboard/disqualified at the query level\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/market-data/trades/XYZ",
+      "filters": {
+        "limit": "50"
+      },
+      "sourceType": "runtime.trades",
+      "freshnessModel": "durable fact rows",
+      "statusCode": 200,
+      "body": "{\"instrumentId\":\"XYZ\",\"meta\":{\"source\":\"runtime.trades\",\"freshness\":\"durable fact rows\",\"limit\":50,\"before\":\"\"},\"trades\":[{\"sequence\":1478,\"tradeId\":\"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"price\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},{\"sequence\":1477,\"tradeId\":\"trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"60\",\"price\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:03Z\"},{\"sequence\":1476,\"tradeId\":\"trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"40\",\"price\":\"100000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}]}"
+    },
+    {
+      "endpoint": "/api/v1/market-data/depth/XYZ",
+      "filters": {
+        "levels": "5"
+      },
+      "statusCode": 404,
+      "body": "{\"error\":\"market data depth not found\",\"instrumentId\":\"XYZ\",\"projectionName\":\"market-data-depth\"}"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "command-001-completed",
+      "status": "pass",
+      "expected": "COMPLETED/accepted",
+      "observed": "COMPLETED/accepted",
+      "proofSource": "GET /api/v1/commands/{commandId}"
+    },
+    {
+      "id": "command-002-completed",
+      "status": "pass",
+      "expected": "COMPLETED/accepted",
+      "observed": "COMPLETED/accepted",
+      "proofSource": "GET /api/v1/commands/{commandId}"
+    },
+    {
+      "id": "command-003-completed",
+      "status": "pass",
+      "expected": "COMPLETED/accepted",
+      "observed": "COMPLETED/accepted",
+      "proofSource": "GET /api/v1/commands/{commandId}"
+    },
+    {
+      "id": "p1-hidden-sell-filled",
+      "status": "pass",
+      "expected": "FILLED",
+      "observed": "FILLED",
+      "proofSource": "/api/v1/orders/history"
+    },
+    {
+      "id": "p1-hidden-sell-filled-quantity",
+      "status": "pass",
+      "expected": "100",
+      "observed": "100",
+      "proofSource": "/api/v1/orders/history"
+    },
+    {
+      "id": "p1-hidden-sell-fills-quantity",
+      "status": "pass",
+      "expected": "100",
+      "observed": "100",
+      "proofSource": "/api/v1/orders/fills"
+    },
+    {
+      "id": "p1-first-visible-buy-filled",
+      "status": "pass",
+      "expected": "FILLED",
+      "observed": "FILLED",
+      "proofSource": "/api/v1/orders/history"
+    },
+    {
+      "id": "p1-first-visible-buy-filled-quantity",
+      "status": "pass",
+      "expected": "40",
+      "observed": "40",
+      "proofSource": "/api/v1/orders/history"
+    },
+    {
+      "id": "p1-first-visible-buy-fills-quantity",
+      "status": "pass",
+      "expected": "40",
+      "observed": "40",
+      "proofSource": "/api/v1/orders/fills"
+    },
+    {
+      "id": "p1-second-visible-buy-filled",
+      "status": "pass",
+      "expected": "FILLED",
+      "observed": "FILLED",
+      "proofSource": "/api/v1/orders/history"
+    },
+    {
+      "id": "p1-second-visible-buy-filled-quantity",
+      "status": "pass",
+      "expected": "60",
+      "observed": "60",
+      "proofSource": "/api/v1/orders/history"
+    },
+    {
+      "id": "p1-second-visible-buy-fills-quantity",
+      "status": "pass",
+      "expected": "60",
+      "observed": "60",
+      "proofSource": "/api/v1/orders/fills"
+    },
+    {
+      "id": "p1-own-fills-unique-execution-count",
+      "status": "pass",
+      "expected": "2",
+      "observed": "2",
+      "proofSource": "/api/v1/orders/fills"
+    },
+    {
+      "id": "p1-own-fills-prices",
+      "status": "pass",
+      "expected": "all 100000000000",
+      "observed": "all 100000000000",
+      "proofSource": "/api/v1/orders/fills"
+    },
+    {
+      "id": "p1-own-fills-counterparty-safe",
+      "status": "pass",
+      "expected": "no counterparty identity",
+      "observed": "no counterparty fields",
+      "proofSource": "/api/v1/orders/fills"
+    },
+    {
+      "id": "p1-read-surface-inventory",
+      "status": "pass",
+      "expected": "orderHistory/orderFills/marketDataDepth/tradeTape",
+      "observed": "read surfaces available",
+      "proofSource": "/api/v1/data/availability"
+    },
+    {
+      "id": "p1-order-history-source-declared",
+      "status": "pass",
+      "expected": "runtime.order_lifecycle_state|dirty-tracked lifecycle projection",
+      "observed": "runtime.order_lifecycle_state|dirty-tracked lifecycle projection",
+      "proofSource": "/api/v1/data/availability"
+    },
+    {
+      "id": "p1-order-fills-source-declared",
+      "status": "pass",
+      "expected": "runtime.orders + runtime.executions|durable execution rows scoped by participant order ownership",
+      "observed": "runtime.orders + runtime.executions|durable execution rows scoped by participant order ownership",
+      "proofSource": "/api/v1/data/availability"
+    },
+    {
+      "id": "p1-market-depth-source-declared",
+      "status": "pass",
+      "expected": "runtime.order_lifecycle_state|read-time bounded aggregation",
+      "observed": "runtime.order_lifecycle_state|read-time bounded aggregation",
+      "proofSource": "/api/v1/data/availability"
+    },
+    {
+      "id": "p1-trade-tape-source-declared",
+      "status": "pass",
+      "expected": "runtime.trades|durable fact rows",
+      "observed": "runtime.trades|durable fact rows",
+      "proofSource": "/api/v1/data/availability"
+    },
+    {
+      "id": "p1-trade-tape-count",
+      "status": "pass",
+      "expected": "2 scenario trades",
+      "observed": "2 scenario trades in 3 tape rows",
+      "proofSource": "/api/v1/market-data/trades/XYZ"
+    },
+    {
+      "id": "p1-trade-tape-total-quantity",
+      "status": "pass",
+      "expected": "100",
+      "observed": "100",
+      "proofSource": "/api/v1/market-data/trades/XYZ"
+    },
+    {
+      "id": "p1-trade-tape-prices",
+      "status": "pass",
+      "expected": "all 100000000000",
+      "observed": "all 100000000000",
+      "proofSource": "/api/v1/market-data/trades/XYZ"
+    },
+    {
+      "id": "p1-trade-tape-public-safe",
+      "status": "pass",
+      "expected": "no counterparty/order/participant identity",
+      "observed": "no identity fields",
+      "proofSource": "/api/v1/market-data/trades/XYZ"
+    },
+    {
+      "id": "p1-public-depth-hidden-size-not-visible",
+      "status": "pass",
+      "expected": "no ask level 100000000000/100",
+      "observed": "no public hidden resting sell level",
+      "proofSource": "/api/v1/market-data/depth/XYZ"
+    },
+    {
+      "id": "p1-replay-checksum-clean",
+      "status": "pass",
+      "expected": "pass true and no replay failures",
+      "observed": "pass true and no replay failures",
+      "proofSource": "../../reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json"
+    }
+  ],
+  "projectionLag": [
+    {
+      "projection": "market-data-top-of-book",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    },
+    {
+      "projection": "runtime-normalized-venue-outcomes",
+      "lag": "0",
+      "watermark": "0",
+      "measuredAt": "2026-07-14T23:03:06.680678133Z"
+    }
+  ],
+  "replayChecksum": {
+    "checkedAt": "2026-07-14T23:34:20.649Z",
+    "commandIds": [
+      "p1-golden-hidden-cross-replay-live-20260714c-p1_golden_hidden_cross_t1-cmd-001",
+      "p1-golden-hidden-cross-replay-live-20260714c-p1_golden_hidden_cross_t1-cmd-002",
+      "p1-golden-hidden-cross-replay-live-20260714c-p1_golden_hidden_cross_t1-cmd-003"
+    ],
+    "eventStream": "REEF_MATERIALIZER_SMOKE_VENUE_EVENTS_P1-REPLAY-LOCK-20260714C",
+    "failures": [],
+    "pass": true,
+    "projectionName": "",
+    "report": {
+      "batchCommandCountMismatchCount": 0,
+      "batchCount": 3,
+      "canonicalOutcomeCount": 3,
+      "checksumMismatchCount": 0,
+      "duplicateReplayInserted": 0,
+      "extraOutcomeCount": 0,
+      "missingOutcomeCount": 0,
+      "payloadHashMismatchCount": 0,
+      "payloadOutcomeCount": 3,
+      "samples": {
+        "batchCommandCountMismatches": [],
+        "checksumMismatches": [],
+        "extraOutcomes": [],
+        "missingOutcomes": [],
+        "payloadHashMismatches": [],
+        "streamGaps": [],
+        "streamOverlaps": [],
+        "watermarkLag": []
+      },
+      "storedCommandCount": 3,
+      "streamGapCount": 0,
+      "streamOverlapCount": 0,
+      "watermarkCount": 0,
+      "watermarkLagCount": 0
+    }
+  },
+  "artifactPaths": [
+    "../../reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json"
+  ]
+}
