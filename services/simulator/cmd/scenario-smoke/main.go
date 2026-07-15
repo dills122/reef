@@ -428,9 +428,10 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 		if cfg.replayCheckReportPath != "" {
 			attachReplayChecksumEvidence(cfg, &report)
 		} else if cfg.requireReplayCheck {
+			prefix := replayAssertionPrefix(&report)
 			failAssertion(
 				&report,
-				"p1-replay-checksum-clean",
+				prefix+"-checksum-clean",
 				"replay_checksum",
 				"clean replay check report attached",
 				"missing --replay-check-report",
@@ -574,7 +575,7 @@ func attachReplayToExistingReport(cfg config, stdout io.Writer) error {
 func removeReplayEvidence(report *smokeReport) {
 	filteredAssertions := report.Assertions[:0]
 	for _, assertion := range report.Assertions {
-		if strings.HasPrefix(assertion.ID, "p1-replay-") {
+		if isReplayAssertionID(assertion.ID) {
 			continue
 		}
 		filteredAssertions = append(filteredAssertions, assertion)
@@ -582,7 +583,7 @@ func removeReplayEvidence(report *smokeReport) {
 	report.Assertions = filteredAssertions
 	filteredFailures := report.Failures[:0]
 	for _, failure := range report.Failures {
-		if strings.HasPrefix(failure.AssertionID, "p1-replay-") {
+		if isReplayAssertionID(failure.AssertionID) {
 			continue
 		}
 		filteredFailures = append(filteredFailures, failure)
@@ -590,6 +591,12 @@ func removeReplayEvidence(report *smokeReport) {
 	report.Failures = filteredFailures
 	report.ReplayChecksum = nil
 	report.ArtifactPaths = nil
+}
+
+func isReplayAssertionID(id string) bool {
+	return strings.HasPrefix(id, "p1-replay-") ||
+		strings.HasPrefix(id, "p2-replay-") ||
+		strings.HasPrefix(id, "replay-")
 }
 
 func redactSensitiveReportHeaders(report *smokeReport) {
@@ -1457,14 +1464,15 @@ func exceptionStates(resolutions []settlementResolution) string {
 }
 
 func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
+	prefix := replayAssertionPrefix(report)
 	body, err := os.ReadFile(cfg.replayCheckReportPath)
 	if err != nil {
-		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "readable replay check report", err.Error(), cfg.replayCheckReportPath)
+		failAssertion(report, prefix+"-checksum-clean", "replay_checksum", "readable replay check report", err.Error(), cfg.replayCheckReportPath)
 		return
 	}
 	var parsed map[string]any
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "valid replay check JSON", err.Error(), cfg.replayCheckReportPath)
+		failAssertion(report, prefix+"-checksum-clean", "replay_checksum", "valid replay check JSON", err.Error(), cfg.replayCheckReportPath)
 		return
 	}
 	if report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
@@ -1479,13 +1487,26 @@ func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
 		if len(failures) > 0 {
 			observed = strings.Join(failures, "; ")
 		}
-		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
+		failAssertion(report, prefix+"-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
 		return
 	}
-	passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	passAssertion(report, prefix+"-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	if cfg.requireReplayCheck {
+		assertReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath, prefix, replayCounterMinimums(report))
+	}
 	if cfg.requireReplayCheck && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
-		assertP1ReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath)
 		assertP1HistoricalVisibilityProof(report, parsed, cfg.replayCheckReportPath)
+	}
+}
+
+func replayAssertionPrefix(report *smokeReport) string {
+	switch report.PathID {
+	case "P1_GOLDEN_HIDDEN_CROSS_T1":
+		return "p1-replay"
+	case "P2_SETTLEMENT_BREAK_REPAIR":
+		return "p2-replay"
+	default:
+		return "replay"
 	}
 }
 
@@ -1575,28 +1596,35 @@ func p1VisibilityReadErrors(checks []p1PublicDepthCheck) []string {
 	return out
 }
 
-func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string) {
+func replayCounterMinimums(report *smokeReport) map[string]float64 {
+	commandCount := float64(len(report.Requests))
+	if commandCount <= 0 {
+		commandCount = 1
+	}
+	return map[string]float64{
+		"batchCount":            1,
+		"storedCommandCount":    commandCount,
+		"payloadOutcomeCount":   commandCount,
+		"canonicalOutcomeCount": commandCount,
+	}
+}
+
+func assertReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string, prefix string, minimums map[string]float64) {
 	replayReport, ok := parsed["report"].(map[string]any)
 	if !ok {
-		failAssertion(report, "p1-replay-counter-report-present", "replay_checksum", "replay report counters", "missing report object", proofSource)
+		failAssertion(report, prefix+"-counter-report-present", "replay_checksum", "replay report counters", "missing report object", proofSource)
 		return
-	}
-	minimums := map[string]float64{
-		"batchCount":            1,
-		"storedCommandCount":    3,
-		"payloadOutcomeCount":   3,
-		"canonicalOutcomeCount": 3,
 	}
 	for key, minimum := range minimums {
 		value, found := replayCounter(replayReport, key)
 		if found && value >= minimum {
-			passAssertion(report, "p1-replay-"+kebabCase(key), fmt.Sprintf(">= %.0f", minimum), fmt.Sprintf("%.0f", value), proofSource)
+			passAssertion(report, prefix+"-"+kebabCase(key), fmt.Sprintf(">= %.0f", minimum), fmt.Sprintf("%.0f", value), proofSource)
 		} else {
 			observed := "missing"
 			if found {
 				observed = fmt.Sprintf("%.0f", value)
 			}
-			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", fmt.Sprintf(">= %.0f", minimum), observed, proofSource)
+			failAssertion(report, prefix+"-"+kebabCase(key), "replay_checksum", fmt.Sprintf(">= %.0f", minimum), observed, proofSource)
 		}
 	}
 	zeroCounters := []string{
@@ -1613,13 +1641,13 @@ func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, 
 	for _, key := range zeroCounters {
 		value, found := replayCounter(replayReport, key)
 		if found && value == 0 {
-			passAssertion(report, "p1-replay-"+kebabCase(key), "0", "0", proofSource)
+			passAssertion(report, prefix+"-"+kebabCase(key), "0", "0", proofSource)
 		} else {
 			observed := "missing"
 			if found {
 				observed = fmt.Sprintf("%.0f", value)
 			}
-			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", "0", observed, proofSource)
+			failAssertion(report, prefix+"-"+kebabCase(key), "replay_checksum", "0", observed, proofSource)
 		}
 	}
 }

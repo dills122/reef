@@ -736,6 +736,43 @@ func TestScenarioSmokeReplayAttachmentUsesReportVisibilityTimeline(t *testing.T)
 	}
 }
 
+func TestScenarioSmokeAttachReplayUsesP2AssertionPrefix(t *testing.T) {
+	tempDir := t.TempDir()
+	reportPath := filepath.Join(tempDir, "report.json")
+	replayPath := filepath.Join(tempDir, "replay-check.json")
+	reportJSON := `{"mode":"live","pass":true,"pathId":"P2_SETTLEMENT_BREAK_REPAIR","scenarioRunId":"p2-report-replay","seed":424243,"requests":[{"sequence":1,"command":"SubmitOrder"},{"sequence":2,"command":"SubmitOrder"}],"results":[],"assertions":[]}`
+	replayJSON := `{"pass":true,"report":{"batchCount":2,"storedCommandCount":2,"payloadOutcomeCount":2,"canonicalOutcomeCount":2,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"failures":[]}`
+	if err := os.WriteFile(reportPath, []byte(reportJSON), 0o644); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+	if err := os.WriteFile(replayPath, []byte(replayJSON), 0o644); err != nil {
+		t.Fatalf("write replay report: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--attach-replay-to-report", reportPath,
+		"--replay-check-report", replayPath,
+		"--require-replay-check",
+	}, &stdout, nil)
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasAssertion(report, "p2-replay-checksum-clean", "pass") {
+		t.Fatalf("missing P2 replay checksum assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-replay-stored-command-count", "pass") {
+		t.Fatalf("missing P2 replay counter assertion: %+v", report.Assertions)
+	}
+	if hasAssertion(report, "p1-replay-checksum-clean", "pass") {
+		t.Fatalf("unexpected P1 replay assertion on P2 report: %+v", report.Assertions)
+	}
+}
+
 func TestScenarioSmokeLiveAssertionsFailOnReplayChecksumEvidence(t *testing.T) {
 	replayPath := filepath.Join(t.TempDir(), "replay-check.json")
 	replayJSON := `{"pass":false,"report":{"batchCount":1,"checksumMismatchCount":1},"failures":["batch payload checksum mismatches: 1"]}`
