@@ -104,7 +104,7 @@ object PlatformCommandParsers {
         }
         if (route == "/api/v1/orders/submit") {
             enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return ApiV1CommandValidation.Invalid(it) }
-            enumValidationError(json, "orderType", setOf("LIMIT"))?.let { return ApiV1CommandValidation.Invalid(it) }
+            enumValidationError(json, "orderType", setOf("LIMIT", "LIMIT_HIDDEN"))?.let { return ApiV1CommandValidation.Invalid(it) }
             enumValidationError(json, "timeInForce", setOf("DAY", "IOC"))?.let { return ApiV1CommandValidation.Invalid(it) }
             numericFieldValidationError(json, "quantityUnits")?.let { return ApiV1CommandValidation.Invalid(it) }
             numericFieldValidationError(json, "limitPrice")?.let { return ApiV1CommandValidation.Invalid(it) }

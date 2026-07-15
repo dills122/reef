@@ -177,7 +177,7 @@
         "limitPrice": "100000000000",
         "occurredAt": "2026-03-14T18:00:01Z",
         "orderId": "p1_golden_hidden_cross_t1-ord-001",
-        "orderType": "LIMIT",
+        "orderType": "LIMIT_HIDDEN",
         "participantId": "HIDDEN_SELLER_A",
         "quantityUnits": "100",
         "runId": "p1-golden-hidden-cross-golden",

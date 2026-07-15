@@ -158,9 +158,6 @@ func scenarioQuantityUnits(payload map[string]interface{}) string {
 }
 
 func executableOrderType(orderType string) string {
-	if strings.EqualFold(orderType, "LIMIT_HIDDEN") {
-		return "LIMIT"
-	}
 	return strings.ToUpper(orderType)
 }
 

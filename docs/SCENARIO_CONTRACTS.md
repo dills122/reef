@@ -10,7 +10,7 @@ These contracts are stricter than the current YAML fixtures where noted. If a YA
 
 ## P1_GOLDEN_HIDDEN_CROSS_T1
 
-Status: live-asserted and replay evidence exists locally, not locked. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden model the hidden-resting-order path. The 2026-07-14 local live assertion report at `reports/scenario-assertions/p1-golden-hidden-cross-live-20260714.json` passed with 25 assertions: command completion, lifecycle/fill reads, scenario-scoped trade tape checks from the instrument tape, public depth non-leakage, read-surface inventory, and zero projection lag. The 2026-07-14 direct-stream replay check at `reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json` passed exact counters for three run-scoped P1 commands. The harness now captures native `visibilityTimeline` proof between hidden-resting acceptance and the first execution, but P1 is not fully locked until a same-run report is promoted with run-scoped command status, clean exact replay counters, native hidden-depth timeline proof, and acceptable projection-lag evidence under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+Status: live-asserted and replay-asserted locally, with projection-freshness policy still open. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden model the hidden-resting-order path. The 2026-07-14 local live assertion report at `reports/scenario-assertions/p1-golden-hidden-cross-live-20260714.json` passed with 25 assertions: command completion, lifecycle/fill reads, scenario-scoped trade tape checks from the instrument tape, public depth non-leakage, read-surface inventory, and zero projection lag. The 2026-07-15 direct-stream same-run report at `reports/scenario-assertions/p1-golden-hidden-cross-replay-live-20260714.json` passed with 44 assertions and attaches `reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json`: run-scoped command status from `platform-projector-0`, exact replay counters for the same three P1 commands, native hidden-depth `visibilityTimeline`, and replay-folded historical visibility proof. It records `/api/v1/data/availability` lag rows of `4`, so P1 still needs an explicit decision or clean-stack rerun for zero-lag projection freshness if that is required for the final lock.
 
 Purpose: prove core venue lifecycle with hidden liquidity, partial fill, full fill, public market-data visibility rules, and deterministic replay.
 
@@ -115,7 +115,7 @@ Post-trade implementation may resume only through the P2-only settlement excepti
 
 ## Implementation Alignment Tasks
 
-1. Promote one same-run P1 report that combines run-scoped command status, exact replay counters, native historical hidden-depth visibility proof, and acceptable projection-lag evidence.
+1. Decide whether the promoted P1 same-run report's recorded projection lag is acceptable for lock, or rerun P1 on a stack expected to be globally drained with `--require-zero-projection-lag`.
 2. Attach and promote P2 replay/checksum evidence for the exception chain.
 3. Promote a P2 live settled instant-post-trade chain report when those facts are present; the assertion harness already checks exact intermediate/finality states for that chain.
 4. Keep these scenarios on public command/API paths where platform functionality exists; any stubbed post-trade action must be clearly marked in the scenario and report.

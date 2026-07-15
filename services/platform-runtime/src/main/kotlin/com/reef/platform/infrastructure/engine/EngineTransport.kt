@@ -494,6 +494,7 @@ private fun String.toProtoSide(): OrderSide =
 
 private fun String.toProtoOrderType(): OrderType =
     when (uppercase()) {
+        "LIMIT_HIDDEN" -> OrderType.ORDER_TYPE_LIMIT
         "LIMIT" -> OrderType.ORDER_TYPE_LIMIT
         else -> throw EngineTransportException("invalid order type: $this")
     }
