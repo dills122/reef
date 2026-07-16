@@ -15,24 +15,19 @@ permissions:
   id-token: write
   issues: write
   pull-requests: write
+  statuses: write
 
 jobs:
   provision:
     runs-on: ubuntu-latest
     if: |
-      github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.pull_requests[0].number != '' &&
-      (
-        startsWith(github.event.workflow_run.head_branch, 'bots/add/') ||
-        startsWith(github.event.workflow_run.head_branch, 'bots/update/') ||
-        startsWith(github.event.workflow_run.head_branch, 'bots/remove/')
-      )
+      github.event.workflow_run.pull_requests[0].number != ''
     env:
-      ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
-      ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
       HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       SUBMITTER_IDENTITY: ${{ github.event.workflow_run.actor.login }}
       PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
     steps:
@@ -42,8 +37,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Parse trusted provisioning inputs
-        id: parse
+      - name: Mark provisioning status pending
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: Bot submission provisioning is queued
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Mark upstream bot submission failure
+        if: github.event.workflow_run.conclusion != 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: Bot Submission workflow did not pass
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: |
+          node scripts/dev/bot-submission-commit-status.mjs
+          exit 1
+      - name: Classify trusted provisioning inputs
+        id: classify
         run: |
           branch="$HEAD_BRANCH"
           case "$branch" in
@@ -51,38 +65,81 @@ jobs:
             bots/update/*) flow="update" ;;
             bots/remove/*) flow="remove" ;;
             *)
-              echo "not a bot-submission branch (bots/add|update|remove/<name>): $branch" >&2
-              exit 1
+              {
+                echo "is-bot=false"
+                echo "trusted-bot=false"
+                echo "classification=skip"
+                echo "message=not a bot-submission branch"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
               ;;
           esac
+          if [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            {
+              echo "is-bot=true"
+              echo "trusted-bot=false"
+              echo "classification=failure"
+              echo "message=forked bot submissions cannot run trusted provisioning"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           bot_name="${branch#bots/*/}"
-          case "$bot_name" in
-            *[!a-z0-9._-]* | [!a-z0-9]* | ? | ??)
-              echo "bot submission branch bot name must be 3-64 chars matching [a-z0-9][a-z0-9._-]*: $bot_name" >&2
-              exit 1
-              ;;
-          esac
-          if [ "${#bot_name}" -gt 64 ]; then
-            echo "bot submission branch bot name is too long: $bot_name" >&2
-            exit 1
+          if ! node scripts/dev/bot-submission-registry-diff.mjs "$bot_name" --validate-only >/tmp/reef-bot-id-validation.log 2>&1; then
+            {
+              echo "is-bot=true"
+              echo "trusted-bot=false"
+              echo "classification=failure"
+              echo "message<<EOF"
+              cat /tmp/reef-bot-id-validation.log
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           {
+            echo "is-bot=true"
+            echo "trusted-bot=true"
+            echo "classification=provision"
             echo "flow=$flow"
             echo "bot-name=$bot_name"
           } >> "$GITHUB_OUTPUT"
+      - name: Mark non-bot branch success
+        if: steps.classify.outputs.classification == 'skip'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: No bot submission provisioning required
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Mark untrusted bot submission failure
+        if: steps.classify.outputs.classification == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: Trusted provisioning inputs rejected
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: |
+          node scripts/dev/bot-submission-commit-status.mjs
+          exit 1
       - name: Registry diff (new bot vs existing bot)
         id: registry-diff
-        if: steps.parse.outputs.flow != 'remove'
+        if: steps.classify.outputs.trusted-bot == 'true' && steps.classify.outputs.flow != 'remove'
         env:
-          BOT_NAME: ${{ steps.parse.outputs.bot-name }}
+          ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
+          ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
+          BOT_NAME: ${{ steps.classify.outputs.bot-name }}
         run: node scripts/dev/bot-submission-registry-diff.mjs "$BOT_NAME"
       - name: OpenBao provisioning
         id: openbao-provision
+        if: steps.classify.outputs.trusted-bot == 'true'
         continue-on-error: true
         env:
+          ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
+          ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
           BOT_SUBMISSION_OPENBAO_MODE: real
-          BOT_NAME: ${{ steps.parse.outputs.bot-name }}
-          REQUESTED_FLOW: ${{ steps.parse.outputs.flow }}
+          BOT_NAME: ${{ steps.classify.outputs.bot-name }}
+          REQUESTED_FLOW: ${{ steps.classify.outputs.flow }}
           REGISTRY_FLOW: ${{ steps.registry-diff.outputs.flow }}
         run: |
           if [ "$REQUESTED_FLOW" = "remove" ]; then
@@ -121,12 +178,30 @@ jobs:
         if: always() && steps.openbao-provision.outputs.result != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          BOT_ID: ${{ steps.parse.outputs.bot-name }}
+          BOT_ID: ${{ steps.classify.outputs.bot-name }}
           PROVISION_FLOW: ${{ steps.openbao-provision.outputs.flow }}
           PROVISION_RESULT: ${{ steps.openbao-provision.outputs.result }}
           PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
           OPENBAO_SLICE_PATH: ${{ steps.openbao-provision.outputs['slice-path'] }}
         run: node scripts/dev/bot-submission-pr-comment.mjs
+      - name: Mark provisioning status success
+        if: steps.openbao-provision.outputs['exit-code'] == '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: OpenBao provisioning completed
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Mark provisioning status failure
+        if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: OpenBao provisioning failed
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: node scripts/dev/bot-submission-commit-status.mjs
       - name: Fail on OpenBao provisioning failure
-        if: steps.openbao-provision.outputs['exit-code'] != '0'
+        if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] != '0'
         run: exit 1

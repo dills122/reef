@@ -483,6 +483,15 @@ or bot secret data. The slice path is an identifier, not a public URL. Normal
 participants use the Reef Admin secret/config surface; direct OpenBao access is
 reserved for `secret-admin`/operator workflows over a private SSH tunnel.
 
+The same trusted workflow also publishes a `registry-diff-and-provision` commit
+status on the PR head SHA. Branch protection should require that explicit
+status context, plus the untrusted PR-side `validate-manifest` and
+`scan-and-sandbox-test` checks, rather than requiring the trusted workflow-run
+job name directly. Non-bot branches get a successful
+`registry-diff-and-provision` status with no hosted Admin API call; forked bot
+submission branches get a failing status because they cannot receive trusted
+provisioning privileges.
+
 After merge, `.github/workflows/bot-registry-sync.yml` syncs changed
 `bots/*/bot.json` manifests into the hosted arena registry. It registers the bot
 metadata through `/admin/v1/arena/bots`, builds the hosted artifact to derive the

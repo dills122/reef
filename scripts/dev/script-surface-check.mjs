@@ -186,32 +186,44 @@ function checkWorkflowSecurity() {
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",
     botProvision,
+    "statuses: write",
+    "trusted provisioning workflow must be able to publish the required branch-protection status",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-provision.yml",
+    botProvision,
+    "bot-submission-commit-status.mjs",
+    "trusted provisioning workflow must publish the registry-diff-and-provision commit status",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-provision.yml",
+    botProvision,
     "ref: ${{ github.event.repository.default_branch }}",
     "trusted provisioning workflow must checkout base-branch scripts",
   );
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",
     botProvision,
-    "github.event.workflow_run.head_repository.full_name == github.repository",
+    'HEAD_REPOSITORY" != "$GITHUB_REPOSITORY"',
     "trusted provisioning workflow must reject forked PR workflow runs",
   );
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",
     botProvision,
-    "startsWith(github.event.workflow_run.head_branch, 'bots/add/')",
-    "trusted provisioning workflow must skip successful non-bot PR workflow runs",
+    "bots/add/*) flow=\"add\"",
+    "trusted provisioning workflow must classify bot add branches before provisioning",
   );
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",
     botProvision,
-    "startsWith(github.event.workflow_run.head_branch, 'bots/update/')",
-    "trusted provisioning workflow must skip successful non-bot PR workflow runs",
+    "bots/update/*) flow=\"update\"",
+    "trusted provisioning workflow must classify bot update branches before provisioning",
   );
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",
     botProvision,
-    "startsWith(github.event.workflow_run.head_branch, 'bots/remove/')",
-    "trusted provisioning workflow must skip successful non-bot PR workflow runs",
+    "bots/remove/*) flow=\"remove\"",
+    "trusted provisioning workflow must classify bot remove branches before provisioning",
   );
   requireNotIncludes(
     ".github/workflows/bot-registry-sync.yml",
