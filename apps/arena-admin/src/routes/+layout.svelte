@@ -2,15 +2,38 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
+	import {
+		fetchSession,
+		githubLoginUrl,
+		hasBotAdminAccess,
+		hasOperatorAccess,
+		type SessionUser
+	} from '$lib/api';
 
 	let { children } = $props();
+	let session = $state<SessionUser | null | 'loading'>('loading');
 
-	const navLinks = [
+	const publicNavLinks = [
 		{ href: '/', label: 'arena' },
 		{ href: '/game-types', label: 'game types' },
-		{ href: '/leaderboard', label: 'leaderboard' },
-		{ href: '/admin', label: 'admin' }
+		{ href: '/leaderboard', label: 'leaderboard' }
 	];
+
+	const navLinks = $derived([
+		...publicNavLinks,
+		...(session !== 'loading' && session && hasBotAdminAccess(session)
+			? [{ href: '/bot-admin', label: 'bot admin' }]
+			: []),
+		...(session !== 'loading' && session && hasOperatorAccess(session)
+			? [{ href: '/admin', label: 'admin' }]
+			: [])
+	]);
+
+	$effect(() => {
+		fetchSession().then((result) => {
+			session = result;
+		});
+	});
 </script>
 
 <svelte:head>
@@ -24,18 +47,29 @@
 		class="mb-8 flex flex-col gap-3 border-t border-rule pt-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
 	>
 		<a href="/" class="text-sm font-bold whitespace-nowrap text-ink no-underline">bot arena</a>
-		<nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-			{#each navLinks as link (link.href)}
-				<a
-					href={link.href}
-					class="no-underline"
-					class:text-ink={page.url.pathname === link.href}
-					class:text-muted={page.url.pathname !== link.href}
-				>
-					{link.label}
-				</a>
-			{/each}
-		</nav>
+		<div class="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-sm sm:justify-end">
+			<nav class="flex flex-wrap gap-x-4 gap-y-1">
+				{#each navLinks as link (link.href)}
+					<a
+						href={link.href}
+						class="no-underline"
+						class:text-ink={page.url.pathname === link.href}
+						class:text-muted={page.url.pathname !== link.href}
+					>
+						{link.label}
+					</a>
+				{/each}
+			</nav>
+			{#if session === 'loading'}
+				<span class="text-muted">checking session…</span>
+			{:else if session}
+				<span class="text-muted">
+					signed in as <span class="text-ink">{session.githubLogin}</span>
+				</span>
+			{:else}
+				<a href={githubLoginUrl(page.url.pathname)} class="no-underline">sign in</a>
+			{/if}
+		</div>
 	</header>
 
 	<main class="flex-1 pb-16">

@@ -390,6 +390,11 @@ class AdminApplicationService(
         return arenaStore().bots(limit)
     }
 
+    fun arenaBotsById(botIds: List<String>, limit: Int = 50): List<ArenaBot> {
+        val uniqueIds = botIds.distinct().take(limit.coerceIn(1, 500))
+        return uniqueIds.mapNotNull { arenaStore().bot(it) }
+    }
+
     fun arenaBotVersion(actor: AdminActor, botId: String, versionId: String): ArenaBotVersion? {
         requirePermission(actor, Permission.ARENA_ADMIN)
         return arenaStore().version(botId, versionId)

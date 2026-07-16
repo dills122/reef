@@ -168,6 +168,11 @@ class AdminIdentityService(
 
     fun user(reefUserId: String): AdminUser? = store.userByReefUserId(reefUserId)
 
+    fun botOwnershipsForUser(reefUserId: String): List<AdminUserBotOwnership> {
+        return store.botOwnershipsForUser(reefUserId)
+            .filter { it.ownershipState != AdminBotOwnershipState.Revoked }
+    }
+
     fun botOwnerMetadata(botId: String): List<AdminBotOwnerMetadata> {
         return store.botOwnerships(botId)
             .filter { it.ownershipState != AdminBotOwnershipState.Revoked }
