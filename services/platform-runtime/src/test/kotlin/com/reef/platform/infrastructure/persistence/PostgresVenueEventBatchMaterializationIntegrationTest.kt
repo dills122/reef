@@ -55,8 +55,10 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
 
         val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val projectionDataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
         val persistence = PostgresRuntimePersistence(
             dataSource = dataSource,
+            projectionDataSource = projectionDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )
         val suffix = UUID.randomUUID().toString()
@@ -79,6 +81,9 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals(1, events.size)
         assertEquals("OrderAccepted", events.first().eventType)
         assertEquals("venue-event-batch-projector", events.first().producer)
+        assertEquals("trace-$suffix", events.first().traceId)
+        assertEquals("cause-$suffix", events.first().causationId)
+        assertEquals("corr-$suffix", events.first().correlationId)
         val order = persistence.acceptedOrder("submit-order-$suffix")
         assertNotNull(order)
         assertEquals("AAPL", order.instrumentId)
@@ -177,7 +182,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
             {
               "commandId":"submit-cmd-$suffix",
               "traceId":"trace-$suffix",
-              "causationId":"submit-cmd-$suffix",
+              "causationId":"cause-$suffix",
               "correlationId":"corr-$suffix",
               "actorId":"actor-$suffix",
               "occurredAt":"2026-07-04T18:01:00Z",

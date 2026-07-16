@@ -88,6 +88,10 @@ object PlatformCommandParsers {
         } catch (_: Exception) {
             return ApiV1CommandValidation.Invalid("invalid json payload")
         }
+        return validateApiV1Command(route, json)
+    }
+
+    fun validateApiV1Command(route: String, json: JsonDocument): ApiV1CommandValidation {
         val contract = apiV1Contracts[route]
         if (contract == null) {
             return ApiV1CommandValidation.Valid(json)

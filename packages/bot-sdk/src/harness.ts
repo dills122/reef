@@ -263,6 +263,7 @@ export function createFixtureBotContextV1(options?: {
   readonly fixtureData?: BotFixtureDataV1;
   readonly nowIso?: string;
   readonly readClients?: BotReadClientsV1 | undefined;
+  readonly random?: BotRandomV1;
   readonly logs?: BotLogEntryV1[];
   readonly denials?: BotDenialV1[];
   readonly counters?: { dataCalls: number; dataCallsThisTick: number };
@@ -271,6 +272,7 @@ export function createFixtureBotContextV1(options?: {
   const fixtureData = options?.fixtureData ?? {};
   const nowIso = options?.nowIso ?? "2026-07-04T14:30:00.000Z";
   const readClients = options?.readClients;
+  const random = options?.random ?? createSeededRandom(1);
   const logs = options?.logs ?? [];
   const denials = options?.denials ?? [];
   const counters = options?.counters ?? { dataCalls: 0, dataCallsThisTick: 0 };
@@ -422,7 +424,7 @@ export function createFixtureBotContextV1(options?: {
       now: () => new Date(nowIso),
       nowIso: () => nowIso,
     },
-    random: createSeededRandom(1),
+    random,
     log: createLogger(logs),
     actions,
     marketData,
@@ -662,6 +664,54 @@ export function createSeededRandom(seed: number): BotRandomV1 {
       return Math.floor(value * (maxInclusive - minInclusive + 1)) + minInclusive;
     },
   };
+}
+
+export function createBotRunRandomV1(identity: {
+  readonly seed?: number;
+  readonly scenarioId?: string;
+  readonly runId?: string;
+  readonly venueSessionId?: string;
+  readonly actorId?: string;
+  readonly botId?: string;
+  readonly botVersion?: string;
+}): BotRandomV1 {
+  return createSeededRandom(seedForBotRunV1(identity));
+}
+
+export function seedForBotRunV1(identity: {
+  readonly seed?: number;
+  readonly scenarioId?: string;
+  readonly runId?: string;
+  readonly venueSessionId?: string;
+  readonly actorId?: string;
+  readonly botId?: string;
+  readonly botVersion?: string;
+}): number {
+  const parts = [
+    `seed=${Number.isFinite(identity.seed) ? identity.seed : 1}`,
+    stringSeedPart("scenario", identity.scenarioId),
+    stringSeedPart("run", identity.runId),
+    stringSeedPart("session", identity.venueSessionId),
+    stringSeedPart("actor", identity.actorId),
+    stringSeedPart("bot", identity.botId),
+    stringSeedPart("version", identity.botVersion),
+  ].filter((part): part is string => part !== undefined);
+
+  return fnv1a32(parts.join("|"));
+}
+
+function stringSeedPart(label: string, value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed === undefined || trimmed.length === 0 ? undefined : `${label}=${trimmed}`;
+}
+
+function fnv1a32(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash >>> 0;
 }
 
 export function createLogger(logs: BotLogEntryV1[]): BotLoggerV1 {

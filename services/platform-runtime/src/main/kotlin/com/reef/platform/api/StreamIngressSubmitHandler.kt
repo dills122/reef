@@ -55,14 +55,14 @@ internal class StreamIngressSubmitHandler(
                 )
             )
         }
-        val validationError = HotPathMetrics.time("streamIngress.command.validate") {
-            PlatformCommandParsers.validateApiV1Command(route, body)
+        val validation = HotPathMetrics.time("streamIngress.command.validate") {
+            PlatformCommandParsers.validateApiV1Command(route, json)
         }
-        if (validationError != null) {
+        if (validation is ApiV1CommandValidation.Invalid) {
             return CompletableFuture.completedFuture(
                 PlatformHotPathResponse(
                     400,
-                    JsonCodec.writeObject("error" to "VALIDATION_ERROR", "message" to validationError)
+                    JsonCodec.writeObject("error" to "VALIDATION_ERROR", "message" to validation.error)
                 )
             )
         }

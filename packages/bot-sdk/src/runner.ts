@@ -8,6 +8,7 @@ import {
   type OwnOrderV1,
 } from "./index";
 import {
+  createBotRunRandomV1,
   createFixtureBotContextV1,
   defaultBotRuntimePolicyV1,
   type BotFixtureDataV1,
@@ -28,6 +29,7 @@ import {
 
 export interface BotScenarioFixtureV1 {
   readonly scenarioId: string;
+  readonly seed?: number;
   readonly runId: string;
   readonly runKind?: "scenario" | "live" | "stress" | string;
   readonly venueSessionId: string;
@@ -104,6 +106,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
   let orderActionsProposed = 0;
   let dataCalls = 0;
   let commandSequence = 1;
+  const random = createBotRunRandomV1(options.fixture);
 
   for (const order of options.fixture.initialOrders ?? []) {
     orderState.set(order.orderId, order);
@@ -115,6 +118,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     policy,
     fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory),
     readClients: options.readClients,
+    random,
     logs,
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },
@@ -135,6 +139,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory, fixtureTick.marketSnapshots),
       nowIso: fixtureTick.occurredAt,
       readClients: options.readClients,
+      random,
       logs,
       denials,
       counters,
@@ -221,6 +226,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     policy,
     fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory),
     readClients: options.readClients,
+    random,
     logs,
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },

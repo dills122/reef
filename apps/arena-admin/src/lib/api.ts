@@ -1,5 +1,6 @@
-import { PUBLIC_ARENA_API_BASE_URL } from '$env/static/public';
 import { env } from '$env/dynamic/public';
+
+export const ARENA_API_BASE_URL = env.PUBLIC_ARENA_API_BASE_URL?.trim() || 'http://localhost:8080';
 
 export type LeaderboardEntry = {
 	rank: number;
@@ -381,7 +382,7 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 		}
 	}
 
-	const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}${path}`, {
+	const res = await fetch(`${ARENA_API_BASE_URL}${path}`, {
 		...init,
 		credentials: 'include',
 		headers: {
@@ -426,7 +427,7 @@ export async function fetchLeaderboard(
 		scoringPolicyVersion,
 		limit: String(options.limit ?? 50)
 	});
-	const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}/api/v1/arena/leaderboard?${params}`, {
+	const res = await fetch(`${ARENA_API_BASE_URL}/api/v1/arena/leaderboard?${params}`, {
 		headers: { 'X-Client-Id': 'arena-admin-web' },
 		signal: options.signal
 	});
@@ -444,7 +445,7 @@ export async function fetchLeaderboard(
 
 export async function fetchSession(): Promise<SessionUser | null> {
 	try {
-		const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}/admin/auth/session`, {
+		const res = await fetch(`${ARENA_API_BASE_URL}/admin/auth/session`, {
 			credentials: 'include'
 		});
 		if (!res.ok) {
@@ -482,7 +483,7 @@ export async function fetchSession(): Promise<SessionUser | null> {
 }
 
 export function githubLoginUrl(redirectPath: string): string {
-	return `${PUBLIC_ARENA_API_BASE_URL}/admin/auth/github/start?redirectPath=${encodeURIComponent(redirectPath)}`;
+	return `${ARENA_API_BASE_URL}/admin/auth/github/start?redirectPath=${encodeURIComponent(redirectPath)}`;
 }
 
 export async function fetchAdminBots(limit = 100): Promise<ArenaBot[]> {

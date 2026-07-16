@@ -13,6 +13,7 @@ const { createRecordingVenueTransportV1 } = await import(
 await assertSimpleMarketMakerRun();
 await assertSimpleMarketMakerActorProfileRun();
 await assertLiveReadClientsRun();
+await assertBotRandomAdvancesAndReplays();
 await assertLifecycleSafeMarketMakerRun();
 await assertRefreshingMarketMakerHealthyNoopRun();
 await assertRefreshingMarketMakerStaleRefreshRun();
@@ -145,6 +146,22 @@ async function assertLifecycleSafeMarketMakerRun() {
   assert.equal(report.finalOrders.length, 2);
 }
 
+async function assertBotRandomAdvancesAndReplays() {
+  const first = await runBotScenarioV1({ BotClass: RandomProbeBot, fixture });
+  const second = await runBotScenarioV1({ BotClass: RandomProbeBot, fixture });
+  const differentRun = await runBotScenarioV1({
+    BotClass: RandomProbeBot,
+    fixture: { ...fixture, runId: `${fixture.runId}-different` },
+  });
+
+  const firstValues = randomReasons(first);
+  assert.equal(first.status, "completed");
+  assert.equal(firstValues.length, 3);
+  assert.equal(new Set(firstValues).size, firstValues.length);
+  assert.deepEqual(firstValues, randomReasons(second));
+  assert.notDeepEqual(firstValues, randomReasons(differentRun));
+}
+
 class LiveReadProbeBot {
   async onStart() {}
   async onStop() {}
@@ -159,6 +176,21 @@ class LiveReadProbeBot {
     }
     return [ctx.orders.placeLimit({ instrumentId: "AAPL", side: "BUY", quantity: 1, limitPrice: snapshot.value.midPrice })];
   }
+}
+
+class RandomProbeBot {
+  async onStart() {}
+  async onStop() {}
+  async onSignal() {
+    return [];
+  }
+  async onTick(ctx) {
+    return [ctx.actions.noop(`random:${ctx.random.integer(0, 1_000_000_000)}`)];
+  }
+}
+
+function randomReasons(report) {
+  return report.ticks.map((tick) => tick.actions[0]?.reason);
 }
 
 async function assertRefreshingMarketMakerHealthyNoopRun() {

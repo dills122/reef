@@ -3,8 +3,11 @@ package app
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -1277,6 +1280,139 @@ func TestSnapshotForInstrumentFiltersBookAndOrders(t *testing.T) {
 	}
 	if _, ok := service.SnapshotForInstrument("UNKNOWN"); ok {
 		t.Fatal("expected missing instrument snapshot to miss")
+	}
+}
+
+func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
+	service := NewService(WithTerminalOrderRetentionLimit(128))
+	anchor := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "snapshot-race-anchor",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "1000000",
+		LimitPrice:    "100000000",
+		Currency:      "USD",
+	})
+	if anchor.Accepted == nil {
+		t.Fatalf("expected anchor order to accept, got %#v", anchor)
+	}
+
+	const snapshotIterations = 200
+	stop := make(chan struct{})
+	errCh := make(chan error, 4)
+	var wg sync.WaitGroup
+	report := func(format string, args ...any) {
+		select {
+		case errCh <- fmt.Errorf(format, args...):
+		default:
+		}
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			result := service.ModifyOrder(domain.ModifyOrder{
+				OrderID:       "snapshot-race-anchor",
+				QuantityUnits: fmt.Sprintf("%d", 1000000+i%10),
+				LimitPrice:    fmt.Sprintf("%d", 100000000+i%2),
+			})
+			if result.Accepted == nil {
+				report("expected anchor modify to accept, got %#v", result)
+				return
+			}
+			runtime.Gosched()
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			orderID := fmt.Sprintf("snapshot-race-life-%d", i)
+			submitted := service.SubmitOrder(domain.SubmitOrder{
+				OrderID:       orderID,
+				InstrumentID:  "AAPL",
+				Side:          domain.SideBuy,
+				QuantityUnits: "100",
+				LimitPrice:    "99000000",
+				Currency:      "USD",
+			})
+			if submitted.Accepted == nil {
+				report("expected lifecycle submit to accept, got %#v", submitted)
+				return
+			}
+			modified := service.ModifyOrder(domain.ModifyOrder{
+				OrderID:       orderID,
+				QuantityUnits: "101",
+				LimitPrice:    "99000001",
+			})
+			if modified.Accepted == nil {
+				report("expected lifecycle modify to accept, got %#v", modified)
+				return
+			}
+			cancelled := service.CancelOrder(domain.CancelOrder{OrderID: orderID})
+			if cancelled.Accepted == nil {
+				report("expected lifecycle cancel to accept, got %#v", cancelled)
+				return
+			}
+			runtime.Gosched()
+		}
+	}()
+
+	for i := 0; i < snapshotIterations; i++ {
+		snapshot := service.Snapshot()
+		if i%10 == 0 {
+			if _, ok := Restore(snapshot); !ok {
+				close(stop)
+				wg.Wait()
+				t.Fatalf("expected service snapshot restore to succeed at iteration %d", i)
+			}
+		}
+		instrumentSnapshot, ok := service.SnapshotForInstrument("AAPL")
+		if !ok {
+			close(stop)
+			wg.Wait()
+			t.Fatalf("expected AAPL snapshot at iteration %d", i)
+		}
+		if i%10 == 0 {
+			if _, ok := Restore(instrumentSnapshot); !ok {
+				close(stop)
+				wg.Wait()
+				t.Fatalf("expected instrument snapshot restore to succeed at iteration %d", i)
+			}
+		}
+		runtime.Gosched()
+	}
+	close(stop)
+	wg.Wait()
+
+	finalSnapshot := service.Snapshot()
+	if _, ok := Restore(finalSnapshot); !ok {
+		t.Fatal("expected final service snapshot restore to succeed")
+	}
+	finalInstrumentSnapshot, ok := service.SnapshotForInstrument("AAPL")
+	if !ok {
+		t.Fatal("expected final AAPL snapshot")
+	}
+	if _, ok := Restore(finalInstrumentSnapshot); !ok {
+		t.Fatal("expected final instrument snapshot restore to succeed")
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatal(err)
+	default:
 	}
 }
 
