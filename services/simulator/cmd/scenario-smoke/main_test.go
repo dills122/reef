@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestScenarioSmokeDryRunPrintsExecutableRequests(t *testing.T) {
@@ -952,6 +953,17 @@ func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
 	}
 	if !hasAssertion(report, "p2-settlement-scope-consistent", "pass") {
 		t.Fatalf("missing settlement scope assertion: %+v", report.Assertions)
+	}
+}
+
+func TestRunLiveDoesNotMutateCallerClientTimeout(t *testing.T) {
+	client := &http.Client{Timeout: 123 * time.Millisecond}
+	report := &smokeReport{}
+
+	runLive(config{timeout: 5 * time.Second}, client, report)
+
+	if client.Timeout != 123*time.Millisecond {
+		t.Fatalf("caller client timeout mutated: got %s", client.Timeout)
 	}
 }
 
