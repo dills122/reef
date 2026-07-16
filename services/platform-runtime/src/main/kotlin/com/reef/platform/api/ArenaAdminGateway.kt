@@ -408,6 +408,39 @@ internal class ArenaAdminGateway(
         }
     }
 
+    fun arenaMyBotsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val identity = adminIdentityService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
+        val actorId = adminSessionAuth.currentPrincipal().actorId
+        if (!actorId.startsWith("user-gh-")) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "GitHub user session is required"))
+        }
+        val user = identity.user(actorId)
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "admin identity is required"))
+        if (user.trustState.dbValue == "banned") {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "admin user is banned"))
+        }
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        return try {
+            val ownerships = identity.botOwnershipsForUser(actorId)
+                .sortedByDescending { it.assignedAt }
+                .take(limit.coerceIn(1, 500))
+            val bots = service.arenaBotsById(ownerships.map { it.botId }, limit)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "reefUserId" to actorId,
+                    "bots" to bots.map { arenaBotJson(it) }
+                )
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "owned arena bots query failed")))
+        }
+    }
+
     // botId omitted -> roster listing, most-recently-registered first.
     private fun arenaBotsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50

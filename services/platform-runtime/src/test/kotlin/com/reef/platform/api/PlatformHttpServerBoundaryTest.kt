@@ -255,6 +255,14 @@ class PlatformHttpServerBoundaryTest {
         )
         assertEquals(
             AdminGatewayRoute(
+                "/internal/admin/arena/my/bots",
+                "arena",
+                emptySet()
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/my/bots", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/settlement/facts",
                 "admin",
                 setOf(AdminServiceTokenFamily.Admin),
@@ -919,6 +927,77 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"githubLogin\":\"octo\"")
             assertContains(response.body, "\"trustState\":\"trusted\"")
             assertContains(response.body, "\"ownershipState\":\"owner\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayMyArenaBotsReturnsOnlySessionOwnedBots() {
+        val auth = testAdminAuth()
+        val owner = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val other = auth.identityService.ensureGitHubUser(GitHubUserIdentity(67890, "mona"))
+        val ownerSession = auth.authService.createSession(owner.reefUserId)
+        val otherSession = auth.authService.createSession(other.reefUserId)
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "octo", email = "p1@example.com"),
+                createdAt = now
+            )
+        )
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-2",
+                fileName = "bot-2.ts",
+                metadata = ArenaBotMetadata(name = "Bot 2", publisher = "mona", email = "p2@example.com"),
+                createdAt = now.plusSeconds(1)
+            )
+        )
+        auth.identityService.assignBotOwnership(
+            "admin-cli",
+            AdminBotOwnershipCommand(reefUserId = owner.reefUserId, botId = "bot-1")
+        )
+        auth.identityService.assignBotOwnership(
+            "admin-cli",
+            AdminBotOwnershipCommand(reefUserId = other.reefUserId, botId = "bot-2")
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = arenaStore
+            )
+        )
+        try {
+            val ownerResponse = get(
+                server.address.port,
+                "/admin/v1/arena/my/bots",
+                headers = mapOf("Cookie" to "reef_admin_session=${ownerSession.token}")
+            )
+            val otherResponse = get(
+                server.address.port,
+                "/admin/v1/arena/my/bots",
+                headers = mapOf("Cookie" to "reef_admin_session=${otherSession.token}")
+            )
+
+            assertEquals(200, ownerResponse.status, ownerResponse.body)
+            assertContains(ownerResponse.body, "\"reefUserId\":\"${owner.reefUserId}\"")
+            assertContains(ownerResponse.body, "\"botId\":\"bot-1\"")
+            assertContains(ownerResponse.body, "\"githubLogin\":\"octo\"")
+            assertFalse(ownerResponse.body.contains("\"botId\":\"bot-2\""), ownerResponse.body)
+
+            assertEquals(200, otherResponse.status, otherResponse.body)
+            assertContains(otherResponse.body, "\"reefUserId\":\"${other.reefUserId}\"")
+            assertContains(otherResponse.body, "\"botId\":\"bot-2\"")
+            assertContains(otherResponse.body, "\"githubLogin\":\"mona\"")
+            assertFalse(otherResponse.body.contains("\"botId\":\"bot-1\""), otherResponse.body)
         } finally {
             server.stop(0)
         }

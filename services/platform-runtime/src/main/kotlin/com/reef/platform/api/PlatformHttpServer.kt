@@ -166,6 +166,15 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         "arena",
         setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
     )
+    "/admin/v1/arena/my/bots" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/arena/my/bots",
+            "arena",
+            emptySet()
+        )
+    } else {
+        null
+    }
     "/admin/v1/arena/bots/openbao-provision" ->
         AdminGatewayRoute(
             "/internal/admin/arena/bots/openbao-provision",
@@ -789,6 +798,7 @@ class PlatformHttpServer(
 
         for (path in listOf(
             "/admin/v1/arena/bots",
+            "/admin/v1/arena/my/bots",
             "/admin/v1/arena/bots/openbao-provision",
             "/admin/v1/arena/bots/ownership",
             "/admin/v1/arena/bots/config",
