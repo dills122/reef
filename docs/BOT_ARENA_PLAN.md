@@ -22,6 +22,8 @@ Current checkpoint: the Bot SDK runtime bridge, arena control-plane source facts
 
 Local hardening caveat: until market-data snapshot/depth reads are venue-session-scoped, repeated hardening runs over the same instruments can inherit previous local order-book state. Use a clean `make dev-reset` stack with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and `MARKET_DATA_PROJECTOR_ENABLED=true` before treating market-quality results as comparable.
 
+The current tasking plan for moving from controlled arena runs toward real game readiness is [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md). That sprint deliberately separates simulation tuning readiness from public submission readiness: run diagnostics, report comparison, starter bot calibration, leaderboard/analytics contracts, and data-interface hardening can proceed before GitHub/OpenBao/review/branch-protection work is declared launch-ready.
+
 This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
 
 Second-review scope:
