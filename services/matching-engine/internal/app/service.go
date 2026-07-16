@@ -3,6 +3,8 @@ package app
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"math"
+	"math/bits"
 	"os"
 	"sort"
 	"strconv"
@@ -1310,8 +1312,33 @@ func priceWithinCollar(limitPrice int64, collar PriceCollar) bool {
 	if collar.ReferencePrice <= 0 || collar.BandBps < 0 {
 		return true
 	}
-	band := (collar.ReferencePrice * collar.BandBps) / 10000
-	return limitPrice >= collar.ReferencePrice-band && limitPrice <= collar.ReferencePrice+band
+	band := priceCollarBand(collar.ReferencePrice, collar.BandBps)
+	lower := collar.ReferencePrice - band
+	upper := int64(math.MaxInt64)
+	if band <= int64(math.MaxInt64)-collar.ReferencePrice {
+		upper = collar.ReferencePrice + band
+	}
+	return limitPrice >= lower && limitPrice <= upper
+}
+
+func priceCollarBand(referencePrice int64, bandBps int64) int64 {
+	if bandBps == 0 {
+		return 0
+	}
+	const bpsScale = int64(10000)
+	if referencePrice <= int64(math.MaxInt64)/bandBps {
+		return (referencePrice * bandBps) / bpsScale
+	}
+
+	hi, lo := bits.Mul64(uint64(referencePrice), uint64(bandBps))
+	if hi >= uint64(bpsScale) {
+		return int64(math.MaxInt64)
+	}
+	quotient, _ := bits.Div64(hi, lo, uint64(bpsScale))
+	if quotient > uint64(math.MaxInt64) {
+		return int64(math.MaxInt64)
+	}
+	return int64(quotient)
 }
 
 func newOrderBook() *orderBook {

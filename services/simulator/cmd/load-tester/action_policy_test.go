@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -246,6 +247,93 @@ func TestValidTransport(t *testing.T) {
 	}
 	if validTransport("carrier-pigeon") {
 		t.Error("expected unknown transport to be invalid")
+	}
+}
+
+func TestValidateStreamTransportActionSupportRejectsLifecycleMix(t *testing.T) {
+	cfg := Config{
+		Transport: " STREAM ",
+		Mode:      "chaos",
+		SubmitPct: 75,
+		ModifyPct: 25,
+		CancelPct: 0,
+	}
+	err := validateStreamTransportActionSupport(cfg)
+	if err == nil {
+		t.Fatal("expected stream transport to reject modify-capable action mix")
+	}
+	if !strings.Contains(err.Error(), "transport=stream currently supports submit orders only") {
+		t.Fatalf("expected clear stream transport error, got %v", err)
+	}
+}
+
+func TestValidateStreamTransportActionSupportAllowsSubmitOnlyMix(t *testing.T) {
+	cfg := Config{
+		Transport: transportStream,
+		Mode:      "chaos",
+		SubmitPct: 100,
+		ModifyPct: 0,
+		CancelPct: 0,
+	}
+	if err := validateStreamTransportActionSupport(cfg); err != nil {
+		t.Fatalf("expected submit-only stream config to validate, got %v", err)
+	}
+}
+
+func TestStreamTransportActionSupportRejectsSessionProfileLifecycle(t *testing.T) {
+	cfg := Config{
+		Transport:        transportStream,
+		HasSessionConfig: true,
+		Mode:             "chaos",
+		SubmitPct:        100,
+		ModifyPct:        0,
+		CancelPct:        0,
+		SessionActors: []sessionconfig.Actor{
+			{ActorID: "mm-1", ActorType: "market_maker", Weight: 1},
+		},
+	}
+	if !streamTransportMayUseLifecycleActions(cfg) {
+		t.Fatal("expected session profile defaults to be modify/cancel-capable")
+	}
+	if err := validateStreamTransportActionSupport(cfg); err == nil {
+		t.Fatal("expected stream transport to reject session profile lifecycle actions")
+	}
+}
+
+func TestStreamTransportActionSupportAllowsExplicitSubmitOnlySessionOverride(t *testing.T) {
+	cfg := Config{
+		Transport:         transportStream,
+		HasSessionConfig:  true,
+		ActionMixOverride: true,
+		Mode:              "strict-lifecycle",
+		SubmitPct:         100,
+		ModifyPct:         0,
+		CancelPct:         0,
+		SessionActors: []sessionconfig.Actor{
+			{ActorID: "mm-1", ActorType: "market_maker", StrategyID: "two_sided_quote", Weight: 1},
+		},
+	}
+	if streamTransportMayUseLifecycleActions(cfg) {
+		t.Fatal("expected explicit submit-only action mix to override session lifecycle defaults")
+	}
+	if err := validateStreamTransportActionSupport(cfg); err != nil {
+		t.Fatalf("expected explicit submit-only session override to validate, got %v", err)
+	}
+}
+
+func TestStreamTransportActionSupportRejectsCapacityBaseline(t *testing.T) {
+	cfg := Config{
+		Transport: transportStream,
+		Mode:      "capacity-baseline",
+		SubmitPct: 100,
+		ModifyPct: 0,
+		CancelPct: 0,
+	}
+	if !streamTransportMayUseLifecycleActions(cfg) {
+		t.Fatal("expected capacity-baseline mode to be modify/cancel-capable")
+	}
+	if err := validateStreamTransportActionSupport(cfg); err == nil {
+		t.Fatal("expected stream transport to reject capacity-baseline mode")
 	}
 }
 

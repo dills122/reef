@@ -5,6 +5,7 @@ import {
   type BotConfigV1,
   type BotContextV1,
   type BotDenialV1,
+  type BotHistoricalBarsRequestV1,
   type BotHistoricalDataClientV1,
   type BotLoggerV1,
   type BotMarketDataClientV1,
@@ -370,8 +371,9 @@ export function createFixtureBotContextV1(options?: {
           denials.push(denial);
           return { ok: false, denial };
         }
-        historicalCache.set(cacheKey, bars);
-        return { ok: true, value: bars };
+        const filteredBars = filterHistoricalBarsForRequest(bars, request);
+        historicalCache.set(cacheKey, filteredBars);
+        return { ok: true, value: filteredBars };
       });
     },
     async intradayBarsBatch(requests) {
@@ -403,8 +405,9 @@ export function createFixtureBotContextV1(options?: {
             missing.push(request.instrumentId);
           } else {
             const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
-            historicalCache.set(cacheKey, bars);
-            result[request.instrumentId] = bars;
+            const filteredBars = filterHistoricalBarsForRequest(bars, request);
+            historicalCache.set(cacheKey, filteredBars);
+            result[request.instrumentId] = filteredBars;
           }
         }
         if (missing.length > 0) {
@@ -612,6 +615,44 @@ function validateOwnOrderAction(
     return { code: "NOT_ALLOWED", message: `Cannot ${action} order with no remaining quantity.` };
   }
   return undefined;
+}
+
+function filterHistoricalBarsForRequest(
+  bars: readonly HistoricalBarV1[],
+  request: BotHistoricalBarsRequestV1,
+): readonly HistoricalBarV1[] {
+  const requestStartMs = Date.parse(request.start);
+  const requestEndMs = Date.parse(request.end);
+  const intervalMs = intervalToMilliseconds(request.interval);
+  if (!Number.isFinite(requestStartMs) || !Number.isFinite(requestEndMs) || intervalMs === undefined) {
+    return [];
+  }
+  return bars.filter((bar) => {
+    const barStartMs = Date.parse(bar.start);
+    const barEndMs = Date.parse(bar.end);
+    return (
+      Number.isFinite(barStartMs) &&
+      Number.isFinite(barEndMs) &&
+      barStartMs >= requestStartMs &&
+      barEndMs <= requestEndMs &&
+      barEndMs - barStartMs === intervalMs
+    );
+  });
+}
+
+function intervalToMilliseconds(interval: string): number | undefined {
+  switch (interval) {
+    case "1m":
+      return 60_000;
+    case "5m":
+      return 5 * 60_000;
+    case "15m":
+      return 15 * 60_000;
+    case "1h":
+      return 60 * 60_000;
+    default:
+      return undefined;
+  }
 }
 
 export function createConfig(values: Record<string, string | number | boolean>): BotConfigV1 {

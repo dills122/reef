@@ -22,6 +22,7 @@ import (
 
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
 	reporting "github.com/dills122/reef/services/simulator/internal/report"
+	"github.com/dills122/reef/services/simulator/internal/strategy"
 )
 
 type Config struct {
@@ -264,6 +265,51 @@ func validTransport(transport string) bool {
 	}
 }
 
+func validateStreamTransportActionSupport(cfg Config) error {
+	if strings.ToLower(strings.TrimSpace(cfg.Transport)) != transportStream || !streamTransportMayUseLifecycleActions(cfg) {
+		return nil
+	}
+	return errors.New("transport=stream currently supports submit orders only; set submit-pct=100, modify-pct=0, and cancel-pct=0 or use transport=http until stream modify/cancel envelopes are supported")
+}
+
+func streamTransportMayUseLifecycleActions(cfg Config) bool {
+	if cfg.Mode == "capacity-baseline" {
+		return true
+	}
+	if cfg.ModifyPct > 0 || cfg.CancelPct > 0 {
+		return true
+	}
+	if cfg.ActionMixOverride || !cfg.HasSessionConfig {
+		return false
+	}
+	if len(cfg.SessionActors) == 0 {
+		return true
+	}
+	totalWeight := 0
+	for _, actor := range cfg.SessionActors {
+		totalWeight += actor.Weight
+		if actor.Weight <= 0 {
+			continue
+		}
+		if actorCanUseLifecycleActions(actor, cfg) {
+			return true
+		}
+	}
+	return totalWeight <= 0
+}
+
+func actorCanUseLifecycleActions(actor sessionconfig.Actor, cfg Config) bool {
+	if mix, ok := strategy.ResolveActionMix(&actor, cfg.StrategyProfiles); ok {
+		return mix.ModifyPct > 0 || mix.CancelPct > 0
+	}
+	switch normalizeProfile(actor.ActorType) {
+	case profileMarketMaker, profileInstitutional, profileRetail, profileNoise:
+		return true
+	default:
+		return false
+	}
+}
+
 var defaultInvalidIntentRejectCodes = []string{"INVALID_STATE", "NOT_FOUND", "SELF_TRADE_PREVENTION", "VALIDATION_ERROR"}
 
 type trade struct {
@@ -458,6 +504,7 @@ func parseConfig() (Config, error) {
 	if !validTransport(cfg.Transport) {
 		return cfg, errors.New("transport must be http or stream")
 	}
+	cfg.Transport = strings.ToLower(strings.TrimSpace(cfg.Transport))
 	if cfg.Transport == transportStream && strings.TrimSpace(cfg.StreamAddress) == "" {
 		return cfg, errors.New("stream-address must be non-empty when transport=stream")
 	}
@@ -469,6 +516,9 @@ func parseConfig() (Config, error) {
 	}
 	if cfg.SubmitPct+cfg.ModifyPct+cfg.CancelPct != 100 {
 		return cfg, errors.New("submit-pct + modify-pct + cancel-pct must equal 100")
+	}
+	if err := validateStreamTransportActionSupport(cfg); err != nil {
+		return cfg, err
 	}
 	if cfg.RateQueueDepth < 0 {
 		return cfg, errors.New("rate-queue-depth must be >= 0")

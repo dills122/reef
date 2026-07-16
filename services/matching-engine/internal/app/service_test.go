@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -2264,6 +2265,15 @@ func TestMarketIntegrityHelpers(t *testing.T) {
 	}
 	if priceWithinCollar(102, PriceCollar{ReferencePrice: 100, BandBps: 100}) {
 		t.Fatal("expected price outside one-percent collar")
+	}
+	if !priceWithinCollar(int64(math.MaxInt64), PriceCollar{ReferencePrice: int64(math.MaxInt64), BandBps: 10000}) {
+		t.Fatal("expected max price inside max-reference one-hundred-percent collar")
+	}
+	if priceWithinCollar(-1, PriceCollar{ReferencePrice: int64(math.MaxInt64), BandBps: 10000}) {
+		t.Fatal("expected negative price outside max-reference one-hundred-percent collar")
+	}
+	if !priceWithinCollar(int64(math.MaxInt64), PriceCollar{ReferencePrice: int64(math.MaxInt64), BandBps: int64(math.MaxInt64)}) {
+		t.Fatal("expected max price inside saturated max-reference collar")
 	}
 }
 
