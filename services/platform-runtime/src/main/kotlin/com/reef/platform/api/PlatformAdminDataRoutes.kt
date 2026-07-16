@@ -51,6 +51,7 @@ internal class PlatformAdminDataRoutes(
         "/internal/admin/circuit-breakers",
         "/internal/admin/price-collars",
         "/internal/admin/arena/bots",
+        "/internal/admin/arena/my/bots",
         "/internal/admin/arena/bot-versions",
         "/internal/admin/arena/bot-versions/transition",
         "/internal/admin/arena/qualification-reports",
@@ -98,6 +99,9 @@ internal class PlatformAdminDataRoutes(
                 { arenaAdminGateway.arenaBotResponse(query) },
                 { arenaAdminGateway.registerArenaBotResponse(body) }
             )
+            "/internal/admin/arena/my/bots" -> getResponseOnly(method) {
+                arenaAdminGateway.arenaMyBotsResponse(query)
+            }
             "/internal/admin/arena/bot-versions" -> getOrPost(
                 method,
                 { arenaAdminGateway.arenaBotVersionResponse(query) },

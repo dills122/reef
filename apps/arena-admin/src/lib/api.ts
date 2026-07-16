@@ -3,11 +3,23 @@ import { env } from '$env/dynamic/public';
 
 export type LeaderboardEntry = {
 	rank: number;
+	runId: string;
+	botId: string;
 	botName: string;
 	ownerHandle: string;
+	versionId: string;
+	scoringPolicyVersion: string;
 	finalEquity: number;
 	realizedPnl: number;
 	maxDrawdown: number;
+	disqualified: boolean;
+};
+
+export type LeaderboardResponse = {
+	modeId: string;
+	scoringPolicyVersion: string;
+	entries: LeaderboardEntry[];
+	fetchedAt: string;
 };
 
 export type SessionUser = {
@@ -17,6 +29,28 @@ export type SessionUser = {
 	trustState?: string;
 	roles: string[];
 };
+
+const operatorRoles = new Set(['operator', 'secret-admin', 'platform-admin', 'arena-operator']);
+const botAdminRoles = new Set([
+	'participant',
+	'reviewer',
+	'operator',
+	'secret-admin',
+	'platform-admin',
+	'arena-operator'
+]);
+
+export function hasOperatorAccess(user: SessionUser): boolean {
+	const trustState = (user.trustState ?? '').toLowerCase();
+	if (trustState && trustState !== 'trusted') return false;
+	return user.roles.some((role) => operatorRoles.has(role));
+}
+
+export function hasBotAdminAccess(user: SessionUser): boolean {
+	const trustState = (user.trustState ?? '').toLowerCase();
+	if (trustState === 'banned') return false;
+	return user.roles.some((role) => botAdminRoles.has(role));
+}
 
 export type ArenaBot = {
 	botId: string;
@@ -39,6 +73,11 @@ export type ArenaBotOwner = {
 	trustState: string;
 	ownershipState: string;
 	assignedAt: string;
+};
+
+export type OwnedArenaBotsResponse = {
+	reefUserId: string;
+	bots: ArenaBot[];
 };
 
 export type ArenaRun = {
@@ -118,6 +157,8 @@ export type BotRuntimeConfigDescriptor = {
 
 type ErrorBody = {
 	error?: string;
+	code?: string;
+	message?: string;
 };
 
 function localDevFakeAdminEnabled(): boolean {
@@ -227,6 +268,12 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 			}
 		];
 
+		if (method === 'GET' && url.pathname === '/admin/v1/arena/my/bots') {
+			return {
+				reefUserId: 'admin-cli',
+				bots: bots.filter((bot) => bot.botId === 'dsteele-spread-maker')
+			} as T;
+		}
 		if (method === 'GET' && url.pathname === '/admin/v1/arena/bots') return { bots } as T;
 		if (method === 'GET' && url.pathname === '/admin/v1/arena/runs') return { runs } as T;
 		if (method === 'GET' && url.pathname === '/admin/v1/arena/run-bot-results') return { results } as T;
@@ -355,25 +402,44 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 	return (await res.json()) as T;
 }
 
+async function responseErrorMessage(res: Response): Promise<string> {
+	let message = `${res.status} ${res.statusText}`.trim();
+	try {
+		const body = (await res.json()) as ErrorBody;
+		message = body.error || body.message || body.code || message;
+	} catch {
+		// Keep HTTP status fallback.
+	}
+	return message;
+}
+
 // Requires an X-Client-Id header per the venue-intake read boundary
 // (ExternalApiBoundary.checkRead) — public/unauthenticated, but still
-// client-identified for rate limiting. Returns [] on any failure so the
-// page renders an empty state rather than an error.
+// client-identified for rate limiting.
 export async function fetchLeaderboard(
 	modeId: string,
-	scoringPolicyVersion: string
-): Promise<LeaderboardEntry[]> {
-	try {
-		const params = new URLSearchParams({ modeId, scoringPolicyVersion });
-		const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}/api/v1/arena/leaderboard?${params}`, {
-			headers: { 'X-Client-Id': 'arena-admin-web' }
-		});
-		if (!res.ok) return [];
-		const body = (await res.json()) as { entries: LeaderboardEntry[] };
-		return body.entries;
-	} catch {
-		return [];
+	scoringPolicyVersion: string,
+	options: { limit?: number; signal?: AbortSignal } = {}
+): Promise<LeaderboardResponse> {
+	const params = new URLSearchParams({
+		modeId,
+		scoringPolicyVersion,
+		limit: String(options.limit ?? 50)
+	});
+	const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}/api/v1/arena/leaderboard?${params}`, {
+		headers: { 'X-Client-Id': 'arena-admin-web' },
+		signal: options.signal
+	});
+	if (!res.ok) {
+		throw new Error(await responseErrorMessage(res));
 	}
+	const body = (await res.json()) as Partial<LeaderboardResponse>;
+	return {
+		modeId: body.modeId ?? modeId,
+		scoringPolicyVersion: body.scoringPolicyVersion ?? scoringPolicyVersion,
+		entries: Array.isArray(body.entries) ? body.entries : [],
+		fetchedAt: new Date().toISOString()
+	};
 }
 
 export async function fetchSession(): Promise<SessionUser | null> {
@@ -423,6 +489,17 @@ export async function fetchAdminBots(limit = 100): Promise<ArenaBot[]> {
 	const params = new URLSearchParams({ limit: String(limit) });
 	const body = await fetchAdminJson<{ bots: ArenaBot[] }>(`/admin/v1/arena/bots?${params}`);
 	return body.bots ?? [];
+}
+
+export async function fetchOwnedArenaBots(limit = 100): Promise<OwnedArenaBotsResponse> {
+	const params = new URLSearchParams({ limit: String(limit) });
+	const body = await fetchAdminJson<Partial<OwnedArenaBotsResponse>>(
+		`/admin/v1/arena/my/bots?${params}`
+	);
+	return {
+		reefUserId: body.reefUserId ?? '',
+		bots: Array.isArray(body.bots) ? body.bots : []
+	};
 }
 
 export async function fetchAdminRuns(limit = 20): Promise<ArenaRun[]> {
