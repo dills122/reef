@@ -417,6 +417,14 @@ class PlatformHttpServer(
         RuntimeEnv.long("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", 500L, min = 0L),
     private val streamCommandBackpressureWorkerDurables: String =
         RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", ""),
+    private val streamCommandBackpressureWorkerCount: Int =
+        RuntimeEnv.int(
+            "STREAM_ACK_BACKPRESSURE_WORKER_COUNT",
+            RuntimeEnv.int("STREAM_ACK_MARK_PUBLISHED_WORKERS", 1, min = 1),
+            min = 1
+        ),
+    private val streamCommandBackpressureWorkerPrefixRoot: String =
+        RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_PREFIX_ROOT", "reef-stream-worker-w"),
     private val streamCommandPublishResponseTimeoutMs: Long =
         RuntimeEnv.long(
             "STREAM_ACK_PUBLISH_RESPONSE_TIMEOUT_MS",
@@ -3431,11 +3439,12 @@ class PlatformHttpServer(
     }
 
     private fun streamCommandBackpressureWorkerDurableNames(): List<String> {
-        return streamCommandBackpressureWorkerDurables
-            .split(',')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
+        return streamCommandBackpressureWorkerDurableNames(
+            config = streamCommandConfig,
+            explicitDurables = streamCommandBackpressureWorkerDurables,
+            workerCount = streamCommandBackpressureWorkerCount,
+            workerPrefixRoot = streamCommandBackpressureWorkerPrefixRoot
+        )
     }
 
     private fun partitionFromDurableName(durableName: String): Int? {
@@ -3615,6 +3624,14 @@ data class ServerBoundaryDeps(
         RuntimeEnv.long("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", 500L, min = 0L),
     val streamCommandBackpressureWorkerDurables: String =
         RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", ""),
+    val streamCommandBackpressureWorkerCount: Int =
+        RuntimeEnv.int(
+            "STREAM_ACK_BACKPRESSURE_WORKER_COUNT",
+            RuntimeEnv.int("STREAM_ACK_MARK_PUBLISHED_WORKERS", 1, min = 1),
+            min = 1
+        ),
+    val streamCommandBackpressureWorkerPrefixRoot: String =
+        RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_PREFIX_ROOT", "reef-stream-worker-w"),
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )
 

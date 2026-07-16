@@ -75,6 +75,33 @@ class StreamCommandDrainBackpressureTest {
     }
 
     @Test
+    fun derivesBackpressureWorkerDurablesFromPartitionsAndWorkerCount() {
+        val durables = streamCommandBackpressureWorkerDurableNames(
+            config = StreamCommandConfig(partitionCount = 64),
+            explicitDurables = "",
+            workerCount = 4
+        )
+
+        assertEquals(64, durables.size)
+        assertEquals("reef-stream-worker-w0-p00", durables.first())
+        assertEquals("reef-stream-worker-w0-p15", durables[15])
+        assertEquals("reef-stream-worker-w1-p16", durables[16])
+        assertEquals("reef-stream-worker-w3-p63", durables.last())
+    }
+
+    @Test
+    fun explicitBackpressureWorkerDurablesOverrideDerivedNames() {
+        assertEquals(
+            listOf("worker-a", "worker-b"),
+            streamCommandBackpressureWorkerDurableNames(
+                config = StreamCommandConfig(partitionCount = 64),
+                explicitDurables = " worker-a,worker-b,worker-a ",
+                workerCount = 4
+            )
+        )
+    }
+
+    @Test
     fun allowsIntakeWhenDrainLagIsBelowThresholds() {
         val snapshot = StreamCommandDrainBackpressureSampler(
             workerSources = listOf(FixedStreamCommandTelemetrySource(streamLag = 25)),
