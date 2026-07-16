@@ -36,6 +36,34 @@ try {
   await server.close();
 }
 
+const retryRequests = [];
+const retryServer = await fakeGitHubApi((req, body, res) => {
+  retryRequests.push({ req, body });
+  if (retryRequests.length === 1) {
+    res.writeHead(503, { "content-type": "text/html" });
+    res.end("<html><title>Unicorn!</title><body>No server is currently available.</body></html>");
+    return;
+  }
+  json(res, 201, { state: "success" });
+});
+
+try {
+  const result = await runStatus({
+    GITHUB_API_URL: retryServer.url,
+    GITHUB_REPOSITORY: "dills122/reef",
+    GITHUB_TOKEN: "github-token",
+    GITHUB_STATUS_RETRY_DELAYS_MS: "1,1",
+    STATUS_SHA: "abc123",
+    STATUS_STATE: "success",
+    STATUS_DESCRIPTION: "No bot submission provisioning required",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /registry-diff-and-provision=success sha=abc123/);
+  assert.equal(retryRequests.length, 2);
+} finally {
+  await retryServer.close();
+}
+
 const invalidState = await runStatus({
   GITHUB_REPOSITORY: "dills122/reef",
   GITHUB_TOKEN: "github-token",
