@@ -37,25 +37,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Mark provisioning status pending
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
-          STATUS_STATE: pending
-          STATUS_DESCRIPTION: Bot submission provisioning is queued
-          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: node scripts/dev/bot-submission-commit-status.mjs
-      - name: Mark upstream bot submission failure
-        if: github.event.workflow_run.conclusion != 'success'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
-          STATUS_STATE: failure
-          STATUS_DESCRIPTION: Bot Submission workflow did not pass
-          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: |
-          node scripts/dev/bot-submission-commit-status.mjs
-          exit 1
       - name: Classify trusted provisioning inputs
         id: classify
         run: |
@@ -102,15 +83,29 @@ jobs:
             echo "flow=$flow"
             echo "bot-name=$bot_name"
           } >> "$GITHUB_OUTPUT"
-      - name: Mark non-bot branch success
+      - name: Skip non-bot branch provisioning status
         if: steps.classify.outputs.classification == 'skip'
+        run: echo "No bot submission provisioning status required for ${HEAD_BRANCH}"
+      - name: Mark provisioning status pending
+        if: steps.classify.outputs.classification != 'skip'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STATUS_SHA: ${{ env.HEAD_SHA }}
-          STATUS_STATE: success
-          STATUS_DESCRIPTION: No bot submission provisioning required
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: Bot submission provisioning is queued
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
         run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Mark upstream bot submission failure
+        if: steps.classify.outputs.classification != 'skip' && github.event.workflow_run.conclusion != 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: Bot Submission workflow did not pass
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: |
+          node scripts/dev/bot-submission-commit-status.mjs
+          exit 1
       - name: Mark untrusted bot submission failure
         if: steps.classify.outputs.classification == 'failure'
         env:
