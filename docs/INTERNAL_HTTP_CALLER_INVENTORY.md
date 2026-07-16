@@ -1,6 +1,6 @@
 # Internal HTTP Caller Inventory
 
-Last aligned: 2026-07-12
+Last aligned: 2026-07-16
 
 Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or stable operator contracts. Hosted, CI, public, bot, SDK, and partner flows must use `/api/v1/...`, `/admin/v1/...`, gRPC, CLI, or durable-message contracts.
 
@@ -33,6 +33,8 @@ These callers may keep raw `/internal/*` while they run against loopback, compos
 - `scripts/dev/throughput-campaign.mjs`: local abuse stats capture.
 - `infra/hetzner-core/server/scripts/start-stream-ack.sh`: operator-side local health probe from inside the server.
 - `infra/hetzner-core/server/scripts/verify-runtime.sh`, `infra/hetzner-core/server/scripts/run-soak.sh`: local loopback health/soak checks.
+
+`scripts/dev/script-surface-check.mjs` blocks new script callers for gateway-backed admin families under raw `/internal/admin/arena/...`, `/internal/admin/analytics/...`, `/internal/admin/settlement/...`, and the gateway-backed risk-control routes.
 
 ## Migration Candidates Before Hosted Use
 

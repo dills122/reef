@@ -142,6 +142,18 @@ if (rawInternalSettlementScriptCallers.length > 0) {
   ].join("\n"));
 }
 
+const rawInternalAnalyticsScriptCallers = scriptFiles
+  .filter((path) => !path.includes("/db/migrations/"))
+  .filter((path) => path !== "scripts/dev/script-surface-check.mjs")
+  .filter((path) => (repoText.get(path) ?? "").includes("/internal/admin/analytics/"))
+  .sort();
+if (rawInternalAnalyticsScriptCallers.length > 0) {
+  failures.push([
+    "script callers must use /admin/v1/analytics/... instead of raw /internal/admin/analytics/...:",
+    ...rawInternalAnalyticsScriptCallers.map((path) => `  - ${path}`),
+  ].join("\n"));
+}
+
 checkWorkflowSecurity();
 checkArenaRunnerTimeoutContainment();
 
