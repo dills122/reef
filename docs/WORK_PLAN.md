@@ -19,6 +19,7 @@ Active execution planning starts from:
 - [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
 - [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
 - [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md)
 - [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
@@ -41,6 +42,7 @@ Current deployment assumptions:
 - API/control-plane hardening follows [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): raw `/internal/*` remains local/migration only, external admin/data must use versioned gateway contracts, and non-local runtime profiles must fail closed on unsafe boundary defaults
 - raw internal HTTP caller status is inventoried in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 - Bot Arena Phase 1 local evidence now has two named gates: `make dev-smoke-bot-arena-local-persist` for the positive live `/api/v1` path with persisted run results, and `make dev-smoke-bot-arena-local-negative` for deterministic freeze/disqualification evidence. Both persist via loopback-only admin calls from inside `platform-api`, keeping raw `/internal/*` off the host/public surface. Static operator evidence is generated with `make dev-render-bot-arena-report` and compared across run artifacts with `make dev-render-bot-arena-report-index`.
+- Bot Arena's next planning milestone is the simulation tuning sprint in [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md): formalize the run diagnostic bundle, public/admin leaderboard split, bot data interface policy, starter bot/persona catalog, safety checklist, and public-submission readiness tasks before treating external bot submissions as launch-ready.
 
 ## Current Execution Checkpoint
 
@@ -231,13 +233,18 @@ The current gaps are:
    - For this pacing-lag cleanup, a short hosted sequence is enough before returning to a full soak: `make do-arena-pacing-lag-gate ARGS=run-destroy` defaults to `5m`, `5m`, and `7.5m` arena samples, each requiring hardening `pass`, health `pass`, projection drain, and `finalCompletionLagMs < 30000`.
    - 2026-07-14 short hosted pacing evidence passed on c-8 source-built workers with scheduled-event projection drain: `do-benchmark-20260714T021445Z` (`5m`, final completion lag `4.19ms`, `2313` completed), `do-benchmark-20260714T022948Z` (`5m`, lag `277.68ms`, `2321` completed), and `do-benchmark-20260714T024455Z` (`7.5m`, lag `7.64ms`, `3491` completed). All three had hardening `pass`, health `pass`, projection lag `0`, zero timeouts, zero failed ticks, and zero command accounting gaps. This closes the pacing-lag cleanup gate; a later full `15m` rerun can be kept as soak confidence rather than the immediate correctness blocker.
 
-6. Lock first lifecycle scenarios.
+6. Plan Bot Arena simulation tuning readiness.
+   - Use [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md) as the tasking source for the next arena milestone.
+   - Keep the simulation-tuning gate separate from the public-submission gate. Controlled local/hosted test simulations should move forward on diagnostic export, report comparison, starter bot calibration, leaderboard/analytics contracts, and data-interface hardening while GitHub/OpenBao/review/branch-protection work remains a separate public-readiness track.
+   - First build follow-up after planning should be the `runId` diagnostic bundle, because tuning, safety review, leaderboard trust, and bot behavior debugging all depend on complete run inspection.
+
+7. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
    - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures encode the target scenario shape, and 2026-07-14 local live reports are promoted under `reports/scenario-assertions/`.
    - Remaining lock work: none for the local P1/P2 scenario-lock criteria. Future reruns can add confidence, but the current promoted evidence already separates P1 zero-lag projection freshness from direct-stream replay proof and proves P2 settled-chain facts through the public settlement read.
 
-7. Start post-trade expansion.
+8. Start post-trade expansion.
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
    - First allowed slice is P2-only settlement exception facts from [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md): obligation, cash-leg break, manual repair, resolved exception, and transition tests.
    - Full allocation, confirmation, clearing, account-ledger mutation, and UI work stay deferred until P2-only facts prove causation.
