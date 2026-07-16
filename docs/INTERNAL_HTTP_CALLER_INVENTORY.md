@@ -18,7 +18,7 @@ Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or 
 - `scripts/dev/export-simulation-run.mjs`: posts analytics exports to `/admin/v1/analytics/run-exports`.
 - `scripts/dev/admin.mjs`: reference-data setup, auth role setup, account-risk, circuit-breaker, and price-collar commands use runtime gateway routes under `/admin/v1/reference/...`, `/admin/v1/auth/...`, and `/admin/v1/risk/...`.
 - `scripts/dev/arena-bot-risk-smoke.mjs`: reference/auth setup uses `/admin/v1/reference/...` and `/admin/v1/auth/...`; arena bot/version calls use `/admin/v1/arena/...`.
-- `scripts/dev/protective-controls-smoke.mjs`: reference/auth setup uses `/admin/v1/reference/...` and `/admin/v1/auth/...`; account-risk, circuit-breaker, and price-collar smoke setup/reads use `/admin/v1/risk/...`, with loopback-only internal risk fallback for old local stacks.
+- `scripts/dev/protective-controls-smoke.mjs`: reference/auth setup uses `/admin/v1/reference/...` and `/admin/v1/auth/...`; account-risk, circuit-breaker, and price-collar smoke setup/reads use `/admin/v1/risk/...`.
 - `scripts/dev/seed-p2-settlement-facts.mjs`: uses `/admin/v1/settlement/facts` when `ADMIN_API_TOKEN` or `--admin-gateway` is present; otherwise posts `/internal/admin/settlement/facts` and falls back to Docker container loopback when host-to-container traffic fails the local-only guard.
 - `infra/hetzner-core/server/Caddyfile`: proxies `/admin/v1/*` through the runtime admin gateway; raw `/internal/*` is not proxied.
 

@@ -108,6 +108,28 @@ if (rawInternalArenaScriptCallers.length > 0) {
   ].join("\n"));
 }
 
+const rawInternalRiskScriptCallers = scriptFiles
+  .filter((path) => !path.includes("/db/migrations/"))
+  .filter((path) => path !== "scripts/dev/script-surface-check.mjs")
+  .filter((path) => {
+    const text = repoText.get(path) ?? "";
+    return [
+      "/internal/admin/account-risk",
+      "/internal/admin/circuit-breakers",
+      "/internal/admin/price-collars",
+      "/internal/boundary/account-risk",
+      "/internal/boundary/circuit-breakers",
+      "/internal/boundary/price-collars",
+    ].some((route) => text.includes(route));
+  })
+  .sort();
+if (rawInternalRiskScriptCallers.length > 0) {
+  failures.push([
+    "script callers must use /admin/v1/risk/... instead of raw risk-control /internal/... routes:",
+    ...rawInternalRiskScriptCallers.map((path) => `  - ${path}`),
+  ].join("\n"));
+}
+
 checkWorkflowSecurity();
 checkArenaRunnerTimeoutContainment();
 
