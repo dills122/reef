@@ -81,6 +81,7 @@ type Config struct {
 	LegacyInternalRoute bool
 	ClientIDPrefix      string
 	APIBearerToken      string `json:"-"`
+	AdminAPIBearerToken string `json:"-"`
 	CommandClockStart   string
 	CommandClockStep    time.Duration
 }
@@ -473,6 +474,7 @@ func parseConfig() (Config, error) {
 	flag.BoolVar(&cfg.LegacyInternalRoute, "legacy-internal-route", cfg.LegacyInternalRoute, "send internal marker header when use-api-v1=false")
 	flag.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix used for /api/v1 traffic")
 	flag.StringVar(&cfg.APIBearerToken, "api-bearer-token", cfg.APIBearerToken, "bearer token used for /api/v1 static-token auth")
+	flag.StringVar(&cfg.AdminAPIBearerToken, "admin-api-bearer-token", cfg.AdminAPIBearerToken, "bearer token used for admin gateway seed routes")
 	flag.StringVar(&cfg.CommandClockStart, "command-clock-start", cfg.CommandClockStart, "optional RFC3339 start time for deterministic command occurredAt values")
 	flag.DurationVar(&cfg.CommandClockStep, "command-clock-step", cfg.CommandClockStep, "deterministic command clock step")
 	flag.Parse()
@@ -614,6 +616,7 @@ func defaultConfigFromEnv() Config {
 		LegacyInternalRoute: envBool("REEF_LEGACY_INTERNAL_ROUTE", false),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
 		APIBearerToken:      envOr("REEF_API_BEARER_TOKEN", ""),
+		AdminAPIBearerToken: envOr("REEF_ADMIN_API_BEARER_TOKEN", envOr("ARENA_ADMIN_API_TOKEN", "")),
 		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
 		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
 	}
@@ -781,6 +784,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["client-id-prefix"] {
 		cfg.ClientIDPrefix = parsed.ClientIDPrefix
+	}
+	if explicit["admin-api-bearer-token"] {
+		cfg.AdminAPIBearerToken = parsed.AdminAPIBearerToken
 	}
 	if explicit["command-clock-start"] {
 		cfg.CommandClockStart = parsed.CommandClockStart
@@ -1573,42 +1579,63 @@ func checkTraceOnce(client *http.Client, baseURL, traceID string) bool {
 }
 
 func seedReferenceData(client *http.Client, cfg Config) error {
-	internalHeaders := map[string]string{"X-Reef-Internal-Route": "true"}
+	headers := seedHeaders(cfg)
 	if cfg.HasSessionConfig && len(cfg.MarketEquities) > 0 {
 		for _, eq := range cfg.MarketEquities {
-			if err := seedPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
+			if err := seedPOST(client, seedURL(cfg, "/reference/instruments"), map[string]string{
 				"instrumentId": eq.InstrumentID,
 				"symbol":       eq.Symbol,
-			}, internalHeaders); err != nil {
+			}, headers); err != nil {
 				return err
 			}
 		}
 	} else {
-		if err := seedPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
+		if err := seedPOST(client, seedURL(cfg, "/reference/instruments"), map[string]string{
 			"instrumentId": cfg.InstrumentID,
 			"symbol":       cfg.InstrumentSymbol,
-		}, internalHeaders); err != nil {
+		}, headers); err != nil {
 			return err
 		}
 	}
 	for _, identity := range orderIdentities(cfg) {
-		if err := seedPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
+		if err := seedPOST(client, seedURL(cfg, "/reference/participants"), map[string]string{
 			"participantId": identity.ParticipantID,
 			"name":          identity.ParticipantName,
-		}, internalHeaders); err != nil {
+		}, headers); err != nil {
 			return err
 		}
-		if err := seedPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
+		if err := seedPOST(client, seedURL(cfg, "/reference/accounts"), map[string]string{
 			"accountId":     identity.AccountID,
 			"participantId": identity.ParticipantID,
-		}, internalHeaders); err != nil {
+		}, headers); err != nil {
 			return err
 		}
 	}
-	if err := seedOrderAuthorization(client, cfg, internalHeaders); err != nil {
+	if err := seedOrderAuthorization(client, cfg, headers); err != nil {
 		return err
 	}
 	return nil
+}
+
+func seedURL(cfg Config, legacyPath string) string {
+	if cfg.UseApiV1 {
+		return cfg.BaseURL + "/admin/v1" + legacyPath
+	}
+	return cfg.BaseURL + legacyPath
+}
+
+func seedHeaders(cfg Config) map[string]string {
+	headers := map[string]string{}
+	if cfg.UseApiV1 {
+		if token := strings.TrimSpace(cfg.AdminAPIBearerToken); token != "" {
+			headers["Authorization"] = "Bearer " + token
+		}
+		return headers
+	}
+	if cfg.LegacyInternalRoute {
+		headers["X-Reef-Internal-Route"] = "true"
+	}
+	return headers
 }
 
 type orderIdentity struct {
@@ -1675,14 +1702,14 @@ func sessionActorOrderIdentity(actorID string) orderIdentity {
 }
 
 func seedOrderAuthorization(client *http.Client, cfg Config, internalHeaders map[string]string) error {
-	if err := seedPOST(client, cfg.BaseURL+"/auth/roles", map[string]string{
+	if err := seedPOST(client, seedURL(cfg, "/auth/roles"), map[string]string{
 		"roleId":      "order_trader",
 		"permissions": "order.submit,order.cancel,order.modify",
 	}, internalHeaders); err != nil {
 		return err
 	}
 	for _, actorID := range orderActorIDs(cfg) {
-		if err := seedPOST(client, cfg.BaseURL+"/auth/actor-roles", map[string]string{
+		if err := seedPOST(client, seedURL(cfg, "/auth/actor-roles"), map[string]string{
 			"actorId": actorID,
 			"roleId":  "order_trader",
 		}, internalHeaders); err != nil {

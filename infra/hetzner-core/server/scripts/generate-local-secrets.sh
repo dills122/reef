@@ -118,17 +118,28 @@ source "$SECRETS/postgres-analytics.env"
 
 # Bearer token gating narrow CI/run-plane admin gateway routes.
 if [[ ! -s "$SECRETS/caddy.env" ]]; then
+  ADMIN_API_TOKEN="$(rand_hex)"
   ARENA_ADMIN_API_TOKEN="$(rand_hex)"
   ANALYTICS_EXPORT_API_TOKEN="$(rand_hex)"
 
   cat > "$SECRETS/caddy.env" <<EOF
+ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
 ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
 
   chmod 600 "$SECRETS/caddy.env"
+  echo "Generated ADMIN_API_TOKEN - use this for reference/auth admin gateway routes."
   echo "Generated ARENA_ADMIN_API_TOKEN - set this as the ARENA_ADMIN_API_TOKEN GitHub Actions secret for the bot-submission workflow."
   echo "Generated ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
+fi
+
+if ! grep -q '^ADMIN_API_TOKEN=' "$SECRETS/caddy.env"; then
+  ADMIN_API_TOKEN="$(rand_hex)"
+  cat >> "$SECRETS/caddy.env" <<EOF
+ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+EOF
+  echo "Generated missing ADMIN_API_TOKEN - use this for reference/auth admin gateway routes."
 fi
 
 if ! grep -q '^ANALYTICS_EXPORT_API_TOKEN=' "$SECRETS/caddy.env"; then
@@ -206,6 +217,7 @@ PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=${PLATFORM_LEGACY_MUTATION_ROUTES_ENABLE
 ADMIN_SESSION_COOKIE_NAME=${ADMIN_SESSION_COOKIE_NAME:-reef_admin_session}
 ADMIN_SESSION_COOKIE_SECURE=${ADMIN_SESSION_COOKIE_SECURE:-true}
 PLATFORM_INTERNAL_HTTP_MODE=disabled
+POST_TRADE_PROFILE=ops-realistic-v1
 EXTERNAL_API_AUTH_MODE=static-token
 EXTERNAL_API_TOKENS=${SIMULATOR_API_TOKENS}
 EXTERNAL_API_RATE_LIMIT_MODE=fixed-window
@@ -241,8 +253,10 @@ ARENA_POSTGRES_PASSWORD=${ADMIN_APP_DB_PASSWORD}
 ANALYTICS_POSTGRES_JDBC_URL=jdbc:postgresql://postgres-analytics:5432/analytics?currentSchema=analytics
 ANALYTICS_POSTGRES_USER=analytics_app
 ANALYTICS_POSTGRES_PASSWORD=${ANALYTICS_APP_DB_PASSWORD}
+ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
 ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
+ADMIN_API_ACTOR_ID=${ADMIN_API_ACTOR_ID:-ops-admin}
 ARENA_ADMIN_API_ACTOR_ID=${ARENA_ADMIN_API_ACTOR_ID:-bot-submission-ci}
 ANALYTICS_EXPORT_API_ACTOR_ID=${ANALYTICS_EXPORT_API_ACTOR_ID:-analytics-export-ci}
 EOF

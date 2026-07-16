@@ -901,7 +901,7 @@ function adminAuthSmoke() {
 
   const caddyFallback = captureOptional("ssh", [
     target,
-    `cd ${remoteDeployDir} && docker compose exec -T caddy sed -n '60,68p' /etc/caddy/Caddyfile`,
+    `cd ${remoteDeployDir} && docker compose exec -T caddy cat /etc/caddy/Caddyfile`,
   ]);
   if (caddyFallback.status !== 0) {
     failures.push(`could not inspect Caddyfile inside container: ${caddyFallback.stderr || `exit ${caddyFallback.status}`}`);

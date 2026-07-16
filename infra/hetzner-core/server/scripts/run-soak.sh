@@ -28,7 +28,16 @@ COMPOSE_STREAM_ACK="${COMPOSE_STREAM_ACK:-0}"
 DIRECT_DOCKER_RUN="${DIRECT_DOCKER_RUN:-0}"
 SIMULATOR_IMAGE="${SIMULATOR_IMAGE:-${REEF_SIMULATOR_IMAGE:-reef-simulator:local}}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-reef_internal}"
+ADMIN_API_BEARER_TOKEN="${ADMIN_API_BEARER_TOKEN:-${ADMIN_API_TOKEN:-}}"
 RUN_USER="$(id -u):$(id -g)"
+
+if [[ -z "$ADMIN_API_BEARER_TOKEN" && -f "$BASE/secrets/caddy.env" ]]; then
+  while IFS='=' read -r key value; do
+    if [[ "$key" == "ADMIN_API_TOKEN" ]]; then
+      ADMIN_API_BEARER_TOKEN="$value"
+    fi
+  done < "$BASE/secrets/caddy.env"
+fi
 
 compose=(docker compose)
 if [[ "$COMPOSE_STREAM_ACK" == "1" ]]; then
@@ -155,6 +164,9 @@ simulator_args=(
   --timeout "$TIMEOUT"
   --report-out "/reports/soak/${RUN_ID}.json"
 )
+if [[ -n "$ADMIN_API_BEARER_TOKEN" ]]; then
+  simulator_args+=(--admin-api-bearer-token "$ADMIN_API_BEARER_TOKEN")
+fi
 if [[ -n "$SESSION_CONFIG" ]]; then
   simulator_args+=(--session-config "$session_config_arg")
 fi
