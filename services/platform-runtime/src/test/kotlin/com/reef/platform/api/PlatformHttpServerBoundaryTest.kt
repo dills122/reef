@@ -4093,6 +4093,51 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun hotPathSettlementFactsEndpointReadsAppendedFactsByScenarioRunId() {
+        val settlementStore = InMemorySettlementFactStore()
+        val server = PlatformHttpServer(
+            port = 0,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            settlementFactStore = settlementStore
+        )
+        val readHeaders = Headers().apply {
+            add("X-Client-Id", "client-hot-path-settlement")
+            add("X-Participant-Id", "participant-1")
+        }
+
+        val posted = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/internal/admin/settlement/facts",
+                query = null,
+                headers = Headers(),
+                remoteAddress = "127.0.0.1",
+                body = p2SettlementFactsBody("p2-run-hot-path")
+            )
+        )
+        val fetched = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "GET",
+                path = "/api/v1/settlement/facts/p2-run-hot-path",
+                query = null,
+                headers = readHeaders,
+                remoteAddress = "203.0.113.10",
+                body = ""
+            )
+        )
+
+        assertEquals(200, posted?.status)
+        assertContains(posted?.body.orEmpty(), "\"status\":\"ok\"")
+        assertEquals(200, fetched?.status)
+        assertContains(fetched?.body.orEmpty(), "\"scenarioRunId\":\"p2-run-hot-path\"")
+        assertContains(fetched?.body.orEmpty(), "\"settlementObligationId\":\"obl-1\"")
+        assertContains(fetched?.body.orEmpty(), "\"settlementInstructionId\":\"instruction-1\"")
+        assertContains(fetched?.body.orEmpty(), "\"settlementAttemptId\":\"attempt-1\"")
+    }
+
+    @Test
     fun adminGatewaySettlementFactsEndpointAppendsAndReadsP2FactsByScenarioRunId() {
         val auth = testAdminAuth()
         val serviceToken = auth.authService.issueServiceToken(

@@ -16,7 +16,8 @@ const adminApiToken = args.token ?? process.env.ADMIN_API_TOKEN ?? "";
 const actorId = args.actorId ?? process.env.ADMIN_ACTOR_ID ?? "settlement-seeder";
 const scenarioRunId = args.scenarioRunId ?? process.env.SCENARIO_RUN_ID ?? "p2-settlement-live";
 const mode = args.mode ?? process.env.P2_SETTLEMENT_FACTS_MODE ?? "exception";
-const facts = p2SettlementFacts(scenarioRunId, mode);
+const factIdScope = args.factIdScope ?? process.env.P2_SETTLEMENT_FACT_ID_SCOPE ?? "stable";
+const facts = p2SettlementFacts(scenarioRunId, mode, factIdScope);
 const useAdminGateway = args.adminGateway || adminApiToken.trim() !== "";
 const settlementFactsPath = useAdminGateway
   ? "/admin/v1/settlement/facts"
@@ -43,6 +44,7 @@ console.log(
       settlementFactsPath,
       actorId,
       mode,
+      factIdScope,
       scenarioRunId,
       postedStatus: posted.status ?? "ok",
       reportOut: args.reportOut ?? "",
@@ -253,9 +255,9 @@ function hasSettledChain(facts) {
   return Array.isArray(facts.settlements) && facts.settlements.length > 0;
 }
 
-function p2SettlementFacts(scenarioRunId, mode) {
+function p2SettlementFacts(scenarioRunId, mode, factIdScope) {
   if (mode === "settled") {
-    return p2SettledPostTradeFacts(scenarioRunId);
+    return p2SettledPostTradeFacts(scenarioRunId, factIdScope);
   }
   if (mode !== "exception") {
     throw new Error(`unknown P2 settlement facts mode: ${mode}`);
@@ -326,12 +328,16 @@ function p2ExceptionFacts(scenarioRunId) {
   };
 }
 
-function p2SettledPostTradeFacts(scenarioRunId) {
+function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
+  if (!["stable", "run"].includes(factIdScope)) {
+    throw new Error(`unknown P2 settlement fact id scope: ${factIdScope}`);
+  }
   const profileId = "instant-post-trade-v1";
   const policyVersion = 4;
   const correlationId = `${scenarioRunId}-corr-1`;
   const tradeId = "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1";
-  const obligationId = `settlement-obligation-${tradeId}`;
+  const idPrefix = factIdScope === "run" ? `${scenarioRunId}-` : "";
+  const obligationId = `${idPrefix}settlement-obligation-${tradeId}`;
   const allocationId = `settlement-allocation-${obligationId}`;
   const confirmationId = `settlement-confirmation-${obligationId}`;
   const affirmationId = `settlement-affirmation-${obligationId}`;
