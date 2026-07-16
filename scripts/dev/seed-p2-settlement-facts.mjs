@@ -1,10 +1,8 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
 import { dirname } from "node:path";
-import { composeArgs } from "./lib/compose-utils.mjs";
 import { deriveDevUrls, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
@@ -18,10 +16,7 @@ const scenarioRunId = args.scenarioRunId ?? process.env.SCENARIO_RUN_ID ?? "p2-s
 const mode = args.mode ?? process.env.P2_SETTLEMENT_FACTS_MODE ?? "exception";
 const factIdScope = args.factIdScope ?? process.env.P2_SETTLEMENT_FACT_ID_SCOPE ?? "stable";
 const facts = p2SettlementFacts(scenarioRunId, mode, factIdScope);
-const useAdminGateway = args.adminGateway || adminApiToken.trim() !== "";
-const settlementFactsPath = useAdminGateway
-  ? "/admin/v1/settlement/facts"
-  : "/internal/admin/settlement/facts";
+const settlementFactsPath = "/admin/v1/settlement/facts";
 
 if (args.dryRun) {
   console.log(JSON.stringify(facts, null, 2));
@@ -105,23 +100,15 @@ function requestHeaders(path) {
     "content-type": "application/json",
     "X-Reef-Actor-Id": actorId,
     ...(path.startsWith("/admin/v1/") && adminApiToken.trim() !== "" ? { Authorization: `Bearer ${adminApiToken}` } : {}),
-    ...(path.startsWith("/internal/") ? { "X-Reef-Internal-Route": "true" } : {}),
   };
 }
 
 async function postJson(url, body, headers) {
-  try {
-    return await requestJson(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-  } catch (error) {
-    if (shouldRetryInternalPostViaContainer(url, error)) {
-      return postInternalSettlementFactsViaContainer(body);
-    }
-    throw error;
-  }
+  return requestJson(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
 }
 
 async function fetchJson(url) {
@@ -168,58 +155,6 @@ async function requestJson(url, options = {}) {
       request.write(body);
     }
     request.end();
-  });
-}
-
-function shouldRetryInternalPostViaContainer(url, error) {
-  const parsed = new URL(url);
-  return parsed.pathname === "/internal/admin/settlement/facts" &&
-    error.statusCode === 403 &&
-    String(error.body ?? "").includes("internal HTTP route requires loopback access");
-}
-
-async function postInternalSettlementFactsViaContainer(body) {
-  const stdout = await runWithInput(
-    "docker",
-    composeArgs([
-      "exec",
-      "-T",
-      "platform-api",
-      "curl",
-      "-sS",
-      "-X",
-      "POST",
-      "-H",
-      "Content-Type: application/json",
-      "-H",
-      "X-Reef-Internal-Route: true",
-      "--data-binary",
-      "@-",
-      "http://127.0.0.1:8080/internal/admin/settlement/facts",
-    ]),
-    JSON.stringify(body),
-  );
-  return stdout ? JSON.parse(stdout) : {};
-}
-
-function runWithInput(command, commandArgs, input) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, commandArgs, { stdio: ["pipe", "pipe", "pipe"] });
-    const stdout = [];
-    const stderr = [];
-    child.stdout.on("data", (chunk) => stdout.push(chunk));
-    child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      const stdoutText = Buffer.concat(stdout).toString("utf8").trim();
-      const stderrText = Buffer.concat(stderr).toString("utf8").trim();
-      if (code !== 0) {
-        reject(new Error(`${command} ${commandArgs.join(" ")} failed with ${code}: ${stderrText || stdoutText}`));
-        return;
-      }
-      resolve(stdoutText);
-    });
-    child.stdin.end(input);
   });
 }
 

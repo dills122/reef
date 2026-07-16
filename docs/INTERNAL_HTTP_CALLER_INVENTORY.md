@@ -1,6 +1,6 @@
 # Internal HTTP Caller Inventory
 
-Last aligned: 2026-07-12
+Last aligned: 2026-07-16
 
 Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or stable operator contracts. Hosted, CI, public, bot, SDK, and partner flows must use `/api/v1/...`, `/admin/v1/...`, gRPC, CLI, or durable-message contracts.
 
@@ -18,8 +18,8 @@ Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or 
 - `scripts/dev/export-simulation-run.mjs`: posts analytics exports to `/admin/v1/analytics/run-exports`.
 - `scripts/dev/admin.mjs`: reference-data setup, auth role setup, account-risk, circuit-breaker, and price-collar commands use runtime gateway routes under `/admin/v1/reference/...`, `/admin/v1/auth/...`, and `/admin/v1/risk/...`.
 - `scripts/dev/arena-bot-risk-smoke.mjs`: reference/auth setup uses `/admin/v1/reference/...` and `/admin/v1/auth/...`; arena bot/version calls use `/admin/v1/arena/...`.
-- `scripts/dev/protective-controls-smoke.mjs`: reference/auth setup uses `/admin/v1/reference/...` and `/admin/v1/auth/...`; account-risk, circuit-breaker, and price-collar smoke setup/reads use `/admin/v1/risk/...`, with loopback-only internal risk fallback for old local stacks.
-- `scripts/dev/seed-p2-settlement-facts.mjs`: uses `/admin/v1/settlement/facts` when `ADMIN_API_TOKEN` or `--admin-gateway` is present; otherwise posts `/internal/admin/settlement/facts` and falls back to Docker container loopback when host-to-container traffic fails the local-only guard.
+- `scripts/dev/protective-controls-smoke.mjs`: reference/auth setup uses `/admin/v1/reference/...` and `/admin/v1/auth/...`; account-risk, circuit-breaker, and price-collar smoke setup/reads use `/admin/v1/risk/...`.
+- `scripts/dev/seed-p2-settlement-facts.mjs`: posts settlement facts through `/admin/v1/settlement/facts`; local authenticated runs should pass `ADMIN_API_TOKEN` when admin auth is enabled.
 - `infra/hetzner-core/server/Caddyfile`: proxies `/admin/v1/*` through the runtime admin gateway; raw `/internal/*` is not proxied.
 
 ## Local-Only Callers
@@ -33,6 +33,8 @@ These callers may keep raw `/internal/*` while they run against loopback, compos
 - `scripts/dev/throughput-campaign.mjs`: local abuse stats capture.
 - `infra/hetzner-core/server/scripts/start-stream-ack.sh`: operator-side local health probe from inside the server.
 - `infra/hetzner-core/server/scripts/verify-runtime.sh`, `infra/hetzner-core/server/scripts/run-soak.sh`: local loopback health/soak checks.
+
+`scripts/dev/script-surface-check.mjs` blocks new script callers for gateway-backed admin families under raw `/internal/admin/arena/...`, `/internal/admin/analytics/...`, `/internal/admin/settlement/...`, and the gateway-backed risk-control routes.
 
 ## Migration Candidates Before Hosted Use
 

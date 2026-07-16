@@ -170,7 +170,7 @@ P2 uses one narrow assertion source before it can be locked:
 
 - `GET /api/v1/settlement/facts/{scenarioRunId}` returns obligation, break, repair, and resolution facts for the run
 - `POST /admin/v1/settlement/facts` appends the same fact bundle through the authenticated admin gateway
-- `POST /internal/admin/settlement/facts` appends the same fact bundle for local/smoke seeding and evidence setup
+- `POST /internal/admin/settlement/facts` remains a local-only runtime alias, but smoke/evidence scripts should seed through `/admin/v1/settlement/facts`
 - `scenario-smoke --settlement-facts-report` remains an artifact fallback for offline test evidence
 
 The assertion source must return obligation, break, repair, and resolution facts by `scenarioRunId` and must expose enough ordering data to prove causation.

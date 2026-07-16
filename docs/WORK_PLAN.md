@@ -44,7 +44,7 @@ Current deployment assumptions:
 
 ## Current Execution Checkpoint
 
-Active checkpoint: projection/read-model promotion on top of the proven durable direct materializer path.
+Active checkpoint: API/control-plane hardening on top of the proven durable direct materializer path and short projection/read-model freshness gate.
 
 Target path:
 
@@ -58,7 +58,7 @@ API publish ack
   -> projection/replay verification
 ```
 
-The direct materializer portion of this checkpoint now has local crash/replay proof and DigitalOcean `10k` `soak-5m` promotion evidence. The checkpoint is not fully done until Reef can also prove, with named local gates and then remote evidence, that projected read models remain fresh or drain predictably under the same durable venue-event load.
+The direct materializer portion of this checkpoint has local crash/replay proof and DigitalOcean `10k` `soak-5m` promotion evidence. The first named short projection/read-model freshness gate is also green: local durable proof passed, and DigitalOcean run `do-benchmark-20260716T005756Z` proved `150,001` accepted/direct-acked/materialized/projected commands at `2499.52/sec` with projection lag `0`, accepted/materialized gap `0`, materialized/projected gap `0`, p95 `47.31ms`, p99 `159.32ms`, and `100%` success. The active engineering priority is now API/control-plane hardening; future projection work should scale this read-model proof toward the `10k` materializer baseline without redefining venue-core command acceptance as UI/control-room freshness.
 
 ### Active Now
 
@@ -83,7 +83,7 @@ The direct materializer portion of this checkpoint now has local crash/replay pr
    - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, selects commands that cover all four direct-stream partitions, stops/restarts engine/materializer/projector roles around accepted commands, injects one engine command-ack failure after durable event-batch publish, injects one materializer ack/offset failure after canonical commit, injects one projector failure after read-model rows commit but before watermark commit, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
    - 2026-07-08 local evidence: this gate passed with 12 accepted commands across partitions 0, 1, 2, and 3, final engine ack lag 0, final materializer lag 0, replay/checksum mismatches 0, duplicate replay inserts 0; see [`DURABLE_DIRECT_CRASH_GATE_RESULTS_2026-07-08.md`](./DURABLE_DIRECT_CRASH_GATE_RESULTS_2026-07-08.md).
    - API publish-marker recovery is covered by HTTP-path tests that retry after publish ack before marker update, republish, converge the marker, and stop republishing once the marker is durable.
-   - remaining promotion gap: projection/read-model freshness under the same durable event-batch load.
+   - first short projection/read-model freshness gate is closed; remaining performance follow-up is scaling projection evidence toward the `10k` materializer baseline.
 
 4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
@@ -170,7 +170,7 @@ Implemented or materially started:
 
 The current gaps are:
 
-- durable hot-ingress plus canonical materialization now has a clean `10k` `soak-5m` baseline; the next throughput gap is projection/read-model freshness under the same durable venue-event load
+- durable hot-ingress plus canonical materialization now has a clean `10k` `soak-5m` baseline; the short projection/read-model freshness gate is green at `2.5k rps`, and the remaining throughput gap is scaling projection freshness toward the same durable venue-event load as the materializer baseline
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; local API publish-marker recovery and engine/materializer/projector crash gates passed, and the direct materializer `10k` `soak-5m` DO gate passed on 2026-07-12
 - the submit/cancel intake contract needs implementation-ready proof around duplicate idempotency, accepted-but-not-completed accounting, and event-batch intermediate status authority; hot-path cancel routing metadata is now covered by stream envelope and HTTP boundary tests, and `/api/v1/commands/{commandId}` exposes the provider-neutral public status vocabulary for stream references, in-flight work, canonical completions, rejects, and failures
@@ -206,9 +206,10 @@ The current gaps are:
    - `/api/v1/commands/{commandId}` now prefers materialized canonical command outcomes and falls back to existing status surfaces while materialization catches up.
 
 4. Complete venue lifecycle projection.
-   - This is the next promotion track after the 2026-07-12 materializer `soak-5m` pass: enable the appropriate projector/read surfaces during a durable venue-event load run, record projected throughput, projection lag/watermarks, replay idempotency, and read API freshness separately from canonical accepted/materialized throughput.
+   - This promotion track is now green for the short `2.5k rps` gate. Keep projected throughput, projection lag/watermarks, replay idempotency, and read API freshness reported separately from canonical accepted/materialized throughput.
    - Remote gate command: `make do-projection-freshness-gate ARGS=plan|run-destroy`. It runs the Redpanda direct-stream plus venue-event-materializer path on DigitalOcean with venue-event-batch projection, order-lifecycle projection, and market-data projection enabled, then fails if projected work does not catch up to durable canonical materialization with zero materialized/projected gap, zero projector lag, and zero projection DB deadlocks after the configured drain window.
    - 2026-07-12 short projection evidence: after splitting four projector instances across active direct-stream partitions `0-15`, DO run `do-benchmark-20260712T172412Z` passed at `2.5k rps` on c-16 with `149,976` accepted/materialized/projected commands, projected rps `2499.56`, p95 `35.98ms`, p99 `82.06ms`, projection lag `0`, materialized/projected gap `0`, and projection-postgres deadlocks `0`.
+   - 2026-07-16 named short projection gate evidence: DO run `do-benchmark-20260716T005756Z` passed at `2.5k rps` on c-16 with `150,001` attempted/accepted/direct-acked/materialized/projected commands, projected rps `2499.52`, p95 `47.31ms`, p99 `159.32ms`, projection lag `0`, accepted/materialized gap `0`, materialized/projected gap `0`, and `100%` success. Local artifacts live under `reports/do-benchmark/do-benchmark-20260716T005756Z/`.
    - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
    - The first persistence-layer live smoke now runs the durable event-batch path end to end: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event/order/lifecycle/market-data rows -> public command status, own-order, top-of-book, depth, and data-availability reads. Its replay check rewinds the projector watermark and requires the stable DB/API snapshot to remain unchanged after replay, so duplicate read-model rows or freshness drift fail locally before a remote projection gate is promoted.
    - No-DB direct-consume `VenueEventBatch` submit outcomes now carry the compact `acceptedOrder` fact needed to reconstruct `orders` rows; the durable `command_log.command_payloads` join remains a compatibility fallback.

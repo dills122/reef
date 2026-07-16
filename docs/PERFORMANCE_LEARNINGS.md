@@ -68,25 +68,27 @@ Immediate implications:
 
 1. The direct-stream plus venue-event-materializer path is now the canonical `10k` venue-core baseline for accepted/direct-acked/materialized throughput.
 2. Do not use this run as projection or read API freshness evidence: `projected=0` was intentional for the materializer gate.
-3. The next performance risk is projection/read-model freshness and replay under the same durable venue-event load, not canonical materialization throughput.
+3. The next performance risk is scaling projection/read-model freshness toward the same durable venue-event load as the `10k` materializer baseline, not canonical materialization throughput.
 4. Keep `soak-15m` as aged-state confirmation before raising the venue-core target above `10k`, and track WAL/table bytes per command plus Kafka producer queue/request latency in every longer run.
 
-## DigitalOcean Projection Freshness Short Gate (July 12, 2026)
+## DigitalOcean Projection Freshness Short Gates (July 12 and 16, 2026)
 
-The first projection-freshness promotion run proved the read-model path can catch up cleanly at a lower rate after partitioning projector work across direct-stream partitions. This evidence is intentionally narrower than the `10k` venue-core materializer claim.
+The projection-freshness promotion runs proved the read-model path can catch up cleanly at `2.5k rps` after partitioning projector work across direct-stream partitions. This evidence is intentionally narrower than the `10k` venue-core materializer claim.
 
-Evidence: `reports/do-benchmark/do-benchmark-20260712T172412Z/`.
+Evidence:
 
-- configuration: c-16, Redpanda direct-stream plus venue-event materializer, venue-event-batch projection, order-lifecycle projection, and market-data projection enabled, with four projector instances split across active direct-stream partitions `0-15`.
-- result: `149,976` accepted, `149,976` materialized, `149,976` projected.
-- throughput and latency: projected rps `2499.56`, p95 `35.98ms`, p99 `82.06ms`.
-- correctness/freshness checks: projection lag `0`, materialized/projected gap `0`, projection Postgres deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260712T172412Z/`
+- `reports/do-benchmark/do-benchmark-20260716T005756Z/`
+
+- July 12 configuration: c-16, Redpanda direct-stream plus venue-event materializer, venue-event-batch projection, order-lifecycle projection, and market-data projection enabled, with four projector instances split across active direct-stream partitions `0-15`.
+- July 12 result: `149,976` accepted, `149,976` materialized, `149,976` projected; projected rps `2499.56`, p95 `35.98ms`, p99 `82.06ms`; projection lag `0`, materialized/projected gap `0`, projection Postgres deadlocks `0`.
+- July 16 named gate result: `150,001` attempted/accepted/direct-acked/materialized/projected; projected rps `2499.52`, p95 `47.31ms`, p99 `159.32ms`; projection lag `0`, accepted/materialized gap `0`, materialized/projected gap `0`, `100%` success.
 
 Immediate implications:
 
 1. Projection partitioning is the right near-term direction; one generic projector path should not be assumed to keep up with venue-core materialization.
-2. The next gate should raise read-model freshness toward the `10k` materializer baseline while preserving separate reporting for accepted, materialized, projected, lag, and replay checks.
-3. Do not use this short `2.5k` run as a UI/control-room capacity claim until the named projection freshness gate also proves drain/replay behavior at the target duration and rate.
+2. The short named projection gate is green. The next projection performance gate should raise read-model freshness toward the `10k` materializer baseline while preserving separate reporting for accepted, materialized, projected, lag, and replay checks.
+3. Do not use these short `2.5k` runs as UI/control-room capacity claims; they prove read-model catch-up for the venue-event projection path only.
 
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 

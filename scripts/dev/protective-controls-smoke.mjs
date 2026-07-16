@@ -41,11 +41,8 @@ async function expectOk(method, path, payload = undefined, headers = {}) {
   return response;
 }
 
-async function expectGatewayOk(method, path, internalPath, payload = undefined) {
-  let response = await request(method, path, payload, adminHeaders(payload), false);
-  if (canFallbackToInternal(path, response)) {
-    response = await request(method, internalPath, payload, adminHeaders(payload), true);
-  }
+async function expectAdminOk(method, path, payload = undefined) {
+  const response = await request(method, path, payload, adminHeaders(payload), false);
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`${method} ${path} failed (${response.status}): ${response.text}`);
   }
@@ -57,15 +54,6 @@ function adminHeaders(payload = undefined) {
     "X-Reef-Actor-Id": payload?.actorId ?? "protective-controls-smoke",
     "X-Correlation-Id": payload?.correlationId ?? `protective-controls-smoke-${suffix}`,
   };
-}
-
-function canFallbackToInternal(path, response) {
-  const host = new URL(runtimeUrl).hostname;
-  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
-  if (!loopback || adminApiToken.trim() !== "" || !path.startsWith("/admin/v1/risk/")) return false;
-  return response.status === 404 ||
-    response.status === 401 ||
-    (response.status === 503 && response.text.includes("ADMIN_API_TOKEN"));
 }
 
 function isAccepted(response) {
@@ -132,7 +120,7 @@ async function seedReferenceData() {
 }
 
 async function setAccountRisk(scopeType, scopeId, decision, reason, limits = {}) {
-  return expectGatewayOk("POST", "/admin/v1/risk/account-controls", "/internal/admin/account-risk/controls", {
+  return expectAdminOk("POST", "/admin/v1/risk/account-controls", {
     scopeType,
     scopeId,
     decision,
@@ -146,7 +134,7 @@ async function setAccountRisk(scopeType, scopeId, decision, reason, limits = {})
 }
 
 async function setBreaker(scopeType, scopeId, action, reason) {
-  return expectGatewayOk("POST", "/admin/v1/risk/circuit-breakers", "/internal/admin/circuit-breakers", {
+  return expectAdminOk("POST", "/admin/v1/risk/circuit-breakers", {
     scopeType,
     scopeId,
     action,
@@ -157,7 +145,7 @@ async function setBreaker(scopeType, scopeId, action, reason) {
 }
 
 async function setPriceCollar(instrumentId, minPrice, maxPrice, reason, currency = "USD") {
-  return expectGatewayOk("POST", "/admin/v1/risk/price-collars", "/internal/admin/price-collars", {
+  return expectAdminOk("POST", "/admin/v1/risk/price-collars", {
     instrumentId,
     minPrice,
     maxPrice,
@@ -172,11 +160,11 @@ console.log("waiting for platform-api health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
 
 console.log("checking protective control admin endpoints...");
-const controls = await expectGatewayOk("GET", "/admin/v1/risk/account-controls", "/internal/boundary/account-risk/controls");
+const controls = await expectAdminOk("GET", "/admin/v1/risk/account-controls");
 if (controls.status !== 200) {
   throw new Error(`account-risk controls endpoint unavailable (${controls.status}): ${controls.text}`);
 }
-const collars = await expectGatewayOk("GET", "/admin/v1/risk/price-collars", "/internal/boundary/price-collars");
+const collars = await expectAdminOk("GET", "/admin/v1/risk/price-collars");
 if (collars.status !== 200) {
   throw new Error(`price collars endpoint unavailable (${collars.status}): ${collars.text}`);
 }
