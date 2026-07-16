@@ -335,6 +335,7 @@ class PostgresArenaBotRegistryStore(
 
     override fun saveQualificationReport(report: ArenaQualificationReport) {
         connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 conn.prepareStatement(
@@ -380,7 +381,7 @@ class PostgresArenaBotRegistryStore(
                 conn.rollback()
                 throw ex
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }
@@ -452,6 +453,7 @@ class PostgresArenaBotRegistryStore(
 
     override fun saveRunRecord(runRecord: ArenaRunRecord) {
         connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 conn.prepareStatement(
@@ -504,7 +506,7 @@ class PostgresArenaBotRegistryStore(
                 conn.rollback()
                 throw ex
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }
@@ -687,6 +689,7 @@ class PostgresArenaBotRegistryStore(
         descriptors: List<ArenaRuntimeConfigDescriptor>
     ) {
         connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 conn.prepareStatement(
@@ -721,7 +724,7 @@ class PostgresArenaBotRegistryStore(
                 conn.rollback()
                 throw ex
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }

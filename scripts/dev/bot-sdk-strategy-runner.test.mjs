@@ -12,6 +12,7 @@ const { createRecordingVenueTransportV1 } = await import(
 
 await assertMultiSymbolStrategyRun();
 await assertLiveReadClientsStrategyRun();
+await assertStrategyBotRandomAdvancesAndReplays();
 await assertPolicyBlockedStrategyRunDoesNotSendOrApply();
 
 console.log("bot SDK strategy runner checks passed");
@@ -132,6 +133,22 @@ async function assertLiveReadClientsStrategyRun() {
   assert.equal(report.finalOrders[0].orderId, "live-strategy-open-1");
 }
 
+async function assertStrategyBotRandomAdvancesAndReplays() {
+  const first = await runBotStrategyScenarioV1({ BotClass: RandomStrategyProbeBot, fixture });
+  const second = await runBotStrategyScenarioV1({ BotClass: RandomStrategyProbeBot, fixture });
+  const differentRun = await runBotStrategyScenarioV1({
+    BotClass: RandomStrategyProbeBot,
+    fixture: { ...fixture, runId: `${fixture.runId}-different` },
+  });
+
+  const firstValues = randomReasons(first);
+  assert.equal(first.status, "completed");
+  assert.equal(firstValues.length, 3);
+  assert.equal(new Set(firstValues).size, firstValues.length);
+  assert.deepEqual(firstValues, randomReasons(second));
+  assert.notDeepEqual(firstValues, randomReasons(differentRun));
+}
+
 async function assertPolicyBlockedStrategyRunDoesNotSendOrApply() {
   const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/test-fixtures/bad-bots/too-many-orders-bot.ts")).href);
   const transport = createRecordingVenueTransportV1(202);
@@ -163,6 +180,22 @@ class LiveReadProbeBot {
     }
     return [ctx.orders.placeLimit({ instrumentId: "AAPL", side: "BUY", quantity: 1, limitPrice: snapshot.value.midPrice })];
   }
+}
+
+class RandomStrategyProbeBot {
+  strategies = [];
+  async onStart() {}
+  async onStop() {}
+  async onSignal() {
+    return [];
+  }
+  async onTick(ctx) {
+    return [ctx.actions.noop(`random:${ctx.random.integer(0, 1_000_000_000)}`)];
+  }
+}
+
+function randomReasons(report) {
+  return report.ticks.map((tick) => tick.actions[0]?.reason);
 }
 
 function bars(instrumentId, closes) {

@@ -747,10 +747,10 @@ func postRequest(baseURL string, path string, headers map[string]string, payload
 }
 
 func runLive(cfg config, client *http.Client, report *smokeReport) {
-	client.Timeout = cfg.timeout
+	liveClient := clientWithTimeout(client, cfg.timeout)
 	if cfg.seedReference {
 		for _, request := range report.SeedRequests {
-			result := executeRequest(client, request)
+			result := executeRequest(liveClient, request)
 			report.Results = append(report.Results, result)
 			if result.Error != "" || result.StatusCode < 200 || result.StatusCode >= 300 {
 				report.Errors = append(report.Errors, fmt.Sprintf("seed %s failed", request.Path))
@@ -759,9 +759,9 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 		}
 	}
 	for _, request := range report.Requests {
-		result := executeRequest(client, request)
+		result := executeRequest(liveClient, request)
 		if result.Error == "" && result.StatusCode >= 200 && result.StatusCode < 300 {
-			statusCode, statusBody, err := waitCommandStatus(client, cfg, request.Payload["commandId"], request.Headers)
+			statusCode, statusBody, err := waitCommandStatus(liveClient, cfg, request.Payload["commandId"], request.Headers)
 			result.CommandStatusCode = statusCode
 			result.CommandStatusBody = statusBody
 			if err != nil {
@@ -774,12 +774,21 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 		}
 		if cfg.assertions && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" && request.Sequence == 1 &&
 			result.Error == "" && result.StatusCode >= 200 && result.StatusCode < 300 && result.CommandStatusCode == 200 {
-			captureP1HiddenDepthTimeline(cfg, client, report)
+			captureP1HiddenDepthTimeline(cfg, liveClient, report)
 		}
 	}
 	if cfg.assertions && len(report.Errors) == 0 {
-		runAssertions(cfg, client, report)
+		runAssertions(cfg, liveClient, report)
 	}
+}
+
+func clientWithTimeout(client *http.Client, timeout time.Duration) *http.Client {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	copy := *client
+	copy.Timeout = timeout
+	return &copy
 }
 
 func requireCommandStatusLookup(cfg config, client *http.Client) error {

@@ -680,8 +680,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .filter {
                 it.orderType == "LIMIT" &&
                     it.limitPrice.toBigDecimalOrNull() != null &&
-                    it.remainingQuantityUnits.toBigDecimalOrNull() != null &&
-                    it.remainingQuantityUnits.toBigDecimalOrNull()!! > BigDecimal.ZERO &&
+                    it.hasPositiveRemainingQuantity() &&
                     it.status in OpenLifecycleStatuses
             }
             .groupBy { it.instrumentId }
@@ -726,8 +725,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 it.instrumentId == instrumentId &&
                     it.orderType == "LIMIT" &&
                     it.limitPrice.toBigDecimalOrNull() != null &&
-                    it.remainingQuantityUnits.toBigDecimalOrNull() != null &&
-                    it.remainingQuantityUnits.toBigDecimalOrNull()!! > BigDecimal.ZERO &&
+                    it.hasPositiveRemainingQuantity() &&
                     it.status in OpenLifecycleStatuses
             }
             if (instrumentOrders.isEmpty()) {
@@ -779,8 +777,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .filter {
                 it.orderType == "LIMIT" &&
                     it.limitPrice.toBigDecimalOrNull() != null &&
-                    it.remainingQuantityUnits.toBigDecimalOrNull() != null &&
-                    it.remainingQuantityUnits.toBigDecimalOrNull()!! > BigDecimal.ZERO &&
+                    it.hasPositiveRemainingQuantity() &&
                     it.status in OpenLifecycleStatuses
             }
         if (openOrders.isEmpty()) return null
@@ -873,6 +870,10 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .fold(BigDecimal.ZERO, BigDecimal::add)
         if (total == BigDecimal.ZERO) return ""
         return decimalString(total)
+    }
+
+    private fun OrderLifecycleState.hasPositiveRemainingQuantity(): Boolean {
+        return (remainingQuantityUnits.toBigDecimalOrNull() ?: return false) > BigDecimal.ZERO
     }
 
     private fun depthLevels(

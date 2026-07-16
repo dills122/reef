@@ -12,6 +12,7 @@ import {
   type OwnOrderV1,
 } from "./index";
 import {
+  createBotRunRandomV1,
   createFixtureBotContextV1,
   defaultBotRuntimePolicyV1,
   type BotFixtureDataV1,
@@ -87,6 +88,7 @@ export async function runBotStrategyScenarioV1(
   let signalsGenerated = 0;
   let eventsProcessed = 0;
   let commandSequence = 1;
+  const random = createBotRunRandomV1(options.fixture);
 
   for (const order of options.fixture.initialOrders ?? []) {
     orderState.set(order.orderId, order);
@@ -98,6 +100,7 @@ export async function runBotStrategyScenarioV1(
     policy,
     fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory),
     readClients: options.readClients,
+    random,
     logs,
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },
@@ -121,6 +124,7 @@ export async function runBotStrategyScenarioV1(
       fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory, fixtureTick.marketSnapshots),
       nowIso: fixtureTick.occurredAt,
       readClients: options.readClients,
+      random,
       logs,
       denials,
       counters,
@@ -217,6 +221,7 @@ export async function runBotStrategyScenarioV1(
     policy,
     fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory),
     readClients: options.readClients,
+    random,
     logs,
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },

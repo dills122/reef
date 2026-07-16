@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { PUBLIC_ARENA_API_BASE_URL } from '$env/static/public';
 	import {
+		ARENA_API_BASE_URL,
 		fetchAdminBots,
 		fetchAdminRunEnforcementEvents,
 		fetchAdminRiskControls,
@@ -276,12 +276,12 @@
 		const policy = runResults(run.runId)[0]?.scoringPolicyVersion;
 		if (!policy) return '';
 		const params = new URLSearchParams({ modeId: run.modeId, scoringPolicyVersion: policy });
-		return `${PUBLIC_ARENA_API_BASE_URL}/admin/v1/arena/leaderboard?${params}`;
+		return `${ARENA_API_BASE_URL}/admin/v1/arena/leaderboard?${params}`;
 	}
 
 	function runResultsHref(runId: string) {
 		const params = new URLSearchParams({ runId });
-		return `${PUBLIC_ARENA_API_BASE_URL}/admin/v1/arena/run-bot-results?${params}`;
+		return `${ARENA_API_BASE_URL}/admin/v1/arena/run-bot-results?${params}`;
 	}
 
 	function signed(n: number) {

@@ -84,3 +84,24 @@ class StreamCommandDrainBackpressureSampler(
         )
     }
 }
+
+internal fun streamCommandBackpressureWorkerDurableNames(
+    config: StreamCommandConfig,
+    explicitDurables: String,
+    workerCount: Int,
+    workerPrefixRoot: String = "reef-stream-worker-w"
+): List<String> {
+    val explicit = explicitDurables
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+    if (explicit.isNotEmpty()) return explicit
+
+    val boundedWorkerCount = workerCount.coerceAtLeast(1)
+    val partitionsPerWorker = ((config.partitionCount + boundedWorkerCount - 1) / boundedWorkerCount).coerceAtLeast(1)
+    return (0 until config.partitionCount).map { partition ->
+        val workerIndex = (partition / partitionsPerWorker).coerceAtMost(boundedWorkerCount - 1)
+        "${workerPrefixRoot}${workerIndex}-${StreamCommandWorkerFactory.partitionToken(config, partition)}"
+    }
+}

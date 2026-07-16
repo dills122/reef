@@ -688,6 +688,7 @@ class PostgresSettlementFactStore(
     override fun appendFacts(facts: SettlementFactBundle): SettlementFactBundle {
         if (facts.isEmpty()) return facts
         connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 val existing = factsByScenarioRunId(conn, facts.scenarioRunId)
@@ -711,7 +712,7 @@ class PostgresSettlementFactStore(
                 conn.rollback()
                 throw error
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
         return facts

@@ -5,6 +5,7 @@ import {
   type BotConfigV1,
   type BotContextV1,
   type BotDenialV1,
+  type BotHistoricalBarsRequestV1,
   type BotHistoricalDataClientV1,
   type BotLoggerV1,
   type BotMarketDataClientV1,
@@ -263,6 +264,7 @@ export function createFixtureBotContextV1(options?: {
   readonly fixtureData?: BotFixtureDataV1;
   readonly nowIso?: string;
   readonly readClients?: BotReadClientsV1 | undefined;
+  readonly random?: BotRandomV1;
   readonly logs?: BotLogEntryV1[];
   readonly denials?: BotDenialV1[];
   readonly counters?: { dataCalls: number; dataCallsThisTick: number };
@@ -271,6 +273,7 @@ export function createFixtureBotContextV1(options?: {
   const fixtureData = options?.fixtureData ?? {};
   const nowIso = options?.nowIso ?? "2026-07-04T14:30:00.000Z";
   const readClients = options?.readClients;
+  const random = options?.random ?? createSeededRandom(1);
   const logs = options?.logs ?? [];
   const denials = options?.denials ?? [];
   const counters = options?.counters ?? { dataCalls: 0, dataCallsThisTick: 0 };
@@ -368,8 +371,9 @@ export function createFixtureBotContextV1(options?: {
           denials.push(denial);
           return { ok: false, denial };
         }
-        historicalCache.set(cacheKey, bars);
-        return { ok: true, value: bars };
+        const filteredBars = filterHistoricalBarsForRequest(bars, request);
+        historicalCache.set(cacheKey, filteredBars);
+        return { ok: true, value: filteredBars };
       });
     },
     async intradayBarsBatch(requests) {
@@ -401,8 +405,9 @@ export function createFixtureBotContextV1(options?: {
             missing.push(request.instrumentId);
           } else {
             const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
-            historicalCache.set(cacheKey, bars);
-            result[request.instrumentId] = bars;
+            const filteredBars = filterHistoricalBarsForRequest(bars, request);
+            historicalCache.set(cacheKey, filteredBars);
+            result[request.instrumentId] = filteredBars;
           }
         }
         if (missing.length > 0) {
@@ -422,7 +427,7 @@ export function createFixtureBotContextV1(options?: {
       now: () => new Date(nowIso),
       nowIso: () => nowIso,
     },
-    random: createSeededRandom(1),
+    random,
     log: createLogger(logs),
     actions,
     marketData,
@@ -612,6 +617,44 @@ function validateOwnOrderAction(
   return undefined;
 }
 
+function filterHistoricalBarsForRequest(
+  bars: readonly HistoricalBarV1[],
+  request: BotHistoricalBarsRequestV1,
+): readonly HistoricalBarV1[] {
+  const requestStartMs = Date.parse(request.start);
+  const requestEndMs = Date.parse(request.end);
+  const intervalMs = intervalToMilliseconds(request.interval);
+  if (!Number.isFinite(requestStartMs) || !Number.isFinite(requestEndMs) || intervalMs === undefined) {
+    return [];
+  }
+  return bars.filter((bar) => {
+    const barStartMs = Date.parse(bar.start);
+    const barEndMs = Date.parse(bar.end);
+    return (
+      Number.isFinite(barStartMs) &&
+      Number.isFinite(barEndMs) &&
+      barStartMs >= requestStartMs &&
+      barEndMs <= requestEndMs &&
+      barEndMs - barStartMs === intervalMs
+    );
+  });
+}
+
+function intervalToMilliseconds(interval: string): number | undefined {
+  switch (interval) {
+    case "1m":
+      return 60_000;
+    case "5m":
+      return 5 * 60_000;
+    case "15m":
+      return 15 * 60_000;
+    case "1h":
+      return 60 * 60_000;
+    default:
+      return undefined;
+  }
+}
+
 export function createConfig(values: Record<string, string | number | boolean>): BotConfigV1 {
   return {
     string: (key) => requiredValue(values, key, "string"),
@@ -662,6 +705,54 @@ export function createSeededRandom(seed: number): BotRandomV1 {
       return Math.floor(value * (maxInclusive - minInclusive + 1)) + minInclusive;
     },
   };
+}
+
+export function createBotRunRandomV1(identity: {
+  readonly seed?: number;
+  readonly scenarioId?: string;
+  readonly runId?: string;
+  readonly venueSessionId?: string;
+  readonly actorId?: string;
+  readonly botId?: string;
+  readonly botVersion?: string;
+}): BotRandomV1 {
+  return createSeededRandom(seedForBotRunV1(identity));
+}
+
+export function seedForBotRunV1(identity: {
+  readonly seed?: number;
+  readonly scenarioId?: string;
+  readonly runId?: string;
+  readonly venueSessionId?: string;
+  readonly actorId?: string;
+  readonly botId?: string;
+  readonly botVersion?: string;
+}): number {
+  const parts = [
+    `seed=${Number.isFinite(identity.seed) ? identity.seed : 1}`,
+    stringSeedPart("scenario", identity.scenarioId),
+    stringSeedPart("run", identity.runId),
+    stringSeedPart("session", identity.venueSessionId),
+    stringSeedPart("actor", identity.actorId),
+    stringSeedPart("bot", identity.botId),
+    stringSeedPart("version", identity.botVersion),
+  ].filter((part): part is string => part !== undefined);
+
+  return fnv1a32(parts.join("|"));
+}
+
+function stringSeedPart(label: string, value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed === undefined || trimmed.length === 0 ? undefined : `${label}=${trimmed}`;
+}
+
+function fnv1a32(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash >>> 0;
 }
 
 export function createLogger(logs: BotLogEntryV1[]): BotLoggerV1 {

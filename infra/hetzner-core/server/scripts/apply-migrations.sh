@@ -13,9 +13,10 @@ APP_USER="${REEF_APP_USER:-reef_app}"
 # D-046. The primary runtime DB still carries the `admin` domain for current
 # runtime policy tables such as post-trade profiles until those dependencies are
 # separated.
+# The arena domain is intentionally applied with the admin DB invocation.
 # Override REEF_MIGRATION_DOMAINS/REEF_POSTGRES_SERVICE/REEF_POSTGRES_DB/
 # REEF_APP_USER to apply those domains against their own container instead.
-domains=(${REEF_MIGRATION_DOMAINS:-runtime auth admin boundary command_log orchestration settlement arena})
+domains=(${REEF_MIGRATION_DOMAINS:-runtime auth admin boundary command_log orchestration settlement})
 
 if [[ ! -d "$MIGRATIONS_ROOT" ]]; then
   echo "missing migrations directory: $MIGRATIONS_ROOT" >&2

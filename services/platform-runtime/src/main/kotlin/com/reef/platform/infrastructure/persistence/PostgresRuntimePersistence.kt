@@ -1818,6 +1818,7 @@ class PostgresRuntimePersistence(
                           canonical.reject_code,
                           canonical.result_payload,
                           COALESCE(canonical.result_payload->'acceptedOrder', payloads.payload_json) AS order_payload,
+                          COALESCE(payloads.payload_json, '{}'::jsonb) AS command_payload,
                           COALESCE(watermark.last_partition_seq, 0) AS previous_partition_seq,
                           row_number() OVER (
                             PARTITION BY canonical.partition_id
@@ -1909,9 +1910,9 @@ class PostgresRuntimePersistence(
                                   ELSE 'OrderAccepted'
                                 END,
                                 'orderId', order_id,
-                                'traceId', command_id,
-                                'causationId', command_id,
-                                'correlationId', command_id,
+                                'traceId', COALESCE(NULLIF(command_payload->>'traceId', ''), command_id),
+                                'causationId', COALESCE(NULLIF(command_payload->>'causationId', ''), command_id),
+                                'correlationId', COALESCE(NULLIF(command_payload->>'correlationId', ''), command_id),
                                 'actorId', '',
                                 'producer', 'venue-event-batch-projector',
                                 'schemaVersion', 'v1',
@@ -2168,6 +2169,7 @@ class PostgresRuntimePersistence(
 
     override fun savePostTradeProfile(profile: PostTradeProfile) {
         connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 if (profile.active) {
@@ -2211,7 +2213,7 @@ class PostgresRuntimePersistence(
                 conn.rollback()
                 throw error
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }
@@ -2235,6 +2237,7 @@ class PostgresRuntimePersistence(
 
     override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
         connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 val profile = queryPostTradeProfile(conn, profileId)
@@ -2252,7 +2255,7 @@ class PostgresRuntimePersistence(
                 conn.rollback()
                 throw error
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }
@@ -4585,6 +4588,9 @@ class PostgresRuntimePersistence(
         val resultPayload = JsonCodec.parseLegacyObjectOrEmpty(resultPayloadJson)
         val embeddedAcceptedOrder = resultPayload.obj("acceptedOrder")
         val commandPayload = JsonCodec.parseLegacyObjectOrEmpty(commandPayloadJson)
+        val traceId = commandPayload.string("traceId").ifBlank { commandId }
+        val causationId = commandPayload.string("causationId").ifBlank { commandId }
+        val correlationId = commandPayload.string("correlationId").ifBlank { commandId }
         val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
         val occurredAt = jsonString(resultPayloadJson, "occurredAt")
         val rejected = resultStatus == "rejected" || resultStatus == "failed"
@@ -4654,9 +4660,9 @@ class PostgresRuntimePersistence(
                     eventId = eventId,
                     eventType = lifecycleEventType(commandType, rejected),
                     orderId = orderId,
-                    traceId = commandId,
-                    causationId = commandId,
-                    correlationId = commandId,
+                    traceId = traceId,
+                    causationId = causationId,
+                    correlationId = correlationId,
                     actorId = "",
                     producer = "venue-event-batch-projector",
                     schemaVersion = "v1",

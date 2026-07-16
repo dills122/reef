@@ -21,6 +21,20 @@ existing_env_value() {
   awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
 }
 
+env_value_or_default() {
+  local file="$1"
+  local key="$2"
+  local default="$3"
+  local value
+
+  value="$(existing_env_value "$file" "$key")"
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+    return
+  fi
+  printf '%s\n' "$default"
+}
+
 append_env_if_set() {
   local file="$1"
   local key="$2"
@@ -125,18 +139,30 @@ EOF
   echo "Generated missing ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
 fi
 
+DEPLOY_RECEIVER_PORT="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_PORT 8090)"
+DEPLOY_RECEIVER_PATH="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_PATH /admin/deploy/arena-admin)"
+DEPLOY_RECEIVER_EXPECTED_AUDIENCE="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_AUDIENCE reef-backbone-admin-deploy)"
+DEPLOY_RECEIVER_EXPECTED_REPOSITORY="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_REPOSITORY dills122/reef)"
+DEPLOY_RECEIVER_EXPECTED_REF="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_REF refs/heads/master)"
+DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT backbone-admin)"
+DEPLOY_RECEIVER_EXPECTED_WORKFLOW="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_WORKFLOW "Admin UI Deploy")"
+DEPLOY_RECEIVER_LIVE_DIR="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_LIVE_DIR /srv/arena-admin)"
+DEPLOY_RECEIVER_RELEASES_DIR="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_RELEASES_DIR /srv/arena-admin-releases)"
+DEPLOY_RECEIVER_MAX_BYTES="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_MAX_BYTES 26214400)"
+DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT 10)"
+
 cat > "$SECRETS/deploy-receiver.env" <<EOF
-DEPLOY_RECEIVER_PORT=8090
-DEPLOY_RECEIVER_PATH=/admin/deploy/arena-admin
-DEPLOY_RECEIVER_EXPECTED_AUDIENCE=reef-backbone-admin-deploy
-DEPLOY_RECEIVER_EXPECTED_REPOSITORY=dills122/reef
-DEPLOY_RECEIVER_EXPECTED_REF=refs/heads/master
-DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT=backbone-admin
-DEPLOY_RECEIVER_EXPECTED_WORKFLOW=Admin UI Deploy
-DEPLOY_RECEIVER_LIVE_DIR=/srv/arena-admin
-DEPLOY_RECEIVER_RELEASES_DIR=/srv/arena-admin-releases
-DEPLOY_RECEIVER_MAX_BYTES=26214400
-DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT=10
+DEPLOY_RECEIVER_PORT=${DEPLOY_RECEIVER_PORT}
+DEPLOY_RECEIVER_PATH=${DEPLOY_RECEIVER_PATH}
+DEPLOY_RECEIVER_EXPECTED_AUDIENCE=${DEPLOY_RECEIVER_EXPECTED_AUDIENCE}
+DEPLOY_RECEIVER_EXPECTED_REPOSITORY=${DEPLOY_RECEIVER_EXPECTED_REPOSITORY}
+DEPLOY_RECEIVER_EXPECTED_REF=${DEPLOY_RECEIVER_EXPECTED_REF}
+DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT=${DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT}
+DEPLOY_RECEIVER_EXPECTED_WORKFLOW=${DEPLOY_RECEIVER_EXPECTED_WORKFLOW}
+DEPLOY_RECEIVER_LIVE_DIR=${DEPLOY_RECEIVER_LIVE_DIR}
+DEPLOY_RECEIVER_RELEASES_DIR=${DEPLOY_RECEIVER_RELEASES_DIR}
+DEPLOY_RECEIVER_MAX_BYTES=${DEPLOY_RECEIVER_MAX_BYTES}
+DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT=${DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT}
 EOF
 chmod 600 "$SECRETS/deploy-receiver.env"
 

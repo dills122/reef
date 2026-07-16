@@ -53,6 +53,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0036_canonical_archive_tables.sql",
       "runtime/0037_runtime_event_trade_archive_tables.sql",
       "runtime/0038_projection_dirty_lock_order.sql",
+      "runtime/0039_command_outcome_projection_metadata.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -245,6 +246,19 @@ test("runtime projection lock-order migration hardens dirty queues", async () =>
   assert.match(migration.sql, /FOR UPDATE SKIP LOCKED/);
   assert.match(migration.sql, /ORDER BY instrument_id/);
   assert.match(migration.sql, /DELETE FROM runtime\.market_data_snapshot_dirty dirty\s+USING selected_dirty/);
+});
+
+test("command outcome projection preserves command correlation metadata", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0039_command_outcome_projection_metadata.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /COALESCE\(payloads\.payload_json, '\{\}'::jsonb\) AS command_payload/);
+  assert.match(migration.sql, /'traceId', COALESCE\(NULLIF\(command_payload->>'traceId', ''\), command_id\)/);
+  assert.match(migration.sql, /'causationId', COALESCE\(NULLIF\(command_payload->>'causationId', ''\), command_id\)/);
+  assert.match(migration.sql, /'correlationId', COALESCE\(NULLIF\(command_payload->>'correlationId', ''\), command_id\)/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

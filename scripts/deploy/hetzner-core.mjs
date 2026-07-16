@@ -295,7 +295,12 @@ if (!host) {
 }
 
 const target = `${opsUser}@${host}`;
-const remoteCompose = `cd ${deployDir} && docker compose`;
+const remoteDeployDir = shellQuote(deployDir);
+const remoteCompose = `cd ${remoteDeployDir} && docker compose`;
+
+function remoteDeployPath(relativePath = "") {
+  return shellQuote(relativePath ? `${deployDir}/${relativePath}` : deployDir);
+}
 
 function syncServerBundle() {
   run("rsync", ["-av", "--exclude", "secrets/", "--exclude", "openbao/logs/", `${serverDir}/`, `${target}:${deployDir}/`]);
@@ -314,7 +319,7 @@ function buildAndSyncArenaAdmin() {
     cwd: arenaAdminDir,
     env: { ...process.env, PUBLIC_ARENA_API_BASE_URL: "" },
   });
-  run("ssh", [target, `mkdir -p ${deployDir}/arena-admin`]);
+  run("ssh", [target, `mkdir -p ${remoteDeployPath("arena-admin")}`]);
   run("rsync", ["-av", "--delete", `${arenaAdminDir}/build/`, `${target}:${deployDir}/arena-admin/`]);
 }
 
@@ -329,10 +334,10 @@ function publicUp() {
     target,
     [
       "set -euo pipefail",
-      `cd ${deployDir}`,
+      `cd ${remoteDeployDir}`,
       "tmp=\"$(mktemp)\"",
       "if [ -f .env ]; then grep -v '^API_DOMAIN=' .env > \"$tmp\"; else : > \"$tmp\"; fi",
-      `printf '%s\\n' 'API_DOMAIN=${apiDomain}' >> "$tmp"`,
+      `printf '%s\\n' ${shellQuote(`API_DOMAIN=${apiDomain}`)} >> "$tmp"`,
       "mv \"$tmp\" .env",
       "sudo ufw allow 80/tcp",
       "sudo ufw allow 443/tcp",
@@ -348,7 +353,7 @@ function publicDown() {
     target,
     [
       "set -euo pipefail",
-      `cd ${deployDir}`,
+      `cd ${remoteDeployDir}`,
       "docker compose --profile public stop caddy || true",
       "docker compose --profile public rm -f caddy || true",
       "sudo ufw delete allow 80/tcp || true",
@@ -364,7 +369,7 @@ function deployReceiverUp() {
     target,
     [
       "set -euo pipefail",
-      `cd ${deployDir}`,
+      `cd ${remoteDeployDir}`,
       "./scripts/generate-local-secrets.sh",
       "docker compose --profile public up -d --build --force-recreate deploy-receiver caddy",
     ].join(" && "),
@@ -403,11 +408,11 @@ function configureAdminAuth(enabled, options = {}) {
       target,
       [
         "set -euo pipefail",
-        `mkdir -p ${deployDir}/secrets`,
+        `mkdir -p ${remoteDeployPath("secrets")}`,
         "umask 077",
-        `cat > ${deployDir}/secrets/admin-auth.env`,
-        `chmod 600 ${deployDir}/secrets/admin-auth.env`,
-        `cd ${deployDir}`,
+        `cat > ${remoteDeployPath("secrets/admin-auth.env")}`,
+        `chmod 600 ${remoteDeployPath("secrets/admin-auth.env")}`,
+        `cd ${remoteDeployDir}`,
         "chmod +x ./scripts/*.sh",
         "./scripts/generate-local-secrets.sh",
         "docker compose up -d --force-recreate platform-runtime",
@@ -425,14 +430,14 @@ function setLegacyMutationRoutes(enabled) {
     target,
     [
       "set -euo pipefail",
-      `mkdir -p ${deployDir}/secrets`,
-      `touch ${deployDir}/secrets/admin-auth.env`,
+      `mkdir -p ${remoteDeployPath("secrets")}`,
+      `touch ${remoteDeployPath("secrets/admin-auth.env")}`,
       `tmp="$(mktemp)"`,
-      `grep -v '^PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=' ${deployDir}/secrets/admin-auth.env > "$tmp" || true`,
-      `printf '%s\\n' 'PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=${value}' >> "$tmp"`,
-      `install -m 600 "$tmp" ${deployDir}/secrets/admin-auth.env`,
+      `grep -v '^PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=' ${remoteDeployPath("secrets/admin-auth.env")} > "$tmp" || true`,
+      `printf '%s\\n' ${shellQuote(`PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=${value}`)} >> "$tmp"`,
+      `install -m 600 "$tmp" ${remoteDeployPath("secrets/admin-auth.env")}`,
       `rm -f "$tmp"`,
-      `cd ${deployDir}`,
+      `cd ${remoteDeployDir}`,
       "chmod +x ./scripts/*.sh",
       "./scripts/generate-local-secrets.sh",
       "docker compose up -d --force-recreate platform-runtime",
@@ -447,7 +452,7 @@ function runHostedSmoke() {
   try {
     status = runStatus("ssh", [
       target,
-      `chmod +x ${deployDir}/scripts/*.sh && cd ${deployDir} && RATE="${env("RATE", "50")}" DURATION="${env("DURATION", "30s")}" WORKERS="${env("WORKERS", "16")}" TRACE_CHECK_LIMIT="${env("TRACE_CHECK_LIMIT", "20")}" ./scripts/hosted-smoke.sh`,
+      `chmod +x ${remoteDeployPath("scripts")}/*.sh && cd ${remoteDeployDir} && RATE=${shellQuote(env("RATE", "50"))} DURATION=${shellQuote(env("DURATION", "30s"))} WORKERS=${shellQuote(env("WORKERS", "16"))} TRACE_CHECK_LIMIT=${shellQuote(env("TRACE_CHECK_LIMIT", "20"))} ./scripts/hosted-smoke.sh`,
     ]);
   } finally {
     setLegacyMutationRoutes(false);
@@ -675,7 +680,7 @@ function backupEnvContent(ageRecipient, existingR2Config = "") {
 
 function backupBootstrap() {
   syncServerBundle();
-  run("ssh", [target, `chmod +x ${deployDir}/scripts/*.sh`]);
+  run("ssh", [target, `chmod +x ${remoteDeployPath("scripts")}/*.sh`]);
 
   const identityPath = resolve(env("REEF_BACKUP_AGE_IDENTITY_PATH", `${homedir()}/Documents/reef-backups-age-identity.txt`));
   mkdirSync(dirname(identityPath), { recursive: true });
@@ -699,7 +704,7 @@ function backupBootstrap() {
 
   const existingR2Config = capture("ssh", [
     target,
-    `if [ -f ${deployDir}/secrets/backup.env ]; then sed -n '/^\\(R2_ENDPOINT\\|R2_BUCKET\\|AWS_ACCESS_KEY_ID\\|AWS_SECRET_ACCESS_KEY\\|AWS_DEFAULT_REGION\\)=/p' ${deployDir}/secrets/backup.env; fi`,
+    `if [ -f ${remoteDeployPath("secrets/backup.env")} ]; then sed -n '/^\\(R2_ENDPOINT\\|R2_BUCKET\\|AWS_ACCESS_KEY_ID\\|AWS_SECRET_ACCESS_KEY\\|AWS_DEFAULT_REGION\\)=/p' ${remoteDeployPath("secrets/backup.env")}; fi`,
   ]);
 
   runWithInput(
@@ -708,19 +713,19 @@ function backupBootstrap() {
       target,
       [
         "set -euo pipefail",
-        `mkdir -p ${deployDir}/secrets`,
+        `mkdir -p ${remoteDeployPath("secrets")}`,
         "umask 077",
-        `cat > ${deployDir}/secrets/backup.env`,
-        `chmod 600 ${deployDir}/secrets/backup.env`,
+        `cat > ${remoteDeployPath("secrets/backup.env")}`,
+        `chmod 600 ${remoteDeployPath("secrets/backup.env")}`,
       ].join(" && "),
     ],
     backupEnvContent(recipient, existingR2Config)
   );
 
-  run("ssh", [target, `cd ${deployDir} && ./scripts/backup-dbs.sh`]);
+  run("ssh", [target, `cd ${remoteDeployDir} && ./scripts/backup-dbs.sh`]);
   const remoteArchive = capture("ssh", [
     target,
-    `find ${deployDir}/backups \\( -name 'reef-db-*.tar.age' -o -name 'reef-db-*.tar.gz.age' \\) -type f | sort | tail -1`,
+    `find ${remoteDeployPath("backups")} \\( -name 'reef-db-*.tar.age' -o -name 'reef-db-*.tar.gz.age' \\) -type f | sort | tail -1`,
   ]);
   if (!remoteArchive) {
     console.error("Backup completed but no encrypted archive was found on the host.");
@@ -733,7 +738,7 @@ function backupBootstrap() {
   run("scp", [`${target}:${remoteArchive}`, localArchive]);
   chmodSync(localArchive, 0o600);
 
-  run("ssh", [target, `cd ${deployDir} && ./scripts/install-backup-timer.sh`]);
+  run("ssh", [target, `cd ${remoteDeployDir} && ./scripts/install-backup-timer.sh`]);
 
   console.log(`backup archive: ${localArchive}`);
   console.log(`sha256: ${sha256(localArchive)}`);
@@ -755,7 +760,7 @@ function backupRestoreCheck() {
     env("REEF_BACKUP_REMOTE_ARCHIVE") ||
     capture("ssh", [
       target,
-      `find ${deployDir}/backups \\( -name 'reef-db-*.tar.age' -o -name 'reef-db-*.tar.gz.age' \\) -type f | sort | tail -1`,
+      `find ${remoteDeployPath("backups")} \\( -name 'reef-db-*.tar.age' -o -name 'reef-db-*.tar.gz.age' \\) -type f | sort | tail -1`,
     ]);
   if (!remoteArchive) {
     console.error("No remote encrypted backup archive found.");
@@ -833,7 +838,7 @@ async function opsCheck() {
     target,
     [
       "set -euo pipefail",
-      `cd ${deployDir}`,
+      `cd ${remoteDeployDir}`,
       "docker compose ps",
       "curl -fsS http://127.0.0.1:8080/health",
       "curl -fsS http://127.0.0.1:8200/v1/sys/seal-status | jq '{initialized,sealed,type,t,n,version,storage_type}'",
@@ -896,7 +901,7 @@ function adminAuthSmoke() {
 
   const caddyFallback = captureOptional("ssh", [
     target,
-    `cd ${deployDir} && docker compose exec -T caddy sed -n '60,68p' /etc/caddy/Caddyfile`,
+    `cd ${remoteDeployDir} && docker compose exec -T caddy sed -n '60,68p' /etc/caddy/Caddyfile`,
   ]);
   if (caddyFallback.status !== 0) {
     failures.push(`could not inspect Caddyfile inside container: ${caddyFallback.stderr || `exit ${caddyFallback.status}`}`);
@@ -907,7 +912,7 @@ function adminAuthSmoke() {
   const legacyRoute = captureOptional("ssh", [
     target,
     [
-      `cd ${deployDir}`,
+      `cd ${remoteDeployDir}`,
       "docker compose exec -T platform-runtime env | grep '^PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=false$'",
       "curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/auth/roles -H 'X-Reef-Internal-Route: true' -H 'content-type: application/json' -d '{\"roleId\":\"check-disabled\",\"permissions\":\"arena.admin\"}'",
     ].join(" && "),
@@ -954,7 +959,7 @@ switch (command) {
         "cd /opt/reef-build/services/platform-runtime && docker build -t reef-platform-runtime:local .",
         "cd /opt/reef-build/services/matching-engine && docker build --network=host -t reef-matching-engine:local .",
         "cd /opt/reef-build/services/simulator && docker build --network=host -t reef-simulator:local .",
-        `cd ${deployDir}`,
+        `cd ${remoteDeployDir}`,
         "tmp=\"$(mktemp)\"",
         "if [ -f .env ]; then grep -v '^REEF_\\(PLATFORM_RUNTIME\\|MATCHING_ENGINE\\|SIMULATOR\\)_IMAGE=' .env > \"$tmp\"; else : > \"$tmp\"; fi",
         "printf '%s\\n' REEF_PLATFORM_RUNTIME_IMAGE=reef-platform-runtime:local REEF_MATCHING_ENGINE_IMAGE=reef-matching-engine:local REEF_SIMULATOR_IMAGE=reef-simulator:local >> \"$tmp\"",
@@ -966,13 +971,13 @@ switch (command) {
     run("ssh", [target, `${remoteCompose} pull --ignore-pull-failures && ${remoteCompose} up -d --build --remove-orphans`]);
     break;
   case "stream-ack":
-    run("ssh", [target, `chmod +x ${deployDir}/scripts/*.sh && cd ${deployDir} && ./scripts/start-stream-ack.sh`]);
+    run("ssh", [target, `chmod +x ${remoteDeployPath("scripts")}/*.sh && cd ${remoteDeployDir} && ./scripts/start-stream-ack.sh`]);
     break;
   case "backup-bootstrap":
     backupBootstrap();
     break;
   case "backup-timer":
-    run("ssh", [target, `chmod +x ${deployDir}/scripts/*.sh && cd ${deployDir} && ./scripts/install-backup-timer.sh`]);
+    run("ssh", [target, `chmod +x ${remoteDeployPath("scripts")}/*.sh && cd ${remoteDeployDir} && ./scripts/install-backup-timer.sh`]);
     break;
   case "backup-restore-check":
     backupRestoreCheck();
@@ -1011,12 +1016,12 @@ switch (command) {
     botConfigUpgrade();
     break;
   case "verify":
-    run("ssh", [target, `cd ${deployDir} && ./scripts/verify-runtime.sh`]);
+    run("ssh", [target, `cd ${remoteDeployDir} && ./scripts/verify-runtime.sh`]);
     break;
   case "soak":
     run("ssh", [
       target,
-      `chmod +x ${deployDir}/scripts/*.sh && cd ${deployDir} && RATE="${env("RATE", "1000")}" DURATION="${env("DURATION", "1m")}" WORKERS="${env("WORKERS", "128")}" MODE="${env("MODE", "strict-lifecycle")}" TRACE_CHECK_LIMIT="${env("TRACE_CHECK_LIMIT", "100")}" ./scripts/run-soak.sh`,
+      `chmod +x ${remoteDeployPath("scripts")}/*.sh && cd ${remoteDeployDir} && RATE=${shellQuote(env("RATE", "1000"))} DURATION=${shellQuote(env("DURATION", "1m"))} WORKERS=${shellQuote(env("WORKERS", "128"))} MODE=${shellQuote(env("MODE", "strict-lifecycle"))} TRACE_CHECK_LIMIT=${shellQuote(env("TRACE_CHECK_LIMIT", "100"))} ./scripts/run-soak.sh`,
     ]);
     break;
   case "status":
@@ -1029,8 +1034,8 @@ switch (command) {
     run("ssh", [
       target,
       [
-        `chmod +x ${deployDir}/scripts/*.sh ${deployDir}/postgres/init/*.sh ${deployDir}/postgres-admin/init/*.sh ${deployDir}/postgres-analytics/init/*.sh`,
-        `cd ${deployDir}`,
+        `chmod +x ${remoteDeployPath("scripts")}/*.sh ${remoteDeployPath("postgres/init")}/*.sh ${remoteDeployPath("postgres-admin/init")}/*.sh ${remoteDeployPath("postgres-analytics/init")}/*.sh`,
+        `cd ${remoteDeployDir}`,
         "./scripts/generate-local-secrets.sh",
         "docker compose pull --ignore-pull-failures",
         "docker compose up -d postgres postgres-admin postgres-analytics openbao matching-engine",

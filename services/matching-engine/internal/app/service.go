@@ -3,6 +3,8 @@ package app
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"math"
+	"math/bits"
 	"os"
 	"sort"
 	"strconv"
@@ -525,36 +527,15 @@ func (s *Service) Snapshot() Snapshot {
 		Books: make(map[string]hotbook.Snapshot),
 	}
 
-	s.booksMu.RLock()
-	bookIDs := make([]string, 0, len(s.books))
-	for instrumentID := range s.books {
-		bookIDs = append(bookIDs, instrumentID)
-	}
-	sort.Strings(bookIDs)
+	bookIDs, books, unlock := s.lockSnapshotBooks(nil)
+	defer unlock()
 	for _, instrumentID := range bookIDs {
-		book := s.books[instrumentID]
-		book.mu.Lock()
-		snapshot.Books[instrumentID] = book.book.Snapshot()
-		book.mu.Unlock()
+		snapshot.Books[instrumentID] = books[instrumentID].book.Snapshot()
 	}
-	s.booksMu.RUnlock()
 
 	snapshot.Orders = make([]SnapshotOrderRecord, 0, s.orderIndex.len())
 	s.orderIndex.forEach(func(record *orderRecord) {
-		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
-			OrderID:           record.OrderID,
-			InstrumentID:      record.InstrumentID,
-			VenueSessionID:    record.VenueSessionID,
-			ParticipantID:     record.ParticipantID,
-			AccountID:         record.AccountID,
-			Side:              record.Side,
-			OriginalQuantity:  record.OriginalQuantity,
-			RemainingQuantity: record.RemainingQuantity,
-			LimitPrice:        record.LimitPrice,
-			Currency:          record.Currency,
-			Status:            record.Status,
-			LastUpdatedAt:     record.LastUpdatedAt,
-		})
+		snapshot.Orders = append(snapshot.Orders, snapshotOrderRecord(record))
 	})
 	sort.Slice(snapshot.Orders, func(i, j int) bool {
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
@@ -617,49 +598,26 @@ func (s *Service) BookStats(instrumentID string) BookStats {
 }
 
 func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
-	s.booksMu.RLock()
-	books := make(map[string]*orderBook, len(s.books))
-	bookKeys := make([]string, 0)
-	for key, book := range s.books {
-		if bookKeyMatchesInstrument(key, instrumentID) {
-			books[key] = book
-			bookKeys = append(bookKeys, key)
-		}
-	}
-	s.booksMu.RUnlock()
+	bookKeys, books, unlock := s.lockSnapshotBooks(func(key string) bool {
+		return bookKeyMatchesInstrument(key, instrumentID)
+	})
+	defer unlock()
 	if len(bookKeys) == 0 {
 		return Snapshot{}, false
 	}
-	sort.Strings(bookKeys)
 
 	snapshot := Snapshot{
 		Books: make(map[string]hotbook.Snapshot),
 	}
 	for _, key := range bookKeys {
-		book := books[key]
-		book.mu.Lock()
-		snapshot.Books[key] = book.book.Snapshot()
-		book.mu.Unlock()
+		snapshot.Books[key] = books[key].book.Snapshot()
 	}
 
 	s.orderIndex.forEach(func(record *orderRecord) {
 		if record.InstrumentID != instrumentID {
 			return
 		}
-		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
-			OrderID:           record.OrderID,
-			InstrumentID:      record.InstrumentID,
-			VenueSessionID:    record.VenueSessionID,
-			ParticipantID:     record.ParticipantID,
-			AccountID:         record.AccountID,
-			Side:              record.Side,
-			OriginalQuantity:  record.OriginalQuantity,
-			RemainingQuantity: record.RemainingQuantity,
-			LimitPrice:        record.LimitPrice,
-			Currency:          record.Currency,
-			Status:            record.Status,
-			LastUpdatedAt:     record.LastUpdatedAt,
-		})
+		snapshot.Orders = append(snapshot.Orders, snapshotOrderRecord(record))
 	})
 	sort.Slice(snapshot.Orders, func(i, j int) bool {
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
@@ -673,6 +631,46 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 	}
 	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
 	return snapshot, true
+}
+
+func (s *Service) lockSnapshotBooks(include func(string) bool) ([]string, map[string]*orderBook, func()) {
+	s.booksMu.RLock()
+	bookIDs := make([]string, 0, len(s.books))
+	books := make(map[string]*orderBook, len(s.books))
+	for instrumentID, book := range s.books {
+		if include != nil && !include(instrumentID) {
+			continue
+		}
+		bookIDs = append(bookIDs, instrumentID)
+		books[instrumentID] = book
+	}
+	sort.Strings(bookIDs)
+	for _, instrumentID := range bookIDs {
+		books[instrumentID].mu.Lock()
+	}
+	return bookIDs, books, func() {
+		for i := len(bookIDs) - 1; i >= 0; i-- {
+			books[bookIDs[i]].mu.Unlock()
+		}
+		s.booksMu.RUnlock()
+	}
+}
+
+func snapshotOrderRecord(record *orderRecord) SnapshotOrderRecord {
+	return SnapshotOrderRecord{
+		OrderID:           record.OrderID,
+		InstrumentID:      record.InstrumentID,
+		VenueSessionID:    record.VenueSessionID,
+		ParticipantID:     record.ParticipantID,
+		AccountID:         record.AccountID,
+		Side:              record.Side,
+		OriginalQuantity:  record.OriginalQuantity,
+		RemainingQuantity: record.RemainingQuantity,
+		LimitPrice:        record.LimitPrice,
+		Currency:          record.Currency,
+		Status:            record.Status,
+		LastUpdatedAt:     record.LastUpdatedAt,
+	}
 }
 
 func (s *Service) MatchAlgorithm(instrumentID string) MatchAlgorithm {
@@ -1314,8 +1312,33 @@ func priceWithinCollar(limitPrice int64, collar PriceCollar) bool {
 	if collar.ReferencePrice <= 0 || collar.BandBps < 0 {
 		return true
 	}
-	band := (collar.ReferencePrice * collar.BandBps) / 10000
-	return limitPrice >= collar.ReferencePrice-band && limitPrice <= collar.ReferencePrice+band
+	band := priceCollarBand(collar.ReferencePrice, collar.BandBps)
+	lower := collar.ReferencePrice - band
+	upper := int64(math.MaxInt64)
+	if band <= int64(math.MaxInt64)-collar.ReferencePrice {
+		upper = collar.ReferencePrice + band
+	}
+	return limitPrice >= lower && limitPrice <= upper
+}
+
+func priceCollarBand(referencePrice int64, bandBps int64) int64 {
+	if bandBps == 0 {
+		return 0
+	}
+	const bpsScale = int64(10000)
+	if referencePrice <= int64(math.MaxInt64)/bandBps {
+		return (referencePrice * bandBps) / bpsScale
+	}
+
+	hi, lo := bits.Mul64(uint64(referencePrice), uint64(bandBps))
+	if hi >= uint64(bpsScale) {
+		return int64(math.MaxInt64)
+	}
+	quotient, _ := bits.Div64(hi, lo, uint64(bpsScale))
+	if quotient > uint64(math.MaxInt64) {
+		return int64(math.MaxInt64)
+	}
+	return int64(quotient)
 }
 
 func newOrderBook() *orderBook {
