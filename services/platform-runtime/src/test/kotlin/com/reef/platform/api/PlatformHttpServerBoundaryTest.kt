@@ -1405,6 +1405,8 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/proof/{scenarioRunId}\"")
             assertContains(response.body, "\"name\":\"settlementScore\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/score/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"arenaLeaderboard\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/arena/leaderboard\"")
         } finally {
             server.stop(0)
         }
@@ -1414,19 +1416,28 @@ class PlatformHttpServerBoundaryTest {
     fun apiV1ReadEndpointsRequireClientPrincipal() {
         val server = testServer()
         try {
-            val availability = get(server.address.port, "/api/v1/data/availability")
-            val marketData = get(server.address.port, "/api/v1/market-data/trades/AAPL")
-            val leaderboard = get(
-                server.address.port,
+            listOf(
+                "/api/v1/commands/missing-command",
+                "/api/v1/data/availability",
+                "/api/v1/market-data/snapshots/AAPL",
+                "/api/v1/market-data/depth/AAPL",
+                "/api/v1/market-data/trades/AAPL",
+                "/api/v1/market-data/bars/AAPL?interval=1m&start=2026-07-16T00:00:00Z&end=2026-07-16T01:00:00Z",
+                "/api/v1/orders/current?participantId=participant-1",
+                "/api/v1/orders/history?participantId=participant-1",
+                "/api/v1/orders/fills?participantId=participant-1",
+                "/api/v1/settlement/facts/run-public-denied",
+                "/api/v1/settlement/obligations/run-public-denied",
+                "/api/v1/settlement/ledger/run-public-denied",
+                "/api/v1/settlement/proof/run-public-denied",
+                "/api/v1/settlement/score/run-public-denied",
                 "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2"
-            )
+            ).forEach { path ->
+                val response = get(server.address.port, path)
 
-            assertEquals(401, availability.status)
-            assertContains(availability.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
-            assertEquals(401, marketData.status)
-            assertContains(marketData.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
-            assertEquals(401, leaderboard.status)
-            assertContains(leaderboard.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+                assertEquals(401, response.status, path)
+                assertContains(response.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+            }
         } finally {
             server.stop(0)
         }
@@ -3987,27 +3998,6 @@ class PlatformHttpServerBoundaryTest {
             assertContains(summaries.body, "\"finalEquity\":1002500.0")
             assertContains(summaries.body, "\"failCount\":2")
             assertContains(summaries.body, "\"authoritative\":false")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun apiV1SettlementReadEndpointsRequireApiBoundaryIdentity() {
-        val server = testServerWithGateway(StaticAcceptedEngineGateway())
-        try {
-            listOf(
-                "/api/v1/settlement/facts/run-public-denied",
-                "/api/v1/settlement/obligations/run-public-denied",
-                "/api/v1/settlement/ledger/run-public-denied",
-                "/api/v1/settlement/proof/run-public-denied",
-                "/api/v1/settlement/score/run-public-denied"
-            ).forEach { path ->
-                val response = get(server.address.port, path)
-
-                assertEquals(401, response.status, path)
-                assertContains(response.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
-            }
         } finally {
             server.stop(0)
         }
