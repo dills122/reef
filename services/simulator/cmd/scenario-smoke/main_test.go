@@ -14,6 +14,7 @@ import (
 )
 
 func TestScenarioSmokeDryRunPrintsExecutableRequests(t *testing.T) {
+	t.Setenv("ADMIN_API_TOKEN", "test-token")
 	var stdout bytes.Buffer
 	err := run([]string{
 		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
@@ -40,6 +41,15 @@ func TestScenarioSmokeDryRunPrintsExecutableRequests(t *testing.T) {
 	if first.Path != "/api/v1/orders/submit" || first.Payload["scenarioRunId"] != "p1-smoke-dry" {
 		t.Fatalf("unexpected first executable request: %+v", first)
 	}
+	if report.SeedRequests[0].Path != "/admin/v1/reference/instruments" {
+		t.Fatalf("unexpected first seed request: %+v", report.SeedRequests[0])
+	}
+	if report.SeedRequests[0].Headers["X-Reef-Actor-Id"] != "scenario-smoke-seed" {
+		t.Fatalf("missing admin seed actor header: %+v", report.SeedRequests[0].Headers)
+	}
+	if _, found := report.SeedRequests[0].Headers["Authorization"]; found {
+		t.Fatalf("authorization header leaked into report: %+v", report.SeedRequests[0].Headers)
+	}
 	if first.Headers["Idempotency-Key"] != first.Payload["commandId"] {
 		t.Fatalf("idempotency header mismatch: %+v", first.Headers)
 	}
@@ -48,6 +58,40 @@ func TestScenarioSmokeDryRunPrintsExecutableRequests(t *testing.T) {
 	}
 	if first.Headers["X-Reef-Actor-Id"] != first.Payload["actorId"] {
 		t.Fatalf("actor header mismatch: %+v", first.Headers)
+	}
+}
+
+func TestScenarioSmokeDryRunCanScopeCommandIDsToRun(t *testing.T) {
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--scenario-run-id", "p1 replay/run 01",
+		"--run-scoped-command-ids",
+	}, &stdout, nil)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("smoke json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if len(report.Requests) != 3 {
+		t.Fatalf("requests: got %d want 3", len(report.Requests))
+	}
+	first := report.Requests[0]
+	expected := "p1-replay-run-01-p1_golden_hidden_cross_t1-cmd-001"
+	if first.Payload["commandId"] != expected {
+		t.Fatalf("unexpected scoped command id: got %q want %q", first.Payload["commandId"], expected)
+	}
+	if first.Headers["Idempotency-Key"] != expected {
+		t.Fatalf("idempotency key did not follow scoped command id: %+v", first.Headers)
+	}
+	if first.Payload["scenarioRunId"] != "p1 replay/run 01" || first.Payload["runId"] != "p1 replay/run 01" {
+		t.Fatalf("scenario run metadata was rewritten: %+v", first.Payload)
+	}
+	if first.Payload["orderId"] != "p1_golden_hidden_cross_t1-ord-001" {
+		t.Fatalf("order id should remain contract-stable: %+v", first.Payload)
 	}
 }
 
@@ -77,8 +121,11 @@ func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
 				_, _ = w.Write([]byte(`{"status":"accepted"}`))
 				return
 			}
-			if r.Header.Get("X-Reef-Internal-Route") == "" {
-				t.Fatalf("missing internal seed header for %s", r.URL.Path)
+			if !strings.HasPrefix(r.URL.Path, "/admin/v1/") {
+				t.Fatalf("seed request did not use admin gateway for %s", r.URL.Path)
+			}
+			if r.Header.Get("X-Reef-Actor-Id") == "" {
+				t.Fatalf("missing admin seed actor header for %s", r.URL.Path)
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -141,11 +188,21 @@ func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
 }
 
 func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
+	var eventMu sync.Mutex
+	var events []string
+	recordEvent := func(event string) {
+		eventMu.Lock()
+		defer eventMu.Unlock()
+		events = append(events, event)
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
 			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
+			if r.URL.Path == "/api/v1/orders/submit" {
+				recordEvent("submit")
+			}
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/commands/"):
@@ -173,8 +230,9 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"sequence":2,"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"},{"sequence":1,"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"}]}`))
+			_, _ = w.Write([]byte(p1TradeTapeJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			recordEvent("depth")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
 		default:
@@ -205,19 +263,130 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 	if len(report.Commands) != 3 {
 		t.Fatalf("commands: got %d want 3", len(report.Commands))
 	}
-	if len(report.Reads) != 9 {
-		t.Fatalf("reads: got %d want 9", len(report.Reads))
+	if len(report.Reads) != 10 {
+		t.Fatalf("reads: got %d want 10", len(report.Reads))
 	}
-	if len(report.Assertions) != 25 {
-		t.Fatalf("assertions: got %d want 25", len(report.Assertions))
+	if len(report.Assertions) != 26 {
+		t.Fatalf("assertions: got %d want 26", len(report.Assertions))
 	}
 	if len(report.ProjectionLag) == 0 {
 		t.Fatalf("expected projection lag rows")
+	}
+	if report.VisibilityTimeline == nil || len(report.VisibilityTimeline.PublicDepthChecks) != 1 {
+		t.Fatalf("expected one hidden-depth timeline check: %+v", report.VisibilityTimeline)
+	}
+	if report.VisibilityTimeline.PublicDepthHiddenRestingExposed {
+		t.Fatalf("hidden resting depth should not be exposed: %+v", report.VisibilityTimeline)
+	}
+	if !hasAssertion(report, "p1-hidden-depth-timeline-proof", "pass") {
+		t.Fatalf("missing hidden-depth timeline assertion: %+v", report.Assertions)
+	}
+	eventMu.Lock()
+	gotEvents := append([]string(nil), events...)
+	eventMu.Unlock()
+	if strings.Join(gotEvents, ",") != "submit,depth,submit,submit,depth" {
+		t.Fatalf("unexpected P1 submit/depth timing: %v", gotEvents)
 	}
 	for _, assertion := range report.Assertions {
 		if assertion.Status != "pass" {
 			t.Fatalf("assertion did not pass: %+v", assertion)
 		}
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnP1ReadSurfaceProjectionLag(t *testing.T) {
+	var availability dataAvailabilityBody
+	if err := json.Unmarshal([]byte(p1DataAvailabilityJSON()), &availability); err != nil {
+		t.Fatalf("unmarshal availability: %v", err)
+	}
+	for index := range availability.Surfaces {
+		if availability.Surfaces[index].Name == "orderHistory" {
+			availability.Surfaces[index].Lag = 2
+		}
+	}
+	report := smokeReport{}
+	assertP1DataAvailability(&report, "/api/v1/data/availability", availability, true)
+
+	if !hasFailure(report, "p1-read-surface-projection-lag-zero") {
+		t.Fatalf("expected projection lag failure: %+v", report.Failures)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsUseSplitStatusAndReadBaseURLs(t *testing.T) {
+	submitPosts := 0
+	submitServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/orders/submit" {
+			http.NotFound(w, r)
+			return
+		}
+		submitPosts++
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"status":"accepted"}`))
+	}))
+	defer submitServer.Close()
+
+	statusReadServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok","pipeline":{"commandStatusSources":["canonical_outcome"]},"dependencies":{"commandStatusLookup":false}}`))
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/commands/"):
+			commandID := strings.TrimPrefix(r.URL.Path, "/api/v1/commands/")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"commandId":"` + commandID + `","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/history":
+			participantID := r.URL.Query().Get("participantId")
+			orderID := map[string]string{
+				"HIDDEN_SELLER_A": "p1_golden_hidden_cross_t1-ord-001",
+				"VISIBLE_BUYER_B": "p1_golden_hidden_cross_t1-ord-002",
+				"VISIBLE_BUYER_C": "p1_golden_hidden_cross_t1-ord-003",
+			}[participantID]
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1TradeTapeJSON()))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer statusReadServer.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--scenario-run-id", "p1-split-live",
+		"--base-url", submitServer.URL,
+		"--status-base-url", statusReadServer.URL,
+		"--read-base-url", statusReadServer.URL,
+		"--live",
+		"--assertions",
+		"--seed-reference=false",
+	}, &stdout, statusReadServer.Client())
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+	if submitPosts != 3 {
+		t.Fatalf("submit posts: got %d want 3", submitPosts)
+	}
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if !report.Pass || len(report.Failures) != 0 || len(report.Errors) != 0 {
+		t.Fatalf("unexpected failed assertion report: %+v", report)
+	}
+	if !hasAssertion(report, "command-001-completed", "pass") || !hasAssertion(report, "p1-trade-tape-count", "pass") {
+		t.Fatalf("missing split-base-url assertions: %+v", report.Assertions)
 	}
 }
 
@@ -302,7 +471,7 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicTradeIdentityLeak(t *testing.T) 
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","buyOrderId":"p1_golden_hidden_cross_t1-ord-002"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+			_, _ = w.Write([]byte(p1TradeTapeWithPublicIdentityLeakJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
@@ -387,7 +556,7 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+			_, _ = w.Write([]byte(p1TradeTapeJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"depth":{"projectionName":"market-data-depth","instrumentId":"XYZ","bidLevels":[],"askLevels":[{"price":"100000000000","quantity":"100"}]}}`))
@@ -454,7 +623,7 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+			_, _ = w.Write([]byte(p1TradeTapeJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
@@ -503,23 +672,24 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 }
 
 func TestScenarioSmokeLiveAssertionsRequireHiddenDepthReplayProof(t *testing.T) {
-	replayPath := filepath.Join(t.TempDir(), "replay-check.json")
+	tempDir := t.TempDir()
+	replayPath := filepath.Join(tempDir, "replay-check.json")
 	replayJSON := `{"pass":true,"checkedAt":"2026-03-14T18:00:30Z","report":{"batchCount":1,"storedCommandCount":3,"payloadOutcomeCount":3,"canonicalOutcomeCount":3,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"failures":[]}`
 	if err := os.WriteFile(replayPath, []byte(replayJSON), 0o644); err != nil {
 		t.Fatalf("write replay report: %v", err)
 	}
-	server := p1AssertionServer(t, p1AssertionServerOptions{})
-	defer server.Close()
+	reportPath := filepath.Join(tempDir, "scenario-report.json")
+	reportJSON := `{"mode":"live","pass":true,"pathId":"P1_GOLDEN_HIDDEN_CROSS_T1","scenarioRunId":"p1-missing-timeline","seed":0,"requests":[],"results":[]}`
+	if err := os.WriteFile(reportPath, []byte(reportJSON), 0o644); err != nil {
+		t.Fatalf("write scenario report: %v", err)
+	}
 
 	var stdout bytes.Buffer
 	err := run([]string{
-		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
-		"--base-url", server.URL,
-		"--live",
-		"--assertions",
+		"--attach-replay-to-report", reportPath,
 		"--replay-check-report", replayPath,
 		"--require-replay-check",
-	}, &stdout, server.Client())
+	}, &stdout, nil)
 	if err == nil {
 		t.Fatal("expected hidden-depth replay proof failure")
 	}
@@ -529,6 +699,77 @@ func TestScenarioSmokeLiveAssertionsRequireHiddenDepthReplayProof(t *testing.T) 
 	}
 	if !hasFailure(report, "p1-replay-hidden-depth-timeline-proof") {
 		t.Fatalf("expected p1-replay-hidden-depth-timeline-proof failure: %+v", report.Failures)
+	}
+}
+
+func TestScenarioSmokeReplayAttachmentUsesReportVisibilityTimeline(t *testing.T) {
+	tempDir := t.TempDir()
+	replayPath := filepath.Join(tempDir, "replay-check.json")
+	replayJSON := `{"pass":true,"checkedAt":"2026-03-14T18:00:30Z","report":{"batchCount":1,"storedCommandCount":3,"payloadOutcomeCount":3,"canonicalOutcomeCount":3,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"failures":[]}`
+	if err := os.WriteFile(replayPath, []byte(replayJSON), 0o644); err != nil {
+		t.Fatalf("write replay report: %v", err)
+	}
+	reportPath := filepath.Join(tempDir, "scenario-report.json")
+	reportJSON := `{"mode":"live","pass":true,"pathId":"P1_GOLDEN_HIDDEN_CROSS_T1","scenarioRunId":"p1-report-timeline","seed":0,"requests":[],"results":[],"visibilityTimeline":{"scenarioId":"P1_GOLDEN_HIDDEN_CROSS_T1","scenarioRunId":"p1-report-timeline","publicDepthHiddenRestingExposed":false,"publicDepthChecks":[{"phase":"after-hidden-resting-before-first-execution","instrumentId":"XYZ","price":"100000000000","hiddenRestingQuantityVisible":false,"statusCode":404,"observed":"no public hidden resting sell level"}]}}`
+	if err := os.WriteFile(reportPath, []byte(reportJSON), 0o644); err != nil {
+		t.Fatalf("write scenario report: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--attach-replay-to-report", reportPath,
+		"--replay-check-report", replayPath,
+		"--require-replay-check",
+	}, &stdout, nil)
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasAssertion(report, "p1-replay-hidden-depth-timeline-proof", "pass") {
+		t.Fatalf("missing replay hidden-depth timeline assertion: %+v", report.Assertions)
+	}
+	if _, ok := report.ReplayChecksum["visibilityTimeline"].(map[string]any); !ok {
+		t.Fatalf("expected replay checksum to include attached visibility timeline: %+v", report.ReplayChecksum)
+	}
+}
+
+func TestScenarioSmokeAttachReplayUsesP2AssertionPrefix(t *testing.T) {
+	tempDir := t.TempDir()
+	reportPath := filepath.Join(tempDir, "report.json")
+	replayPath := filepath.Join(tempDir, "replay-check.json")
+	reportJSON := `{"mode":"live","pass":true,"pathId":"P2_SETTLEMENT_BREAK_REPAIR","scenarioRunId":"p2-report-replay","seed":424243,"requests":[{"sequence":1,"command":"SubmitOrder"},{"sequence":2,"command":"SubmitOrder"}],"results":[],"assertions":[]}`
+	replayJSON := `{"pass":true,"report":{"batchCount":2,"storedCommandCount":2,"payloadOutcomeCount":2,"canonicalOutcomeCount":2,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"failures":[]}`
+	if err := os.WriteFile(reportPath, []byte(reportJSON), 0o644); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+	if err := os.WriteFile(replayPath, []byte(replayJSON), 0o644); err != nil {
+		t.Fatalf("write replay report: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--attach-replay-to-report", reportPath,
+		"--replay-check-report", replayPath,
+		"--require-replay-check",
+	}, &stdout, nil)
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasAssertion(report, "p2-replay-checksum-clean", "pass") {
+		t.Fatalf("missing P2 replay checksum assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-replay-stored-command-count", "pass") {
+		t.Fatalf("missing P2 replay counter assertion: %+v", report.Assertions)
+	}
+	if hasAssertion(report, "p1-replay-checksum-clean", "pass") {
+		t.Fatalf("unexpected P1 replay assertion on P2 report: %+v", report.Assertions)
 	}
 }
 
@@ -570,7 +811,7 @@ func TestScenarioSmokeLiveAssertionsFailOnReplayChecksumEvidence(t *testing.T) {
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+			_, _ = w.Write([]byte(p1TradeTapeJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
@@ -751,6 +992,58 @@ func TestScenarioSmokeLiveAssertionsAttachPostTradeSettlementChain(t *testing.T)
 	if !hasAssertion(report, "p2-post-trade-chain-linked", "pass") {
 		t.Fatalf("missing post-trade chain assertion: %+v", report.Assertions)
 	}
+	for _, assertionID := range []string{
+		"p2-obligation-state-created",
+		"p2-allocation-state-proposed",
+		"p2-confirmation-state-generated",
+		"p2-affirmation-state-accepted",
+		"p2-instruction-state-created",
+		"p2-attempt-state-started",
+		"p2-settlement-state-settled",
+	} {
+		if !hasAssertion(report, assertionID, "pass") {
+			t.Fatalf("missing post-trade state assertion %s: %+v", assertionID, report.Assertions)
+		}
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnPostTradeSettlementChainWrongState(t *testing.T) {
+	settlementPath := filepath.Join(t.TempDir(), "settlement-facts.json")
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"trade-event-1","tradeId":"trade-1","state":"OBLIGATION_CREATED"}],
+		"allocations":[{"settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"obl-1","tradeId":"trade-1","buyOrderId":"buy-order-1","sellOrderId":"sell-order-1","state":"ALLOCATION_SKIPPED"}],
+		"confirmations":[{"settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"allocation-1","tradeId":"trade-1","state":"CONFIRMATION_GENERATED"}],
+		"affirmations":[{"settlementAffirmationId":"affirmation-1","settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"confirmation-1","tradeId":"trade-1","state":"AFFIRMATION_ACCEPTED"}],
+		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"INSTRUCTION_CREATED"}],
+		"attempts":[{"settlementAttemptId":"attempt-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"instruction-1","state":"ATTEMPT_STARTED"}],
+		"settlements":[{"settlementId":"settlement-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","settlementAttemptId":"attempt-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"attempt-1","settlementState":"SETTLED"}]
+	}`
+	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
+		t.Fatalf("write settlement facts: %v", err)
+	}
+	server := p2SettlementServer(t, "")
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+		"--settlement-facts-report", settlementPath,
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected post-trade settlement state failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p2-allocation-state-proposed") {
+		t.Fatalf("expected allocation state failure: %+v", report.Failures)
+	}
 }
 
 func TestScenarioSmokeLiveAssertionsFailOnP2SettlementFactsWithoutRepairLink(t *testing.T) {
@@ -858,6 +1151,47 @@ func TestScenarioSmokeLiveAssertionsFailOnP2SettlementCrossRunFact(t *testing.T)
 	}
 	if !hasFailure(report, "p2-settlement-scope-consistent") {
 		t.Fatalf("expected scenario scope failure: %+v", report.Failures)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsPassOnScopedCanonicalCommandStatus(t *testing.T) {
+	report := smokeReport{
+		ScenarioRunID: "p1-current-run",
+		Results: []smokeResult{{
+			Sequence:          1,
+			Command:           "submit-sell-hidden",
+			Path:              "/api/v1/orders",
+			CommandStatusCode: 200,
+			CommandStatusBody: `{"commandId":"cmd-001","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome","eventStream":"REEF_EVENTS_CURRENT","responsePayloadJson":"{\"acceptedOrder\":{\"runId\":\"p1-current-run\"}}"}`,
+		}},
+	}
+
+	runAssertions(config{}, nil, &report)
+
+	if hasFailure(report, "command-001-scenario-run") {
+		t.Fatalf("unexpected scenario scope failure: %+v", report.Failures)
+	}
+	if !hasAssertion(report, "command-001-scenario-run", "pass") {
+		t.Fatalf("expected scenario scope assertion: %+v", report.Assertions)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnStaleCanonicalCommandStatusRun(t *testing.T) {
+	report := smokeReport{
+		ScenarioRunID: "p1-current-run",
+		Results: []smokeResult{{
+			Sequence:          1,
+			Command:           "submit-sell-hidden",
+			Path:              "/api/v1/orders",
+			CommandStatusCode: 200,
+			CommandStatusBody: `{"commandId":"cmd-001","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome","eventStream":"REEF_EVENTS_PREVIOUS","responsePayloadJson":"{\"acceptedOrder\":{\"runId\":\"p1-previous-run\"}}"}`,
+		}},
+	}
+
+	runAssertions(config{}, nil, &report)
+
+	if !hasFailure(report, "command-001-scenario-run") {
+		t.Fatalf("expected stale scenario scope failure: %+v", report.Failures)
 	}
 }
 
@@ -1058,6 +1392,14 @@ func p1OwnFillsJSON(participantID string) string {
 	return `{"meta":{"source":"runtime.orders + runtime.executions","freshness":"durable execution rows scoped by participant order ownership"},"fills":[` + fills + `]}`
 }
 
+func p1TradeTapeJSON() string {
+	return `{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"sequence":3,"tradeId":"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1","instrumentId":"XYZ","quantityUnits":"1000","price":"150000000000","currency":"USD","occurredAt":"2026-03-14T18:00:02Z"},{"sequence":2,"tradeId":"` + p1SecondVisibleBuyTradeID + `","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"},{"sequence":1,"tradeId":"` + p1FirstVisibleBuyTradeID + `","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"}]}`
+}
+
+func p1TradeTapeWithPublicIdentityLeakJSON() string {
+	return `{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"` + p1FirstVisibleBuyTradeID + `","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","buyOrderId":"p1_golden_hidden_cross_t1-ord-002"},{"tradeId":"` + p1SecondVisibleBuyTradeID + `","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`
+}
+
 func p1DataAvailabilityJSON() string {
 	return p1DataAvailabilityJSONWithOrderHistorySource("runtime.orders + runtime.order_lifecycle_state")
 }
@@ -1143,7 +1485,7 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 			_, _ = w.Write([]byte(availabilityJSON))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"sequence":2,"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"},{"sequence":1,"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"}]}`))
+			_, _ = w.Write([]byte(p1TradeTapeJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))

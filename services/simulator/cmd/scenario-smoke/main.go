@@ -19,16 +19,26 @@ import (
 
 const defaultScenarioStart = "2026-03-14T18:00:00Z"
 
+const (
+	p1FirstVisibleBuyTradeID  = "trade-p1_golden_hidden_cross_t1-ord-002-p1_golden_hidden_cross_t1-ord-001-1"
+	p1SecondVisibleBuyTradeID = "trade-p1_golden_hidden_cross_t1-ord-003-p1_golden_hidden_cross_t1-ord-001-1"
+)
+
 type config struct {
 	scenarioPath              string
 	scenarioRunID             string
 	start                     string
 	baseURL                   string
+	statusBaseURL             string
+	readBaseURL               string
 	live                      bool
 	assertions                bool
 	settlementFactsReportPath string
 	replayCheckReportPath     string
+	attachReplayToReportPath  string
 	requireReplayCheck        bool
+	runScopedCommandIDs       bool
+	requireZeroProjectionLag  bool
 	seedReference             bool
 	timeout                   time.Duration
 	statusTimeout             time.Duration
@@ -37,23 +47,24 @@ type config struct {
 }
 
 type smokeReport struct {
-	Mode           string              `json:"mode"`
-	Pass           bool                `json:"pass"`
-	PathID         string              `json:"pathId"`
-	ScenarioRunID  string              `json:"scenarioRunId"`
-	Seed           int64               `json:"seed"`
-	BaseURL        string              `json:"baseUrl,omitempty"`
-	SeedRequests   []smokeRequest      `json:"seedRequests,omitempty"`
-	Requests       []smokeRequest      `json:"requests"`
-	Results        []smokeResult       `json:"results,omitempty"`
-	Commands       []assertionCommand  `json:"commands,omitempty"`
-	Reads          []assertionRead     `json:"reads,omitempty"`
-	Assertions     []scenarioAssertion `json:"assertions,omitempty"`
-	Failures       []scenarioFailure   `json:"failures,omitempty"`
-	ProjectionLag  []projectionLag     `json:"projectionLag,omitempty"`
-	ReplayChecksum map[string]any      `json:"replayChecksum,omitempty"`
-	ArtifactPaths  []string            `json:"artifactPaths,omitempty"`
-	Errors         []string            `json:"errors,omitempty"`
+	Mode               string                `json:"mode"`
+	Pass               bool                  `json:"pass"`
+	PathID             string                `json:"pathId"`
+	ScenarioRunID      string                `json:"scenarioRunId"`
+	Seed               int64                 `json:"seed"`
+	BaseURL            string                `json:"baseUrl,omitempty"`
+	SeedRequests       []smokeRequest        `json:"seedRequests,omitempty"`
+	Requests           []smokeRequest        `json:"requests"`
+	Results            []smokeResult         `json:"results,omitempty"`
+	Commands           []assertionCommand    `json:"commands,omitempty"`
+	Reads              []assertionRead       `json:"reads,omitempty"`
+	Assertions         []scenarioAssertion   `json:"assertions,omitempty"`
+	Failures           []scenarioFailure     `json:"failures,omitempty"`
+	ProjectionLag      []projectionLag       `json:"projectionLag,omitempty"`
+	VisibilityTimeline *p1VisibilityTimeline `json:"visibilityTimeline,omitempty"`
+	ReplayChecksum     map[string]any        `json:"replayChecksum,omitempty"`
+	ArtifactPaths      []string              `json:"artifactPaths,omitempty"`
+	Errors             []string              `json:"errors,omitempty"`
 }
 
 type smokeRequest struct {
@@ -78,6 +89,9 @@ type smokeResult struct {
 }
 
 type readyzReport struct {
+	Pipeline struct {
+		CommandStatusSources []string `json:"commandStatusSources"`
+	} `json:"pipeline"`
 	Dependencies struct {
 		CommandStatusLookup bool `json:"commandStatusLookup"`
 	} `json:"dependencies"`
@@ -126,12 +140,34 @@ type projectionLag struct {
 	MeasuredAt string `json:"measuredAt,omitempty"`
 }
 
+type p1VisibilityTimeline struct {
+	ScenarioID                      string               `json:"scenarioId"`
+	ScenarioRunID                   string               `json:"scenarioRunId,omitempty"`
+	PublicDepthHiddenRestingExposed bool                 `json:"publicDepthHiddenRestingExposed"`
+	PublicDepthChecks               []p1PublicDepthCheck `json:"publicDepthChecks"`
+}
+
+type p1PublicDepthCheck struct {
+	Phase                        string `json:"phase"`
+	InstrumentID                 string `json:"instrumentId"`
+	Price                        string `json:"price"`
+	HiddenRestingQuantityVisible bool   `json:"hiddenRestingQuantityVisible"`
+	StatusCode                   int    `json:"statusCode,omitempty"`
+	Observed                     string `json:"observed,omitempty"`
+	CheckedAt                    string `json:"checkedAt,omitempty"`
+	Error                        string `json:"error,omitempty"`
+}
+
 type commandStatusBody struct {
-	CommandID      string `json:"commandId"`
-	Status         string `json:"status"`
-	ResultStatus   string `json:"resultStatus"`
-	ResponseStatus int    `json:"responseStatus"`
-	Source         string `json:"source"`
+	CommandID           string `json:"commandId"`
+	Status              string `json:"status"`
+	ResultStatus        string `json:"resultStatus"`
+	ResponseStatus      int    `json:"responseStatus"`
+	Source              string `json:"source"`
+	CommandStream       string `json:"commandStream"`
+	EventStream         string `json:"eventStream"`
+	ResponsePayloadJSON string `json:"responsePayloadJson"`
+	ResultPayloadJSON   string `json:"resultPayloadJson"`
 }
 
 type ownOrdersBody struct {
@@ -354,6 +390,9 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 	if err != nil {
 		return err
 	}
+	if cfg.attachReplayToReportPath != "" {
+		return attachReplayToExistingReport(cfg, stdout)
+	}
 	scenario, err := scenarioconfig.LoadScenarioFile(cfg.scenarioPath)
 	if err != nil {
 		return err
@@ -389,9 +428,10 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 		if cfg.replayCheckReportPath != "" {
 			attachReplayChecksumEvidence(cfg, &report)
 		} else if cfg.requireReplayCheck {
+			prefix := replayAssertionPrefix(&report)
 			failAssertion(
 				&report,
-				"p1-replay-checksum-clean",
+				prefix+"-checksum-clean",
 				"replay_checksum",
 				"clean replay check report attached",
 				"missing --replay-check-report",
@@ -400,6 +440,7 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 		}
 		report.Pass = len(report.Errors) == 0
 	}
+	redactSensitiveReportHeaders(&report)
 	body, err := encodeReport(report, cfg.pretty)
 	if err != nil {
 		return fmt.Errorf("write smoke json: %w", err)
@@ -432,11 +473,16 @@ func parseConfig(args []string) (config, error) {
 	fs.StringVar(&cfg.scenarioRunID, "scenario-run-id", "", "scenario run id stamped into compiled payloads")
 	fs.StringVar(&cfg.start, "start", cfg.start, "scenario start time, RFC3339")
 	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "platform runtime base URL for live mode")
+	fs.StringVar(&cfg.statusBaseURL, "status-base-url", "", "optional command status base URL; defaults to --base-url")
+	fs.StringVar(&cfg.readBaseURL, "read-base-url", "", "optional assertion read base URL; defaults to --base-url")
 	fs.BoolVar(&cfg.live, "live", false, "send executable scenario requests to base-url")
 	fs.BoolVar(&cfg.assertions, "assertions", false, "run first-wave live scenario assertions after command submission")
 	fs.StringVar(&cfg.settlementFactsReportPath, "settlement-facts-report", "", "optional P2 settlement assertion JSON artifact")
 	fs.StringVar(&cfg.replayCheckReportPath, "replay-check-report", "", "optional JSON output from dev-venue-event-replay-check to attach to assertion report")
+	fs.StringVar(&cfg.attachReplayToReportPath, "attach-replay-to-report", "", "attach --replay-check-report to an existing scenario-smoke report without resubmitting live commands")
 	fs.BoolVar(&cfg.requireReplayCheck, "require-replay-check", false, "fail assertion report unless --replay-check-report is attached and clean")
+	fs.BoolVar(&cfg.runScopedCommandIDs, "run-scoped-command-ids", false, "prefix executable command ids with the scenario run id to avoid retained-stream collisions")
+	fs.BoolVar(&cfg.requireZeroProjectionLag, "require-zero-projection-lag", false, "fail P1 assertions unless required read surfaces report zero projection lag")
 	fs.BoolVar(&cfg.seedReference, "seed-reference", cfg.seedReference, "seed scenario reference/auth data in live mode")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP request timeout")
 	fs.DurationVar(&cfg.statusTimeout, "status-timeout", cfg.statusTimeout, "command status polling timeout")
@@ -445,19 +491,22 @@ func parseConfig(args []string) (config, error) {
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
-	if cfg.scenarioPath == "" {
+	if cfg.attachReplayToReportPath != "" && cfg.replayCheckReportPath == "" {
+		return cfg, errors.New("--attach-replay-to-report requires --replay-check-report")
+	}
+	if cfg.attachReplayToReportPath == "" && cfg.scenarioPath == "" {
 		return cfg, errors.New("missing --scenario")
 	}
-	if cfg.assertions && !cfg.live {
+	if cfg.attachReplayToReportPath == "" && cfg.assertions && !cfg.live {
 		return cfg, errors.New("--assertions requires --live")
 	}
 	if cfg.settlementFactsReportPath != "" && !cfg.assertions {
 		return cfg, errors.New("--settlement-facts-report requires --assertions")
 	}
-	if cfg.replayCheckReportPath != "" && !cfg.assertions {
+	if cfg.attachReplayToReportPath == "" && cfg.replayCheckReportPath != "" && !cfg.assertions {
 		return cfg, errors.New("--replay-check-report requires --assertions")
 	}
-	if cfg.requireReplayCheck && !cfg.assertions {
+	if cfg.attachReplayToReportPath == "" && cfg.requireReplayCheck && !cfg.assertions {
 		return cfg, errors.New("--require-replay-check requires --assertions")
 	}
 	if cfg.timeout <= 0 {
@@ -465,6 +514,12 @@ func parseConfig(args []string) (config, error) {
 	}
 	if cfg.statusTimeout <= 0 {
 		return cfg, errors.New("status-timeout must be > 0")
+	}
+	if strings.TrimSpace(cfg.statusBaseURL) == "" {
+		cfg.statusBaseURL = cfg.baseURL
+	}
+	if strings.TrimSpace(cfg.readBaseURL) == "" {
+		cfg.readBaseURL = cfg.baseURL
 	}
 	if fs.NArg() > 0 {
 		return cfg, fmt.Errorf("unexpected positional argument: %s", fs.Arg(0))
@@ -482,6 +537,83 @@ func encodeReport(report smokeReport, pretty bool) ([]byte, error) {
 		return nil, err
 	}
 	return buffer.Bytes(), nil
+}
+
+func attachReplayToExistingReport(cfg config, stdout io.Writer) error {
+	body, err := os.ReadFile(cfg.attachReplayToReportPath)
+	if err != nil {
+		return fmt.Errorf("read report for replay attachment: %w", err)
+	}
+	var report smokeReport
+	if err := json.Unmarshal(body, &report); err != nil {
+		return fmt.Errorf("parse report for replay attachment: %w", err)
+	}
+	removeReplayEvidence(&report)
+	attachReplayChecksumEvidence(cfg, &report)
+	report.Pass = len(report.Errors) == 0 && len(report.Failures) == 0
+	redactSensitiveReportHeaders(&report)
+	encoded, err := encodeReport(report, cfg.pretty)
+	if err != nil {
+		return fmt.Errorf("write smoke json: %w", err)
+	}
+	outPath := cfg.reportOut
+	if outPath == "" {
+		outPath = cfg.attachReplayToReportPath
+	}
+	if err := os.WriteFile(outPath, encoded, 0o644); err != nil {
+		return fmt.Errorf("write report-out: %w", err)
+	}
+	if _, err := stdout.Write(encoded); err != nil {
+		return fmt.Errorf("write smoke json: %w", err)
+	}
+	if !report.Pass {
+		return errors.New("replay attachment failed")
+	}
+	return nil
+}
+
+func removeReplayEvidence(report *smokeReport) {
+	filteredAssertions := report.Assertions[:0]
+	for _, assertion := range report.Assertions {
+		if isReplayAssertionID(assertion.ID) {
+			continue
+		}
+		filteredAssertions = append(filteredAssertions, assertion)
+	}
+	report.Assertions = filteredAssertions
+	filteredFailures := report.Failures[:0]
+	for _, failure := range report.Failures {
+		if isReplayAssertionID(failure.AssertionID) {
+			continue
+		}
+		filteredFailures = append(filteredFailures, failure)
+	}
+	report.Failures = filteredFailures
+	report.ReplayChecksum = nil
+	report.ArtifactPaths = nil
+}
+
+func isReplayAssertionID(id string) bool {
+	return strings.HasPrefix(id, "p1-replay-") ||
+		strings.HasPrefix(id, "p2-replay-") ||
+		strings.HasPrefix(id, "replay-")
+}
+
+func redactSensitiveReportHeaders(report *smokeReport) {
+	for i := range report.SeedRequests {
+		redactSensitiveHeaders(report.SeedRequests[i].Headers)
+	}
+	for i := range report.Requests {
+		redactSensitiveHeaders(report.Requests[i].Headers)
+	}
+}
+
+func redactSensitiveHeaders(headers map[string]string) {
+	for key := range headers {
+		if strings.EqualFold(key, "Authorization") {
+			delete(headers, key)
+		}
+	}
 }
 
 func buildReport(cfg config, scenario scenarioconfig.ScenarioFile, plan scenarioconfig.ScenarioPlan) smokeReport {
@@ -510,6 +642,10 @@ func executableRequests(cfg config, plan scenarioconfig.ScenarioPlan) []smokeReq
 		if !step.APIExecutable {
 			continue
 		}
+		payload := copyStringMap(step.Payload)
+		if cfg.runScopedCommandIDs {
+			payload["commandId"] = runScopedCommandID(plan.ScenarioRunID, payload["commandId"])
+		}
 		out = append(out, smokeRequest{
 			Sequence: step.Sequence,
 			Command:  step.Command,
@@ -518,44 +654,81 @@ func executableRequests(cfg config, plan scenarioconfig.ScenarioPlan) []smokeReq
 			URL:      absoluteURL(cfg.baseURL, step.Route),
 			Headers: map[string]string{
 				"X-Client-Id":      fmt.Sprintf("scenario-smoke-%d", step.Sequence),
-				"Idempotency-Key":  step.Payload["commandId"],
-				"X-Correlation-Id": step.Payload["traceId"],
-				"X-Participant-Id": step.Payload["participantId"],
-				"X-Reef-Actor-Id":  step.Payload["actorId"],
+				"Idempotency-Key":  payload["commandId"],
+				"X-Correlation-Id": payload["traceId"],
+				"X-Participant-Id": payload["participantId"],
+				"X-Reef-Actor-Id":  payload["actorId"],
 			},
-			Payload: copyStringMap(step.Payload),
+			Payload: payload,
 		})
 	}
 	return out
 }
 
+func runScopedCommandID(scenarioRunID string, commandID string) string {
+	prefix := safeCommandIDPart(scenarioRunID)
+	if prefix == "" {
+		return commandID
+	}
+	return prefix + "-" + commandID
+}
+
+func safeCommandIDPart(value string) string {
+	var builder strings.Builder
+	lastWasDash := false
+	for _, char := range strings.TrimSpace(value) {
+		allowed := (char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '_' ||
+			char == '-' ||
+			char == '.'
+		if allowed {
+			builder.WriteRune(char)
+			lastWasDash = false
+			continue
+		}
+		if !lastWasDash {
+			builder.WriteByte('-')
+			lastWasDash = true
+		}
+	}
+	return strings.Trim(builder.String(), "-")
+}
+
 func seedRequests(cfg config, scenario scenarioconfig.ScenarioFile, plan scenarioconfig.ScenarioPlan) []smokeRequest {
-	headers := map[string]string{"X-Reef-Internal-Route": "true"}
+	headers := map[string]string{
+		"X-Reef-Actor-Id":  "scenario-smoke-seed",
+		"X-Correlation-Id": plan.ScenarioRunID + "-reference-seed",
+	}
+	if token := strings.TrimSpace(os.Getenv("ADMIN_API_TOKEN")); token != "" {
+		headers["Authorization"] = "Bearer " + token
+	}
 	out := make([]smokeRequest, 0)
 	for _, instrument := range scenario.Preconditions.ReferenceData.Instruments {
-		out = append(out, postRequest(cfg.baseURL, "/reference/instruments", headers, map[string]string{
+		out = append(out, postRequest(cfg.baseURL, "/admin/v1/reference/instruments", headers, map[string]string{
 			"instrumentId": instrument.InstrumentID,
 			"symbol":       instrument.Symbol,
 		}))
 	}
 	for _, participant := range scenario.Preconditions.ReferenceData.Participants {
-		out = append(out, postRequest(cfg.baseURL, "/reference/participants", headers, map[string]string{
+		out = append(out, postRequest(cfg.baseURL, "/admin/v1/reference/participants", headers, map[string]string{
 			"participantId": participant.ParticipantID,
 			"name":          participant.ParticipantID,
 		}))
 	}
 	for _, account := range scenario.Preconditions.ReferenceData.Accounts {
-		out = append(out, postRequest(cfg.baseURL, "/reference/accounts", headers, map[string]string{
+		out = append(out, postRequest(cfg.baseURL, "/admin/v1/reference/accounts", headers, map[string]string{
 			"accountId":     account.AccountID,
 			"participantId": account.ParticipantID,
 		}))
 	}
-	out = append(out, postRequest(cfg.baseURL, "/auth/roles", headers, map[string]string{
+	out = append(out, postRequest(cfg.baseURL, "/admin/v1/auth/roles", headers, map[string]string{
 		"roleId":      "order_trader",
 		"permissions": "order.submit,order.cancel,order.modify",
 	}))
 	for _, actorID := range executableActorIDs(plan) {
-		out = append(out, postRequest(cfg.baseURL, "/auth/actor-roles", headers, map[string]string{
+		out = append(out, postRequest(cfg.baseURL, "/admin/v1/auth/actor-roles", headers, map[string]string{
 			"actorId": actorID,
 			"roleId":  "order_trader",
 		}))
@@ -599,6 +772,10 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 		if result.Error != "" || result.StatusCode < 200 || result.StatusCode >= 300 || result.CommandStatusCode != 200 {
 			report.Errors = append(report.Errors, fmt.Sprintf("command %s failed", request.Payload["commandId"]))
 		}
+		if cfg.assertions && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" && request.Sequence == 1 &&
+			result.Error == "" && result.StatusCode >= 200 && result.StatusCode < 300 && result.CommandStatusCode == 200 {
+			captureP1HiddenDepthTimeline(cfg, client, report)
+		}
 	}
 	if cfg.assertions && len(report.Errors) == 0 {
 		runAssertions(cfg, client, report)
@@ -606,7 +783,7 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 }
 
 func requireCommandStatusLookup(cfg config, client *http.Client) error {
-	request, err := http.NewRequest(http.MethodGet, absoluteURL(cfg.baseURL, "/readyz"), nil)
+	request, err := http.NewRequest(http.MethodGet, absoluteURL(cfg.statusBaseURL, "/readyz"), nil)
 	if err != nil {
 		return fmt.Errorf("command status readiness check failed: %w", err)
 	}
@@ -626,10 +803,20 @@ func requireCommandStatusLookup(cfg config, client *http.Client) error {
 	if err := json.Unmarshal(body, &ready); err != nil {
 		return fmt.Errorf("command status readiness check failed: invalid /readyz JSON: %w", err)
 	}
-	if !ready.Dependencies.CommandStatusLookup {
+	if !ready.Dependencies.CommandStatusLookup && !hasCommandStatusSource(ready.Pipeline.CommandStatusSources) {
 		return errors.New("command status lookup unavailable: /readyz dependencies.commandStatusLookup=false")
 	}
 	return nil
+}
+
+func hasCommandStatusSource(sources []string) bool {
+	for _, source := range sources {
+		switch strings.ToLower(strings.TrimSpace(source)) {
+		case "canonical_outcome", "command_log", "stream_reference", "event_batch":
+			return true
+		}
+	}
+	return false
 }
 
 func runAssertions(cfg config, client *http.Client, report *smokeReport) {
@@ -660,11 +847,29 @@ func runAssertions(cfg config, client *http.Client, report *smokeReport) {
 		} else {
 			failAssertion(report, assertionID, "command_completion", "COMPLETED/accepted", status.Status+"/"+resultStatus, "GET /api/v1/commands/{commandId}")
 		}
+		assertCommandStatusScenarioScope(report, result.Sequence, status)
 	}
 	if report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
+		assertP1HistoricalVisibilityTimeline(report)
 		runP1OwnOrderAssertions(cfg, client, report)
 		runP1MarketDataAssertions(cfg, client, report)
 	}
+}
+
+func assertCommandStatusScenarioScope(report *smokeReport, sequence int, status commandStatusBody) {
+	observed := commandStatusScenarioRunID(status)
+	if observed == "" && !commandStatusHasCanonicalScopeEvidence(status) {
+		return
+	}
+	assertionID := fmt.Sprintf("command-%03d-scenario-run", sequence)
+	if observed == report.ScenarioRunID {
+		passAssertion(report, assertionID, report.ScenarioRunID, observed, "GET /api/v1/commands/{commandId}")
+		return
+	}
+	if observed == "" {
+		observed = "missing scenario run in canonical command status"
+	}
+	failAssertion(report, assertionID, "command_status_scope", report.ScenarioRunID, observed, "GET /api/v1/commands/{commandId}")
 }
 
 func attachSettlementFactArtifactAssertions(cfg config, report *smokeReport) {
@@ -697,7 +902,7 @@ func attachSettlementFactArtifactAssertions(cfg config, report *smokeReport) {
 
 func attachSettlementFactAPIAssertions(cfg config, client *http.Client, report *smokeReport) {
 	endpoint := "/api/v1/settlement/facts/" + url.PathEscape(report.ScenarioRunID)
-	read, body, err := executeRead(client, absoluteURL(cfg.baseURL, endpoint), endpoint, map[string]string{"scenarioRunId": report.ScenarioRunID})
+	read, body, err := executeRead(client, absoluteURL(cfg.readBaseURL, endpoint), endpoint, map[string]string{"scenarioRunId": report.ScenarioRunID})
 	read.SourceType = "settlement facts"
 	read.FreshnessModel = "append-only settlement fact store"
 	if err != nil {
@@ -816,11 +1021,75 @@ func assertPostTradeSettlementChain(report *smokeReport, facts settlementFactsRe
 	} else {
 		failAssertion(report, "p2-obligation-references-trade", "settlement_fact_causation", "one obligation with tradeId", obligationTradeIDs(facts.Obligations), proofSource)
 	}
+	assertSettlementFactState(report, "p2-obligation-state-created", stateFromObligation(facts.Obligations), "OBLIGATION_CREATED", proofSource)
+	assertSettlementFactState(report, "p2-allocation-state-proposed", stateFromAllocation(facts.Allocations), "ALLOCATION_PROPOSED", proofSource)
+	assertSettlementFactState(report, "p2-confirmation-state-generated", stateFromConfirmation(facts.Confirmations), "CONFIRMATION_GENERATED", proofSource)
+	assertSettlementFactState(report, "p2-affirmation-state-accepted", stateFromAffirmation(facts.Affirmations), "AFFIRMATION_ACCEPTED", proofSource)
+	assertSettlementFactState(report, "p2-instruction-state-created", stateFromInstruction(facts.Instructions), "INSTRUCTION_CREATED", proofSource)
+	assertSettlementFactState(report, "p2-attempt-state-started", stateFromAttempt(facts.Attempts), "ATTEMPT_STARTED", proofSource)
+	assertSettlementFactState(report, "p2-settlement-state-settled", stateFromSettlement(facts.Settlements), "SETTLED", proofSource)
 	if postTradeSettlementChainLinked(facts) {
 		passAssertion(report, "p2-post-trade-chain-linked", "trade -> obligation -> allocation -> confirmation -> affirmation -> settlement", "all fact references linked", proofSource)
 	} else {
 		failAssertion(report, "p2-post-trade-chain-linked", "settlement_fact_causation", "trade -> obligation -> allocation -> confirmation -> affirmation -> settlement", postTradeSettlementChainObserved(facts), proofSource)
 	}
+}
+
+func assertSettlementFactState(report *smokeReport, id string, observed string, expected string, proofSource string) {
+	if observed == expected {
+		passAssertion(report, id, expected, observed, proofSource)
+		return
+	}
+	failAssertion(report, id, "settlement_fact_state", expected, observed, proofSource)
+}
+
+func stateFromObligation(facts []settlementObligation) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].State
+}
+
+func stateFromAllocation(facts []settlementAllocation) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].State
+}
+
+func stateFromConfirmation(facts []settlementConfirmation) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].State
+}
+
+func stateFromAffirmation(facts []settlementAffirmation) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].State
+}
+
+func stateFromInstruction(facts []settlementInstruction) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].State
+}
+
+func stateFromAttempt(facts []settlementAttempt) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].State
+}
+
+func stateFromSettlement(facts []settlementSettled) string {
+	if len(facts) != 1 {
+		return fmt.Sprintf("count=%d", len(facts))
+	}
+	return facts[0].SettlementState
 }
 
 func assertCount(report *smokeReport, id string, category string, observed int, expected int, proofSource string) {
@@ -923,9 +1192,11 @@ func postTradeSettlementChainLinked(facts settlementFactsReport) bool {
 		affirmation.CausationID == confirmation.SettlementConfirmationID &&
 		instruction.SettlementObligationID == obligation.SettlementObligationID &&
 		instruction.CausationID == affirmation.SettlementAffirmationID &&
+		instruction.State == "INSTRUCTION_CREATED" &&
 		attempt.SettlementObligationID == obligation.SettlementObligationID &&
 		attempt.SettlementInstructionID == instruction.SettlementInstructionID &&
 		attempt.CausationID == instruction.SettlementInstructionID &&
+		attempt.State == "ATTEMPT_STARTED" &&
 		settlement.SettlementObligationID == obligation.SettlementObligationID &&
 		settlement.SettlementInstructionID == instruction.SettlementInstructionID &&
 		settlement.SettlementAttemptID == attempt.SettlementAttemptID &&
@@ -1193,15 +1464,19 @@ func exceptionStates(resolutions []settlementResolution) string {
 }
 
 func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
+	prefix := replayAssertionPrefix(report)
 	body, err := os.ReadFile(cfg.replayCheckReportPath)
 	if err != nil {
-		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "readable replay check report", err.Error(), cfg.replayCheckReportPath)
+		failAssertion(report, prefix+"-checksum-clean", "replay_checksum", "readable replay check report", err.Error(), cfg.replayCheckReportPath)
 		return
 	}
 	var parsed map[string]any
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "valid replay check JSON", err.Error(), cfg.replayCheckReportPath)
+		failAssertion(report, prefix+"-checksum-clean", "replay_checksum", "valid replay check JSON", err.Error(), cfg.replayCheckReportPath)
 		return
+	}
+	if report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
+		attachP1VisibilityTimelineToReplayChecksum(report, parsed)
 	}
 	report.ReplayChecksum = parsed
 	report.ArtifactPaths = append(report.ArtifactPaths, cfg.replayCheckReportPath)
@@ -1212,13 +1487,26 @@ func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
 		if len(failures) > 0 {
 			observed = strings.Join(failures, "; ")
 		}
-		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
+		failAssertion(report, prefix+"-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
 		return
 	}
-	passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	passAssertion(report, prefix+"-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	if cfg.requireReplayCheck {
+		assertReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath, prefix, replayCounterMinimums(report))
+	}
 	if cfg.requireReplayCheck && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
-		assertP1ReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath)
 		assertP1HistoricalVisibilityProof(report, parsed, cfg.replayCheckReportPath)
+	}
+}
+
+func replayAssertionPrefix(report *smokeReport) string {
+	switch report.PathID {
+	case "P1_GOLDEN_HIDDEN_CROSS_T1":
+		return "p1-replay"
+	case "P2_SETTLEMENT_BREAK_REPAIR":
+		return "p2-replay"
+	default:
+		return "replay"
 	}
 }
 
@@ -1264,28 +1552,79 @@ func replayVisibilityCheckCount(visibility map[string]any) int {
 	return len(raw)
 }
 
-func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string) {
-	replayReport, ok := parsed["report"].(map[string]any)
-	if !ok {
-		failAssertion(report, "p1-replay-counter-report-present", "replay_checksum", "replay report counters", "missing report object", proofSource)
+func attachP1VisibilityTimelineToReplayChecksum(report *smokeReport, parsed map[string]any) {
+	if _, found := parsed["visibilityTimeline"]; found || report.VisibilityTimeline == nil {
 		return
 	}
-	minimums := map[string]float64{
+	encoded, err := json.Marshal(report.VisibilityTimeline)
+	if err != nil {
+		return
+	}
+	var timeline map[string]any
+	if err := json.Unmarshal(encoded, &timeline); err != nil {
+		return
+	}
+	parsed["visibilityTimeline"] = timeline
+}
+
+func assertP1HistoricalVisibilityTimeline(report *smokeReport) {
+	proofSource := "/api/v1/market-data/depth/XYZ"
+	if report.VisibilityTimeline == nil {
+		failAssertion(report, "p1-hidden-depth-timeline-proof", "public_depth_visibility_timeline", "captured pre-execution public depth check with hidden resting size not visible", "missing visibilityTimeline object", proofSource)
+		return
+	}
+	checks := report.VisibilityTimeline.PublicDepthChecks
+	readErrors := p1VisibilityReadErrors(checks)
+	if len(checks) > 0 && len(readErrors) == 0 && !report.VisibilityTimeline.PublicDepthHiddenRestingExposed {
+		passAssertion(report, "p1-hidden-depth-timeline-proof", "hidden resting size not visible before first execution", fmt.Sprintf("%d public depth checks, exposed=false", len(checks)), proofSource)
+		return
+	}
+	observed := fmt.Sprintf("%d public depth checks, exposed=%t", len(checks), report.VisibilityTimeline.PublicDepthHiddenRestingExposed)
+	if len(readErrors) > 0 {
+		observed += ", errors=" + strings.Join(readErrors, "; ")
+	}
+	failAssertion(report, "p1-hidden-depth-timeline-proof", "public_depth_visibility_timeline", "hidden resting size not visible before first execution", observed, proofSource)
+}
+
+func p1VisibilityReadErrors(checks []p1PublicDepthCheck) []string {
+	out := make([]string, 0)
+	for _, check := range checks {
+		if strings.TrimSpace(check.Error) != "" {
+			out = append(out, check.Error)
+		}
+	}
+	return out
+}
+
+func replayCounterMinimums(report *smokeReport) map[string]float64 {
+	commandCount := float64(len(report.Requests))
+	if commandCount <= 0 {
+		commandCount = 1
+	}
+	return map[string]float64{
 		"batchCount":            1,
-		"storedCommandCount":    3,
-		"payloadOutcomeCount":   3,
-		"canonicalOutcomeCount": 3,
+		"storedCommandCount":    commandCount,
+		"payloadOutcomeCount":   commandCount,
+		"canonicalOutcomeCount": commandCount,
+	}
+}
+
+func assertReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string, prefix string, minimums map[string]float64) {
+	replayReport, ok := parsed["report"].(map[string]any)
+	if !ok {
+		failAssertion(report, prefix+"-counter-report-present", "replay_checksum", "replay report counters", "missing report object", proofSource)
+		return
 	}
 	for key, minimum := range minimums {
 		value, found := replayCounter(replayReport, key)
 		if found && value >= minimum {
-			passAssertion(report, "p1-replay-"+kebabCase(key), fmt.Sprintf(">= %.0f", minimum), fmt.Sprintf("%.0f", value), proofSource)
+			passAssertion(report, prefix+"-"+kebabCase(key), fmt.Sprintf(">= %.0f", minimum), fmt.Sprintf("%.0f", value), proofSource)
 		} else {
 			observed := "missing"
 			if found {
 				observed = fmt.Sprintf("%.0f", value)
 			}
-			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", fmt.Sprintf(">= %.0f", minimum), observed, proofSource)
+			failAssertion(report, prefix+"-"+kebabCase(key), "replay_checksum", fmt.Sprintf(">= %.0f", minimum), observed, proofSource)
 		}
 	}
 	zeroCounters := []string{
@@ -1302,13 +1641,13 @@ func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, 
 	for _, key := range zeroCounters {
 		value, found := replayCounter(replayReport, key)
 		if found && value == 0 {
-			passAssertion(report, "p1-replay-"+kebabCase(key), "0", "0", proofSource)
+			passAssertion(report, prefix+"-"+kebabCase(key), "0", "0", proofSource)
 		} else {
 			observed := "missing"
 			if found {
 				observed = fmt.Sprintf("%.0f", value)
 			}
-			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", "0", observed, proofSource)
+			failAssertion(report, prefix+"-"+kebabCase(key), "replay_checksum", "0", observed, proofSource)
 		}
 	}
 }
@@ -1464,8 +1803,42 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 	}
 }
 
+func captureP1HiddenDepthTimeline(cfg config, client *http.Client, report *smokeReport) {
+	read, depth, depthFound, err := readMarketDepth(cfg, client, "XYZ")
+	report.Reads = append(report.Reads, read)
+	if report.VisibilityTimeline == nil {
+		report.VisibilityTimeline = &p1VisibilityTimeline{
+			ScenarioID:    report.PathID,
+			ScenarioRunID: report.ScenarioRunID,
+		}
+	}
+	check := p1PublicDepthCheck{
+		Phase:        "after-hidden-resting-before-first-execution",
+		InstrumentID: "XYZ",
+		Price:        "100000000000",
+		StatusCode:   read.StatusCode,
+		CheckedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	if err != nil {
+		check.Error = err.Error()
+		check.Observed = err.Error()
+	} else if depthFound && marketDepthContainsLevel(depth.AskLevels, "100000000000", "100") {
+		check.HiddenRestingQuantityVisible = true
+		check.Observed = "ask level 100000000000/100 visible"
+	} else if depthFound {
+		check.Observed = fmt.Sprintf("bidLevels=%d askLevels=%d", len(depth.BidLevels), len(depth.AskLevels))
+	} else {
+		check.Observed = "no public hidden resting sell level"
+	}
+	report.VisibilityTimeline.PublicDepthHiddenRestingExposed = report.VisibilityTimeline.PublicDepthHiddenRestingExposed || check.HiddenRestingQuantityVisible
+	report.VisibilityTimeline.PublicDepthChecks = append(report.VisibilityTimeline.PublicDepthChecks, check)
+}
+
 func runP1MarketDataAssertions(cfg config, client *http.Client, report *smokeReport) {
 	availabilityRead, availability, err := readDataAvailability(cfg, client)
+	if cfg.requireZeroProjectionLag {
+		availabilityRead, availability, err = waitP1DataAvailabilityZero(cfg, client)
+	}
 	report.Reads = append(report.Reads, availabilityRead)
 	if err != nil {
 		report.Errors = append(report.Errors, "p1-read-surface-inventory failed")
@@ -1476,7 +1849,7 @@ func runP1MarketDataAssertions(cfg config, client *http.Client, report *smokeRep
 			ProofSource: availabilityRead.Endpoint,
 		})
 	} else {
-		assertP1DataAvailability(report, availabilityRead.Endpoint, availability)
+		assertP1DataAvailability(report, availabilityRead.Endpoint, availability, cfg.requireZeroProjectionLag)
 	}
 
 	tradeRead, trades, err := readTradeTape(cfg, client, "XYZ")
@@ -1516,7 +1889,7 @@ func runP1MarketDataAssertions(cfg config, client *http.Client, report *smokeRep
 	}
 }
 
-func assertP1DataAvailability(report *smokeReport, endpoint string, availability dataAvailabilityBody) {
+func assertP1DataAvailability(report *smokeReport, endpoint string, availability dataAvailabilityBody, requireZeroProjectionLag bool) {
 	required := map[string]struct {
 		assertionID string
 		source      string
@@ -1571,6 +1944,14 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 	} else {
 		failAssertion(report, "p1-read-surface-inventory", "read_surface_inventory", "orderHistory/orderFills/marketDataDepth/tradeTape", "missing "+strings.Join(missing, ","), endpoint)
 	}
+	if requireZeroProjectionLag {
+		lagZero, lagSummary := p1RequiredReadSurfaceLagSummary(surfaces, required)
+		if lagZero {
+			passAssertion(report, "p1-read-surface-projection-lag-zero", "lag 0 on required projected read surfaces", lagSummary, endpoint)
+		} else {
+			failAssertion(report, "p1-read-surface-projection-lag-zero", "projection_lag", "lag 0 on required projected read surfaces", lagSummary, endpoint)
+		}
+	}
 	for name, want := range required {
 		surface, ok := surfaces[name]
 		observed := ""
@@ -1586,6 +1967,37 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 	}
 }
 
+func p1RequiredReadSurfaceLagSummary(surfaces map[string]dataSurfaceStatus, required map[string]struct {
+	assertionID string
+	source      string
+	freshness   string
+}) (bool, string) {
+	names := make([]string, 0, len(required))
+	for name := range required {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	allZero := true
+	for _, name := range names {
+		surface, ok := surfaces[name]
+		if !ok {
+			parts = append(parts, name+":missing")
+			allZero = false
+			continue
+		}
+		if surface.ProjectionName == "" {
+			parts = append(parts, name+":no projection")
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s:%s lag=%d", name, surface.ProjectionName, surface.Lag))
+		if surface.Lag != 0 {
+			allZero = false
+		}
+	}
+	return allZero, strings.Join(parts, ", ")
+}
+
 func compatibleP1ReadSurfaceSource(name string, observed string, expected string) bool {
 	return name == "orderHistory" &&
 		expected == "runtime.order_lifecycle_state" &&
@@ -1593,14 +2005,19 @@ func compatibleP1ReadSurfaceSource(name string, observed string, expected string
 }
 
 func assertP1TradeTape(report *smokeReport, endpoint string, body string, trades []tradeTapeEntry) {
-	if len(trades) == 2 {
-		passAssertion(report, "p1-trade-tape-count", "2", "2", endpoint)
+	scenarioTrades := p1ScenarioTrades(trades)
+	if len(scenarioTrades) == 2 {
+		passAssertion(report, "p1-trade-tape-count", "2 scenario trades", fmt.Sprintf("2 scenario trades in %d tape rows", len(trades)), endpoint)
 	} else {
-		failAssertion(report, "p1-trade-tape-count", "trade_tape_count", "2", fmt.Sprint(len(trades)), endpoint)
+		observed := tradeIDs(scenarioTrades)
+		if observed == "" {
+			observed = "no scenario trades; tape IDs: " + tradeIDs(trades)
+		}
+		failAssertion(report, "p1-trade-tape-count", "trade_tape_count", "2 scenario trades", observed, endpoint)
 	}
 	totalQuantity := 0
 	allExpectedPrice := true
-	for _, trade := range trades {
+	for _, trade := range scenarioTrades {
 		totalQuantity += parsePositiveInt(trade.QuantityUnits)
 		if trade.Price != "100000000000" {
 			allExpectedPrice = false
@@ -1611,10 +2028,10 @@ func assertP1TradeTape(report *smokeReport, endpoint string, body string, trades
 	} else {
 		failAssertion(report, "p1-trade-tape-total-quantity", "trade_tape_quantity", "100", fmt.Sprint(totalQuantity), endpoint)
 	}
-	if allExpectedPrice {
+	if len(scenarioTrades) == 2 && allExpectedPrice {
 		passAssertion(report, "p1-trade-tape-prices", "all 100000000000", "all 100000000000", endpoint)
 	} else {
-		failAssertion(report, "p1-trade-tape-prices", "trade_tape_price", "all 100000000000", tradePrices(trades), endpoint)
+		failAssertion(report, "p1-trade-tape-prices", "trade_tape_price", "all 100000000000", tradePrices(scenarioTrades), endpoint)
 	}
 	identityLeaks := leakedPublicIdentityFields(body)
 	if len(identityLeaks) == 0 {
@@ -1624,11 +2041,25 @@ func assertP1TradeTape(report *smokeReport, endpoint string, body string, trades
 	}
 }
 
+func p1ScenarioTrades(trades []tradeTapeEntry) []tradeTapeEntry {
+	expected := map[string]struct{}{
+		p1FirstVisibleBuyTradeID:  {},
+		p1SecondVisibleBuyTradeID: {},
+	}
+	out := make([]tradeTapeEntry, 0, 2)
+	for _, trade := range trades {
+		if _, found := expected[trade.TradeID]; found {
+			out = append(out, trade)
+		}
+	}
+	return out
+}
+
 func readTradeTape(cfg config, client *http.Client, instrumentID string) (assertionRead, []tradeTapeEntry, error) {
 	endpoint := "/api/v1/market-data/trades/" + instrumentID
 	query := url.Values{}
 	query.Set("limit", "50")
-	read, body, err := executeRead(client, absoluteURL(cfg.baseURL, endpoint)+"?"+query.Encode(), endpoint, map[string]string{"limit": "50"})
+	read, body, err := executeRead(client, absoluteURL(cfg.readBaseURL, endpoint)+"?"+query.Encode(), endpoint, map[string]string{"limit": "50"})
 	if err != nil {
 		return read, nil, err
 	}
@@ -1648,7 +2079,7 @@ func readMarketDepth(cfg config, client *http.Client, instrumentID string) (asse
 	endpoint := "/api/v1/market-data/depth/" + instrumentID
 	query := url.Values{}
 	query.Set("levels", "5")
-	read, body, err := executeRead(client, absoluteURL(cfg.baseURL, endpoint)+"?"+query.Encode(), endpoint, map[string]string{"levels": "5"})
+	read, body, err := executeRead(client, absoluteURL(cfg.readBaseURL, endpoint)+"?"+query.Encode(), endpoint, map[string]string{"levels": "5"})
 	if err != nil {
 		return read, marketDepthSnapshot{}, false, err
 	}
@@ -1669,7 +2100,7 @@ func readMarketDepth(cfg config, client *http.Client, instrumentID string) (asse
 
 func readDataAvailability(cfg config, client *http.Client) (assertionRead, dataAvailabilityBody, error) {
 	endpoint := "/api/v1/data/availability"
-	read, body, err := executeRead(client, absoluteURL(cfg.baseURL, endpoint), endpoint, nil)
+	read, body, err := executeRead(client, absoluteURL(cfg.readBaseURL, endpoint), endpoint, nil)
 	if err != nil {
 		return read, dataAvailabilityBody{}, err
 	}
@@ -1683,6 +2114,51 @@ func readDataAvailability(cfg config, client *http.Client) (assertionRead, dataA
 		return read, parsed, fmt.Errorf("data availability returned %d", read.StatusCode)
 	}
 	return read, parsed, nil
+}
+
+func waitP1DataAvailabilityZero(cfg config, client *http.Client) (assertionRead, dataAvailabilityBody, error) {
+	deadline := time.Now().Add(cfg.statusTimeout)
+	var lastRead assertionRead
+	var lastAvailability dataAvailabilityBody
+	for {
+		read, availability, err := readDataAvailability(cfg, client)
+		if err != nil {
+			return read, availability, err
+		}
+		lastRead = read
+		lastAvailability = availability
+		if p1DataAvailabilityLagZero(availability) {
+			return read, availability, nil
+		}
+		if time.Now().After(deadline) {
+			return lastRead, lastAvailability, nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func p1DataAvailabilityLagZero(availability dataAvailabilityBody) bool {
+	required := map[string]struct{}{
+		"orderHistory":    {},
+		"orderFills":      {},
+		"marketDataDepth": {},
+		"tradeTape":       {},
+	}
+	seen := map[string]dataSurfaceStatus{}
+	for _, surface := range availability.Surfaces {
+		if _, ok := required[surface.Name]; ok {
+			seen[surface.Name] = surface
+		}
+	}
+	if len(seen) != len(required) {
+		return false
+	}
+	for _, surface := range seen {
+		if surface.ProjectionName != "" && surface.Lag != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func executeRead(client *http.Client, requestURL string, endpoint string, filters map[string]string) (assertionRead, []byte, error) {
@@ -1740,6 +2216,14 @@ func tradePrices(trades []tradeTapeEntry) string {
 	return strings.Join(prices, ",")
 }
 
+func tradeIDs(trades []tradeTapeEntry) string {
+	ids := make([]string, 0, len(trades))
+	for _, trade := range trades {
+		ids = append(ids, trade.TradeID)
+	}
+	return strings.Join(ids, ",")
+}
+
 func leakedPublicIdentityFields(body string) []string {
 	fields := []string{"buyOrderId", "sellOrderId", "participantId", "accountId", "orderId"}
 	leaks := make([]string, 0)
@@ -1768,7 +2252,7 @@ func readOwnOrderHistory(cfg config, client *http.Client, participantID string, 
 	query.Set("participantId", participantID)
 	query.Set("instrumentId", instrumentID)
 	query.Set("limit", "50")
-	requestURL := absoluteURL(cfg.baseURL, endpoint) + "?" + query.Encode()
+	requestURL := absoluteURL(cfg.readBaseURL, endpoint) + "?" + query.Encode()
 	read := assertionRead{
 		Endpoint: endpoint,
 		Filters: map[string]string{
@@ -1831,7 +2315,7 @@ func readOwnFills(cfg config, client *http.Client, participantID string, instrum
 	query.Set("participantId", participantID)
 	query.Set("instrumentId", instrumentID)
 	query.Set("limit", "50")
-	requestURL := absoluteURL(cfg.baseURL, endpoint) + "?" + query.Encode()
+	requestURL := absoluteURL(cfg.readBaseURL, endpoint) + "?" + query.Encode()
 	read := assertionRead{
 		Endpoint: endpoint,
 		Filters: map[string]string{
@@ -1860,6 +2344,64 @@ func parseCommandStatus(body string) commandStatusBody {
 	var status commandStatusBody
 	_ = json.Unmarshal([]byte(body), &status)
 	return status
+}
+
+func commandStatusScenarioRunID(status commandStatusBody) string {
+	for _, payload := range []string{status.ResponsePayloadJSON, status.ResultPayloadJSON} {
+		if runID := scenarioRunIDFromJSON(payload); runID != "" {
+			return runID
+		}
+	}
+	return ""
+}
+
+func commandStatusHasCanonicalScopeEvidence(status commandStatusBody) bool {
+	return strings.TrimSpace(status.CommandStream) != "" ||
+		strings.TrimSpace(status.EventStream) != "" ||
+		strings.TrimSpace(status.ResponsePayloadJSON) != "" ||
+		strings.TrimSpace(status.ResultPayloadJSON) != ""
+}
+
+func scenarioRunIDFromJSON(payload string) string {
+	payload = strings.TrimSpace(payload)
+	if payload == "" {
+		return ""
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(payload), &parsed); err != nil {
+		return ""
+	}
+	return scenarioRunIDFromValue(parsed)
+}
+
+func scenarioRunIDFromValue(value any) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, key := range []string{"scenarioRunId", "runId"} {
+			if raw, ok := typed[key]; ok {
+				if runID, ok := raw.(string); ok && strings.TrimSpace(runID) != "" {
+					return runID
+				}
+			}
+		}
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if runID := scenarioRunIDFromValue(typed[key]); runID != "" {
+				return runID
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			if runID := scenarioRunIDFromValue(item); runID != "" {
+				return runID
+			}
+		}
+	}
+	return ""
 }
 
 func effectiveCommandResultStatus(status commandStatusBody) string {
@@ -1973,7 +2515,7 @@ func executeRequest(client *http.Client, request smokeRequest) smokeResult {
 
 func waitCommandStatus(client *http.Client, cfg config, commandID string, headers map[string]string) (int, string, error) {
 	deadline := time.Now().Add(cfg.statusTimeout)
-	statusURL := absoluteURL(cfg.baseURL, "/api/v1/commands/"+commandID)
+	statusURL := absoluteURL(cfg.statusBaseURL, "/api/v1/commands/"+commandID)
 	var lastStatus int
 	var lastBody string
 	for {

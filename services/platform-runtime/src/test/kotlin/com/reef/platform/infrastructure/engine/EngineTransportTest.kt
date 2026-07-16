@@ -106,6 +106,24 @@ class EngineTransportTest {
     }
 
     @Test
+    fun grpcTransportMapsHiddenLimitOrdersToLimitProtoType() {
+        val capture = Capture()
+        val server = buildSubmitServer(capture)
+        server.start()
+
+        try {
+            val gateway = GrpcEngineClient("localhost:${server.port}")
+
+            gateway.submitOrder(validSubmitCommand(orderType = "LIMIT_HIDDEN"))
+
+            assertNotNull(capture.request)
+            assertEquals(OrderType.ORDER_TYPE_LIMIT, capture.request!!.orderType)
+        } finally {
+            server.shutdownNow()
+        }
+    }
+
+    @Test
     fun grpcTransportClosesManagedChannel() {
         val gateway = GrpcEngineClient("localhost:1")
 
@@ -236,6 +254,7 @@ private fun buildHangingSubmitServer(): Server {
 
 private fun validSubmitCommand(
     side: String = "BUY",
+    orderType: String = "LIMIT",
     commandId: String = "cmd-1",
     orderId: String = "ord-1"
 ): SubmitOrderCommand {
@@ -251,7 +270,7 @@ private fun validSubmitCommand(
         participantId = "participant-1",
         accountId = "account-1",
         side = side,
-        orderType = "LIMIT",
+        orderType = orderType,
         quantityUnits = "100",
         limitPrice = "150250000000",
         currency = "USD",

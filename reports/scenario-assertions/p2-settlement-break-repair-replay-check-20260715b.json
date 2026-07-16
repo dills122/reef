@@ -1,0 +1,37 @@
+{
+  "pass": true,
+  "checkedAt": "2026-07-15T02:26:11.779Z",
+  "projectionName": "",
+  "eventStream": "REEF_MATERIALIZER_SMOKE_VENUE_EVENTS_P2-LOCK-20260715B",
+  "commandIds": [
+    "p2-settlement-break-repair-replay-live-20260715b-p2_settlement_break_repair-cmd-001",
+    "p2-settlement-break-repair-replay-live-20260715b-p2_settlement_break_repair-cmd-002"
+  ],
+  "report": {
+    "samples": {
+      "streamGaps": [],
+      "watermarkLag": [],
+      "extraOutcomes": [],
+      "streamOverlaps": [],
+      "missingOutcomes": [],
+      "checksumMismatches": [],
+      "payloadHashMismatches": [],
+      "batchCommandCountMismatches": []
+    },
+    "batchCount": 2,
+    "streamGapCount": 0,
+    "watermarkCount": 0,
+    "extraOutcomeCount": 0,
+    "watermarkLagCount": 0,
+    "storedCommandCount": 2,
+    "streamOverlapCount": 0,
+    "missingOutcomeCount": 0,
+    "payloadOutcomeCount": 2,
+    "canonicalOutcomeCount": 2,
+    "checksumMismatchCount": 0,
+    "duplicateReplayInserted": 0,
+    "payloadHashMismatchCount": 0,
+    "batchCommandCountMismatchCount": 0
+  },
+  "failures": []
+}

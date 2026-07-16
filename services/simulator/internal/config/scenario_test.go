@@ -110,7 +110,7 @@ func TestCompileP1GoldenHiddenCrossScenarioPlan(t *testing.T) {
 		"participantId":  "HIDDEN_SELLER_A",
 		"accountId":      "HIDDEN_SELLER_A_MAIN",
 		"side":           "SELL",
-		"orderType":      "LIMIT",
+		"orderType":      "LIMIT_HIDDEN",
 		"quantityUnits":  "100",
 		"limitPrice":     "100000000000",
 		"currency":       "USD",

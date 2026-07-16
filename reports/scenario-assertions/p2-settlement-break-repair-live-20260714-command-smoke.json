@@ -1,0 +1,256 @@
+{
+  "mode": "live",
+  "pass": true,
+  "pathId": "P2_SETTLEMENT_BREAK_REPAIR",
+  "scenarioRunId": "p2-settlement-break-repair-live-20260714",
+  "seed": 424243,
+  "baseUrl": "http://127.0.0.1:8080",
+  "seedRequests": [
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/instruments",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/instruments",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "instrumentId": "XYZ",
+        "symbol": "XYZ"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/participants",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "name": "BUY_SIDE_1",
+        "participantId": "BUY_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/participants",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/participants",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "name": "SELL_SIDE_1",
+        "participantId": "SELL_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/accounts",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "accountId": "BUY_SIDE_1_MAIN",
+        "participantId": "BUY_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/reference/accounts",
+      "url": "http://127.0.0.1:8080/admin/v1/reference/accounts",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "accountId": "SELL_SIDE_1_MAIN",
+        "participantId": "SELL_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/roles",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "permissions": "order.submit,order.cancel,order.modify",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/actor-roles",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "actorId": "BUY_SIDE_1_MAIN",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/admin/v1/auth/actor-roles",
+      "url": "http://127.0.0.1:8080/admin/v1/auth/actor-roles",
+      "headers": {
+        "X-Correlation-Id": "p2-settlement-break-repair-live-20260714-reference-seed",
+        "X-Reef-Actor-Id": "scenario-smoke-seed"
+      },
+      "payload": {
+        "actorId": "SELL_SIDE_1_MAIN",
+        "roleId": "order_trader"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p2_settlement_break_repair-cmd-001",
+        "X-Client-Id": "scenario-smoke-1",
+        "X-Correlation-Id": "p2_settlement_break_repair-trace-001",
+        "X-Participant-Id": "BUY_SIDE_1",
+        "X-Reef-Actor-Id": "BUY_SIDE_1_MAIN"
+      },
+      "payload": {
+        "accountId": "BUY_SIDE_1_MAIN",
+        "actorId": "BUY_SIDE_1_MAIN",
+        "actorType": "BOT",
+        "causationId": "p2_settlement_break_repair-cause-001",
+        "clientOrderId": "p2_settlement_break_repair-ord-001",
+        "commandId": "p2_settlement_break_repair-cmd-001",
+        "correlationId": "p2_settlement_break_repair-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "150000000000",
+        "occurredAt": "2026-03-14T18:00:01Z",
+        "orderId": "p2_settlement_break_repair-ord-001",
+        "orderType": "LIMIT",
+        "participantId": "BUY_SIDE_1",
+        "quantityUnits": "1000",
+        "runId": "p2-settlement-break-repair-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P2_SETTLEMENT_BREAK_REPAIR",
+        "scenarioRunId": "p2-settlement-break-repair-live-20260714",
+        "seed": "424243",
+        "side": "BUY",
+        "timeInForce": "DAY",
+        "traceId": "p2_settlement_break_repair-trace-001",
+        "venueSessionId": "P2_SETTLEMENT_BREAK_REPAIR"
+      }
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p2_settlement_break_repair-cmd-002",
+        "X-Client-Id": "scenario-smoke-2",
+        "X-Correlation-Id": "p2_settlement_break_repair-trace-002",
+        "X-Participant-Id": "SELL_SIDE_1",
+        "X-Reef-Actor-Id": "SELL_SIDE_1_MAIN"
+      },
+      "payload": {
+        "accountId": "SELL_SIDE_1_MAIN",
+        "actorId": "SELL_SIDE_1_MAIN",
+        "actorType": "BOT",
+        "causationId": "p2_settlement_break_repair-cause-001",
+        "clientOrderId": "p2_settlement_break_repair-ord-002",
+        "commandId": "p2_settlement_break_repair-cmd-002",
+        "correlationId": "p2_settlement_break_repair-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "150000000000",
+        "occurredAt": "2026-03-14T18:00:02Z",
+        "orderId": "p2_settlement_break_repair-ord-002",
+        "orderType": "LIMIT",
+        "participantId": "SELL_SIDE_1",
+        "quantityUnits": "1000",
+        "runId": "p2-settlement-break-repair-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P2_SETTLEMENT_BREAK_REPAIR",
+        "scenarioRunId": "p2-settlement-break-repair-live-20260714",
+        "seed": "424243",
+        "side": "SELL",
+        "timeInForce": "DAY",
+        "traceId": "p2_settlement_break_repair-trace-002",
+        "venueSessionId": "P2_SETTLEMENT_BREAK_REPAIR"
+      }
+    }
+  ],
+  "results": [
+    {
+      "path": "/admin/v1/reference/instruments",
+      "statusCode": 200,
+      "body": "{\"instrumentId\":\"XYZ\"}"
+    },
+    {
+      "path": "/admin/v1/reference/participants",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"BUY_SIDE_1\"}"
+    },
+    {
+      "path": "/admin/v1/reference/participants",
+      "statusCode": 200,
+      "body": "{\"participantId\":\"SELL_SIDE_1\"}"
+    },
+    {
+      "path": "/admin/v1/reference/accounts",
+      "statusCode": 200,
+      "body": "{\"accountId\":\"BUY_SIDE_1_MAIN\"}"
+    },
+    {
+      "path": "/admin/v1/reference/accounts",
+      "statusCode": 200,
+      "body": "{\"accountId\":\"SELL_SIDE_1_MAIN\"}"
+    },
+    {
+      "path": "/admin/v1/auth/roles",
+      "statusCode": 200,
+      "body": "{\"roleId\":\"order_trader\"}"
+    },
+    {
+      "path": "/admin/v1/auth/actor-roles",
+      "statusCode": 200,
+      "body": "{\"actorId\":\"BUY_SIDE_1_MAIN\",\"roleId\":\"order_trader\"}"
+    },
+    {
+      "path": "/admin/v1/auth/actor-roles",
+      "statusCode": 200,
+      "body": "{\"actorId\":\"SELL_SIDE_1_MAIN\",\"roleId\":\"order_trader\"}"
+    },
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p2_settlement_break_repair-ord-001\",\"orderId\":\"p2_settlement_break_repair-ord-001\",\"engineOrderId\":\"eng-p2_settlement_break_repair-ord-001\",\"occurredAt\":\"2026-03-14T18:00:01Z\"},\"executions\":[],\"trades\":[]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p2_settlement_break_repair-cmd-001\",\"clientId\":\"scenario-smoke-1\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p2_settlement_break_repair-cmd-001\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p2_settlement_break_repair-ord-001\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"engineOrderId\\\":\\\"eng-p2_settlement_break_repair-ord-001\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:01Z\\\"},\\\"executions\\\":[],\\\"trades\\\":[]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"BUY_SIDE_1\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p2_settlement_break_repair-ord-002\",\"orderId\":\"p2_settlement_break_repair-ord-002\",\"engineOrderId\":\"eng-p2_settlement_break_repair-ord-002\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},\"executions\":[{\"eventId\":\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\",\"executionId\":\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\",\"orderId\":\"p2_settlement_break_repair-ord-001\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"executionPrice\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},{\"eventId\":\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\",\"executionId\":\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\",\"orderId\":\"p2_settlement_break_repair-ord-002\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"executionPrice\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}],\"trades\":[{\"eventId\":\"evt-trade-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"tradeId\":\"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"executionId\":\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"buyOrderId\":\"p2_settlement_break_repair-ord-001\",\"sellOrderId\":\"p2_settlement_break_repair-ord-002\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"price\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p2_settlement_break_repair-cmd-002\",\"clientId\":\"scenario-smoke-2\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p2_settlement_break_repair-cmd-002\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p2_settlement_break_repair-ord-002\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"engineOrderId\\\":\\\"eng-p2_settlement_break_repair-ord-002\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"executionPrice\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"executionPrice\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"tradeId\\\":\\\"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"buyOrderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"sellOrderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"price\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"SELL_SIDE_1\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    }
+  ]
+}

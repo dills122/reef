@@ -1,0 +1,227 @@
+{
+  "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+  "resourcePositions": [],
+  "obligations": [
+    {
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "tradeId": "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "buyerParticipantId": "BUY_SIDE_1",
+      "sellerParticipantId": "SELL_SIDE_1",
+      "instrumentId": "XYZ",
+      "quantity": "1000",
+      "cashAmount": "150000000000000",
+      "currency": "USD",
+      "state": "OBLIGATION_CREATED",
+      "occurredAt": "2026-03-14T18:00:04Z"
+    }
+  ],
+  "allocations": [
+    {
+      "settlementAllocationId": "settlement-allocation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "tradeId": "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "buyOrderId": "p2_settlement_break_repair-ord-001",
+      "sellOrderId": "p2_settlement_break_repair-ord-002",
+      "buyerAccountId": "BUY_SIDE_1_MAIN",
+      "sellerAccountId": "SELL_SIDE_1_MAIN",
+      "quantity": "1000",
+      "state": "ALLOCATION_PROPOSED",
+      "occurredAt": "2026-03-14T18:00:04Z"
+    }
+  ],
+  "confirmations": [
+    {
+      "settlementConfirmationId": "settlement-confirmation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementAllocationId": "settlement-allocation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-allocation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "tradeId": "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "state": "CONFIRMATION_GENERATED",
+      "occurredAt": "2026-03-14T18:00:04Z"
+    }
+  ],
+  "affirmations": [
+    {
+      "settlementAffirmationId": "settlement-affirmation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementConfirmationId": "settlement-confirmation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementAllocationId": "settlement-allocation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-confirmation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "tradeId": "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "actorType": "SYSTEM",
+      "actorId": "instant-post-trade",
+      "state": "AFFIRMATION_ACCEPTED",
+      "occurredAt": "2026-03-14T18:00:04Z"
+    }
+  ],
+  "instructions": [
+    {
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-affirmation-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "instructionType": "DVP",
+      "state": "INSTRUCTION_CREATED",
+      "occurredAt": "2026-03-14T18:00:05Z"
+    }
+  ],
+  "attempts": [
+    {
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "attemptNumber": 1,
+      "state": "ATTEMPT_STARTED",
+      "occurredAt": "2026-03-14T18:00:05Z"
+    }
+  ],
+  "legOutcomes": [
+    {
+      "settlementLegOutcomeId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1-cash",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "legType": "CASH",
+      "state": "LEG_SUCCEEDED",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    },
+    {
+      "settlementLegOutcomeId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1-security",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "legType": "SECURITY",
+      "state": "LEG_SUCCEEDED",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    }
+  ],
+  "ledgerEntries": [
+    {
+      "ledgerEntryId": "settlement-ledger-settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1-buyer-cash-debit",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "participantId": "BUY_SIDE_1",
+      "accountId": "BUY_SIDE_1_MAIN",
+      "assetType": "CASH",
+      "assetId": "USD",
+      "direction": "DEBIT",
+      "quantity": "150000000000000",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    },
+    {
+      "ledgerEntryId": "settlement-ledger-settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1-seller-cash-credit",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "participantId": "SELL_SIDE_1",
+      "accountId": "SELL_SIDE_1_MAIN",
+      "assetType": "CASH",
+      "assetId": "USD",
+      "direction": "CREDIT",
+      "quantity": "150000000000000",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    },
+    {
+      "ledgerEntryId": "settlement-ledger-settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1-seller-security-debit",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "participantId": "SELL_SIDE_1",
+      "accountId": "SELL_SIDE_1_MAIN",
+      "assetType": "SECURITY",
+      "assetId": "XYZ",
+      "direction": "DEBIT",
+      "quantity": "1000",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    },
+    {
+      "ledgerEntryId": "settlement-ledger-settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1-buyer-security-credit",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "participantId": "BUY_SIDE_1",
+      "accountId": "BUY_SIDE_1_MAIN",
+      "assetType": "SECURITY",
+      "assetId": "XYZ",
+      "direction": "CREDIT",
+      "quantity": "1000",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    }
+  ],
+  "settlements": [
+    {
+      "settlementId": "settlement-final-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementObligationId": "settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1",
+      "settlementInstructionId": "settlement-instruction-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementAttemptId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "scenarioRunId": "p2-settlement-break-repair-replay-live-20260715b",
+      "postTradeProfileId": "instant-post-trade-v1",
+      "postTradePolicyVersion": 4,
+      "correlationId": "p2-settlement-break-repair-replay-live-20260715b-corr-1",
+      "causationId": "settlement-attempt-settlement-obligation-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-1",
+      "settlementState": "SETTLED",
+      "occurredAt": "2026-03-14T18:00:06Z"
+    }
+  ],
+  "breaks": [],
+  "repairs": [],
+  "resolutions": [],
+  "operatorActions": []
+}

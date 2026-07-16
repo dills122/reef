@@ -10,7 +10,7 @@ These contracts are stricter than the current YAML fixtures where noted. If a YA
 
 ## P1_GOLDEN_HIDDEN_CROSS_T1
 
-Status: fixture-aligned contract. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden now model the hidden-resting-order path. P1 is not fully locked until live replay, lifecycle, trade tape, and visibility assertions pass under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+Status: locked locally from promoted live and replay assertion evidence. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden model the hidden-resting-order path. The 2026-07-14 local live assertion report at `reports/scenario-assertions/p1-golden-hidden-cross-live-20260714.json` passed with 25 assertions: command completion, lifecycle/fill reads, scenario-scoped trade tape checks from the instrument tape, public depth non-leakage, read-surface inventory, and zero projection lag. The 2026-07-15 direct-stream same-run report at `reports/scenario-assertions/p1-golden-hidden-cross-replay-live-20260714.json` passed with 44 assertions and attaches `reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json`: run-scoped command status from `platform-projector-0`, exact replay counters for the same three P1 commands, native hidden-depth `visibilityTimeline`, and replay-folded historical visibility proof. P1's local lock uses the zero-lag `sync-result` report for projection freshness and the direct-stream same-run report for durable replay evidence; the direct-stream report's retained-stack `/api/v1/data/availability` lag rows of `4` are not the P1 zero-lag projection claim.
 
 Purpose: prove core venue lifecycle with hidden liquidity, partial fill, full fill, public market-data visibility rules, and deterministic replay.
 
@@ -66,7 +66,7 @@ P1 is a hard correctness gate. It must not rely on stubbed settlement or post-tr
 
 ## P2_SETTLEMENT_BREAK_REPAIR
 
-Status: target contract. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. P2 is not fully locked until settlement fact assertions pass under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+Status: locked locally from promoted live, public-read, and replay assertion evidence. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. The 2026-07-14 local command smoke report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json` passed, and the 2026-07-14 local assertion report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json` passed with 18 assertions covering command completion, one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping. The 2026-07-15 direct-stream settled-chain report at `reports/scenario-assertions/p2-settlement-break-repair-settled-live-public-20260715c.json` passed with public settlement facts readback and attaches `reports/scenario-assertions/p2-settlement-break-repair-replay-check-20260715c.json`: run-scoped command status from `platform-projector-0`, exact replay counters for the same two P2 commands, and the minimal `instant-post-trade-v1` obligation/allocation/confirmation/affirmation/instruction/attempt/leg/ledger/`SETTLED` fact chain from `/api/v1/settlement/facts/{scenarioRunId}`. The public readback artifact is `reports/scenario-assertions/p2-settlement-break-repair-settled-facts-public-20260715c.json`.
 
 Purpose: prove post-match causation from canonical trade fact through settlement obligation, cash-leg break, manual repair, and resolved exception without building full post-trade/account-ledger modules yet.
 
@@ -115,7 +115,6 @@ Post-trade implementation may resume only through the P2-only settlement excepti
 
 ## Implementation Alignment Tasks
 
-1. Implement [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md) report generation.
-2. Add P1 live assertions for final order lifecycle states, execution/trade count, total executed quantity, public depth visibility, own-order visibility, trade tape contents, and replay checksum identity.
-3. Add P2 replay assertions for final `RESOLVED` settlement state, one `CASH_LEG_FAILED` break, one manual repair, and no direct failed-to-resolved transition.
-4. Keep these scenarios on public command/API paths where platform functionality exists; any stubbed post-trade action must be clearly marked in the scenario and report.
+1. Keep these scenarios on public command/API paths where platform functionality exists; any stubbed post-trade action must be clearly marked in the scenario and report.
+2. Treat future P1 clean-stack direct-stream zero-lag reruns as confidence evidence unless the lock policy changes; the current local lock already separates zero-lag projection freshness from durable replay proof.
+3. Treat future P2 settled-chain work as scope-controlled extension evidence only; the current local lock already proves the public settlement facts read for the minimal `instant-post-trade-v1` chain.

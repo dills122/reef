@@ -1676,6 +1676,31 @@ class PlatformHttpServer(
                     )
                 )
             }
+            request.path.startsWith("/api/v1/settlement/facts/") && request.method == "GET" -> {
+                settlementReadResponse(request, "/api/v1/settlement/facts/{scenarioRunId}") { scenarioRunId ->
+                    settlementAdminGateway.settlementFactsResponse(scenarioRunId)
+                }
+            }
+            request.path.startsWith("/api/v1/settlement/obligations/") && request.method == "GET" -> {
+                settlementReadResponse(request, "/api/v1/settlement/obligations/{scenarioRunId}") { scenarioRunId ->
+                    settlementAdminGateway.settlementObligationsResponse(scenarioRunId)
+                }
+            }
+            request.path.startsWith("/api/v1/settlement/ledger/") && request.method == "GET" -> {
+                settlementReadResponse(request, "/api/v1/settlement/ledger/{scenarioRunId}") { scenarioRunId ->
+                    settlementAdminGateway.settlementLedgerResponse(scenarioRunId)
+                }
+            }
+            request.path.startsWith("/api/v1/settlement/proof/") && request.method == "GET" -> {
+                settlementReadResponse(request, "/api/v1/settlement/proof/{scenarioRunId}") { scenarioRunId ->
+                    settlementAdminGateway.settlementProofResponse(scenarioRunId)
+                }
+            }
+            request.path.startsWith("/api/v1/settlement/score/") && request.method == "GET" -> {
+                settlementReadResponse(request, "/api/v1/settlement/score/{scenarioRunId}") { scenarioRunId ->
+                    settlementAdminGateway.settlementScoreResponse(scenarioRunId, request.query)
+                }
+            }
             request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/snapshots/{instrumentId}")
                 if (readError != null) {
@@ -1741,6 +1766,19 @@ class PlatformHttpServer(
                 readOrderFillsResponse(request, "/api/v1/orders/fills")
             else -> legacySetupRoutes.handle(request)
         }
+    }
+
+    private fun settlementReadResponse(
+        request: PlatformHotPathRequest,
+        route: String,
+        read: (String) -> PlatformHotPathResponse
+    ): PlatformHotPathResponse {
+        val readError = apiV1ReadErrorResponse(request, route)
+        if (readError != null) {
+            return readError
+        }
+        val scenarioRunId = request.path.removePrefix(route.removeSuffix("{scenarioRunId}")).trimEnd('/')
+        return read(scenarioRunId)
     }
 
     private fun readOrdersResponse(request: PlatformHotPathRequest, route: String, openOnly: Boolean): PlatformHotPathResponse {

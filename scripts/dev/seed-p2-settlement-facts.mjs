@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
+import { dirname } from "node:path";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { deriveDevUrls, loadDotEnv } from "./lib/dev-utils.mjs";
 
@@ -13,7 +15,9 @@ const runtimeUrl = (args.runtimeUrl ?? defaultRuntimeUrl).replace(/\/$/, "");
 const adminApiToken = args.token ?? process.env.ADMIN_API_TOKEN ?? "";
 const actorId = args.actorId ?? process.env.ADMIN_ACTOR_ID ?? "settlement-seeder";
 const scenarioRunId = args.scenarioRunId ?? process.env.SCENARIO_RUN_ID ?? "p2-settlement-live";
-const facts = p2SettlementFacts(scenarioRunId);
+const mode = args.mode ?? process.env.P2_SETTLEMENT_FACTS_MODE ?? "exception";
+const factIdScope = args.factIdScope ?? process.env.P2_SETTLEMENT_FACT_ID_SCOPE ?? "stable";
+const facts = p2SettlementFacts(scenarioRunId, mode, factIdScope);
 const useAdminGateway = args.adminGateway || adminApiToken.trim() !== "";
 const settlementFactsPath = useAdminGateway
   ? "/admin/v1/settlement/facts"
@@ -25,8 +29,12 @@ if (args.dryRun) {
 }
 
 const posted = await postJson(`${runtimeUrl}${settlementFactsPath}`, facts, requestHeaders(settlementFactsPath));
-const fetched = await fetchJson(`${runtimeUrl}/api/v1/settlement/facts/${encodeURIComponent(scenarioRunId)}`);
+const fetched = await fetchSettlementFacts(posted);
 validateReadback(fetched, scenarioRunId);
+if (args.reportOut) {
+  await mkdir(dirname(args.reportOut), { recursive: true });
+  await writeFile(args.reportOut, `${JSON.stringify(fetched, null, 2)}\n`);
+}
 
 console.log(
   JSON.stringify(
@@ -35,9 +43,18 @@ console.log(
       runtimeUrl,
       settlementFactsPath,
       actorId,
+      mode,
+      factIdScope,
       scenarioRunId,
       postedStatus: posted.status ?? "ok",
+      reportOut: args.reportOut ?? "",
       obligationCount: fetched.obligations.length,
+      allocationCount: fetched.allocations.length,
+      confirmationCount: fetched.confirmations.length,
+      affirmationCount: fetched.affirmations.length,
+      instructionCount: fetched.instructions.length,
+      attemptCount: fetched.attempts.length,
+      settlementCount: fetched.settlements.length,
       breakCount: fetched.breaks.length,
       repairCount: fetched.repairs.length,
       resolutionCount: fetched.resolutions.length,
@@ -46,6 +63,18 @@ console.log(
     2,
   ),
 );
+
+async function fetchSettlementFacts(posted) {
+  try {
+    return await fetchJson(`${runtimeUrl}/api/v1/settlement/facts/${encodeURIComponent(scenarioRunId)}`);
+  } catch (error) {
+    if (args.reportOut && error.statusCode === 404 && posted?.facts) {
+      console.warn(`public settlement facts read unavailable; wrote posted facts artifact: ${args.reportOut}`);
+      return posted.facts;
+    }
+    throw error;
+  }
+}
 
 function parseArgs(argv) {
   const out = {};
@@ -195,12 +224,23 @@ function runWithInput(command, commandArgs, input) {
 }
 
 function validateReadback(facts, scenarioRunId) {
-  const counts = [
-    ["obligations", 1],
-    ["breaks", 1],
-    ["repairs", 1],
-    ["resolutions", 1],
-  ];
+  const settledMode = hasSettledChain(facts);
+  const counts = settledMode
+    ? [
+        ["obligations", 1],
+        ["allocations", 1],
+        ["confirmations", 1],
+        ["affirmations", 1],
+        ["instructions", 1],
+        ["attempts", 1],
+        ["settlements", 1],
+      ]
+    : [
+        ["obligations", 1],
+        ["breaks", 1],
+        ["repairs", 1],
+        ["resolutions", 1],
+      ];
   if (facts.scenarioRunId !== scenarioRunId) {
     throw new Error(`readback scenarioRunId mismatch: ${facts.scenarioRunId}`);
   }
@@ -211,7 +251,21 @@ function validateReadback(facts, scenarioRunId) {
   }
 }
 
-function p2SettlementFacts(scenarioRunId) {
+function hasSettledChain(facts) {
+  return Array.isArray(facts.settlements) && facts.settlements.length > 0;
+}
+
+function p2SettlementFacts(scenarioRunId, mode, factIdScope) {
+  if (mode === "settled") {
+    return p2SettledPostTradeFacts(scenarioRunId, factIdScope);
+  }
+  if (mode !== "exception") {
+    throw new Error(`unknown P2 settlement facts mode: ${mode}`);
+  }
+  return p2ExceptionFacts(scenarioRunId);
+}
+
+function p2ExceptionFacts(scenarioRunId) {
   return {
     scenarioRunId,
     obligations: [
@@ -269,6 +323,245 @@ function p2SettlementFacts(scenarioRunId) {
         settlementState: "RESOLVED",
         exceptionState: "RESOLVED",
         occurredAt: "2026-03-14T18:00:07Z",
+      },
+    ],
+  };
+}
+
+function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
+  if (!["stable", "run"].includes(factIdScope)) {
+    throw new Error(`unknown P2 settlement fact id scope: ${factIdScope}`);
+  }
+  const profileId = "instant-post-trade-v1";
+  const policyVersion = 4;
+  const correlationId = `${scenarioRunId}-corr-1`;
+  const tradeId = "trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1";
+  const idPrefix = factIdScope === "run" ? `${scenarioRunId}-` : "";
+  const obligationId = `${idPrefix}settlement-obligation-${tradeId}`;
+  const allocationId = `settlement-allocation-${obligationId}`;
+  const confirmationId = `settlement-confirmation-${obligationId}`;
+  const affirmationId = `settlement-affirmation-${obligationId}`;
+  const instructionId = `settlement-instruction-${obligationId}-1`;
+  const attemptId = `settlement-attempt-${obligationId}-1`;
+  return {
+    scenarioRunId,
+    obligations: [
+      {
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: tradeId,
+        tradeId,
+        buyerParticipantId: "BUY_SIDE_1",
+        sellerParticipantId: "SELL_SIDE_1",
+        instrumentId: "XYZ",
+        quantity: "1000",
+        cashAmount: "150000000000000",
+        currency: "USD",
+        state: "OBLIGATION_CREATED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    allocations: [
+      {
+        settlementAllocationId: allocationId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: obligationId,
+        tradeId,
+        buyOrderId: "p2_settlement_break_repair-ord-001",
+        sellOrderId: "p2_settlement_break_repair-ord-002",
+        buyerAccountId: "BUY_SIDE_1_MAIN",
+        sellerAccountId: "SELL_SIDE_1_MAIN",
+        quantity: "1000",
+        state: "ALLOCATION_PROPOSED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    confirmations: [
+      {
+        settlementConfirmationId: confirmationId,
+        settlementAllocationId: allocationId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: allocationId,
+        tradeId,
+        state: "CONFIRMATION_GENERATED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    affirmations: [
+      {
+        settlementAffirmationId: affirmationId,
+        settlementConfirmationId: confirmationId,
+        settlementAllocationId: allocationId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: confirmationId,
+        tradeId,
+        actorType: "SYSTEM",
+        actorId: "instant-post-trade",
+        state: "AFFIRMATION_ACCEPTED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    instructions: [
+      {
+        settlementInstructionId: instructionId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: affirmationId,
+        instructionType: "DVP",
+        state: "INSTRUCTION_CREATED",
+        occurredAt: "2026-03-14T18:00:05Z",
+      },
+    ],
+    attempts: [
+      {
+        settlementAttemptId: attemptId,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: instructionId,
+        attemptNumber: 1,
+        state: "ATTEMPT_STARTED",
+        occurredAt: "2026-03-14T18:00:05Z",
+      },
+    ],
+    legOutcomes: [
+      {
+        settlementLegOutcomeId: `${attemptId}-cash`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        legType: "CASH",
+        state: "LEG_SUCCEEDED",
+        occurredAt: "2026-03-14T18:00:06Z",
+      },
+      {
+        settlementLegOutcomeId: `${attemptId}-security`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        legType: "SECURITY",
+        state: "LEG_SUCCEEDED",
+        occurredAt: "2026-03-14T18:00:06Z",
+      },
+    ],
+    ledgerEntries: [
+      {
+        ledgerEntryId: `settlement-ledger-${attemptId}-buyer-cash-debit`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        participantId: "BUY_SIDE_1",
+        accountId: "BUY_SIDE_1_MAIN",
+        assetType: "CASH",
+        assetId: "USD",
+        direction: "DEBIT",
+        quantity: "150000000000000",
+        occurredAt: "2026-03-14T18:00:06Z",
+      },
+      {
+        ledgerEntryId: `settlement-ledger-${attemptId}-seller-cash-credit`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        participantId: "SELL_SIDE_1",
+        accountId: "SELL_SIDE_1_MAIN",
+        assetType: "CASH",
+        assetId: "USD",
+        direction: "CREDIT",
+        quantity: "150000000000000",
+        occurredAt: "2026-03-14T18:00:06Z",
+      },
+      {
+        ledgerEntryId: `settlement-ledger-${attemptId}-seller-security-debit`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        participantId: "SELL_SIDE_1",
+        accountId: "SELL_SIDE_1_MAIN",
+        assetType: "SECURITY",
+        assetId: "XYZ",
+        direction: "DEBIT",
+        quantity: "1000",
+        occurredAt: "2026-03-14T18:00:06Z",
+      },
+      {
+        ledgerEntryId: `settlement-ledger-${attemptId}-buyer-security-credit`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        participantId: "BUY_SIDE_1",
+        accountId: "BUY_SIDE_1_MAIN",
+        assetType: "SECURITY",
+        assetId: "XYZ",
+        direction: "CREDIT",
+        quantity: "1000",
+        occurredAt: "2026-03-14T18:00:06Z",
+      },
+    ],
+    settlements: [
+      {
+        settlementId: `settlement-final-${obligationId}`,
+        settlementObligationId: obligationId,
+        settlementInstructionId: instructionId,
+        settlementAttemptId: attemptId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: attemptId,
+        settlementState: "SETTLED",
+        occurredAt: "2026-03-14T18:00:06Z",
       },
     ],
   };

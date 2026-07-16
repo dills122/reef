@@ -1,0 +1,274 @@
+{
+  "mode": "live",
+  "pass": true,
+  "pathId": "P2_SETTLEMENT_BREAK_REPAIR",
+  "scenarioRunId": "p2-settlement-break-repair-live-20260714",
+  "seed": 424243,
+  "baseUrl": "http://127.0.0.1:8080",
+  "requests": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p2_settlement_break_repair-cmd-001",
+        "X-Client-Id": "scenario-smoke-1",
+        "X-Correlation-Id": "p2_settlement_break_repair-trace-001",
+        "X-Participant-Id": "BUY_SIDE_1",
+        "X-Reef-Actor-Id": "BUY_SIDE_1_MAIN"
+      },
+      "payload": {
+        "accountId": "BUY_SIDE_1_MAIN",
+        "actorId": "BUY_SIDE_1_MAIN",
+        "actorType": "BOT",
+        "causationId": "p2_settlement_break_repair-cause-001",
+        "clientOrderId": "p2_settlement_break_repair-ord-001",
+        "commandId": "p2_settlement_break_repair-cmd-001",
+        "correlationId": "p2_settlement_break_repair-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "150000000000",
+        "occurredAt": "2026-03-14T18:00:01Z",
+        "orderId": "p2_settlement_break_repair-ord-001",
+        "orderType": "LIMIT",
+        "participantId": "BUY_SIDE_1",
+        "quantityUnits": "1000",
+        "runId": "p2-settlement-break-repair-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P2_SETTLEMENT_BREAK_REPAIR",
+        "scenarioRunId": "p2-settlement-break-repair-live-20260714",
+        "seed": "424243",
+        "side": "BUY",
+        "timeInForce": "DAY",
+        "traceId": "p2_settlement_break_repair-trace-001",
+        "venueSessionId": "P2_SETTLEMENT_BREAK_REPAIR"
+      }
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://127.0.0.1:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p2_settlement_break_repair-cmd-002",
+        "X-Client-Id": "scenario-smoke-2",
+        "X-Correlation-Id": "p2_settlement_break_repair-trace-002",
+        "X-Participant-Id": "SELL_SIDE_1",
+        "X-Reef-Actor-Id": "SELL_SIDE_1_MAIN"
+      },
+      "payload": {
+        "accountId": "SELL_SIDE_1_MAIN",
+        "actorId": "SELL_SIDE_1_MAIN",
+        "actorType": "BOT",
+        "causationId": "p2_settlement_break_repair-cause-001",
+        "clientOrderId": "p2_settlement_break_repair-ord-002",
+        "commandId": "p2_settlement_break_repair-cmd-002",
+        "correlationId": "p2_settlement_break_repair-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "150000000000",
+        "occurredAt": "2026-03-14T18:00:02Z",
+        "orderId": "p2_settlement_break_repair-ord-002",
+        "orderType": "LIMIT",
+        "participantId": "SELL_SIDE_1",
+        "quantityUnits": "1000",
+        "runId": "p2-settlement-break-repair-live-20260714",
+        "runKind": "scenario",
+        "scenarioId": "P2_SETTLEMENT_BREAK_REPAIR",
+        "scenarioRunId": "p2-settlement-break-repair-live-20260714",
+        "seed": "424243",
+        "side": "SELL",
+        "timeInForce": "DAY",
+        "traceId": "p2_settlement_break_repair-trace-002",
+        "venueSessionId": "P2_SETTLEMENT_BREAK_REPAIR"
+      }
+    }
+  ],
+  "results": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p2_settlement_break_repair-ord-001\",\"orderId\":\"p2_settlement_break_repair-ord-001\",\"engineOrderId\":\"eng-p2_settlement_break_repair-ord-001\",\"occurredAt\":\"2026-03-14T18:00:01Z\"},\"executions\":[],\"trades\":[]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p2_settlement_break_repair-cmd-001\",\"clientId\":\"scenario-smoke-1\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p2_settlement_break_repair-cmd-001\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p2_settlement_break_repair-ord-001\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"engineOrderId\\\":\\\"eng-p2_settlement_break_repair-ord-001\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:01Z\\\"},\\\"executions\\\":[],\\\"trades\\\":[]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"BUY_SIDE_1\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "path": "/api/v1/orders/submit",
+      "statusCode": 200,
+      "body": "{\"accepted\":{\"eventId\":\"evt-order-accepted-p2_settlement_break_repair-ord-002\",\"orderId\":\"p2_settlement_break_repair-ord-002\",\"engineOrderId\":\"eng-p2_settlement_break_repair-ord-002\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},\"executions\":[{\"eventId\":\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\",\"executionId\":\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\",\"orderId\":\"p2_settlement_break_repair-ord-001\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"executionPrice\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"},{\"eventId\":\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\",\"executionId\":\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\",\"orderId\":\"p2_settlement_break_repair-ord-002\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"executionPrice\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}],\"trades\":[{\"eventId\":\"evt-trade-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"tradeId\":\"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"executionId\":\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\",\"buyOrderId\":\"p2_settlement_break_repair-ord-001\",\"sellOrderId\":\"p2_settlement_break_repair-ord-002\",\"instrumentId\":\"XYZ\",\"quantityUnits\":\"1000\",\"price\":\"150000000000\",\"currency\":\"USD\",\"occurredAt\":\"2026-03-14T18:00:02Z\"}]}",
+      "commandStatusCode": 200,
+      "commandStatusBody": "{\"commandId\":\"p2_settlement_break_repair-cmd-002\",\"clientId\":\"scenario-smoke-2\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p2_settlement_break_repair-cmd-002\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p2_settlement_break_repair-ord-002\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"engineOrderId\\\":\\\"eng-p2_settlement_break_repair-ord-002\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"executionPrice\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"executionPrice\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"tradeId\\\":\\\"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"buyOrderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"sellOrderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"price\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"SELL_SIDE_1\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    }
+  ],
+  "commands": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "commandId": "p2_settlement_break_repair-cmd-001",
+      "route": "/api/v1/orders/submit",
+      "status": "COMPLETED",
+      "resultStatus": "accepted",
+      "source": "command_capture",
+      "statusCode": 200,
+      "body": "{\"commandId\":\"p2_settlement_break_repair-cmd-001\",\"clientId\":\"scenario-smoke-1\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p2_settlement_break_repair-cmd-001\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p2_settlement_break_repair-ord-001\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"engineOrderId\\\":\\\"eng-p2_settlement_break_repair-ord-001\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:01Z\\\"},\\\"executions\\\":[],\\\"trades\\\":[]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"BUY_SIDE_1\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "commandId": "p2_settlement_break_repair-cmd-002",
+      "route": "/api/v1/orders/submit",
+      "status": "COMPLETED",
+      "resultStatus": "accepted",
+      "source": "command_capture",
+      "statusCode": 200,
+      "body": "{\"commandId\":\"p2_settlement_break_repair-cmd-002\",\"clientId\":\"scenario-smoke-2\",\"route\":\"/api/v1/orders/submit\",\"idempotencyKey\":\"p2_settlement_break_repair-cmd-002\",\"status\":\"COMPLETED\",\"internalStatus\":\"COMPLETED\",\"processingMode\":\"sync-result\",\"responseStatus\":200,\"responsePayloadJson\":\"{\\\"accepted\\\":{\\\"eventId\\\":\\\"evt-order-accepted-p2_settlement_break_repair-ord-002\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"engineOrderId\\\":\\\"eng-p2_settlement_break_repair-ord-002\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},\\\"executions\\\":[{\\\"eventId\\\":\\\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-buy\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"executionPrice\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"},{\\\"eventId\\\":\\\"evt-execution-exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1-sell\\\",\\\"orderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"executionPrice\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}],\\\"trades\\\":[{\\\"eventId\\\":\\\"evt-trade-trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"tradeId\\\":\\\"trade-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"executionId\\\":\\\"exec-p2_settlement_break_repair-ord-001-p2_settlement_break_repair-ord-002-1\\\",\\\"buyOrderId\\\":\\\"p2_settlement_break_repair-ord-001\\\",\\\"sellOrderId\\\":\\\"p2_settlement_break_repair-ord-002\\\",\\\"instrumentId\\\":\\\"XYZ\\\",\\\"quantityUnits\\\":\\\"1000\\\",\\\"price\\\":\\\"150000000000\\\",\\\"currency\\\":\\\"USD\\\",\\\"occurredAt\\\":\\\"2026-03-14T18:00:02Z\\\"}]}\",\"lastError\":\"\",\"canonicalMaterialized\":false,\"engineResultStatus\":\"\",\"resultStatus\":\"\",\"batchId\":\"\",\"shardId\":\"\",\"partition\":-1,\"commandStream\":\"\",\"eventStream\":\"\",\"streamSequence\":0,\"deliveredCount\":0,\"commandType\":\"\",\"payloadHash\":\"\",\"instrumentId\":\"\",\"participantId\":\"SELL_SIDE_1\",\"orderId\":\"\",\"rejectCode\":\"\",\"resultPayloadJson\":\"\",\"source\":\"command_capture\"}"
+    }
+  ],
+  "reads": [
+    {
+      "endpoint": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714",
+      "filters": {
+        "scenarioRunId": "p2-settlement-break-repair-live-20260714"
+      },
+      "sourceType": "settlement facts",
+      "freshnessModel": "append-only settlement fact store",
+      "statusCode": 200,
+      "body": "{\"scenarioRunId\":\"p2-settlement-break-repair-live-20260714\",\"resourcePositions\":[],\"obligations\":[{\"settlementObligationId\":\"p2-settlement-break-repair-live-20260714-obl-1\",\"scenarioRunId\":\"p2-settlement-break-repair-live-20260714\",\"postTradeProfileId\":\"ops-realistic-v1\",\"postTradePolicyVersion\":1,\"correlationId\":\"p2-settlement-break-repair-live-20260714-corr-1\",\"causationId\":\"p2-settlement-break-repair-live-20260714-trade-1\",\"tradeId\":\"p2-settlement-break-repair-live-20260714-trade-1\",\"buyerParticipantId\":\"BUY_SIDE_1\",\"sellerParticipantId\":\"SELL_SIDE_1\",\"instrumentId\":\"XYZ\",\"quantity\":\"1000\",\"cashAmount\":\"100000.00\",\"currency\":\"USD\",\"state\":\"OBLIGATION_CREATED\",\"occurredAt\":\"2026-03-14T18:00:04Z\"}],\"allocations\":[],\"confirmations\":[],\"affirmations\":[],\"instructions\":[],\"attempts\":[],\"legOutcomes\":[],\"ledgerEntries\":[],\"settlements\":[],\"breaks\":[{\"settlementBreakId\":\"p2-settlement-break-repair-live-20260714-break-1\",\"settlementObligationId\":\"p2-settlement-break-repair-live-20260714-obl-1\",\"scenarioRunId\":\"p2-settlement-break-repair-live-20260714\",\"postTradeProfileId\":\"ops-realistic-v1\",\"postTradePolicyVersion\":1,\"correlationId\":\"p2-settlement-break-repair-live-20260714-corr-1\",\"causationId\":\"p2-settlement-break-repair-live-20260714-cash-leg-failed-1\",\"reason\":\"CASH_LEG_FAILED\",\"state\":\"BROKEN\",\"occurredAt\":\"2026-03-14T18:00:05Z\"}],\"repairs\":[{\"settlementRepairId\":\"p2-settlement-break-repair-live-20260714-repair-1\",\"settlementBreakId\":\"p2-settlement-break-repair-live-20260714-break-1\",\"settlementObligationId\":\"p2-settlement-break-repair-live-20260714-obl-1\",\"scenarioRunId\":\"p2-settlement-break-repair-live-20260714\",\"postTradeProfileId\":\"ops-realistic-v1\",\"postTradePolicyVersion\":1,\"correlationId\":\"p2-settlement-break-repair-live-20260714-corr-1\",\"causationId\":\"p2-settlement-break-repair-live-20260714-repair-command-1\",\"repairAction\":\"POST_CASH_LEG_REPAIR\",\"actorType\":\"USER\",\"actorId\":\"settlement-ops-1\",\"occurredAt\":\"2026-03-14T18:00:06Z\"}],\"resolutions\":[{\"settlementResolutionId\":\"p2-settlement-break-repair-live-20260714-resolution-1\",\"settlementObligationId\":\"p2-settlement-break-repair-live-20260714-obl-1\",\"settlementBreakId\":\"p2-settlement-break-repair-live-20260714-break-1\",\"settlementRepairId\":\"p2-settlement-break-repair-live-20260714-repair-1\",\"scenarioRunId\":\"p2-settlement-break-repair-live-20260714\",\"postTradeProfileId\":\"ops-realistic-v1\",\"postTradePolicyVersion\":1,\"correlationId\":\"p2-settlement-break-repair-live-20260714-corr-1\",\"causationId\":\"p2-settlement-break-repair-live-20260714-repair-command-1\",\"settlementState\":\"RESOLVED\",\"exceptionState\":\"RESOLVED\",\"occurredAt\":\"2026-03-14T18:00:07Z\"}],\"operatorActions\":[]}"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "command-001-completed",
+      "status": "pass",
+      "expected": "COMPLETED/accepted",
+      "observed": "COMPLETED/accepted",
+      "proofSource": "GET /api/v1/commands/{commandId}"
+    },
+    {
+      "id": "command-002-completed",
+      "status": "pass",
+      "expected": "COMPLETED/accepted",
+      "observed": "COMPLETED/accepted",
+      "proofSource": "GET /api/v1/commands/{commandId}"
+    },
+    {
+      "id": "p2-settlement-scenario-run",
+      "status": "pass",
+      "expected": "p2-settlement-break-repair-live-20260714",
+      "observed": "p2-settlement-break-repair-live-20260714",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-one-settlement-obligation",
+      "status": "pass",
+      "expected": "1",
+      "observed": "1",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-one-cash-leg-break",
+      "status": "pass",
+      "expected": "1",
+      "observed": "1",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-one-manual-repair",
+      "status": "pass",
+      "expected": "1",
+      "observed": "1",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-one-settlement-resolution",
+      "status": "pass",
+      "expected": "1",
+      "observed": "1",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-obligation-references-trade",
+      "status": "pass",
+      "expected": "non-empty tradeId",
+      "observed": "p2-settlement-break-repair-live-20260714-trade-1",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-obligation-state-created",
+      "status": "pass",
+      "expected": "OBLIGATION_CREATED",
+      "observed": "OBLIGATION_CREATED",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-break-reason-cash-leg-failed",
+      "status": "pass",
+      "expected": "CASH_LEG_FAILED",
+      "observed": "CASH_LEG_FAILED",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-break-state-broken",
+      "status": "pass",
+      "expected": "BROKEN",
+      "observed": "BROKEN",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-repair-action-posted",
+      "status": "pass",
+      "expected": "POST_CASH_LEG_REPAIR",
+      "observed": "POST_CASH_LEG_REPAIR",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-settlement-final-resolved",
+      "status": "pass",
+      "expected": "RESOLVED",
+      "observed": "RESOLVED",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-exception-final-resolved",
+      "status": "pass",
+      "expected": "RESOLVED",
+      "observed": "RESOLVED",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-no-direct-resolution-without-repair",
+      "status": "pass",
+      "expected": "resolution references repair",
+      "observed": "resolution references repair",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-settlement-chain-linked",
+      "status": "pass",
+      "expected": "obligation -\u003e break -\u003e repair -\u003e resolution",
+      "observed": "all fact references linked",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-settlement-causation-fields",
+      "status": "pass",
+      "expected": "scenarioRunId/correlationId/causationId on every fact",
+      "observed": "all facts carry causation fields",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    },
+    {
+      "id": "p2-settlement-scope-consistent",
+      "status": "pass",
+      "expected": "p2-settlement-break-repair-live-20260714",
+      "observed": "all facts match scenarioRunId",
+      "proofSource": "/api/v1/settlement/facts/p2-settlement-break-repair-live-20260714"
+    }
+  ]
+}

@@ -1,13 +1,19 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 
 const projectionName = env("DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME", "");
 const eventStream = env("DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM", "");
+const commandIds = env("DEV_VENUE_EVENT_REPLAY_CHECK_COMMAND_IDS", "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const allowEmpty = env("DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY", "false").toLowerCase() === "true";
 const requireWatermarks = env("DEV_VENUE_EVENT_REPLAY_CHECK_REQUIRE_WATERMARKS", "false").toLowerCase() === "true";
+const reportOut = env("DEV_VENUE_EVENT_REPLAY_CHECK_REPORT_OUT", "");
 const visibilityTimeline = await loadVisibilityTimeline();
 
 const report = JSON.parse(await queryReplayReport());
@@ -17,6 +23,7 @@ const output = {
   checkedAt: new Date().toISOString(),
   projectionName,
   eventStream,
+  commandIds,
   report,
   failures,
 };
@@ -24,7 +31,12 @@ if (visibilityTimeline) {
   output.visibilityTimeline = visibilityTimeline;
 }
 
-console.log(JSON.stringify(output, null, 2));
+const encodedOutput = `${JSON.stringify(output, null, 2)}\n`;
+if (reportOut) {
+  await mkdir(dirname(reportOut), { recursive: true });
+  await writeFile(reportOut, encodedOutput);
+}
+console.log(encodedOutput.trimEnd());
 
 if (failures.length > 0) {
   process.exitCode = 1;
@@ -35,18 +47,49 @@ async function queryReplayReport() {
 }
 
 function replayCheckSql() {
-  const projectionFilter = projectionName
-    ? `WHERE watermark.projection_name = '${sqlLiteral(projectionName)}'`
-    : "";
-  const batchFilter = eventStream
-    ? `WHERE batch.event_stream = '${sqlLiteral(eventStream)}'`
-    : "";
-  const outcomeFilter = eventStream
-    ? `WHERE outcome.event_stream = '${sqlLiteral(eventStream)}'`
-    : "";
-  const projectableEventStreamFilter = eventStream
-    ? `AND event_stream = '${sqlLiteral(eventStream)}'`
-    : "";
+  const commandIDList = commandIds.map((id) => `'${sqlLiteral(id)}'`).join(", ");
+  const batchConditions = [];
+  if (eventStream) {
+    batchConditions.push(`batch.event_stream = '${sqlLiteral(eventStream)}'`);
+  }
+  if (commandIds.length > 0) {
+    batchConditions.push(`
+      EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(
+          CASE
+            WHEN jsonb_typeof(batch.payload_json->'outcomes') = 'array'
+            THEN batch.payload_json->'outcomes'
+            ELSE '[]'::jsonb
+          END
+        ) AS outcome
+        WHERE outcome->>'commandId' IN (${commandIDList})
+      )
+    `);
+  }
+  const outcomeConditions = [];
+  if (eventStream) {
+    outcomeConditions.push(`outcome.event_stream = '${sqlLiteral(eventStream)}'`);
+  }
+  if (commandIds.length > 0) {
+    outcomeConditions.push(`outcome.command_id IN (${commandIDList})`);
+  }
+  const projectableConditions = [`command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')`];
+  if (eventStream) {
+    projectableConditions.push(`event_stream = '${sqlLiteral(eventStream)}'`);
+  }
+  if (commandIds.length > 0) {
+    projectableConditions.push(`command_id IN (${commandIDList})`);
+  }
+  const projectionConditions = ["watermark.partition_id >= 0"];
+  if (projectionName) {
+    projectionConditions.push(`watermark.projection_name = '${sqlLiteral(projectionName)}'`);
+  }
+  const batchFilter = batchConditions.length > 0 ? `WHERE ${batchConditions.join(" AND ")}` : "";
+  const outcomeFilter = outcomeConditions.length > 0 ? `WHERE ${outcomeConditions.join(" AND ")}` : "";
+  const expectedOutcomeFilter = commandIds.length > 0 ? `WHERE outcome->>'commandId' IN (${commandIDList})` : "";
+  const projectableFilter = `WHERE ${projectableConditions.join(" AND ")}`;
+  const projectionFilter = `WHERE ${projectionConditions.join(" AND ")}`;
   return `
     WITH duplicate_replay AS (
       SELECT COALESCE(SUM(runtime.runtime_materialize_venue_event_batch(payload_json)), 0)::BIGINT AS inserted
@@ -88,6 +131,7 @@ function replayCheckSql() {
           ELSE '[]'::jsonb
         END
       ) AS outcome
+      ${expectedOutcomeFilter}
     ),
     actual_outcomes AS (
       SELECT
@@ -174,8 +218,7 @@ function replayCheckSql() {
     projectable_max AS (
       SELECT partition_id, MAX(stream_sequence)::BIGINT AS max_stream_sequence
       FROM runtime.canonical_command_outcomes
-      WHERE command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
-        ${projectableEventStreamFilter}
+      ${projectableFilter}
       GROUP BY partition_id
     ),
     watermark_rows AS (
@@ -189,7 +232,6 @@ function replayCheckSql() {
       LEFT JOIN projectable_max
         ON projectable_max.partition_id = watermark.partition_id
       ${projectionFilter}
-        ${projectionFilter ? "AND" : "WHERE"} watermark.partition_id >= 0
     ),
     watermark_lag AS (
       SELECT projection_name, partition_id, last_partition_seq, canonical_max_sequence, lag

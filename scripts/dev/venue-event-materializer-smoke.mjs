@@ -119,11 +119,8 @@ console.log("waiting for canonical command outcome row...");
 const outcome = await waitForCanonicalOutcome(commandId);
 console.log("waiting for background projection and read APIs...");
 const readApiProof = await waitForProjectedReadApis(outcome);
-const afterStats = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
+const afterStats = await waitForMaterializerAdvance(beforeMaterialized);
 const afterMaterialized = Number(afterStats.metrics?.materialized ?? 0);
-if (afterMaterialized <= beforeMaterialized) {
-  throw new Error(`materializer stats did not advance: before=${beforeMaterialized} after=${afterMaterialized}`);
-}
 
 let replayIdempotencyProof = null;
 if (assertReplayIdempotency) {
@@ -188,6 +185,21 @@ async function waitForCanonicalOutcome(id) {
   throw new Error(`timeout waiting for canonical outcome (${last})`);
 }
 
+async function waitForMaterializerAdvance(beforeMaterialized) {
+  const started = Date.now();
+  let lastStats = null;
+  while (Date.now() - started < materializerTimeoutMs) {
+    lastStats = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
+    const afterMaterialized = Number(lastStats.metrics?.materialized ?? 0);
+    if (afterMaterialized > beforeMaterialized) {
+      return lastStats;
+    }
+    await sleep(materializerPollMs);
+  }
+  const afterMaterialized = Number(lastStats?.metrics?.materialized ?? 0);
+  throw new Error(`materializer stats did not advance: before=${beforeMaterialized} after=${afterMaterialized}`);
+}
+
 async function waitForProjectedReadApis(outcome) {
   const partition = Number(outcome.partition_id);
   if (!Number.isFinite(partition)) {
@@ -237,7 +249,7 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
   }
 
   const commandStatus = await getJson(
-    `${runtimeUrl}/api/v1/commands/${encodeURIComponent(outcome.command_id)}`,
+    `${readApiUrl}/api/v1/commands/${encodeURIComponent(outcome.command_id)}`,
     readApiHeaders,
   );
   assertCommandStatus(commandStatus, outcome);
@@ -459,7 +471,7 @@ async function readProjectionReplaySnapshot(outcome) {
     ORDER BY projection_name, partition_id
   `, ["projection_name", "partition_id", "last_partition_seq", "last_error"]);
   const commandStatus = await getJson(
-    `${runtimeUrl}/api/v1/commands/${encodeURIComponent(outcome.command_id)}`,
+    `${readApiUrl}/api/v1/commands/${encodeURIComponent(outcome.command_id)}`,
     readApiHeaders,
   );
   assertCommandStatus(commandStatus, outcome);

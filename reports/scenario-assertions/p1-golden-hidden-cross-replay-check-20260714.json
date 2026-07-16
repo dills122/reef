@@ -1,0 +1,38 @@
+{
+  "pass": true,
+  "checkedAt": "2026-07-15T02:06:50.361Z",
+  "projectionName": "",
+  "eventStream": "REEF_MATERIALIZER_SMOKE_VENUE_EVENTS_P1-REPLAY-LOCK-20260714H",
+  "commandIds": [
+    "p1-golden-hidden-cross-replay-live-20260714h-p1_golden_hidden_cross_t1-cmd-001",
+    "p1-golden-hidden-cross-replay-live-20260714h-p1_golden_hidden_cross_t1-cmd-002",
+    "p1-golden-hidden-cross-replay-live-20260714h-p1_golden_hidden_cross_t1-cmd-003"
+  ],
+  "report": {
+    "samples": {
+      "streamGaps": [],
+      "watermarkLag": [],
+      "extraOutcomes": [],
+      "streamOverlaps": [],
+      "missingOutcomes": [],
+      "checksumMismatches": [],
+      "payloadHashMismatches": [],
+      "batchCommandCountMismatches": []
+    },
+    "batchCount": 3,
+    "streamGapCount": 0,
+    "watermarkCount": 0,
+    "extraOutcomeCount": 0,
+    "watermarkLagCount": 0,
+    "storedCommandCount": 3,
+    "streamOverlapCount": 0,
+    "missingOutcomeCount": 0,
+    "payloadOutcomeCount": 3,
+    "canonicalOutcomeCount": 3,
+    "checksumMismatchCount": 0,
+    "duplicateReplayInserted": 0,
+    "payloadHashMismatchCount": 0,
+    "batchCommandCountMismatchCount": 0
+  },
+  "failures": []
+}

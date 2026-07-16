@@ -540,7 +540,25 @@ internal class SettlementAdminGateway(
         }
     }
 
-    fun settlementScoreResponse(exchange: HttpExchange, scenarioRunId: String): PlatformHotPathResponse {
+    fun settlementScoreResponse(exchange: HttpExchange, scenarioRunId: String): PlatformHotPathResponse =
+        settlementScoreResponse(
+            scenarioRunId = scenarioRunId,
+            asOfRaw = queryValue(exchange, "asOf"),
+            agedFailAfterSecondsRaw = queryValue(exchange, "agedFailAfterSeconds")
+        )
+
+    fun settlementScoreResponse(scenarioRunId: String, query: String?): PlatformHotPathResponse =
+        settlementScoreResponse(
+            scenarioRunId = scenarioRunId,
+            asOfRaw = queryValue(query, "asOf"),
+            agedFailAfterSecondsRaw = queryValue(query, "agedFailAfterSeconds")
+        )
+
+    private fun settlementScoreResponse(
+        scenarioRunId: String,
+        asOfRaw: String,
+        agedFailAfterSecondsRaw: String
+    ): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
         if (scenarioRunId.isBlank()) {
@@ -550,8 +568,8 @@ internal class SettlementAdminGateway(
             val projection = SettlementScoreProjection.project(
                 facts = store.factsByScenarioRunId(scenarioRunId),
                 options = SettlementScoreProjectionOptions(
-                    asOf = queryValue(exchange, "asOf").takeIf { it.isNotBlank() }?.let { instantFrom(it, "asOf") },
-                    agedFailAfterSeconds = queryValue(exchange, "agedFailAfterSeconds")
+                    asOf = asOfRaw.takeIf { it.isNotBlank() }?.let { instantFrom(it, "asOf") },
+                    agedFailAfterSeconds = agedFailAfterSecondsRaw
                         .takeIf { it.isNotBlank() }
                         ?.let {
                             val parsed = it.toLongOrNull()

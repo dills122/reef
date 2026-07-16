@@ -175,7 +175,7 @@ The current gaps are:
 - direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; local API publish-marker recovery and engine/materializer/projector crash gates passed, and the direct materializer `10k` `soak-5m` DO gate passed on 2026-07-12
 - the submit/cancel intake contract needs implementation-ready proof around duplicate idempotency, accepted-but-not-completed accounting, and event-batch intermediate status authority; hot-path cancel routing metadata is now covered by stream envelope and HTTP boundary tests, and `/api/v1/commands/{commandId}` exposes the provider-neutral public status vocabulary for stream references, in-flight work, canonical completions, rejects, and failures
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
-- first deterministic lifecycle scenarios are not locked end to end
+- first deterministic lifecycle scenarios are locked locally with promoted assertion evidence: P1 combines the 2026-07-14 zero-lag `sync-result` report with the 2026-07-15 same-run direct-stream replay report, and P2 combines public settlement facts readback, direct-stream replay/checksum evidence, and the settled `instant-post-trade-v1` chain proof
 - post-trade workflows remain scenario-locked future work
 - Bot Arena score-v1 correctness gate is locked locally and on DigitalOcean: local reset-to-reset `5m` proof passed and hosted run `do-benchmark-20260714T010045Z` passed the `15m` arena artifact gate. The active follow-up is hosted arena pacing lag cleanup, not score-v1 correctness.
 
@@ -233,8 +233,8 @@ The current gaps are:
 6. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
-   - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures now encode the target scenario shape; they are locked only after live replay, lifecycle, visibility, trade-tape, and settlement-fact assertions pass against platform facts.
-   - Assert ordered events, final state, replay consistency, and visible timeline causation.
+   - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures encode the target scenario shape, and 2026-07-14 local live reports are promoted under `reports/scenario-assertions/`.
+   - Remaining lock work: none for the local P1/P2 scenario-lock criteria. Future reruns can add confidence, but the current promoted evidence already separates P1 zero-lag projection freshness from direct-stream replay proof and proves P2 settled-chain facts through the public settlement read.
 
 7. Start post-trade expansion.
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
