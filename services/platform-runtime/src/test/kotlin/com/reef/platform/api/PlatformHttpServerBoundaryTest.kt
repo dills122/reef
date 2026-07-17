@@ -202,7 +202,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/arena/bot-versions",
                 "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/arena/bot-versions")
         )
@@ -210,7 +211,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/arena/bot-versions/transition",
                 "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/arena/bot-versions/transition")
         )
@@ -218,7 +220,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/arena/runs",
                 "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/arena/runs", "POST")
         )
@@ -226,7 +229,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/arena/runs/status",
                 "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/arena/runs/status", "POST")
         )
@@ -234,7 +238,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/arena/run-bot-results",
                 "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/arena/run-bot-results", "POST")
         )
@@ -242,7 +247,8 @@ class PlatformHttpServerBoundaryTest {
             AdminGatewayRoute(
                 "/internal/admin/arena/run-enforcement-events",
                 "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
             ),
             adminGatewayRouteFor("/admin/v1/arena/run-enforcement-events", "POST")
         )
@@ -390,7 +396,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"reefUserId\":\"admin-cli\"")
             assertContains(response.body, "\"githubLogin\":\"local-dev-admin\"")
-            assertContains(response.body, "\"roles\":[\"arena-operator\",\"participant\",\"local-dev\"]")
+            assertContains(response.body, "\"roles\":[\"operator\",\"participant\"]")
             assertContains(response.body, "\"authProvider\":\"local-dev\"")
         } finally {
             server.stop(0)
@@ -862,12 +868,7 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun adminGatewayArenaBotsReadReturnsCleanErrorWhenSessionLacksPermission() {
-        // A real GitHub-authenticated session with no arena.admin role bound — the
-        // common case today, since GitHub OAuth login grants no runtimePersistence
-        // role by default. GET must fail with a clean 409, not an unhandled
-        // AuthorizationException reaching the HTTP layer (regression coverage for
-        // the missing try/catch previously present on every arena admin GET route).
+    fun adminGatewayArenaBotsReadRequiresTrustedOperatorSession() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         val session = auth.authService.createSession(user.reefUserId)
@@ -889,8 +890,8 @@ class PlatformHttpServerBoundaryTest {
                 headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
             )
 
-            assertEquals(409, response.status)
-            assertContains(response.body, "missing permission arena.admin")
+            assertEquals(403, response.status)
+            assertContains(response.body, "trusted admin identity is required")
         } finally {
             server.stop(0)
         }
@@ -902,8 +903,6 @@ class PlatformHttpServerBoundaryTest {
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         val session = auth.authService.createSession(user.reefUserId)
         val persistence = InMemoryRuntimePersistence()
-        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
-        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
         val arenaStore = InMemoryArenaBotRegistryStore()
         val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
         arenaStore.saveBot(
@@ -922,7 +921,7 @@ class PlatformHttpServerBoundaryTest {
                 createdAt = now.plusSeconds(1)
             )
         )
-        auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
+        grantTrustedOperator(auth, user.reefUserId)
         auth.identityService.assignBotOwnership(
             "admin-cli",
             AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = "bot-1")
@@ -933,7 +932,11 @@ class PlatformHttpServerBoundaryTest {
             adminAuthService = auth.authService,
             adminIdentityService = auth.identityService,
             adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = persistence,
+                arenaRegistryStore = arenaStore,
+                adminIdentityService = auth.identityService
+            )
         )
         try {
             val response = get(
@@ -1076,6 +1079,7 @@ class PlatformHttpServerBoundaryTest {
     fun adminGatewayRejectsParticipantBotOwnershipAssignment() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
         val session = auth.authService.createSession(user.reefUserId)
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
@@ -1102,7 +1106,7 @@ class PlatformHttpServerBoundaryTest {
             )
 
             assertEquals(403, response.status)
-            assertContains(response.body, "not authorized for bot ownership")
+            assertContains(response.body, "admin role required")
             assertTrue(auth.identityService.botOwnerMetadata("bot-1").isEmpty())
         } finally {
             server.stop(0)
@@ -1115,8 +1119,7 @@ class PlatformHttpServerBoundaryTest {
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         val session = auth.authService.createSession(user.reefUserId)
         val persistence = InMemoryRuntimePersistence()
-        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
-        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        grantTrustedOperator(auth, user.reefUserId)
         val arenaStore = InMemoryArenaBotRegistryStore()
         val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
         arenaStore.saveBot(
@@ -1162,7 +1165,11 @@ class PlatformHttpServerBoundaryTest {
             adminAuthService = auth.authService,
             adminIdentityService = auth.identityService,
             adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = persistence,
+                arenaRegistryStore = arenaStore,
+                adminIdentityService = auth.identityService
+            )
         )
         try {
             val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
@@ -1240,8 +1247,7 @@ class PlatformHttpServerBoundaryTest {
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         val session = auth.authService.createSession(user.reefUserId)
         val persistence = InMemoryRuntimePersistence()
-        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
-        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        grantTrustedOperator(auth, user.reefUserId)
         val arenaStore = InMemoryArenaBotRegistryStore()
         val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
         controlPlane.registerBot(
@@ -1257,7 +1263,11 @@ class PlatformHttpServerBoundaryTest {
             adminAuthService = auth.authService,
             adminIdentityService = auth.identityService,
             adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = persistence,
+                arenaRegistryStore = arenaStore,
+                adminIdentityService = auth.identityService
+            )
         )
         try {
             val response = post(
@@ -1291,8 +1301,7 @@ class PlatformHttpServerBoundaryTest {
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         val session = auth.authService.createSession(user.reefUserId)
         val persistence = InMemoryRuntimePersistence()
-        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
-        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        grantTrustedOperator(auth, user.reefUserId)
         val arenaStore = InMemoryArenaBotRegistryStore()
         val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
         controlPlane.registerBot(
@@ -1319,7 +1328,11 @@ class PlatformHttpServerBoundaryTest {
             adminAuthService = auth.authService,
             adminIdentityService = auth.identityService,
             adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = persistence,
+                arenaRegistryStore = arenaStore,
+                adminIdentityService = auth.identityService
+            )
         )
         try {
             val response = post(
@@ -1342,8 +1355,7 @@ class PlatformHttpServerBoundaryTest {
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         val session = auth.authService.createSession(user.reefUserId)
         val persistence = InMemoryRuntimePersistence()
-        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
-        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        grantTrustedOperator(auth, user.reefUserId)
         val arenaStore = InMemoryArenaBotRegistryStore()
         val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
         controlPlane.registerBot(
@@ -1373,7 +1385,11 @@ class PlatformHttpServerBoundaryTest {
             adminAuthService = auth.authService,
             adminIdentityService = auth.identityService,
             adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = persistence,
+                arenaRegistryStore = arenaStore,
+                adminIdentityService = auth.identityService
+            )
         )
         try {
             val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
@@ -6607,6 +6623,11 @@ class PlatformHttpServerBoundaryTest {
     private fun grantTrustedPlatformAdmin(auth: TestAdminAuth, reefUserId: String) {
         auth.identityService.updateTrustState("admin-cli", reefUserId, AdminTrustState.Trusted)
         auth.identityService.assignRole("admin-cli", reefUserId, AdminIdentityService.RolePlatformAdmin)
+    }
+
+    private fun grantTrustedOperator(auth: TestAdminAuth, reefUserId: String) {
+        auth.identityService.updateTrustState("admin-cli", reefUserId, AdminTrustState.Trusted)
+        auth.identityService.assignRole("admin-cli", reefUserId, AdminIdentityService.RoleOperator)
     }
 
     private fun openBaoProvisionBody(

@@ -267,11 +267,11 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
         }
         return try {
-            val bot = service.arenaBot(arenaAdminActor(query), botId)
+            val bot = service.arenaBotForOwnerScopedConfig(botId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
             val ownerIdentity = openBaoOwnerIdentity(bot)
                 ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
-            if (!canManageBotOpenBaoConfig(bot.botId)) {
+            if (!canManageBotOpenBaoConfig(bot.botId, write = false)) {
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
             val snapshot = openBaoBotConfigService().status(ownerIdentity, bot.botId)
@@ -309,11 +309,11 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and config are required"))
         }
         return try {
-            val bot = service.arenaBot(arenaAdminActor(json), botId)
+            val bot = service.arenaBotForOwnerScopedConfig(botId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
             val ownerIdentity = openBaoOwnerIdentity(bot)
                 ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
-            if (!canManageBotOpenBaoConfig(bot.botId)) {
+            if (!canManageBotOpenBaoConfig(bot.botId, write = true)) {
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
             val actor = adminSessionAuth.currentPrincipal().actorId
@@ -355,11 +355,11 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
         }
         return try {
-            val bot = service.arenaBot(arenaAdminActor(query), botId)
+            val bot = service.arenaBotForOwnerScopedConfig(botId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
             val ownerIdentity = openBaoOwnerIdentity(bot)
                 ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
-            if (!canManageBotOpenBaoConfig(bot.botId)) {
+            if (!canManageBotOpenBaoConfig(bot.botId, write = true)) {
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
             openBaoBotConfigService().deleteConfig(ownerIdentity, bot.botId)
@@ -955,14 +955,13 @@ internal class ArenaAdminGateway(
         return owner?.ifBlank { null } ?: bot.metadata.publisher.takeIf { it.isNotBlank() }
     }
 
-    private fun canManageBotOpenBaoConfig(botId: String): Boolean {
+    private fun canManageBotOpenBaoConfig(botId: String, write: Boolean): Boolean {
         val identityService = adminIdentityService ?: return true
         val actorId = adminSessionAuth.currentPrincipal().actorId
         if (!actorId.startsWith("user-gh-")) return true
-        val roles = identityService.rolesForUser(actorId).map { it.roleId }.toSet()
-        if (roles.any { it in adminBotConfigPrivilegedRoles }) return true
         val user = identityService.user(actorId) ?: return false
         if (user.trustState.dbValue == "banned") return false
+        if (write && user.trustState.dbValue == "limited") return false
         return identityService.botOwnerMetadata(botId).any { owner ->
             owner.reefUserId == actorId && owner.ownershipState.dbValue in setOf("owner", "maintainer")
         }

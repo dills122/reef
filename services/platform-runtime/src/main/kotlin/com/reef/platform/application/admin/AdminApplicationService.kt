@@ -151,6 +151,7 @@ class AdminApplicationService(
     private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence(),
     private val arenaRegistryStore: ArenaBotRegistryStore? = null,
     private val accountRiskControlStore: AccountRiskControlStore? = null,
+    private val adminIdentityService: AdminIdentityService? = null,
     private val now: () -> Instant = { Instant.now() }
 ) {
     private val eventProducer = "platform-runtime-admin"
@@ -382,6 +383,10 @@ class AdminApplicationService(
 
     fun arenaBot(actor: AdminActor, botId: String): ArenaBot? {
         requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().bot(botId)
+    }
+
+    fun arenaBotForOwnerScopedConfig(botId: String): ArenaBot? {
         return arenaStore().bot(botId)
     }
 
@@ -656,6 +661,7 @@ class AdminApplicationService(
     }
 
     private fun requirePermission(actor: AdminActor, permission: String) {
+        if (adminIdentityAllowsPermission(actor.actorId, permission)) return
         val boundRoleIds = runtimePersistence.actorRoleBindings(actor.actorId).map { it.roleId }.toSet()
         val allowed = runtimePersistence.roles()
             .filter { it.roleId in boundRoleIds }
@@ -663,6 +669,20 @@ class AdminApplicationService(
             .toSet()
         if (permission !in allowed && Permission.SUPERUSER !in allowed) {
             throw AuthorizationException("actor ${actor.actorId} missing permission $permission")
+        }
+    }
+
+    private fun adminIdentityAllowsPermission(actorId: String, permission: String): Boolean {
+        if (!actorId.startsWith("user-gh-")) return false
+        val identity = adminIdentityService ?: return false
+        val user = identity.user(actorId) ?: return false
+        if (user.trustState != AdminTrustState.Trusted) return false
+        val roles = identity.rolesForUser(actorId).map { it.roleId }.toSet()
+        return when (permission) {
+            Permission.ARENA_ADMIN -> roles.any {
+                it == AdminIdentityService.RoleOperator || it == AdminIdentityService.RolePlatformAdmin
+            }
+            else -> false
         }
     }
 }

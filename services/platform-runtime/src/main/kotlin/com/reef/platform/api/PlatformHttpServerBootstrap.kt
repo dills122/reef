@@ -80,7 +80,7 @@ internal fun defaultBoundary(): ServerBoundaryDeps {
         commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
-        arenaAdminService = defaultArenaAdminService(hooks),
+        arenaAdminService = defaultArenaAdminService(hooks, adminHttpAuth?.identityService),
         adminAuthService = adminHttpAuth?.authService,
         adminIdentityService = adminHttpAuth?.identityService,
         adminGitHubOAuthClient = adminHttpAuth?.githubOAuthClient,
@@ -155,7 +155,10 @@ private fun defaultAdminHttpAuth(): AdminHttpAuthDefaults? {
     )
 }
 
-private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationService? {
+private fun defaultArenaAdminService(
+    hooks: BoundaryHooks,
+    adminIdentityService: AdminIdentityService?
+): AdminApplicationService? {
     if (!RuntimeEnv.bool("PLATFORM_ARENA_ADMIN_ENABLED", false)) return null
     val jdbcUrl = RuntimeEnv.string("ARENA_POSTGRES_JDBC_URL", "")
         .ifBlank { error("ARENA_POSTGRES_JDBC_URL is required when PLATFORM_ARENA_ADMIN_ENABLED=true") }
@@ -170,7 +173,8 @@ private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationServ
     return AdminApplicationService(
         runtimePersistence = defaultRuntimePersistence(),
         arenaRegistryStore = PostgresArenaBotRegistryStore(dataSource = dataSource),
-        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore
+        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore,
+        adminIdentityService = adminIdentityService
     )
 }
 
