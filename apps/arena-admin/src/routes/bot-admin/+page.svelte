@@ -335,6 +335,9 @@
 						controls are shown.
 					</p>
 				</div>
+				{#if hasOperatorAccess(activeSession)}
+					<Button variant="secondary" href="/admin">open game admin</Button>
+				{/if}
 			</div>
 
 			<dl class="mt-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
