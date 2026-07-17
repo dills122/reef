@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/public';
 
-export const ARENA_API_BASE_URL = env.PUBLIC_ARENA_API_BASE_URL?.trim() || 'http://localhost:8080';
+export const ARENA_API_BASE_URL = env.PUBLIC_ARENA_API_BASE_URL?.trim() ?? '';
 
 export type LeaderboardEntry = {
 	rank: number;

@@ -112,6 +112,9 @@ internal class AdminSessionAuth(
                 redirect(exchange, state.redirectPath)
             } catch (ex: IllegalArgumentException) {
                 writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "admin auth failed")))
+            } catch (ex: Exception) {
+                System.err.println("admin_github_oauth_callback_failed error=${ex.javaClass.simpleName} message=${ex.message.orEmpty()}")
+                writeHotPathResponse(exchange, PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "admin auth upstream failed")))
             }
         }
 

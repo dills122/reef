@@ -57,6 +57,7 @@ import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import com.sun.net.httpserver.Headers
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
@@ -329,6 +330,28 @@ class PlatformHttpServerBoundaryTest {
             assertContains(session.body, "\"displayName\":\"Octo User\"")
             assertContains(session.body, "\"trustState\":\"new\"")
             assertContains(session.body, "\"roles\":[\"participant\"]")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGitHubOAuthCallbackReturnsGatewayErrorForExchangeFailure() {
+        val auth = testAdminAuth()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = ThrowingAdminGitHubOAuthClient()
+        )
+        try {
+            val start = get(server.address.port, "/admin/auth/github/start?redirectPath=/admin")
+            val state = responseHeader(start, "Location").substringAfter("state=").substringBefore("&")
+
+            val callback = get(server.address.port, "/admin/auth/github/callback?code=github-code&state=$state")
+
+            assertEquals(502, callback.status)
+            assertContains(callback.body, "admin auth upstream failed")
         } finally {
             server.stop(0)
         }
@@ -6629,6 +6652,16 @@ class PlatformHttpServerBoundaryTest {
         override fun exchangeCode(code: String): GitHubUserIdentity {
             require(code == "github-code") { "unexpected code" }
             return GitHubUserIdentity(12345, "octo", "Octo User")
+        }
+    }
+
+    private class ThrowingAdminGitHubOAuthClient : AdminGitHubOAuthClient {
+        override fun authorizationUrl(stateToken: String): String {
+            return "https://github.test/oauth?state=$stateToken"
+        }
+
+        override fun exchangeCode(code: String): GitHubUserIdentity {
+            throw IOException("github unavailable")
         }
     }
 
