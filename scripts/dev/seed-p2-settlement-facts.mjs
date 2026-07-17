@@ -168,6 +168,7 @@ async function requestJson(url, options = {}) {
 
 function validateReadback(facts, scenarioRunId) {
   const settledMode = hasSettledChain(facts);
+  const pendingMode = hasOpsPendingChain(facts);
   const counts = settledMode
     ? [
         ["obligations", 1],
@@ -182,6 +183,25 @@ function validateReadback(facts, scenarioRunId) {
         ["attempts", 1],
         ["settlements", 1],
       ]
+    : pendingMode
+      ? [
+          ["obligations", 1],
+          ["allocations", 0],
+          ["confirmations", 0],
+          ["affirmations", 0],
+          ["clearingSubmissions", 0],
+          ["clearingAcceptances", 0],
+          ["clearingRejections", 0],
+          ["novations", 0],
+          ["instructions", 0],
+          ["attempts", 0],
+          ["legOutcomes", 0],
+          ["ledgerEntries", 0],
+          ["settlements", 0],
+          ["breaks", 0],
+          ["repairs", 0],
+          ["resolutions", 0],
+        ]
     : [
         ["obligations", 1],
         ["breaks", 1],
@@ -202,9 +222,18 @@ function hasSettledChain(facts) {
   return Array.isArray(facts.settlements) && facts.settlements.length > 0;
 }
 
+function hasOpsPendingChain(facts) {
+  return Array.isArray(facts.obligations) && facts.obligations.length === 1 &&
+    factCount(facts, "breaks") === 0 &&
+    factCount(facts, "settlements") === 0;
+}
+
 function p2SettlementFacts(scenarioRunId, mode, factIdScope) {
   if (mode === "settled") {
     return p2SettledPostTradeFacts(scenarioRunId, factIdScope);
+  }
+  if (mode === "ops-pending") {
+    return p2OpsRealisticPendingFacts(scenarioRunId);
   }
   if (mode === "exception" || mode === "cash-exception") {
     return p2ExceptionFacts(scenarioRunId, "CASH_LEG_FAILED", "POST_CASH_LEG_REPAIR", "cash-leg-failed");
@@ -275,6 +304,46 @@ function p2ExceptionFacts(scenarioRunId, breakReason, repairAction, causationSco
         occurredAt: "2026-03-14T18:00:07Z",
       },
     ],
+  };
+}
+
+function p2OpsRealisticPendingFacts(scenarioRunId) {
+  return {
+    scenarioRunId,
+    obligations: [
+      {
+        settlementObligationId: `${scenarioRunId}-obl-1`,
+        scenarioRunId,
+        postTradeProfileId: "ops-realistic-v1",
+        postTradePolicyVersion: 1,
+        correlationId: `${scenarioRunId}-corr-1`,
+        causationId: `${scenarioRunId}-trade-1`,
+        tradeId: `${scenarioRunId}-trade-1`,
+        buyerParticipantId: "BUY_SIDE_1",
+        sellerParticipantId: "SELL_SIDE_1",
+        instrumentId: "XYZ",
+        quantity: "1000",
+        cashAmount: "100000.00",
+        currency: "USD",
+        state: "OBLIGATION_CREATED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    allocations: [],
+    confirmations: [],
+    affirmations: [],
+    clearingSubmissions: [],
+    clearingAcceptances: [],
+    clearingRejections: [],
+    novations: [],
+    instructions: [],
+    attempts: [],
+    legOutcomes: [],
+    ledgerEntries: [],
+    settlements: [],
+    breaks: [],
+    repairs: [],
+    resolutions: [],
   };
 }
 

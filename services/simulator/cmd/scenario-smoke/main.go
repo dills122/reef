@@ -217,6 +217,8 @@ type settlementFactsReport struct {
 	Novations           []settlementNovation           `json:"novations"`
 	Instructions        []settlementInstruction        `json:"instructions"`
 	Attempts            []settlementAttempt            `json:"attempts"`
+	LegOutcomes         []settlementLegOutcome         `json:"legOutcomes"`
+	LedgerEntries       []settlementLedgerEntry        `json:"ledgerEntries"`
 	Settlements         []settlementSettled            `json:"settlements"`
 	Breaks              []settlementBreak              `json:"breaks"`
 	Repairs             []settlementRepair             `json:"repairs"`
@@ -229,6 +231,7 @@ type settlementObligation struct {
 	CorrelationID          string `json:"correlationId"`
 	CausationID            string `json:"causationId"`
 	TradeID                string `json:"tradeId"`
+	PostTradeProfileID     string `json:"postTradeProfileId"`
 	State                  string `json:"state"`
 }
 
@@ -325,6 +328,14 @@ type settlementAttempt struct {
 	CorrelationID           string `json:"correlationId"`
 	CausationID             string `json:"causationId"`
 	State                   string `json:"state"`
+}
+
+type settlementLegOutcome struct {
+	SettlementLegOutcomeID string `json:"settlementLegOutcomeId"`
+}
+
+type settlementLedgerEntry struct {
+	LedgerEntryID string `json:"ledgerEntryId"`
 }
 
 type settlementSettled struct {
@@ -1141,6 +1152,20 @@ func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, p
 		}
 		return
 	}
+	if hasOpsRealisticPendingFacts(facts) {
+		assertOpsRealisticPendingSettlementFacts(report, facts, proofSource)
+		if settlementFactsHaveCausation(facts) {
+			passAssertion(report, "p2-settlement-causation-fields", "scenarioRunId/correlationId/causationId on every fact", "all facts carry causation fields", proofSource)
+		} else {
+			failAssertion(report, "p2-settlement-causation-fields", "settlement_fact_causation", "scenarioRunId/correlationId/causationId on every fact", "missing causation field", proofSource)
+		}
+		if settlementFactsScopedToScenarioRun(facts, report.ScenarioRunID) {
+			passAssertion(report, "p2-settlement-scope-consistent", report.ScenarioRunID, "all facts match scenarioRunId", proofSource)
+		} else {
+			failAssertion(report, "p2-settlement-scope-consistent", "settlement_fact_scope", report.ScenarioRunID, settlementScenarioRunIDs(facts), proofSource)
+		}
+		return
+	}
 	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
 	assertCount(report, "p2-one-settlement-break", "settlement_fact_count", len(facts.Breaks), 1, proofSource)
 	assertCount(report, "p2-one-manual-repair", "settlement_fact_count", len(facts.Repairs), 1, proofSource)
@@ -1210,6 +1235,56 @@ func hasPostTradeSettlementChainFacts(facts settlementFactsReport) bool {
 	return len(facts.Allocations) > 0 || len(facts.Confirmations) > 0 || len(facts.Affirmations) > 0 ||
 		len(facts.ClearingSubmissions) > 0 || len(facts.ClearingAcceptances) > 0 || len(facts.Novations) > 0 ||
 		len(facts.Settlements) > 0
+}
+
+func hasOpsRealisticPendingFacts(facts settlementFactsReport) bool {
+	return len(facts.Obligations) == 1 &&
+		len(facts.Allocations) == 0 &&
+		len(facts.Confirmations) == 0 &&
+		len(facts.Affirmations) == 0 &&
+		len(facts.ClearingSubmissions) == 0 &&
+		len(facts.ClearingAcceptances) == 0 &&
+		len(facts.ClearingRejections) == 0 &&
+		len(facts.Novations) == 0 &&
+		len(facts.Instructions) == 0 &&
+		len(facts.Attempts) == 0 &&
+		len(facts.LegOutcomes) == 0 &&
+		len(facts.LedgerEntries) == 0 &&
+		len(facts.Settlements) == 0 &&
+		len(facts.Breaks) == 0 &&
+		len(facts.Repairs) == 0 &&
+		len(facts.Resolutions) == 0
+}
+
+func assertOpsRealisticPendingSettlementFacts(report *smokeReport, facts settlementFactsReport, proofSource string) {
+	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
+	assertCount(report, "p2-ops-pending-zero-allocations", "settlement_fact_count", len(facts.Allocations), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-confirmations", "settlement_fact_count", len(facts.Confirmations), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-affirmations", "settlement_fact_count", len(facts.Affirmations), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-clearing-submissions", "settlement_fact_count", len(facts.ClearingSubmissions), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-clearing-acceptances", "settlement_fact_count", len(facts.ClearingAcceptances), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-novations", "settlement_fact_count", len(facts.Novations), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-instructions", "settlement_fact_count", len(facts.Instructions), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-attempts", "settlement_fact_count", len(facts.Attempts), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-leg-outcomes", "settlement_fact_count", len(facts.LegOutcomes), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-ledger-entries", "settlement_fact_count", len(facts.LedgerEntries), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-settlements", "settlement_fact_count", len(facts.Settlements), 0, proofSource)
+	assertCount(report, "p2-ops-pending-zero-breaks", "settlement_fact_count", len(facts.Breaks), 0, proofSource)
+	if len(facts.Obligations) == 1 && facts.Obligations[0].State == "OBLIGATION_CREATED" {
+		passAssertion(report, "p2-ops-pending-obligation-created", "OBLIGATION_CREATED", facts.Obligations[0].State, proofSource)
+	} else {
+		failAssertion(report, "p2-ops-pending-obligation-created", "settlement_fact_state", "OBLIGATION_CREATED", obligationStates(facts.Obligations), proofSource)
+	}
+	if len(facts.Obligations) == 1 && facts.Obligations[0].PostTradeProfileID == "ops-realistic-v1" {
+		passAssertion(report, "p2-ops-pending-profile", "ops-realistic-v1", facts.Obligations[0].PostTradeProfileID, proofSource)
+	} else {
+		failAssertion(report, "p2-ops-pending-profile", "settlement_fact_profile", "ops-realistic-v1", obligationProfiles(facts.Obligations), proofSource)
+	}
+	if len(facts.Obligations) == 1 && strings.TrimSpace(facts.Obligations[0].TradeID) != "" {
+		passAssertion(report, "p2-obligation-references-trade", "non-empty tradeId", facts.Obligations[0].TradeID, proofSource)
+	} else {
+		failAssertion(report, "p2-obligation-references-trade", "settlement_fact_causation", "one obligation with tradeId", obligationTradeIDs(facts.Obligations), proofSource)
+	}
 }
 
 func assertPostTradeSettlementChain(report *smokeReport, facts settlementFactsReport, proofSource string) {
@@ -1739,6 +1814,14 @@ func obligationStates(obligations []settlementObligation) string {
 	values := make([]string, 0, len(obligations))
 	for _, obligation := range obligations {
 		values = append(values, obligation.State)
+	}
+	return strings.Join(values, ",")
+}
+
+func obligationProfiles(obligations []settlementObligation) string {
+	values := make([]string, 0, len(obligations))
+	for _, obligation := range obligations {
+		values = append(values, obligation.PostTradeProfileID)
 	}
 	return strings.Join(values, ",")
 }

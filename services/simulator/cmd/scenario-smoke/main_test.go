@@ -1008,6 +1008,65 @@ func TestScenarioSmokeLiveAssertionsAttachP2SecuritySettlementFacts(t *testing.T
 	}
 }
 
+func TestScenarioSmokeLiveAssertionsAttachP2OpsRealisticPendingFacts(t *testing.T) {
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","postTradeProfileId":"ops-realistic-v1","postTradePolicyVersion":1,"correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","buyerParticipantId":"buyer-1","sellerParticipantId":"seller-1","instrumentId":"XYZ","quantity":"100","cashAmount":"10000.00","currency":"USD","state":"OBLIGATION_CREATED","occurredAt":"2026-03-14T18:00:04Z"}],
+		"allocations":[],
+		"confirmations":[],
+		"affirmations":[],
+		"clearingSubmissions":[],
+		"clearingAcceptances":[],
+		"clearingRejections":[],
+		"novations":[],
+		"instructions":[],
+		"attempts":[],
+		"legOutcomes":[],
+		"ledgerEntries":[],
+		"settlements":[],
+		"breaks":[],
+		"repairs":[],
+		"resolutions":[]
+	}`
+	server := p2SettlementServerWithExceptionQueue(t, settlementJSON, p2EmptySettlementExceptionQueueJSON())
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if !report.Pass || len(report.Failures) != 0 || len(report.Errors) != 0 {
+		t.Fatalf("unexpected failed assertion report: %+v", report)
+	}
+	for _, assertionID := range []string{
+		"p2-ops-pending-obligation-created",
+		"p2-ops-pending-profile",
+		"p2-ops-pending-zero-clearing-submissions",
+		"p2-ops-pending-zero-clearing-acceptances",
+		"p2-ops-pending-zero-novations",
+		"p2-ops-pending-zero-leg-outcomes",
+		"p2-ops-pending-zero-ledger-entries",
+		"p2-ops-pending-zero-settlements",
+		"p2-exception-queue-empty",
+	} {
+		if !hasAssertion(report, assertionID, "pass") {
+			t.Fatalf("missing ops pending assertion %s: %+v", assertionID, report.Assertions)
+		}
+	}
+}
+
 func TestRunLiveDoesNotMutateCallerClientTimeout(t *testing.T) {
 	client := &http.Client{Timeout: 123 * time.Millisecond}
 	report := &smokeReport{}
@@ -1646,6 +1705,19 @@ func p2ResolvedSettlementExceptionQueueJSON(reason string, repairAction string) 
 			"updatedAt":"2026-03-14T18:00:07Z"
 		}]
 	}`, reason, repairAction)
+}
+
+func p2EmptySettlementExceptionQueueJSON() string {
+	return `{
+		"scenarioRunId":"p2-settlement-live",
+		"exceptionsCount":0,
+		"openCount":0,
+		"repairPostedCount":0,
+		"resolvedCount":0,
+		"clearingRejectedCount":0,
+		"settlementBreakCount":0,
+		"exceptions":[]
+	}`
 }
 
 func writeReadyzOK(w http.ResponseWriter) {
