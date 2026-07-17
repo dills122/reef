@@ -152,6 +152,7 @@ export type BotConfigStatus = {
 	ownerIdentity: string;
 	secretPath: string;
 	hasConfig: boolean;
+	config?: Record<string, unknown> | null;
 	keys: string[];
 	updatedAt?: string;
 	updatedBy?: string;
@@ -329,8 +330,12 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 			return {
 				botId,
 				ownerIdentity: 'admin-cli',
-				secretPath: `secret/data/bots/admin-cli/${botId}`,
+				secretPath: `secret/bots/admin-cli/${botId}`,
 				hasConfig: botId === 'dsteele-spread-maker',
+				config:
+					botId === 'dsteele-spread-maker'
+						? { instrumentId: 'AAPL', orderSize: 100, spread: 0.02 }
+						: null,
 				keys: botId === 'dsteele-spread-maker' ? ['instrumentId', 'orderSize', 'spread'] : [],
 				updatedAt: now,
 				updatedBy: 'local-dev-admin',

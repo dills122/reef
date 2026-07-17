@@ -78,6 +78,20 @@ package imports, install the pinned JS dependencies first:
 bun install --frozen-lockfile
 ```
 
+`apps/arena-admin` has its own Bun lockfile and SvelteKit toolchain. Install it
+from the app directory before running its check or build scripts:
+
+```bash
+cd apps/arena-admin
+bun install --frozen-lockfile
+bun run check
+bun run build
+```
+
+The app scripts select Node `22.22.1` through `fnm` when available, matching the
+deployment path. Without `fnm`, ensure `node` on `PATH` is new enough for the
+Svelte/Vite toolchain.
+
 If default host ports are already in use, override them at runtime:
 
 ```bash

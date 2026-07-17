@@ -4,12 +4,12 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"dev": "bun ../../scripts/dev/arena-admin-tool.mjs dev",
+		"build": "bun ../../scripts/dev/arena-admin-tool.mjs build",
+		"preview": "bun ../../scripts/dev/arena-admin-tool.mjs preview",
+		"prepare": "bun ../../scripts/dev/arena-admin-tool.mjs sync-optional",
+		"check": "bun ../../scripts/dev/arena-admin-tool.mjs check",
+		"check:watch": "bun ../../scripts/dev/arena-admin-tool.mjs check --watch"
 	},
 	"devDependencies": {
 		"@fontsource/courier-prime": "^5.2.8",

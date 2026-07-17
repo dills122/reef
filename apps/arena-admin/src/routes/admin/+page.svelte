@@ -8,14 +8,44 @@
 		type ArenaRunBotResult,
 		type ArenaRunEnforcementEvent
 	} from '$lib/api';
+	import ActionBar from '$lib/components/ui/ActionBar.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import SegmentButton from '$lib/components/ui/SegmentButton.svelte';
+	import StateMessage from '$lib/components/ui/StateMessage.svelte';
+	import TextInput from '$lib/components/ui/TextInput.svelte';
 
 	let runs = $state<ArenaRun[]>([]);
 	let resultsByRunId = $state<Record<string, ArenaRunBotResult[]>>({});
 	let enforcementByRunId = $state<Record<string, ArenaRunEnforcementEvent[]>>({});
 	let loading = $state(true);
 	let error = $state('');
+	let runFilter = $state<'all' | 'attention' | 'completed' | 'open'>('all');
+	let runSearch = $state('');
+
+	let attentionRuns = $derived(
+		runs.filter((run) => {
+			const results = runResults(run.runId);
+			return run.status !== 'COMPLETED' || results.length < run.botVersions.length || runEnforcementEvents(run.runId).length > 0;
+		})
+	);
+	let filteredRuns = $derived(
+		runs.filter((run) => {
+			const query = runSearch.trim().toLowerCase();
+			const matchesQuery =
+				!query ||
+				run.runId.toLowerCase().includes(query) ||
+				run.modeId.toLowerCase().includes(query) ||
+				run.scenarioId.toLowerCase().includes(query);
+			if (!matchesQuery) return false;
+			if (runFilter === 'completed') return run.status === 'COMPLETED';
+			if (runFilter === 'open') return run.status !== 'COMPLETED';
+			if (runFilter === 'attention') return attentionRuns.some((item) => item.runId === run.runId);
+			return true;
+		})
+	);
 
 	$effect(() => {
 		loadAdminData();
@@ -65,6 +95,11 @@
 		return `${ARENA_API_BASE_URL}/admin/v1/arena/run-bot-results?${params}`;
 	}
 
+	function runDetailHref(runId: string) {
+		const params = new URLSearchParams({ runId });
+		return `/admin/run?${params}`;
+	}
+
 	function signed(n: number) {
 		return `${n > 0 ? '+' : ''}${n.toLocaleString()}`;
 	}
@@ -74,44 +109,68 @@
 	<title>Game Admin — Bot Arena</title>
 </svelte:head>
 
-<div class="mb-6 flex flex-col gap-3 border-b border-rule pb-5 sm:flex-row sm:items-end sm:justify-between">
-	<div>
-		<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">game admin</h1>
-		<p class="mt-2 text-sm text-muted">{runs.length} recent runs</p>
-	</div>
-	<Button variant="secondary" href="/bot-admin">bot admin</Button>
-</div>
+<PageHeader title="game admin">
+	{#snippet meta()}
+		<p class="text-sm text-muted">{runs.length} recent runs</p>
+	{/snippet}
+	{#snippet actions()}
+		<Button variant="secondary" href="/bot-admin">bot admin</Button>
+	{/snippet}
+</PageHeader>
 
 {#if loading}
-	<p class="border-t border-rule py-6 text-center text-muted">loading…</p>
+	<StateMessage variant="loading" message="loading…" />
 {:else if error}
-	<div class="border-t border-destructive py-6">
-		<p class="font-bold text-destructive">game admin unavailable</p>
-		<p class="mt-1 text-sm text-muted">{error}</p>
-	</div>
+	<StateMessage variant="error" title="game admin unavailable" message={error} />
 {:else}
 	<Card>
 		<div class="mb-4 flex items-baseline justify-between gap-4">
 			<h2 class="text-xl font-normal lowercase">runs</h2>
-			<p class="text-xs text-muted">{runs.length} recent</p>
+			<p class="text-xs text-muted">{filteredRuns.length} shown / {runs.length} recent</p>
+		</div>
+
+		<div class="mb-4 grid gap-3 border-t border-rule pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+			<TextInput
+				type="search"
+				placeholder="filter by run, mode, or scenario"
+				aria-label="Filter runs"
+				value={runSearch}
+				oninput={(event) => (runSearch = event.currentTarget.value)}
+			/>
+			<div class="flex flex-wrap gap-2">
+				<SegmentButton selected={runFilter === 'all'} onclick={() => (runFilter = 'all')}>all</SegmentButton>
+				<SegmentButton selected={runFilter === 'attention'} onclick={() => (runFilter = 'attention')}>
+					attention {attentionRuns.length}
+				</SegmentButton>
+				<SegmentButton selected={runFilter === 'completed'} onclick={() => (runFilter = 'completed')}>completed</SegmentButton>
+				<SegmentButton selected={runFilter === 'open'} onclick={() => (runFilter = 'open')}>open</SegmentButton>
+			</div>
 		</div>
 
 		{#if runs.length === 0}
-			<p class="border-t border-rule py-5 text-center text-muted">no arena runs recorded.</p>
+			<StateMessage variant="empty" message="no arena runs recorded." />
+		{:else if filteredRuns.length === 0}
+			<StateMessage variant="empty" message="no runs match the current filters." />
 		{:else}
 			<ul class="divide-y divide-rule border-t border-rule">
-				{#each runs as run (run.runId)}
+				{#each filteredRuns as run (run.runId)}
 					{@const results = runResults(run.runId)}
 					{@const enforcementEvents = runEnforcementEvents(run.runId)}
 					{@const winner = results.filter((result) => !result.disqualified).sort((a, b) => b.finalEquity - a.finalEquity)[0]}
 					{@const leaderboardHref = runLeaderboardHref(run)}
-					<li class="grid gap-4 py-5 lg:grid-cols-[minmax(0,1fr)_180px]">
+					<li class="grid gap-4 py-5 lg:grid-cols-[minmax(0,1fr)_190px]">
 						<div class="min-w-0">
 							<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 								<h3 class="min-w-0 break-all text-lg font-bold leading-tight text-ink">{run.runId}</h3>
-								<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
-									{run.status}
-								</span>
+								<div class="flex flex-wrap gap-1.5">
+									<Badge variant={run.status === 'COMPLETED' ? 'success' : 'muted'}>{run.status}</Badge>
+									{#if enforcementEvents.length}
+										<Badge variant="danger">enforcement</Badge>
+									{/if}
+									{#if results.length < run.botVersions.length}
+										<Badge variant="muted">partial results</Badge>
+									{/if}
+								</div>
 							</div>
 
 							<dl class="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -151,17 +210,14 @@
 									<dd class="mt-1 text-ink">{new Date(run.createdAt).toLocaleString()}</dd>
 								</div>
 							</dl>
-							<div class="flex flex-wrap gap-3 lg:justify-end">
-								<a class="text-ink underline decoration-rule underline-offset-4" href={runResultsHref(run.runId)}>
-									results
-								</a>
-								{#if leaderboardHref}
-									<a class="text-ink underline decoration-rule underline-offset-4" href={leaderboardHref}>
-										leaderboard data
-									</a>
-								{/if}
-							</div>
 						</div>
+						<ActionBar label="run actions" class="lg:col-span-2">
+							<Button size="sm" href={runDetailHref(run.runId)}>details</Button>
+							<Button size="sm" variant="secondary" href={runResultsHref(run.runId)}>results json</Button>
+							{#if leaderboardHref}
+								<Button size="sm" variant="secondary" href={leaderboardHref}>leaderboard json</Button>
+							{/if}
+						</ActionBar>
 					</li>
 				{/each}
 			</ul>

@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 
 class OpenBaoBotConfigServiceTest {
     @Test
-    fun storesOpaqueConfigJsonAndReturnsMetadataOnlyStatus() {
+    fun storesOpaqueConfigJsonAndReturnsAuthorizedStatusWithConfig() {
         val writes = mutableListOf<String>()
         val server = HttpServer.create(InetSocketAddress(0), 0)
         server.createContext("/v1/auth/approle/login") { exchange ->
@@ -49,6 +49,10 @@ class OpenBaoBotConfigServiceTest {
             assertTrue(writes.single().contains("config_json"))
             assertFalse(writes.single().contains(""""apiKey":"secret""""))
             assertEquals(true, status.hasConfig)
+            assertEquals("secret", result.config.path("apiKey").asText())
+            assertEquals(12, result.config.path("riskLimit").asInt())
+            assertEquals("secret", status.config?.path("apiKey")?.asText())
+            assertEquals(12, status.config?.path("riskLimit")?.asInt())
             assertEquals(listOf("apiKey", "riskLimit"), status.keys)
             assertEquals("secret/bots/dills122/sample-bot", status.secretPath)
             assertEquals(2L, status.version)
