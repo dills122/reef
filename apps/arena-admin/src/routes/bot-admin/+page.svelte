@@ -6,6 +6,7 @@
 		fetchOwnedArenaBots,
 		githubLoginUrl,
 		hasBotAdminAccess,
+		hasOperatorAccess,
 		replaceBotConfig,
 		deleteBotConfig,
 		type ArenaBot,
