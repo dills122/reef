@@ -283,6 +283,7 @@ internal class ArenaAdminGateway(
                     "ownerIdentity" to snapshot.ownerIdentity,
                     "secretPath" to snapshot.secretPath,
                     "hasConfig" to snapshot.hasConfig,
+                    "config" to snapshot.config,
                     "keys" to snapshot.keys,
                     "updatedAt" to snapshot.updatedAt,
                     "updatedBy" to snapshot.updatedBy,
@@ -333,6 +334,7 @@ internal class ArenaAdminGateway(
                     "ownerIdentity" to result.ownerIdentity,
                     "secretPath" to result.secretPath,
                     "hasConfig" to true,
+                    "config" to result.config,
                     "keys" to result.keys,
                     "updatedAt" to result.updatedAt
                 )

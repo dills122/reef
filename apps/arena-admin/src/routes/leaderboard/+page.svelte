@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { fetchLeaderboard, type LeaderboardResponse } from '$lib/api';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import SegmentButton from '$lib/components/ui/SegmentButton.svelte';
+	import StateMessage from '$lib/components/ui/StateMessage.svelte';
 	import { GAME_MODES, type GameMode } from '$lib/config/game-modes';
 	import { cn } from '$lib/utils';
 
@@ -48,21 +51,13 @@
 	<meta name="description" content="Bot Arena leaderboards by game type — current standings for every active bot." />
 </svelte:head>
 
-<h1 class="mb-6 text-3xl font-normal tracking-[-0.03em] lowercase">leaderboard</h1>
+<PageHeader title="leaderboard" class="mb-6" />
 
 <div class="mb-6 flex flex-wrap gap-2">
 	{#each GAME_MODES as mode (mode.id)}
-		<button
-			class={cn(
-				'inline-flex min-h-[32px] items-center rounded border px-2.5 py-1.5 text-sm lowercase transition-colors',
-				selectedMode === mode.id
-					? 'border-accent bg-accent text-accent-ink font-bold'
-					: 'border-rule-strong bg-accent-soft text-ink'
-			)}
-			onclick={() => (selectedMode = mode.id)}
-		>
+		<SegmentButton selected={selectedMode === mode.id} onclick={() => (selectedMode = mode.id)}>
 			{mode.name}
-		</button>
+		</SegmentButton>
 	{/each}
 </div>
 
@@ -93,23 +88,20 @@
 </section>
 
 {#if loading}
-	<p class="border-t border-rule py-6 text-center text-muted">loading leaderboard…</p>
+	<StateMessage variant="loading" message="loading leaderboard…" />
 {:else if error}
-	<div class="border-t border-destructive py-6">
-		<p class="font-bold text-destructive">leaderboard unavailable</p>
-		<p class="mt-1 text-sm text-muted">{error}</p>
+	<StateMessage variant="error" title="leaderboard unavailable" message={error}>
 		<p class="mt-3 text-xs text-muted">
 			This is the public `/api/v1/arena/leaderboard` read. An unavailable board is not treated as an
 			empty scored run set.
 		</p>
-	</div>
+	</StateMessage>
 {:else if !leaderboard || leaderboard.entries.length === 0}
-	<div class="border-t border-rule py-6 text-center">
-		<p class="text-muted">no public scored runs yet for this game type.</p>
+	<StateMessage variant="empty" message="no public scored runs yet for this game type.">
 		<p class="mt-2 text-xs text-muted">
 			Only eligible, non-disqualified results marked for the public leaderboard appear here.
 		</p>
-	</div>
+	</StateMessage>
 {:else}
 	<!-- Mobile: stacked cards, bot + pnl are the two things worth a glance on a phone. -->
 	<ul class="border-t border-rule sm:hidden">

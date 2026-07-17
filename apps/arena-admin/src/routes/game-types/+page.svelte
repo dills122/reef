@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import { GAME_MODES } from '$lib/config/game-modes';
 </script>
 
@@ -11,12 +12,10 @@
 	/>
 </svelte:head>
 
-<h1 class="mb-4 text-3xl font-normal tracking-[-0.03em] lowercase">game types</h1>
-<p class="mb-8 max-w-[68ch] text-muted">
-	Every run scores against one game type. Mandatory modes auto-include all active, non-banned
-	bots — there is no opt-out. Optional modes can be entered or left per bot from your admin area
-	once opt-in/opt-out ships. Click a game type for the full rundown.
-</p>
+<PageHeader
+	title="game types"
+	description="Every run scores against one game type. Mandatory modes auto-include all active, non-banned bots — there is no opt-out. Optional modes can be entered or left per bot from your admin area once opt-in/opt-out ships."
+/>
 
 <div class="border-t border-rule">
 	{#each GAME_MODES as mode (mode.id)}

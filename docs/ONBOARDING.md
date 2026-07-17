@@ -215,6 +215,11 @@ make dev-smoke
   bot SDK and arena test flows require Bun plus dependencies from
   `bun install --frozen-lockfile`.
 
+`svelte-kit: command not found` under `apps/arena-admin`
+- Install the app-local dependencies: `cd apps/arena-admin && bun install --frozen-lockfile`.
+- The app scripts use `fnm exec --using=22.22.1` when `fnm` is available. If
+  `fnm` is not installed, make sure `node` on `PATH` is a current Node 22 build.
+
 `bind: address already in use`
 - Use host port overrides (see section 7).
 
