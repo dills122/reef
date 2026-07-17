@@ -607,6 +607,10 @@ class PostgresSchemaRequirementsTest {
             allocations = "settlement.allocations",
             confirmations = "settlement.confirmations",
             affirmations = "settlement.affirmations",
+            clearingSubmissions = "settlement.clearing_submissions",
+            clearingAcceptances = "settlement.clearing_acceptances",
+            clearingRejections = "settlement.clearing_rejections",
+            novations = "settlement.novations",
             instructions = "settlement.instructions",
             attempts = "settlement.attempts",
             legOutcomes = "settlement.leg_outcomes",
@@ -625,6 +629,10 @@ class PostgresSchemaRequirementsTest {
                 "settlement.allocations",
                 "settlement.confirmations",
                 "settlement.affirmations",
+                "settlement.clearing_submissions",
+                "settlement.clearing_acceptances",
+                "settlement.clearing_rejections",
+                "settlement.novations",
                 "settlement.instructions",
                 "settlement.attempts",
                 "settlement.leg_outcomes",
@@ -647,6 +655,14 @@ class PostgresSchemaRequirementsTest {
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.confirmations.settlement_allocation_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.affirmations.settlement_affirmation_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.affirmations.settlement_confirmation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.clearing_submissions.settlement_clearing_submission_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.clearing_submissions.settlement_affirmation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.clearing_acceptances.settlement_clearing_acceptance_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.clearing_acceptances.settlement_clearing_submission_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.clearing_rejections.settlement_clearing_rejection_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.clearing_rejections.reason" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.novations.settlement_novation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.novations.settlement_clearing_acceptance_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.settlement_instruction_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.instruction_type" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_attempt_id" })

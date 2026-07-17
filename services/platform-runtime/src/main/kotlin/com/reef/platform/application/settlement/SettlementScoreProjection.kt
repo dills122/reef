@@ -176,6 +176,13 @@ object SettlementScoreProjection {
         return (
             facts.resourcePositions.map { it.occurredAt } +
                 facts.obligations.map { it.occurredAt } +
+                facts.allocations.map { it.occurredAt } +
+                facts.confirmations.map { it.occurredAt } +
+                facts.affirmations.map { it.occurredAt } +
+                facts.clearingSubmissions.map { it.occurredAt } +
+                facts.clearingAcceptances.map { it.occurredAt } +
+                facts.clearingRejections.map { it.occurredAt } +
+                facts.novations.map { it.occurredAt } +
                 facts.instructions.map { it.occurredAt } +
                 facts.attempts.map { it.occurredAt } +
                 facts.legOutcomes.map { it.occurredAt } +

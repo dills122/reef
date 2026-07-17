@@ -187,14 +187,18 @@ Obligation materialization:
 - deterministic instant allocation id: `settlement-allocation-settlement-obligation-{tradeId}`
 - deterministic instant confirmation id: `settlement-confirmation-settlement-obligation-{tradeId}`
 - deterministic instant affirmation id: `settlement-affirmation-settlement-obligation-{tradeId}`
-- minimal post-trade chain: allocation references the settlement obligation, canonical trade id, canonical buy/sell order ids, and buyer/seller accounts; confirmation references the allocation and obligation; affirmation references the confirmation, allocation, and obligation; the first settlement instruction is caused by the affirmation
+- deterministic instant clearing submission id: `settlement-clearing-submission-settlement-obligation-{tradeId}`
+- deterministic instant clearing acceptance id: `settlement-clearing-acceptance-settlement-obligation-{tradeId}`
+- deterministic instant novation id: `settlement-novation-settlement-obligation-{tradeId}`
+- minimal post-trade chain: allocation references the settlement obligation, canonical trade id, canonical buy/sell order ids, and buyer/seller accounts; confirmation references the allocation and obligation; affirmation references the confirmation, allocation, and obligation; clearing submission references the affirmation; clearing acceptance references the submission; novation references the acceptance; the first settlement instruction is caused by the novation
 - ledger proof: buyer cash debit, seller cash credit, seller security debit, buyer security credit
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 - ledger query surface: `GET /api/v1/settlement/ledger/{scenarioRunId}` returns replayable participant/account/asset balances plus per-settlement proof totals derived from append-only ledger facts
+- exceptions query surface: `GET /api/v1/settlement/exceptions/{scenarioRunId}` returns an operator-readable queue projection over clearing rejections and settlement breaks, including open/repair-posted/resolved counts and action hints
 - proof query surface: `GET /api/v1/settlement/proof/{scenarioRunId}` returns one replay proof with trade/obligation/attempt/ledger identifiers, final balances, settlement proof rows, profile/policy evidence, `CLEAN`/`GAPPED` proof status, causation-gap checks, fact counts, and a deterministic checksum
-- settlement facts/proof now expose allocation, confirmation, and affirmation counts and identifiers for the minimal instant-post-trade chain
+- settlement facts/proof now expose allocation, confirmation, affirmation, clearing, and novation counts and identifiers for the minimal instant-post-trade chain
 - score query surface: `GET /api/v1/settlement/score/{scenarioRunId}` returns participant scoring inputs from the same facts: settled balances, pending value, haircut-adjusted pending value, blocked unsettled value, fail counts, aged-fail counts, repair-pending counts, and penalty points; optional `asOf` and `agedFailAfterSeconds` query parameters let scenario-clock checks age open fails deterministically
 - resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
 - constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts

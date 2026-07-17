@@ -1108,6 +1108,18 @@ class PlatformHttpServer(
             writeHotPathResponse(exchange, settlementAdminGateway.settlementLedgerResponse(scenarioRunId))
         }
 
+        server.createContext("/api/v1/settlement/exceptions/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Read(exchange, "/api/v1/settlement/exceptions/{scenarioRunId}")) {
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/exceptions/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementAdminGateway.settlementExceptionsResponse(scenarioRunId))
+        }
+
         server.createContext("/api/v1/settlement/proof/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -1720,6 +1732,11 @@ class PlatformHttpServer(
             request.path.startsWith("/api/v1/settlement/ledger/") && request.method == "GET" -> {
                 settlementReadResponse(request, "/api/v1/settlement/ledger/{scenarioRunId}") { scenarioRunId ->
                     settlementAdminGateway.settlementLedgerResponse(scenarioRunId)
+                }
+            }
+            request.path.startsWith("/api/v1/settlement/exceptions/") && request.method == "GET" -> {
+                settlementReadResponse(request, "/api/v1/settlement/exceptions/{scenarioRunId}") { scenarioRunId ->
+                    settlementAdminGateway.settlementExceptionsResponse(scenarioRunId)
                 }
             }
             request.path.startsWith("/api/v1/settlement/proof/") && request.method == "GET" -> {

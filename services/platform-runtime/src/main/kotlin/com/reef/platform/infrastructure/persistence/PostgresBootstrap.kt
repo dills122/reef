@@ -230,6 +230,10 @@ object PostgresSchemaRequirements {
         allocations: String,
         confirmations: String,
         affirmations: String,
+        clearingSubmissions: String,
+        clearingAcceptances: String,
+        clearingRejections: String,
+        novations: String,
         instructions: String,
         attempts: String,
         legOutcomes: String,
@@ -245,6 +249,10 @@ object PostgresSchemaRequirements {
         val allocationTable = PostgresSchemaObject.parse(allocations)
         val confirmationTable = PostgresSchemaObject.parse(confirmations)
         val affirmationTable = PostgresSchemaObject.parse(affirmations)
+        val clearingSubmissionTable = PostgresSchemaObject.parse(clearingSubmissions)
+        val clearingAcceptanceTable = PostgresSchemaObject.parse(clearingAcceptances)
+        val clearingRejectionTable = PostgresSchemaObject.parse(clearingRejections)
+        val novationTable = PostgresSchemaObject.parse(novations)
         val instructionTable = PostgresSchemaObject.parse(instructions)
         val attemptTable = PostgresSchemaObject.parse(attempts)
         val legOutcomeTable = PostgresSchemaObject.parse(legOutcomes)
@@ -261,6 +269,10 @@ object PostgresSchemaRequirements {
                 allocationTable,
                 confirmationTable,
                 affirmationTable,
+                clearingSubmissionTable,
+                clearingAcceptanceTable,
+                clearingRejectionTable,
+                novationTable,
                 instructionTable,
                 attemptTable,
                 legOutcomeTable,
@@ -309,6 +321,31 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(affirmationTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(affirmationTable, "actor_id", "text"),
                 PostgresSchemaColumn(affirmationTable, "state", "text"),
+                PostgresSchemaColumn(clearingSubmissionTable, "settlement_clearing_submission_id", "text"),
+                PostgresSchemaColumn(clearingSubmissionTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(clearingSubmissionTable, "settlement_affirmation_id", "text"),
+                PostgresSchemaColumn(clearingSubmissionTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(clearingSubmissionTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(clearingSubmissionTable, "state", "text"),
+                PostgresSchemaColumn(clearingAcceptanceTable, "settlement_clearing_acceptance_id", "text"),
+                PostgresSchemaColumn(clearingAcceptanceTable, "settlement_clearing_submission_id", "text"),
+                PostgresSchemaColumn(clearingAcceptanceTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(clearingAcceptanceTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(clearingAcceptanceTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(clearingAcceptanceTable, "state", "text"),
+                PostgresSchemaColumn(clearingRejectionTable, "settlement_clearing_rejection_id", "text"),
+                PostgresSchemaColumn(clearingRejectionTable, "settlement_clearing_submission_id", "text"),
+                PostgresSchemaColumn(clearingRejectionTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(clearingRejectionTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(clearingRejectionTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(clearingRejectionTable, "reason", "text"),
+                PostgresSchemaColumn(clearingRejectionTable, "state", "text"),
+                PostgresSchemaColumn(novationTable, "settlement_novation_id", "text"),
+                PostgresSchemaColumn(novationTable, "settlement_clearing_acceptance_id", "text"),
+                PostgresSchemaColumn(novationTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(novationTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(novationTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(novationTable, "state", "text"),
                 PostgresSchemaColumn(instructionTable, "settlement_instruction_id", "text"),
                 PostgresSchemaColumn(instructionTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(instructionTable, "post_trade_profile_id", "text"),

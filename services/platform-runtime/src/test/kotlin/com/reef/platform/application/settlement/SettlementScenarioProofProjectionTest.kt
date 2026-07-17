@@ -14,16 +14,20 @@ class SettlementScenarioProofProjectionTest {
         assertEquals("CLEAN", proof.proofStatus)
         assertEquals("SHA-256", proof.checksumAlgorithm)
         assertEquals(64, proof.checksum.length)
-        assertEquals(18, proof.factsCount)
+        assertEquals(21, proof.factsCount)
         assertEquals(0, proof.operatorActionsCount)
         assertEquals(1, proof.profilePolicies.size)
         assertEquals("instant-post-trade-v1", proof.profilePolicies.single().postTradeProfileId)
         assertEquals(2, proof.profilePolicies.single().postTradePolicyVersion)
-        assertEquals(18, proof.profilePolicies.single().factCount)
+        assertEquals(21, proof.profilePolicies.single().factCount)
         assertEquals(2, proof.obligationsCount)
         assertEquals(1, proof.allocationsCount)
         assertEquals(1, proof.confirmationsCount)
         assertEquals(1, proof.affirmationsCount)
+        assertEquals(1, proof.clearingSubmissionsCount)
+        assertEquals(1, proof.clearingAcceptancesCount)
+        assertEquals(0, proof.clearingRejectionsCount)
+        assertEquals(1, proof.novationsCount)
         assertEquals(0, proof.causationGaps.size)
         assertEquals(2, proof.obligations.size)
         assertEquals(4, proof.balances.size)
@@ -35,6 +39,10 @@ class SettlementScenarioProofProjectionTest {
         assertEquals(listOf("allocation-1"), settled.settlementAllocationIds)
         assertEquals(listOf("confirmation-1"), settled.settlementConfirmationIds)
         assertEquals(listOf("affirmation-1"), settled.settlementAffirmationIds)
+        assertEquals(listOf("clearing-submission-1"), settled.settlementClearingSubmissionIds)
+        assertEquals(listOf("clearing-acceptance-1"), settled.settlementClearingAcceptanceIds)
+        assertEquals(emptyList(), settled.settlementClearingRejectionIds)
+        assertEquals(listOf("novation-1"), settled.settlementNovationIds)
         assertEquals(listOf("instruction-1"), settled.settlementInstructionIds)
         assertEquals(listOf("attempt-1"), settled.settlementAttemptIds)
         assertEquals(4, settled.ledgerEntryIds.size)
@@ -71,6 +79,9 @@ class SettlementScenarioProofProjectionTest {
                 allocations = listOf(allocation("allocation-1", "obl-1", "trade-1")),
                 confirmations = listOf(confirmation("confirmation-1", "allocation-1", "obl-1", "trade-1")),
                 affirmations = listOf(affirmation("affirmation-1", "confirmation-1", "allocation-1", "obl-1", "trade-1")),
+                clearingSubmissions = listOf(clearingSubmission("clearing-submission-1", "obl-1", "affirmation-1")),
+                clearingAcceptances = listOf(clearingAcceptance("clearing-acceptance-1", "clearing-submission-1", "obl-1")),
+                novations = listOf(novation("novation-1", "clearing-acceptance-1", "obl-1")),
                 instructions = listOf(instruction("instruction-1", "obl-1")),
                 attempts = listOf(attempt("attempt-1", "obl-1", "instruction-1")),
                 legOutcomes = listOf(
@@ -209,6 +220,60 @@ class SettlementScenarioProofProjectionTest {
                 correlationId = "corr-1",
                 causationId = confirmationId,
                 tradeId = tradeId,
+                occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+            )
+        }
+
+        fun clearingSubmission(
+            id: String,
+            obligationId: String,
+            affirmationId: String
+        ): SettlementClearingSubmittedFact {
+            return SettlementClearingSubmittedFact(
+                settlementClearingSubmissionId = id,
+                settlementObligationId = obligationId,
+                settlementAffirmationId = affirmationId,
+                scenarioRunId = "run-proof",
+                postTradeProfileId = "instant-post-trade-v1",
+                postTradePolicyVersion = 2,
+                correlationId = "corr-1",
+                causationId = affirmationId,
+                occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+            )
+        }
+
+        fun clearingAcceptance(
+            id: String,
+            submissionId: String,
+            obligationId: String
+        ): SettlementClearingAcceptedFact {
+            return SettlementClearingAcceptedFact(
+                settlementClearingAcceptanceId = id,
+                settlementClearingSubmissionId = submissionId,
+                settlementObligationId = obligationId,
+                scenarioRunId = "run-proof",
+                postTradeProfileId = "instant-post-trade-v1",
+                postTradePolicyVersion = 2,
+                correlationId = "corr-1",
+                causationId = submissionId,
+                occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+            )
+        }
+
+        fun novation(
+            id: String,
+            acceptanceId: String,
+            obligationId: String
+        ): SettlementNovationRecordedFact {
+            return SettlementNovationRecordedFact(
+                settlementNovationId = id,
+                settlementClearingAcceptanceId = acceptanceId,
+                settlementObligationId = obligationId,
+                scenarioRunId = "run-proof",
+                postTradeProfileId = "instant-post-trade-v1",
+                postTradePolicyVersion = 2,
+                correlationId = "corr-1",
+                causationId = acceptanceId,
                 occurredAt = Instant.parse("2026-01-01T00:00:02Z")
             )
         }

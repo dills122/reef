@@ -893,6 +893,8 @@ class PlatformApiTest {
         assertContains(availability, "\"endpoint\":\"/api/v1/settlement/obligations/{scenarioRunId}\"")
         assertContains(availability, "\"name\":\"settlementLedger\"")
         assertContains(availability, "\"endpoint\":\"/api/v1/settlement/ledger/{scenarioRunId}\"")
+        assertContains(availability, "\"name\":\"settlementExceptions\"")
+        assertContains(availability, "\"endpoint\":\"/api/v1/settlement/exceptions/{scenarioRunId}\"")
         assertContains(availability, "\"name\":\"currentOrders\"")
         assertContains(availability, "\"name\":\"orderFills\"")
         assertContains(availability, "\"endpoint\":\"/api/v1/orders/fills\"")
