@@ -114,6 +114,7 @@
 		<p class="text-sm text-muted">{runs.length} recent runs</p>
 	{/snippet}
 	{#snippet actions()}
+		<Button variant="secondary" href="/admin/access">access</Button>
 		<Button variant="secondary" href="/bot-admin">bot admin</Button>
 	{/snippet}
 </PageHeader>

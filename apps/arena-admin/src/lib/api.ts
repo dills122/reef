@@ -31,6 +31,40 @@ export type SessionUser = {
 	roles: string[];
 };
 
+export type AdminAccessUserRole = {
+	reefUserId: string;
+	roleId: string;
+	assignedBy: string;
+	assignedAt: string;
+};
+
+export type AdminAccessBotOwnership = {
+	reefUserId: string;
+	botId: string;
+	ownershipState: string;
+	assignedBy: string;
+	assignedAt: string;
+};
+
+export type AdminAccessUser = {
+	reefUserId: string;
+	githubUserId: number;
+	githubLogin: string;
+	displayName: string;
+	trustState: string;
+	roles: AdminAccessUserRole[];
+	botOwnerships: AdminAccessBotOwnership[];
+	createdAt: string;
+	lastSeenAt: string;
+	updatedAt: string;
+};
+
+export type AdminAccessRole = {
+	roleId: string;
+	description: string;
+	createdAt: string;
+};
+
 const operatorRoles = new Set([
 	'operator',
 	'site-operator',
@@ -263,6 +297,93 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 				completedAt: '2026-07-11T21:13:22Z'
 			}
 		];
+		const accessRoles: AdminAccessRole[] = [
+			{
+				roleId: 'participant',
+				description: 'Can own accepted bots and manage own bot config',
+				createdAt: '2026-07-10T15:00:00Z'
+			},
+			{
+				roleId: 'reviewer',
+				description: 'Can review bot submissions',
+				createdAt: '2026-07-10T15:00:00Z'
+			},
+			{
+				roleId: 'operator',
+				description: 'Can operate arena runs and game settings',
+				createdAt: '2026-07-10T15:00:00Z'
+			},
+			{
+				roleId: 'secret-admin',
+				description: 'Can perform explicit secret repair and rotation actions',
+				createdAt: '2026-07-10T15:00:00Z'
+			},
+			{
+				roleId: 'platform-admin',
+				description: 'Can administer the Reef control plane',
+				createdAt: '2026-07-10T15:00:00Z'
+			}
+		];
+		const accessUsers: AdminAccessUser[] = [
+			{
+				reefUserId: 'user-gh-15662762',
+				githubUserId: 15662762,
+				githubLogin: 'dills122',
+				displayName: 'Dill Steele',
+				trustState: 'trusted',
+				roles: [
+					{
+						reefUserId: 'user-gh-15662762',
+						roleId: 'participant',
+						assignedBy: 'github-oauth',
+						assignedAt: '2026-07-10T15:00:00Z'
+					},
+					{
+						reefUserId: 'user-gh-15662762',
+						roleId: 'operator',
+						assignedBy: 'bootstrap',
+						assignedAt: '2026-07-10T15:02:00Z'
+					}
+				],
+				botOwnerships: [
+					{
+						reefUserId: 'user-gh-15662762',
+						botId: 'dsteele-spread-maker',
+						ownershipState: 'owner',
+						assignedBy: 'admin-cli',
+						assignedAt: '2026-07-10T15:44:01Z'
+					}
+				],
+				createdAt: '2026-07-10T15:00:00Z',
+				lastSeenAt: now,
+				updatedAt: now
+			},
+			{
+				reefUserId: 'user-gh-424242',
+				githubUserId: 424242,
+				githubLogin: 'reef-reviewer',
+				displayName: 'Reef Reviewer',
+				trustState: 'limited',
+				roles: [
+					{
+						reefUserId: 'user-gh-424242',
+						roleId: 'participant',
+						assignedBy: 'github-oauth',
+						assignedAt: '2026-07-11T16:00:00Z'
+					},
+					{
+						reefUserId: 'user-gh-424242',
+						roleId: 'reviewer',
+						assignedBy: 'user-gh-15662762',
+						assignedAt: '2026-07-11T16:15:00Z'
+					}
+				],
+				botOwnerships: [],
+				createdAt: '2026-07-11T16:00:00Z',
+				lastSeenAt: '2026-07-11T18:03:00Z',
+				updatedAt: '2026-07-11T18:04:00Z'
+			}
+		];
 		const results = [
 			{
 				runId: 'local-visual-run-001',
@@ -304,6 +425,39 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 			return {
 				reefUserId: 'admin-cli',
 				bots: bots.filter((bot) => bot.botId === 'dsteele-spread-maker')
+			} as T;
+		}
+		if (method === 'GET' && url.pathname === '/admin/v1/access/users') return { users: accessUsers } as T;
+		if (method === 'GET' && url.pathname === '/admin/v1/access/roles') return { roles: accessRoles } as T;
+		if (method === 'POST' && url.pathname === '/admin/v1/access/users/trust-state') {
+			const payload = JSON.parse(String(init.body ?? '{}')) as Partial<AdminAccessUser>;
+			return {
+				status: 'ok',
+				user: {
+					...accessUsers[0],
+					reefUserId: payload.reefUserId ?? accessUsers[0].reefUserId,
+					trustState: payload.trustState ?? 'trusted'
+				}
+			} as T;
+		}
+		if (method === 'POST' && url.pathname === '/admin/v1/access/users/roles') {
+			const payload = JSON.parse(String(init.body ?? '{}')) as Partial<AdminAccessUserRole>;
+			return {
+				status: 'ok',
+				role: {
+					reefUserId: payload.reefUserId ?? accessUsers[0].reefUserId,
+					roleId: payload.roleId ?? 'reviewer',
+					assignedBy: 'user-gh-15662762',
+					assignedAt: now
+				}
+			} as T;
+		}
+		if (method === 'POST' && url.pathname === '/admin/v1/access/users/roles/revoke') {
+			const payload = JSON.parse(String(init.body ?? '{}')) as Partial<AdminAccessUserRole>;
+			return {
+				status: 'ok',
+				reefUserId: payload.reefUserId ?? accessUsers[0].reefUserId,
+				roleId: payload.roleId ?? 'reviewer'
 			} as T;
 		}
 		if (method === 'GET' && url.pathname === '/admin/v1/arena/bots') return { bots } as T;
@@ -565,6 +719,50 @@ export async function fetchAdminRiskControls(): Promise<AccountRiskControl[]> {
 		'/admin/v1/risk/account-controls'
 	);
 	return body.controls ?? [];
+}
+
+export async function fetchAdminAccessUsers(limit = 100): Promise<AdminAccessUser[]> {
+	const params = new URLSearchParams({ limit: String(limit) });
+	const body = await fetchAdminJson<{ users: AdminAccessUser[] }>(`/admin/v1/access/users?${params}`);
+	return body.users ?? [];
+}
+
+export async function fetchAdminAccessRoles(): Promise<AdminAccessRole[]> {
+	const body = await fetchAdminJson<{ roles: AdminAccessRole[] }>('/admin/v1/access/roles');
+	return body.roles ?? [];
+}
+
+export async function updateAdminUserTrustState(
+	reefUserId: string,
+	trustState: string,
+	reason: string
+): Promise<void> {
+	await fetchAdminJson('/admin/v1/access/users/trust-state', {
+		method: 'POST',
+		body: JSON.stringify({ reefUserId, trustState, reason })
+	});
+}
+
+export async function assignAdminAccessRole(
+	reefUserId: string,
+	roleId: string,
+	reason: string
+): Promise<void> {
+	await fetchAdminJson('/admin/v1/access/users/roles', {
+		method: 'POST',
+		body: JSON.stringify({ reefUserId, roleId, reason })
+	});
+}
+
+export async function revokeAdminAccessRole(
+	reefUserId: string,
+	roleId: string,
+	reason: string
+): Promise<void> {
+	await fetchAdminJson('/admin/v1/access/users/roles/revoke', {
+		method: 'POST',
+		body: JSON.stringify({ reefUserId, roleId, reason })
+	});
 }
 
 export async function fetchBotConfigStatus(botId: string): Promise<BotConfigStatus> {

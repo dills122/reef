@@ -165,6 +165,56 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     } else {
         null
     }
+    "/admin/v1/access/users" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/access/users",
+            "admin",
+            setOf(AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
+        )
+    } else {
+        null
+    }
+    "/admin/v1/access/roles" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/access/roles",
+            "admin",
+            setOf(AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
+        )
+    } else {
+        null
+    }
+    "/admin/v1/access/users/trust-state" -> if (method == "POST") {
+        AdminGatewayRoute(
+            "/internal/admin/access/users/trust-state",
+            "admin",
+            setOf(AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
+        )
+    } else {
+        null
+    }
+    "/admin/v1/access/users/roles" -> if (method == "POST") {
+        AdminGatewayRoute(
+            "/internal/admin/access/users/roles",
+            "admin",
+            setOf(AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
+        )
+    } else {
+        null
+    }
+    "/admin/v1/access/users/roles/revoke" -> if (method == "POST") {
+        AdminGatewayRoute(
+            "/internal/admin/access/users/roles/revoke",
+            "admin",
+            setOf(AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
+        )
+    } else {
+        null
+    }
     "/admin/v1/arena/bots" -> AdminGatewayRoute(
         "/internal/admin/arena/bots",
         "arena",
@@ -532,6 +582,10 @@ class PlatformHttpServer(
         analyticsRunExportService = analyticsRunExportService,
         adminSessionAuth = adminSessionAuth
     )
+    private val adminAccessGateway = AdminAccessGateway(
+        adminIdentityService = adminIdentityService,
+        adminSessionAuth = adminSessionAuth
+    )
     private val riskGuardrailGateway = RiskGuardrailGateway(
         api = api,
         accountRiskControlStore = accountRiskControlStore,
@@ -837,6 +891,11 @@ class PlatformHttpServer(
             "/admin/v1/reference/accounts",
             "/admin/v1/auth/roles",
             "/admin/v1/auth/actor-roles",
+            "/admin/v1/access/users",
+            "/admin/v1/access/roles",
+            "/admin/v1/access/users/trust-state",
+            "/admin/v1/access/users/roles",
+            "/admin/v1/access/users/roles/revoke",
             "/admin/v1/risk/account-controls",
             "/admin/v1/risk/circuit-breakers",
             "/admin/v1/risk/price-collars",
@@ -1555,6 +1614,7 @@ class PlatformHttpServer(
         }
         withAdminRequestPrincipal(principal) {
             val response = adminSetupGatewayResponse(exchange.requestMethod, route.internalPath, exchange.requestURI.query, body)
+                ?: adminAccessGatewayResponse(exchange.requestMethod, route.internalPath, exchange.requestURI.query, body)
                 ?: settlementAdminGatewayResponse(exchange.requestMethod, route.internalPath, body)
                 ?: adminDataRoutes.handle(
                     method = exchange.requestMethod,
@@ -1575,6 +1635,7 @@ class PlatformHttpServer(
         val body = if (request.method in setOf("POST", "PUT", "PATCH")) request.body else ""
         return withAdminRequestPrincipal(principal) {
             adminSetupGatewayResponse(request.method, route.internalPath, request.query, body)
+                ?: adminAccessGatewayResponse(request.method, route.internalPath, request.query, body)
                 ?: settlementAdminGatewayResponse(request.method, route.internalPath, body)
                 ?: adminDataRoutes.handle(
                     method = request.method,
@@ -1583,6 +1644,43 @@ class PlatformHttpServer(
                     body = body
                 )
                 ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
+        }
+    }
+
+    private fun adminAccessGatewayResponse(
+        method: String,
+        path: String,
+        query: String?,
+        body: String
+    ): PlatformHotPathResponse? {
+        if (!path.startsWith("/internal/admin/access/")) return null
+        return when (path) {
+            "/internal/admin/access/users" -> if (method == "GET") {
+                adminAccessGateway.usersResponse(query)
+            } else {
+                methodNotAllowedResponse()
+            }
+            "/internal/admin/access/roles" -> if (method == "GET") {
+                adminAccessGateway.rolesResponse()
+            } else {
+                methodNotAllowedResponse()
+            }
+            "/internal/admin/access/users/trust-state" -> if (method == "POST") {
+                adminAccessGateway.updateTrustStateResponse(body)
+            } else {
+                methodNotAllowedResponse()
+            }
+            "/internal/admin/access/users/roles" -> if (method == "POST") {
+                adminAccessGateway.assignRoleResponse(body)
+            } else {
+                methodNotAllowedResponse()
+            }
+            "/internal/admin/access/users/roles/revoke" -> if (method == "POST") {
+                adminAccessGateway.revokeRoleResponse(body)
+            } else {
+                methodNotAllowedResponse()
+            }
+            else -> null
         }
     }
 

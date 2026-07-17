@@ -127,6 +127,51 @@ class PlatformHttpServerBoundaryTest {
         )
         assertEquals(
             AdminGatewayRoute(
+                "/internal/admin/access/users",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/roles",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/roles", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/users/trust-state",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users/trust-state", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/users/roles",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users/roles", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/users/roles/revoke",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users/roles/revoke", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/analytics/run-exports",
                 "analytics",
                 setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
@@ -485,6 +530,107 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, allowedByServiceToken.status)
             assertContains(allowedByServiceToken.body, "account risk control store unavailable")
             assertEquals(401, deniedByWrongFamily.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminAccessGatewayListsUsersAndLetsTrustedOperatorAssignReviewerRole() {
+        val auth = testAdminAuth()
+        val operator = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val target = auth.identityService.ensureGitHubUser(GitHubUserIdentity(67890, "mona"))
+        grantTrustedOperator(auth, operator.reefUserId)
+        val session = auth.authService.createSession(operator.reefUserId)
+        val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
+        )
+        try {
+            val users = get(server.address.port, "/admin/v1/access/users", headers)
+            val roles = get(server.address.port, "/admin/v1/access/roles", headers)
+            val assigned = post(
+                server.address.port,
+                "/admin/v1/access/users/roles",
+                headers,
+                JsonCodec.writeObject(
+                    "reefUserId" to target.reefUserId,
+                    "roleId" to AdminIdentityService.RoleReviewer,
+                    "reason" to "ready to review submissions"
+                )
+            )
+            val limited = post(
+                server.address.port,
+                "/admin/v1/access/users/trust-state",
+                headers,
+                JsonCodec.writeObject(
+                    "reefUserId" to target.reefUserId,
+                    "trustState" to AdminTrustState.Limited.dbValue,
+                    "reason" to "temporary moderation"
+                )
+            )
+
+            assertEquals(200, users.status)
+            assertContains(users.body, "\"reefUserId\":\"${operator.reefUserId}\"")
+            assertContains(users.body, "\"githubLogin\":\"mona\"")
+            assertContains(users.body, "\"roles\":[")
+            assertEquals(200, roles.status)
+            assertContains(roles.body, "\"roleId\":\"operator\"")
+            assertEquals(200, assigned.status)
+            assertContains(assigned.body, "\"roleId\":\"reviewer\"")
+            assertEquals(200, limited.status)
+            assertContains(limited.body, "\"trustState\":\"limited\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminAccessGatewayLeavesPrivilegedRoleChangesToPlatformAdmins() {
+        val auth = testAdminAuth()
+        val operator = auth.identityService.ensureGitHubUser(GitHubUserIdentity(20001, "operator"))
+        val platformAdmin = auth.identityService.ensureGitHubUser(GitHubUserIdentity(20002, "platform-admin"))
+        val target = auth.identityService.ensureGitHubUser(GitHubUserIdentity(20003, "target-user"))
+        grantTrustedOperator(auth, operator.reefUserId)
+        grantTrustedPlatformAdmin(auth, platformAdmin.reefUserId)
+        val operatorHeaders = mapOf("Cookie" to "reef_admin_session=${auth.authService.createSession(operator.reefUserId).token}")
+        val platformHeaders = mapOf(
+            "Cookie" to "reef_admin_session=${auth.authService.createSession(platformAdmin.reefUserId).token}"
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
+        )
+        try {
+            val body = JsonCodec.writeObject(
+                "reefUserId" to target.reefUserId,
+                "roleId" to AdminIdentityService.RoleOperator,
+                "reason" to "promote to operator"
+            )
+            val denied = post(server.address.port, "/admin/v1/access/users/roles", operatorHeaders, body)
+            val allowed = post(server.address.port, "/admin/v1/access/users/roles", platformHeaders, body)
+            val banned = post(
+                server.address.port,
+                "/admin/v1/access/users/trust-state",
+                platformHeaders,
+                JsonCodec.writeObject(
+                    "reefUserId" to target.reefUserId,
+                    "trustState" to AdminTrustState.Banned.dbValue,
+                    "reason" to "account compromise"
+                )
+            )
+
+            assertEquals(400, denied.status)
+            assertContains(denied.body, "trusted platform-admin role required")
+            assertEquals(200, allowed.status)
+            assertContains(allowed.body, "\"roleId\":\"operator\"")
+            assertEquals(200, banned.status)
+            assertContains(banned.body, "\"trustState\":\"banned\"")
         } finally {
             server.stop(0)
         }

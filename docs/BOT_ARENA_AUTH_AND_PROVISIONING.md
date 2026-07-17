@@ -269,6 +269,11 @@ server-side service token. Scoped service token families are route-specific:
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
 /admin/v1/arena/bots/config             -> admin
 /admin/v1/arena/bot-versions            -> ci, admin
+GET /admin/v1/access/users              -> admin
+GET /admin/v1/access/roles              -> admin
+POST /admin/v1/access/users/trust-state -> admin
+POST /admin/v1/access/users/roles       -> admin
+POST /admin/v1/access/users/roles/revoke -> admin
 GET /admin/v1/arena/runs                -> ci, admin
 GET /admin/v1/arena/run-bot-results     -> ci, admin
 GET /admin/v1/arena/run-enforcement-events -> ci, admin
@@ -285,6 +290,16 @@ GET /admin/v1/arena/leaderboard         -> ci, admin
 /admin/v1/settlement/reverse-ledger-entry -> admin
 /admin/v1/settlement/obligations/materialize -> admin
 ```
+
+Access-management browser sessions require a trusted Admin DB `operator` or
+`platform-admin`. The `/admin/access` page lists Admin DB users, roles, trust
+state, and bot ownerships, then writes trust-state and role mutations through the
+routes above. The gateway performs the coarse operator/platform-admin session
+check; `AdminIdentityService` applies the finer policy: operators may assign or
+revoke `reviewer` and move users among `new`, `trusted`, and `limited`, while
+`platform-admin` is required for `operator`, `secret-admin`, `platform-admin`,
+`participant`, and `banned` changes. Every mutation requires a reason and is
+written to `admin.audit_events`.
 
 The existing static bearer-token environment variables remain as compatibility
 fallbacks:
