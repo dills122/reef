@@ -49,9 +49,26 @@ const botAdminRoles = new Set([
 	'platform-admin',
 	'arena-operator'
 ]);
+const roleDisplayAliases = new Map([
+	['site-operator', 'operator'],
+	['game-admin', 'operator'],
+	['arena-operator', 'operator']
+]);
 
 function normalizedRole(role: string): string {
 	return role.trim().toLowerCase().replaceAll('_', '-');
+}
+
+function canonicalDisplayRole(role: string): string {
+	const normalized = normalizedRole(role);
+	return roleDisplayAliases.get(normalized) ?? normalized;
+}
+
+export function displayRoles(roles: string[]): string {
+	const display = Array.from(
+		new Set(roles.map(canonicalDisplayRole).filter((role) => role.length > 0))
+	).sort();
+	return display.length ? display.join(', ') : 'none';
 }
 
 export function hasOperatorAccess(user: SessionUser): boolean {

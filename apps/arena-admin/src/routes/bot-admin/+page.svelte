@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		displayRoles,
 		fetchSession,
 		fetchBotConfigStatus,
 		fetchOwnedArenaBots,
@@ -204,7 +205,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>Bot Admin — Bot Arena</title>
+	<title>My Bots — Bot Arena</title>
 	<meta
 		name="description"
 		content="Bot Arena participant administration for owned bots, runtime config, and submitted bot status."
@@ -215,7 +216,7 @@
 	<StateMessage variant="loading" message="checking session…" />
 {:else if session === null}
 	<div class="flex flex-col items-start gap-4">
-		<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">bot admin sign-in required</h1>
+		<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">my bots sign-in required</h1>
 		<p class="max-w-[58ch] text-muted">
 			Sign in with the GitHub account you use for Bot Arena submissions to manage bot-owned
 			control-plane data.
@@ -236,7 +237,7 @@
 			</p>
 			<p class="mt-3">
 				<span class="font-bold uppercase tracking-normal">roles</span><br />
-				{session.roles.length ? session.roles.join(', ') : 'none'}
+				{displayRoles(session.roles)}
 			</p>
 		</div>
 		<Button href="/">back to arena</Button>
@@ -279,7 +280,7 @@
 				</div>
 				<div class="min-w-0">
 					<dt class="text-xs font-bold uppercase tracking-normal text-muted">roles</dt>
-					<dd class="mt-1 break-words text-ink">{session.roles.join(', ')}</dd>
+					<dd class="mt-1 break-words text-ink">{displayRoles(session.roles)}</dd>
 				</div>
 			</dl>
 		</Card>

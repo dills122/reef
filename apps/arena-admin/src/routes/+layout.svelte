@@ -3,6 +3,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
 	import {
+		displayRoles,
 		fetchSession,
 		githubLoginUrl,
 		hasBotAdminAccess,
@@ -23,7 +24,7 @@
 	const navLinks = $derived([
 		...publicNavLinks,
 		...(session !== 'loading' && session && hasBotAdminAccess(session)
-			? [{ href: '/bot-admin', label: 'bot admin' }]
+			? [{ href: '/bot-admin', label: 'my bots' }]
 			: []),
 		...(session !== 'loading' && session && hasOperatorAccess(session)
 			? [{ href: '/admin', label: 'game admin' }]
@@ -66,9 +67,15 @@
 			{#if session === 'loading'}
 				<span class="text-muted">checking session…</span>
 			{:else if session}
-				<span class="text-muted">
-					signed in as <span class="text-ink">{session.githubLogin}</span>
-				</span>
+				<div class="flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+					<span class="max-w-[18ch] truncate text-ink" title={session.githubLogin}>
+						{session.githubLogin}
+					</span>
+					<span class="border-l border-rule pl-2">{session.trustState || 'unknown'}</span>
+					<span class="max-w-[28ch] truncate border-l border-rule pl-2" title={displayRoles(session.roles)}>
+						{displayRoles(session.roles)}
+					</span>
+				</div>
 			{:else}
 				<a href={githubLoginUrl(page.url.pathname)} class="no-underline">sign in</a>
 			{/if}

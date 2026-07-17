@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { fetchSession, githubLoginUrl, hasOperatorAccess, type SessionUser } from '$lib/api';
+	import {
+		displayRoles,
+		fetchSession,
+		githubLoginUrl,
+		hasOperatorAccess,
+		type SessionUser
+	} from '$lib/api';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let { children } = $props();
@@ -39,17 +45,11 @@
 			</p>
 			<p class="mt-3">
 				<span class="font-bold uppercase tracking-normal">roles</span><br />
-				{session.roles.length ? session.roles.join(', ') : 'none'}
+				{displayRoles(session.roles)}
 			</p>
 		</div>
 		<Button href="/">back to arena</Button>
 	</div>
 {:else}
-	<div class="mb-6 flex items-baseline justify-between border-b border-rule pb-4">
-		<p class="text-sm text-muted">
-			signed in as <span class="text-ink">{session.githubLogin}</span>
-		</p>
-		<p class="text-xs text-muted">{session.roles.join(', ')}</p>
-	</div>
 	{@render children()}
 {/if}
