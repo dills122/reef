@@ -66,7 +66,7 @@ P1 is a hard correctness gate. It must not rely on stubbed settlement or post-tr
 
 ## P2_SETTLEMENT_BREAK_REPAIR
 
-Status: locked locally from promoted live, public-read, and replay assertion evidence. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. The 2026-07-14 local command smoke report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json` passed, and the 2026-07-14 local assertion report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json` passed with 18 assertions covering command completion, one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping. The 2026-07-15 direct-stream settled-chain report at `reports/scenario-assertions/p2-settlement-break-repair-settled-live-public-20260715c.json` passed with public settlement facts readback and attaches `reports/scenario-assertions/p2-settlement-break-repair-replay-check-20260715c.json`: run-scoped command status from `platform-projector-0`, exact replay counters for the same two P2 commands, and the minimal `instant-post-trade-v1` obligation/allocation/confirmation/affirmation/instruction/attempt/leg/ledger/`SETTLED` fact chain from `/api/v1/settlement/facts/{scenarioRunId}`. The public readback artifact is `reports/scenario-assertions/p2-settlement-break-repair-settled-facts-public-20260715c.json`.
+Status: locked locally from promoted live, public-read, and replay assertion evidence. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. The 2026-07-14 local command smoke report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json` passed, and the 2026-07-14 local assertion report at `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json` passed with 18 assertions covering command completion, one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping. The 2026-07-15 direct-stream settled-chain report at `reports/scenario-assertions/p2-settlement-break-repair-settled-live-public-20260715c.json` passed with public settlement facts readback and attaches `reports/scenario-assertions/p2-settlement-break-repair-replay-check-20260715c.json`: run-scoped command status from `platform-projector-0`, exact replay counters for the same two P2 commands, and the minimal `instant-post-trade-v1` obligation/allocation/confirmation/affirmation/clearing/novation/instruction/attempt/leg/ledger/`SETTLED` fact chain from `/api/v1/settlement/facts/{scenarioRunId}`. The public readback artifact is `reports/scenario-assertions/p2-settlement-break-repair-settled-facts-public-20260715c.json`.
 
 Purpose: prove post-match causation from canonical trade fact through settlement obligation, cash-leg break, manual repair, and resolved exception without building full post-trade/account-ledger modules yet.
 
@@ -110,6 +110,14 @@ trade -> obligation -> break -> repair -> resolved
 ```
 
 P2 did not by itself authorize broad post-trade expansion. `D-050` has since accepted that broader expansion — including real account ledger mutation via obligation materialization — for the `instant-post-trade` profile. Full allocation/confirmation workflows and operational exception workbenches remain later work unless separately planned; see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md) for current scope.
+
+The current instant settled-chain evidence requires:
+
+```text
+trade -> obligation -> allocation -> confirmation -> affirmation -> clearing submission -> clearing acceptance -> novation -> instruction -> attempt -> settled
+```
+
+The assertion requires one clearing submission caused by the affirmation, one clearing acceptance caused by that submission, zero clearing rejections, one novation caused by the acceptance, and the first settlement instruction caused by the novation.
 
 Post-trade implementation may resume only through the P2-only settlement exception slice defined in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
 

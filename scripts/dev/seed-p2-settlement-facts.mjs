@@ -43,21 +43,29 @@ console.log(
       scenarioRunId,
       postedStatus: posted.status ?? "ok",
       reportOut: args.reportOut ?? "",
-      obligationCount: fetched.obligations.length,
-      allocationCount: fetched.allocations.length,
-      confirmationCount: fetched.confirmations.length,
-      affirmationCount: fetched.affirmations.length,
-      instructionCount: fetched.instructions.length,
-      attemptCount: fetched.attempts.length,
-      settlementCount: fetched.settlements.length,
-      breakCount: fetched.breaks.length,
-      repairCount: fetched.repairs.length,
-      resolutionCount: fetched.resolutions.length,
+      obligationCount: factCount(fetched, "obligations"),
+      allocationCount: factCount(fetched, "allocations"),
+      confirmationCount: factCount(fetched, "confirmations"),
+      affirmationCount: factCount(fetched, "affirmations"),
+      clearingSubmissionCount: factCount(fetched, "clearingSubmissions"),
+      clearingAcceptanceCount: factCount(fetched, "clearingAcceptances"),
+      clearingRejectionCount: factCount(fetched, "clearingRejections"),
+      novationCount: factCount(fetched, "novations"),
+      instructionCount: factCount(fetched, "instructions"),
+      attemptCount: factCount(fetched, "attempts"),
+      settlementCount: factCount(fetched, "settlements"),
+      breakCount: factCount(fetched, "breaks"),
+      repairCount: factCount(fetched, "repairs"),
+      resolutionCount: factCount(fetched, "resolutions"),
     },
     null,
     2,
   ),
 );
+
+function factCount(facts, key) {
+  return Array.isArray(facts[key]) ? facts[key].length : 0;
+}
 
 async function fetchSettlementFacts(posted) {
   try {
@@ -166,6 +174,10 @@ function validateReadback(facts, scenarioRunId) {
         ["allocations", 1],
         ["confirmations", 1],
         ["affirmations", 1],
+        ["clearingSubmissions", 1],
+        ["clearingAcceptances", 1],
+        ["clearingRejections", 0],
+        ["novations", 1],
         ["instructions", 1],
         ["attempts", 1],
         ["settlements", 1],
@@ -276,6 +288,9 @@ function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
   const allocationId = `settlement-allocation-${obligationId}`;
   const confirmationId = `settlement-confirmation-${obligationId}`;
   const affirmationId = `settlement-affirmation-${obligationId}`;
+  const clearingSubmissionId = `settlement-clearing-submission-${obligationId}`;
+  const clearingAcceptanceId = `settlement-clearing-acceptance-${obligationId}`;
+  const novationId = `settlement-novation-${obligationId}`;
   const instructionId = `settlement-instruction-${obligationId}-1`;
   const attemptId = `settlement-attempt-${obligationId}-1`;
   return {
@@ -351,6 +366,49 @@ function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
         occurredAt: "2026-03-14T18:00:04Z",
       },
     ],
+    clearingSubmissions: [
+      {
+        settlementClearingSubmissionId: clearingSubmissionId,
+        settlementObligationId: obligationId,
+        settlementAffirmationId: affirmationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: affirmationId,
+        state: "CLEARING_SUBMITTED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    clearingAcceptances: [
+      {
+        settlementClearingAcceptanceId: clearingAcceptanceId,
+        settlementClearingSubmissionId: clearingSubmissionId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: clearingSubmissionId,
+        state: "CLEARING_ACCEPTED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    clearingRejections: [],
+    novations: [
+      {
+        settlementNovationId: novationId,
+        settlementClearingAcceptanceId: clearingAcceptanceId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: clearingAcceptanceId,
+        state: "NOVATION_RECORDED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
     instructions: [
       {
         settlementInstructionId: instructionId,
@@ -359,7 +417,7 @@ function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
         postTradeProfileId: profileId,
         postTradePolicyVersion: policyVersion,
         correlationId,
-        causationId: affirmationId,
+        causationId: novationId,
         instructionType: "DVP",
         state: "INSTRUCTION_CREATED",
         occurredAt: "2026-03-14T18:00:05Z",

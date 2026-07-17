@@ -975,7 +975,11 @@ func TestScenarioSmokeLiveAssertionsAttachPostTradeSettlementChain(t *testing.T)
 		"allocations":[{"settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"obl-1","tradeId":"trade-1","buyOrderId":"buy-order-1","sellOrderId":"sell-order-1","state":"ALLOCATION_PROPOSED"}],
 		"confirmations":[{"settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"allocation-1","tradeId":"trade-1","state":"CONFIRMATION_GENERATED"}],
 		"affirmations":[{"settlementAffirmationId":"affirmation-1","settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"confirmation-1","tradeId":"trade-1","state":"AFFIRMATION_ACCEPTED"}],
-		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"INSTRUCTION_CREATED"}],
+		"clearingSubmissions":[{"settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","settlementAffirmationId":"affirmation-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"CLEARING_SUBMITTED"}],
+		"clearingAcceptances":[{"settlementClearingAcceptanceId":"clearing-acceptance-1","settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-submission-1","state":"CLEARING_ACCEPTED"}],
+		"clearingRejections":[],
+		"novations":[{"settlementNovationId":"novation-1","settlementClearingAcceptanceId":"clearing-acceptance-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-acceptance-1","state":"NOVATION_RECORDED"}],
+		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"novation-1","state":"INSTRUCTION_CREATED"}],
 		"attempts":[{"settlementAttemptId":"attempt-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"instruction-1","state":"ATTEMPT_STARTED"}],
 		"settlements":[{"settlementId":"settlement-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","settlementAttemptId":"attempt-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"attempt-1","settlementState":"SETTLED"}]
 	}`
@@ -1009,6 +1013,9 @@ func TestScenarioSmokeLiveAssertionsAttachPostTradeSettlementChain(t *testing.T)
 		"p2-allocation-state-proposed",
 		"p2-confirmation-state-generated",
 		"p2-affirmation-state-accepted",
+		"p2-clearing-state-submitted",
+		"p2-clearing-state-accepted",
+		"p2-novation-state-recorded",
 		"p2-instruction-state-created",
 		"p2-attempt-state-started",
 		"p2-settlement-state-settled",
@@ -1027,7 +1034,11 @@ func TestScenarioSmokeLiveAssertionsFailOnPostTradeSettlementChainWrongState(t *
 		"allocations":[{"settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"obl-1","tradeId":"trade-1","buyOrderId":"buy-order-1","sellOrderId":"sell-order-1","state":"ALLOCATION_SKIPPED"}],
 		"confirmations":[{"settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"allocation-1","tradeId":"trade-1","state":"CONFIRMATION_GENERATED"}],
 		"affirmations":[{"settlementAffirmationId":"affirmation-1","settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"confirmation-1","tradeId":"trade-1","state":"AFFIRMATION_ACCEPTED"}],
-		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"INSTRUCTION_CREATED"}],
+		"clearingSubmissions":[{"settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","settlementAffirmationId":"affirmation-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"CLEARING_SUBMITTED"}],
+		"clearingAcceptances":[{"settlementClearingAcceptanceId":"clearing-acceptance-1","settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-submission-1","state":"CLEARING_ACCEPTED"}],
+		"clearingRejections":[],
+		"novations":[{"settlementNovationId":"novation-1","settlementClearingAcceptanceId":"clearing-acceptance-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-acceptance-1","state":"NOVATION_RECORDED"}],
+		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"novation-1","state":"INSTRUCTION_CREATED"}],
 		"attempts":[{"settlementAttemptId":"attempt-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"instruction-1","state":"ATTEMPT_STARTED"}],
 		"settlements":[{"settlementId":"settlement-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","settlementAttemptId":"attempt-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"attempt-1","settlementState":"SETTLED"}]
 	}`
