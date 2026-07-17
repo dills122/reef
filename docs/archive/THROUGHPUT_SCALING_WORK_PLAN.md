@@ -6,7 +6,7 @@ Define the execution plan for making Reef ready for bot-arena traffic, high-thro
 
 This plan supersedes the earlier `5k accepted rps` target for the active bot-arena scaling track. The current goal is completed lifecycle throughput: commands accepted by the runtime must be durably captured, processed to a terminal state, and accounted for without silent drops.
 
-Status note (2026-07-09): this document is a phased throughput reference, not the single active execution ladder. Current sequencing lives in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder). Older P0-P8 items below remain useful for why the path changed, but items marked shipped/superseded must not be reopened as "next" work unless a later decision or `WORK_PLAN.md` reactivates them.
+Status note (2026-07-09): this document is a phased throughput reference, not the single active execution ladder. Current sequencing lives in [`WORK_PLAN.md`](../WORK_PLAN.md#active-execution-ladder). Older P0-P8 items below remain useful for why the path changed, but items marked shipped/superseded must not be reopened as "next" work unless a later decision or `WORK_PLAN.md` reactivates them.
 
 ## Non-Negotiable Goals
 
@@ -82,7 +82,7 @@ Interpretation:
 
 ## Work Plan
 
-The P0-P8 ladder below is historical phase structure. Use it for context and gap classification; use [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder) for execution order.
+The P0-P8 ladder below is historical phase structure. Use it for context and gap classification; use [`WORK_PLAN.md`](../WORK_PLAN.md#active-execution-ladder) for execution order.
 
 ### P0: Accounting And Run Attribution
 
@@ -115,7 +115,7 @@ Exit criteria:
 
 ### P2: Stream-Ack Command Ingress
 
-Status: shipped, superseded by D-041. JetStream stream-ack ingress was implemented and measured, including a clean single-droplet DO soak (see "Stream-Ack Sunset Checkpoint (July 3, 2026)" in [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)), but the full accepted-to-completed lifecycle did not reach the required throughput under real drain pressure. `docs/DECISIONS.md` D-041 moved the active hot-ingress target to a Kafka-compatible durable producer with matching-engine direct consumption; JetStream stream-ack remains available only as fallback/comparison, not the primary gate.
+Status: shipped, superseded by D-041. JetStream stream-ack ingress was implemented and measured, including a clean single-droplet DO soak (see "Stream-Ack Sunset Checkpoint (July 3, 2026)" in [`PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md)), but the full accepted-to-completed lifecycle did not reach the required throughput under real drain pressure. `docs/DECISIONS.md` D-041 moved the active hot-ingress target to a Kafka-compatible durable producer with matching-engine direct consumption; JetStream stream-ack remains available only as fallback/comparison, not the primary gate.
 
 Objective (superseded): make durable acceptance a JetStream publish-ack operation with deterministic partition routing.
 
@@ -182,7 +182,7 @@ Exit criteria:
 
 ### P5.5: Engine Shards And Hot Book Structure
 
-Status: done locally. The Reef-owned book (`services/matching-engine/internal/book`) with ordered price levels, FIFO queues per price, and direct order-id unlinking shipped, and the "July 4, 2026 Checkpoint" in [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md) and [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md) shows single hot-book and multi-book partitionable throughput clearing this phase's targets; the hot book is no longer the active limiter. Snapshot/replay checksum work remains open and is tracked as its own next slice, not a blocker for this phase's exit criteria.
+Status: done locally. The Reef-owned book (`services/matching-engine/internal/book`) with ordered price levels, FIFO queues per price, and direct order-id unlinking shipped, and the "July 4, 2026 Checkpoint" in [`HOT_BOOK_SHARDING_PLAN.md`](../HOT_BOOK_SHARDING_PLAN.md) and [`PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md) shows single hot-book and multi-book partitionable throughput clearing this phase's targets; the hot book is no longer the active limiter. Snapshot/replay checksum work remains open and is tracked as its own next slice, not a blocker for this phase's exit criteria.
 
 Objective: make matching-engine partition ownership and shard-local book state explicit before adding deeper persistence and replay work.
 

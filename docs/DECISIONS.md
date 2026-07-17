@@ -412,8 +412,8 @@ Summary:
 - physical database splitting is deferred until schema-level diagnostics prove contention that cannot be solved with logical isolation, partitioning, and batching.
 
 Primary references:
-- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
 
 ### D-029: Simulator Control Room Before Next Throughput Architecture Sprint
@@ -446,7 +446,7 @@ Summary:
 - `runtime.event_outbox` remains a follow-up migration/workflow. It should be introduced with explicit transaction timing and publisher semantics rather than being mixed into this drift-fix slice.
 
 Primary references:
-- [`docs/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./SPRINT_CRITICAL_QUALITY_HARDENING.md)
+- [`docs/archive/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./archive/SPRINT_CRITICAL_QUALITY_HARDENING.md)
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
 
 ### D-031: Captured-Ack Async Command Worker
@@ -463,7 +463,7 @@ Summary:
 - Synchronous `sync-result` remains available for compatibility and deterministic tests.
 
 Primary references:
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ### D-033: Command Log Lifecycle Controls
@@ -479,7 +479,7 @@ Summary:
 - physical partitioning remains a follow-up after prune/retest evidence shows how much table lifecycle alone recovers.
 
 Primary references:
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
 ### D-034: Command Log Partitioning Direction
@@ -496,7 +496,7 @@ Summary:
 
 Primary references:
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-035: Completed Throughput And No-Loss Scaling Target
 
@@ -516,9 +516,9 @@ Summary:
 - bot traffic must use the same public command/API path as other simulator traffic, with run/session/bot attribution and no direct state mutation.
 
 Primary references:
-- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./archive/THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-036: Stream-Ack Ingress And Partitioned Processing Direction
 
@@ -538,9 +538,9 @@ Summary:
 - failure tests must cover publish retry, redelivery before DB commit, redelivery after DB commit before ack, deterministic replay, and projection rebuild.
 
 Primary references:
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-037: Stream-Ack Canonical Append And Projection Split
 
@@ -564,8 +564,8 @@ Summary:
 - no `7500-10000` completed/sec claim is valid without accepted/completed/projected accounting, bounded lag, p95/p99 evidence, zero accepted-command gaps, and replay or checksum evidence.
 
 Primary references:
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/steering/architecture.md`](./steering/architecture.md)
 - [NATS JetStream Streams](https://docs.nats.io/nats-concepts/jetstream/streams)
 - [NATS JetStream Consumers](https://docs.nats.io/nats-concepts/jetstream/consumers)
@@ -592,7 +592,7 @@ Summary:
 - using JetStream as the canonical venue event log with Postgres as projection/query storage is a reserved hard-pivot option only if a compact canonical Postgres append path still caps completed throughput; adopting it would require a new decision that supersedes the D-036/D-037 completion boundary.
 
 Primary references:
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
@@ -609,7 +609,7 @@ Summary:
 - This comparison is meant to test durable-log mechanics, not to move canonical venue facts out of Postgres.
 
 Primary references:
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
 ### D-040: JetStream Command Stream And Engine Ingestion Direction
@@ -732,7 +732,7 @@ Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
 
 ### D-032: Command Log Queue And Result Split
@@ -766,7 +766,7 @@ Summary:
 - superseded by D-036 for the bot-arena high-throughput path: the next major throughput slice should build stream-ack ingress and partitioned processing rather than continue small command-log write-amplification tuning.
 
 Primary references:
-- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ### D-045: Bot Arena Intake Direction
@@ -783,13 +783,13 @@ Summary:
 - final equity is the first headline leaderboard metric; richer risk, conduct, and consistency metrics are retained from day one.
 - public bot submissions are delayed until built-in/local bots prove replay, scoring, sandboxing, and operator controls (Rollout Plan Phase 5 gated behind Phases 1-4).
 - arena metadata, leaderboards, bot registry, run history, and replay indexes stay outside the trading hot-path database; Redis is ephemeral coordination/cache only, never the sole durable store for competition records.
-- the run plane is designed for early horizontal scale by tournament run, shard, instrument group, and sandbox worker; it inherits the throughput target from `docs/THROUGHPUT_SCALING_WORK_PLAN.md` (`7500`+ completed commands/sec per runtime+engine instance) and uses `docs/STREAM_ACK_ARCHITECTURE_PLAN.md` as the target venue-ingress design for high-throughput bot traffic.
+- the run plane is designed for early horizontal scale by tournament run, shard, instrument group, and sandbox worker; it inherits the throughput target from `docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md` (`7500`+ completed commands/sec per runtime+engine instance) and uses `docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md` as the target venue-ingress design for high-throughput bot traffic.
 - current implementation state (`ArenaControlPlaneService`, `ArenaBotRegistryStore`/`PostgresArenaBotRegistryStore`, `ArenaBotVersionRiskCheck`) is early Rollout Plan Phase 1 (control-plane registry only); no sandbox execution, modular game modes, UI, or public submissions exist yet.
 
 Primary references:
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./archive/THROUGHPUT_SCALING_WORK_PLAN.md)
 
 ### D-046: Backbone/Run-Plane Infra Split
 
@@ -831,7 +831,7 @@ Primary references:
 - [`docs/COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 ### D-048: Internal Interface And External Surface Hardline
 

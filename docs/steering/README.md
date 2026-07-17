@@ -6,6 +6,7 @@ These documents define how Reef should be built as the repository grows into the
 
 - [Onboarding](../ONBOARDING.md): contributor ramp-up path, prerequisites, first-run, and troubleshooting
 - [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
+- [Documentation Cleanup Plan](../DOCUMENTATION_CLEANUP_PLAN.md): active vs historical document rules and archive cleanup queue
 - [Engineering Delivery Policy](../ENGINEERING_DELIVERY_POLICY.md): delivery mode matrix, refactor triggers, and non-negotiable feature-test requirements
 - [Repository Scope And Priorities](./repository-scope-and-priorities.md): repo-level correctness, throughput, audit, replay, and safe-change priorities
 - [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules
@@ -18,6 +19,7 @@ These documents define how Reef should be built as the repository grows into the
 - [Kotlin](./kotlin.md): platform runtime and workflow orchestration guidance
 - [Astro](./astro.md): docs and marketing site guidance
 - [Post-Match Standards](../POST_MATCH_STANDARDS.md): normative post-match roles, calendar/time config, observability, exception taxonomy, and ledger standards
+- [Post-Trade Lifecycle Sprint](../POST_TRADE_LIFECYCLE_SPRINT.md): focused next sprint for clearing/novation facts, exception queue v1, and operator-visible lifecycle evidence
 - [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes
 - [Performance Library Investigation](../PERFORMANCE_LIBRARY_INVESTIGATION.md): runtime/Go library benchmark candidates and acceptance criteria
 

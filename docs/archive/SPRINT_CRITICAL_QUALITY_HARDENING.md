@@ -1,6 +1,6 @@
 # Sprint Plan: Critical Correctness and Boundary Hardening
 
-Status: complete (June 2026) — historical record; all tasks and checkpoints below are done. See [`WORK_PLAN.md`](./WORK_PLAN.md#historical-planning-documents) for the current active execution ladder.
+Status: complete (June 2026) — historical record; all tasks and checkpoints below are done. See [`WORK_PLAN.md`](../WORK_PLAN.md#historical-planning-documents) for the current active execution ladder.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ small, verifiable work that protects command correctness, replay determinism,
 API trust boundaries, authorization, and audit persistence.
 
 Primary findings source:
-- [`docs/research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md`](./research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md)
+- [`docs/research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md`](../research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md)
 
 ## Sprint Goal
 

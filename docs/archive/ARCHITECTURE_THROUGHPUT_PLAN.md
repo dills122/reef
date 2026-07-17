@@ -6,11 +6,11 @@ Define the next architecture improvements after Reef proved that a single local 
 
 The active goal is to move from tuned synchronous throughput to a production-shaped write architecture that can sustain at least `7500` completed commands per second per runtime instance, preferably `10000`, while preserving command capture, auditability, deterministic replay, and zero silent loss of accepted commands.
 
-Status note (2026-07-09): this is a design direction document, not the active execution ladder. The durable stream/direct materializer pieces described as target architecture have partly landed; use [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder) and [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) for current sequencing and evidence.
+Status note (2026-07-09): this is a design direction document, not the active execution ladder. The durable stream/direct materializer pieces described as target architecture have partly landed; use [`WORK_PLAN.md`](../WORK_PLAN.md#active-execution-ladder) and [`CURRENT_STATUS.md`](../CURRENT_STATUS.md) for current sequencing and evidence.
 
 Detailed execution plan:
-- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 ## Current Baseline
 
@@ -159,7 +159,7 @@ Make the persistence sprint faster without adding speculative library churn.
 - Any adopted library has rollback/config toggles or a narrow integration surface.
 
 Reference:
-- [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
+- [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](../PERFORMANCE_LIBRARY_INVESTIGATION.md)
 
 ## Priority 2: Command Log Slice
 
@@ -325,7 +325,7 @@ JetStream is implemented as the fallback/comparison stream-ack provider. Redpand
 - Projection lag is visible and does not block command processing.
 
 Reference:
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 ## Target Milestones
 
