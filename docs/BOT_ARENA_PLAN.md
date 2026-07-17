@@ -176,8 +176,8 @@ The current working direction is:
 - keep arena metadata, leaderboards, bot registry, run history, and replay indexes outside the trading hot-path database
 - use Redis only for ephemeral coordination, rate limits, leases, and live caches, not as the sole durable store for competition records
 - design the run plane for early horizontal scale by tournament run, shard, instrument group, sandbox worker, and matching-engine partition
-- inherit the throughput scaling target from [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md): at least `7500` completed commands/sec per runtime + engine instance, preferably `10000`, with zero silent accepted-command loss
-- use [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md) as the target venue-ingress design for high-throughput bot traffic
+- inherit the throughput scaling target from [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./archive/THROUGHPUT_SCALING_WORK_PLAN.md): at least `7500` completed commands/sec per runtime + engine instance, preferably `10000`, with zero silent accepted-command loss
+- use [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md) as the target venue-ingress design for high-throughput bot traffic
 
 This direction can change, but changing it should update this document and any accepted decision records that later depend on it.
 

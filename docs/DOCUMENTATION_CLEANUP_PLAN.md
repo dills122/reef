@@ -57,13 +57,13 @@ Rule: move to `docs/archive/` and leave a short note in the archive index.
 
 ## Near-Term Cleanup Queue
 
-1. Move superseded throughput story docs after active links are replaced:
+1. Moved in the 2026-07 cleanup pass:
    - `ARCHITECTURE_THROUGHPUT_PLAN.md`
    - `ARCHITECTURE_THROUGHPUT_TRACKER.md`
    - `STREAM_ACK_ARCHITECTURE_PLAN.md`
    - `THROUGHPUT_SCALING_WORK_PLAN.md`
-2. Move old sprint/baseline docs after any still-active tasking is extracted:
    - `SPRINT_CRITICAL_QUALITY_HARDENING.md`
+2. Move old sprint/baseline docs after any still-active tasking is extracted:
    - dated Bot Arena and benchmark baselines that are no longer active gates
 3. Split Bot Arena docs into active product work versus historical evidence.
 4. Keep post-trade sprint docs active until the lifecycle V1 work lands, then

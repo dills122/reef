@@ -6,7 +6,7 @@ Define the high-throughput command path Reef should move toward for bot-arena an
 
 The current Postgres `captured-ack` path is useful as a correctness baseline and fallback, but the measured local ceiling is still below the required `7500-10000` completed commands/sec per runtime + engine instance. More small tuning on the same command-log hot path is unlikely to close the gap.
 
-The accepted target architecture uses a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. JetStream remains the stream-ack baseline and fallback/comparison provider. D-041 moves the active hot-ingress work toward a Kafka-compatible producer plus matching-engine direct partition consumption. [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) is the current implementation contract for submit/cancel intake, idempotency, accepted-but-not-completed accounting, and readiness gates.
+The accepted target architecture uses a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. JetStream remains the stream-ack baseline and fallback/comparison provider. D-041 moves the active hot-ingress work toward a Kafka-compatible producer plus matching-engine direct partition consumption. [`COMMAND_INTAKE_PROCESS.md`](../COMMAND_INTAKE_PROCESS.md) is the current implementation contract for submit/cancel intake, idempotency, accepted-but-not-completed accounting, and readiness gates.
 
 Status note (2026-07-09): this plan spans both the earlier JetStream stream-ack baseline and the current Kafka-compatible direct-materializer path. When wording below says JetStream specifically, treat it as applying to the fallback/comparison provider unless the section explicitly names Redpanda/Kafka-compatible direct consumption.
 
@@ -35,7 +35,7 @@ bot / simulator / manual client
   -> UI, run state, reports, leaderboards, replay indexes
 ```
 
-The matching hot book is shard-local Go memory, not Redis/Postgres/shared mutable storage. See [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md) and D-042 for the current hot-book and sharding decision.
+The matching hot book is shard-local Go memory, not Redis/Postgres/shared mutable storage. See [`HOT_BOOK_SHARDING_PLAN.md`](../HOT_BOOK_SHARDING_PLAN.md) and D-042 for the current hot-book and sharding decision.
 
 Avoid designing the throughput path as:
 
@@ -343,7 +343,7 @@ The current Postgres `captured-ack` path should remain available for local fallb
 
 ## Implementation Work Plan
 
-This ladder records the stream-ack build-out, including the earlier JetStream worker phase. The active near-term intake contract is now [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): Redpanda/Kafka-compatible hot ingress first, matching-engine direct consumption, and JetStream retained as fallback/comparison.
+This ladder records the stream-ack build-out, including the earlier JetStream worker phase. The active near-term intake contract is now [`COMMAND_INTAKE_PROCESS.md`](../COMMAND_INTAKE_PROCESS.md): Redpanda/Kafka-compatible hot ingress first, matching-engine direct consumption, and JetStream retained as fallback/comparison.
 
 0. Architecture decision checkpoint
 - record D-037 as the stream-ack canonical append and projection split
