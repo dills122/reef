@@ -155,9 +155,9 @@ Rules:
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
 - The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations. If no opening resource facts are seeded for a scenario, instant mode remains unconstrained for fast simulation. If resource facts are seeded, it checks buyer cash and seller securities before finality, emits failed leg outcomes plus a break on insufficiency, and only writes append-only ledger proof entries plus `SETTLED` facts when both legs pass. A posted repair unlocks the next deterministic attempt number; a successful retry writes ledger proof, `SETTLED`, and `RESOLVED` facts. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
-- The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, and now emits a minimal auto allocation, confirmation, and affirmation fact chain before the settlement instruction. It does not yet apply micro-batch netting or create clearing/novation records.
+- The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, and now emits allocation, confirmation, affirmation, clearing submission, clearing acceptance, and novation facts before the settlement instruction. It does not yet apply micro-batch netting.
 - Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
-- The next bounded post-trade sprint is [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). It should add clearing/novation facts, an exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior. It must not expand into full CCP/CNS clearing, production custody, or complete netted obligation settlement.
+- The bounded post-trade sprint is [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). Clearing/novation facts, an exception queue v1, and operator-readable lifecycle state are now in progress on the implementation branch. Remaining sprint work is scenario evidence for instant happy path, cash fail/repair, security fail/repair, ops-realistic pending behavior, and any read-only netting seed that stays small. It must not expand into full CCP/CNS clearing, production custody, or complete netted obligation settlement.
 
 Policy storage:
 
@@ -216,7 +216,9 @@ Likely settlement/clearing tables:
 - `settlement.allocations`
 - `settlement.confirmations`
 - `settlement.affirmations`
-- `settlement.clearing_records`
+- `settlement.clearing_submissions`
+- `settlement.clearing_acceptances`
+- `settlement.clearing_rejections`
 - `settlement.novations`
 - `settlement.netting_batches`
 - `settlement.netted_obligations`
