@@ -12,6 +12,7 @@
 
 	let { children } = $props();
 	let session = $state<SessionUser | null | 'loading'>('loading');
+	let appShell = $derived(page.url.pathname === '/bot-admin' || page.url.pathname.startsWith('/admin'));
 
 	const publicNavLinks = [
 		{ href: '/', label: 'arena' },
@@ -41,7 +42,9 @@
 </svelte:head>
 
 <div
-	class="mx-auto flex min-h-screen w-[min(76ch,calc(100%-32px))] flex-col pt-[clamp(28px,7vw,72px)]"
+	class={appShell
+		? 'mx-auto flex min-h-screen w-[min(1120px,calc(100%-32px))] flex-col pt-[clamp(28px,7vw,72px)]'
+		: 'mx-auto flex min-h-screen w-[min(76ch,calc(100%-32px))] flex-col pt-[clamp(28px,7vw,72px)]'}
 >
 	<header
 		class="mb-8 flex flex-col gap-3 border-t border-rule pt-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"

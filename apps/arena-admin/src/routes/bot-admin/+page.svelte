@@ -5,7 +5,6 @@
 		fetchOwnedArenaBots,
 		githubLoginUrl,
 		hasBotAdminAccess,
-		hasOperatorAccess,
 		replaceBotConfig,
 		deleteBotConfig,
 		type ArenaBot,
@@ -13,8 +12,14 @@
 		type BotConfigStatus,
 		type SessionUser
 	} from '$lib/api';
+	import ActionBar from '$lib/components/ui/ActionBar.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import SegmentButton from '$lib/components/ui/SegmentButton.svelte';
+	import StateMessage from '$lib/components/ui/StateMessage.svelte';
+	import TextInput from '$lib/components/ui/TextInput.svelte';
 
 	let session = $state<SessionUser | null | 'loading'>('loading');
 	let ownedBots = $state<ArenaBot[]>([]);
@@ -27,6 +32,29 @@
 	let configSaveErrorByBotId = $state<Record<string, string>>({});
 	let configBusyByBotId = $state<Record<string, boolean>>({});
 	let configNoticeByBotId = $state<Record<string, string>>({});
+	let botFilter = $state<'all' | 'attention' | 'configured' | 'empty'>('all');
+	let botSearch = $state('');
+
+	let attentionBots = $derived(
+		ownedBots.filter((bot) => configErrorByBotId[bot.botId] || !configByBotId[bot.botId]?.hasConfig)
+	);
+	let filteredOwnedBots = $derived(
+		ownedBots.filter((bot) => {
+			const query = botSearch.trim().toLowerCase();
+			const matchesQuery =
+				!query ||
+				bot.botId.toLowerCase().includes(query) ||
+				bot.metadata.name.toLowerCase().includes(query) ||
+				bot.fileName.toLowerCase().includes(query) ||
+				bot.metadata.publisher.toLowerCase().includes(query);
+			if (!matchesQuery) return false;
+			const hasConfig = configByBotId[bot.botId]?.hasConfig;
+			if (botFilter === 'attention') return attentionBots.some((item) => item.botId === bot.botId);
+			if (botFilter === 'configured') return Boolean(hasConfig);
+			if (botFilter === 'empty') return !hasConfig;
+			return true;
+		})
+	);
 
 	$effect(() => {
 		fetchSession().then((result) => {
@@ -80,7 +108,7 @@
 	function openConfigEditor(botId: string) {
 		selectedConfigBotId = botId;
 		if (!configDraftByBotId[botId]) {
-			configDraftByBotId = { ...configDraftByBotId, [botId]: '{\n}' };
+			configDraftByBotId = { ...configDraftByBotId, [botId]: draftFromConfigStatus(configByBotId[botId]) };
 		}
 		configSaveErrorByBotId = { ...configSaveErrorByBotId, [botId]: '' };
 		configNoticeByBotId = { ...configNoticeByBotId, [botId]: '' };
@@ -92,6 +120,14 @@
 
 	function updateConfigDraft(botId: string, value: string) {
 		configDraftByBotId = { ...configDraftByBotId, [botId]: value };
+	}
+
+	function draftFromConfigStatus(status: BotConfigStatus | undefined): string {
+		if (status?.config && typeof status.config === 'object' && !Array.isArray(status.config)) {
+			return JSON.stringify(status.config, null, 2);
+		}
+		if (!status?.keys?.length) return '{\n}';
+		return JSON.stringify(Object.fromEntries(status.keys.map((key) => [key, ''])), null, 2);
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -128,8 +164,11 @@
 			const status = await replaceBotConfig(botId, parsed);
 			configByBotId = { ...configByBotId, [botId]: status };
 			configErrorByBotId = { ...configErrorByBotId, [botId]: '' };
-			configDraftByBotId = { ...configDraftByBotId, [botId]: JSON.stringify(parsed, null, 2) };
-			configNoticeByBotId = { ...configNoticeByBotId, [botId]: 'config saved' };
+			configDraftByBotId = { ...configDraftByBotId, [botId]: draftFromConfigStatus(status) };
+			configNoticeByBotId = {
+				...configNoticeByBotId,
+				[botId]: 'config saved'
+			};
 		} catch (err) {
 			configSaveErrorByBotId = {
 				...configSaveErrorByBotId,
@@ -149,7 +188,7 @@
 			const status = await deleteBotConfig(botId);
 			configByBotId = { ...configByBotId, [botId]: status };
 			configErrorByBotId = { ...configErrorByBotId, [botId]: '' };
-			configDraftByBotId = { ...configDraftByBotId, [botId]: '{\n}' };
+			configDraftByBotId = { ...configDraftByBotId, [botId]: draftFromConfigStatus(status) };
 			configNoticeByBotId = { ...configNoticeByBotId, [botId]: 'config cleared' };
 		} catch (err) {
 			configSaveErrorByBotId = {
@@ -173,7 +212,7 @@
 </svelte:head>
 
 {#if session === 'loading'}
-	<p class="border-t border-rule py-6 text-center text-muted">checking session…</p>
+	<StateMessage variant="loading" message="checking session…" />
 {:else if session === null}
 	<div class="flex flex-col items-start gap-4">
 		<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">bot admin sign-in required</h1>
@@ -203,15 +242,15 @@
 		<Button href="/">back to arena</Button>
 	</div>
 {:else}
-	<div class="mb-6 flex flex-col gap-2 border-b border-rule pb-4 sm:flex-row sm:items-baseline sm:justify-between">
-		<div>
-			<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">bot admin</h1>
-			<p class="mt-2 text-sm text-muted">
-				signed in as <span class="text-ink">{session.githubLogin}</span>
+	{@const activeSession = session as SessionUser}
+	<PageHeader title="bot admin" class="pb-4">
+		{#snippet meta()}
+			<p class="text-sm text-muted">
+				signed in as <span class="text-ink">{activeSession.githubLogin}</span>
 			</p>
-		</div>
-		<p class="text-xs text-muted">{session.roles.join(', ')}</p>
-	</div>
+			<p class="text-xs text-muted">{activeSession.roles.join(', ')}</p>
+		{/snippet}
+	</PageHeader>
 
 	<div class="grid gap-6">
 		<Card>
@@ -223,9 +262,6 @@
 						controls are shown.
 					</p>
 				</div>
-				{#if hasOperatorAccess(session)}
-					<Button variant="secondary" href="/admin">open app admin</Button>
-				{/if}
 			</div>
 
 			<dl class="mt-5 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
@@ -257,25 +293,40 @@
 						owner-scoped arena route, not the all-bots operator roster.
 					</p>
 				</div>
-				<span class="w-fit rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
-					{ownedBots.length} owned
-				</span>
+				<Badge variant="muted">{filteredOwnedBots.length} shown / {ownedBots.length} owned</Badge>
+			</div>
+
+			<div class="mt-5 grid gap-3 border-t border-rule pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+				<TextInput
+					type="search"
+					placeholder="filter by bot, source, or publisher"
+					aria-label="Filter owned bots"
+					value={botSearch}
+					oninput={(event) => (botSearch = event.currentTarget.value)}
+				/>
+				<div class="flex flex-wrap gap-2">
+					<SegmentButton selected={botFilter === 'all'} onclick={() => (botFilter = 'all')}>all</SegmentButton>
+					<SegmentButton selected={botFilter === 'attention'} onclick={() => (botFilter = 'attention')}>
+						attention {attentionBots.length}
+					</SegmentButton>
+					<SegmentButton selected={botFilter === 'configured'} onclick={() => (botFilter = 'configured')}>
+						configured
+					</SegmentButton>
+					<SegmentButton selected={botFilter === 'empty'} onclick={() => (botFilter = 'empty')}>empty</SegmentButton>
+				</div>
 			</div>
 
 			{#if loadingBots}
-				<p class="mt-5 border-t border-rule py-5 text-center text-muted">loading owned bots…</p>
+				<StateMessage variant="loading" message="loading owned bots…" />
 			{:else if botError}
-				<div class="mt-5 border-t border-destructive py-5">
-					<p class="font-bold text-destructive">owned bots unavailable</p>
-					<p class="mt-1 text-sm text-muted">{botError}</p>
-				</div>
+				<StateMessage variant="error" title="owned bots unavailable" message={botError} />
 			{:else if ownedBots.length === 0}
-				<p class="mt-5 border-t border-rule py-5 text-center text-muted">
-					no bots are linked to this account yet.
-				</p>
+				<StateMessage variant="empty" message="no bots are linked to this account yet." />
+			{:else if filteredOwnedBots.length === 0}
+				<StateMessage variant="empty" message="no bots match the current filters." />
 			{:else}
 				<ul class="mt-5 divide-y divide-rule border-t border-rule">
-					{#each ownedBots as bot (bot.botId)}
+					{#each filteredOwnedBots as bot (bot.botId)}
 						{@const owner = ownerFor(bot)}
 						{@const configStatus = configByBotId[bot.botId]}
 						{@const configError = configErrorByBotId[bot.botId]}
@@ -287,12 +338,10 @@
 										{bot.metadata.name}
 									</h3>
 									<div class="flex shrink-0 flex-wrap gap-1.5">
-										<span class="rounded-full border border-accent px-2 py-0.5 text-xs leading-tight text-ink">
-											{owner?.ownershipState ?? 'linked'}
-										</span>
-										<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
+										<Badge variant="accent">{owner?.ownershipState ?? 'linked'}</Badge>
+										<Badge variant={configStatus?.hasConfig ? 'success' : configError ? 'danger' : 'muted'}>
 											{configStatus?.hasConfig ? 'configured' : configError ? 'config unavailable' : 'empty config'}
-										</span>
+										</Badge>
 									</div>
 								</div>
 
@@ -341,23 +390,23 @@
 								{/if}
 							</dl>
 
-							<div class="flex flex-wrap gap-2 lg:col-span-2 lg:justify-end">
+							<ActionBar label="bot actions" class="lg:col-span-2">
 								<Button
 									variant="secondary"
-									class="min-h-8 px-2.5 py-1.5 text-xs"
+									size="sm"
 									disabled={configBusy}
 									onclick={() => refreshConfigStatus(bot.botId)}
 								>
 									refresh config
 								</Button>
 								<Button
-									class="min-h-8 px-2.5 py-1.5 text-xs"
+									size="sm"
 									disabled={configBusy}
 									onclick={() => openConfigEditor(bot.botId)}
 								>
 									edit config
 								</Button>
-							</div>
+							</ActionBar>
 						</li>
 					{/each}
 				</ul>
@@ -407,12 +456,10 @@
 							</div>
 
 							<div class="mt-5 flex flex-wrap gap-2">
-								<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
-									{selectedOwner?.ownershipState ?? 'linked'}
-								</span>
-								<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
+								<Badge variant="muted">{selectedOwner?.ownershipState ?? 'linked'}</Badge>
+								<Badge variant={selectedStatus?.hasConfig ? 'success' : 'muted'}>
 									{selectedBusy && !selectedStatus ? 'loading' : selectedStatus?.hasConfig ? 'configured' : 'empty'}
-								</span>
+								</Badge>
 							</div>
 
 							<dl class="mt-6 space-y-4 text-sm">
@@ -458,7 +505,7 @@
 						<div class="mt-6 shrink-0">
 							<Button
 								variant="secondary"
-								class="min-h-9 px-3 py-2 text-xs"
+								size="sm"
 								disabled={selectedBusy}
 								onclick={() => refreshConfigStatus(selectedBot.botId)}
 							>
@@ -471,7 +518,7 @@
 						<div class="shrink-0 border-b border-rule pb-4">
 							<h3 class="text-xl font-normal text-ink">json</h3>
 							<p class="mt-1 max-w-[58ch] text-sm text-muted">
-								values are hidden after save; saving replaces the stored object.
+								saved values reload for authorized bot owners and operators.
 							</p>
 						</div>
 
@@ -496,7 +543,7 @@
 								<p class="mt-3 border-l border-accent pl-3 text-sm text-muted">{selectedNotice}</p>
 							{/if}
 							<p id="bot-config-json-help" class="mt-3 text-xs text-muted">
-								Only object-shaped JSON is accepted. Top-level keys are validated by the config service.
+								Only object-shaped JSON is accepted. Save replaces the whole stored object.
 							</p>
 						</div>
 
@@ -506,7 +553,7 @@
 								<div class="flex flex-wrap gap-2 sm:justify-end">
 									<Button
 										variant="secondary"
-										class="min-h-9 px-3 py-2 text-xs"
+										size="sm"
 										disabled={selectedBusy}
 										onclick={() => clearBotConfig(selectedBot.botId)}
 									>
@@ -514,14 +561,14 @@
 									</Button>
 									<Button
 										variant="secondary"
-										class="min-h-9 px-3 py-2 text-xs"
+										size="sm"
 										disabled={selectedBusy}
 										onclick={closeConfigEditor}
 									>
 										cancel
 									</Button>
 									<Button
-										class="min-h-9 px-3 py-2 text-xs"
+										size="sm"
 										disabled={selectedBusy}
 										onclick={() => saveBotConfig(selectedBot.botId)}
 									>

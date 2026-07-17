@@ -356,7 +356,9 @@ secret/bots/<submitter-identity>/<bot-id>
 
 Participants manage that slice through the Admin app's bot config panel. The
 browser talks only to `/admin/v1/arena/bots/config`; it never receives an
-OpenBao token and the API never returns secret values.
+OpenBao token. The API returns saved config values only after the same
+owner-scoped authorization used for bot config edits, so another participant
+cannot read a different bot owner's config.
 
 Supported operations:
 
