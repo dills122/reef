@@ -185,6 +185,12 @@ This direction can change, but changing it should update this document and any a
 
 Bot Arena is a simulation-control layer where submitted or built-in trading agents compete across configurable game modes.
 
+Bot Arena is not Reef itself. Reef is the institutional equity-market
+simulation platform; Bot Arena is a game product that uses Reef's venue,
+market-data, post-trade, replay, and admin contracts. Arena-specific UX,
+leaderboards, and scoring must not create alternate order, settlement, ledger,
+or audit semantics.
+
 Each bot starts with a configured capital base, risk limits, visible data policy, and allowed action set. The simulator drives seeded market conditions and participant activity. Bots observe only an explicit public snapshot, emit order intents, and compete on mode-specific leaderboards.
 
 Arena runs should model a real market with multiple actor classes:

@@ -18,17 +18,29 @@ Active execution planning starts from:
 - [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
 - [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
+- [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md)
 - [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
 - [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md)
 - [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
+- [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md)
 
 Topic-specific architecture and steering docs remain active inputs when linked from this set. Older sprint, benchmark, and research documents remain evidence or design context unless one of the active docs explicitly reactivates them.
 
 ## Planning Posture
 
 Reef remains a simulation-first institutional trading venue and post-trade platform. The near-term work is not broad feature expansion. It is proving a durable, replayable, high-throughput venue core while preserving the API, audit, and simulation contracts that later post-trade modules need.
+
+Reef and Bot Arena are separate product surfaces:
+
+- Reef is the institutional equity-market simulation platform.
+- Bot Arena is a bot trading competition/game that uses Reef as its simulation
+  environment.
+
+This distinction matters for planning. Bot Arena can use `instant-post-trade-v1`
+for fast game feedback, but post-trade semantics belong to Reef and must remain
+valid without Bot Arena enabled.
 
 Current deployment assumptions:
 
@@ -43,6 +55,8 @@ Current deployment assumptions:
 - raw internal HTTP caller status is inventoried in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 - Bot Arena Phase 1 local evidence now has two named gates: `make dev-smoke-bot-arena-local-persist` for the positive live `/api/v1` path with persisted run results, and `make dev-smoke-bot-arena-local-negative` for deterministic freeze/disqualification evidence. Both persist via loopback-only admin calls from inside `platform-api`, keeping raw `/internal/*` off the host/public surface. Static operator evidence is generated with `make dev-render-bot-arena-report` and compared across run artifacts with `make dev-render-bot-arena-report-index`.
 - Bot Arena's next planning milestone is the simulation tuning sprint in [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md): formalize the run diagnostic bundle, public/admin leaderboard split, bot data interface policy, starter bot/persona catalog, safety checklist, and public-submission readiness tasks before treating external bot submissions as launch-ready.
+- Post-trade's next planning milestone is the lifecycle sprint in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md): add clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for happy path plus failure/repair paths.
+- Documentation cleanup follows [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md): keep active docs as current operating guidance, move superseded planning docs to `docs/archive/`, and preserve evidence instead of deleting it.
 
 ## Current Execution Checkpoint
 
@@ -145,7 +159,7 @@ Plan the failure matrix as subsystem slices, not as disconnected one-off tests:
 
 ### Explicit Non-Goals
 
-- no post-trade expansion until command/event causation is proven end to end
+- no broad clearinghouse build in this checkpoint; post-trade expansion is limited to the lifecycle V1 sprint now that P1/P2 causation and replay assertions are locked locally
 - no UI/control-room freshness as a blocker for venue-core command intake
 - no more API intake tuning unless durable drain/accounting proof is already clean
 - no treating no-op publisher, raw accepted/sec, or accepted-but-unmaterialized counts as release evidence
@@ -178,7 +192,7 @@ The current gaps are:
 - the submit/cancel intake contract needs implementation-ready proof around duplicate idempotency, accepted-but-not-completed accounting, and event-batch intermediate status authority; hot-path cancel routing metadata is now covered by stream envelope and HTTP boundary tests, and `/api/v1/commands/{commandId}` exposes the provider-neutral public status vocabulary for stream references, in-flight work, canonical completions, rejects, and failures
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
 - first deterministic lifecycle scenarios are locked locally with promoted assertion evidence: P1 combines the 2026-07-14 zero-lag `sync-result` report with the 2026-07-15 same-run direct-stream replay report, and P2 combines public settlement facts readback, direct-stream replay/checksum evidence, and the settled `instant-post-trade-v1` chain proof
-- post-trade workflows remain scenario-locked future work
+- post-trade workflows are moving from scenario-locked proof into a focused lifecycle V1 sprint: clearing/novation facts, exception queue v1, operator-readable lifecycle state, and happy/failure scenario evidence
 - Bot Arena score-v1 correctness gate is locked locally and on DigitalOcean: local reset-to-reset `5m` proof passed and hosted run `do-benchmark-20260714T010045Z` passed the `15m` arena artifact gate. The active follow-up is hosted arena pacing lag cleanup, not score-v1 correctness.
 
 ## Active Execution Ladder
@@ -244,10 +258,18 @@ The current gaps are:
    - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures encode the target scenario shape, and 2026-07-14 local live reports are promoted under `reports/scenario-assertions/`.
    - Remaining lock work: none for the local P1/P2 scenario-lock criteria. Future reruns can add confidence, but the current promoted evidence already separates P1 zero-lag projection freshness from direct-stream replay proof and proves P2 settled-chain facts through the public settlement read.
 
-8. Start post-trade expansion.
+8. Execute the post-trade lifecycle V1 sprint.
+   - Sprint plan lives in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md).
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
-   - First allowed slice is P2-only settlement exception facts from [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md): obligation, cash-leg break, manual repair, resolved exception, and transition tests.
-   - Full allocation, confirmation, clearing, account-ledger mutation, and UI work stay deferred until P2-only facts prove causation.
+   - Current foundation already includes instant-post-trade obligation materialization, minimal allocation/confirmation/affirmation facts, instructions, attempts, leg outcomes, ledger proof, repair commands, and proof/score reads.
+   - Next slice adds clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
+   - Full CCP/CNS clearing, rich custody, production messaging schemas, and complete netted obligation settlement remain non-goals.
+
+9. Clean up documentation.
+   - Use [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md) as the guide.
+   - Keep this file as the active execution ladder.
+   - Move superseded planning docs into `docs/archive/` only after active links are replaced.
+   - Preserve benchmark, decision, and security evidence.
 
 ## Active Workstreams
 

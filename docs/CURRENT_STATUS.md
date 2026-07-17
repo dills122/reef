@@ -22,6 +22,15 @@ Reef has moved beyond a repository skeleton. The current implementation includes
 
 The platform UI and post-trade lifecycle are still early. The current strongest verification surface is the local/remote simulator and benchmark harness, not the UI.
 
+Current product split:
+
+- Reef is the institutional equity-market simulation platform. It owns venue
+  intake, matching, post-trade lifecycle, settlement, replay, audit, scenarios,
+  and operator workflows.
+- Bot Arena is a bot trading competition/game that uses Reef as its simulation
+  environment. It should keep using Reef's public command, market-data,
+  settlement, and admin contracts rather than becoming a parallel platform.
+
 ## Active Architecture Direction
 
 Keep these distinctions explicit:
@@ -66,6 +75,7 @@ Current decision anchors:
 - `packages/bot-sdk/src/live-client.ts` adds live-read wiring in the Bot SDK: `createLiveMarketDataClientV1`, `createLiveHistoricalDataClientV1`, `createLiveOwnOrdersReadClientV1`, and `createLiveBotContextV1` call the endpoints above over real HTTP. `runner.ts`, `strategy-runner.ts`, and `hosted-runner.ts` now accept opt-in `readClients`, so fixture mode remains the default while live smoke and hosted artifact runs can read market data, bars, and own orders from platform projections. Hosted reports include `readMode` and, in live read mode, `dataAvailability`. Prices are stored venue-wide as fixed-point nanos (`contracts/proto/order_execution.proto`'s `Price.nanos`, `price_nanos = price_dollars * 1e9`); live reads divide by that scale before returning `number` fields to bot code, and the venue adapter converts bot `limitPrice` values back to nanos before submitting commands.
 - Bot Arena Phase 1 now has local positive and negative persisted gates. `make dev-smoke-bot-arena-local-persist` runs the local arena through `/api/v1`, waits for projection drain, then persists run results, enforcement events, and leaderboard evidence through loopback-only admin routes from inside the `platform-api` container. `make dev-smoke-bot-arena-local-negative` adds `custom-too-many-orders`, expects a deterministic freeze/disqualification, persists the enforcement event, and verifies the public leaderboard still excludes the frozen bot. `make dev-render-bot-arena-report` renders one static operator HTML report from the arena JSON artifact, and `make dev-render-bot-arena-report-index` renders a static comparison index across positive/negative/future run artifacts. Local 2026-07-08 evidence in the `codex/bot-arena-phase1` worktree: positive persisted gate produced `5` bots, `15` ticks, `14` submitted commands, `33` persistence operations, and leaderboard entry `custom-technical-indicator`; negative persisted gate produced `6` bots, `16` ticks, `14` submitted commands, `1` freeze for `custom-too-many-orders`, `40` persistence operations, and the same public leaderboard winner.
 - Bot Arena score-v1 now has local reset-to-reset proof and hosted DigitalOcean `15m` hardening evidence. Local 2026-07-14 evidence proved deterministic score/accounting equality across two clean `5m` runs. Hosted run `do-benchmark-20260714T010045Z` passed the arena artifact gate with `6985` submitted commands, `6985` terminal `COMPLETED`, accounting gap `0`, timeouts/rejects/freezes `0`, health `pass`, projection lag `0`, `2010` fills, and public score-v1 mismatch count `0`; artifacts live under `reports/do-benchmark/do-benchmark-20260714T010045Z/`. Remaining arena cleanup is hosted pacing lag: the `900s` schedule took `1017s` on the c-8 source-built worker with final completion lag near `107s`; track this as performance cleanup, not scoring correctness.
+- Post-trade is ready for a focused lifecycle sprint now that P1/P2 scenario locks and direct-stream replay evidence exist. The current implementation has instant-post-trade obligation materialization, minimal allocation/confirmation/affirmation facts, instructions, attempts, cash/security leg outcomes, append-only ledger proof, repair commands, and proof/score reads. The next work is not a broad clearinghouse build; it is [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md): add clearing/novation facts, an exception queue v1, better operator-visible lifecycle reads, and happy/failure scenario evidence while keeping Bot Arena as a consumer rather than the owner of settlement semantics.
 
 ## Current Forward Path
 
@@ -85,7 +95,8 @@ This is a short summary of the single active execution ladder in [`WORK_PLAN.md`
    - 2026-07-14 local P2 command smoke passed; report: `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json`. The P2 live assertion passed after seeding settlement facts with `make dev-seed-p2-settlement-facts SCENARIO_RUN_ID=p2-settlement-break-repair-live-20260714`; report: `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json`. The assertion run proved command completion plus the settlement exception chain from `/api/v1/settlement/facts/{scenarioRunId}`: one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping.
    - 2026-07-15 local P2 direct-stream settled-chain report passed with public settlement facts readback; report: `reports/scenario-assertions/p2-settlement-break-repair-settled-live-public-20260715c.json`, public facts readback artifact: `reports/scenario-assertions/p2-settlement-break-repair-settled-facts-public-20260715c.json`, replay artifact: `reports/scenario-assertions/p2-settlement-break-repair-replay-check-20260715c.json`. It combines run-scoped command ids, canonical command status from `platform-projector-0`, exact replay counters for the same two P2 commands, and a minimal `instant-post-trade-v1` settled chain read from `/api/v1/settlement/facts/{scenarioRunId}`: obligation, allocation, confirmation, affirmation, instruction, attempt, cash/security leg outcomes, ledger entries, and `SETTLED` finality.
 10. Keep Bot Arena Phase 1 moving without overlapping the real-time stress dashboard work: score-v1 correctness is promotion-ready after local reset-to-reset and hosted `15m` evidence, and short hosted pacing cleanup evidence is green. The next arena planning milestone is [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md): task the run diagnostic bundle, public/admin leaderboard split, analytics export, bot data-interface policy, starter bot/persona catalog, safety gates, and public-submission readiness checklist.
-11. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
+11. Start the focused post-trade lifecycle sprint in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). Target clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
+12. Run documentation cleanup as a separate bounded stream using [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md): keep active docs short, move superseded planning docs into `docs/archive/`, and preserve benchmark/security/decision evidence.
 
 ## Documentation Map
 
@@ -105,6 +116,7 @@ Use these docs for active work:
 - Scenario live assertion plan: [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - Minimal settlement exception facts: [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
 - Settlement and clearing strategy: [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
+- Post-trade lifecycle sprint: [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md)
 - Command intake process: [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - Bot Arena docs, current-to-oldest: admin UI follow-ups [`BOT_ARENA_ADMIN_UI_FOLLOW_UPS.md`](./BOT_ARENA_ADMIN_UI_FOLLOW_UPS.md), main plan [`BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md), simulation tuning sprint [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md), auth/provisioning [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md), DO soak checklist [`BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md`](./BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md), phase 1 readiness [`BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./BOT_ARENA_PHASE_1_READINESS_PLAN.md), runner bench [`BOT_ARENA_RUNNER_BENCH.md`](./BOT_ARENA_RUNNER_BENCH.md); intake gap analysis is superseded by the auth/provisioning model and archived at [`archive/ARENA_INTAKE_GAP_ANALYSIS.md`](./archive/ARENA_INTAKE_GAP_ANALYSIS.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
@@ -115,6 +127,7 @@ Use these docs for active work:
 - Stream/direct throughput context: [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - Local setup and commands: [`ONBOARDING.md`](./ONBOARDING.md), [`DEV_ENV.md`](./DEV_ENV.md)
 - Steering index: [`steering/README.md`](./steering/README.md)
+- Documentation cleanup plan: [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md)
 
 Dated benchmark reports, sprint plans, and baseline documents are evidence/history unless this file or `WORK_PLAN.md` links them as active inputs.
 

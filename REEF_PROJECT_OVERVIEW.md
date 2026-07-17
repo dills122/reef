@@ -12,6 +12,22 @@ Reef is intended to sit at the intersection of three ideas:
 2. **Post-trade operations platform** — allocations, confirmations, affirmations, settlement obligations, exception handling, and audit trails.
 3. **Scenario-driven demo and research environment** — deterministic simulations, replayable runs, synthetic participants, accelerated time, and fault injection.
 
+## Product Boundary
+
+Reef and Bot Arena should be described as related but distinct products:
+
+- **Reef** is the institutional-grade equity-market simulation platform. It owns
+  venue intake, matching, post-trade lifecycle, settlement, replay, audit,
+  scenario execution, and operator workflows.
+- **Bot Arena** is a bot trading competition/game built on top of Reef. It uses
+  Reef as the simulation environment and should enter through the same public
+  command, market-data, post-trade, and admin contracts that other simulation
+  actors use.
+
+Bot Arena can make Reef easier to demo and tune, but it must not redefine the
+core platform model or become a shortcut around Reef's venue, post-trade,
+audit, or replay rules.
+
 ## Vision
 
 Reef should feel like a real institutional market-infrastructure platform under the hood, while remaining approachable as a local development environment and portfolio-grade demo tool.
