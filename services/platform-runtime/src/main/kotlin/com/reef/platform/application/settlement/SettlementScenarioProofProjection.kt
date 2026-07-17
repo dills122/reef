@@ -13,6 +13,10 @@ data class SettlementScenarioProofView(
     val allocationsCount: Int,
     val confirmationsCount: Int,
     val affirmationsCount: Int,
+    val clearingSubmissionsCount: Int,
+    val clearingAcceptancesCount: Int,
+    val clearingRejectionsCount: Int,
+    val novationsCount: Int,
     val instructionsCount: Int,
     val attemptsCount: Int,
     val legOutcomesCount: Int,
@@ -55,6 +59,10 @@ data class SettlementProofObligationView(
     val settlementAllocationIds: List<String>,
     val settlementConfirmationIds: List<String>,
     val settlementAffirmationIds: List<String>,
+    val settlementClearingSubmissionIds: List<String>,
+    val settlementClearingAcceptanceIds: List<String>,
+    val settlementClearingRejectionIds: List<String>,
+    val settlementNovationIds: List<String>,
     val settlementInstructionIds: List<String>,
     val settlementAttemptIds: List<String>,
     val ledgerEntryIds: List<String>,
@@ -96,6 +104,22 @@ object SettlementScenarioProofProjection {
                         .filter { it.settlementObligationId == obligation.settlementObligationId }
                         .sortedBy { it.settlementAffirmationId }
                         .map { it.settlementAffirmationId },
+                    settlementClearingSubmissionIds = facts.clearingSubmissions
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementClearingSubmissionId }
+                        .map { it.settlementClearingSubmissionId },
+                    settlementClearingAcceptanceIds = facts.clearingAcceptances
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementClearingAcceptanceId }
+                        .map { it.settlementClearingAcceptanceId },
+                    settlementClearingRejectionIds = facts.clearingRejections
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementClearingRejectionId }
+                        .map { it.settlementClearingRejectionId },
+                    settlementNovationIds = facts.novations
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementNovationId }
+                        .map { it.settlementNovationId },
                     settlementInstructionIds = facts.instructions
                         .filter { it.settlementObligationId == obligation.settlementObligationId }
                         .sortedBy { it.settlementInstructionId }
@@ -134,12 +158,18 @@ object SettlementScenarioProofProjection {
             checksum = sha256(checksumInput),
             factsCount = facts.resourcePositions.size + facts.obligations.size + facts.instructions.size +
             facts.allocations.size + facts.confirmations.size + facts.affirmations.size +
+            facts.clearingSubmissions.size + facts.clearingAcceptances.size + facts.clearingRejections.size +
+            facts.novations.size +
             facts.attempts.size + facts.legOutcomes.size + facts.ledgerEntries.size + facts.settlements.size +
                 facts.breaks.size + facts.repairs.size + facts.resolutions.size + facts.operatorActions.size,
             obligationsCount = facts.obligations.size,
             allocationsCount = facts.allocations.size,
             confirmationsCount = facts.confirmations.size,
             affirmationsCount = facts.affirmations.size,
+            clearingSubmissionsCount = facts.clearingSubmissions.size,
+            clearingAcceptancesCount = facts.clearingAcceptances.size,
+            clearingRejectionsCount = facts.clearingRejections.size,
+            novationsCount = facts.novations.size,
             instructionsCount = facts.instructions.size,
             attemptsCount = facts.attempts.size,
             legOutcomesCount = facts.legOutcomes.size,
@@ -162,6 +192,9 @@ object SettlementScenarioProofProjection {
         val obligationIds = facts.obligations.map { it.settlementObligationId }.toSet()
         val allocationIds = facts.allocations.map { it.settlementAllocationId }.toSet()
         val confirmationIds = facts.confirmations.map { it.settlementConfirmationId }.toSet()
+        val affirmationIds = facts.affirmations.map { it.settlementAffirmationId }.toSet()
+        val clearingSubmissionIds = facts.clearingSubmissions.map { it.settlementClearingSubmissionId }.toSet()
+        val clearingAcceptanceIds = facts.clearingAcceptances.map { it.settlementClearingAcceptanceId }.toSet()
         val instructionIds = facts.instructions.map { it.settlementInstructionId }.toSet()
         val attemptIds = facts.attempts.map { it.settlementAttemptId }.toSet()
         val breakIds = facts.breaks.map { it.settlementBreakId }.toSet()
@@ -241,6 +274,94 @@ object SettlementScenarioProofProjection {
                             it.settlementAffirmationId,
                             "SettlementConfirmationGenerated",
                             it.settlementConfirmationId
+                        )
+                    )
+                }
+            }
+            facts.clearingSubmissions.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementClearingSubmitted",
+                            it.settlementClearingSubmissionId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+                if (it.settlementAffirmationId !in affirmationIds) {
+                    add(
+                        gap(
+                            "SettlementClearingSubmitted",
+                            it.settlementClearingSubmissionId,
+                            "SettlementAffirmationAccepted",
+                            it.settlementAffirmationId
+                        )
+                    )
+                }
+            }
+            facts.clearingAcceptances.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementClearingAccepted",
+                            it.settlementClearingAcceptanceId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+                if (it.settlementClearingSubmissionId !in clearingSubmissionIds) {
+                    add(
+                        gap(
+                            "SettlementClearingAccepted",
+                            it.settlementClearingAcceptanceId,
+                            "SettlementClearingSubmitted",
+                            it.settlementClearingSubmissionId
+                        )
+                    )
+                }
+            }
+            facts.clearingRejections.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementClearingRejected",
+                            it.settlementClearingRejectionId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+                if (it.settlementClearingSubmissionId !in clearingSubmissionIds) {
+                    add(
+                        gap(
+                            "SettlementClearingRejected",
+                            it.settlementClearingRejectionId,
+                            "SettlementClearingSubmitted",
+                            it.settlementClearingSubmissionId
+                        )
+                    )
+                }
+            }
+            facts.novations.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementNovationRecorded",
+                            it.settlementNovationId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+                if (it.settlementClearingAcceptanceId !in clearingAcceptanceIds) {
+                    add(
+                        gap(
+                            "SettlementNovationRecorded",
+                            it.settlementNovationId,
+                            "SettlementClearingAccepted",
+                            it.settlementClearingAcceptanceId
                         )
                     )
                 }
@@ -498,6 +619,10 @@ object SettlementScenarioProofProjection {
                         it.settlementAllocationIds.joinToString(","),
                         it.settlementConfirmationIds.joinToString(","),
                         it.settlementAffirmationIds.joinToString(","),
+                        it.settlementClearingSubmissionIds.joinToString(","),
+                        it.settlementClearingAcceptanceIds.joinToString(","),
+                        it.settlementClearingRejectionIds.joinToString(","),
+                        it.settlementNovationIds.joinToString(","),
                         it.settlementInstructionIds.joinToString(","),
                         it.settlementAttemptIds.joinToString(","),
                         it.ledgerEntryIds.joinToString(","),
@@ -548,6 +673,10 @@ object SettlementScenarioProofProjection {
                 facts.allocations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.confirmations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.affirmations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.clearingSubmissions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.clearingAcceptances.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.clearingRejections.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.novations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.instructions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.attempts.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.legOutcomes.map { it.postTradeProfileId to it.postTradePolicyVersion } +
@@ -582,6 +711,10 @@ object SettlementScenarioProofProjection {
                 facts.allocations.map { it.occurredAt } +
                 facts.confirmations.map { it.occurredAt } +
                 facts.affirmations.map { it.occurredAt } +
+                facts.clearingSubmissions.map { it.occurredAt } +
+                facts.clearingAcceptances.map { it.occurredAt } +
+                facts.clearingRejections.map { it.occurredAt } +
+                facts.novations.map { it.occurredAt } +
                 facts.instructions.map { it.occurredAt } +
                 facts.attempts.map { it.occurredAt } +
                 facts.legOutcomes.map { it.occurredAt } +

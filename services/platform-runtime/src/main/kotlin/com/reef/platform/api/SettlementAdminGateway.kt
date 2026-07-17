@@ -7,7 +7,13 @@ import com.reef.platform.application.settlement.SettlementAttemptStartedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedReason
 import com.reef.platform.application.settlement.SettlementBreakOpenedReasonSecurity
+import com.reef.platform.application.settlement.SettlementClearingAcceptedFact
+import com.reef.platform.application.settlement.SettlementClearingRejectedFact
+import com.reef.platform.application.settlement.SettlementClearingRejectedReason
+import com.reef.platform.application.settlement.SettlementClearingSubmittedFact
 import com.reef.platform.application.settlement.SettlementConfirmationGeneratedFact
+import com.reef.platform.application.settlement.SettlementExceptionProjection
+import com.reef.platform.application.settlement.SettlementExceptionQueueView
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
@@ -19,6 +25,7 @@ import com.reef.platform.application.settlement.SettlementLedgerEntryTypeSecurit
 import com.reef.platform.application.settlement.SettlementLedgerProjection
 import com.reef.platform.application.settlement.SettlementLedgerProjectionView
 import com.reef.platform.application.settlement.SettlementLegOutcomeFact
+import com.reef.platform.application.settlement.SettlementNovationRecordedFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationProjection
 import com.reef.platform.application.settlement.SettlementObligationView
@@ -294,6 +301,10 @@ internal class SettlementAdminGateway(
                         "materializedAllocations" to result.materializedAllocations,
                         "materializedConfirmations" to result.materializedConfirmations,
                         "materializedAffirmations" to result.materializedAffirmations,
+                        "materializedClearingSubmissions" to result.materializedClearingSubmissions,
+                        "materializedClearingAcceptances" to result.materializedClearingAcceptances,
+                        "materializedClearingRejections" to result.materializedClearingRejections,
+                        "materializedNovations" to result.materializedNovations,
                         "materializedAttempts" to result.materializedAttempts,
                         "materializedLedgerEntries" to result.materializedLedgerEntries,
                         "materializedSettlements" to result.materializedSettlements,
@@ -452,6 +463,10 @@ internal class SettlementAdminGateway(
                     "materializedAllocations" to result.materializedAllocations,
                     "materializedConfirmations" to result.materializedConfirmations,
                     "materializedAffirmations" to result.materializedAffirmations,
+                    "materializedClearingSubmissions" to result.materializedClearingSubmissions,
+                    "materializedClearingAcceptances" to result.materializedClearingAcceptances,
+                    "materializedClearingRejections" to result.materializedClearingRejections,
+                    "materializedNovations" to result.materializedNovations,
                     "materializedInstructions" to result.materializedInstructions,
                     "materializedAttempts" to result.materializedAttempts,
                     "materializedLegOutcomes" to result.materializedLegOutcomes,
@@ -521,6 +536,22 @@ internal class SettlementAdminGateway(
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement ledger query")))
         } catch (ex: Exception) {
             PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement ledger query failed")))
+        }
+    }
+
+    fun settlementExceptionsResponse(scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            val projection = SettlementExceptionProjection.project(store.factsByScenarioRunId(scenarioRunId))
+            PlatformHotPathResponse(200, settlementExceptionQueueBody(projection))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement exception query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement exception query failed")))
         }
     }
 
@@ -629,6 +660,18 @@ internal class SettlementAdminGateway(
             },
             affirmations = json.objectDocuments("affirmations").map {
                 affirmationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            clearingSubmissions = json.objectDocuments("clearingSubmissions").map {
+                clearingSubmissionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            clearingAcceptances = json.objectDocuments("clearingAcceptances").map {
+                clearingAcceptanceFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            clearingRejections = json.objectDocuments("clearingRejections").map {
+                clearingRejectionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            novations = json.objectDocuments("novations").map {
+                novationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
             instructions = json.objectDocuments("instructions").map {
                 instructionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
@@ -773,6 +816,87 @@ internal class SettlementAdminGateway(
             actorType = json.string("actorType").ifBlank { "SYSTEM" },
             actorId = json.string("actorId").ifBlank { "post-trade-auto-affirmer" },
             state = json.string("state").ifBlank { "AFFIRMATION_ACCEPTED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun clearingSubmissionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementClearingSubmittedFact {
+        return SettlementClearingSubmittedFact(
+            settlementClearingSubmissionId = json.string("settlementClearingSubmissionId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            settlementAffirmationId = json.string("settlementAffirmationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            state = json.string("state").ifBlank { "CLEARING_SUBMITTED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun clearingAcceptanceFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementClearingAcceptedFact {
+        return SettlementClearingAcceptedFact(
+            settlementClearingAcceptanceId = json.string("settlementClearingAcceptanceId"),
+            settlementClearingSubmissionId = json.string("settlementClearingSubmissionId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            state = json.string("state").ifBlank { "CLEARING_ACCEPTED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun clearingRejectionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementClearingRejectedFact {
+        return SettlementClearingRejectedFact(
+            settlementClearingRejectionId = json.string("settlementClearingRejectionId"),
+            settlementClearingSubmissionId = json.string("settlementClearingSubmissionId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            reason = json.string("reason").ifBlank { SettlementClearingRejectedReason },
+            state = json.string("state").ifBlank { "CLEARING_REJECTED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun novationFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementNovationRecordedFact {
+        return SettlementNovationRecordedFact(
+            settlementNovationId = json.string("settlementNovationId"),
+            settlementClearingAcceptanceId = json.string("settlementClearingAcceptanceId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            state = json.string("state").ifBlank { "NOVATION_RECORDED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
     }
@@ -1083,6 +1207,63 @@ internal class SettlementAdminGateway(
                     "occurredAt" to it.occurredAt.toString()
                 )
             },
+            "clearingSubmissions" to facts.clearingSubmissions.map {
+                mapOf(
+                    "settlementClearingSubmissionId" to it.settlementClearingSubmissionId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "settlementAffirmationId" to it.settlementAffirmationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "clearingAcceptances" to facts.clearingAcceptances.map {
+                mapOf(
+                    "settlementClearingAcceptanceId" to it.settlementClearingAcceptanceId,
+                    "settlementClearingSubmissionId" to it.settlementClearingSubmissionId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "clearingRejections" to facts.clearingRejections.map {
+                mapOf(
+                    "settlementClearingRejectionId" to it.settlementClearingRejectionId,
+                    "settlementClearingSubmissionId" to it.settlementClearingSubmissionId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "reason" to it.reason,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "novations" to facts.novations.map {
+                mapOf(
+                    "settlementNovationId" to it.settlementNovationId,
+                    "settlementClearingAcceptanceId" to it.settlementClearingAcceptanceId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "instructions" to facts.instructions.map {
                 mapOf(
                     "settlementInstructionId" to it.settlementInstructionId,
@@ -1280,6 +1461,55 @@ internal class SettlementAdminGateway(
         )
     }
 
+    private fun settlementExceptionQueueBody(projection: SettlementExceptionQueueView): String {
+        return jsonObjectBody(
+            mapOf(
+                "scenarioRunId" to projection.scenarioRunId,
+                "exceptionsCount" to projection.exceptionsCount,
+                "openCount" to projection.openCount,
+                "repairPostedCount" to projection.repairPostedCount,
+                "resolvedCount" to projection.resolvedCount,
+                "clearingRejectedCount" to projection.clearingRejectedCount,
+                "settlementBreakCount" to projection.settlementBreakCount,
+                "exceptions" to projection.exceptions.map {
+                    mapOf(
+                        "settlementExceptionId" to it.settlementExceptionId,
+                        "exceptionType" to it.exceptionType,
+                        "exceptionState" to it.exceptionState,
+                        "state" to it.exceptionState,
+                        "severity" to it.severity,
+                        "ownerRole" to it.ownerRole,
+                        "actionRequired" to it.actionRequired,
+                        "reason" to it.reason,
+                        "settlementObligationId" to it.settlementObligationId,
+                        "tradeId" to it.tradeId,
+                        "buyerParticipantId" to it.buyerParticipantId,
+                        "sellerParticipantId" to it.sellerParticipantId,
+                        "instrumentId" to it.instrumentId,
+                        "quantity" to it.quantity,
+                        "cashAmount" to it.cashAmount,
+                        "currency" to it.currency,
+                        "settlementClearingSubmissionId" to it.settlementClearingSubmissionId,
+                        "settlementClearingRejectionId" to it.settlementClearingRejectionId,
+                        "settlementBreakId" to it.settlementBreakId,
+                        "settlementRepairId" to it.settlementRepairId,
+                        "settlementResolutionId" to it.settlementResolutionId,
+                        "repairAction" to it.repairAction,
+                        "actorId" to it.actorId,
+                        "correlationId" to it.correlationId,
+                        "postTradeProfileId" to it.postTradeProfileId,
+                        "postTradePolicyVersion" to it.postTradePolicyVersion,
+                        "openedAt" to it.openedAt.toString(),
+                        "lastUpdatedAt" to it.lastUpdatedAt.toString(),
+                        "resolvedAt" to it.resolvedAt?.toString(),
+                        "occurredAt" to it.occurredAt.toString(),
+                        "updatedAt" to it.updatedAt.toString()
+                    )
+                }
+            )
+        )
+    }
+
     private fun settlementScenarioProofBody(proof: SettlementScenarioProofView): String {
         return jsonObjectBody(
             mapOf(
@@ -1292,6 +1522,10 @@ internal class SettlementAdminGateway(
                 "allocationsCount" to proof.allocationsCount,
                 "confirmationsCount" to proof.confirmationsCount,
                 "affirmationsCount" to proof.affirmationsCount,
+                "clearingSubmissionsCount" to proof.clearingSubmissionsCount,
+                "clearingAcceptancesCount" to proof.clearingAcceptancesCount,
+                "clearingRejectionsCount" to proof.clearingRejectionsCount,
+                "novationsCount" to proof.novationsCount,
                 "instructionsCount" to proof.instructionsCount,
                 "attemptsCount" to proof.attemptsCount,
                 "legOutcomesCount" to proof.legOutcomesCount,
@@ -1330,6 +1564,10 @@ internal class SettlementAdminGateway(
                         "settlementAllocationIds" to it.settlementAllocationIds,
                         "settlementConfirmationIds" to it.settlementConfirmationIds,
                         "settlementAffirmationIds" to it.settlementAffirmationIds,
+                        "settlementClearingSubmissionIds" to it.settlementClearingSubmissionIds,
+                        "settlementClearingAcceptanceIds" to it.settlementClearingAcceptanceIds,
+                        "settlementClearingRejectionIds" to it.settlementClearingRejectionIds,
+                        "settlementNovationIds" to it.settlementNovationIds,
                         "settlementInstructionIds" to it.settlementInstructionIds,
                         "settlementAttemptIds" to it.settlementAttemptIds,
                         "ledgerEntryIds" to it.ledgerEntryIds,
@@ -1415,6 +1653,11 @@ internal class SettlementAdminGateway(
             "obligationState" to view.obligationState,
             "settlementState" to view.settlementState,
             "exceptionState" to view.exceptionState,
+            "clearingState" to view.clearingState,
+            "settlementClearingSubmissionId" to view.settlementClearingSubmissionId,
+            "settlementClearingAcceptanceId" to view.settlementClearingAcceptanceId,
+            "settlementClearingRejectionId" to view.settlementClearingRejectionId,
+            "settlementNovationId" to view.settlementNovationId,
             "settlementInstructionId" to view.settlementInstructionId,
             "settlementAttemptId" to view.settlementAttemptId,
             "settlementAttemptNumber" to view.settlementAttemptNumber,

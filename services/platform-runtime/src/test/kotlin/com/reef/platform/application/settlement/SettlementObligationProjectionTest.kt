@@ -144,6 +144,46 @@ class SettlementObligationProjectionTest {
         assertEquals(Instant.parse("2026-01-01T00:00:01Z"), view.updatedAt)
     }
 
+    @Test
+    fun projectsClearingAndNovationStateBeforeInstruction() {
+        val view = SettlementObligationProjection.project(
+            SettlementFactBundle(
+                scenarioRunId = "run-1",
+                obligations = listOf(obligation()),
+                clearingSubmissions = listOf(clearingSubmitted()),
+                clearingAcceptances = listOf(clearingAccepted()),
+                novations = listOf(novation())
+            )
+        ).single()
+
+        assertEquals("NOVATION_RECORDED", view.settlementState)
+        assertEquals("NONE", view.exceptionState)
+        assertEquals("NOVATION_RECORDED", view.clearingState)
+        assertEquals("clearing-submission-1", view.settlementClearingSubmissionId)
+        assertEquals("clearing-acceptance-1", view.settlementClearingAcceptanceId)
+        assertEquals("", view.settlementClearingRejectionId)
+        assertEquals("novation-1", view.settlementNovationId)
+        assertEquals(Instant.parse("2026-01-01T00:00:03Z"), view.updatedAt)
+    }
+
+    @Test
+    fun projectsClearingRejectionAsOpenException() {
+        val view = SettlementObligationProjection.project(
+            SettlementFactBundle(
+                scenarioRunId = "run-1",
+                obligations = listOf(obligation()),
+                clearingSubmissions = listOf(clearingSubmitted()),
+                clearingRejections = listOf(clearingRejected())
+            )
+        ).single()
+
+        assertEquals("CLEARING_REJECTED", view.settlementState)
+        assertEquals("OPEN", view.exceptionState)
+        assertEquals("CLEARING_REJECTED", view.clearingState)
+        assertEquals("clearing-rejection-1", view.settlementClearingRejectionId)
+        assertEquals("", view.settlementNovationId)
+    }
+
     private fun obligation(): SettlementObligationCreatedFact {
         return SettlementObligationCreatedFact(
             settlementObligationId = "obl-1",
@@ -187,6 +227,62 @@ class SettlementObligationProjectionTest {
             correlationId = "corr-1",
             causationId = "obl-1",
             occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun clearingSubmitted(): SettlementClearingSubmittedFact {
+        return SettlementClearingSubmittedFact(
+            settlementClearingSubmissionId = "clearing-submission-1",
+            settlementObligationId = "obl-1",
+            settlementAffirmationId = "affirmation-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "affirmation-1",
+            occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun clearingAccepted(): SettlementClearingAcceptedFact {
+        return SettlementClearingAcceptedFact(
+            settlementClearingAcceptanceId = "clearing-acceptance-1",
+            settlementClearingSubmissionId = "clearing-submission-1",
+            settlementObligationId = "obl-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "clearing-submission-1",
+            occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+        )
+    }
+
+    private fun clearingRejected(): SettlementClearingRejectedFact {
+        return SettlementClearingRejectedFact(
+            settlementClearingRejectionId = "clearing-rejection-1",
+            settlementClearingSubmissionId = "clearing-submission-1",
+            settlementObligationId = "obl-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "clearing-submission-1",
+            occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+        )
+    }
+
+    private fun novation(): SettlementNovationRecordedFact {
+        return SettlementNovationRecordedFact(
+            settlementNovationId = "novation-1",
+            settlementClearingAcceptanceId = "clearing-acceptance-1",
+            settlementObligationId = "obl-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "clearing-acceptance-1",
+            occurredAt = Instant.parse("2026-01-01T00:00:03Z")
         )
     }
 

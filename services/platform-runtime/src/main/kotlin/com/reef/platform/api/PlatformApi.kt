@@ -252,6 +252,16 @@ class PlatformApi(
                     optionalQuery = emptyList()
                 ),
                 surfaceAvailability(
+                    name = "settlementExceptions",
+                    endpoint = "/api/v1/settlement/exceptions/{scenarioRunId}",
+                    source = "settlement append-only fact store exception projection",
+                    freshness = "rebuildable exception queue over clearing rejections and settlement breaks",
+                    status = venueStatus,
+                    scope = "scenario-settlement-evidence",
+                    requiredQuery = emptyList(),
+                    optionalQuery = emptyList()
+                ),
+                surfaceAvailability(
                     name = "settlementProof",
                     endpoint = "/api/v1/settlement/proof/{scenarioRunId}",
                     source = "settlement append-only fact store + replayable ledger projection",

@@ -20,6 +20,11 @@ data class SettlementObligationView(
     val obligationState: String,
     val settlementState: String,
     val exceptionState: String,
+    val clearingState: String,
+    val settlementClearingSubmissionId: String,
+    val settlementClearingAcceptanceId: String,
+    val settlementClearingRejectionId: String,
+    val settlementNovationId: String,
     val settlementInstructionId: String,
     val settlementAttemptId: String,
     val settlementAttemptNumber: Int,
@@ -37,6 +42,10 @@ data class SettlementObligationView(
 object SettlementObligationProjection {
     fun project(facts: SettlementFactBundle): List<SettlementObligationView> {
         val breaksByObligation = facts.breaks.groupBy { it.settlementObligationId }
+        val clearingSubmissionsByObligation = facts.clearingSubmissions.groupBy { it.settlementObligationId }
+        val clearingAcceptancesByObligation = facts.clearingAcceptances.groupBy { it.settlementObligationId }
+        val clearingRejectionsByObligation = facts.clearingRejections.groupBy { it.settlementObligationId }
+        val novationsByObligation = facts.novations.groupBy { it.settlementObligationId }
         val instructionsByObligation = facts.instructions.groupBy { it.settlementObligationId }
         val attemptsByObligation = facts.attempts.groupBy { it.settlementObligationId }
         val legOutcomesByObligation = facts.legOutcomes.groupBy { it.settlementObligationId }
@@ -50,6 +59,30 @@ object SettlementObligationProjection {
                 val breakFact = breaksByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementBreakOpenedFact> { it.occurredAt }.thenBy { it.settlementBreakId })
+                val clearingSubmission = clearingSubmissionsByObligation[obligation.settlementObligationId]
+                    .orEmpty()
+                    .maxWithOrNull(
+                        compareBy<SettlementClearingSubmittedFact> { it.occurredAt }
+                            .thenBy { it.settlementClearingSubmissionId }
+                    )
+                val clearingAcceptance = clearingAcceptancesByObligation[obligation.settlementObligationId]
+                    .orEmpty()
+                    .maxWithOrNull(
+                        compareBy<SettlementClearingAcceptedFact> { it.occurredAt }
+                            .thenBy { it.settlementClearingAcceptanceId }
+                    )
+                val clearingRejection = clearingRejectionsByObligation[obligation.settlementObligationId]
+                    .orEmpty()
+                    .maxWithOrNull(
+                        compareBy<SettlementClearingRejectedFact> { it.occurredAt }
+                            .thenBy { it.settlementClearingRejectionId }
+                    )
+                val novation = novationsByObligation[obligation.settlementObligationId]
+                    .orEmpty()
+                    .maxWithOrNull(
+                        compareBy<SettlementNovationRecordedFact> { it.occurredAt }
+                            .thenBy { it.settlementNovationId }
+                    )
                 val instruction = instructionsByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementInstructionCreatedFact> { it.occurredAt }.thenBy { it.settlementInstructionId })
@@ -74,6 +107,10 @@ object SettlementObligationProjection {
                     .maxWithOrNull(compareBy<SettlementResolvedFact> { it.occurredAt }.thenBy { it.settlementResolutionId })
                 val updatedAt = listOfNotNull(
                     obligation.occurredAt,
+                    clearingSubmission?.occurredAt,
+                    clearingAcceptance?.occurredAt,
+                    clearingRejection?.occurredAt,
+                    novation?.occurredAt,
                     instruction?.occurredAt,
                     attempt?.occurredAt,
                     cashLeg?.occurredAt,
@@ -100,11 +137,25 @@ object SettlementObligationProjection {
                         ?: breakFact?.state
                         ?: attempt?.state
                         ?: instruction?.state
+                        ?: clearingRejection?.state
+                        ?: novation?.state
+                        ?: clearingAcceptance?.state
+                        ?: clearingSubmission?.state
                         ?: obligation.state,
                     exceptionState = resolution?.exceptionState
                         ?: repair?.let { SettlementRepairPostedState }
+                        ?: clearingRejection?.let { SettlementExceptionOpenState }
                         ?: breakFact?.state
                         ?: SettlementExceptionNoneState,
+                    clearingState = clearingRejection?.state
+                        ?: novation?.state
+                        ?: clearingAcceptance?.state
+                        ?: clearingSubmission?.state
+                        ?: "",
+                    settlementClearingSubmissionId = clearingSubmission?.settlementClearingSubmissionId.orEmpty(),
+                    settlementClearingAcceptanceId = clearingAcceptance?.settlementClearingAcceptanceId.orEmpty(),
+                    settlementClearingRejectionId = clearingRejection?.settlementClearingRejectionId.orEmpty(),
+                    settlementNovationId = novation?.settlementNovationId.orEmpty(),
                     settlementInstructionId = instruction?.settlementInstructionId.orEmpty(),
                     settlementAttemptId = attempt?.settlementAttemptId.orEmpty(),
                     settlementAttemptNumber = attempt?.attemptNumber ?: 0,

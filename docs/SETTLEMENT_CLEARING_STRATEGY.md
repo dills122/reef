@@ -155,9 +155,9 @@ Rules:
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
 - The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations. If no opening resource facts are seeded for a scenario, instant mode remains unconstrained for fast simulation. If resource facts are seeded, it checks buyer cash and seller securities before finality, emits failed leg outcomes plus a break on insufficiency, and only writes append-only ledger proof entries plus `SETTLED` facts when both legs pass. A posted repair unlocks the next deterministic attempt number; a successful retry writes ledger proof, `SETTLED`, and `RESOLVED` facts. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
-- The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, and now emits a minimal auto allocation, confirmation, and affirmation fact chain before the settlement instruction. It does not yet apply micro-batch netting or create clearing/novation records.
+- The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, and now emits allocation, confirmation, affirmation, clearing submission, clearing acceptance, and novation facts before the settlement instruction. It does not yet apply micro-batch netting.
 - Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
-- The next bounded post-trade sprint is [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). It should add clearing/novation facts, an exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior. It must not expand into full CCP/CNS clearing, production custody, or complete netted obligation settlement.
+- The bounded post-trade sprint is [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). Clearing/novation facts, an exception queue v1, and operator-readable lifecycle state are now in progress on the implementation branch. Remaining sprint work is scenario evidence for instant happy path, cash fail/repair, security fail/repair, ops-realistic pending behavior, and any read-only netting seed that stays small. It must not expand into full CCP/CNS clearing, production custody, or complete netted obligation settlement.
 
 Policy storage:
 
@@ -187,14 +187,18 @@ Obligation materialization:
 - deterministic instant allocation id: `settlement-allocation-settlement-obligation-{tradeId}`
 - deterministic instant confirmation id: `settlement-confirmation-settlement-obligation-{tradeId}`
 - deterministic instant affirmation id: `settlement-affirmation-settlement-obligation-{tradeId}`
-- minimal post-trade chain: allocation references the settlement obligation, canonical trade id, canonical buy/sell order ids, and buyer/seller accounts; confirmation references the allocation and obligation; affirmation references the confirmation, allocation, and obligation; the first settlement instruction is caused by the affirmation
+- deterministic instant clearing submission id: `settlement-clearing-submission-settlement-obligation-{tradeId}`
+- deterministic instant clearing acceptance id: `settlement-clearing-acceptance-settlement-obligation-{tradeId}`
+- deterministic instant novation id: `settlement-novation-settlement-obligation-{tradeId}`
+- minimal post-trade chain: allocation references the settlement obligation, canonical trade id, canonical buy/sell order ids, and buyer/seller accounts; confirmation references the allocation and obligation; affirmation references the confirmation, allocation, and obligation; clearing submission references the affirmation; clearing acceptance references the submission; novation references the acceptance; the first settlement instruction is caused by the novation
 - ledger proof: buyer cash debit, seller cash credit, seller security debit, buyer security credit
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 - ledger query surface: `GET /api/v1/settlement/ledger/{scenarioRunId}` returns replayable participant/account/asset balances plus per-settlement proof totals derived from append-only ledger facts
+- exceptions query surface: `GET /api/v1/settlement/exceptions/{scenarioRunId}` returns an operator-readable queue projection over clearing rejections and settlement breaks, including open/repair-posted/resolved counts and action hints
 - proof query surface: `GET /api/v1/settlement/proof/{scenarioRunId}` returns one replay proof with trade/obligation/attempt/ledger identifiers, final balances, settlement proof rows, profile/policy evidence, `CLEAN`/`GAPPED` proof status, causation-gap checks, fact counts, and a deterministic checksum
-- settlement facts/proof now expose allocation, confirmation, and affirmation counts and identifiers for the minimal instant-post-trade chain
+- settlement facts/proof now expose allocation, confirmation, affirmation, clearing, and novation counts and identifiers for the minimal instant-post-trade chain
 - score query surface: `GET /api/v1/settlement/score/{scenarioRunId}` returns participant scoring inputs from the same facts: settled balances, pending value, haircut-adjusted pending value, blocked unsettled value, fail counts, aged-fail counts, repair-pending counts, and penalty points; optional `asOf` and `agedFailAfterSeconds` query parameters let scenario-clock checks age open fails deterministically
 - resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
 - constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts
@@ -212,7 +216,9 @@ Likely settlement/clearing tables:
 - `settlement.allocations`
 - `settlement.confirmations`
 - `settlement.affirmations`
-- `settlement.clearing_records`
+- `settlement.clearing_submissions`
+- `settlement.clearing_acceptances`
+- `settlement.clearing_rejections`
 - `settlement.novations`
 - `settlement.netting_batches`
 - `settlement.netted_obligations`

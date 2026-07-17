@@ -67,6 +67,95 @@ class SettlementFactStoreTest {
     }
 
     @Test
+    fun appendsAndReadsClearingAndNovationFacts() {
+        val store = InMemorySettlementFactStore()
+        val facts = clearingLifecycleFacts("run-clearing")
+
+        store.appendFacts(facts)
+        store.appendFacts(facts)
+        val stored = store.factsByScenarioRunId("run-clearing")
+
+        assertEquals(listOf("clearing-submission-1"), stored.clearingSubmissions.map { it.settlementClearingSubmissionId })
+        assertEquals(listOf("clearing-acceptance-1"), stored.clearingAcceptances.map { it.settlementClearingAcceptanceId })
+        assertEquals(listOf("novation-1"), stored.novations.map { it.settlementNovationId })
+        assertEquals("affirmation-1", stored.clearingSubmissions.single().causationId)
+        assertEquals("clearing-submission-1", stored.clearingAcceptances.single().causationId)
+        assertEquals("clearing-acceptance-1", stored.novations.single().causationId)
+    }
+
+    @Test
+    fun appendsAndReadsClearingRejectedFact() {
+        val store = InMemorySettlementFactStore()
+        val facts = clearingLifecycleFacts("run-rejected").copy(
+            clearingAcceptances = emptyList(),
+            novations = emptyList(),
+            clearingRejections = listOf(clearingRejected("run-rejected"))
+        )
+
+        store.appendFacts(facts)
+        val stored = store.factsByScenarioRunId("run-rejected")
+
+        assertEquals(listOf("clearing-rejection-1"), stored.clearingRejections.map { it.settlementClearingRejectionId })
+        assertEquals(SettlementClearingRejectedReason, stored.clearingRejections.single().reason)
+    }
+
+    @Test
+    fun rejectsClearingFactsWithoutRequiredParents() {
+        val store = InMemorySettlementFactStore()
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(
+                    scenarioRunId = "run-clearing",
+                    obligations = listOf(obligation("run-clearing")),
+                    clearingSubmissions = listOf(clearingSubmitted("run-clearing"))
+                )
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                clearingLifecycleFacts("run-clearing").copy(
+                    clearingSubmissions = emptyList(),
+                    clearingAcceptances = listOf(clearingAccepted("run-clearing")),
+                    novations = emptyList()
+                )
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                clearingLifecycleFacts("run-clearing").copy(
+                    clearingAcceptances = emptyList(),
+                    novations = listOf(novation("run-clearing"))
+                )
+            )
+        }
+    }
+
+    @Test
+    fun rejectsInvalidClearingRejectionShape() {
+        val store = InMemorySettlementFactStore()
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                clearingLifecycleFacts("run-rejected").copy(
+                    clearingAcceptances = emptyList(),
+                    novations = emptyList(),
+                    clearingRejections = listOf(clearingRejected("run-rejected").copy(reason = "OTHER"))
+                )
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                clearingLifecycleFacts("run-rejected").copy(
+                    clearingAcceptances = emptyList(),
+                    novations = emptyList(),
+                    clearingRejections = listOf(clearingRejected("run-rejected").copy(state = "OTHER"))
+                )
+            )
+        }
+    }
+
+    @Test
     fun rejectsSettlementWithoutLegAndLedgerProof() {
         val store = InMemorySettlementFactStore()
 
@@ -582,6 +671,19 @@ private fun finalityFacts(scenarioRunId: String): SettlementFactBundle {
     )
 }
 
+private fun clearingLifecycleFacts(scenarioRunId: String): SettlementFactBundle {
+    return SettlementFactBundle(
+        scenarioRunId = scenarioRunId,
+        obligations = listOf(obligation(scenarioRunId)),
+        allocations = listOf(allocation(scenarioRunId)),
+        confirmations = listOf(confirmation(scenarioRunId)),
+        affirmations = listOf(affirmation(scenarioRunId)),
+        clearingSubmissions = listOf(clearingSubmitted(scenarioRunId)),
+        clearingAcceptances = listOf(clearingAccepted(scenarioRunId)),
+        novations = listOf(novation(scenarioRunId))
+    )
+}
+
 private fun ledgerEntry(
     scenarioRunId: String,
     ledgerEntryId: String,
@@ -627,6 +729,18 @@ private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: I
         affirmations = affirmations.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
+        clearingSubmissions = clearingSubmissions.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        clearingAcceptances = clearingAcceptances.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        clearingRejections = clearingRejections.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        novations = novations.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
         instructions = instructions.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
@@ -661,6 +775,10 @@ private fun SettlementFactBundle.profileIds(): Set<String> {
             allocations.map { it.postTradeProfileId } +
             confirmations.map { it.postTradeProfileId } +
             affirmations.map { it.postTradeProfileId } +
+            clearingSubmissions.map { it.postTradeProfileId } +
+            clearingAcceptances.map { it.postTradeProfileId } +
+            clearingRejections.map { it.postTradeProfileId } +
+            novations.map { it.postTradeProfileId } +
             instructions.map { it.postTradeProfileId } +
             attempts.map { it.postTradeProfileId } +
             legOutcomes.map { it.postTradeProfileId } +
@@ -679,6 +797,10 @@ private fun SettlementFactBundle.policyVersions(): Set<Int> {
             allocations.map { it.postTradePolicyVersion } +
             confirmations.map { it.postTradePolicyVersion } +
             affirmations.map { it.postTradePolicyVersion } +
+            clearingSubmissions.map { it.postTradePolicyVersion } +
+            clearingAcceptances.map { it.postTradePolicyVersion } +
+            clearingRejections.map { it.postTradePolicyVersion } +
+            novations.map { it.postTradePolicyVersion } +
             instructions.map { it.postTradePolicyVersion } +
             attempts.map { it.postTradePolicyVersion } +
             legOutcomes.map { it.postTradePolicyVersion } +
@@ -703,6 +825,98 @@ private fun obligation(scenarioRunId: String): SettlementObligationCreatedFact {
         quantity = "100",
         cashAmount = "15000.00",
         currency = "USD",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun allocation(scenarioRunId: String): SettlementAllocationProposedFact {
+    return SettlementAllocationProposedFact(
+        settlementAllocationId = "allocation-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "obl-1",
+        tradeId = "trade-1",
+        buyOrderId = "buy-order-1",
+        sellOrderId = "sell-order-1",
+        buyerAccountId = "account-buyer-1",
+        sellerAccountId = "account-seller-1",
+        quantity = "100",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun confirmation(scenarioRunId: String): SettlementConfirmationGeneratedFact {
+    return SettlementConfirmationGeneratedFact(
+        settlementConfirmationId = "confirmation-1",
+        settlementAllocationId = "allocation-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "allocation-1",
+        tradeId = "trade-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun affirmation(scenarioRunId: String): SettlementAffirmationAcceptedFact {
+    return SettlementAffirmationAcceptedFact(
+        settlementAffirmationId = "affirmation-1",
+        settlementConfirmationId = "confirmation-1",
+        settlementAllocationId = "allocation-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "confirmation-1",
+        tradeId = "trade-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun clearingSubmitted(scenarioRunId: String): SettlementClearingSubmittedFact {
+    return SettlementClearingSubmittedFact(
+        settlementClearingSubmissionId = "clearing-submission-1",
+        settlementObligationId = "obl-1",
+        settlementAffirmationId = "affirmation-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "affirmation-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun clearingAccepted(scenarioRunId: String): SettlementClearingAcceptedFact {
+    return SettlementClearingAcceptedFact(
+        settlementClearingAcceptanceId = "clearing-acceptance-1",
+        settlementClearingSubmissionId = "clearing-submission-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "clearing-submission-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun clearingRejected(scenarioRunId: String): SettlementClearingRejectedFact {
+    return SettlementClearingRejectedFact(
+        settlementClearingRejectionId = "clearing-rejection-1",
+        settlementClearingSubmissionId = "clearing-submission-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "clearing-submission-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun novation(scenarioRunId: String): SettlementNovationRecordedFact {
+    return SettlementNovationRecordedFact(
+        settlementNovationId = "novation-1",
+        settlementClearingAcceptanceId = "clearing-acceptance-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "clearing-acceptance-1",
         occurredAt = Instant.parse("2026-01-01T00:00:00Z")
     )
 }

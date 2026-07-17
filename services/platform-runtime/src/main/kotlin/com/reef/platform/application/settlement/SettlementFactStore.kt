@@ -16,6 +16,11 @@ const val SettlementConfirmationGeneratedState = "CONFIRMATION_GENERATED"
 const val SettlementAffirmationAcceptedState = "AFFIRMATION_ACCEPTED"
 const val SettlementAffirmationActorType = "SYSTEM"
 const val SettlementAffirmationActorId = "post-trade-auto-affirmer"
+const val SettlementClearingSubmittedState = "CLEARING_SUBMITTED"
+const val SettlementClearingAcceptedState = "CLEARING_ACCEPTED"
+const val SettlementClearingRejectedState = "CLEARING_REJECTED"
+const val SettlementClearingRejectedReason = "CLEARING_REJECT"
+const val SettlementNovationRecordedState = "NOVATION_RECORDED"
 const val SettlementInstructionCreatedState = "INSTRUCTION_CREATED"
 const val SettlementInstructionTypeDvp = "DVP"
 const val SettlementAttemptStartedState = "ATTEMPT_STARTED"
@@ -105,6 +110,59 @@ data class SettlementAffirmationAcceptedFact(
     val actorType: String = SettlementAffirmationActorType,
     val actorId: String = SettlementAffirmationActorId,
     val state: String = SettlementAffirmationAcceptedState,
+    val occurredAt: Instant
+)
+
+data class SettlementClearingSubmittedFact(
+    val settlementClearingSubmissionId: String,
+    val settlementObligationId: String,
+    val settlementAffirmationId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val state: String = SettlementClearingSubmittedState,
+    val occurredAt: Instant
+)
+
+data class SettlementClearingAcceptedFact(
+    val settlementClearingAcceptanceId: String,
+    val settlementClearingSubmissionId: String,
+    val settlementObligationId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val state: String = SettlementClearingAcceptedState,
+    val occurredAt: Instant
+)
+
+data class SettlementClearingRejectedFact(
+    val settlementClearingRejectionId: String,
+    val settlementClearingSubmissionId: String,
+    val settlementObligationId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val reason: String = SettlementClearingRejectedReason,
+    val state: String = SettlementClearingRejectedState,
+    val occurredAt: Instant
+)
+
+data class SettlementNovationRecordedFact(
+    val settlementNovationId: String,
+    val settlementClearingAcceptanceId: String,
+    val settlementObligationId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val state: String = SettlementNovationRecordedState,
     val occurredAt: Instant
 )
 
@@ -263,6 +321,10 @@ data class SettlementFactBundle(
     val allocations: List<SettlementAllocationProposedFact> = emptyList(),
     val confirmations: List<SettlementConfirmationGeneratedFact> = emptyList(),
     val affirmations: List<SettlementAffirmationAcceptedFact> = emptyList(),
+    val clearingSubmissions: List<SettlementClearingSubmittedFact> = emptyList(),
+    val clearingAcceptances: List<SettlementClearingAcceptedFact> = emptyList(),
+    val clearingRejections: List<SettlementClearingRejectedFact> = emptyList(),
+    val novations: List<SettlementNovationRecordedFact> = emptyList(),
     val instructions: List<SettlementInstructionCreatedFact> = emptyList(),
     val attempts: List<SettlementAttemptStartedFact> = emptyList(),
     val legOutcomes: List<SettlementLegOutcomeFact> = emptyList(),
@@ -275,7 +337,9 @@ data class SettlementFactBundle(
 ) {
     fun isEmpty(): Boolean =
         resourcePositions.isEmpty() && obligations.isEmpty() && allocations.isEmpty() &&
-            confirmations.isEmpty() && affirmations.isEmpty() && instructions.isEmpty() && attempts.isEmpty() &&
+            confirmations.isEmpty() && affirmations.isEmpty() && clearingSubmissions.isEmpty() &&
+            clearingAcceptances.isEmpty() && clearingRejections.isEmpty() && novations.isEmpty() &&
+            instructions.isEmpty() && attempts.isEmpty() &&
             legOutcomes.isEmpty() && ledgerEntries.isEmpty() && settlements.isEmpty() &&
             breaks.isEmpty() && repairs.isEmpty() && resolutions.isEmpty() && operatorActions.isEmpty()
 }
@@ -291,6 +355,10 @@ class InMemorySettlementFactStore : SettlementFactStore {
     private val allocations = ConcurrentHashMap<String, SettlementAllocationProposedFact>()
     private val confirmations = ConcurrentHashMap<String, SettlementConfirmationGeneratedFact>()
     private val affirmations = ConcurrentHashMap<String, SettlementAffirmationAcceptedFact>()
+    private val clearingSubmissions = ConcurrentHashMap<String, SettlementClearingSubmittedFact>()
+    private val clearingAcceptances = ConcurrentHashMap<String, SettlementClearingAcceptedFact>()
+    private val clearingRejections = ConcurrentHashMap<String, SettlementClearingRejectedFact>()
+    private val novations = ConcurrentHashMap<String, SettlementNovationRecordedFact>()
     private val instructions = ConcurrentHashMap<String, SettlementInstructionCreatedFact>()
     private val attempts = ConcurrentHashMap<String, SettlementAttemptStartedFact>()
     private val legOutcomes = ConcurrentHashMap<String, SettlementLegOutcomeFact>()
@@ -310,6 +378,10 @@ class InMemorySettlementFactStore : SettlementFactStore {
         facts.allocations.forEach { allocations.putIfAbsent(it.settlementAllocationId, it) }
         facts.confirmations.forEach { confirmations.putIfAbsent(it.settlementConfirmationId, it) }
         facts.affirmations.forEach { affirmations.putIfAbsent(it.settlementAffirmationId, it) }
+        facts.clearingSubmissions.forEach { clearingSubmissions.putIfAbsent(it.settlementClearingSubmissionId, it) }
+        facts.clearingAcceptances.forEach { clearingAcceptances.putIfAbsent(it.settlementClearingAcceptanceId, it) }
+        facts.clearingRejections.forEach { clearingRejections.putIfAbsent(it.settlementClearingRejectionId, it) }
+        facts.novations.forEach { novations.putIfAbsent(it.settlementNovationId, it) }
         facts.instructions.forEach { instructions.putIfAbsent(it.settlementInstructionId, it) }
         facts.attempts.forEach { attempts.putIfAbsent(it.settlementAttemptId, it) }
         facts.legOutcomes.forEach { legOutcomes.putIfAbsent(it.settlementLegOutcomeId, it) }
@@ -331,6 +403,10 @@ class InMemorySettlementFactStore : SettlementFactStore {
             allocations = allocations.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             confirmations = confirmations.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             affirmations = affirmations.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
+            clearingSubmissions = clearingSubmissions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
+            clearingAcceptances = clearingAcceptances.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
+            clearingRejections = clearingRejections.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
+            novations = novations.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             instructions = instructions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             attempts = attempts.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             legOutcomes = legOutcomes.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
@@ -353,6 +429,10 @@ data class PostgresSettlementSqlNames(
     val allocations = qualify("allocations")
     val confirmations = qualify("confirmations")
     val affirmations = qualify("affirmations")
+    val clearingSubmissions = qualify("clearing_submissions")
+    val clearingAcceptances = qualify("clearing_acceptances")
+    val clearingRejections = qualify("clearing_rejections")
+    val novations = qualify("novations")
     val instructions = qualify("instructions")
     val attempts = qualify("attempts")
     val legOutcomes = qualify("leg_outcomes")
@@ -392,6 +472,10 @@ class PostgresSettlementFactStore(
                         allocations = names.allocations,
                         confirmations = names.confirmations,
                         affirmations = names.affirmations,
+                        clearingSubmissions = names.clearingSubmissions,
+                        clearingAcceptances = names.clearingAcceptances,
+                        clearingRejections = names.clearingRejections,
+                        novations = names.novations,
                         instructions = names.instructions,
                         attempts = names.attempts,
                         legOutcomes = names.legOutcomes,
@@ -504,6 +588,75 @@ class PostgresSettlementFactStore(
                       actor_type TEXT NOT NULL CHECK (actor_type = 'SYSTEM'),
                       actor_id TEXT NOT NULL,
                       state TEXT NOT NULL CHECK (state = 'AFFIRMATION_ACCEPTED'),
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.clearingSubmissions} (
+                      settlement_clearing_submission_id TEXT PRIMARY KEY,
+                      settlement_obligation_id TEXT NOT NULL,
+                      settlement_affirmation_id TEXT NOT NULL,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      state TEXT NOT NULL CHECK (state = 'CLEARING_SUBMITTED'),
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.clearingAcceptances} (
+                      settlement_clearing_acceptance_id TEXT PRIMARY KEY,
+                      settlement_clearing_submission_id TEXT NOT NULL,
+                      settlement_obligation_id TEXT NOT NULL,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      state TEXT NOT NULL CHECK (state = 'CLEARING_ACCEPTED'),
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.clearingRejections} (
+                      settlement_clearing_rejection_id TEXT PRIMARY KEY,
+                      settlement_clearing_submission_id TEXT NOT NULL,
+                      settlement_obligation_id TEXT NOT NULL,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      reason TEXT NOT NULL CHECK (reason = 'CLEARING_REJECT'),
+                      state TEXT NOT NULL CHECK (state = 'CLEARING_REJECTED'),
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.novations} (
+                      settlement_novation_id TEXT PRIMARY KEY,
+                      settlement_clearing_acceptance_id TEXT NOT NULL,
+                      settlement_obligation_id TEXT NOT NULL,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      state TEXT NOT NULL CHECK (state = 'NOVATION_RECORDED'),
                       occurred_at TIMESTAMPTZ NOT NULL,
                       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
@@ -698,6 +851,10 @@ class PostgresSettlementFactStore(
                 insertAllocations(conn, facts.allocations)
                 insertConfirmations(conn, facts.confirmations)
                 insertAffirmations(conn, facts.affirmations)
+                insertClearingSubmissions(conn, facts.clearingSubmissions)
+                insertClearingAcceptances(conn, facts.clearingAcceptances)
+                insertClearingRejections(conn, facts.clearingRejections)
+                insertNovations(conn, facts.novations)
                 insertInstructions(conn, facts.instructions)
                 insertAttempts(conn, facts.attempts)
                 insertLegOutcomes(conn, facts.legOutcomes)
@@ -731,6 +888,10 @@ class PostgresSettlementFactStore(
             allocations = queryAllocations(conn, scenarioRunId),
             confirmations = queryConfirmations(conn, scenarioRunId),
             affirmations = queryAffirmations(conn, scenarioRunId),
+            clearingSubmissions = queryClearingSubmissions(conn, scenarioRunId),
+            clearingAcceptances = queryClearingAcceptances(conn, scenarioRunId),
+            clearingRejections = queryClearingRejections(conn, scenarioRunId),
+            novations = queryNovations(conn, scenarioRunId),
             instructions = queryInstructions(conn, scenarioRunId),
             attempts = queryAttempts(conn, scenarioRunId),
             legOutcomes = queryLegOutcomes(conn, scenarioRunId),
@@ -900,6 +1061,123 @@ class PostgresSettlementFactStore(
                 ps.setString(12, it.actorId)
                 ps.setString(13, it.state)
                 ps.setTimestamp(14, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
+    }
+
+    private fun insertClearingSubmissions(conn: Connection, facts: List<SettlementClearingSubmittedFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.clearingSubmissions}(
+              settlement_clearing_submission_id, settlement_obligation_id, settlement_affirmation_id,
+              scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+              correlation_id, causation_id, state, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (settlement_clearing_submission_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.settlementClearingSubmissionId)
+                ps.setString(2, it.settlementObligationId)
+                ps.setString(3, it.settlementAffirmationId)
+                ps.setString(4, it.scenarioRunId)
+                ps.setString(5, it.postTradeProfileId)
+                ps.setInt(6, it.postTradePolicyVersion)
+                ps.setString(7, it.correlationId)
+                ps.setString(8, it.causationId)
+                ps.setString(9, it.state)
+                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
+    }
+
+    private fun insertClearingAcceptances(conn: Connection, facts: List<SettlementClearingAcceptedFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.clearingAcceptances}(
+              settlement_clearing_acceptance_id, settlement_clearing_submission_id,
+              settlement_obligation_id, scenario_run_id, post_trade_profile_id,
+              post_trade_policy_version, correlation_id, causation_id, state, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (settlement_clearing_acceptance_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.settlementClearingAcceptanceId)
+                ps.setString(2, it.settlementClearingSubmissionId)
+                ps.setString(3, it.settlementObligationId)
+                ps.setString(4, it.scenarioRunId)
+                ps.setString(5, it.postTradeProfileId)
+                ps.setInt(6, it.postTradePolicyVersion)
+                ps.setString(7, it.correlationId)
+                ps.setString(8, it.causationId)
+                ps.setString(9, it.state)
+                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
+    }
+
+    private fun insertClearingRejections(conn: Connection, facts: List<SettlementClearingRejectedFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.clearingRejections}(
+              settlement_clearing_rejection_id, settlement_clearing_submission_id,
+              settlement_obligation_id, scenario_run_id, post_trade_profile_id,
+              post_trade_policy_version, correlation_id, causation_id, reason, state, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (settlement_clearing_rejection_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.settlementClearingRejectionId)
+                ps.setString(2, it.settlementClearingSubmissionId)
+                ps.setString(3, it.settlementObligationId)
+                ps.setString(4, it.scenarioRunId)
+                ps.setString(5, it.postTradeProfileId)
+                ps.setInt(6, it.postTradePolicyVersion)
+                ps.setString(7, it.correlationId)
+                ps.setString(8, it.causationId)
+                ps.setString(9, it.reason)
+                ps.setString(10, it.state)
+                ps.setTimestamp(11, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
+    }
+
+    private fun insertNovations(conn: Connection, facts: List<SettlementNovationRecordedFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.novations}(
+              settlement_novation_id, settlement_clearing_acceptance_id, settlement_obligation_id,
+              scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+              correlation_id, causation_id, state, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (settlement_novation_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.settlementNovationId)
+                ps.setString(2, it.settlementClearingAcceptanceId)
+                ps.setString(3, it.settlementObligationId)
+                ps.setString(4, it.scenarioRunId)
+                ps.setString(5, it.postTradeProfileId)
+                ps.setInt(6, it.postTradePolicyVersion)
+                ps.setString(7, it.correlationId)
+                ps.setString(8, it.causationId)
+                ps.setString(9, it.state)
+                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
             ps.executeBatch()
@@ -1284,6 +1562,86 @@ class PostgresSettlementFactStore(
         }
     }
 
+    private fun queryClearingSubmissions(conn: Connection, scenarioRunId: String): List<SettlementClearingSubmittedFact> {
+        conn.prepareStatement(
+            """
+            SELECT settlement_clearing_submission_id, settlement_obligation_id, settlement_affirmation_id,
+                   scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+                   correlation_id, causation_id, state, occurred_at
+            FROM ${names.clearingSubmissions}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, settlement_clearing_submission_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementClearingSubmittedFact>()
+                while (rs.next()) records.add(rs.toClearingSubmission())
+                return records
+            }
+        }
+    }
+
+    private fun queryClearingAcceptances(conn: Connection, scenarioRunId: String): List<SettlementClearingAcceptedFact> {
+        conn.prepareStatement(
+            """
+            SELECT settlement_clearing_acceptance_id, settlement_clearing_submission_id,
+                   settlement_obligation_id, scenario_run_id, post_trade_profile_id,
+                   post_trade_policy_version, correlation_id, causation_id, state, occurred_at
+            FROM ${names.clearingAcceptances}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, settlement_clearing_acceptance_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementClearingAcceptedFact>()
+                while (rs.next()) records.add(rs.toClearingAcceptance())
+                return records
+            }
+        }
+    }
+
+    private fun queryClearingRejections(conn: Connection, scenarioRunId: String): List<SettlementClearingRejectedFact> {
+        conn.prepareStatement(
+            """
+            SELECT settlement_clearing_rejection_id, settlement_clearing_submission_id,
+                   settlement_obligation_id, scenario_run_id, post_trade_profile_id,
+                   post_trade_policy_version, correlation_id, causation_id, reason, state, occurred_at
+            FROM ${names.clearingRejections}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, settlement_clearing_rejection_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementClearingRejectedFact>()
+                while (rs.next()) records.add(rs.toClearingRejection())
+                return records
+            }
+        }
+    }
+
+    private fun queryNovations(conn: Connection, scenarioRunId: String): List<SettlementNovationRecordedFact> {
+        conn.prepareStatement(
+            """
+            SELECT settlement_novation_id, settlement_clearing_acceptance_id, settlement_obligation_id,
+                   scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+                   correlation_id, causation_id, state, occurred_at
+            FROM ${names.novations}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, settlement_novation_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementNovationRecordedFact>()
+                while (rs.next()) records.add(rs.toNovation())
+                return records
+            }
+        }
+    }
+
     private fun queryAttempts(conn: Connection, scenarioRunId: String): List<SettlementAttemptStartedFact> {
         conn.prepareStatement(
             """
@@ -1470,6 +1828,10 @@ class PostgresSettlementFactStore(
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_allocations_run ON ${names.allocations}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_confirmations_run ON ${names.confirmations}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_affirmations_run ON ${names.affirmations}(scenario_run_id, occurred_at)")
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_clearing_submissions_run ON ${names.clearingSubmissions}(scenario_run_id, occurred_at)")
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_clearing_acceptances_run ON ${names.clearingAcceptances}(scenario_run_id, occurred_at)")
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_clearing_rejections_run ON ${names.clearingRejections}(scenario_run_id, occurred_at)")
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_novations_run ON ${names.novations}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_instructions_run ON ${names.instructions}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_attempts_run ON ${names.attempts}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_leg_outcomes_run ON ${names.legOutcomes}(scenario_run_id, occurred_at)")
@@ -1488,6 +1850,10 @@ class PostgresSettlementFactStore(
             names.allocations,
             names.confirmations,
             names.affirmations,
+            names.clearingSubmissions,
+            names.clearingAcceptances,
+            names.clearingRejections,
+            names.novations,
             names.instructions,
             names.attempts,
             names.legOutcomes,
@@ -1527,6 +1893,10 @@ private fun SettlementFactBundle.merge(next: SettlementFactBundle): SettlementFa
         allocations = allocations.byId(next.allocations) { it.settlementAllocationId },
         confirmations = confirmations.byId(next.confirmations) { it.settlementConfirmationId },
         affirmations = affirmations.byId(next.affirmations) { it.settlementAffirmationId },
+        clearingSubmissions = clearingSubmissions.byId(next.clearingSubmissions) { it.settlementClearingSubmissionId },
+        clearingAcceptances = clearingAcceptances.byId(next.clearingAcceptances) { it.settlementClearingAcceptanceId },
+        clearingRejections = clearingRejections.byId(next.clearingRejections) { it.settlementClearingRejectionId },
+        novations = novations.byId(next.novations) { it.settlementNovationId },
         instructions = instructions.byId(next.instructions) { it.settlementInstructionId },
         attempts = attempts.byId(next.attempts) { it.settlementAttemptId },
         legOutcomes = legOutcomes.byId(next.legOutcomes) { it.settlementLegOutcomeId },
@@ -1553,6 +1923,9 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
     val obligations = facts.obligations.associateBy { it.settlementObligationId }
     val allocations = facts.allocations.associateBy { it.settlementAllocationId }
     val confirmations = facts.confirmations.associateBy { it.settlementConfirmationId }
+    val affirmations = facts.affirmations.associateBy { it.settlementAffirmationId }
+    val clearingSubmissions = facts.clearingSubmissions.associateBy { it.settlementClearingSubmissionId }
+    val clearingAcceptances = facts.clearingAcceptances.associateBy { it.settlementClearingAcceptanceId }
     val instructions = facts.instructions.associateBy { it.settlementInstructionId }
     val attempts = facts.attempts.associateBy { it.settlementAttemptId }
     val legOutcomesByAttempt = facts.legOutcomes.groupBy { it.settlementAttemptId }
@@ -1565,6 +1938,10 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
             facts.allocations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.confirmations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.affirmations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.clearingSubmissions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.clearingAcceptances.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.clearingRejections.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.novations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.instructions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.attempts.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.legOutcomes.map { it.postTradeProfileId to it.postTradePolicyVersion } +
@@ -1665,6 +2042,79 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         require(it.state == SettlementAffirmationAcceptedState) {
             "affirmation state must be $SettlementAffirmationAcceptedState"
         }
+    }
+
+    facts.clearingSubmissions.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.settlementClearingSubmissionId.isNotBlank()) { "settlementClearingSubmissionId is required" }
+        val affirmation = affirmations[it.settlementAffirmationId]
+        require(affirmation != null) { "clearing submission must reference existing affirmation" }
+        require(affirmation.settlementObligationId == it.settlementObligationId) {
+            "clearing submission obligation must match affirmation obligation"
+        }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, affirmation)) {
+            "clearing submission post-trade profile must match affirmation"
+        }
+        require(obligations[it.settlementObligationId] != null) { "clearing submission must reference existing obligation" }
+        require(it.state == SettlementClearingSubmittedState) {
+            "clearing submission state must be $SettlementClearingSubmittedState"
+        }
+    }
+
+    facts.clearingAcceptances.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.settlementClearingAcceptanceId.isNotBlank()) { "settlementClearingAcceptanceId is required" }
+        val submission = clearingSubmissions[it.settlementClearingSubmissionId]
+        require(submission != null) { "clearing acceptance must reference existing clearing submission" }
+        require(submission.settlementObligationId == it.settlementObligationId) {
+            "clearing acceptance obligation must match clearing submission obligation"
+        }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, submission)) {
+            "clearing acceptance post-trade profile must match clearing submission"
+        }
+        require(obligations[it.settlementObligationId] != null) { "clearing acceptance must reference existing obligation" }
+        require(it.state == SettlementClearingAcceptedState) {
+            "clearing acceptance state must be $SettlementClearingAcceptedState"
+        }
+    }
+
+    facts.clearingRejections.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.settlementClearingRejectionId.isNotBlank()) { "settlementClearingRejectionId is required" }
+        val submission = clearingSubmissions[it.settlementClearingSubmissionId]
+        require(submission != null) { "clearing rejection must reference existing clearing submission" }
+        require(submission.settlementObligationId == it.settlementObligationId) {
+            "clearing rejection obligation must match clearing submission obligation"
+        }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, submission)) {
+            "clearing rejection post-trade profile must match clearing submission"
+        }
+        require(obligations[it.settlementObligationId] != null) { "clearing rejection must reference existing obligation" }
+        require(it.reason == SettlementClearingRejectedReason) {
+            "clearing rejection reason must be $SettlementClearingRejectedReason"
+        }
+        require(it.state == SettlementClearingRejectedState) {
+            "clearing rejection state must be $SettlementClearingRejectedState"
+        }
+    }
+
+    facts.novations.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.settlementNovationId.isNotBlank()) { "settlementNovationId is required" }
+        val acceptance = clearingAcceptances[it.settlementClearingAcceptanceId]
+        require(acceptance != null) { "novation must reference existing clearing acceptance" }
+        require(acceptance.settlementObligationId == it.settlementObligationId) {
+            "novation obligation must match clearing acceptance obligation"
+        }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, acceptance)) {
+            "novation post-trade profile must match clearing acceptance"
+        }
+        require(obligations[it.settlementObligationId] != null) { "novation must reference existing obligation" }
+        require(it.state == SettlementNovationRecordedState) { "novation state must be $SettlementNovationRecordedState" }
     }
 
     facts.attempts.forEach {
@@ -1880,6 +2330,30 @@ private fun profileMatchesParent(
 private fun profileMatchesParent(
     postTradeProfileId: String,
     postTradePolicyVersion: Int,
+    parent: SettlementAffirmationAcceptedFact?
+): Boolean = parent != null &&
+    parent.postTradeProfileId == postTradeProfileId &&
+    parent.postTradePolicyVersion == postTradePolicyVersion
+
+private fun profileMatchesParent(
+    postTradeProfileId: String,
+    postTradePolicyVersion: Int,
+    parent: SettlementClearingSubmittedFact?
+): Boolean = parent != null &&
+    parent.postTradeProfileId == postTradeProfileId &&
+    parent.postTradePolicyVersion == postTradePolicyVersion
+
+private fun profileMatchesParent(
+    postTradeProfileId: String,
+    postTradePolicyVersion: Int,
+    parent: SettlementClearingAcceptedFact?
+): Boolean = parent != null &&
+    parent.postTradeProfileId == postTradeProfileId &&
+    parent.postTradePolicyVersion == postTradePolicyVersion
+
+private fun profileMatchesParent(
+    postTradeProfileId: String,
+    postTradePolicyVersion: Int,
     parent: SettlementInstructionCreatedFact?
 ): Boolean = parent != null &&
     parent.postTradeProfileId == postTradeProfileId &&
@@ -2009,6 +2483,67 @@ private fun ResultSet.toAffirmation(): SettlementAffirmationAcceptedFact {
         actorId = getString(12),
         state = getString(13),
         occurredAt = getTimestamp(14).toInstant()
+    )
+}
+
+private fun ResultSet.toClearingSubmission(): SettlementClearingSubmittedFact {
+    return SettlementClearingSubmittedFact(
+        settlementClearingSubmissionId = getString(1),
+        settlementObligationId = getString(2),
+        settlementAffirmationId = getString(3),
+        scenarioRunId = getString(4),
+        postTradeProfileId = getString(5),
+        postTradePolicyVersion = getInt(6),
+        correlationId = getString(7),
+        causationId = getString(8),
+        state = getString(9),
+        occurredAt = getTimestamp(10).toInstant()
+    )
+}
+
+private fun ResultSet.toClearingAcceptance(): SettlementClearingAcceptedFact {
+    return SettlementClearingAcceptedFact(
+        settlementClearingAcceptanceId = getString(1),
+        settlementClearingSubmissionId = getString(2),
+        settlementObligationId = getString(3),
+        scenarioRunId = getString(4),
+        postTradeProfileId = getString(5),
+        postTradePolicyVersion = getInt(6),
+        correlationId = getString(7),
+        causationId = getString(8),
+        state = getString(9),
+        occurredAt = getTimestamp(10).toInstant()
+    )
+}
+
+private fun ResultSet.toClearingRejection(): SettlementClearingRejectedFact {
+    return SettlementClearingRejectedFact(
+        settlementClearingRejectionId = getString(1),
+        settlementClearingSubmissionId = getString(2),
+        settlementObligationId = getString(3),
+        scenarioRunId = getString(4),
+        postTradeProfileId = getString(5),
+        postTradePolicyVersion = getInt(6),
+        correlationId = getString(7),
+        causationId = getString(8),
+        reason = getString(9),
+        state = getString(10),
+        occurredAt = getTimestamp(11).toInstant()
+    )
+}
+
+private fun ResultSet.toNovation(): SettlementNovationRecordedFact {
+    return SettlementNovationRecordedFact(
+        settlementNovationId = getString(1),
+        settlementClearingAcceptanceId = getString(2),
+        settlementObligationId = getString(3),
+        scenarioRunId = getString(4),
+        postTradeProfileId = getString(5),
+        postTradePolicyVersion = getInt(6),
+        correlationId = getString(7),
+        causationId = getString(8),
+        state = getString(9),
+        occurredAt = getTimestamp(10).toInstant()
     )
 }
 

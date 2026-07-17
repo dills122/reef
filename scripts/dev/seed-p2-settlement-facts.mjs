@@ -43,21 +43,29 @@ console.log(
       scenarioRunId,
       postedStatus: posted.status ?? "ok",
       reportOut: args.reportOut ?? "",
-      obligationCount: fetched.obligations.length,
-      allocationCount: fetched.allocations.length,
-      confirmationCount: fetched.confirmations.length,
-      affirmationCount: fetched.affirmations.length,
-      instructionCount: fetched.instructions.length,
-      attemptCount: fetched.attempts.length,
-      settlementCount: fetched.settlements.length,
-      breakCount: fetched.breaks.length,
-      repairCount: fetched.repairs.length,
-      resolutionCount: fetched.resolutions.length,
+      obligationCount: factCount(fetched, "obligations"),
+      allocationCount: factCount(fetched, "allocations"),
+      confirmationCount: factCount(fetched, "confirmations"),
+      affirmationCount: factCount(fetched, "affirmations"),
+      clearingSubmissionCount: factCount(fetched, "clearingSubmissions"),
+      clearingAcceptanceCount: factCount(fetched, "clearingAcceptances"),
+      clearingRejectionCount: factCount(fetched, "clearingRejections"),
+      novationCount: factCount(fetched, "novations"),
+      instructionCount: factCount(fetched, "instructions"),
+      attemptCount: factCount(fetched, "attempts"),
+      settlementCount: factCount(fetched, "settlements"),
+      breakCount: factCount(fetched, "breaks"),
+      repairCount: factCount(fetched, "repairs"),
+      resolutionCount: factCount(fetched, "resolutions"),
     },
     null,
     2,
   ),
 );
+
+function factCount(facts, key) {
+  return Array.isArray(facts[key]) ? facts[key].length : 0;
+}
 
 async function fetchSettlementFacts(posted) {
   try {
@@ -160,16 +168,40 @@ async function requestJson(url, options = {}) {
 
 function validateReadback(facts, scenarioRunId) {
   const settledMode = hasSettledChain(facts);
+  const pendingMode = hasOpsPendingChain(facts);
   const counts = settledMode
     ? [
         ["obligations", 1],
         ["allocations", 1],
         ["confirmations", 1],
         ["affirmations", 1],
+        ["clearingSubmissions", 1],
+        ["clearingAcceptances", 1],
+        ["clearingRejections", 0],
+        ["novations", 1],
         ["instructions", 1],
         ["attempts", 1],
         ["settlements", 1],
       ]
+    : pendingMode
+      ? [
+          ["obligations", 1],
+          ["allocations", 0],
+          ["confirmations", 0],
+          ["affirmations", 0],
+          ["clearingSubmissions", 0],
+          ["clearingAcceptances", 0],
+          ["clearingRejections", 0],
+          ["novations", 0],
+          ["instructions", 0],
+          ["attempts", 0],
+          ["legOutcomes", 0],
+          ["ledgerEntries", 0],
+          ["settlements", 0],
+          ["breaks", 0],
+          ["repairs", 0],
+          ["resolutions", 0],
+        ]
     : [
         ["obligations", 1],
         ["breaks", 1],
@@ -190,17 +222,29 @@ function hasSettledChain(facts) {
   return Array.isArray(facts.settlements) && facts.settlements.length > 0;
 }
 
+function hasOpsPendingChain(facts) {
+  return Array.isArray(facts.obligations) && facts.obligations.length === 1 &&
+    factCount(facts, "breaks") === 0 &&
+    factCount(facts, "settlements") === 0;
+}
+
 function p2SettlementFacts(scenarioRunId, mode, factIdScope) {
   if (mode === "settled") {
     return p2SettledPostTradeFacts(scenarioRunId, factIdScope);
   }
-  if (mode !== "exception") {
-    throw new Error(`unknown P2 settlement facts mode: ${mode}`);
+  if (mode === "ops-pending") {
+    return p2OpsRealisticPendingFacts(scenarioRunId);
   }
-  return p2ExceptionFacts(scenarioRunId);
+  if (mode === "exception" || mode === "cash-exception") {
+    return p2ExceptionFacts(scenarioRunId, "CASH_LEG_FAILED", "POST_CASH_LEG_REPAIR", "cash-leg-failed");
+  }
+  if (mode === "security-exception") {
+    return p2ExceptionFacts(scenarioRunId, "SECURITY_LEG_FAILED", "POST_SECURITY_LEG_REPAIR", "security-leg-failed");
+  }
+  throw new Error(`unknown P2 settlement facts mode: ${mode}`);
 }
 
-function p2ExceptionFacts(scenarioRunId) {
+function p2ExceptionFacts(scenarioRunId, breakReason, repairAction, causationScope) {
   return {
     scenarioRunId,
     obligations: [
@@ -226,8 +270,8 @@ function p2ExceptionFacts(scenarioRunId) {
         settlementObligationId: `${scenarioRunId}-obl-1`,
         scenarioRunId,
         correlationId: `${scenarioRunId}-corr-1`,
-        causationId: `${scenarioRunId}-cash-leg-failed-1`,
-        reason: "CASH_LEG_FAILED",
+        causationId: `${scenarioRunId}-${causationScope}-1`,
+        reason: breakReason,
         state: "BROKEN",
         occurredAt: "2026-03-14T18:00:05Z",
       },
@@ -240,7 +284,7 @@ function p2ExceptionFacts(scenarioRunId) {
         scenarioRunId,
         correlationId: `${scenarioRunId}-corr-1`,
         causationId: `${scenarioRunId}-repair-command-1`,
-        repairAction: "POST_CASH_LEG_REPAIR",
+        repairAction,
         actorType: "USER",
         actorId: "settlement-ops-1",
         occurredAt: "2026-03-14T18:00:06Z",
@@ -263,6 +307,46 @@ function p2ExceptionFacts(scenarioRunId) {
   };
 }
 
+function p2OpsRealisticPendingFacts(scenarioRunId) {
+  return {
+    scenarioRunId,
+    obligations: [
+      {
+        settlementObligationId: `${scenarioRunId}-obl-1`,
+        scenarioRunId,
+        postTradeProfileId: "ops-realistic-v1",
+        postTradePolicyVersion: 1,
+        correlationId: `${scenarioRunId}-corr-1`,
+        causationId: `${scenarioRunId}-trade-1`,
+        tradeId: `${scenarioRunId}-trade-1`,
+        buyerParticipantId: "BUY_SIDE_1",
+        sellerParticipantId: "SELL_SIDE_1",
+        instrumentId: "XYZ",
+        quantity: "1000",
+        cashAmount: "100000.00",
+        currency: "USD",
+        state: "OBLIGATION_CREATED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    allocations: [],
+    confirmations: [],
+    affirmations: [],
+    clearingSubmissions: [],
+    clearingAcceptances: [],
+    clearingRejections: [],
+    novations: [],
+    instructions: [],
+    attempts: [],
+    legOutcomes: [],
+    ledgerEntries: [],
+    settlements: [],
+    breaks: [],
+    repairs: [],
+    resolutions: [],
+  };
+}
+
 function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
   if (!["stable", "run"].includes(factIdScope)) {
     throw new Error(`unknown P2 settlement fact id scope: ${factIdScope}`);
@@ -276,6 +360,9 @@ function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
   const allocationId = `settlement-allocation-${obligationId}`;
   const confirmationId = `settlement-confirmation-${obligationId}`;
   const affirmationId = `settlement-affirmation-${obligationId}`;
+  const clearingSubmissionId = `settlement-clearing-submission-${obligationId}`;
+  const clearingAcceptanceId = `settlement-clearing-acceptance-${obligationId}`;
+  const novationId = `settlement-novation-${obligationId}`;
   const instructionId = `settlement-instruction-${obligationId}-1`;
   const attemptId = `settlement-attempt-${obligationId}-1`;
   return {
@@ -351,6 +438,49 @@ function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
         occurredAt: "2026-03-14T18:00:04Z",
       },
     ],
+    clearingSubmissions: [
+      {
+        settlementClearingSubmissionId: clearingSubmissionId,
+        settlementObligationId: obligationId,
+        settlementAffirmationId: affirmationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: affirmationId,
+        state: "CLEARING_SUBMITTED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    clearingAcceptances: [
+      {
+        settlementClearingAcceptanceId: clearingAcceptanceId,
+        settlementClearingSubmissionId: clearingSubmissionId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: clearingSubmissionId,
+        state: "CLEARING_ACCEPTED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
+    clearingRejections: [],
+    novations: [
+      {
+        settlementNovationId: novationId,
+        settlementClearingAcceptanceId: clearingAcceptanceId,
+        settlementObligationId: obligationId,
+        scenarioRunId,
+        postTradeProfileId: profileId,
+        postTradePolicyVersion: policyVersion,
+        correlationId,
+        causationId: clearingAcceptanceId,
+        state: "NOVATION_RECORDED",
+        occurredAt: "2026-03-14T18:00:04Z",
+      },
+    ],
     instructions: [
       {
         settlementInstructionId: instructionId,
@@ -359,7 +489,7 @@ function p2SettledPostTradeFacts(scenarioRunId, factIdScope) {
         postTradeProfileId: profileId,
         postTradePolicyVersion: policyVersion,
         correlationId,
-        causationId: affirmationId,
+        causationId: novationId,
         instructionType: "DVP",
         state: "INSTRUCTION_CREATED",
         occurredAt: "2026-03-14T18:00:05Z",

@@ -14,6 +14,10 @@ data class SettlementObligationMaterializationResult(
     val materializedAllocations: Int,
     val materializedConfirmations: Int,
     val materializedAffirmations: Int,
+    val materializedClearingSubmissions: Int,
+    val materializedClearingAcceptances: Int,
+    val materializedClearingRejections: Int,
+    val materializedNovations: Int,
     val materializedInstructions: Int,
     val materializedAttempts: Int,
     val materializedLegOutcomes: Int,
@@ -38,6 +42,10 @@ class TradeSettlementObligationMaterializer(
         val allocations = mutableListOf<SettlementAllocationProposedFact>()
         val confirmations = mutableListOf<SettlementConfirmationGeneratedFact>()
         val affirmations = mutableListOf<SettlementAffirmationAcceptedFact>()
+        val clearingSubmissions = mutableListOf<SettlementClearingSubmittedFact>()
+        val clearingAcceptances = mutableListOf<SettlementClearingAcceptedFact>()
+        val clearingRejections = mutableListOf<SettlementClearingRejectedFact>()
+        val novations = mutableListOf<SettlementNovationRecordedFact>()
         val instructions = mutableListOf<SettlementInstructionCreatedFact>()
         val attempts = mutableListOf<SettlementAttemptStartedFact>()
         val legOutcomes = mutableListOf<SettlementLegOutcomeFact>()
@@ -50,6 +58,9 @@ class TradeSettlementObligationMaterializer(
         val materializedAllocationIds = existingFacts.allocations.mapTo(mutableSetOf()) { it.settlementAllocationId }
         val materializedConfirmationIds = existingFacts.confirmations.mapTo(mutableSetOf()) { it.settlementConfirmationId }
         val materializedAffirmationIds = existingFacts.affirmations.mapTo(mutableSetOf()) { it.settlementAffirmationId }
+        val materializedClearingSubmissionIds = existingFacts.clearingSubmissions.mapTo(mutableSetOf()) { it.settlementClearingSubmissionId }
+        val materializedClearingAcceptanceIds = existingFacts.clearingAcceptances.mapTo(mutableSetOf()) { it.settlementClearingAcceptanceId }
+        val materializedNovationIds = existingFacts.novations.mapTo(mutableSetOf()) { it.settlementNovationId }
         val resourceChecksEnabled = existingFacts.resourcePositions.isNotEmpty()
         val scenarioRunProfileId = runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId).orEmpty()
         val venueSessionProfileIds = mutableMapOf<String, String>()
@@ -122,8 +133,20 @@ class TradeSettlementObligationMaterializer(
                 if (materializedAffirmationIds.add(affirmation.settlementAffirmationId)) {
                     affirmations += affirmation
                 }
+                val clearingSubmission = clearingSubmissionFact(obligation, affirmation)
+                if (materializedClearingSubmissionIds.add(clearingSubmission.settlementClearingSubmissionId)) {
+                    clearingSubmissions += clearingSubmission
+                }
+                val clearingAcceptance = clearingAcceptanceFact(obligation, clearingSubmission)
+                if (materializedClearingAcceptanceIds.add(clearingAcceptance.settlementClearingAcceptanceId)) {
+                    clearingAcceptances += clearingAcceptance
+                }
+                val novation = novationFact(obligation, clearingAcceptance)
+                if (materializedNovationIds.add(novation.settlementNovationId)) {
+                    novations += novation
+                }
                 val plan = instantSettlementPlan(existingFacts, obligation) ?: return@forEach
-                val instruction = instructionFact(obligation, plan.attemptNumber, plan.occurredAt, affirmation.settlementAffirmationId)
+                val instruction = instructionFact(obligation, plan.attemptNumber, plan.occurredAt, novation.settlementNovationId)
                 val attempt = attemptFact(obligation, instruction, plan.attemptNumber, plan.occurredAt)
                 val proposedLedgerEntries = ledgerEntryFacts(obligation, instruction, attempt, buyOrder, sellOrder)
                 val availability = if (resourceChecksEnabled) {
@@ -173,7 +196,9 @@ class TradeSettlementObligationMaterializer(
 
         if (
             obligations.isNotEmpty() || allocations.isNotEmpty() || confirmations.isNotEmpty() ||
-            affirmations.isNotEmpty() || instructions.isNotEmpty() || attempts.isNotEmpty() ||
+            affirmations.isNotEmpty() || clearingSubmissions.isNotEmpty() || clearingAcceptances.isNotEmpty() ||
+            clearingRejections.isNotEmpty() || novations.isNotEmpty() ||
+            instructions.isNotEmpty() || attempts.isNotEmpty() ||
             legOutcomes.isNotEmpty() || ledgerEntries.isNotEmpty() || settlements.isNotEmpty() ||
             breaks.isNotEmpty() || resolutions.isNotEmpty()
         ) {
@@ -184,6 +209,10 @@ class TradeSettlementObligationMaterializer(
                     allocations = allocations,
                     confirmations = confirmations,
                     affirmations = affirmations,
+                    clearingSubmissions = clearingSubmissions,
+                    clearingAcceptances = clearingAcceptances,
+                    clearingRejections = clearingRejections,
+                    novations = novations,
                     instructions = instructions,
                     attempts = attempts,
                     legOutcomes = legOutcomes,
@@ -201,6 +230,10 @@ class TradeSettlementObligationMaterializer(
             materializedAllocations = allocations.size,
             materializedConfirmations = confirmations.size,
             materializedAffirmations = affirmations.size,
+            materializedClearingSubmissions = clearingSubmissions.size,
+            materializedClearingAcceptances = clearingAcceptances.size,
+            materializedClearingRejections = clearingRejections.size,
+            materializedNovations = novations.size,
             materializedInstructions = instructions.size,
             materializedAttempts = attempts.size,
             materializedLegOutcomes = legOutcomes.size,
@@ -314,6 +347,57 @@ class TradeSettlementObligationMaterializer(
             correlationId = obligation.correlationId,
             causationId = confirmation.settlementConfirmationId,
             tradeId = obligation.tradeId,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun clearingSubmissionFact(
+        obligation: SettlementObligationCreatedFact,
+        affirmation: SettlementAffirmationAcceptedFact
+    ): SettlementClearingSubmittedFact {
+        return SettlementClearingSubmittedFact(
+            settlementClearingSubmissionId = "settlement-clearing-submission-${obligation.settlementObligationId}",
+            settlementObligationId = obligation.settlementObligationId,
+            settlementAffirmationId = affirmation.settlementAffirmationId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = affirmation.settlementAffirmationId,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun clearingAcceptanceFact(
+        obligation: SettlementObligationCreatedFact,
+        clearingSubmission: SettlementClearingSubmittedFact
+    ): SettlementClearingAcceptedFact {
+        return SettlementClearingAcceptedFact(
+            settlementClearingAcceptanceId = "settlement-clearing-acceptance-${obligation.settlementObligationId}",
+            settlementClearingSubmissionId = clearingSubmission.settlementClearingSubmissionId,
+            settlementObligationId = obligation.settlementObligationId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = clearingSubmission.settlementClearingSubmissionId,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun novationFact(
+        obligation: SettlementObligationCreatedFact,
+        clearingAcceptance: SettlementClearingAcceptedFact
+    ): SettlementNovationRecordedFact {
+        return SettlementNovationRecordedFact(
+            settlementNovationId = "settlement-novation-${obligation.settlementObligationId}",
+            settlementClearingAcceptanceId = clearingAcceptance.settlementClearingAcceptanceId,
+            settlementObligationId = obligation.settlementObligationId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = clearingAcceptance.settlementClearingAcceptanceId,
             occurredAt = obligation.occurredAt
         )
     }

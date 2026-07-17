@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -954,6 +955,116 @@ func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
 	if !hasAssertion(report, "p2-settlement-scope-consistent", "pass") {
 		t.Fatalf("missing settlement scope assertion: %+v", report.Assertions)
 	}
+	if !hasAssertion(report, "p2-exception-state-resolved", "pass") {
+		t.Fatalf("missing exception queue resolved assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-exception-repair-action-matches-reason", "pass") {
+		t.Fatalf("missing exception queue repair action assertion: %+v", report.Assertions)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsAttachP2SecuritySettlementFacts(t *testing.T) {
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","buyerParticipantId":"buyer-1","sellerParticipantId":"seller-1","instrumentId":"XYZ","quantity":"100","cashAmount":"10000.00","currency":"USD","state":"OBLIGATION_CREATED","occurredAt":"2026-03-14T18:00:04Z"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"SECURITY_LEG_FAILED","state":"BROKEN","occurredAt":"2026-03-14T18:00:05Z"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_SECURITY_LEG_REPAIR","actorType":"USER","actorId":"ops-1","occurredAt":"2026-03-14T18:00:06Z"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED","occurredAt":"2026-03-14T18:00:07Z"}]
+	}`
+	server := p2SettlementServerWithExceptionQueue(
+		t,
+		settlementJSON,
+		p2ResolvedSettlementExceptionQueueJSON("SECURITY_LEG_FAILED", "POST_SECURITY_LEG_REPAIR"),
+	)
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if !report.Pass || len(report.Failures) != 0 || len(report.Errors) != 0 {
+		t.Fatalf("unexpected failed assertion report: %+v", report)
+	}
+	if !hasAssertion(report, "p2-break-reason-security-leg-failed", "pass") {
+		t.Fatalf("missing security break reason assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-repair-action-posted", "pass") {
+		t.Fatalf("missing security repair action assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-exception-repair-action-matches-reason", "pass") {
+		t.Fatalf("missing security exception queue repair action assertion: %+v", report.Assertions)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsAttachP2OpsRealisticPendingFacts(t *testing.T) {
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","postTradeProfileId":"ops-realistic-v1","postTradePolicyVersion":1,"correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","buyerParticipantId":"buyer-1","sellerParticipantId":"seller-1","instrumentId":"XYZ","quantity":"100","cashAmount":"10000.00","currency":"USD","state":"OBLIGATION_CREATED","occurredAt":"2026-03-14T18:00:04Z"}],
+		"allocations":[],
+		"confirmations":[],
+		"affirmations":[],
+		"clearingSubmissions":[],
+		"clearingAcceptances":[],
+		"clearingRejections":[],
+		"novations":[],
+		"instructions":[],
+		"attempts":[],
+		"legOutcomes":[],
+		"ledgerEntries":[],
+		"settlements":[],
+		"breaks":[],
+		"repairs":[],
+		"resolutions":[]
+	}`
+	server := p2SettlementServerWithExceptionQueue(t, settlementJSON, p2EmptySettlementExceptionQueueJSON())
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if !report.Pass || len(report.Failures) != 0 || len(report.Errors) != 0 {
+		t.Fatalf("unexpected failed assertion report: %+v", report)
+	}
+	for _, assertionID := range []string{
+		"p2-ops-pending-obligation-created",
+		"p2-ops-pending-profile",
+		"p2-ops-pending-zero-clearing-submissions",
+		"p2-ops-pending-zero-clearing-acceptances",
+		"p2-ops-pending-zero-novations",
+		"p2-ops-pending-zero-leg-outcomes",
+		"p2-ops-pending-zero-ledger-entries",
+		"p2-ops-pending-zero-settlements",
+		"p2-exception-queue-empty",
+	} {
+		if !hasAssertion(report, assertionID, "pass") {
+			t.Fatalf("missing ops pending assertion %s: %+v", assertionID, report.Assertions)
+		}
+	}
 }
 
 func TestRunLiveDoesNotMutateCallerClientTimeout(t *testing.T) {
@@ -975,7 +1086,11 @@ func TestScenarioSmokeLiveAssertionsAttachPostTradeSettlementChain(t *testing.T)
 		"allocations":[{"settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"obl-1","tradeId":"trade-1","buyOrderId":"buy-order-1","sellOrderId":"sell-order-1","state":"ALLOCATION_PROPOSED"}],
 		"confirmations":[{"settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"allocation-1","tradeId":"trade-1","state":"CONFIRMATION_GENERATED"}],
 		"affirmations":[{"settlementAffirmationId":"affirmation-1","settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"confirmation-1","tradeId":"trade-1","state":"AFFIRMATION_ACCEPTED"}],
-		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"INSTRUCTION_CREATED"}],
+		"clearingSubmissions":[{"settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","settlementAffirmationId":"affirmation-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"CLEARING_SUBMITTED"}],
+		"clearingAcceptances":[{"settlementClearingAcceptanceId":"clearing-acceptance-1","settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-submission-1","state":"CLEARING_ACCEPTED"}],
+		"clearingRejections":[],
+		"novations":[{"settlementNovationId":"novation-1","settlementClearingAcceptanceId":"clearing-acceptance-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-acceptance-1","state":"NOVATION_RECORDED"}],
+		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"novation-1","state":"INSTRUCTION_CREATED"}],
 		"attempts":[{"settlementAttemptId":"attempt-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"instruction-1","state":"ATTEMPT_STARTED"}],
 		"settlements":[{"settlementId":"settlement-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","settlementAttemptId":"attempt-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"attempt-1","settlementState":"SETTLED"}]
 	}`
@@ -1009,6 +1124,9 @@ func TestScenarioSmokeLiveAssertionsAttachPostTradeSettlementChain(t *testing.T)
 		"p2-allocation-state-proposed",
 		"p2-confirmation-state-generated",
 		"p2-affirmation-state-accepted",
+		"p2-clearing-state-submitted",
+		"p2-clearing-state-accepted",
+		"p2-novation-state-recorded",
 		"p2-instruction-state-created",
 		"p2-attempt-state-started",
 		"p2-settlement-state-settled",
@@ -1027,7 +1145,11 @@ func TestScenarioSmokeLiveAssertionsFailOnPostTradeSettlementChainWrongState(t *
 		"allocations":[{"settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"obl-1","tradeId":"trade-1","buyOrderId":"buy-order-1","sellOrderId":"sell-order-1","state":"ALLOCATION_SKIPPED"}],
 		"confirmations":[{"settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"allocation-1","tradeId":"trade-1","state":"CONFIRMATION_GENERATED"}],
 		"affirmations":[{"settlementAffirmationId":"affirmation-1","settlementConfirmationId":"confirmation-1","settlementAllocationId":"allocation-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"confirmation-1","tradeId":"trade-1","state":"AFFIRMATION_ACCEPTED"}],
-		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"INSTRUCTION_CREATED"}],
+		"clearingSubmissions":[{"settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","settlementAffirmationId":"affirmation-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"affirmation-1","state":"CLEARING_SUBMITTED"}],
+		"clearingAcceptances":[{"settlementClearingAcceptanceId":"clearing-acceptance-1","settlementClearingSubmissionId":"clearing-submission-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-submission-1","state":"CLEARING_ACCEPTED"}],
+		"clearingRejections":[],
+		"novations":[{"settlementNovationId":"novation-1","settlementClearingAcceptanceId":"clearing-acceptance-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"clearing-acceptance-1","state":"NOVATION_RECORDED"}],
+		"instructions":[{"settlementInstructionId":"instruction-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"novation-1","state":"INSTRUCTION_CREATED"}],
 		"attempts":[{"settlementAttemptId":"attempt-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"instruction-1","state":"ATTEMPT_STARTED"}],
 		"settlements":[{"settlementId":"settlement-1","settlementObligationId":"obl-1","settlementInstructionId":"instruction-1","settlementAttemptId":"attempt-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"attempt-1","settlementState":"SETTLED"}]
 	}`
@@ -1508,6 +1630,14 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 }
 
 func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
+	return p2SettlementServerWithExceptionQueue(
+		t,
+		settlementFacts,
+		p2ResolvedSettlementExceptionQueueJSON("CASH_LEG_FAILED", "POST_CASH_LEG_REPAIR"),
+	)
+}
+
+func p2SettlementServerWithExceptionQueue(t *testing.T, settlementFacts string, exceptionQueue string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -1523,10 +1653,71 @@ func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/settlement/facts/p2-settlement-live" && settlementFacts != "":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(settlementFacts))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/settlement/exceptions/p2-settlement-live" && settlementFacts != "":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(exceptionQueue))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+func p2ResolvedSettlementExceptionQueueJSON(reason string, repairAction string) string {
+	return fmt.Sprintf(`{
+		"scenarioRunId":"p2-settlement-live",
+		"exceptionsCount":1,
+		"openCount":0,
+		"repairPostedCount":0,
+		"resolvedCount":1,
+		"clearingRejectedCount":0,
+		"settlementBreakCount":1,
+		"exceptions":[{
+			"settlementExceptionId":"break-1",
+			"exceptionType":"SETTLEMENT_BREAK",
+			"exceptionState":"RESOLVED",
+			"state":"RESOLVED",
+			"severity":"MEDIUM",
+			"ownerRole":"SETTLEMENT_OPS",
+			"actionRequired":"NONE",
+			"reason":"%s",
+			"settlementObligationId":"obl-1",
+			"tradeId":"trade-1",
+			"buyerParticipantId":"buyer-1",
+			"sellerParticipantId":"seller-1",
+			"instrumentId":"XYZ",
+			"quantity":"100",
+			"cashAmount":"10000.00",
+			"currency":"USD",
+			"settlementClearingSubmissionId":"",
+			"settlementClearingRejectionId":"",
+			"settlementBreakId":"break-1",
+			"settlementRepairId":"repair-1",
+			"settlementResolutionId":"resolution-1",
+			"repairAction":"%s",
+			"actorId":"ops-1",
+			"correlationId":"corr-1",
+			"postTradeProfileId":"ops-realistic-v1",
+			"postTradePolicyVersion":1,
+			"openedAt":"2026-03-14T18:00:05Z",
+			"lastUpdatedAt":"2026-03-14T18:00:07Z",
+			"resolvedAt":"2026-03-14T18:00:07Z",
+			"occurredAt":"2026-03-14T18:00:05Z",
+			"updatedAt":"2026-03-14T18:00:07Z"
+		}]
+	}`, reason, repairAction)
+}
+
+func p2EmptySettlementExceptionQueueJSON() string {
+	return `{
+		"scenarioRunId":"p2-settlement-live",
+		"exceptionsCount":0,
+		"openCount":0,
+		"repairPostedCount":0,
+		"resolvedCount":0,
+		"clearingRejectedCount":0,
+		"settlementBreakCount":0,
+		"exceptions":[]
+	}`
 }
 
 func writeReadyzOK(w http.ResponseWriter) {
