@@ -134,6 +134,10 @@ private val adminGatewaySecretAdminRoles = setOf(
     AdminIdentityService.RoleSecretAdmin,
     AdminIdentityService.RolePlatformAdmin
 )
+private val adminGatewayArenaAdminRoles = setOf(
+    AdminIdentityService.RoleOperator,
+    AdminIdentityService.RolePlatformAdmin
+)
 
 internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminGatewayRoute? = when (path) {
     "/admin/v1/reference/instruments" -> if (method in setOf("GET", "POST")) {
@@ -164,7 +168,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     "/admin/v1/arena/bots" -> AdminGatewayRoute(
         "/internal/admin/arena/bots",
         "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+        adminGatewayArenaAdminRoles
     )
     "/admin/v1/arena/my/bots" -> if (method == "GET") {
         AdminGatewayRoute(
@@ -185,7 +190,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     "/admin/v1/arena/bots/ownership" -> AdminGatewayRoute(
         "/internal/admin/arena/bots/ownership",
         "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+        adminGatewayArenaAdminRoles
     )
     "/admin/v1/arena/bots/config" -> AdminGatewayRoute(
         "/internal/admin/arena/bots/config",
@@ -195,18 +201,21 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     "/admin/v1/arena/bot-versions" -> AdminGatewayRoute(
         "/internal/admin/arena/bot-versions",
         "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+        adminGatewayArenaAdminRoles
     )
     "/admin/v1/arena/bot-versions/transition" -> AdminGatewayRoute(
         "/internal/admin/arena/bot-versions/transition",
         "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+        adminGatewayArenaAdminRoles
     )
     "/admin/v1/arena/runs" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute(
             "/internal/admin/arena/runs",
             "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
         )
     } else {
         null
@@ -215,7 +224,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         AdminGatewayRoute(
             "/internal/admin/arena/runs/status",
             "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
         )
     } else {
         null
@@ -224,7 +234,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         AdminGatewayRoute(
             "/internal/admin/arena/run-bot-results",
             "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
         )
     } else {
         null
@@ -233,7 +244,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         AdminGatewayRoute(
             "/internal/admin/arena/run-enforcement-events",
             "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
         )
     } else {
         null
@@ -242,7 +254,8 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         AdminGatewayRoute(
             "/internal/admin/arena/leaderboard",
             "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
+            adminGatewayArenaAdminRoles
         )
     } else {
         null

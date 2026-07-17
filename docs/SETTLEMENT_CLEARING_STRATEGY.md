@@ -157,6 +157,7 @@ Rules:
 - The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations. If no opening resource facts are seeded for a scenario, instant mode remains unconstrained for fast simulation. If resource facts are seeded, it checks buyer cash and seller securities before finality, emits failed leg outcomes plus a break on insufficiency, and only writes append-only ledger proof entries plus `SETTLED` facts when both legs pass. A posted repair unlocks the next deterministic attempt number; a successful retry writes ledger proof, `SETTLED`, and `RESOLVED` facts. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
 - The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, and now emits a minimal auto allocation, confirmation, and affirmation fact chain before the settlement instruction. It does not yet apply micro-batch netting or create clearing/novation records.
 - Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
+- The next bounded post-trade sprint is [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). It should add clearing/novation facts, an exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior. It must not expand into full CCP/CNS clearing, production custody, or complete netted obligation settlement.
 
 Policy storage:
 
@@ -283,19 +284,25 @@ SettlementObligationCreated
 
 3. Add instant clearing and gross settlement before full settlement expansion.
    - settlement instruction facts before settlement attempts
-   - auto clearing acceptance
+   - auto clearing submission/acceptance facts
+   - novation facts
    - gross obligation settlement first
    - cash/security leg outcomes and append-only ledger before `SETTLED`
    - deterministic per-tick micro-batch netting as follow-up
    - netting policy version on obligations once netting is enabled
 
-4. Add account ledger postings.
+4. Add exception queue v1.
+   - project `CASH_LEG_FAILED`, `SECURITY_LEG_FAILED`, `AFFIRMATION_TIMEOUT`, and `CLEARING_REJECT`
+   - include severity, owner role, SLA state, actor, correlation id, and repair action
+   - close queue items only through append-only repair/resolution facts
+
+5. Add account ledger postings.
    - one typed append-only ledger for cash and securities
    - synchronous ledger posting inside the instant-post-trade tick
    - settled/pending/blocked balances as projections
    - compensating repair entries
 
-5. Add full failure matrix.
+6. Add full failure matrix.
    - affirmation timeout
    - clearing reject
    - cash leg fail
@@ -303,7 +310,7 @@ SettlementObligationCreated
    - partial settlement
    - aged fail
 
-6. Add game/report projections.
+7. Add game/report projections.
    - settled cash/securities
    - unsettled obligations
    - fail penalties

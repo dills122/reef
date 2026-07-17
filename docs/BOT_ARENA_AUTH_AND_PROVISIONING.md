@@ -97,8 +97,23 @@ limited
 banned
 ```
 
-Trust state changes review friction and allowed actions, but accepted bot code
-still passes through a human review gate.
+Trust state rules:
+
+- `new` is assigned automatically on first GitHub OAuth login. New users can
+  sign in, view their account and linked bots, and prepare owner-managed config,
+  but their bots are not run-eligible.
+- `trusted` is required for bot run eligibility.
+- `limited` is an operator-applied safety restriction. Limited users can view
+  public pages and their own bot status, but cannot write bot config, submit or
+  activate new bot versions, or become run-eligible.
+- `banned` blocks Bot Arena participation, bot config management, provisioning,
+  and run eligibility.
+
+Only `operator` or `platform-admin` can move users among `new`, `trusted`, and
+`limited`. Only `platform-admin` can apply or remove `banned`. Every trust-state
+change requires a reason and an Admin DB audit event.
+
+Accepted bot code still passes through a human review gate.
 
 ## Role Model
 
@@ -124,6 +139,22 @@ operator
 secret-admin
 platform-admin
 ```
+
+Role assignment rules:
+
+- `participant` is assigned automatically on first GitHub OAuth login.
+- `reviewer` can be assigned by `operator` or `platform-admin`.
+- `operator`, `secret-admin`, and `platform-admin` can be assigned only by
+  `platform-admin`.
+- `platform-admin` is a bootstrap or break-glass role, not a normal
+  GitHub-repository-role sync.
+- Role assignment and removal require a reason and an Admin DB audit event.
+
+The backend role ids above are the source-of-truth values. The web app may map
+older or friendlier display labels for presentation, but authorization decisions
+must use the canonical backend ids. For Bot Arena browser sessions, `operator`
+implies arena game/run administration and `platform-admin` implies all operator
+capabilities.
 
 ## Communication Channels
 
@@ -362,9 +393,17 @@ the bot id, OpenBao path, and key count/path metadata.
 Authorization:
 
 - the bot owner or maintainer can manage that bot's config unless banned
-- `operator`, `secret-admin`, and `platform-admin` can manage any bot config
+- `limited` users cannot write bot config
+- operators/admins must not view or edit another user's bot config values
+- `secret-admin` and `platform-admin` may clear or purge bot config through a
+  separate audited repair path with a reason; `operator` may clear config only
+  where an explicit operator-recovery action exists
 - `/admin/v1/arena/bots/config` accepts only admin-family service tokens on the
   service-token path
+
+Normal owner config updates do not require a user-entered reason. Reef audit
+records still include actor, bot id, OpenBao path metadata, key count, timestamp,
+and correlation id, and must never include secret values.
 
 OpenBao access uses the dedicated `reef-platform-admin-bot-config` AppRole from
 `infra/hetzner-core/server/scripts/configure-openbao.sh`. The runtime must have
@@ -504,7 +543,8 @@ Required before run:
 
 - bot version is accepted
 - bot is enabled
-- user is not banned
+- owner trust state is `trusted`
+- owner is not `limited` or `banned`
 - required config descriptors are resolvable
 - config blob passes platform-known descriptor checks where declared
 - simulation safety switches and runtime guardrails pass
@@ -577,6 +617,11 @@ and relevant object ids. Audit records must not contain secret values.
 - Config completeness is a pre-run requirement.
 - Reef roles and trust state are stored in the Admin DB and enforced by the
   Admin API.
+- Browser-session authorization uses Admin DB roles and trust state as the
+  source of truth. The older runtime role/permission binding remains available
+  for CLI, local setup, service-token actors, and non-browser command paths, but
+  GitHub-authenticated browser sessions must not require a duplicate
+  `arena.admin` runtime binding.
 
 ## Open Follow-Ups
 
@@ -586,16 +631,11 @@ and relevant object ids. Audit records must not contain secret values.
   `/admin/v1/*`, and `/api/v1/*` same-origin with the static app (previously
   the browser-facing surface wasn't Caddy-exposed at all, only the CI
   bearer-token paths were).
-- Bridge the two disconnected admin identity/permission systems: GitHub OAuth
-  login (`AdminIdentityService`) grants a baseline `participant` role in its
-  own table, but `AdminApplicationService.requirePermission` checks a
-  completely separate `runtimePersistence` role-binding table that only the
-  hardcoded bootstrap actor (`admin-cli`/`ADMIN_ACTOR_ID`) has any role in.
-  A fresh GitHub login today has zero permission to call any `/admin/v1/...`
-  route, and there's no HTTP-reachable grant path — only CLI
-  `role-assign`/`role-upsert`. Needs a real design decision (see the arena
-  admin UI plan, D-052) before the admin app's data panels can be wired to
-  live routes.
+- ~~Bridge the two disconnected admin identity/permission systems for Bot Arena
+  browser sessions.~~ Done: trusted Admin DB `operator` and `platform-admin`
+  users satisfy `arena.admin` for GitHub-authenticated browser requests without
+  a duplicate runtime role binding. Runtime role bindings remain for CLI,
+  service-token actors, and non-browser command paths.
 - Run the hosted/local arena-admin auth configuration test now that the admin
   panels read live `/admin/v1` data. Current local stack returns
   `{"error":"admin auth is not configured"}` from `/admin/auth/session`, so a
@@ -615,7 +655,8 @@ and relevant object ids. Audit records must not contain secret values.
   1. Restart platform-api with the auth environment above and Admin DB access.
   2. Open http://127.0.0.1:5173/admin.
   3. Complete GitHub OAuth login.
-  4. Grant or seed arena.admin in runtime role bindings for the logged-in Reef user.
+  4. Grant Admin DB `operator` or `platform-admin` to the logged-in Reef user
+     and set trust state to `trusted`.
   5. Confirm the admin page shows live bots/runs instead of the sign-in or error state.
   6. Seed admin.user_bot_ownerships for at least one bot and confirm owner/trust metadata renders.
   7. Seed a freeze enforcement event and confirm the bot state renders as frozen.

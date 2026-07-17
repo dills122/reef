@@ -4,14 +4,14 @@
 
 Track architecture work needed to move beyond accepted-request intake toward sustained `7500` completed commands per second per runtime + engine instance, with `10000` completed commands per second as the preferred target, while preserving command capture, auditability, deterministic simulation, and zero silent loss.
 
-Status note (2026-07-09): this tracker is evidence and workstream history. The single active execution ladder lives in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder). Where older bullets below say "next" for JetStream/generic stream workers, treat them as historical unless repeated in `WORK_PLAN.md`, `CURRENT_STATUS.md`, or a later decision.
+Status note (2026-07-09): this tracker is evidence and workstream history. The single active execution ladder lives in [`WORK_PLAN.md`](../WORK_PLAN.md#active-execution-ladder). Where older bullets below say "next" for JetStream/generic stream workers, treat them as historical unless repeated in `WORK_PLAN.md`, `CURRENT_STATUS.md`, or a later decision.
 
 Primary plan:
-- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
-- [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
-- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](../COMMAND_LOG_PARTITIONING_PLAN.md)
+- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](../DIGITALOCEAN_STRESS_TEST_PLAN.md)
 
 Architecture checkpoint:
 - D-041 and D-043 supersede the older generic JetStream-worker ladder for the active venue-core path: Kafka-compatible durable command ingress, matching-engine direct partition consumption, durable `VenueEventBatch` publication, then asynchronous Postgres materialization.

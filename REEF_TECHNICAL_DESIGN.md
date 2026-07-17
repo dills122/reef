@@ -86,7 +86,7 @@ Design rule:
 
 Exploratory extension:
 - [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) proposes a future tournament-style bot arena on top of the simulation control plane. The arena would use sandboxed bot execution, tested operator-controlled liquidity and background-flow bots, modular game modes, replayable runs, separate arena storage for competition metadata, and leaderboard analytics while preserving venue command-path parity.
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
+- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
 
 ### 3.5 Admin operations surface (CLI first)
 

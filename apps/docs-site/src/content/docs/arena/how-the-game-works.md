@@ -45,5 +45,5 @@ Local run evidence now covers positive and negative persisted arena gates, stati
 ## Learn More
 
 - `docs/BOT_ARENA_PLAN.md` — full plan: game-mode module contract, infrastructure/scale-out design, open questions (source for this page)
-- `docs/STREAM_ACK_ARCHITECTURE_PLAN.md` — target high-throughput ingress path for bot-arena scale
+- `docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md` — target high-throughput ingress path for bot-arena scale
 - [Arena Overview](../overview/) — current build status

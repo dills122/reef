@@ -30,7 +30,7 @@ Near-term work should therefore not restart broad schema, UI, or post-trade expa
 
 ## 2026-07-03 Checkpoint Addendum
 
-The critique below remains useful for the broad product direction, but it predates the merged stream-ack architecture shift and the latest latency/backpressure work. For the high-throughput track, the current execution checkpoint is now the stream-ack path described by D-036, D-037, [`STREAM_ACK_ARCHITECTURE_PLAN.md`](../STREAM_ACK_ARCHITECTURE_PLAN.md), [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](../ARCHITECTURE_THROUGHPUT_TRACKER.md), and [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](../DIGITALOCEAN_STRESS_TEST_PLAN.md).
+The critique below remains useful for the broad product direction, but it predates the merged stream-ack architecture shift and the latest latency/backpressure work. For the high-throughput track, the current execution checkpoint is now the stream-ack path described by D-036, D-037, [`STREAM_ACK_ARCHITECTURE_PLAN.md`](../archive/STREAM_ACK_ARCHITECTURE_PLAN.md), [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](../archive/ARCHITECTURE_THROUGHPUT_TRACKER.md), and [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](../DIGITALOCEAN_STRESS_TEST_PLAN.md).
 
 Current state:
 

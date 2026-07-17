@@ -489,7 +489,7 @@ internal class AdminSessionAuth(
                 "githubLogin" to "local-dev-admin",
                 "displayName" to "Local Dev Admin",
                 "trustState" to "trusted",
-                "roles" to listOf("arena-operator", "participant", "local-dev"),
+                "roles" to listOf("operator", "participant"),
                 "authProvider" to "local-dev",
                 "expiresAt" to ""
             )

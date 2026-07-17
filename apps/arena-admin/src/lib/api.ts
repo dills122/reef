@@ -468,7 +468,7 @@ export async function fetchSession(): Promise<SessionUser | null> {
 					githubLogin: 'local-dev-admin',
 					displayName: 'Local Dev Admin',
 					trustState: 'trusted',
-					roles: ['arena-operator', 'participant', 'local-dev']
+					roles: ['operator', 'participant']
 				};
 			}
 			return null;
@@ -488,7 +488,7 @@ export async function fetchSession(): Promise<SessionUser | null> {
 				githubLogin: 'local-dev-admin',
 				displayName: 'Local Dev Admin',
 				trustState: 'trusted',
-				roles: ['arena-operator', 'participant', 'local-dev']
+				roles: ['operator', 'participant']
 			};
 		}
 		return null;
