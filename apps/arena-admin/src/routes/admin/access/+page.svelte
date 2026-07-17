@@ -47,7 +47,9 @@
 	const roleOptions = $derived(roles.filter((role) => role.roleId !== 'participant'));
 	const roleDescriptions = $derived(Object.fromEntries(roles.map((role) => [role.roleId, role.description])));
 	const trustedCount = $derived(users.filter((user) => user.trustState === 'trusted').length);
-	const reviewCount = $derived(users.filter((user) => user.trustState === 'new').length);
+	const reviewCount = $derived(
+		users.filter((user) => user.trustState === 'new' || user.trustState === 'limited').length
+	);
 	const operatorCount = $derived(users.filter((user) => hasRole(user, 'operator')).length);
 	const filteredUsers = $derived(
 		users.filter((user) => {

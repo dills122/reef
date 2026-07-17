@@ -784,7 +784,7 @@ export async function fetchBotRuntimeConfigDescriptors(
 export async function replaceBotConfig(botId: string, config: unknown): Promise<BotConfigStatus> {
 	if (import.meta.env.DEV && localDevFixturesEnabled()) {
 		throw new Error(
-			'local fixture mode does not persist bot config; disable PUBLIC_ARENA_LOCAL_DEV_FIXTURES to test writes'
+			'local fixture mode does not persist bot config; use http://localhost:5174 with PUBLIC_ARENA_API_BASE_URL=http://localhost:8080 and disable PUBLIC_ARENA_LOCAL_DEV_FIXTURES to test writes'
 		);
 	}
 	return await fetchAdminJson<BotConfigStatus>('/admin/v1/arena/bots/config', {
@@ -796,7 +796,7 @@ export async function replaceBotConfig(botId: string, config: unknown): Promise<
 export async function deleteBotConfig(botId: string): Promise<BotConfigStatus> {
 	if (import.meta.env.DEV && localDevFixturesEnabled()) {
 		throw new Error(
-			'local fixture mode does not persist bot config; disable PUBLIC_ARENA_LOCAL_DEV_FIXTURES to test writes'
+			'local fixture mode does not persist bot config; use http://localhost:5174 with PUBLIC_ARENA_API_BASE_URL=http://localhost:8080 and disable PUBLIC_ARENA_LOCAL_DEV_FIXTURES to test writes'
 		);
 	}
 	const params = new URLSearchParams({ botId });
