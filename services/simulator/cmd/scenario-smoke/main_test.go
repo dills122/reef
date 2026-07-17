@@ -954,6 +954,12 @@ func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
 	if !hasAssertion(report, "p2-settlement-scope-consistent", "pass") {
 		t.Fatalf("missing settlement scope assertion: %+v", report.Assertions)
 	}
+	if !hasAssertion(report, "p2-exception-state-resolved", "pass") {
+		t.Fatalf("missing exception queue resolved assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-exception-repair-action-matches-reason", "pass") {
+		t.Fatalf("missing exception queue repair action assertion: %+v", report.Assertions)
+	}
 }
 
 func TestRunLiveDoesNotMutateCallerClientTimeout(t *testing.T) {
@@ -1534,10 +1540,58 @@ func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/settlement/facts/p2-settlement-live" && settlementFacts != "":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(settlementFacts))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/settlement/exceptions/p2-settlement-live" && settlementFacts != "":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p2ResolvedSettlementExceptionQueueJSON()))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+func p2ResolvedSettlementExceptionQueueJSON() string {
+	return `{
+		"scenarioRunId":"p2-settlement-live",
+		"exceptionsCount":1,
+		"openCount":0,
+		"repairPostedCount":0,
+		"resolvedCount":1,
+		"clearingRejectedCount":0,
+		"settlementBreakCount":1,
+		"exceptions":[{
+			"settlementExceptionId":"break-1",
+			"exceptionType":"SETTLEMENT_BREAK",
+			"exceptionState":"RESOLVED",
+			"state":"RESOLVED",
+			"severity":"MEDIUM",
+			"ownerRole":"SETTLEMENT_OPS",
+			"actionRequired":"NONE",
+			"reason":"CASH_LEG_FAILED",
+			"settlementObligationId":"obl-1",
+			"tradeId":"trade-1",
+			"buyerParticipantId":"buyer-1",
+			"sellerParticipantId":"seller-1",
+			"instrumentId":"XYZ",
+			"quantity":"100",
+			"cashAmount":"10000.00",
+			"currency":"USD",
+			"settlementClearingSubmissionId":"",
+			"settlementClearingRejectionId":"",
+			"settlementBreakId":"break-1",
+			"settlementRepairId":"repair-1",
+			"settlementResolutionId":"resolution-1",
+			"repairAction":"POST_CASH_LEG_REPAIR",
+			"actorId":"ops-1",
+			"correlationId":"corr-1",
+			"postTradeProfileId":"ops-realistic-v1",
+			"postTradePolicyVersion":1,
+			"openedAt":"2026-03-14T18:00:05Z",
+			"lastUpdatedAt":"2026-03-14T18:00:07Z",
+			"resolvedAt":"2026-03-14T18:00:07Z",
+			"occurredAt":"2026-03-14T18:00:05Z",
+			"updatedAt":"2026-03-14T18:00:07Z"
+		}]
+	}`
 }
 
 func writeReadyzOK(w http.ResponseWriter) {

@@ -370,6 +370,41 @@ type settlementResolution struct {
 	ExceptionState         string `json:"exceptionState"`
 }
 
+type settlementExceptionQueueReport struct {
+	ScenarioRunID           string                `json:"scenarioRunId"`
+	ExceptionsCount         int                   `json:"exceptionsCount"`
+	OpenCount               int                   `json:"openCount"`
+	RepairPostedCount       int                   `json:"repairPostedCount"`
+	ResolvedCount           int                   `json:"resolvedCount"`
+	ClearingRejectedCount   int                   `json:"clearingRejectedCount"`
+	SettlementBreakCount    int                   `json:"settlementBreakCount"`
+	SettlementExceptionRows []settlementException `json:"exceptions"`
+}
+
+type settlementException struct {
+	SettlementExceptionID          string `json:"settlementExceptionId"`
+	ExceptionType                  string `json:"exceptionType"`
+	ExceptionState                 string `json:"exceptionState"`
+	State                          string `json:"state"`
+	Severity                       string `json:"severity"`
+	OwnerRole                      string `json:"ownerRole"`
+	ActionRequired                 string `json:"actionRequired"`
+	Reason                         string `json:"reason"`
+	SettlementObligationID         string `json:"settlementObligationId"`
+	TradeID                        string `json:"tradeId"`
+	SettlementClearingSubmissionID string `json:"settlementClearingSubmissionId"`
+	SettlementClearingRejectionID  string `json:"settlementClearingRejectionId"`
+	SettlementBreakID              string `json:"settlementBreakId"`
+	SettlementRepairID             string `json:"settlementRepairId"`
+	SettlementResolutionID         string `json:"settlementResolutionId"`
+	RepairAction                   string `json:"repairAction"`
+	ActorID                        string `json:"actorId"`
+	CorrelationID                  string `json:"correlationId"`
+	OpenedAt                       string `json:"openedAt"`
+	LastUpdatedAt                  string `json:"lastUpdatedAt"`
+	ResolvedAt                     string `json:"resolvedAt"`
+}
+
 type tradeTapeBody struct {
 	Meta struct {
 		Source    string `json:"source"`
@@ -468,6 +503,7 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 				attachSettlementFactArtifactAssertions(cfg, &report)
 			} else if report.PathID == "P2_SETTLEMENT_BREAK_REPAIR" {
 				attachSettlementFactAPIAssertions(cfg, client, &report)
+				attachSettlementExceptionAPIAssertions(cfg, client, &report)
 			}
 		}
 		if cfg.replayCheckReportPath != "" {
@@ -975,6 +1011,103 @@ func attachSettlementFactAPIAssertions(cfg config, client *http.Client, report *
 		return
 	}
 	assertP2SettlementFacts(report, facts, endpoint)
+}
+
+func attachSettlementExceptionAPIAssertions(cfg config, client *http.Client, report *smokeReport) {
+	endpoint := "/api/v1/settlement/exceptions/" + url.PathEscape(report.ScenarioRunID)
+	read, body, err := executeRead(client, absoluteURL(cfg.readBaseURL, endpoint), endpoint, map[string]string{"scenarioRunId": report.ScenarioRunID})
+	read.SourceType = "settlement exception queue"
+	read.FreshnessModel = "rebuildable exception queue over clearing rejections and settlement breaks"
+	if err != nil {
+		report.Reads = append(report.Reads, read)
+		failAssertion(report, "p2-exception-queue-readable", "settlement_exception_read", "readable settlement exception queue API", err.Error(), endpoint)
+		return
+	}
+	report.Reads = append(report.Reads, read)
+	if read.StatusCode != 200 {
+		failAssertion(report, "p2-exception-queue-readable", "settlement_exception_read", "HTTP 200 settlement exception queue API", fmt.Sprint(read.StatusCode), endpoint)
+		return
+	}
+	var queue settlementExceptionQueueReport
+	if err := json.Unmarshal(body, &queue); err != nil {
+		failAssertion(report, "p2-exception-queue-readable", "settlement_exception_read", "valid settlement exception queue JSON", err.Error(), endpoint)
+		return
+	}
+	assertP2SettlementExceptionQueue(report, queue, endpoint)
+}
+
+func assertP2SettlementExceptionQueue(report *smokeReport, queue settlementExceptionQueueReport, proofSource string) {
+	if queue.ScenarioRunID == report.ScenarioRunID {
+		passAssertion(report, "p2-exception-queue-scenario-run", report.ScenarioRunID, queue.ScenarioRunID, proofSource)
+	} else {
+		failAssertion(report, "p2-exception-queue-scenario-run", "settlement_exception_scope", report.ScenarioRunID, queue.ScenarioRunID, proofSource)
+	}
+	if queue.ExceptionsCount == len(queue.SettlementExceptionRows) {
+		passAssertion(report, "p2-exception-queue-count-matches", fmt.Sprint(queue.ExceptionsCount), fmt.Sprint(len(queue.SettlementExceptionRows)), proofSource)
+	} else {
+		failAssertion(report, "p2-exception-queue-count-matches", "settlement_exception_count", fmt.Sprint(queue.ExceptionsCount), fmt.Sprint(len(queue.SettlementExceptionRows)), proofSource)
+	}
+	if queue.ExceptionsCount == 0 {
+		passAssertion(report, "p2-exception-queue-empty", "0 exceptions", "0 exceptions", proofSource)
+		return
+	}
+	assertCount(report, "p2-one-settlement-break-exception", "settlement_exception_count", queue.SettlementBreakCount, 1, proofSource)
+	assertCount(report, "p2-zero-clearing-rejected-exceptions", "settlement_exception_count", queue.ClearingRejectedCount, 0, proofSource)
+	assertCount(report, "p2-zero-open-exceptions", "settlement_exception_count", queue.OpenCount, 0, proofSource)
+	assertCount(report, "p2-zero-repair-posted-exceptions", "settlement_exception_count", queue.RepairPostedCount, 0, proofSource)
+	assertCount(report, "p2-one-resolved-exception", "settlement_exception_count", queue.ResolvedCount, 1, proofSource)
+	if len(queue.SettlementExceptionRows) != 1 {
+		failAssertion(report, "p2-exception-queue-single-row", "settlement_exception_count", "1", fmt.Sprint(len(queue.SettlementExceptionRows)), proofSource)
+		return
+	}
+	exception := queue.SettlementExceptionRows[0]
+	assertSettlementExceptionField(report, "p2-exception-type-settlement-break", exception.ExceptionType, "SETTLEMENT_BREAK", proofSource)
+	assertSettlementExceptionField(report, "p2-exception-state-resolved", exception.ExceptionState, "RESOLVED", proofSource)
+	assertSettlementExceptionField(report, "p2-exception-owner-settlement-ops", exception.OwnerRole, "SETTLEMENT_OPS", proofSource)
+	assertSettlementExceptionField(report, "p2-exception-action-none-after-resolution", exception.ActionRequired, "NONE", proofSource)
+	expectedRepairAction := expectedSettlementRepairAction(exception.Reason)
+	if expectedRepairAction == "" {
+		failAssertion(report, "p2-exception-repair-action-matches-reason", "settlement_exception_repair", "known settlement break reason", exception.Reason, proofSource)
+	} else {
+		assertSettlementExceptionField(report, "p2-exception-repair-action-matches-reason", exception.RepairAction, expectedRepairAction, proofSource)
+	}
+	if exception.SettlementBreakID != "" && exception.SettlementRepairID != "" && exception.SettlementResolutionID != "" &&
+		exception.ResolvedAt != "" && exception.ActorID != "" && exception.CorrelationID != "" {
+		passAssertion(report, "p2-exception-resolution-linked", "break, repair, resolution, actor, correlation, resolvedAt", "all links present", proofSource)
+	} else {
+		failAssertion(report, "p2-exception-resolution-linked", "settlement_exception_causation", "break, repair, resolution, actor, correlation, resolvedAt", settlementExceptionObserved(exception), proofSource)
+	}
+}
+
+func assertSettlementExceptionField(report *smokeReport, id string, observed string, expected string, proofSource string) {
+	if observed == expected {
+		passAssertion(report, id, expected, observed, proofSource)
+		return
+	}
+	failAssertion(report, id, "settlement_exception_field", expected, observed, proofSource)
+}
+
+func expectedSettlementRepairAction(reason string) string {
+	switch reason {
+	case "CASH_LEG_FAILED":
+		return "POST_CASH_LEG_REPAIR"
+	case "SECURITY_LEG_FAILED":
+		return "POST_SECURITY_LEG_REPAIR"
+	default:
+		return ""
+	}
+}
+
+func settlementExceptionObserved(exception settlementException) string {
+	return fmt.Sprintf(
+		"break=%s repair=%s resolution=%s actor=%s correlation=%s resolvedAt=%s",
+		exception.SettlementBreakID,
+		exception.SettlementRepairID,
+		exception.SettlementResolutionID,
+		exception.ActorID,
+		exception.CorrelationID,
+		exception.ResolvedAt,
+	)
 }
 
 func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, proofSource string) {
