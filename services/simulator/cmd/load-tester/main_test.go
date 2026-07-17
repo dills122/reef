@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -795,13 +796,14 @@ func TestSeedReferenceDataSeedsOrderRolesForDefaultActors(t *testing.T) {
 	})}
 
 	cfg := Config{
-		BaseURL:          "http://platform-runtime.test",
-		Workers:          2,
-		InstrumentID:     "AAPL",
-		InstrumentSymbol: "AAPL",
-		ParticipantID:    "participant-1",
-		ParticipantName:  "Participant 1",
-		AccountID:        "account-1",
+		BaseURL:             "http://platform-runtime.test",
+		Workers:             2,
+		InstrumentID:        "AAPL",
+		InstrumentSymbol:    "AAPL",
+		ParticipantID:       "participant-1",
+		ParticipantName:     "Participant 1",
+		AccountID:           "account-1",
+		LegacyInternalRoute: true,
 	}
 
 	if err := seedReferenceData(client, cfg); err != nil {
@@ -812,6 +814,50 @@ func TestSeedReferenceDataSeedsOrderRolesForDefaultActors(t *testing.T) {
 	}
 	if !bindings["bot-0"] || !bindings["bot-1"] {
 		t.Fatalf("expected default worker actors to be bound, got %+v", bindings)
+	}
+}
+
+func TestSeedReferenceDataUsesAdminGatewayWhenApiV1Enabled(t *testing.T) {
+	seenPaths := []string{}
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		seenPaths = append(seenPaths, r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer admin-token" {
+			t.Fatalf("missing admin bearer token for %s", r.URL.Path)
+		}
+		if r.Header.Get("X-Reef-Internal-Route") != "" {
+			t.Fatalf("unexpected internal route marker for %s", r.URL.Path)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"status":"ok"}`)),
+		}, nil
+	})}
+
+	cfg := Config{
+		BaseURL:             "http://platform-runtime.test",
+		Workers:             1,
+		InstrumentID:        "AAPL",
+		InstrumentSymbol:    "AAPL",
+		ParticipantID:       "participant-1",
+		ParticipantName:     "Participant 1",
+		AccountID:           "account-1",
+		UseApiV1:            true,
+		AdminAPIBearerToken: "admin-token",
+	}
+
+	if err := seedReferenceData(client, cfg); err != nil {
+		t.Fatalf("seedReferenceData error: %v", err)
+	}
+	want := []string{
+		"/admin/v1/reference/instruments",
+		"/admin/v1/reference/participants",
+		"/admin/v1/reference/accounts",
+		"/admin/v1/auth/roles",
+		"/admin/v1/auth/actor-roles",
+	}
+	if !reflect.DeepEqual(seenPaths, want) {
+		t.Fatalf("unexpected seed paths: got=%v want=%v", seenPaths, want)
 	}
 }
 

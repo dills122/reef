@@ -899,9 +899,33 @@ function adminAuthSmoke() {
     failures.push(`OAuth start expected 302 to GitHub, got ${oauthOutput || oauthStart.stderr || `exit ${oauthStart.status}`}`);
   }
 
+  const oauthInvalidCallback = captureOptional("curl", [
+    "-sS",
+    "-o",
+    "/dev/null",
+    "-w",
+    "%{http_code}",
+    `${baseUrl}/admin/auth/github/callback?code=invalid-smoke&state=invalid-smoke`,
+  ]);
+  if (oauthInvalidCallback.status !== 0 || oauthInvalidCallback.stdout.trim() !== "401") {
+    failures.push(`invalid OAuth callback expected app 401, got ${oauthInvalidCallback.stdout || oauthInvalidCallback.stderr || `exit ${oauthInvalidCallback.status}`}`);
+  }
+
+  const publicLeaderboard = captureOptional("curl", [
+    "-sS",
+    "-o",
+    "/dev/null",
+    "-w",
+    "%{http_code}",
+    `${baseUrl}/api/v1/arena/leaderboard`,
+  ]);
+  if (publicLeaderboard.status !== 0 || publicLeaderboard.stdout.trim() !== "400") {
+    failures.push(`public leaderboard expected app 400 for missing params, got ${publicLeaderboard.stdout || publicLeaderboard.stderr || `exit ${publicLeaderboard.status}`}`);
+  }
+
   const caddyFallback = captureOptional("ssh", [
     target,
-    `cd ${remoteDeployDir} && docker compose exec -T caddy sed -n '60,68p' /etc/caddy/Caddyfile`,
+    `cd ${remoteDeployDir} && docker compose exec -T caddy cat /etc/caddy/Caddyfile`,
   ]);
   if (caddyFallback.status !== 0) {
     failures.push(`could not inspect Caddyfile inside container: ${caddyFallback.stderr || `exit ${caddyFallback.status}`}`);
@@ -934,6 +958,8 @@ function adminAuthSmoke() {
   console.log("admin shell ok");
   console.log("unauthenticated session 401 ok");
   console.log("OAuth start 302 to GitHub ok");
+  console.log("invalid OAuth callback app 401 ok");
+  console.log("public leaderboard reaches app ok");
   console.log("Caddy clean-url fallback ok");
   console.log("legacy mutation route disabled ok");
 }

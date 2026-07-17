@@ -118,17 +118,31 @@ source "$SECRETS/postgres-analytics.env"
 
 # Bearer token gating narrow CI/run-plane admin gateway routes.
 if [[ ! -s "$SECRETS/caddy.env" ]]; then
+  ADMIN_API_TOKEN="$(rand_hex)"
   ARENA_ADMIN_API_TOKEN="$(rand_hex)"
   ANALYTICS_EXPORT_API_TOKEN="$(rand_hex)"
+  PUBLIC_API_TOKEN="$(rand_hex)"
 
   cat > "$SECRETS/caddy.env" <<EOF
+ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
 ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
+PUBLIC_API_TOKEN=${PUBLIC_API_TOKEN}
 EOF
 
   chmod 600 "$SECRETS/caddy.env"
+  echo "Generated ADMIN_API_TOKEN - use this for reference/auth admin gateway routes."
   echo "Generated ARENA_ADMIN_API_TOKEN - set this as the ARENA_ADMIN_API_TOKEN GitHub Actions secret for the bot-submission workflow."
   echo "Generated ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
+  echo "Generated PUBLIC_API_TOKEN - Caddy injects this for browser-safe public reads."
+fi
+
+if ! grep -q '^ADMIN_API_TOKEN=' "$SECRETS/caddy.env"; then
+  ADMIN_API_TOKEN="$(rand_hex)"
+  cat >> "$SECRETS/caddy.env" <<EOF
+ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+EOF
+  echo "Generated missing ADMIN_API_TOKEN - use this for reference/auth admin gateway routes."
 fi
 
 if ! grep -q '^ANALYTICS_EXPORT_API_TOKEN=' "$SECRETS/caddy.env"; then
@@ -137,6 +151,14 @@ if ! grep -q '^ANALYTICS_EXPORT_API_TOKEN=' "$SECRETS/caddy.env"; then
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
   echo "Generated missing ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
+fi
+
+if ! grep -q '^PUBLIC_API_TOKEN=' "$SECRETS/caddy.env"; then
+  PUBLIC_API_TOKEN="$(rand_hex)"
+  cat >> "$SECRETS/caddy.env" <<EOF
+PUBLIC_API_TOKEN=${PUBLIC_API_TOKEN}
+EOF
+  echo "Generated missing PUBLIC_API_TOKEN - Caddy injects this for browser-safe public reads."
 fi
 
 DEPLOY_RECEIVER_PORT="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_PORT 8090)"
@@ -189,6 +211,7 @@ SIMULATOR_STATIC_CLIENT_COUNT="${SIMULATOR_STATIC_CLIENT_COUNT:-512}"
 SIMULATOR_PARTICIPANT_ID="${SIMULATOR_PARTICIPANT_ID:-${REEF_PARTICIPANT_ID:-participant-1}}"
 SIMULATOR_ACCOUNT_ID="${SIMULATOR_ACCOUNT_ID:-${REEF_ACCOUNT_ID:-account-1}}"
 SIMULATOR_API_TOKENS="$(static_client_tokens "$SIMULATOR_CLIENT_ID_PREFIX" "$SIMULATOR_STATIC_CLIENT_COUNT" "$SIMULATOR_API_TOKEN" "$SIMULATOR_PARTICIPANT_ID" "$SIMULATOR_ACCOUNT_ID" "bot")"
+PUBLIC_API_TOKENS="arena-admin-web:${PUBLIC_API_TOKEN}:actors=arena-admin-web:participants=${SIMULATOR_PARTICIPANT_ID}:accounts=${SIMULATOR_ACCOUNT_ID}"
 
 cat > "$SECRETS/openbao.env" <<EOF
 BAO_ADDR=http://127.0.0.1:8200
@@ -206,8 +229,9 @@ PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=${PLATFORM_LEGACY_MUTATION_ROUTES_ENABLE
 ADMIN_SESSION_COOKIE_NAME=${ADMIN_SESSION_COOKIE_NAME:-reef_admin_session}
 ADMIN_SESSION_COOKIE_SECURE=${ADMIN_SESSION_COOKIE_SECURE:-true}
 PLATFORM_INTERNAL_HTTP_MODE=disabled
+POST_TRADE_PROFILE=ops-realistic-v1
 EXTERNAL_API_AUTH_MODE=static-token
-EXTERNAL_API_TOKENS=${SIMULATOR_API_TOKENS}
+EXTERNAL_API_TOKENS=${SIMULATOR_API_TOKENS},${PUBLIC_API_TOKENS}
 EXTERNAL_API_RATE_LIMIT_MODE=fixed-window
 EXTERNAL_API_IDEMPOTENCY_STORE=postgres
 ENGINE_TRANSPORT=grpc
@@ -241,8 +265,10 @@ ARENA_POSTGRES_PASSWORD=${ADMIN_APP_DB_PASSWORD}
 ANALYTICS_POSTGRES_JDBC_URL=jdbc:postgresql://postgres-analytics:5432/analytics?currentSchema=analytics
 ANALYTICS_POSTGRES_USER=analytics_app
 ANALYTICS_POSTGRES_PASSWORD=${ANALYTICS_APP_DB_PASSWORD}
+ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
 ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
+ADMIN_API_ACTOR_ID=${ADMIN_API_ACTOR_ID:-ops-admin}
 ARENA_ADMIN_API_ACTOR_ID=${ARENA_ADMIN_API_ACTOR_ID:-bot-submission-ci}
 ANALYTICS_EXPORT_API_ACTOR_ID=${ANALYTICS_EXPORT_API_ACTOR_ID:-analytics-export-ci}
 EOF

@@ -77,8 +77,8 @@ on the Hetzner host.
 | `/opt/reef/secrets/admin-auth.env` | Hosted GitHub OAuth config and temporary legacy-route flag | Sourced by `generate-local-secrets.sh` when present |
 | `/opt/reef/secrets/matching-engine.env` | Matching engine bind settings | Matching engine |
 | `/opt/reef/secrets/simulator.env` | Simulator API bearer token, client id prefix, optional Bao AppRole credentials | Hosted smoke/soak simulator |
-| `/opt/reef/secrets/caddy.env` | `ARENA_ADMIN_API_TOKEN`, `ANALYTICS_EXPORT_API_TOKEN` | Caddy public admin gateway and platform runtime route checks |
-| `/opt/reef/secrets/platform-runtime.env` | `ARENA_ADMIN_API_ACTOR_ID`, `ANALYTICS_EXPORT_API_ACTOR_ID`, optional `ADMIN_API_ACTOR_ID` | Server-side actor binding for static fallback tokens; request headers cannot override it |
+| `/opt/reef/secrets/caddy.env` | `ADMIN_API_TOKEN`, `ARENA_ADMIN_API_TOKEN`, `ANALYTICS_EXPORT_API_TOKEN`, `PUBLIC_API_TOKEN` | Caddy public/admin gateway tokens and platform runtime route checks |
+| `/opt/reef/secrets/platform-runtime.env` | `ADMIN_API_ACTOR_ID`, `ARENA_ADMIN_API_ACTOR_ID`, `ANALYTICS_EXPORT_API_ACTOR_ID` | Server-side actor binding for static fallback tokens; request headers cannot override it |
 | `/opt/reef/secrets/backup.env` | `AGE_RECIPIENT` and optional R2 settings | Host backup job |
 | `/opt/reef/secrets/platform-runtime.env` | `BAO_BOT_CONFIG_ROLE_ID`, `BAO_BOT_CONFIG_SECRET_ID` | Dedicated OpenBao AppRole used by the Admin API for participant bot config writes |
 
@@ -106,7 +106,9 @@ server.
 | Secret | Purpose | Source |
 | --- | --- | --- |
 | `ARENA_ADMIN_API_URL` | Bot-submission workflow target | `https://reef-arena-admin.shrimpworks.dev` once public ingress is enabled. |
+| `ADMIN_API_TOKEN` | Reference/auth admin gateway bearer token for hosted setup and smoke/soak seeding | Generated in `/opt/reef/secrets/caddy.env`; consumed by platform runtime through `/opt/reef/secrets/platform-runtime.env`. |
 | `ARENA_ADMIN_API_TOKEN` | Bot-submission CI admin gateway bearer token | Generated in `/opt/reef/secrets/caddy.env`; copy to GitHub Actions secret when CI path is enabled. |
+| `PUBLIC_API_TOKEN` | Edge-injected static token for browser-safe public reads such as `/api/v1/arena/leaderboard` | Generated in `/opt/reef/secrets/caddy.env`; never copy into frontend JavaScript. |
 | `BOT_SUBMISSION_OPENBAO_MODE` | Enables real OpenBao provisioning in CI | Set to `real` only for the hosted provisioning workflow. |
 | `ACTIONS_ID_TOKEN_REQUEST_URL` | GitHub OIDC URL | Supplied by GitHub Actions when workflow grants `id-token: write`. |
 | `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | GitHub OIDC request token | Supplied by GitHub Actions when workflow grants `id-token: write`. |

@@ -78,7 +78,7 @@
 	}
 
 	function openConfigEditor(botId: string) {
-		selectedConfigBotId = selectedConfigBotId === botId ? '' : botId;
+		selectedConfigBotId = botId;
 		if (!configDraftByBotId[botId]) {
 			configDraftByBotId = { ...configDraftByBotId, [botId]: '{\n}' };
 		}
@@ -86,8 +86,18 @@
 		configNoticeByBotId = { ...configNoticeByBotId, [botId]: '' };
 	}
 
+	function closeConfigEditor() {
+		selectedConfigBotId = '';
+	}
+
 	function updateConfigDraft(botId: string, value: string) {
 		configDraftByBotId = { ...configDraftByBotId, [botId]: value };
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && selectedConfigBotId) {
+			closeConfigEditor();
+		}
 	}
 
 	async function refreshConfigStatus(botId: string) {
@@ -151,6 +161,8 @@
 		}
 	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
 	<title>Bot Admin — Bot Arena</title>
@@ -268,8 +280,6 @@
 						{@const configStatus = configByBotId[bot.botId]}
 						{@const configError = configErrorByBotId[bot.botId]}
 						{@const configBusy = configBusyByBotId[bot.botId]}
-						{@const configSaveError = configSaveErrorByBotId[bot.botId]}
-						{@const configNotice = configNoticeByBotId[bot.botId]}
 						<li class="grid gap-4 py-5 lg:grid-cols-[minmax(0,1fr)_180px]">
 							<div class="min-w-0">
 								<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -345,80 +355,184 @@
 									disabled={configBusy}
 									onclick={() => openConfigEditor(bot.botId)}
 								>
-									{selectedConfigBotId === bot.botId ? 'close config' : 'edit config'}
+									edit config
 								</Button>
 							</div>
-
-							{#if selectedConfigBotId === bot.botId}
-								<section class="border-t border-rule pt-4 lg:col-span-2" aria-labelledby={`bot-config-${bot.botId}`}>
-									<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-										<div class="min-w-0">
-											<h4 id={`bot-config-${bot.botId}`} class="text-sm font-bold text-ink">runtime config</h4>
-											<p class="mt-1 max-w-[62ch] text-xs text-muted">
-												Values are hidden after save. Saving replaces the whole object for this bot.
-											</p>
-										</div>
-										{#if configStatus?.secretPath}
-											<p class="max-w-full break-all text-xs text-muted sm:max-w-[32ch] sm:text-right">
-												{configStatus.secretPath}
-											</p>
-										{/if}
-									</div>
-
-									<label
-										class="mt-4 block text-xs font-bold uppercase tracking-normal text-muted"
-										for={`bot-config-json-${bot.botId}`}
-									>
-										config object
-									</label>
-									<textarea
-										id={`bot-config-json-${bot.botId}`}
-										class="mt-2 h-[clamp(180px,32dvh,280px)] max-h-[45dvh] min-h-[180px] w-full resize-y border border-rule bg-[#070b13] p-4 text-sm leading-relaxed text-ink outline-none focus:border-accent-hover"
-										spellcheck="false"
-										disabled={configBusy}
-										value={configDraftByBotId[bot.botId] ?? '{\n}'}
-										oninput={(event) =>
-											updateConfigDraft(bot.botId, (event.currentTarget as HTMLTextAreaElement).value)}
-									></textarea>
-
-									{#if configSaveError}
-										<p class="mt-3 border-l border-destructive pl-3 text-sm text-destructive">{configSaveError}</p>
-									{:else if configNotice}
-										<p class="mt-3 border-l border-accent pl-3 text-sm text-muted">{configNotice}</p>
-									{:else}
-										<p class="mt-3 text-xs text-muted">
-											Only object-shaped JSON is accepted. Top-level keys are validated by the config service.
-										</p>
-									{/if}
-
-									<div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-										<p class="text-xs text-muted">
-											Current stored keys: {configStatus?.keys?.length ? configStatus.keys.join(', ') : 'none'}
-										</p>
-										<div class="flex flex-wrap gap-2 sm:justify-end">
-											<Button
-												variant="secondary"
-												class="min-h-9 px-3 py-2 text-xs"
-												disabled={configBusy}
-												onclick={() => clearBotConfig(bot.botId)}
-											>
-												clear
-											</Button>
-											<Button
-												class="min-h-9 px-3 py-2 text-xs"
-												disabled={configBusy}
-												onclick={() => saveBotConfig(bot.botId)}
-											>
-												{configBusy ? 'saving' : 'save'}
-											</Button>
-										</div>
-									</div>
-								</section>
-							{/if}
 						</li>
 					{/each}
 				</ul>
 			{/if}
 		</Card>
 	</div>
+{/if}
+
+{#if selectedConfigBotId}
+	{@const selectedBot = ownedBots.find((bot) => bot.botId === selectedConfigBotId)}
+	{#if selectedBot}
+		{@const selectedOwner = ownerFor(selectedBot)}
+		{@const selectedStatus = configByBotId[selectedBot.botId]}
+		{@const selectedBusy = configBusyByBotId[selectedBot.botId]}
+		{@const selectedError = configErrorByBotId[selectedBot.botId]}
+		{@const selectedSaveError = configSaveErrorByBotId[selectedBot.botId]}
+		{@const selectedNotice = configNoticeByBotId[selectedBot.botId]}
+		<div class="fixed inset-0 z-50">
+			<button
+				class="absolute inset-0 h-full w-full cursor-default bg-black/70"
+				type="button"
+				aria-label="Close config editor"
+				onclick={closeConfigEditor}
+			></button>
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-3 sm:p-4">
+				<div
+					class="pointer-events-auto relative grid h-[min(720px,calc(100dvh-2rem))] w-full max-w-5xl overflow-hidden border border-rule-strong bg-bg shadow-2xl md:grid-cols-[320px_minmax(0,1fr)]"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="bot-config-title"
+				>
+					<button
+						class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 shrink-0 items-center justify-center border border-rule-strong bg-bg text-lg leading-none text-muted transition-colors hover:border-accent-hover hover:text-ink"
+						type="button"
+						aria-label="Close config editor"
+						onclick={closeConfigEditor}
+					>
+						×
+					</button>
+					<aside class="flex min-h-0 flex-col overflow-y-auto border-b border-rule bg-[#0d1422] p-4 md:border-b-0 md:border-r md:p-5">
+						<div class="min-h-0 flex-1">
+							<div class="pr-12">
+								<p class="text-xs text-muted">runtime config</p>
+								<h2 id="bot-config-title" class="mt-2 break-words text-2xl font-bold text-ink">
+									{selectedBot.metadata.name}
+								</h2>
+							</div>
+
+							<div class="mt-5 flex flex-wrap gap-2">
+								<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
+									{selectedOwner?.ownershipState ?? 'linked'}
+								</span>
+								<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
+									{selectedBusy && !selectedStatus ? 'loading' : selectedStatus?.hasConfig ? 'configured' : 'empty'}
+								</span>
+							</div>
+
+							<dl class="mt-6 space-y-4 text-sm">
+								<div>
+									<dt class="text-xs text-muted">bot id</dt>
+									<dd class="mt-1 break-all text-ink">{selectedBot.botId}</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-muted">source</dt>
+									<dd class="mt-1 break-all text-ink">{selectedBot.fileName}</dd>
+								</div>
+								<div>
+									<dt class="text-xs text-muted">owner</dt>
+									<dd class="mt-1 text-ink">{selectedOwner?.githubLogin ?? selectedBot.metadata.publisher}</dd>
+									{#if selectedBot.metadata.email}
+										<dd class="mt-1 break-all text-muted">{selectedBot.metadata.email}</dd>
+									{/if}
+								</div>
+								<div>
+									<dt class="text-xs text-muted">secret path</dt>
+									<dd class="mt-1 break-all text-ink">{selectedStatus?.secretPath ?? 'unavailable'}</dd>
+								</div>
+							</dl>
+
+							{#if selectedStatus?.keys?.length}
+								<div class="mt-6">
+									<p class="text-xs text-muted">stored keys</p>
+									<div class="mt-2 flex flex-wrap gap-1.5">
+										{#each selectedStatus.keys as key}
+											<span class="max-w-full truncate border border-rule px-2 py-0.5 text-xs text-muted">{key}</span>
+										{/each}
+									</div>
+								</div>
+							{/if}
+
+							{#if selectedError}
+								<div class="mt-6 border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive">
+									{selectedError}
+								</div>
+							{/if}
+						</div>
+
+						<div class="mt-6 shrink-0">
+							<Button
+								variant="secondary"
+								class="min-h-9 px-3 py-2 text-xs"
+								disabled={selectedBusy}
+								onclick={() => refreshConfigStatus(selectedBot.botId)}
+							>
+								refresh
+							</Button>
+						</div>
+					</aside>
+
+					<div class="flex min-h-0 flex-col overflow-hidden p-4 pt-14 md:p-5 md:pt-5">
+						<div class="shrink-0 border-b border-rule pb-4">
+							<h3 class="text-xl font-normal text-ink">json</h3>
+							<p class="mt-1 max-w-[58ch] text-sm text-muted">
+								values are hidden after save; saving replaces the stored object.
+							</p>
+						</div>
+
+						<div class="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
+							<label class="block text-xs font-bold uppercase tracking-normal text-muted" for="bot-config-json">
+								config object
+							</label>
+							<textarea
+								id="bot-config-json"
+								class="mt-2 h-[clamp(220px,46dvh,420px)] min-h-[220px] w-full resize-y border border-rule bg-[#070b13] p-4 text-sm leading-relaxed text-ink outline-none focus:border-accent-hover"
+								spellcheck="false"
+								disabled={selectedBusy}
+								aria-describedby="bot-config-json-help"
+								value={configDraftByBotId[selectedBot.botId] ?? '{\n}'}
+								oninput={(event) =>
+									updateConfigDraft(selectedBot.botId, (event.currentTarget as HTMLTextAreaElement).value)}
+							></textarea>
+
+							{#if selectedSaveError}
+								<p class="mt-3 border-l border-destructive pl-3 text-sm text-destructive">{selectedSaveError}</p>
+							{:else if selectedNotice}
+								<p class="mt-3 border-l border-accent pl-3 text-sm text-muted">{selectedNotice}</p>
+							{/if}
+							<p id="bot-config-json-help" class="mt-3 text-xs text-muted">
+								Only object-shaped JSON is accepted. Top-level keys are validated by the config service.
+							</p>
+						</div>
+
+						<div class="shrink-0 border-t border-rule bg-bg pt-4">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<p class="text-xs text-muted">save replaces the whole object.</p>
+								<div class="flex flex-wrap gap-2 sm:justify-end">
+									<Button
+										variant="secondary"
+										class="min-h-9 px-3 py-2 text-xs"
+										disabled={selectedBusy}
+										onclick={() => clearBotConfig(selectedBot.botId)}
+									>
+										clear
+									</Button>
+									<Button
+										variant="secondary"
+										class="min-h-9 px-3 py-2 text-xs"
+										disabled={selectedBusy}
+										onclick={closeConfigEditor}
+									>
+										cancel
+									</Button>
+									<Button
+										class="min-h-9 px-3 py-2 text-xs"
+										disabled={selectedBusy}
+										onclick={() => saveBotConfig(selectedBot.botId)}
+									>
+										{selectedBusy ? 'saving' : 'save'}
+									</Button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 {/if}
