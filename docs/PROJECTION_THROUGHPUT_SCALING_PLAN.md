@@ -190,6 +190,10 @@ Target the tables that dominate the patched `5k` run.
 - Move rebuildable dirty queues to unlogged or staging tables when they can be
   reconstructed from canonical facts and watermarks. Durable truth stays in
   canonical command outcomes and event batches.
+  - Initial implementation is in place: `order_lifecycle_dirty` and
+    `market_data_snapshot_dirty` are unlogged rebuildable queues, and hot
+    dirty-marking paths use `ON CONFLICT DO NOTHING` because an already-dirty
+    id already preserves the required recompute signal.
 - Collapse insert/delete dirty-table churn by batching dirty ids in memory or
   unlogged staging before merge.
 - Avoid writing `runtime_events` for every freshness-critical read if the read
@@ -346,10 +350,14 @@ structural separation:
 5. Reduce remaining runtime-events, lifecycle/fill, and dirty-table write
    amplification. Deterministic timeline sequencing cleared the final `5k`
    lag, but `runtime_events` still drove `~588MB` table/index growth and temp
-   bytes rose to `~5.59GB`.
-6. Add maintained depth/top-of-book projections.
-7. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
+   bytes rose to `~5.59GB`. Dirty queues are now unlogged locally; rerun `5k`
+   full projection to quantify WAL and dirty-table growth delta before moving
+   to the next write-shape fix.
+6. Split hot `runtime_events` facts from cold timeline payload JSON and review
+   hot event indexes.
+7. Add maintained depth/top-of-book projections.
+8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.
-8. Promote `7.5k`/`10k` projection gates only after `5k` remains stable with
+9. Promote `7.5k`/`10k` projection gates only after `5k` remains stable with
    zero final lag/deadlocks over longer soaks and materially lower write
    amplification.

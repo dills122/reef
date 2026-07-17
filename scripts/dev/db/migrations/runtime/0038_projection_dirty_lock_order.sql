@@ -180,7 +180,7 @@ BEGIN
   mark_market_data_dirty AS (
     INSERT INTO runtime.market_data_snapshot_dirty(instrument_id)
     SELECT instrument_id FROM dirty_instruments
-    ON CONFLICT (instrument_id) DO UPDATE SET dirtied_at = now()
+    ON CONFLICT (instrument_id) DO NOTHING
     RETURNING 1
   ),
   cleared AS (

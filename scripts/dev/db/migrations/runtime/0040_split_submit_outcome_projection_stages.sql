@@ -172,7 +172,7 @@ BEGIN
   mark_dirty AS (
     INSERT INTO runtime.order_lifecycle_dirty(order_id)
     SELECT order_id FROM dirty_ids
-    ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now()
+    ON CONFLICT (order_id) DO NOTHING
     RETURNING 1
   )
   SELECT COUNT(*) INTO persisted_count FROM outcomes;

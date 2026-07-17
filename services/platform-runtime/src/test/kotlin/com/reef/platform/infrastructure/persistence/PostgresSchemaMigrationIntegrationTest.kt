@@ -36,6 +36,39 @@ import kotlin.test.assertTrue
 
 class PostgresSchemaMigrationIntegrationTest {
     @Test
+    fun projectionDirtyQueuesAreUnloggedAfterMigration() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT relname, relpersistence
+                FROM pg_class
+                WHERE relnamespace = 'runtime'::regnamespace
+                  AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty')
+                ORDER BY relname
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) {
+                        rows.add("${rs.getString("relname")}:${rs.getString("relpersistence")}")
+                    }
+                    assertEquals(
+                        listOf(
+                            "market_data_snapshot_dirty:u",
+                            "order_lifecycle_dirty:u"
+                        ),
+                        rows
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun timelineProjectionUsesStreamSequenceWithoutTraceAllocatorWhenPresent() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return

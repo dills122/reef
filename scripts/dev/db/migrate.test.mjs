@@ -56,6 +56,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0039_command_outcome_projection_metadata.sql",
       "runtime/0040_split_submit_outcome_projection_stages.sql",
       "runtime/0041_deterministic_timeline_projection_sequence.sql",
+      "runtime/0042_unlogged_projection_dirty_queues.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -248,6 +249,17 @@ test("runtime projection lock-order migration hardens dirty queues", async () =>
   assert.match(migration.sql, /FOR UPDATE SKIP LOCKED/);
   assert.match(migration.sql, /ORDER BY instrument_id/);
   assert.match(migration.sql, /DELETE FROM runtime\.market_data_snapshot_dirty dirty\s+USING selected_dirty/);
+});
+
+test("runtime dirty queue migration moves rebuildable queues out of WAL", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0042_unlogged_projection_dirty_queues.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.order_lifecycle_dirty SET UNLOGGED/);
+  assert.match(migration.sql, /ALTER TABLE runtime\.market_data_snapshot_dirty SET UNLOGGED/);
 });
 
 test("command outcome projection preserves command correlation metadata", async () => {

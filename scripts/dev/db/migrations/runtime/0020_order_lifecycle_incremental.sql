@@ -6,7 +6,7 @@
 -- since the last projection cycle and only recompute those, so cost scales with
 -- recent activity instead of total historical order count.
 
-CREATE TABLE IF NOT EXISTS runtime.order_lifecycle_dirty (
+CREATE UNLOGGED TABLE IF NOT EXISTS runtime.order_lifecycle_dirty (
   order_id TEXT PRIMARY KEY,
   dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -125,7 +125,7 @@ BEGIN
     SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
   ) dirty_ids
   WHERE COALESCE(order_id, '') <> ''
-  ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now();
+  ON CONFLICT (order_id) DO NOTHING;
 
   IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
     RETURN;
@@ -329,7 +329,7 @@ BEGIN
   mark_dirty AS (
     INSERT INTO runtime.order_lifecycle_dirty(order_id)
     SELECT order_id FROM dirty_ids
-    ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now()
+    ON CONFLICT (order_id) DO NOTHING
     RETURNING 1
   ),
   parsed_events AS (

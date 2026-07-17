@@ -162,7 +162,12 @@ Immediate implications:
 5. The next fixes should reduce `runtime_events`, remaining dirty-table, and
    lifecycle/fill write amplification before promoting longer `5k` soaks or
    `7.5k`/`10k` projection gates.
-6. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+6. Dirty queue state is rebuildable and should not consume durable WAL budget:
+   the local follow-up makes `order_lifecycle_dirty` and
+   `market_data_snapshot_dirty` unlogged and avoids redundant conflict updates.
+   The next remote comparison should measure dirty-table WAL/table growth
+   against `do-benchmark-20260717T134058Z`.
+7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)

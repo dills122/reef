@@ -1357,7 +1357,7 @@ class PostgresRuntimePersistence(
                         SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
                       ) dirty_ids
                       WHERE COALESCE(order_id, '') <> ''
-                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now();
+                      ON CONFLICT (order_id) DO NOTHING;
 
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
