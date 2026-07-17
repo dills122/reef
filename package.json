@@ -59,6 +59,7 @@
     "arena-admin:dev": "bun run --cwd apps/arena-admin dev",
     "arena-admin:build": "bun run --cwd apps/arena-admin build",
     "arena-admin:build:guarded": "bun run --cwd apps/arena-admin build:guarded",
+    "arena-admin:ui-audit": "bun scripts/dev/arena-admin-ui-audit.mjs",
     "arena-admin:check": "bun run --cwd apps/arena-admin check",
     "infra:test:deploy-receiver": "node scripts/dev/deploy-receiver.test.mjs"
   },
