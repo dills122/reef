@@ -149,6 +149,12 @@ Evidence:
   p99 `111.94ms`, but projected only `288,242` and ended with projection lag
   `13,773` and materialized/projected gap `11,773`. Projector
   failures/retries/deadlocks stayed `0`.
+- `reports/do-benchmark/do-benchmark-20260717T170604Z/`: after dropping three
+  legacy all-event runtime-event indexes, the same `5k` full-projection shape
+  accepted/direct-acked/materialized `300,000` commands with p95 `76.46ms` and
+  p99 `119.44ms`, projected `298,353`, and ended with projection
+  lag/materialized gap `1,647`. Projector failures/retries/deadlocks stayed
+  `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -188,6 +194,11 @@ Database pressure in the patched `5k` run:
   `6.11GB` temp bytes. `runtime_events` grew `~345MB`; the cold
   `runtime_event_payloads` table grew `~297MB`; lifecycle updates remained in
   the same range, so the guard did not move the bottleneck.
+- runtime-event legacy index cut DB: about `1.77GB` WAL, `5.92KB` WAL per
+  accepted command, `2.02M` inserted tuples, `33.7k` updated tuples, and
+  `7.72GB` temp bytes. `runtime_events` index growth fell to `~173MB` from
+  `~243-245MB` in prior comparable runs, but `runtime_event_payloads` stayed
+  around `~297MB` and temp bytes rose, so row/payload/temp work remains.
 
 Immediate implications:
 
@@ -224,9 +235,10 @@ Immediate implications:
    preserve `5k` full-projection freshness; event/payload/index volume remains
    the next target.
    The next local event-index slice drops three legacy all-event indexes and
-   aligns recent event reads with the typed timestamp index. Measure it by
-   comparing `runtime.runtime_events` index-byte growth in the next `5k`
-   full-projection run.
+   aligns recent event reads with the typed timestamp index. The remote A/B
+   confirmed the expected index-byte reduction and much smaller final lag, but
+   strict freshness still failed; next work should focus on the broad
+   order-scoped lifecycle index and total event/payload row volume.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 

@@ -29,6 +29,7 @@ venue-event-materializer path on a DigitalOcean c-16 worker.
 | `do-benchmark-20260717T145907Z` | same `5k` full-projection shape after runtime-event hot/cold payload split, before lifecycle zero-format patch | `299,953` attempted/accepted/direct-acked/materialized, projected `288,761`, final lag/gap `11,192`, p95 `74.55ms`, p99 `117.68ms`, projection DB deadlocks `0`; preflight smoke exposed `filled_quantity_units=''` for an unfilled open order | Hot `runtime_events` growth fell, but cold payload side-table growth offset much of it and freshness still failed. Treat as diagnostic; fix lifecycle zero rendering before any rerun. |
 | `do-benchmark-20260717T151610Z` | same `5k` full-projection shape after lifecycle zero-format patch | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `63.53ms`, p99 `108.11ms`, projection DB deadlocks `0` | Correctness smoke and strict freshness gate passed. The hot/cold split lowers hot-row pressure but total event-storage growth remains high, so next fixes should target total rows/indexes/temp work. |
 | `do-benchmark-20260717T163043Z` | same `5k` full-projection shape after skipping no-op lifecycle projection rewrites | `300,015` attempted/accepted/direct-acked/materialized, projected `288,242`, final lag `13,773`, materialized/projected gap `11,773`, p95 `71.77ms`, p99 `111.94ms`, projector failures/retries/deadlocks `0` | Lifecycle no-op guards did not materially change the pressure profile and did not preserve freshness. Treat this as diagnostic evidence that the next bottleneck is still event/payload/index volume. |
+| `do-benchmark-20260717T170604Z` | same `5k` full-projection shape after dropping legacy all-event runtime-event indexes | `300,000` attempted/accepted/direct-acked/materialized, projected `298,353`, final lag/gap `1,647`, p95 `76.46ms`, p99 `119.44ms`, projector failures/retries/deadlocks `0` | Index removal worked but did not fully clear the gate: `runtime_events` index growth fell by about `70MB` and WAL/accepted fell to `~5.92KB`, while strict zero-lag still failed. Next target is event/payload row volume and temp work. |
 
 The patched `5k` run showed direct partitions balanced across all `16` active
 partitions with about `1.017` skew, and the venue-event materializer matched
@@ -126,6 +127,23 @@ Lifecycle no-op rewrite A/B in `do-benchmark-20260717T163043Z`:
 - The no-op guard is still the right projection semantics, but it is not a
   promotion fix for `5k` full projection. Move next to event index/row-volume
   reduction.
+
+Runtime-event legacy index cut in `do-benchmark-20260717T170604Z`:
+
+- full projection nearly caught up but failed the strict gate: projected
+  `298,353` of `300,000`, with final projection lag/materialized gap `1,647`.
+- projection WAL was `~1.77GB`, about `5.92KB` per accepted command, with
+  `2.02M` inserted tuples, `33.7k` updated tuples, and `~7.72GB` temp bytes.
+- `runtime.runtime_events` index growth fell to `~173MB` from `~243-245MB` in
+  prior comparable hot/cold runs; total `runtime_events` growth fell to
+  `~275MB` from `~345-347MB`.
+- `runtime.runtime_event_payloads` remained about `~297MB`, and
+  `runtime_events` inserts stayed around `270k`. The remaining pressure is
+  row volume, payload side-table growth, and temp work, not the dropped legacy
+  indexes.
+- lag concentrated in projector group/index `2`, owning partitions `8-11`; the
+  other projector groups caught up. Failures, retries, and deadlocks stayed
+  `0`.
 
 Canonical runtime DB pressure in the same patched `5k` run was much lower and
 cleaner:
@@ -281,7 +299,8 @@ Target the tables that dominate the patched `5k` run.
     `idx_runtime_events_occurred_event` are dropped. Recent event reads now
     order by typed timestamp/UUID keys. The order-scoped occurred index is
     intentionally retained until lifecycle modification lookup moves to a
-    dedicated typed or partial index.
+    dedicated typed or partial index. The remote A/B confirmed the expected
+    index-byte reduction and lower WAL per command, but zero-lag still failed.
 - Partition large append-heavy projection tables by event stream, run/session,
   projection partition, or time where that reduces B-tree contention and vacuum
   pressure without harming point lookups.
@@ -436,9 +455,11 @@ structural separation:
    is now measured and did not preserve `5k` freshness; keep it, but do not
    treat it as a promotion fix.
 6. Review hot `runtime_events` indexes and total event-storage row volume.
-   Initial legacy all-event index removal is in place locally; rerun the `5k`
-   full gate to measure runtime event index-byte reduction before cutting the
-   order-scoped lifecycle index.
+   Initial legacy all-event index removal is measured: event index bytes fell
+   materially and lag improved, but zero-lag still failed. Next cut is moving
+   lifecycle modification lookup to a narrow typed or partial index, dropping
+   the broad order-scoped runtime-event index, and then attacking payload/event
+   row volume.
 7. Add maintained depth/top-of-book projections.
 8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.
