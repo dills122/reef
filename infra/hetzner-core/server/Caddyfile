@@ -63,7 +63,22 @@
 		reverse_proxy deploy-receiver:8090
 	}
 
-	# Public venue-intake reads (trade tape, market data, arena leaderboard).
+	# Browser-visible public leaderboard reads still pass through the
+	# production ExternalApiBoundary. Inject the static read credential at the
+	# edge so the token is not exposed to frontend JavaScript.
+	@public_arena_leaderboard {
+		method GET
+		path /api/v1/arena/leaderboard
+	}
+
+	handle @public_arena_leaderboard {
+		reverse_proxy platform-runtime:8080 {
+			header_up X-Client-Id "arena-admin-web"
+			header_up Authorization "Bearer {$PUBLIC_API_TOKEN}"
+		}
+	}
+
+	# Public venue-intake reads that do not have route-specific edge auth.
 	@venue_api {
 		path /api/v1/*
 	}

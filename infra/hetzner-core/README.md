@@ -461,7 +461,10 @@ generator creates a simulator bearer token, maps `sim-client-*` entries into
 `EXTERNAL_API_TOKENS`, and writes the matching `REEF_API_BEARER_TOKEN` into
 `secrets/simulator.env`; do not replace those with hardcoded values. Hosted
 smoke/soak reference and auth seeding uses `/admin/v1/reference/...` and
-`/admin/v1/auth/...` with the generated `ADMIN_API_TOKEN`.
+`/admin/v1/auth/...` with the generated `ADMIN_API_TOKEN`. Browser-visible
+public reads, including `/api/v1/arena/leaderboard`, stay behind the same
+runtime boundary; Caddy injects the generated `PUBLIC_API_TOKEN` for those
+routes so static frontend assets never receive bearer secrets.
 
 Run the default hosted smoke gate:
 
