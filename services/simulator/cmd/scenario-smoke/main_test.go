@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -962,6 +963,51 @@ func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
 	}
 }
 
+func TestScenarioSmokeLiveAssertionsAttachP2SecuritySettlementFacts(t *testing.T) {
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","buyerParticipantId":"buyer-1","sellerParticipantId":"seller-1","instrumentId":"XYZ","quantity":"100","cashAmount":"10000.00","currency":"USD","state":"OBLIGATION_CREATED","occurredAt":"2026-03-14T18:00:04Z"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"SECURITY_LEG_FAILED","state":"BROKEN","occurredAt":"2026-03-14T18:00:05Z"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_SECURITY_LEG_REPAIR","actorType":"USER","actorId":"ops-1","occurredAt":"2026-03-14T18:00:06Z"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED","occurredAt":"2026-03-14T18:00:07Z"}]
+	}`
+	server := p2SettlementServerWithExceptionQueue(
+		t,
+		settlementJSON,
+		p2ResolvedSettlementExceptionQueueJSON("SECURITY_LEG_FAILED", "POST_SECURITY_LEG_REPAIR"),
+	)
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if !report.Pass || len(report.Failures) != 0 || len(report.Errors) != 0 {
+		t.Fatalf("unexpected failed assertion report: %+v", report)
+	}
+	if !hasAssertion(report, "p2-break-reason-security-leg-failed", "pass") {
+		t.Fatalf("missing security break reason assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-repair-action-posted", "pass") {
+		t.Fatalf("missing security repair action assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-exception-repair-action-matches-reason", "pass") {
+		t.Fatalf("missing security exception queue repair action assertion: %+v", report.Assertions)
+	}
+}
+
 func TestRunLiveDoesNotMutateCallerClientTimeout(t *testing.T) {
 	client := &http.Client{Timeout: 123 * time.Millisecond}
 	report := &smokeReport{}
@@ -1525,6 +1571,14 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 }
 
 func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
+	return p2SettlementServerWithExceptionQueue(
+		t,
+		settlementFacts,
+		p2ResolvedSettlementExceptionQueueJSON("CASH_LEG_FAILED", "POST_CASH_LEG_REPAIR"),
+	)
+}
+
+func p2SettlementServerWithExceptionQueue(t *testing.T, settlementFacts string, exceptionQueue string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -1542,15 +1596,15 @@ func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
 			_, _ = w.Write([]byte(settlementFacts))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/settlement/exceptions/p2-settlement-live" && settlementFacts != "":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(p2ResolvedSettlementExceptionQueueJSON()))
+			_, _ = w.Write([]byte(exceptionQueue))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 }
 
-func p2ResolvedSettlementExceptionQueueJSON() string {
-	return `{
+func p2ResolvedSettlementExceptionQueueJSON(reason string, repairAction string) string {
+	return fmt.Sprintf(`{
 		"scenarioRunId":"p2-settlement-live",
 		"exceptionsCount":1,
 		"openCount":0,
@@ -1566,7 +1620,7 @@ func p2ResolvedSettlementExceptionQueueJSON() string {
 			"severity":"MEDIUM",
 			"ownerRole":"SETTLEMENT_OPS",
 			"actionRequired":"NONE",
-			"reason":"CASH_LEG_FAILED",
+			"reason":"%s",
 			"settlementObligationId":"obl-1",
 			"tradeId":"trade-1",
 			"buyerParticipantId":"buyer-1",
@@ -1580,7 +1634,7 @@ func p2ResolvedSettlementExceptionQueueJSON() string {
 			"settlementBreakId":"break-1",
 			"settlementRepairId":"repair-1",
 			"settlementResolutionId":"resolution-1",
-			"repairAction":"POST_CASH_LEG_REPAIR",
+			"repairAction":"%s",
 			"actorId":"ops-1",
 			"correlationId":"corr-1",
 			"postTradeProfileId":"ops-realistic-v1",
@@ -1591,7 +1645,7 @@ func p2ResolvedSettlementExceptionQueueJSON() string {
 			"occurredAt":"2026-03-14T18:00:05Z",
 			"updatedAt":"2026-03-14T18:00:07Z"
 		}]
-	}`
+	}`, reason, repairAction)
 }
 
 func writeReadyzOK(w http.ResponseWriter) {

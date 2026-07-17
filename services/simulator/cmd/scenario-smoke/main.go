@@ -1098,6 +1098,17 @@ func expectedSettlementRepairAction(reason string) string {
 	}
 }
 
+func settlementBreakReasonAssertionID(reason string) string {
+	switch reason {
+	case "CASH_LEG_FAILED":
+		return "p2-break-reason-cash-leg-failed"
+	case "SECURITY_LEG_FAILED":
+		return "p2-break-reason-security-leg-failed"
+	default:
+		return "p2-break-reason-known"
+	}
+}
+
 func settlementExceptionObserved(exception settlementException) string {
 	return fmt.Sprintf(
 		"break=%s repair=%s resolution=%s actor=%s correlation=%s resolvedAt=%s",
@@ -1131,7 +1142,7 @@ func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, p
 		return
 	}
 	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
-	assertCount(report, "p2-one-cash-leg-break", "settlement_fact_count", len(facts.Breaks), 1, proofSource)
+	assertCount(report, "p2-one-settlement-break", "settlement_fact_count", len(facts.Breaks), 1, proofSource)
 	assertCount(report, "p2-one-manual-repair", "settlement_fact_count", len(facts.Repairs), 1, proofSource)
 	assertCount(report, "p2-one-settlement-resolution", "settlement_fact_count", len(facts.Resolutions), 1, proofSource)
 	if len(facts.Obligations) == 1 && strings.TrimSpace(facts.Obligations[0].TradeID) != "" {
@@ -1144,20 +1155,24 @@ func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, p
 	} else {
 		failAssertion(report, "p2-obligation-state-created", "settlement_fact_state", "OBLIGATION_CREATED", obligationStates(facts.Obligations), proofSource)
 	}
-	if len(facts.Breaks) == 1 && facts.Breaks[0].Reason == "CASH_LEG_FAILED" {
-		passAssertion(report, "p2-break-reason-cash-leg-failed", "CASH_LEG_FAILED", facts.Breaks[0].Reason, proofSource)
+	expectedRepairAction := ""
+	if len(facts.Breaks) == 1 {
+		expectedRepairAction = expectedSettlementRepairAction(facts.Breaks[0].Reason)
+	}
+	if len(facts.Breaks) == 1 && expectedRepairAction != "" {
+		passAssertion(report, settlementBreakReasonAssertionID(facts.Breaks[0].Reason), facts.Breaks[0].Reason, facts.Breaks[0].Reason, proofSource)
 	} else {
-		failAssertion(report, "p2-break-reason-cash-leg-failed", "settlement_fact_reason", "CASH_LEG_FAILED", breakReasons(facts.Breaks), proofSource)
+		failAssertion(report, "p2-break-reason-known", "settlement_fact_reason", "CASH_LEG_FAILED or SECURITY_LEG_FAILED", breakReasons(facts.Breaks), proofSource)
 	}
 	if len(facts.Breaks) == 1 && facts.Breaks[0].State == "BROKEN" {
 		passAssertion(report, "p2-break-state-broken", "BROKEN", facts.Breaks[0].State, proofSource)
 	} else {
 		failAssertion(report, "p2-break-state-broken", "settlement_fact_state", "BROKEN", breakStates(facts.Breaks), proofSource)
 	}
-	if len(facts.Repairs) == 1 && facts.Repairs[0].RepairAction == "POST_CASH_LEG_REPAIR" {
-		passAssertion(report, "p2-repair-action-posted", "POST_CASH_LEG_REPAIR", facts.Repairs[0].RepairAction, proofSource)
+	if len(facts.Repairs) == 1 && expectedRepairAction != "" && facts.Repairs[0].RepairAction == expectedRepairAction {
+		passAssertion(report, "p2-repair-action-posted", expectedRepairAction, facts.Repairs[0].RepairAction, proofSource)
 	} else {
-		failAssertion(report, "p2-repair-action-posted", "settlement_fact_repair", "POST_CASH_LEG_REPAIR", repairActions(facts.Repairs), proofSource)
+		failAssertion(report, "p2-repair-action-posted", "settlement_fact_repair", expectedRepairAction, repairActions(facts.Repairs), proofSource)
 	}
 	if len(facts.Resolutions) == 1 && facts.Resolutions[0].SettlementState == "RESOLVED" {
 		passAssertion(report, "p2-settlement-final-resolved", "RESOLVED", facts.Resolutions[0].SettlementState, proofSource)

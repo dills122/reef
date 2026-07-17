@@ -206,13 +206,16 @@ function p2SettlementFacts(scenarioRunId, mode, factIdScope) {
   if (mode === "settled") {
     return p2SettledPostTradeFacts(scenarioRunId, factIdScope);
   }
-  if (mode !== "exception") {
-    throw new Error(`unknown P2 settlement facts mode: ${mode}`);
+  if (mode === "exception" || mode === "cash-exception") {
+    return p2ExceptionFacts(scenarioRunId, "CASH_LEG_FAILED", "POST_CASH_LEG_REPAIR", "cash-leg-failed");
   }
-  return p2ExceptionFacts(scenarioRunId);
+  if (mode === "security-exception") {
+    return p2ExceptionFacts(scenarioRunId, "SECURITY_LEG_FAILED", "POST_SECURITY_LEG_REPAIR", "security-leg-failed");
+  }
+  throw new Error(`unknown P2 settlement facts mode: ${mode}`);
 }
 
-function p2ExceptionFacts(scenarioRunId) {
+function p2ExceptionFacts(scenarioRunId, breakReason, repairAction, causationScope) {
   return {
     scenarioRunId,
     obligations: [
@@ -238,8 +241,8 @@ function p2ExceptionFacts(scenarioRunId) {
         settlementObligationId: `${scenarioRunId}-obl-1`,
         scenarioRunId,
         correlationId: `${scenarioRunId}-corr-1`,
-        causationId: `${scenarioRunId}-cash-leg-failed-1`,
-        reason: "CASH_LEG_FAILED",
+        causationId: `${scenarioRunId}-${causationScope}-1`,
+        reason: breakReason,
         state: "BROKEN",
         occurredAt: "2026-03-14T18:00:05Z",
       },
@@ -252,7 +255,7 @@ function p2ExceptionFacts(scenarioRunId) {
         scenarioRunId,
         correlationId: `${scenarioRunId}-corr-1`,
         causationId: `${scenarioRunId}-repair-command-1`,
-        repairAction: "POST_CASH_LEG_REPAIR",
+        repairAction,
         actorType: "USER",
         actorId: "settlement-ops-1",
         occurredAt: "2026-03-14T18:00:06Z",
