@@ -1845,12 +1845,27 @@ class PlatformHttpServerBoundaryTest {
         )
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
+            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl(
+                envLookup(
+                    "REEF_ENV" to "local",
+                    "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+                )
+            ),
             arenaAdminService = AdminApplicationService(
                 runtimePersistence = InMemoryRuntimePersistence(),
                 arenaRegistryStore = arenaStore
             )
         )
         try {
+            val preflight = options(
+                server.address.port,
+                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
+                headers = mapOf(
+                    "Origin" to "http://localhost:5174",
+                    "Access-Control-Request-Method" to "GET",
+                    "Access-Control-Request-Headers" to "x-client-id"
+                )
+            )
             val missingParams = get(server.address.port, "/api/v1/arena/leaderboard", apiReadHeaders())
             val leaderboard = get(
                 server.address.port,
@@ -1858,6 +1873,9 @@ class PlatformHttpServerBoundaryTest {
                 apiReadHeaders()
             )
 
+            assertEquals(204, preflight.status)
+            assertEquals("http://localhost:5174", responseHeader(preflight, "Access-Control-Allow-Origin"))
+            assertEquals("x-client-id", responseHeader(preflight, "Access-Control-Allow-Headers"))
             assertEquals(400, missingParams.status)
             assertEquals(200, leaderboard.status)
             assertContains(leaderboard.body, "\"modeId\":\"hosted-sim\"")

@@ -1225,6 +1225,7 @@ class PlatformHttpServer(
         }
 
         server.createContext("/api/v1/arena/leaderboard") { exchange ->
+            if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
                 return@createContext
