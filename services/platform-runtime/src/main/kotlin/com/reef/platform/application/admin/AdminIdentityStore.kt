@@ -156,12 +156,14 @@ object AdminIdentityValidation {
 
 interface AdminIdentityStore {
     fun saveUser(user: AdminUser): AdminUser
+    fun users(limit: Int = 100): List<AdminUser>
     fun userByReefUserId(reefUserId: String): AdminUser?
     fun userByGithubUserId(githubUserId: Long): AdminUser?
     fun saveRole(role: AdminRole): AdminRole
     fun role(roleId: String): AdminRole?
     fun roles(): List<AdminRole>
     fun assignRole(binding: AdminUserRole): AdminUserRole
+    fun revokeRole(reefUserId: String, roleId: String)
     fun rolesForUser(reefUserId: String): List<AdminUserRole>
     fun saveUserBotLimit(limit: AdminUserBotLimit): AdminUserBotLimit
     fun userBotLimit(reefUserId: String): AdminUserBotLimit?
@@ -200,6 +202,10 @@ class InMemoryAdminIdentityStore : AdminIdentityStore {
         return users[AdminIdentityValidation.reefUserId(reefUserId)]
     }
 
+    override fun users(limit: Int): List<AdminUser> {
+        return users.values.sortedByDescending { it.lastSeenAt }.take(limit.coerceIn(1, 500))
+    }
+
     override fun userByGithubUserId(githubUserId: Long): AdminUser? {
         AdminIdentityValidation.requireGitHubUserId(githubUserId)
         return githubUsers[githubUserId]?.let(users::get)
@@ -224,6 +230,12 @@ class InMemoryAdminIdentityStore : AdminIdentityStore {
         require(roles.containsKey(binding.roleId)) { "Unknown admin role: ${binding.roleId}" }
         userRoles[binding.reefUserId to binding.roleId] = binding
         return binding
+    }
+
+    override fun revokeRole(reefUserId: String, roleId: String) {
+        val userId = AdminIdentityValidation.reefUserId(reefUserId)
+        val role = AdminIdentityValidation.roleId(roleId)
+        userRoles.remove(userId to role)
     }
 
     override fun rolesForUser(reefUserId: String): List<AdminUserRole> {

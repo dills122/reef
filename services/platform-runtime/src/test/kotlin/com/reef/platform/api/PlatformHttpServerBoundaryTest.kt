@@ -127,6 +127,51 @@ class PlatformHttpServerBoundaryTest {
         )
         assertEquals(
             AdminGatewayRoute(
+                "/internal/admin/access/users",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/roles",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/roles", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/users/trust-state",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users/trust-state", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/users/roles",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users/roles", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/access/users/roles/revoke",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin),
+                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+            ),
+            adminGatewayRouteFor("/admin/v1/access/users/roles/revoke", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/analytics/run-exports",
                 "analytics",
                 setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
@@ -342,6 +387,97 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGitHubOAuthCallbackCanRedirectToLocalDevAdminUi() {
+        val auth = testAdminAuth()
+        val github = FakeAdminGitHubOAuthClient()
+        val localUiBase = localDevAdminUiBaseUrl(
+            envLookup(
+                "REEF_ENV" to "local",
+                "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = github,
+            localDevAdminUiBaseUrl = localUiBase
+        )
+        try {
+            val start = get(server.address.port, "/admin/auth/github/start?redirectPath=/admin")
+            val state = responseHeader(start, "Location").substringAfter("state=").substringBefore("&")
+
+            val callback = get(server.address.port, "/admin/auth/github/callback?code=github-code&state=$state")
+
+            assertEquals(302, callback.status)
+            assertEquals("http://localhost:5174/admin", responseHeader(callback, "Location"))
+            assertContains(responseHeader(callback, "Set-Cookie"), "reef_admin_session=")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun localDevAdminUiCorsAllowsConfiguredLoopbackOriginOnly() {
+        val localUiBase = localDevAdminUiBaseUrl(
+            envLookup(
+                "REEF_ENV" to "local",
+                "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            localDevAdminUiBaseUrl = localUiBase
+        )
+        try {
+            val preflight = options(
+                server.address.port,
+                "/admin/v1/access/roles",
+                headers = mapOf(
+                    "Origin" to "http://localhost:5174",
+                    "Access-Control-Request-Headers" to "content-type"
+                )
+            )
+            assertEquals(204, preflight.status)
+            assertEquals("http://localhost:5174", responseHeader(preflight, "Access-Control-Allow-Origin"))
+            assertEquals("true", responseHeader(preflight, "Access-Control-Allow-Credentials"))
+            assertEquals("content-type", responseHeader(preflight, "Access-Control-Allow-Headers"))
+
+            val authSession = requestWithHeaders(
+                "GET",
+                server.address.port,
+                "/admin/auth/session",
+                headers = mapOf("Origin" to "http://localhost:5174")
+            )
+            assertEquals("http://localhost:5174", responseHeader(authSession, "Access-Control-Allow-Origin"))
+            assertEquals("true", responseHeader(authSession, "Access-Control-Allow-Credentials"))
+
+            val deniedOrigin = requestWithHeaders(
+                "GET",
+                server.address.port,
+                "/admin/auth/session",
+                headers = mapOf("Origin" to "https://reef.example")
+            )
+            assertEquals("", responseHeader(deniedOrigin, "Access-Control-Allow-Origin"))
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun localDevAdminUiBaseUrlIsIgnoredOutsideLocalProfile() {
+        assertEquals(
+            null,
+            localDevAdminUiBaseUrl(
+                envLookup(
+                    "REEF_ENV" to "prod",
+                    "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+                )
+            )
+        )
+    }
+
+    @Test
     fun adminGitHubOAuthCallbackReturnsGatewayErrorForExchangeFailure() {
         val auth = testAdminAuth()
         val server = testServerWithGateway(
@@ -485,6 +621,107 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, allowedByServiceToken.status)
             assertContains(allowedByServiceToken.body, "account risk control store unavailable")
             assertEquals(401, deniedByWrongFamily.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminAccessGatewayListsUsersAndLetsTrustedOperatorAssignReviewerRole() {
+        val auth = testAdminAuth()
+        val operator = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val target = auth.identityService.ensureGitHubUser(GitHubUserIdentity(67890, "mona"))
+        grantTrustedOperator(auth, operator.reefUserId)
+        val session = auth.authService.createSession(operator.reefUserId)
+        val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
+        )
+        try {
+            val users = get(server.address.port, "/admin/v1/access/users", headers)
+            val roles = get(server.address.port, "/admin/v1/access/roles", headers)
+            val assigned = post(
+                server.address.port,
+                "/admin/v1/access/users/roles",
+                headers,
+                JsonCodec.writeObject(
+                    "reefUserId" to target.reefUserId,
+                    "roleId" to AdminIdentityService.RoleReviewer,
+                    "reason" to "ready to review submissions"
+                )
+            )
+            val limited = post(
+                server.address.port,
+                "/admin/v1/access/users/trust-state",
+                headers,
+                JsonCodec.writeObject(
+                    "reefUserId" to target.reefUserId,
+                    "trustState" to AdminTrustState.Limited.dbValue,
+                    "reason" to "temporary moderation"
+                )
+            )
+
+            assertEquals(200, users.status)
+            assertContains(users.body, "\"reefUserId\":\"${operator.reefUserId}\"")
+            assertContains(users.body, "\"githubLogin\":\"mona\"")
+            assertContains(users.body, "\"roles\":[")
+            assertEquals(200, roles.status)
+            assertContains(roles.body, "\"roleId\":\"operator\"")
+            assertEquals(200, assigned.status)
+            assertContains(assigned.body, "\"roleId\":\"reviewer\"")
+            assertEquals(200, limited.status)
+            assertContains(limited.body, "\"trustState\":\"limited\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminAccessGatewayLeavesPrivilegedRoleChangesToPlatformAdmins() {
+        val auth = testAdminAuth()
+        val operator = auth.identityService.ensureGitHubUser(GitHubUserIdentity(20001, "operator"))
+        val platformAdmin = auth.identityService.ensureGitHubUser(GitHubUserIdentity(20002, "platform-admin"))
+        val target = auth.identityService.ensureGitHubUser(GitHubUserIdentity(20003, "target-user"))
+        grantTrustedOperator(auth, operator.reefUserId)
+        grantTrustedPlatformAdmin(auth, platformAdmin.reefUserId)
+        val operatorHeaders = mapOf("Cookie" to "reef_admin_session=${auth.authService.createSession(operator.reefUserId).token}")
+        val platformHeaders = mapOf(
+            "Cookie" to "reef_admin_session=${auth.authService.createSession(platformAdmin.reefUserId).token}"
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
+        )
+        try {
+            val body = JsonCodec.writeObject(
+                "reefUserId" to target.reefUserId,
+                "roleId" to AdminIdentityService.RoleOperator,
+                "reason" to "promote to operator"
+            )
+            val denied = post(server.address.port, "/admin/v1/access/users/roles", operatorHeaders, body)
+            val allowed = post(server.address.port, "/admin/v1/access/users/roles", platformHeaders, body)
+            val banned = post(
+                server.address.port,
+                "/admin/v1/access/users/trust-state",
+                platformHeaders,
+                JsonCodec.writeObject(
+                    "reefUserId" to target.reefUserId,
+                    "trustState" to AdminTrustState.Banned.dbValue,
+                    "reason" to "account compromise"
+                )
+            )
+
+            assertEquals(400, denied.status)
+            assertContains(denied.body, "trusted platform-admin role required")
+            assertEquals(200, allowed.status)
+            assertContains(allowed.body, "\"roleId\":\"operator\"")
+            assertEquals(200, banned.status)
+            assertContains(banned.body, "\"trustState\":\"banned\"")
         } finally {
             server.stop(0)
         }
@@ -1610,12 +1847,27 @@ class PlatformHttpServerBoundaryTest {
         )
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
+            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl(
+                envLookup(
+                    "REEF_ENV" to "local",
+                    "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+                )
+            ),
             arenaAdminService = AdminApplicationService(
                 runtimePersistence = InMemoryRuntimePersistence(),
                 arenaRegistryStore = arenaStore
             )
         )
         try {
+            val preflight = options(
+                server.address.port,
+                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
+                headers = mapOf(
+                    "Origin" to "http://localhost:5174",
+                    "Access-Control-Request-Method" to "GET",
+                    "Access-Control-Request-Headers" to "x-client-id"
+                )
+            )
             val missingParams = get(server.address.port, "/api/v1/arena/leaderboard", apiReadHeaders())
             val leaderboard = get(
                 server.address.port,
@@ -1623,6 +1875,9 @@ class PlatformHttpServerBoundaryTest {
                 apiReadHeaders()
             )
 
+            assertEquals(204, preflight.status)
+            assertEquals("http://localhost:5174", responseHeader(preflight, "Access-Control-Allow-Origin"))
+            assertEquals("x-client-id", responseHeader(preflight, "Access-Control-Allow-Headers"))
             assertEquals(400, missingParams.status)
             assertEquals(200, leaderboard.status)
             assertContains(leaderboard.body, "\"modeId\":\"hosted-sim\"")
@@ -6757,6 +7012,7 @@ class PlatformHttpServerBoundaryTest {
         streamCommandBackpressureSampleMs: Long = 100L,
         streamCommandPublishResponseTimeoutMs: Long = 2_000L,
         venueEventMaterializerEnabled: Boolean = false,
+        localDevAdminUiBaseUrl: String? = null,
         runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = runtimePersistence
@@ -6818,7 +7074,8 @@ class PlatformHttpServerBoundaryTest {
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
             commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled,
-            localDevAdminAuthBypass = localDevAdminAuthBypass
+            localDevAdminAuthBypass = localDevAdminAuthBypass,
+            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl
         ).start()
     }
 
@@ -6911,6 +7168,26 @@ class PlatformHttpServerBoundaryTest {
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream?.bufferedReader()?.readText().orEmpty()
         return HttpResponse(connection.responseCode, text, responseHeaders(connection))
+    }
+
+    private fun options(port: Int, path: String, headers: Map<String, String> = emptyMap()): HttpResponse {
+        return requestWithHeaders("OPTIONS", port, path, headers)
+    }
+
+    private fun requestWithHeaders(
+        method: String,
+        port: Int,
+        path: String,
+        headers: Map<String, String> = emptyMap()
+    ): HttpResponse {
+        val builder = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:$port$path"))
+            .method(method, java.net.http.HttpRequest.BodyPublishers.noBody())
+        headers.forEach { (k, v) -> builder.header(k, v) }
+        val response = java.net.http.HttpClient.newHttpClient().send(
+            builder.build(),
+            java.net.http.HttpResponse.BodyHandlers.ofString()
+        )
+        return HttpResponse(response.statusCode(), response.body(), response.headers().map())
     }
 
     private fun apiGet(port: Int, path: String, headers: Map<String, String> = apiReadHeaders()): HttpResponse {

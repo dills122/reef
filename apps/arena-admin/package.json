@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "bun ../../scripts/dev/arena-admin-tool.mjs dev",
 		"build": "bun ../../scripts/dev/arena-admin-tool.mjs build",
+		"build:guarded": "bun ../../scripts/dev/arena-admin-tool.mjs build && node scripts/assert-production-build-no-local-fixtures.mjs",
 		"preview": "bun ../../scripts/dev/arena-admin-tool.mjs preview",
 		"prepare": "bun ../../scripts/dev/arena-admin-tool.mjs sync-optional",
 		"check": "bun ../../scripts/dev/arena-admin-tool.mjs check",

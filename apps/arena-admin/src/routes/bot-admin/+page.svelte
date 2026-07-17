@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		displayRoles,
 		fetchSession,
 		fetchBotConfigStatus,
 		fetchOwnedArenaBots,
@@ -29,11 +30,14 @@
 	let configErrorByBotId = $state<Record<string, string>>({});
 	let selectedConfigBotId = $state('');
 	let configDraftByBotId = $state<Record<string, string>>({});
+	let configBaselineByBotId = $state<Record<string, string>>({});
 	let configSaveErrorByBotId = $state<Record<string, string>>({});
 	let configBusyByBotId = $state<Record<string, boolean>>({});
 	let configNoticeByBotId = $state<Record<string, string>>({});
 	let botFilter = $state<'all' | 'attention' | 'configured' | 'empty'>('all');
 	let botSearch = $state('');
+	let copyNoticeByKey = $state<Record<string, string>>({});
+	let confirmAction = $state<{ kind: 'close' | 'clear'; botId: string } | null>(null);
 
 	let attentionBots = $derived(
 		ownedBots.filter((bot) => configErrorByBotId[bot.botId] || !configByBotId[bot.botId]?.hasConfig)
@@ -107,15 +111,24 @@
 
 	function openConfigEditor(botId: string) {
 		selectedConfigBotId = botId;
-		if (!configDraftByBotId[botId]) {
-			configDraftByBotId = { ...configDraftByBotId, [botId]: draftFromConfigStatus(configByBotId[botId]) };
-		}
+		const draft = configDraftByBotId[botId] ?? draftFromConfigStatus(configByBotId[botId]);
+		configDraftByBotId = { ...configDraftByBotId, [botId]: draft };
+		configBaselineByBotId = { ...configBaselineByBotId, [botId]: draft };
 		configSaveErrorByBotId = { ...configSaveErrorByBotId, [botId]: '' };
 		configNoticeByBotId = { ...configNoticeByBotId, [botId]: '' };
 	}
 
 	function closeConfigEditor() {
 		selectedConfigBotId = '';
+		confirmAction = null;
+	}
+
+	function requestCloseConfigEditor() {
+		if (selectedConfigBotId && configDraftIsDirty(selectedConfigBotId)) {
+			confirmAction = { kind: 'close', botId: selectedConfigBotId };
+			return;
+		}
+		closeConfigEditor();
 	}
 
 	function updateConfigDraft(botId: string, value: string) {
@@ -132,7 +145,28 @@
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && selectedConfigBotId) {
-			closeConfigEditor();
+			requestCloseConfigEditor();
+		}
+	}
+
+	function canWriteBotConfig(): boolean {
+		const currentSession = session;
+		if (currentSession === 'loading' || currentSession === null) return false;
+		const trustState = (currentSession.trustState ?? '').toLowerCase();
+		return trustState !== 'limited' && trustState !== 'banned';
+	}
+
+	function configDraftIsDirty(botId: string): boolean {
+		return (configDraftByBotId[botId] ?? '{\n}') !== (configBaselineByBotId[botId] ?? '{\n}');
+	}
+
+	async function copyText(key: string, value: string) {
+		if (!value || value === 'unavailable') return;
+		try {
+			await navigator.clipboard.writeText(value);
+			copyNoticeByKey = { ...copyNoticeByKey, [key]: 'copied' };
+		} catch {
+			copyNoticeByKey = { ...copyNoticeByKey, [key]: 'copy failed' };
 		}
 	}
 
@@ -153,11 +187,15 @@
 	}
 
 	async function saveBotConfig(botId: string) {
+		if (!canWriteBotConfig()) {
+			configSaveErrorByBotId = { ...configSaveErrorByBotId, [botId]: 'config writes are disabled for this trust state' };
+			return;
+		}
 		configBusyByBotId = { ...configBusyByBotId, [botId]: true };
 		configSaveErrorByBotId = { ...configSaveErrorByBotId, [botId]: '' };
 		configNoticeByBotId = { ...configNoticeByBotId, [botId]: '' };
 		try {
-			const parsed = JSON.parse(configDraftByBotId[botId] || '{}');
+			const parsed = parseConfigDraft(botId);
 			if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
 				throw new Error('config must be a JSON object');
 			}
@@ -165,6 +203,7 @@
 			configByBotId = { ...configByBotId, [botId]: status };
 			configErrorByBotId = { ...configErrorByBotId, [botId]: '' };
 			configDraftByBotId = { ...configDraftByBotId, [botId]: draftFromConfigStatus(status) };
+			configBaselineByBotId = { ...configBaselineByBotId, [botId]: draftFromConfigStatus(status) };
 			configNoticeByBotId = {
 				...configNoticeByBotId,
 				[botId]: 'config saved'
@@ -179,8 +218,31 @@
 		}
 	}
 
+	function parseConfigDraft(botId: string): Record<string, unknown> {
+		try {
+			const parsed = JSON.parse(configDraftByBotId[botId] || '{}');
+			if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+				throw new Error('config must be a JSON object');
+			}
+			return parsed as Record<string, unknown>;
+		} catch (err) {
+			if (err instanceof SyntaxError) {
+				throw new Error(`invalid JSON: ${err.message}`);
+			}
+			throw err;
+		}
+	}
+
+	function requestClearBotConfig(botId: string) {
+		if (!canWriteBotConfig()) {
+			configSaveErrorByBotId = { ...configSaveErrorByBotId, [botId]: 'config clears are disabled for this trust state' };
+			return;
+		}
+		confirmAction = { kind: 'clear', botId };
+	}
+
 	async function clearBotConfig(botId: string) {
-		if (!confirm(`Clear config for ${botId}?`)) return;
+		confirmAction = null;
 		configBusyByBotId = { ...configBusyByBotId, [botId]: true };
 		configSaveErrorByBotId = { ...configSaveErrorByBotId, [botId]: '' };
 		configNoticeByBotId = { ...configNoticeByBotId, [botId]: '' };
@@ -189,6 +251,7 @@
 			configByBotId = { ...configByBotId, [botId]: status };
 			configErrorByBotId = { ...configErrorByBotId, [botId]: '' };
 			configDraftByBotId = { ...configDraftByBotId, [botId]: draftFromConfigStatus(status) };
+			configBaselineByBotId = { ...configBaselineByBotId, [botId]: draftFromConfigStatus(status) };
 			configNoticeByBotId = { ...configNoticeByBotId, [botId]: 'config cleared' };
 		} catch (err) {
 			configSaveErrorByBotId = {
@@ -199,12 +262,22 @@
 			configBusyByBotId = { ...configBusyByBotId, [botId]: false };
 		}
 	}
+
+	function confirmPendingAction() {
+		const action = confirmAction;
+		if (!action) return;
+		if (action.kind === 'close') {
+			closeConfigEditor();
+			return;
+		}
+		void clearBotConfig(action.botId);
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>Bot Admin — Bot Arena</title>
+	<title>My Bots — Bot Arena</title>
 	<meta
 		name="description"
 		content="Bot Arena participant administration for owned bots, runtime config, and submitted bot status."
@@ -215,7 +288,7 @@
 	<StateMessage variant="loading" message="checking session…" />
 {:else if session === null}
 	<div class="flex flex-col items-start gap-4">
-		<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">bot admin sign-in required</h1>
+		<h1 class="text-3xl font-normal tracking-[-0.03em] lowercase">my bots sign-in required</h1>
 		<p class="max-w-[58ch] text-muted">
 			Sign in with the GitHub account you use for Bot Arena submissions to manage bot-owned
 			control-plane data.
@@ -236,7 +309,7 @@
 			</p>
 			<p class="mt-3">
 				<span class="font-bold uppercase tracking-normal">roles</span><br />
-				{session.roles.length ? session.roles.join(', ') : 'none'}
+				{displayRoles(session.roles)}
 			</p>
 		</div>
 		<Button href="/">back to arena</Button>
@@ -279,7 +352,7 @@
 				</div>
 				<div class="min-w-0">
 					<dt class="text-xs font-bold uppercase tracking-normal text-muted">roles</dt>
-					<dd class="mt-1 break-words text-ink">{session.roles.join(', ')}</dd>
+					<dd class="mt-1 break-words text-ink">{displayRoles(session.roles)}</dd>
 				</div>
 			</dl>
 		</Card>
@@ -348,7 +421,19 @@
 								<dl class="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
 									<div class="min-w-0">
 										<dt class="text-xs font-bold uppercase tracking-normal text-muted">bot id</dt>
-										<dd class="mt-1 break-all text-muted">{bot.botId}</dd>
+										<dd class="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-muted">
+											<span class="break-all">{bot.botId}</span>
+											<button
+												class="border border-rule px-2 py-0.5 text-xs text-ink transition-colors hover:border-accent-hover hover:bg-accent-hover hover:text-accent-ink"
+												type="button"
+												onclick={() => copyText(`bot:${bot.botId}`, bot.botId)}
+											>
+												copy
+											</button>
+											{#if copyNoticeByKey[`bot:${bot.botId}`]}
+												<span class="text-xs text-muted">{copyNoticeByKey[`bot:${bot.botId}`]}</span>
+											{/if}
+										</dd>
 									</div>
 									<div class="min-w-0">
 										<dt class="text-xs font-bold uppercase tracking-normal text-muted">source</dt>
@@ -401,7 +486,7 @@
 								</Button>
 								<Button
 									size="sm"
-									disabled={configBusy}
+									disabled={configBusy || !canWriteBotConfig()}
 									onclick={() => openConfigEditor(bot.botId)}
 								>
 									edit config
@@ -424,12 +509,14 @@
 		{@const selectedError = configErrorByBotId[selectedBot.botId]}
 		{@const selectedSaveError = configSaveErrorByBotId[selectedBot.botId]}
 		{@const selectedNotice = configNoticeByBotId[selectedBot.botId]}
+		{@const selectedSecretPath = selectedStatus?.secretPath ?? 'unavailable'}
+		{@const writeAllowed = canWriteBotConfig()}
 		<div class="fixed inset-0 z-50">
 			<button
 				class="absolute inset-0 h-full w-full cursor-default bg-black/70"
 				type="button"
 				aria-label="Close config editor"
-				onclick={closeConfigEditor}
+				onclick={requestCloseConfigEditor}
 			></button>
 			<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-3 sm:p-4">
 				<div
@@ -442,7 +529,7 @@
 						class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 shrink-0 items-center justify-center border border-rule-strong bg-bg text-lg leading-none text-muted transition-colors hover:border-accent-hover hover:text-ink"
 						type="button"
 						aria-label="Close config editor"
-						onclick={closeConfigEditor}
+						onclick={requestCloseConfigEditor}
 					>
 						×
 					</button>
@@ -465,7 +552,19 @@
 							<dl class="mt-6 space-y-4 text-sm">
 								<div>
 									<dt class="text-xs text-muted">bot id</dt>
-									<dd class="mt-1 break-all text-ink">{selectedBot.botId}</dd>
+									<dd class="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-ink">
+										<span class="break-all">{selectedBot.botId}</span>
+										<button
+											class="border border-rule px-2 py-0.5 text-xs text-ink transition-colors hover:border-accent-hover hover:bg-accent-hover hover:text-accent-ink"
+											type="button"
+											onclick={() => copyText(`modal-bot:${selectedBot.botId}`, selectedBot.botId)}
+										>
+											copy
+										</button>
+										{#if copyNoticeByKey[`modal-bot:${selectedBot.botId}`]}
+											<span class="text-xs text-muted">{copyNoticeByKey[`modal-bot:${selectedBot.botId}`]}</span>
+										{/if}
+									</dd>
 								</div>
 								<div>
 									<dt class="text-xs text-muted">source</dt>
@@ -480,7 +579,20 @@
 								</div>
 								<div>
 									<dt class="text-xs text-muted">secret path</dt>
-									<dd class="mt-1 break-all text-ink">{selectedStatus?.secretPath ?? 'unavailable'}</dd>
+									<dd class="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-ink">
+										<span class="break-all">{selectedSecretPath}</span>
+										<button
+											class="border border-rule px-2 py-0.5 text-xs text-ink transition-colors hover:border-accent-hover hover:bg-accent-hover hover:text-accent-ink disabled:pointer-events-none disabled:opacity-50"
+											type="button"
+											disabled={selectedSecretPath === 'unavailable'}
+											onclick={() => copyText(`secret:${selectedBot.botId}`, selectedSecretPath)}
+										>
+											copy
+										</button>
+										{#if copyNoticeByKey[`secret:${selectedBot.botId}`]}
+											<span class="text-xs text-muted">{copyNoticeByKey[`secret:${selectedBot.botId}`]}</span>
+										{/if}
+									</dd>
 								</div>
 							</dl>
 
@@ -520,6 +632,11 @@
 							<p class="mt-1 max-w-[58ch] text-sm text-muted">
 								saved values reload for authorized bot owners and operators.
 							</p>
+							{#if !writeAllowed}
+								<p class="mt-2 border-l border-destructive pl-3 text-sm text-destructive">
+									config writes are disabled for this trust state.
+								</p>
+							{/if}
 						</div>
 
 						<div class="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
@@ -554,8 +671,8 @@
 									<Button
 										variant="secondary"
 										size="sm"
-										disabled={selectedBusy}
-										onclick={() => clearBotConfig(selectedBot.botId)}
+										disabled={selectedBusy || !writeAllowed}
+										onclick={() => requestClearBotConfig(selectedBot.botId)}
 									>
 										clear
 									</Button>
@@ -563,13 +680,13 @@
 										variant="secondary"
 										size="sm"
 										disabled={selectedBusy}
-										onclick={closeConfigEditor}
+										onclick={requestCloseConfigEditor}
 									>
 										cancel
 									</Button>
 									<Button
 										size="sm"
-										disabled={selectedBusy}
+										disabled={selectedBusy || !writeAllowed}
 										onclick={() => saveBotConfig(selectedBot.botId)}
 									>
 										{selectedBusy ? 'saving' : 'save'}
@@ -581,5 +698,39 @@
 				</div>
 			</div>
 		</div>
+		{#if confirmAction?.botId === selectedBot.botId}
+			<div class="fixed inset-0 z-[60]">
+				<div class="absolute inset-0 bg-black/75"></div>
+				<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+					<div
+						class="pointer-events-auto w-full max-w-sm border border-rule-strong bg-bg p-5 shadow-2xl"
+						role="alertdialog"
+						aria-modal="true"
+						aria-labelledby="confirm-config-action-title"
+					>
+						<h2 id="confirm-config-action-title" class="text-xl font-bold text-ink">
+							{confirmAction.kind === 'clear' ? 'clear config?' : 'discard changes?'}
+						</h2>
+						<p class="mt-3 text-sm text-muted">
+							{confirmAction.kind === 'clear'
+								? 'Stored config metadata remains visible, but the current config object will be removed.'
+								: 'Unsaved JSON changes in this editor will be lost.'}
+						</p>
+						<div class="mt-5 flex flex-wrap justify-end gap-2">
+							<Button
+								variant="secondary"
+								class="min-h-9 px-3 py-2 text-xs"
+								onclick={() => (confirmAction = null)}
+							>
+								cancel
+							</Button>
+							<Button class="min-h-9 px-3 py-2 text-xs" onclick={confirmPendingAction}>
+								{confirmAction.kind === 'clear' ? 'clear config' : 'discard'}
+							</Button>
+						</div>
+					</div>
+				</div>
+			</div>
+		{/if}
 	{/if}
 {/if}
