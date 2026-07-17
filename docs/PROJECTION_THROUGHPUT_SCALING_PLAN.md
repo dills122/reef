@@ -24,6 +24,7 @@ venue-event-materializer path on a DigitalOcean c-16 worker.
 | `do-benchmark-20260717T015658Z` | `5k rps`, `60s`, `256` workers, before deterministic event insert ordering | `299,950` accepted/direct-acked/materialized, p95 `67.57ms`, p99 `138.57ms`; projection ended with `1,834` lag, `1` projector failure, `1` projection-postgres deadlock | Venue-core held; projection failed by deadlock and freshness lag. |
 | `do-benchmark-20260717T020807Z` | same `5k` shape after ordering `runtime_events` inserts by `event_id` | `299,952` accepted/direct-acked/materialized/projected, materialized/projected gap `0`, deadlocks `0`, p95 `69.92ms`, p99 `136.68ms`; watermark lag `1,367` | The tactical ordering fix removed the deadlock/count-gap mode but did not make `5k` projection-fresh. |
 | `do-benchmark-20260717T131344Z` | same `5k` shape with `STREAM_ACK_PROJECTION_STAGE=command-status` after Docker Compose env pass-through fix | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `74.49ms`, p99 `112.93ms`, projector failures/retries/deadlocks `0` | Command status plus own-order lifecycle can keep up at `5k`; full event/timeline projection remains the active bottleneck. |
+| `do-benchmark-20260717T134058Z` | same `5k` full-projection shape after deterministic timeline sequencing removed the trace allocator for new canonical payloads | `299,804` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `71.89ms`, p99 `112.89ms`, projector failures/retries/deadlocks `0` | Full projection is now green at `5k/60s`; remaining work is lowering WAL/temp/table pressure before longer soaks or higher gates. |
 
 The patched `5k` run showed direct partitions balanced across all `16` active
 partitions with about `1.017` skew, and the venue-event materializer matched
@@ -52,6 +53,17 @@ Projection-postgres pressure in the `5k` `command-status` run:
   growth, confirming the stage split removed the timeline/event write path from
   the command-status freshness gate.
 
+Projection-postgres pressure in the deterministic-timeline `5k` full run:
+
+- `~1.94GB` WAL for one `60s` sample, about `6.48KB` per accepted command.
+- `~1.75M` inserted tuples and `~47k` updated tuples.
+- `~5.59GB` temp bytes.
+- all `16` projector partitions ended with watermark lag `0`.
+- `runtime.runtime_trace_sequences` did not appear in tracked table growth;
+  runtime event/typed projection pressure moved to `runtime.runtime_events`
+  itself (`270,015` inserts, `~588MB` total table/index growth), plus
+  executions, trades, orders, submit results, lifecycle state, and dirty queues.
+
 Canonical runtime DB pressure in the same patched `5k` run was much lower and
 cleaner:
 
@@ -77,8 +89,8 @@ In market-infrastructure terms:
   explicit freshness SLOs to read surfaces.
 - The stage split isolated the biggest class of coupling: command-status and
   lifecycle freshness are now independently green at `5k`, so the next
-  bottleneck is the full event/timeline projection and remaining lifecycle/fill
-  write amplification, not the durable venue-core lane.
+  bottleneck is reducing full-projection WAL/temp/table growth, not the durable
+  venue-core lane.
 
 ## Non-Negotiable Constraints
 
@@ -266,21 +278,22 @@ Current:
 
 - `2.5k` projection freshness short: green.
 - `5k` command-status freshness short: green.
-- `5k` full projection pressure: current knee.
+- `5k` full projection short: green after deterministic timeline sequencing.
 
 Next gates:
 
 1. `2.5k soak-5m`: zero lag, zero gaps, zero deadlocks, zero projector DB
    retry delta, DB diagnostics present.
-2. `5k pressure-no-deadlock`: accepted/materialized/projected counts align,
-   deadlocks zero, projector DB retries reported, lag reported. This is
-   diagnostic, not promotion.
+2. `5k soak-5m`: zero lag, zero gaps, zero deadlocks, zero projector DB retry
+   delta, DB diagnostics present, and table/WAL/temp pressure compared against
+   `do-benchmark-20260717T134058Z`.
 3. `5k command-status-fresh`: green on `do-benchmark-20260717T131344Z` after
    fixing Docker Compose pass-through for `STREAM_ACK_PROJECTION_STAGE`.
    Re-run this after changes to submit status, order, fill, trade, or lifecycle
    projection writes.
-4. `5k full-projection-fresh`: all current projection stages catch up to lag
-   `0`.
+4. `5k full-projection-fresh`: green on `do-benchmark-20260717T134058Z`.
+   Re-run after changes to runtime events, executions/trades, lifecycle, dirty
+   queues, or projection indexes.
 5. `5k timeline-fresh`: run with `REEF_DO_PROJECTION_STAGE=timeline` when
    isolating runtime event/trace history cost from command status and lifecycle
    freshness.
@@ -330,11 +343,13 @@ structural separation:
    deterministic timeline sequencing is in place, and
    `STREAM_ACK_PROJECTION_STAGE=timeline` / `REEF_DO_PROJECTION_STAGE=timeline`
    is available for isolated timeline pressure runs.
-5. Rerun the `5k` full-projection gate to measure whether removing the
-   trace-sequence allocator lowers WAL/temp pressure and clears final lag.
-6. Reduce remaining lifecycle/fill/dirty-table write amplification.
-7. Add maintained depth/top-of-book projections.
-8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
+5. Reduce remaining runtime-events, lifecycle/fill, and dirty-table write
+   amplification. Deterministic timeline sequencing cleared the final `5k`
+   lag, but `runtime_events` still drove `~588MB` table/index growth and temp
+   bytes rose to `~5.59GB`.
+6. Add maintained depth/top-of-book projections.
+7. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.
-9. Promote `7.5k`/`10k` projection gates only after `5k` is stable with zero
-   final lag and zero deadlocks.
+8. Promote `7.5k`/`10k` projection gates only after `5k` remains stable with
+   zero final lag/deadlocks over longer soaks and materially lower write
+   amplification.

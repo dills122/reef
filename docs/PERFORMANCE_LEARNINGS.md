@@ -118,6 +118,12 @@ Evidence:
   direct-acked, materialized, and projected `299,955` commands with p95
   `74.49ms`, p99 `112.93ms`, projection lag `0`, materialized/projected gap
   `0`, projector failures/retries `0`, and projection-postgres deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260717T134058Z/`: after deterministic
+  timeline sequencing removed the trace allocator from new canonical payloads,
+  the `5k` full-projection run accepted, direct-acked, materialized, and
+  projected `299,804` commands with p95 `71.89ms`, p99 `112.89ms`, projection
+  lag `0`, materialized/projected gap `0`, projector failures/retries `0`, and
+  projection-postgres deadlocks `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -133,6 +139,11 @@ Database pressure in the patched `5k` run:
 - command-status stage projection DB: about `1.22GB` WAL, `4.06KB` WAL per
   accepted command, `1.48M` inserted tuples, `47k` updated tuples, `3.87GB`
   temp bytes, and no `runtime_events` or `runtime_trace_sequences` row growth.
+- deterministic-timeline full projection DB: about `1.94GB` WAL, `6.48KB` WAL
+  per accepted command, `1.75M` inserted tuples, `47k` updated tuples, `5.59GB`
+  temp bytes, all projector partition watermarks at lag `0`, and no tracked
+  `runtime_trace_sequences` table growth. `runtime_events` remained the hottest
+  table with `270,015` inserts and about `588MB` table/index growth.
 
 Immediate implications:
 
@@ -144,12 +155,13 @@ Immediate implications:
 3. Deterministic index-key ordering is worth keeping: it removed the observed
    deadlock/count-gap failure mode, but it does not solve zero-lag freshness.
 4. The projection-stage split is a valid direction: command-status plus
-   own-order lifecycle freshness is now green at `5k`, while full projection is
-   still not. Keep separate SLOs for command status, lifecycle, timeline,
-   market data, and analytics instead of forcing every query table to share the
-   same freshness gate.
-5. The next fixes should reduce event/timeline and remaining dirty-table write
-   amplification, then re-run full-projection freshness at `5k`.
+   own-order lifecycle freshness is green at `5k`, and full projection is now
+   green at `5k/60s` after deterministic timeline sequencing. Keep separate
+   SLOs for command status, lifecycle, timeline, market data, and analytics
+   instead of forcing every query table to share one freshness claim.
+5. The next fixes should reduce `runtime_events`, remaining dirty-table, and
+   lifecycle/fill write amplification before promoting longer `5k` soaks or
+   `7.5k`/`10k` projection gates.
 6. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 
