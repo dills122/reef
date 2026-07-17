@@ -60,6 +60,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0043_runtime_event_payload_cold_table.sql",
       "runtime/0044_idempotent_lifecycle_projection.sql",
       "runtime/0045_drop_legacy_runtime_event_indexes.sql",
+      "runtime/0046_order_modified_lifecycle_index.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
