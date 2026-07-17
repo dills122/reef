@@ -124,6 +124,12 @@ Evidence:
   projected `299,804` commands with p95 `71.89ms`, p99 `112.89ms`, projection
   lag `0`, materialized/projected gap `0`, projector failures/retries `0`, and
   projection-postgres deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260717T142157Z/`: after making dirty
+  queues unlogged and avoiding redundant dirty conflict updates, the `5k`
+  full-projection run accepted/direct-acked/materialized `299,954` commands
+  with p95 `64.41ms` and p99 `105.69ms`, but projected only `252,866` and
+  ended with projection lag/materialized gap `47,088`. Projector
+  failures/retries/deadlocks stayed `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -144,6 +150,10 @@ Database pressure in the patched `5k` run:
   temp bytes, all projector partition watermarks at lag `0`, and no tracked
   `runtime_trace_sequences` table growth. `runtime_events` remained the hottest
   table with `270,015` inserts and about `588MB` table/index growth.
+- unlogged dirty-queue A/B DB: about `1.79GB` WAL, `5.98KB` WAL per accepted
+  command, `1.73M` inserted tuples, `25k` updated tuples, `5.60GB` temp bytes,
+  dirty-queue updates `0`, `order_lifecycle_dirty` growth down to `~13.9MB`,
+  but final projection lag `47,088`.
 
 Immediate implications:
 
@@ -165,8 +175,10 @@ Immediate implications:
 6. Dirty queue state is rebuildable and should not consume durable WAL budget:
    the local follow-up makes `order_lifecycle_dirty` and
    `market_data_snapshot_dirty` unlogged and avoids redundant conflict updates.
-   The next remote comparison should measure dirty-table WAL/table growth
-   against `do-benchmark-20260717T134058Z`.
+   The remote comparison lowered dirty-table pressure but did not preserve
+   `5k` full-projection freshness, so do not treat it as a promotion fix.
+   Move to `runtime_events` hot/cold split and lifecycle/fill write-shape
+   reduction next.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 

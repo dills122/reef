@@ -25,6 +25,7 @@ venue-event-materializer path on a DigitalOcean c-16 worker.
 | `do-benchmark-20260717T020807Z` | same `5k` shape after ordering `runtime_events` inserts by `event_id` | `299,952` accepted/direct-acked/materialized/projected, materialized/projected gap `0`, deadlocks `0`, p95 `69.92ms`, p99 `136.68ms`; watermark lag `1,367` | The tactical ordering fix removed the deadlock/count-gap mode but did not make `5k` projection-fresh. |
 | `do-benchmark-20260717T131344Z` | same `5k` shape with `STREAM_ACK_PROJECTION_STAGE=command-status` after Docker Compose env pass-through fix | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `74.49ms`, p99 `112.93ms`, projector failures/retries/deadlocks `0` | Command status plus own-order lifecycle can keep up at `5k`; full event/timeline projection remains the active bottleneck. |
 | `do-benchmark-20260717T134058Z` | same `5k` full-projection shape after deterministic timeline sequencing removed the trace allocator for new canonical payloads | `299,804` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `71.89ms`, p99 `112.89ms`, projector failures/retries/deadlocks `0` | Full projection is now green at `5k/60s`; remaining work is lowering WAL/temp/table pressure before longer soaks or higher gates. |
+| `do-benchmark-20260717T142157Z` | same `5k` full-projection shape after making dirty queues unlogged and avoiding redundant dirty conflict updates | `299,954` attempted/accepted/direct-acked/materialized, projected `252,866`, final lag/gap `47,088`, p95 `64.41ms`, p99 `105.69ms`, projector failures/retries/deadlocks `0` | Dirty queue WAL/table pressure improved, but this A/B did not preserve `5k` freshness. Treat it as diagnostic, not promotion evidence. |
 
 The patched `5k` run showed direct partitions balanced across all `16` active
 partitions with about `1.017` skew, and the venue-event materializer matched
@@ -63,6 +64,19 @@ Projection-postgres pressure in the deterministic-timeline `5k` full run:
   runtime event/typed projection pressure moved to `runtime.runtime_events`
   itself (`270,015` inserts, `~588MB` total table/index growth), plus
   executions, trades, orders, submit results, lifecycle state, and dirty queues.
+
+Dirty-queue A/B pressure in `do-benchmark-20260717T142157Z`:
+
+- projection WAL fell to `~1.79GB`, about `5.98KB` per accepted command.
+- dirty-queue updates dropped to `0`; `order_lifecycle_dirty` table/index
+  growth fell to `~13.9MB` from `~25.0MB` in the prior full pass, and
+  `market_data_snapshot_dirty` growth fell to `~65KB` from `~115KB`.
+- full projection did not catch up: projected `252,866` of `299,954`, with
+  final lag/gap `47,088` spread across all `16` projection partitions.
+- The A/B says dirty queues are worth keeping out of WAL, but this change alone
+  is not a promotion fix; the dominant remaining stall is still broader
+  full-projection write shape, especially `runtime_events`,
+  `order_lifecycle_state`, executions/trades, and their indexes/temp work.
 
 Canonical runtime DB pressure in the same patched `5k` run was much lower and
 cleaner:
@@ -350,9 +364,9 @@ structural separation:
 5. Reduce remaining runtime-events, lifecycle/fill, and dirty-table write
    amplification. Deterministic timeline sequencing cleared the final `5k`
    lag, but `runtime_events` still drove `~588MB` table/index growth and temp
-   bytes rose to `~5.59GB`. Dirty queues are now unlogged locally; rerun `5k`
-   full projection to quantify WAL and dirty-table growth delta before moving
-   to the next write-shape fix.
+   bytes rose to `~5.59GB`. Dirty queues are now unlogged locally and reduced
+   dirty-table pressure, but the follow-up `5k` full run regressed to `47,088`
+   lag; keep this as diagnostic evidence and move to the next write-shape fix.
 6. Split hot `runtime_events` facts from cold timeline payload JSON and review
    hot event indexes.
 7. Add maintained depth/top-of-book projections.
