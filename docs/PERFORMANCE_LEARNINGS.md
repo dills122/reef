@@ -130,6 +130,14 @@ Evidence:
   with p95 `64.41ms` and p99 `105.69ms`, but projected only `252,866` and
   ended with projection lag/materialized gap `47,088`. Projector
   failures/retries/deadlocks stayed `0`.
+- `reports/do-benchmark/do-benchmark-20260717T145907Z/`: after splitting new
+  runtime event payloads into `runtime.runtime_event_payloads`, the `5k`
+  full-projection run accepted/direct-acked/materialized `299,953` commands
+  with p95 `74.55ms` and p99 `117.68ms`, but projected only `288,761` and
+  ended with projection lag/materialized gap `11,192`. Projection DB deadlocks
+  stayed `0`. The preflight smoke also caught a lifecycle regression in the new
+  function replacement: unfilled open orders rendered `filled_quantity_units`
+  as `''` instead of `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -154,6 +162,12 @@ Database pressure in the patched `5k` run:
   command, `1.73M` inserted tuples, `25k` updated tuples, `5.60GB` temp bytes,
   dirty-queue updates `0`, `order_lifecycle_dirty` growth down to `~13.9MB`,
   but final projection lag `47,088`.
+- runtime-event hot/cold A/B DB: about `1.88GB` WAL, `6.27KB` WAL per accepted
+  command, `2.00M` inserted tuples, `27.5k` updated tuples, `6.14GB` temp
+  bytes. `runtime_events` growth fell to `~335MB`, but
+  `runtime_event_payloads` added `~296MB`, so the split moved cold JSON off the
+  hot row but did not remove enough total write work to preserve `5k`
+  freshness.
 
 Immediate implications:
 
@@ -177,10 +191,12 @@ Immediate implications:
    `market_data_snapshot_dirty` unlogged and avoids redundant conflict updates.
    The remote comparison lowered dirty-table pressure but did not preserve
    `5k` full-projection freshness, so do not treat it as a promotion fix.
-   The next local fix moves new `runtime_events` payload JSON to
+   The next local fix moved new `runtime_events` payload JSON to
    `runtime.runtime_event_payloads` while keeping `OrderModified` lifecycle
-   facts hot on `runtime_events`; it needs the next DO run before it can be
-   promoted as measured throughput evidence.
+   facts hot on `runtime_events`; the first DO A/B reduced hot-row growth but
+   did not preserve freshness, so the next implementation step is reducing
+   remaining lifecycle/fill/event storage write shape rather than treating the
+   side-table split as a promotion fix.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 

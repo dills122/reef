@@ -276,6 +276,8 @@ test("runtime event payload migration moves event JSON off hot rows", async () =
   assert.match(migration.sql, /INSERT INTO runtime\.runtime_event_payloads\(event_id, payload_json\)/);
   assert.match(migration.sql, /payload_json,\s+occurred_at,\s+modify_quantity_units,\s+modify_limit_price/s);
   assert.match(migration.sql, /'\{\}'::jsonb,\s+event->>'occurredAt'/s);
+  assert.match(migration.sql, /filled_quantity_units::TEXT/);
+  assert.doesNotMatch(migration.sql, /TRIM\(TRAILING '0' FROM filled_quantity_units::TEXT\)/);
 });
 
 test("command outcome projection preserves command correlation metadata", async () => {

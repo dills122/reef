@@ -26,6 +26,7 @@ venue-event-materializer path on a DigitalOcean c-16 worker.
 | `do-benchmark-20260717T131344Z` | same `5k` shape with `STREAM_ACK_PROJECTION_STAGE=command-status` after Docker Compose env pass-through fix | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `74.49ms`, p99 `112.93ms`, projector failures/retries/deadlocks `0` | Command status plus own-order lifecycle can keep up at `5k`; full event/timeline projection remains the active bottleneck. |
 | `do-benchmark-20260717T134058Z` | same `5k` full-projection shape after deterministic timeline sequencing removed the trace allocator for new canonical payloads | `299,804` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `71.89ms`, p99 `112.89ms`, projector failures/retries/deadlocks `0` | Full projection is now green at `5k/60s`; remaining work is lowering WAL/temp/table pressure before longer soaks or higher gates. |
 | `do-benchmark-20260717T142157Z` | same `5k` full-projection shape after making dirty queues unlogged and avoiding redundant dirty conflict updates | `299,954` attempted/accepted/direct-acked/materialized, projected `252,866`, final lag/gap `47,088`, p95 `64.41ms`, p99 `105.69ms`, projector failures/retries/deadlocks `0` | Dirty queue WAL/table pressure improved, but this A/B did not preserve `5k` freshness. Treat it as diagnostic, not promotion evidence. |
+| `do-benchmark-20260717T145907Z` | same `5k` full-projection shape after runtime-event hot/cold payload split, before lifecycle zero-format patch | `299,953` attempted/accepted/direct-acked/materialized, projected `288,761`, final lag/gap `11,192`, p95 `74.55ms`, p99 `117.68ms`, projection DB deadlocks `0`; preflight smoke exposed `filled_quantity_units=''` for an unfilled open order | Hot `runtime_events` growth fell, but cold payload side-table growth offset much of it and freshness still failed. Treat as diagnostic; fix lifecycle zero rendering before any rerun. |
 
 The patched `5k` run showed direct partitions balanced across all `16` active
 partitions with about `1.017` skew, and the venue-event materializer matched
@@ -77,6 +78,22 @@ Dirty-queue A/B pressure in `do-benchmark-20260717T142157Z`:
   is not a promotion fix; the dominant remaining stall is still broader
   full-projection write shape, especially `runtime_events`,
   `order_lifecycle_state`, executions/trades, and their indexes/temp work.
+
+Runtime-event hot/cold A/B pressure in `do-benchmark-20260717T145907Z`:
+
+- projection WAL was `~1.88GB`, about `6.27KB` per accepted command.
+- full projection did not catch up: projected `288,761` of `299,953`, with
+  final lag/gap `11,192`.
+- `runtime.runtime_events` growth fell to `~335MB` from `~588MB` in the prior
+  deterministic-timeline full pass, but `runtime.runtime_event_payloads` added
+  `~296MB`, so total event-storage growth moved more than it disappeared.
+- the hot row split is still useful for removing cold JSON from lifecycle
+  recompute and lowering `runtime_events` table bytes, but it is not by itself
+  a projection freshness fix.
+- preflight smoke caught a lifecycle formatting regression in the `0043`
+  function replacement: unfilled open orders rendered `filled_quantity_units`
+  as `''` instead of `0`. The follow-up patch restores the established
+  `filled_quantity_units::TEXT` projection behavior.
 
 Canonical runtime DB pressure in the same patched `5k` run was much lower and
 cleaner:
