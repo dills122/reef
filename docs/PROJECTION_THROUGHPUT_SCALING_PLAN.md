@@ -28,6 +28,7 @@ venue-event-materializer path on a DigitalOcean c-16 worker.
 | `do-benchmark-20260717T142157Z` | same `5k` full-projection shape after making dirty queues unlogged and avoiding redundant dirty conflict updates | `299,954` attempted/accepted/direct-acked/materialized, projected `252,866`, final lag/gap `47,088`, p95 `64.41ms`, p99 `105.69ms`, projector failures/retries/deadlocks `0` | Dirty queue WAL/table pressure improved, but this A/B did not preserve `5k` freshness. Treat it as diagnostic, not promotion evidence. |
 | `do-benchmark-20260717T145907Z` | same `5k` full-projection shape after runtime-event hot/cold payload split, before lifecycle zero-format patch | `299,953` attempted/accepted/direct-acked/materialized, projected `288,761`, final lag/gap `11,192`, p95 `74.55ms`, p99 `117.68ms`, projection DB deadlocks `0`; preflight smoke exposed `filled_quantity_units=''` for an unfilled open order | Hot `runtime_events` growth fell, but cold payload side-table growth offset much of it and freshness still failed. Treat as diagnostic; fix lifecycle zero rendering before any rerun. |
 | `do-benchmark-20260717T151610Z` | same `5k` full-projection shape after lifecycle zero-format patch | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `63.53ms`, p99 `108.11ms`, projection DB deadlocks `0` | Correctness smoke and strict freshness gate passed. The hot/cold split lowers hot-row pressure but total event-storage growth remains high, so next fixes should target total rows/indexes/temp work. |
+| `do-benchmark-20260717T163043Z` | same `5k` full-projection shape after skipping no-op lifecycle projection rewrites | `300,015` attempted/accepted/direct-acked/materialized, projected `288,242`, final lag `13,773`, materialized/projected gap `11,773`, p95 `71.77ms`, p99 `111.94ms`, projector failures/retries/deadlocks `0` | Lifecycle no-op guards did not materially change the pressure profile and did not preserve freshness. Treat this as diagnostic evidence that the next bottleneck is still event/payload/index volume. |
 
 The patched `5k` run showed direct partitions balanced across all `16` active
 partitions with about `1.017` skew, and the venue-event materializer matched
@@ -109,6 +110,22 @@ Corrected runtime-event hot/cold run `do-benchmark-20260717T151610Z`:
   to catch up at `5k/60s`, but the write-amplification target is now clearer:
   reduce event/timeline indexes and total lifecycle/fill/event projection rows,
   not just move JSON payloads out of the hot row.
+
+Lifecycle no-op rewrite A/B in `do-benchmark-20260717T163043Z`:
+
+- full projection did not catch up: projected `288,242` of `300,015`, with
+  final projection lag `13,773` and materialized/projected gap `11,773`.
+- projection WAL was `~1.90GB`, about `6.32KB` per accepted command, with
+  `2.01M` inserted tuples, `32.1k` updated tuples, and `~6.11GB` temp bytes.
+  That is effectively unchanged from the corrected hot/cold pass.
+- `runtime.runtime_events` growth was `~345MB`; `runtime.runtime_event_payloads`
+  added `~297MB`. Event storage and indexes remain the largest write surface.
+- `order_lifecycle_state` updates stayed in the same range (`27.4k` vs `27.2k`
+  previously). `market_data_snapshot_dirty` inserts fell modestly, but the
+  change was too small to move projector freshness.
+- The no-op guard is still the right projection semantics, but it is not a
+  promotion fix for `5k` full projection. Move next to event index/row-volume
+  reduction.
 
 Canonical runtime DB pressure in the same patched `5k` run was much lower and
 cleaner:
@@ -409,9 +426,9 @@ structural separation:
 5. Reduce remaining runtime-events, lifecycle/fill, and dirty-table write
    amplification. Deterministic timeline sequencing cleared the final `5k`
    lag, dirty queues are unlogged, and the corrected runtime-event hot/cold
-   split passed `5k/60s` full-projection freshness. The current local follow-up
-   skips no-op lifecycle row rewrites and avoids market-snapshot fanout for
-   unchanged lifecycle rows; rerun the `5k` full gate before promoting it.
+   split passed `5k/60s` full-projection freshness. The lifecycle no-op guard
+   is now measured and did not preserve `5k` freshness; keep it, but do not
+   treat it as a promotion fix.
 6. Review hot `runtime_events` indexes and total event-storage row volume.
 7. Add maintained depth/top-of-book projections.
 8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per

@@ -143,6 +143,12 @@ Evidence:
   full-projection shape passed strict freshness with `299,955`
   attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`,
   p95 `63.53ms`, p99 `108.11ms`, and projection DB deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260717T163043Z/`: after adding the
+  lifecycle no-op rewrite guard, the same `5k` full-projection shape
+  accepted/direct-acked/materialized `300,015` commands with p95 `71.77ms` and
+  p99 `111.94ms`, but projected only `288,242` and ended with projection lag
+  `13,773` and materialized/projected gap `11,773`. Projector
+  failures/retries/deadlocks stayed `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -177,6 +183,11 @@ Database pressure in the patched `5k` run:
   accepted command, `2.01M` inserted tuples, `32.6k` updated tuples, and
   `6.11GB` temp bytes. `runtime_events` grew `~347MB`; the cold
   `runtime_event_payloads` table grew `~297MB`.
+- lifecycle no-op rewrite A/B DB: about `1.90GB` WAL, `6.32KB` WAL per
+  accepted command, `2.01M` inserted tuples, `32.1k` updated tuples, and
+  `6.11GB` temp bytes. `runtime_events` grew `~345MB`; the cold
+  `runtime_event_payloads` table grew `~297MB`; lifecycle updates remained in
+  the same range, so the guard did not move the bottleneck.
 
 Immediate implications:
 
@@ -209,6 +220,9 @@ Immediate implications:
    The follow-up lifecycle projector change keeps dirty-row clearing as the
    progress counter but skips no-op `order_lifecycle_state` rewrites and avoids
    market-snapshot dirty fanout when the recomputed lifecycle row is unchanged.
+   The remote A/B showed that this is correct write hygiene but not enough to
+   preserve `5k` full-projection freshness; event/payload/index volume remains
+   the next target.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 
