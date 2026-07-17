@@ -3,10 +3,12 @@
 		assignAdminAccessRole,
 		fetchAdminAccessRoles,
 		fetchAdminAccessUsers,
+		fetchSession,
 		revokeAdminAccessRole,
 		updateAdminUserTrustState,
 		type AdminAccessRole,
-		type AdminAccessUser
+		type AdminAccessUser,
+		type SessionUser
 	} from '$lib/api';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -34,6 +36,7 @@
 
 	let users = $state<AdminAccessUser[]>([]);
 	let roles = $state<AdminAccessRole[]>([]);
+	let currentSession = $state<SessionUser | null>(null);
 	let loading = $state(true);
 	let error = $state('');
 	let notice = $state('');
@@ -44,13 +47,19 @@
 	let reasons = $state<Record<string, string>>({});
 	let busyByUser = $state<Record<string, boolean>>({});
 
-	const roleOptions = $derived(roles.filter((role) => role.roleId !== 'participant'));
+	const canManagePrivilegedAccess = $derived(canManagePrivilegedAccessFor(currentSession));
+	const roleOptions = $derived(roles.filter((role) => canAssignRole(role.roleId)));
 	const roleDescriptions = $derived(Object.fromEntries(roles.map((role) => [role.roleId, role.description])));
+	const trustOptions = $derived(
+		trustStates.filter((trustState) => canSetTrustState(trustState.value))
+	);
 	const trustedCount = $derived(users.filter((user) => user.trustState === 'trusted').length);
 	const reviewCount = $derived(
 		users.filter((user) => user.trustState === 'new' || user.trustState === 'limited').length
 	);
-	const operatorCount = $derived(users.filter((user) => hasRole(user, 'operator')).length);
+	const operatorCount = $derived(
+		users.filter((user) => hasRole(user, 'operator') || hasRole(user, 'platform-admin')).length
+	);
 	const filteredUsers = $derived(
 		users.filter((user) => {
 			if (filter === 'review') return user.trustState === 'new' || user.trustState === 'limited';
@@ -67,10 +76,9 @@
 	const selectedTrustValue = $derived(
 		selectedUser ? (selectedTrust[selectedUser.reefUserId] ?? selectedUser.trustState) : ''
 	);
-	const selectedAssignRole = $derived(
-		selectedUser ? (selectedRole[selectedUser.reefUserId] ?? defaultRoleId()) : ''
-	);
+	const selectedAssignRole = $derived(selectedUser ? selectedAssignableRole(selectedUser) : '');
 	const selectedReason = $derived(selectedUser ? (reasons[selectedUser.reefUserId] ?? '') : '');
+	const selectedTrustOptions = $derived(selectedUser ? trustOptionsFor(selectedTrustValue) : trustOptions);
 
 	$effect(() => {
 		loadAccessData();
@@ -80,10 +88,12 @@
 		if (showSpinner) loading = true;
 		error = '';
 		try {
-			const [userList, roleList] = await Promise.all([
+			const [session, userList, roleList] = await Promise.all([
+				fetchSession(),
 				fetchAdminAccessUsers(),
 				fetchAdminAccessRoles()
 			]);
+			currentSession = session;
 			users = userList;
 			roles = roleList;
 			selectedTrust = {
@@ -91,7 +101,7 @@
 				...selectedTrust
 			};
 			selectedRole = {
-				...Object.fromEntries(userList.map((user) => [user.reefUserId, defaultRoleId(roleList)])),
+				...Object.fromEntries(userList.map((user) => [user.reefUserId, defaultRoleId(roleList, session)])),
 				...selectedRole
 			};
 			if (!selectedUserId || !userList.some((user) => user.reefUserId === selectedUserId)) {
@@ -119,12 +129,60 @@
 		if (!currentStillVisible) selectedUserId = filteredUsers[0]?.reefUserId ?? users[0]?.reefUserId ?? '';
 	}
 
-	function defaultRoleId(roleList = roles): string {
-		return roleList.find((role) => role.roleId === 'operator')?.roleId ?? roleList[0]?.roleId ?? '';
+	function defaultRoleId(roleList = roles, session = currentSession): string {
+		return (
+			roleList.find((role) => role.roleId === 'reviewer' && canAssignRole(role.roleId, session))?.roleId ??
+			roleList.find((role) => canAssignRole(role.roleId, session))?.roleId ??
+			''
+		);
 	}
 
 	function hasRole(user: AdminAccessUser, roleId: string): boolean {
 		return user.roles.some((role) => role.roleId === roleId);
+	}
+
+	function normalizedRole(role: string): string {
+		return role.trim().toLowerCase().replaceAll('_', '-');
+	}
+
+	function canManagePrivilegedAccessFor(session: SessionUser | null): boolean {
+		return session?.roles.some((role) => normalizedRole(role) === 'platform-admin') ?? false;
+	}
+
+	function canAssignRole(roleId: string, session = currentSession): boolean {
+		const role = normalizedRole(roleId);
+		if (role === 'participant') return false;
+		if (role === 'reviewer') return true;
+		if (role === 'operator' || role === 'secret-admin' || role === 'platform-admin') {
+			return canManagePrivilegedAccessFor(session);
+		}
+		return false;
+	}
+
+	function canRevokeRole(roleId: string): boolean {
+		const role = normalizedRole(roleId);
+		if (role === 'participant') return false;
+		if (role === 'reviewer') return true;
+		if (role === 'operator' || role === 'secret-admin' || role === 'platform-admin') {
+			return canManagePrivilegedAccess;
+		}
+		return false;
+	}
+
+	function canSetTrustState(trustState: string): boolean {
+		return normalizedRole(trustState) !== 'banned' || canManagePrivilegedAccess;
+	}
+
+	function selectedAssignableRole(user: AdminAccessUser): string {
+		const storedRole = selectedRole[user.reefUserId] ?? '';
+		if (roleOptions.some((role) => role.roleId === storedRole)) return storedRole;
+		return defaultRoleId();
+	}
+
+	function trustOptionsFor(trustState: string) {
+		if (!trustState || trustOptions.some((option) => option.value === trustState)) return trustOptions;
+		const currentTrustState = trustStates.find((option) => option.value === trustState);
+		return currentTrustState ? [...trustOptions, currentTrustState] : trustOptions;
 	}
 
 	function trustTone(trustState: string): string {
@@ -350,7 +408,7 @@
 												[selectedUser.reefUserId]: (event.currentTarget as HTMLSelectElement).value
 											})}
 									>
-										{#each trustStates as trustState}
+										{#each selectedTrustOptions as trustState}
 											<option value={trustState.value}>{trustState.label}</option>
 										{/each}
 									</select>
@@ -358,7 +416,9 @@
 								<div class="flex flex-wrap gap-2">
 									<Button
 										variant="secondary"
-										disabled={selectedBusy || selectedTrustValue === selectedUser.trustState}
+										disabled={selectedBusy ||
+											selectedTrustValue === selectedUser.trustState ||
+											!canSetTrustState(selectedTrustValue)}
 										onclick={() => updateTrust(selectedUser)}
 									>
 										update trust
@@ -384,7 +444,7 @@
 											<button
 												type="button"
 												class="text-ink underline disabled:text-muted"
-												disabled={selectedBusy}
+												disabled={selectedBusy || !canRevokeRole(role.roleId)}
 												onclick={() => revokeRole(selectedUser, role.roleId)}
 											>
 												revoke
