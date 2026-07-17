@@ -59,6 +59,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0042_unlogged_projection_dirty_queues.sql",
       "runtime/0043_runtime_event_payload_cold_table.sql",
       "runtime/0044_idempotent_lifecycle_projection.sql",
+      "runtime/0045_drop_legacy_runtime_event_indexes.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -292,6 +293,19 @@ test("idempotent lifecycle projection migration skips no-op row rewrites", async
   assert.match(migration.sql, /WHERE lifecycle\.engine_order_id IS DISTINCT FROM EXCLUDED\.engine_order_id/);
   assert.match(migration.sql, /lifecycle\.limit_price_num IS DISTINCT FROM EXCLUDED\.limit_price_num/);
   assert.match(migration.sql, /SELECT COUNT\(\*\) INTO projected_count FROM cleared/);
+});
+
+test("runtime event index migration drops legacy all-event indexes", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0045_drop_legacy_runtime_event_indexes.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.runtime_events_occurred_at_idx/);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.runtime_events_trace_seq_idx/);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.idx_runtime_events_occurred_event/);
+  assert.doesNotMatch(migration.sql, /runtime_events_order_occurred_idx/);
 });
 
 test("command outcome projection preserves command correlation metadata", async () => {

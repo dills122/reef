@@ -534,12 +534,6 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_event
-                    ON ${names.runtimeEvents}(occurred_at DESC, event_id DESC)
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_typed
                     ON ${names.runtimeEvents}(occurred_at_ts DESC, event_id_uuid DESC)
                     WHERE occurred_at_ts IS NOT NULL
@@ -4719,7 +4713,7 @@ class PostgresRuntimePersistence(
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
         """
         $runtimeEventSelect
-        ORDER BY events.occurred_at_ts DESC NULLS LAST, events.occurred_at DESC, events.event_id DESC
+        ORDER BY events.occurred_at_ts DESC NULLS LAST, events.event_id_uuid DESC NULLS LAST, events.event_id DESC
         LIMIT ?::integer
         """.trimIndent(),
         limit.coerceIn(0, 500).toString()

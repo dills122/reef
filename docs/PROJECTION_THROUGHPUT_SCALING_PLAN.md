@@ -276,6 +276,12 @@ Target the tables that dominate the patched `5k` run.
     lifecycle rows re-dirty market snapshots.
 - Review hot projection indexes. Keep indexes required for public reads and
   replay integrity; drop or defer indexes that only serve cold inspection paths.
+  - Initial runtime-event index reduction is in place locally:
+    `runtime_events_occurred_at_idx`, `runtime_events_trace_seq_idx`, and
+    `idx_runtime_events_occurred_event` are dropped. Recent event reads now
+    order by typed timestamp/UUID keys. The order-scoped occurred index is
+    intentionally retained until lifecycle modification lookup moves to a
+    dedicated typed or partial index.
 - Partition large append-heavy projection tables by event stream, run/session,
   projection partition, or time where that reduces B-tree contention and vacuum
   pressure without harming point lookups.
@@ -430,6 +436,9 @@ structural separation:
    is now measured and did not preserve `5k` freshness; keep it, but do not
    treat it as a promotion fix.
 6. Review hot `runtime_events` indexes and total event-storage row volume.
+   Initial legacy all-event index removal is in place locally; rerun the `5k`
+   full gate to measure runtime event index-byte reduction before cutting the
+   order-scoped lifecycle index.
 7. Add maintained depth/top-of-book projections.
 8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.

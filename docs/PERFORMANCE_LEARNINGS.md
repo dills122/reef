@@ -223,6 +223,10 @@ Immediate implications:
    The remote A/B showed that this is correct write hygiene but not enough to
    preserve `5k` full-projection freshness; event/payload/index volume remains
    the next target.
+   The next local event-index slice drops three legacy all-event indexes and
+   aligns recent event reads with the typed timestamp index. Measure it by
+   comparing `runtime.runtime_events` index-byte growth in the next `5k`
+   full-projection run.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 

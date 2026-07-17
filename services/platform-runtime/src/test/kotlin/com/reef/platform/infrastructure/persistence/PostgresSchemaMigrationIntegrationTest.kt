@@ -69,6 +69,66 @@ class PostgresSchemaMigrationIntegrationTest {
     }
 
     @Test
+    fun legacyRuntimeEventIndexesAreDroppedAfterMigration() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'runtime'
+                  AND tablename = 'runtime_events'
+                  AND indexname IN (
+                    'runtime_events_occurred_at_idx',
+                    'runtime_events_trace_seq_idx',
+                    'idx_runtime_events_occurred_event'
+                  )
+                ORDER BY indexname
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("indexname"))
+                    assertEquals(emptyList(), rows)
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'runtime'
+                  AND tablename = 'runtime_events'
+                  AND indexname IN (
+                    'idx_runtime_events_trace_sequence',
+                    'idx_runtime_events_order_trace_sequence',
+                    'idx_runtime_events_occurred_typed',
+                    'idx_runtime_events_order_occurred_typed'
+                  )
+                ORDER BY indexname
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("indexname"))
+                    assertEquals(
+                        listOf(
+                            "idx_runtime_events_occurred_typed",
+                            "idx_runtime_events_order_occurred_typed",
+                            "idx_runtime_events_order_trace_sequence",
+                            "idx_runtime_events_trace_sequence"
+                        ),
+                        rows
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun timelineProjectionUsesStreamSequenceWithoutTraceAllocatorWhenPresent() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
@@ -397,6 +457,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0038_projection_dirty_lock_order.sql',
                   'runtime/0043_runtime_event_payload_cold_table.sql',
                   'runtime/0044_idempotent_lifecycle_projection.sql',
+                  'runtime/0045_drop_legacy_runtime_event_indexes.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -484,7 +545,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0037_runtime_event_trade_archive_tables.sql",
                     "runtime/0038_projection_dirty_lock_order.sql",
                     "runtime/0043_runtime_event_payload_cold_table.sql",
-                    "runtime/0044_idempotent_lifecycle_projection.sql"
+                    "runtime/0044_idempotent_lifecycle_projection.sql",
+                    "runtime/0045_drop_legacy_runtime_event_indexes.sql"
                 ),
                 appliedMigrations
             )
