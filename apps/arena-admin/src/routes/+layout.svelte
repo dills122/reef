@@ -25,7 +25,7 @@
 			? [{ href: '/bot-admin', label: 'bot admin' }]
 			: []),
 		...(session !== 'loading' && session && hasOperatorAccess(session)
-			? [{ href: '/admin', label: 'admin' }]
+			? [{ href: '/admin', label: 'game admin' }]
 			: [])
 	]);
 
