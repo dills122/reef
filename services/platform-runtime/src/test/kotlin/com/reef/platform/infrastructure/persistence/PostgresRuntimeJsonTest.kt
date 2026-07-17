@@ -137,13 +137,15 @@ class PostgresRuntimeJsonTest {
                 trades = listOf(trade)
             ),
             acceptedOrder = order,
-            lifecycleEvents = listOf(event)
+            lifecycleEvents = listOf(event),
+            streamSequence = 42L
         )
 
         val json = outcome.toJsonObject()
         assertEquals(true, json.contains("\"resultType\":\"accepted\""))
         assertEquals(true, json.contains("\"eventId\":\"evt-accept-1\""))
         assertEquals(true, json.contains("\"engineOrderId\":\"eng-1\""))
+        assertEquals(true, json.contains("\"streamSequence\":\"42\""))
         assertEquals(true, json.contains("\"acceptedOrder\":{\"orderId\":\"ord-1\""))
         assertEquals(true, json.contains("\"executions\":[{"))
         assertEquals(true, json.contains("\"trades\":[{"))

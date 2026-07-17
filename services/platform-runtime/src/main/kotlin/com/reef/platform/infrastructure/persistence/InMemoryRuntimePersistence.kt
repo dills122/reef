@@ -466,8 +466,10 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .take(batchSize)
         if (outcomes.isEmpty()) return 0
         outcomes.forEach { outcome ->
-            saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
-            if (projectionStage == ProjectionStage.Full) {
+            if (projectionStage != ProjectionStage.Timeline) {
+                saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
+            }
+            if (projectionStage != ProjectionStage.CommandStatus) {
                 saveEvent(outcome.toRuntimeEvent())
             }
         }

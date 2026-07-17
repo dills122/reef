@@ -170,6 +170,11 @@ Target the tables that dominate the patched `5k` run.
   deterministic sequence derived from canonical partition sequence and event
   ordinal where possible. Trace sequence allocation should not require a hot
   shared upsert table for the common single-event command case.
+  - Initial implementation is in place for canonical venue-event projection
+    payloads that carry `streamSequence`: the timeline stage derives
+    `runtime_events.sequence_number` from `streamSequence * 100 + eventOrdinal`
+    and only falls back to `runtime.runtime_trace_sequences` for legacy
+    payloads without stream sequence metadata.
 - Move rebuildable dirty queues to unlogged or staging tables when they can be
   reconstructed from canonical facts and watermarks. Durable truth stays in
   canonical command outcomes and event batches.
@@ -276,7 +281,10 @@ Next gates:
    projection writes.
 4. `5k full-projection-fresh`: all current projection stages catch up to lag
    `0`.
-5. `7.5k` and `10k` projection pressure/freshness gates only after `5k` is
+5. `5k timeline-fresh`: run with `REEF_DO_PROJECTION_STAGE=timeline` when
+   isolating runtime event/trace history cost from command status and lifecycle
+   freshness.
+6. `7.5k` and `10k` projection pressure/freshness gates only after `5k` is
    boring.
 
 Every gate should report:
@@ -318,10 +326,15 @@ structural separation:
    `5k` `command-status` pass are in place; default `full` behavior remains
    unchanged.
 4. Split or reduce the event/timeline stage so `runtime_events` and trace
-   sequence writes no longer govern command-status freshness.
-5. Reduce remaining lifecycle/fill/dirty-table write amplification.
-6. Add maintained depth/top-of-book projections.
-7. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
+   sequence writes no longer govern command-status freshness. Initial
+   deterministic timeline sequencing is in place, and
+   `STREAM_ACK_PROJECTION_STAGE=timeline` / `REEF_DO_PROJECTION_STAGE=timeline`
+   is available for isolated timeline pressure runs.
+5. Rerun the `5k` full-projection gate to measure whether removing the
+   trace-sequence allocator lowers WAL/temp pressure and clears final lag.
+6. Reduce remaining lifecycle/fill/dirty-table write amplification.
+7. Add maintained depth/top-of-book projections.
+8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.
-8. Promote `7.5k`/`10k` projection gates only after `5k` is stable with zero
+9. Promote `7.5k`/`10k` projection gates only after `5k` is stable with zero
    final lag and zero deadlocks.

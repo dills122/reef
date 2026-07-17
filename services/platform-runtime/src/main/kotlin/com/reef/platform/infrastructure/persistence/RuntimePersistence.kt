@@ -29,7 +29,8 @@ data class PersistableSubmitOutcome(
     val commandId: String,
     val result: SubmitOrderResult,
     val acceptedOrder: PersistedOrder?,
-    val lifecycleEvents: List<RuntimeEvent>
+    val lifecycleEvents: List<RuntimeEvent>,
+    val streamSequence: Long = 0L
 )
 
 data class CanonicalSubmitOutcome(
@@ -202,7 +203,8 @@ data class VenueEventBatchCommandReference(
 
 enum class ProjectionStage(val configValue: String) {
     Full("full"),
-    CommandStatus("command-status");
+    CommandStatus("command-status"),
+    Timeline("timeline");
 
     companion object {
         fun fromConfig(raw: String): ProjectionStage {
@@ -210,6 +212,7 @@ enum class ProjectionStage(val configValue: String) {
             return when (normalized) {
                 "", "full", "all" -> Full
                 "command-status", "status", "lifecycle", "core" -> CommandStatus
+                "timeline", "event-timeline", "events" -> Timeline
                 else -> throw IllegalArgumentException("Unsupported projection stage: $raw")
             }
         }

@@ -353,6 +353,40 @@ class InMemoryRuntimePersistenceTest {
     }
 
     @Test
+    fun timelineProjectionStageSkipsSubmitStatusRows() {
+        val persistence = InMemoryRuntimePersistence()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(venueEventBatch()))
+        assertEquals(
+            1,
+            persistence.projectCanonicalCommandOutcomes(
+                projectionName = "runtime-timeline",
+                batchSize = 10,
+                partitions = emptyList(),
+                includeFills = true,
+                eventStream = "",
+                projectionStage = ProjectionStage.Timeline
+            )
+        )
+
+        assertEquals(null, persistence.submitResult("cmd-1"))
+        val events = persistence.eventsForOrder("ord-1")
+        assertEquals(1, events.size)
+        assertEquals("OrderAccepted", events.first().eventType)
+
+        val status = persistence.projectionStatus("runtime-timeline", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(42L, status.watermarks.single().lastPartitionSequence)
+    }
+
+    @Test
+    fun projectionStageParsesTimelineAliases() {
+        assertEquals(ProjectionStage.Timeline, ProjectionStage.fromConfig("timeline"))
+        assertEquals(ProjectionStage.Timeline, ProjectionStage.fromConfig("events"))
+        assertEquals(ProjectionStage.Timeline, ProjectionStage.fromConfig("event-timeline"))
+    }
+
+    @Test
     fun projectsRejectedVenueEventBatchOutcomesIntoCompactLifecycleRows() {
         val persistence = InMemoryRuntimePersistence()
         val batch = venueEventBatch().copy(

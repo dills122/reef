@@ -77,7 +77,8 @@ internal fun PersistableSubmitOutcome.toJsonObject(): String {
         "engineOrderId" to accepted?.engineOrderId.orEmpty(),
         "code" to rejected?.code.orEmpty(),
         "reason" to rejected?.reason.orEmpty(),
-        "occurredAt" to (accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
+        "occurredAt" to (accepted?.occurredAt ?: rejected?.occurredAt.orEmpty()),
+        "streamSequence" to streamSequence.toString()
     ).joinToString(",") { (key, value) ->
         "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
     }

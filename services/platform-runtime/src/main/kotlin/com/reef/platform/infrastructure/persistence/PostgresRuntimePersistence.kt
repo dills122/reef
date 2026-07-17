@@ -4805,7 +4805,8 @@ class PostgresRuntimePersistence(
                     occurredAt = occurredAt,
                     payloadJson = resultPayloadJson.ifBlank { "{}" }
                 )
-            )
+            ),
+            streamSequence = streamSequence
         )
     }
 

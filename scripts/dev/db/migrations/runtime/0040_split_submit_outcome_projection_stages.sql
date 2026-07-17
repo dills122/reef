@@ -206,7 +206,13 @@ BEGIN
     SELECT
       event,
       outcomes.outcome_ordinality,
-      event_ordinality::BIGINT AS event_ordinality
+      event_ordinality::BIGINT AS event_ordinality,
+      CASE
+        WHEN COALESCE(outcome->>'streamSequence', '') ~ '^[0-9]+$'
+         AND (outcome->>'streamSequence')::NUMERIC BETWEEN 1 AND 92233720368547758
+        THEN (outcome->>'streamSequence')::BIGINT
+        ELSE NULL
+      END AS stream_sequence
     FROM outcomes
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE
@@ -215,9 +221,19 @@ BEGIN
       END
     ) WITH ORDINALITY AS event_rows(event, event_ordinality)
   ),
+  deterministic_events AS (
+    SELECT *
+    FROM parsed_events
+    WHERE stream_sequence IS NOT NULL
+  ),
+  legacy_events AS (
+    SELECT *
+    FROM parsed_events
+    WHERE stream_sequence IS NULL
+  ),
   trace_counts AS (
     SELECT event->>'traceId' AS trace_id, COUNT(*)::BIGINT AS event_count
-    FROM parsed_events
+    FROM legacy_events
     GROUP BY event->>'traceId'
   ),
   trace_allocations AS (
@@ -235,16 +251,36 @@ BEGIN
   ),
   ordered_events AS (
     SELECT
-      parsed.event,
-      parsed.outcome_ordinality,
-      parsed.event_ordinality,
+      legacy.event,
+      legacy.outcome_ordinality,
+      legacy.event_ordinality,
       row_number() OVER (
-        PARTITION BY parsed.event->>'traceId'
-        ORDER BY parsed.outcome_ordinality, parsed.event_ordinality
+        PARTITION BY legacy.event->>'traceId'
+        ORDER BY legacy.outcome_ordinality, legacy.event_ordinality
       ) - 1 AS trace_offset
-    FROM parsed_events parsed
+    FROM legacy_events legacy
   ),
-  insert_events AS (
+  insert_deterministic_events AS (
+    INSERT INTO runtime.runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
+    SELECT
+      event->>'eventId',
+      event->>'eventType',
+      event->>'orderId',
+      event->>'traceId',
+      event->>'causationId',
+      event->>'correlationId',
+      COALESCE(event->>'actorId', ''),
+      event->>'producer',
+      event->>'schemaVersion',
+      deterministic_events.stream_sequence * 100 + deterministic_events.event_ordinality,
+      COALESCE(event->'payloadJson', '{}'::jsonb),
+      event->>'occurredAt'
+    FROM deterministic_events
+    ORDER BY deterministic_events.event->>'eventId'
+    ON CONFLICT (event_id) DO NOTHING
+    RETURNING 1
+  ),
+  insert_legacy_events AS (
     INSERT INTO runtime.runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
     SELECT
       event->>'eventId',
@@ -290,6 +326,10 @@ BEGIN
 
   IF normalized_stage IN ('command-status', 'status', 'lifecycle', 'core') THEN
     RETURN runtime.runtime_persist_submit_outcome_status_stage(p_outcomes);
+  END IF;
+
+  IF normalized_stage IN ('timeline', 'event-timeline', 'events') THEN
+    RETURN runtime.runtime_persist_submit_outcome_timeline_stage(p_outcomes);
   END IF;
 
   RAISE EXCEPTION 'unsupported submit outcome projection stage: %', p_projection_stage;

@@ -55,6 +55,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0038_projection_dirty_lock_order.sql",
       "runtime/0039_command_outcome_projection_metadata.sql",
       "runtime/0040_split_submit_outcome_projection_stages.sql",
+      "runtime/0041_deterministic_timeline_projection_sequence.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));

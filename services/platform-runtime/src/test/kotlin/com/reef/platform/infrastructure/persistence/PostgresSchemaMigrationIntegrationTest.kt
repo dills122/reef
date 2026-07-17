@@ -36,6 +36,87 @@ import kotlin.test.assertTrue
 
 class PostgresSchemaMigrationIntegrationTest {
     @Test
+    fun timelineProjectionUsesStreamSequenceWithoutTraceAllocatorWhenPresent() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val eventId = "evt-deterministic-${UUID.randomUUID()}"
+        val traceId = "trace-deterministic-${UUID.randomUUID()}"
+        val payload = """
+            [
+              {
+                "commandId": "cmd-$eventId",
+                "resultType": "accepted",
+                "eventId": "$eventId",
+                "orderId": "ord-$eventId",
+                "engineOrderId": "eng-$eventId",
+                "code": "",
+                "reason": "",
+                "occurredAt": "2026-07-17T14:00:00Z",
+                "streamSequence": "12345",
+                "acceptedOrder": null,
+                "executions": [],
+                "trades": [],
+                "events": [
+                  {
+                    "eventId": "$eventId",
+                    "eventType": "OrderAccepted",
+                    "orderId": "ord-$eventId",
+                    "traceId": "$traceId",
+                    "causationId": "cmd-$eventId",
+                    "correlationId": "corr-$eventId",
+                    "actorId": "",
+                    "producer": "timeline-test",
+                    "schemaVersion": "v1",
+                    "occurredAt": "2026-07-17T14:00:00Z",
+                    "payloadJson": {"source": "deterministic-sequence-test"}
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_timeline_stage(?::jsonb)").use { ps ->
+                ps.setString(1, payload)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT sequence_number
+                FROM runtime.runtime_events
+                WHERE event_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, eventId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(1234501L, rs.getLong("sequence_number"))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT COUNT(*) AS allocator_rows
+                FROM runtime.runtime_trace_sequences
+                WHERE trace_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, traceId)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(0L, rs.getLong("allocator_rows"))
+                }
+            }
+        }
+    }
+
+    @Test
     fun migratedTablesLandInDomainSchemasWhenConfigured() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
