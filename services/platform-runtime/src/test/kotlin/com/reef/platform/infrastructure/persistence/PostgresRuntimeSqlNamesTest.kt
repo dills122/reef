@@ -16,6 +16,7 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.trades_archive", names.tradesArchive)
         assertEquals("runtime.trades_archive_default", names.tradesArchiveDefault)
         assertEquals("runtime.runtime_events", names.runtimeEvents)
+        assertEquals("runtime.runtime_event_payloads", names.runtimeEventPayloads)
         assertEquals("runtime.runtime_events_archive", names.runtimeEventsArchive)
         assertEquals("runtime.runtime_events_archive_default", names.runtimeEventsArchiveDefault)
         assertEquals("runtime.submit_results", names.submitResults)

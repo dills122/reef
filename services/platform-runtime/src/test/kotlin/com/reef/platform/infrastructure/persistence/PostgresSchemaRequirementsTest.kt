@@ -25,6 +25,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.trades",
                 "runtime.trades_archive",
                 "runtime.runtime_events",
+                "runtime.runtime_event_payloads",
                 "runtime.runtime_events_archive",
                 "runtime.runtime_trace_sequences",
                 "runtime.submit_results",
@@ -125,10 +126,22 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_events.occurred_at_ts:timestamp with time zone",
                 "runtime.runtime_events.actor_id:text",
                 "runtime.runtime_events.payload_json:jsonb",
+                "runtime.runtime_events.modify_quantity_units:text",
+                "runtime.runtime_events.modify_limit_price:text",
                 "runtime.runtime_events.sequence_number:bigint"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.runtime_events" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.runtime_event_payloads.event_id:text",
+                "runtime.runtime_event_payloads.payload_json:jsonb"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.runtime_event_payloads" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

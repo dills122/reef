@@ -212,6 +212,13 @@ Target the tables that dominate the patched `5k` run.
   unlogged staging before merge.
 - Avoid writing `runtime_events` for every freshness-critical read if the read
   surface can be served from typed order/execution/trade facts.
+  - Initial runtime-event hot/cold split is in place locally: new timeline
+    projection inserts keep `runtime.runtime_events.payload_json` as `{}`,
+    persist full payloads to `runtime.runtime_event_payloads`, and keep
+    `OrderModified` lifecycle facts hot as typed text columns so lifecycle
+    recompute does not join or parse cold JSON. This is not promotion evidence
+    until the next DO full-projection run measures WAL/table growth and
+    freshness.
 - Review hot projection indexes. Keep indexes required for public reads and
   replay integrity; drop or defer indexes that only serve cold inspection paths.
 - Partition large append-heavy projection tables by event stream, run/session,

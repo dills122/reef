@@ -150,6 +150,87 @@ class PostgresSchemaMigrationIntegrationTest {
     }
 
     @Test
+    fun timelineProjectionStoresRuntimeEventPayloadsColdAndKeepsModifyFactsHot() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val eventId = "evt-cold-payload-${UUID.randomUUID()}"
+        val traceId = "trace-cold-payload-${UUID.randomUUID()}"
+        val payload = """
+            [
+              {
+                "commandId": "cmd-$eventId",
+                "resultType": "accepted",
+                "eventId": "$eventId",
+                "orderId": "ord-$eventId",
+                "engineOrderId": "eng-$eventId",
+                "code": "",
+                "reason": "",
+                "occurredAt": "2026-07-17T15:00:00Z",
+                "streamSequence": "22345",
+                "acceptedOrder": null,
+                "executions": [],
+                "trades": [],
+                "events": [
+                  {
+                    "eventId": "$eventId",
+                    "eventType": "OrderModified",
+                    "orderId": "ord-$eventId",
+                    "traceId": "$traceId",
+                    "causationId": "cmd-$eventId",
+                    "correlationId": "corr-$eventId",
+                    "actorId": "",
+                    "producer": "timeline-test",
+                    "schemaVersion": "v1",
+                    "occurredAt": "2026-07-17T15:00:00Z",
+                    "payloadJson": {
+                      "quantityUnits": "42",
+                      "limitPrice": "101.25",
+                      "source": "cold-payload-test"
+                    }
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_timeline_stage(?::jsonb)").use { ps ->
+                ps.setString(1, payload)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT
+                  events.payload_json::text AS hot_payload,
+                  events.modify_quantity_units,
+                  events.modify_limit_price,
+                  payloads.payload_json->>'source' AS cold_source,
+                  payloads.payload_json->>'quantityUnits' AS cold_quantity_units
+                FROM runtime.runtime_events events
+                JOIN runtime.runtime_event_payloads payloads ON payloads.event_id = events.event_id
+                WHERE events.event_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, eventId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals("{}", rs.getString("hot_payload"))
+                    assertEquals("42", rs.getString("modify_quantity_units"))
+                    assertEquals("101.25", rs.getString("modify_limit_price"))
+                    assertEquals("cold-payload-test", rs.getString("cold_source"))
+                    assertEquals("42", rs.getString("cold_quantity_units"))
+                }
+            }
+        }
+    }
+
+    @Test
     fun migratedTablesLandInDomainSchemasWhenConfigured() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
@@ -186,6 +267,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0036_canonical_archive_tables.sql',
                   'runtime/0037_runtime_event_trade_archive_tables.sql',
                   'runtime/0038_projection_dirty_lock_order.sql',
+                  'runtime/0043_runtime_event_payload_cold_table.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -271,7 +353,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0034_post_trade_profile_references.sql",
                     "runtime/0036_canonical_archive_tables.sql",
                     "runtime/0037_runtime_event_trade_archive_tables.sql",
-                    "runtime/0038_projection_dirty_lock_order.sql"
+                    "runtime/0038_projection_dirty_lock_order.sql",
+                    "runtime/0043_runtime_event_payload_cold_table.sql"
                 ),
                 appliedMigrations
             )
@@ -298,6 +381,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.orders",
                 "runtime.reference_instruments",
                 "runtime.runtime_events",
+                "runtime.runtime_event_payloads",
                 "runtime.runtime_events_archive",
                 "runtime.runtime_events_archive_default",
                 "runtime.submit_results",
@@ -562,6 +646,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'occurred_at_ts',
                     'actor_id',
                     'payload_json',
+                    'modify_quantity_units',
+                    'modify_limit_price',
                     'sequence_number'
                   )
                 ORDER BY column_name
@@ -579,12 +665,42 @@ class PostgresSchemaMigrationIntegrationTest {
                     "actor_id:text",
                     "event_id:text",
                     "event_id_uuid:uuid",
+                    "modify_limit_price:text",
+                    "modify_quantity_units:text",
                     "occurred_at:text",
                     "occurred_at_ts:timestamp with time zone",
                     "payload_json:jsonb",
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val runtimeEventPayloadColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'runtime_event_payloads'
+                  AND column_name IN (
+                    'event_id',
+                    'payload_json'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "event_id:text",
+                    "payload_json:jsonb"
+                ),
+                runtimeEventPayloadColumns
             )
 
             val submitResultColumns = conn.prepareStatement(

@@ -431,6 +431,8 @@ class PostgresRuntimePersistence(
                       sequence_number BIGINT NOT NULL,
                       payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
                       occurred_at TEXT NOT NULL,
+                      modify_quantity_units TEXT NOT NULL DEFAULT '',
+                      modify_limit_price TEXT NOT NULL DEFAULT '',
                       event_id_uuid UUID,
                       occurred_at_ts TIMESTAMPTZ
                     )
@@ -451,8 +453,23 @@ class PostgresRuntimePersistence(
                 stmt.execute(
                     """
                     ALTER TABLE ${names.runtimeEvents}
+                    ADD COLUMN IF NOT EXISTS modify_quantity_units TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS modify_limit_price TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.runtimeEvents}
                     ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
                     ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeEventPayloads} (
+                      event_id TEXT PRIMARY KEY,
+                      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
+                    )
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -3475,8 +3492,8 @@ class PostgresRuntimePersistence(
                     latest_modify AS (
                       SELECT DISTINCT ON (order_id)
                         order_id,
-                        COALESCE(NULLIF(payload_json->>'quantityUnits', ''), '') AS modified_quantity_units,
-                        COALESCE(NULLIF(payload_json->>'limitPrice', ''), '') AS modified_limit_price,
+                        COALESCE(NULLIF(modify_quantity_units, ''), '') AS modified_quantity_units,
+                        COALESCE(NULLIF(modify_limit_price, ''), '') AS modified_limit_price,
                         occurred_at
                       FROM ${names.runtimeEvents}
                       WHERE event_type = 'OrderModified'
@@ -4207,14 +4224,30 @@ class PostgresRuntimePersistence(
                 val nextByTrace = startByTrace.toMutableMap()
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+                    INSERT INTO ${names.runtimeEvents}(
+                      event_id,
+                      event_type,
+                      order_id,
+                      trace_id,
+                      causation_id,
+                      correlation_id,
+                      actor_id,
+                      producer,
+                      schema_version,
+                      sequence_number,
+                      payload_json,
+                      occurred_at,
+                      modify_quantity_units,
+                      modify_limit_price
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?)
                     ON CONFLICT (event_id) DO NOTHING
                     """.trimIndent()
                 ).use { ps ->
                     events.forEach { event ->
                         val sequence = nextByTrace.getValue(event.traceId)
                         nextByTrace[event.traceId] = sequence + 1
+                        val modifyFacts = event.modifyFacts()
                         ps.setString(1, event.eventId)
                         ps.setString(2, event.eventType)
                         ps.setString(3, event.orderId)
@@ -4225,8 +4258,25 @@ class PostgresRuntimePersistence(
                         ps.setString(8, event.producer)
                         ps.setString(9, event.schemaVersion)
                         ps.setLong(10, sequence)
-                        ps.setString(11, event.payloadJson)
-                        ps.setString(12, event.occurredAt)
+                        ps.setString(11, event.occurredAt)
+                        ps.setString(12, modifyFacts.quantityUnits)
+                        ps.setString(13, modifyFacts.limitPrice)
+                        ps.addBatch()
+                    }
+                    ps.executeBatch()
+                }
+                conn.prepareStatement(
+                    """
+                    INSERT INTO ${names.runtimeEventPayloads}(event_id, payload_json)
+                    VALUES (?, ?::jsonb)
+                    ON CONFLICT (event_id) DO NOTHING
+                    """.trimIndent()
+                ).use { ps ->
+                    events.forEach { event ->
+                        val payload = event.payloadJson.ifBlank { "{}" }
+                        if (payload == "{}") return@forEach
+                        ps.setString(1, event.eventId)
+                        ps.setString(2, payload)
                         ps.addBatch()
                     }
                     ps.executeBatch()
@@ -4240,6 +4290,20 @@ class PostgresRuntimePersistence(
             }
         }
     }
+
+    private fun RuntimeEvent.modifyFacts(): RuntimeEventModifyFacts {
+        if (eventType != "OrderModified") return RuntimeEventModifyFacts()
+        val payload = JsonCodec.parseLegacyObjectOrEmpty(payloadJson)
+        return RuntimeEventModifyFacts(
+            quantityUnits = payload.string("quantityUnits"),
+            limitPrice = payload.string("limitPrice")
+        )
+    }
+
+    private data class RuntimeEventModifyFacts(
+        val quantityUnits: String = "",
+        val limitPrice: String = ""
+    )
 
     override fun acceptedOrder(orderId: String): PersistedOrder? {
         projectionConnection().use { conn ->
@@ -4628,23 +4692,57 @@ class PostgresRuntimePersistence(
     }
 
     override fun eventsForOrder(orderId: String): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} WHERE order_id = ? ORDER BY trace_id, sequence_number",
+        """
+        $runtimeEventSelect
+        WHERE events.order_id = ?
+        ORDER BY events.trace_id, events.sequence_number
+        """.trimIndent(),
         orderId
     )
 
     override fun eventsForTrace(traceId: String): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} WHERE trace_id = ? ORDER BY sequence_number",
+        """
+        $runtimeEventSelect
+        WHERE events.trace_id = ?
+        ORDER BY events.sequence_number
+        """.trimIndent(),
         traceId
     )
 
     override fun events(): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} ORDER BY trace_id, sequence_number"
+        """
+        $runtimeEventSelect
+        ORDER BY events.trace_id, events.sequence_number
+        """.trimIndent()
     )
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
+        """
+        $runtimeEventSelect
+        ORDER BY events.occurred_at_ts DESC NULLS LAST, events.occurred_at DESC, events.event_id DESC
+        LIMIT ?::integer
+        """.trimIndent(),
         limit.coerceIn(0, 500).toString()
     ).asReversed()
+
+    private val runtimeEventSelect: String
+        get() = """
+            SELECT
+              events.event_id,
+              events.event_type,
+              events.order_id,
+              events.trace_id,
+              events.causation_id,
+              events.correlation_id,
+              events.actor_id,
+              events.producer,
+              events.schema_version,
+              events.sequence_number,
+              COALESCE(payloads.payload_json, events.payload_json)::TEXT AS payload_json,
+              events.occurred_at
+            FROM ${names.runtimeEvents} events
+            LEFT JOIN ${names.runtimeEventPayloads} payloads ON payloads.event_id = events.event_id
+        """.trimIndent()
 
     private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = projectionQueryList(sql, *params) {
         RuntimeEvent(

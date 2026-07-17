@@ -54,6 +54,7 @@ data class PostgresSchemaRequirement(
 object PostgresSchemaRequirements {
     fun runtime(names: PostgresRuntimeSqlNames): PostgresSchemaRequirement {
         val runtimeEvents = PostgresSchemaObject.parse(names.runtimeEvents)
+        val runtimeEventPayloads = PostgresSchemaObject.parse(names.runtimeEventPayloads)
         val canonicalCommandResults = PostgresSchemaObject.parse(names.canonicalCommandResults)
         val canonicalVenueEvents = PostgresSchemaObject.parse(names.canonicalVenueEvents)
         val canonicalVenueEventBatches = PostgresSchemaObject.parse(names.canonicalVenueEventBatches)
@@ -84,6 +85,7 @@ object PostgresSchemaRequirements {
                 names.trades,
                 names.tradesArchive,
                 names.runtimeEvents,
+                names.runtimeEventPayloads,
                 names.runtimeEventsArchive,
                 names.runtimeTraceSequences,
                 names.submitResults,
@@ -146,7 +148,11 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(runtimeEvents, "occurred_at_ts", "timestamp with time zone"),
                 PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "payload_json", "jsonb"),
+                PostgresSchemaColumn(runtimeEvents, "modify_quantity_units", "text"),
+                PostgresSchemaColumn(runtimeEvents, "modify_limit_price", "text"),
                 PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint"),
+                PostgresSchemaColumn(runtimeEventPayloads, "event_id", "text"),
+                PostgresSchemaColumn(runtimeEventPayloads, "payload_json", "jsonb"),
                 PostgresSchemaColumn(runtimeEventsArchive, "event_id", "text"),
                 PostgresSchemaColumn(runtimeEventsArchive, "event_id_uuid", "uuid"),
                 PostgresSchemaColumn(runtimeEventsArchive, "occurred_at_ts", "timestamp with time zone"),

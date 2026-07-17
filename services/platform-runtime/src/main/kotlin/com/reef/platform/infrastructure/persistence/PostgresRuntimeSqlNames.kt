@@ -20,6 +20,7 @@ data class PostgresRuntimeSqlNames(
     val tradesArchive = qualify(runtimeSchemaName, "trades_archive")
     val tradesArchiveDefault = qualify(runtimeSchemaName, "trades_archive_default")
     val runtimeEvents = qualify(runtimeSchemaName, "runtime_events")
+    val runtimeEventPayloads = qualify(runtimeSchemaName, "runtime_event_payloads")
     val runtimeEventsArchive = qualify(runtimeSchemaName, "runtime_events_archive")
     val runtimeEventsArchiveDefault = qualify(runtimeSchemaName, "runtime_events_archive_default")
     val runtimeTraceSequences = qualify(runtimeSchemaName, "runtime_trace_sequences")

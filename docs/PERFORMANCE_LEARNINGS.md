@@ -177,8 +177,10 @@ Immediate implications:
    `market_data_snapshot_dirty` unlogged and avoids redundant conflict updates.
    The remote comparison lowered dirty-table pressure but did not preserve
    `5k` full-projection freshness, so do not treat it as a promotion fix.
-   Move to `runtime_events` hot/cold split and lifecycle/fill write-shape
-   reduction next.
+   The next local fix moves new `runtime_events` payload JSON to
+   `runtime.runtime_event_payloads` while keeping `OrderModified` lifecycle
+   facts hot on `runtime_events`; it needs the next DO run before it can be
+   promoted as measured throughput evidence.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 

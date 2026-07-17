@@ -57,6 +57,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0040_split_submit_outcome_projection_stages.sql",
       "runtime/0041_deterministic_timeline_projection_sequence.sql",
       "runtime/0042_unlogged_projection_dirty_queues.sql",
+      "runtime/0043_runtime_event_payload_cold_table.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -260,6 +261,21 @@ test("runtime dirty queue migration moves rebuildable queues out of WAL", async 
   assert.ok(migration);
   assert.match(migration.sql, /ALTER TABLE runtime\.order_lifecycle_dirty SET UNLOGGED/);
   assert.match(migration.sql, /ALTER TABLE runtime\.market_data_snapshot_dirty SET UNLOGGED/);
+});
+
+test("runtime event payload migration moves event JSON off hot rows", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0043_runtime_event_payload_cold_table.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE TABLE IF NOT EXISTS runtime\.runtime_event_payloads/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS modify_quantity_units TEXT/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS modify_limit_price TEXT/);
+  assert.match(migration.sql, /INSERT INTO runtime\.runtime_event_payloads\(event_id, payload_json\)/);
+  assert.match(migration.sql, /payload_json,\s+occurred_at,\s+modify_quantity_units,\s+modify_limit_price/s);
+  assert.match(migration.sql, /'\{\}'::jsonb,\s+event->>'occurredAt'/s);
 });
 
 test("command outcome projection preserves command correlation metadata", async () => {
