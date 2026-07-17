@@ -112,6 +112,12 @@ Evidence:
   `69.92ms` and p99 `136.68ms`; deadlocks fell to `0` and the
   materialized/projected count gap closed to `0`, but final projection
   watermark lag remained `1,367`, concentrated in partitions `8-11`.
+- `reports/do-benchmark/do-benchmark-20260717T131344Z/`: after splitting
+  projection stages and fixing Docker Compose pass-through for
+  `STREAM_ACK_PROJECTION_STAGE`, the `5k` `command-status` run accepted,
+  direct-acked, materialized, and projected `299,955` commands with p95
+  `74.49ms`, p99 `112.93ms`, projection lag `0`, materialized/projected gap
+  `0`, projector failures/retries `0`, and projection-postgres deadlocks `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -124,6 +130,9 @@ Database pressure in the patched `5k` run:
 - hottest projection tables: `runtime_events`, `executions`, `trades`,
   `orders`, `order_lifecycle_state`, `submit_results`,
   `runtime_trace_sequences`, dirty queues, and market-data projection tables.
+- command-status stage projection DB: about `1.22GB` WAL, `4.06KB` WAL per
+  accepted command, `1.48M` inserted tuples, `47k` updated tuples, `3.87GB`
+  temp bytes, and no `runtime_events` or `runtime_trace_sequences` row growth.
 
 Immediate implications:
 
@@ -134,11 +143,14 @@ Immediate implications:
    one-minute `5k` sample.
 3. Deterministic index-key ordering is worth keeping: it removed the observed
    deadlock/count-gap failure mode, but it does not solve zero-lag freshness.
-4. The next fixes should split the monolithic projection function, reduce
-   `runtime_events`/trace/dirty-table write amplification, and give read
-   surfaces explicit freshness classes instead of forcing every query table to
-   share the same SLO.
-5. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+4. The projection-stage split is a valid direction: command-status plus
+   own-order lifecycle freshness is now green at `5k`, while full projection is
+   still not. Keep separate SLOs for command status, lifecycle, timeline,
+   market data, and analytics instead of forcing every query table to share the
+   same freshness gate.
+5. The next fixes should reduce event/timeline and remaining dirty-table write
+   amplification, then re-run full-projection freshness at `5k`.
+6. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
