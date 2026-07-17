@@ -541,7 +541,8 @@ class PlatformHttpServer(
         RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false),
     private val localDevAdminAuthBypass: Boolean = localDevAdminAuthBypassEnabled(),
-    private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv()
+    private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv(),
+    private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl()
 ) {
     companion object {
         private val streamPublishTimeoutExecutor = ScheduledThreadPoolExecutor(1) { runnable ->
@@ -566,7 +567,8 @@ class PlatformHttpServer(
         adminSessionCookieName = adminSessionCookieName,
         adminSessionCookieSecure = adminSessionCookieSecure,
         localDevAdminAuthBypass = localDevAdminAuthBypass,
-        internalHttpExposureMode = internalHttpExposureMode
+        internalHttpExposureMode = internalHttpExposureMode,
+        localDevAdminUiBaseUrl = localDevAdminUiBaseUrl
     )
     private val settlementAdminGateway = SettlementAdminGateway(
         settlementFactStore = settlementFactStore,
@@ -907,6 +909,7 @@ class PlatformHttpServer(
             "/admin/v1/settlement/obligations/materialize"
         )) {
             server.createContext(path) { exchange ->
+                if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
                 handleAdminGatewayRoute(exchange)
             }
         }
@@ -1406,6 +1409,7 @@ class PlatformHttpServer(
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
         val bytes = json.toByteArray()
+        adminSessionAuth.applyLocalDevAdminUiCors(exchange)
         exchange.responseHeaders.add("Content-Type", "application/json")
         exchange.sendResponseHeaders(status, bytes.size.toLong())
         exchange.responseBody.use { output ->
@@ -1414,6 +1418,7 @@ class PlatformHttpServer(
     }
 
     private fun writeHotPathResponse(exchange: HttpExchange, response: PlatformHotPathResponse) {
+        adminSessionAuth.applyLocalDevAdminUiCors(exchange)
         if (response.body.isEmpty() && response.contentType == null) {
             exchange.sendResponseHeaders(response.status, -1)
             exchange.close()
@@ -1546,6 +1551,7 @@ class PlatformHttpServer(
     }
 
     private fun methodNotAllowed(exchange: HttpExchange) {
+        adminSessionAuth.applyLocalDevAdminUiCors(exchange)
         exchange.sendResponseHeaders(405, -1)
         exchange.close()
     }
@@ -1600,6 +1606,7 @@ class PlatformHttpServer(
     private fun currentAdminPrincipal(): AdminRequestPrincipal = adminSessionAuth.currentPrincipal()
 
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
+        if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return
         val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod)
         if (route == null) {
             exchange.sendResponseHeaders(404, -1)

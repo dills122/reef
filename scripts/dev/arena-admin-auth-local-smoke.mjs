@@ -7,6 +7,7 @@ loadDotEnv();
 
 const { runtimeUrl } = deriveDevUrls();
 const arenaAdminUrl = env("ARENA_ADMIN_WEB_URL", "");
+const localAdminUiBase = env("LOCAL_DEV_ADMIN_UI_BASE_URL", "").trim().replace(/\/$/, "");
 const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
 
 for (const key of ["PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN", "PUBLIC_ARENA_LOCAL_DEV_FIXTURES"]) {
@@ -43,6 +44,37 @@ const invalidCallback = await request(
 );
 if (invalidCallback.status !== 401) {
   throw new Error(`invalid OAuth callback expected 401, got ${invalidCallback.status}: ${invalidCallback.body}`);
+}
+
+if (localAdminUiBase) {
+  const corsSession = await request(`${runtimeUrl}/admin/auth/session`, {
+    headers: { Origin: localAdminUiBase },
+  });
+  if (corsSession.headers["access-control-allow-origin"] !== localAdminUiBase) {
+    throw new Error(
+      `local admin CORS session check failed: expected access-control-allow-origin ${localAdminUiBase}, got ${
+        corsSession.headers["access-control-allow-origin"] ?? ""
+      }`,
+    );
+  }
+  if (corsSession.headers["access-control-allow-credentials"] !== "true") {
+    throw new Error("local admin CORS session check failed: credentials header is missing");
+  }
+
+  const preflight = await request(`${runtimeUrl}/admin/v1/access/roles`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: localAdminUiBase,
+      "Access-Control-Request-Headers": "content-type",
+    },
+  });
+  if (preflight.status !== 204) {
+    throw new Error(`local admin CORS preflight expected 204, got ${preflight.status}: ${preflight.body}`);
+  }
+  if (preflight.headers["access-control-allow-origin"] !== localAdminUiBase) {
+    throw new Error("local admin CORS preflight check failed: origin was not allowed");
+  }
+  console.log("local admin UI CORS ok");
 }
 
 const adminApiToken = env("ADMIN_API_TOKEN", "").trim();

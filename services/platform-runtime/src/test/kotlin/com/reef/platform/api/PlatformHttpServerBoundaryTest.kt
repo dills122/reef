@@ -387,6 +387,97 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGitHubOAuthCallbackCanRedirectToLocalDevAdminUi() {
+        val auth = testAdminAuth()
+        val github = FakeAdminGitHubOAuthClient()
+        val localUiBase = localDevAdminUiBaseUrl(
+            envLookup(
+                "REEF_ENV" to "local",
+                "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = github,
+            localDevAdminUiBaseUrl = localUiBase
+        )
+        try {
+            val start = get(server.address.port, "/admin/auth/github/start?redirectPath=/admin")
+            val state = responseHeader(start, "Location").substringAfter("state=").substringBefore("&")
+
+            val callback = get(server.address.port, "/admin/auth/github/callback?code=github-code&state=$state")
+
+            assertEquals(302, callback.status)
+            assertEquals("http://localhost:5174/admin", responseHeader(callback, "Location"))
+            assertContains(responseHeader(callback, "Set-Cookie"), "reef_admin_session=")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun localDevAdminUiCorsAllowsConfiguredLoopbackOriginOnly() {
+        val localUiBase = localDevAdminUiBaseUrl(
+            envLookup(
+                "REEF_ENV" to "local",
+                "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            localDevAdminUiBaseUrl = localUiBase
+        )
+        try {
+            val preflight = options(
+                server.address.port,
+                "/admin/v1/access/roles",
+                headers = mapOf(
+                    "Origin" to "http://localhost:5174",
+                    "Access-Control-Request-Headers" to "content-type"
+                )
+            )
+            assertEquals(204, preflight.status)
+            assertEquals("http://localhost:5174", responseHeader(preflight, "Access-Control-Allow-Origin"))
+            assertEquals("true", responseHeader(preflight, "Access-Control-Allow-Credentials"))
+            assertEquals("content-type", responseHeader(preflight, "Access-Control-Allow-Headers"))
+
+            val authSession = requestWithHeaders(
+                "GET",
+                server.address.port,
+                "/admin/auth/session",
+                headers = mapOf("Origin" to "http://localhost:5174")
+            )
+            assertEquals("http://localhost:5174", responseHeader(authSession, "Access-Control-Allow-Origin"))
+            assertEquals("true", responseHeader(authSession, "Access-Control-Allow-Credentials"))
+
+            val deniedOrigin = requestWithHeaders(
+                "GET",
+                server.address.port,
+                "/admin/auth/session",
+                headers = mapOf("Origin" to "https://reef.example")
+            )
+            assertEquals("", responseHeader(deniedOrigin, "Access-Control-Allow-Origin"))
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun localDevAdminUiBaseUrlIsIgnoredOutsideLocalProfile() {
+        assertEquals(
+            null,
+            localDevAdminUiBaseUrl(
+                envLookup(
+                    "REEF_ENV" to "prod",
+                    "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
+                )
+            )
+        )
+    }
+
+    @Test
     fun adminGitHubOAuthCallbackReturnsGatewayErrorForExchangeFailure() {
         val auth = testAdminAuth()
         val server = testServerWithGateway(
@@ -6883,6 +6974,7 @@ class PlatformHttpServerBoundaryTest {
         streamCommandBackpressureSampleMs: Long = 100L,
         streamCommandPublishResponseTimeoutMs: Long = 2_000L,
         venueEventMaterializerEnabled: Boolean = false,
+        localDevAdminUiBaseUrl: String? = null,
         runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = runtimePersistence
@@ -6944,7 +7036,8 @@ class PlatformHttpServerBoundaryTest {
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
             commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled,
-            localDevAdminAuthBypass = localDevAdminAuthBypass
+            localDevAdminAuthBypass = localDevAdminAuthBypass,
+            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl
         ).start()
     }
 
@@ -7037,6 +7130,26 @@ class PlatformHttpServerBoundaryTest {
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream?.bufferedReader()?.readText().orEmpty()
         return HttpResponse(connection.responseCode, text, responseHeaders(connection))
+    }
+
+    private fun options(port: Int, path: String, headers: Map<String, String> = emptyMap()): HttpResponse {
+        return requestWithHeaders("OPTIONS", port, path, headers)
+    }
+
+    private fun requestWithHeaders(
+        method: String,
+        port: Int,
+        path: String,
+        headers: Map<String, String> = emptyMap()
+    ): HttpResponse {
+        val builder = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:$port$path"))
+            .method(method, java.net.http.HttpRequest.BodyPublishers.noBody())
+        headers.forEach { (k, v) -> builder.header(k, v) }
+        val response = java.net.http.HttpClient.newHttpClient().send(
+            builder.build(),
+            java.net.http.HttpResponse.BodyHandlers.ofString()
+        )
+        return HttpResponse(response.statusCode(), response.body(), response.headers().map())
     }
 
     private fun apiGet(port: Int, path: String, headers: Map<String, String> = apiReadHeaders()): HttpResponse {

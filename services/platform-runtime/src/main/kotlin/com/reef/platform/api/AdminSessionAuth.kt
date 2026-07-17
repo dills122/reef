@@ -11,6 +11,7 @@ import com.sun.net.httpserver.Headers
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.net.InetAddress
+import java.net.URI
 import java.net.URLDecoder
 import java.time.Instant
 
@@ -53,12 +54,14 @@ internal class AdminSessionAuth(
     private val adminSessionCookieSecure: Boolean,
     private val localDevAdminAuthBypass: Boolean,
     private val internalHttpExposureMode: InternalHttpExposureMode,
-    private val envLookup: (String) -> String? = System::getenv
+    private val envLookup: (String) -> String? = System::getenv,
+    private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl(envLookup)
 ) {
     private val adminRequestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
 
     fun register(server: HttpServer) {
         server.createContext("/admin/auth/github/start") { exchange ->
+            if (handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
                 return@createContext
@@ -81,6 +84,7 @@ internal class AdminSessionAuth(
         }
 
         server.createContext("/admin/auth/github/callback") { exchange ->
+            if (handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
                 return@createContext
@@ -109,7 +113,7 @@ internal class AdminSessionAuth(
                 val user = identity.ensureGitHubUser(githubIdentity)
                 val session = auth.createSession(user.reefUserId)
                 setAdminSessionCookie(exchange, session.token)
-                redirect(exchange, state.redirectPath)
+                redirect(exchange, adminUiRedirectLocation(state.redirectPath))
             } catch (ex: IllegalArgumentException) {
                 writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "admin auth failed")))
             } catch (ex: Exception) {
@@ -119,6 +123,7 @@ internal class AdminSessionAuth(
         }
 
         server.createContext("/admin/auth/session") { exchange ->
+            if (handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
                 return@createContext
@@ -170,6 +175,7 @@ internal class AdminSessionAuth(
         }
 
         server.createContext("/admin/auth/logout") { exchange ->
+            if (handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
                 methodNotAllowed(exchange)
                 return@createContext
@@ -218,6 +224,31 @@ internal class AdminSessionAuth(
             }
             InternalHttpExposureMode.Enabled -> true
         }
+    }
+
+    fun handleLocalDevAdminUiCorsPreflight(exchange: HttpExchange): Boolean {
+        if (exchange.requestMethod != "OPTIONS") return false
+        if (!applyLocalDevAdminUiCors(exchange)) return false
+        exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,OPTIONS")
+        val requestedHeaders = headerValue(exchange, "Access-Control-Request-Headers").trim()
+        exchange.responseHeaders.add(
+            "Access-Control-Allow-Headers",
+            requestedHeaders.ifBlank { "authorization,content-type,x-client-id,x-correlation-id,x-reef-actor-id" }
+        )
+        exchange.responseHeaders.add("Access-Control-Max-Age", "600")
+        exchange.sendResponseHeaders(204, -1)
+        exchange.close()
+        return true
+    }
+
+    fun applyLocalDevAdminUiCors(exchange: HttpExchange): Boolean {
+        val baseUrl = localDevAdminUiBaseUrl ?: return false
+        val origin = headerValue(exchange, "Origin").trim()
+        if (origin != baseUrl) return false
+        exchange.responseHeaders.add("Vary", "Origin")
+        exchange.responseHeaders.add("Access-Control-Allow-Origin", baseUrl)
+        exchange.responseHeaders.add("Access-Control-Allow-Credentials", "true")
+        return true
     }
 
     private fun isLoopback(address: InetAddress?): Boolean {
@@ -529,6 +560,11 @@ internal class AdminSessionAuth(
         return "$prefix; Path=/; HttpOnly; SameSite=Lax$secure"
     }
 
+    private fun adminUiRedirectLocation(redirectPath: String): String {
+        val path = com.reef.platform.application.admin.AdminAuthTokenCodec.redirectPath(redirectPath)
+        return localDevAdminUiBaseUrl?.let { baseUrl -> "$baseUrl$path" } ?: path
+    }
+
     // Duplicated from PlatformHttpServer's own header/query/json-writer helpers rather
     // than shared, since those stay generic HTTP utilities used well beyond admin auth;
     // see docs/steering/kotlin.md API-layer guidance for the tradeoff.
@@ -558,6 +594,7 @@ internal class AdminSessionAuth(
     }
 
     private fun redirect(exchange: HttpExchange, location: String) {
+        applyLocalDevAdminUiCors(exchange)
         exchange.responseHeaders.add("Location", location)
         exchange.sendResponseHeaders(302, -1)
         exchange.close()
@@ -565,6 +602,7 @@ internal class AdminSessionAuth(
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
         val bytes = json.toByteArray()
+        applyLocalDevAdminUiCors(exchange)
         exchange.responseHeaders.add("Content-Type", "application/json")
         exchange.sendResponseHeaders(status, bytes.size.toLong())
         exchange.responseBody.use { output ->
@@ -573,6 +611,7 @@ internal class AdminSessionAuth(
     }
 
     private fun writeHotPathResponse(exchange: HttpExchange, response: PlatformHotPathResponse) {
+        applyLocalDevAdminUiCors(exchange)
         if (response.body.isEmpty() && response.contentType == null) {
             exchange.sendResponseHeaders(response.status, -1)
             exchange.close()
@@ -587,7 +626,29 @@ internal class AdminSessionAuth(
     }
 
     private fun methodNotAllowed(exchange: HttpExchange) {
+        applyLocalDevAdminUiCors(exchange)
         exchange.sendResponseHeaders(405, -1)
         exchange.close()
     }
+}
+
+internal fun localDevAdminUiBaseUrl(lookup: (String) -> String? = System::getenv): String? {
+    val reefEnv = RuntimeEnv.string("REEF_ENV", "", lookup).trim().lowercase()
+    if (reefEnv != "local") return null
+    val raw = RuntimeEnv.string("LOCAL_DEV_ADMIN_UI_BASE_URL", "", lookup).trim().trimEnd('/')
+    if (raw.isBlank()) return null
+    val uri = URI(raw)
+    require(uri.scheme == "http") { "LOCAL_DEV_ADMIN_UI_BASE_URL must use http in local dev" }
+    val host = uri.host?.lowercase().orEmpty()
+    require(host == "localhost" || host == "127.0.0.1" || host == "::1") {
+        "LOCAL_DEV_ADMIN_UI_BASE_URL must be a loopback host"
+    }
+    require(uri.rawPath.isNullOrBlank() || uri.rawPath == "/") {
+        "LOCAL_DEV_ADMIN_UI_BASE_URL must not include a path"
+    }
+    require(uri.rawQuery == null && uri.rawFragment == null) {
+        "LOCAL_DEV_ADMIN_UI_BASE_URL must not include query or fragment"
+    }
+    require(uri.port > 0) { "LOCAL_DEV_ADMIN_UI_BASE_URL must include a port" }
+    return raw
 }

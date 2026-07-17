@@ -666,7 +666,12 @@ and relevant object ids. Audit records must not contain secret values.
   GITHUB_OAUTH_CLIENT_ID=<local GitHub OAuth app client id>
   GITHUB_OAUTH_CLIENT_SECRET=<local GitHub OAuth app secret>
   GITHUB_OAUTH_REDIRECT_URI=http://localhost:8080/admin/auth/github/callback
+  LOCAL_DEV_ADMIN_UI_BASE_URL=http://localhost:5174
   ```
+
+  `LOCAL_DEV_ADMIN_UI_BASE_URL` is ignored unless `REEF_ENV=local`. It keeps
+  `redirectPath` relative and allowlisted while sending the browser back to the
+  Vite admin UI after GitHub sets the platform session cookie.
 
   Keep these disabled for the live auth smoke:
 
