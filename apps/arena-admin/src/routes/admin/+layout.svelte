@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import {
 		displayRoles,
 		fetchSession,
@@ -10,6 +11,10 @@
 
 	let { children } = $props();
 	let session = $state<SessionUser | null | 'loading'>('loading');
+	const adminNavLinks = [
+		{ href: '/admin', label: 'runs' },
+		{ href: '/admin/access', label: 'access' }
+	];
 
 	$effect(() => {
 		fetchSession().then((result) => {
@@ -28,7 +33,7 @@
 			This area is gated to Reef operators. Sign in with the GitHub account tied to your admin
 			role.
 		</p>
-		<Button href={githubLoginUrl('/admin')}>sign in with github</Button>
+		<Button href={githubLoginUrl(page.url.pathname)}>sign in with github</Button>
 	</div>
 {:else if !hasOperatorAccess(session)}
 	<div class="flex flex-col items-start gap-4">
@@ -51,5 +56,20 @@
 		<Button href="/">back to arena</Button>
 	</div>
 {:else}
+	<nav class="mb-6 flex flex-wrap gap-2 border-b border-rule pb-3 text-sm">
+		{#each adminNavLinks as link (link.href)}
+			<a
+				href={link.href}
+				class="border px-3 py-2 font-bold no-underline"
+				class:border-accent={page.url.pathname === link.href}
+				class:bg-accent-soft={page.url.pathname === link.href}
+				class:text-ink={page.url.pathname === link.href}
+				class:border-rule={page.url.pathname !== link.href}
+				class:text-muted={page.url.pathname !== link.href}
+			>
+				{link.label}
+			</a>
+		{/each}
+	</nav>
 	{@render children()}
 {/if}

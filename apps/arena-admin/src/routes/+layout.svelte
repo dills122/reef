@@ -57,8 +57,10 @@
 					<a
 						href={link.href}
 						class="no-underline"
-						class:text-ink={page.url.pathname === link.href}
-						class:text-muted={page.url.pathname !== link.href}
+						class:text-ink={page.url.pathname === link.href ||
+							(link.href !== '/' && page.url.pathname.startsWith(`${link.href}/`))}
+						class:text-muted={page.url.pathname !== link.href &&
+							(link.href === '/' || !page.url.pathname.startsWith(`${link.href}/`))}
 					>
 						{link.label}
 					</a>
