@@ -215,6 +215,7 @@ jobs:
       STREAM_ACK_PROJECTOR_ENABLED: 'false'
       # Replay seeding reaches platform-runtime through Docker networking, not loopback.
       PLATFORM_INTERNAL_HTTP_MODE: enabled
+      ADMIN_API_TOKEN: local-admin
       DEV_REPLAY_ARTIFACT_DIR: replay-artifacts/persona-session
       DEV_REPLAY_DURATION: 20s
       DEV_REPLAY_WORKERS: '8'

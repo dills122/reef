@@ -36,8 +36,10 @@ The workflow can authenticate with:
 echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
 ```
 
-The workflow should publish on pushes to `main`, version tags matching `v*`, and
-manual `workflow_dispatch`.
+The workflow publishes on image-impacting pushes to `master`, version tags
+matching `v*`, and manual `workflow_dispatch`. Push-triggered image sets also
+create or update a GitHub pre-release marker, because the published deployment
+images are intentionally unstable while platform contracts are still moving.
 
 ## Private Image Fallbacks
 
