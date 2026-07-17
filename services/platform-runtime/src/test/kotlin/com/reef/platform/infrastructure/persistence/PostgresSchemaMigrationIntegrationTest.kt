@@ -610,6 +610,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     'trades_archive',
                     'trades_archive_default',
                     'runtime_events',
+                    'runtime_event_payloads',
                     'runtime_events_archive',
                     'runtime_events_archive_default',
                     'submit_results',
@@ -1265,6 +1266,8 @@ class PostgresSchemaMigrationIntegrationTest {
         val botId = "bot-$suffix"
         val versionId = "v1"
         val runId = "run-$suffix"
+        val modeId = "hosted-sim-$suffix"
+        val scoringPolicyVersion = "score-$suffix"
         val controlPlane = ArenaControlPlaneService(store) { Instant.parse("2026-07-05T12:00:00Z") }
 
         controlPlane.registerBot(
@@ -1320,7 +1323,7 @@ class PostgresSchemaMigrationIntegrationTest {
         controlPlane.registerRun(
             RegisterArenaRunCommand(
                 runId = runId,
-                modeId = "hosted-sim",
+                modeId = modeId,
                 scenarioId = "scenario-schema",
                 seed = 42,
                 policyVersion = "policy-v1",
@@ -1334,7 +1337,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 runId = runId,
                 botId = botId,
                 versionId = versionId,
-                scoringPolicyVersion = "score-v1",
+                scoringPolicyVersion = scoringPolicyVersion,
                 finalEquity = 1_025_000,
                 realizedPnl = 25_000,
                 maxDrawdown = 1_000,
@@ -1354,7 +1357,7 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals("maxInventory", store.runtimeConfigDescriptors(botId, versionId).single().key)
         assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
         assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
-        assertEquals(botId, store.leaderboard("hosted-sim", "score-v1").single().botId)
+        assertEquals(botId, store.leaderboard(modeId, scoringPolicyVersion).single().botId)
     }
 
     @Test
