@@ -239,6 +239,8 @@ services:
     container_name: reef-platform-api
     environment:
       PLATFORM_ARENA_ADMIN_ENABLED: "${PLATFORM_ARENA_ADMIN_ENABLED:-true}"
+      REEF_ENV: "${REEF_ENV:-local}"
+      LOCAL_DEV_BOT_CONFIG_STORE: "${LOCAL_DEV_BOT_CONFIG_STORE:-memory}"
     ports:
       - "${REEF_PLATFORM_API_HOST_PORT:-8080}:8080"
       - "${REEF_STREAM_INGRESS_HOST_PORT:-8090}:8090"

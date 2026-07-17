@@ -702,6 +702,14 @@ and relevant object ids. Audit records must not contain secret values.
   row for the selected GitHub-backed user. `scripts/dev/arena-admin-auth-local-smoke.mjs`
   fails if `LOCAL_DEV_ADMIN_AUTH_BYPASS` or the public arena-admin fixture flags
   are enabled.
+- The main local Compose stack does not start OpenBao. `compose.local.yml`
+  sets `REEF_ENV=local` and `LOCAL_DEV_BOT_CONFIG_STORE=memory` for
+  `platform-api`, and the runtime only honors that fallback when
+  `REEF_ENV`/profile is local/dev/test/ci and
+  `BAO_ADDR` is absent. This keeps owner config editing testable in the local
+  admin UI without shipping an OpenBao bypass to hosted environments. If
+  `BAO_ADDR` is configured, the runtime uses the dedicated OpenBao AppRole path
+  instead.
 - Guard production arena-admin builds against local fixture leakage:
 
   ```text

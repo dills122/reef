@@ -12,6 +12,35 @@ import kotlin.test.assertTrue
 
 class OpenBaoBotConfigServiceTest {
     @Test
+    fun localDevStoreReturnsAuthorizedStatusWithConfigAndDeletesConfig() {
+        val service = LocalDevBotConfigService(now = { Instant.parse("2026-07-10T00:00:00Z") })
+
+        val result = service.replaceConfig("dills122", "sample-bot", """{"apiKey":"secret","riskLimit":12}""", "user-gh-1")
+        val status = service.status("dills122", "sample-bot")
+
+        assertEquals("sample-bot", result.botId)
+        assertEquals("secret/bots/dills122/sample-bot", result.secretPath)
+        assertEquals(listOf("apiKey", "riskLimit"), result.keys)
+        assertEquals("secret", result.config.path("apiKey").asText())
+        assertEquals(12, result.config.path("riskLimit").asInt())
+        assertEquals(true, status.hasConfig)
+        assertEquals("secret", status.config?.path("apiKey")?.asText())
+        assertEquals(12, status.config?.path("riskLimit")?.asInt())
+        assertEquals(listOf("apiKey", "riskLimit"), status.keys)
+        assertEquals("2026-07-10T00:00:00Z", status.updatedAt)
+        assertEquals("user-gh-1", status.updatedBy)
+        assertEquals(1L, status.version)
+
+        service.deleteConfig("dills122", "sample-bot")
+        val cleared = service.status("dills122", "sample-bot")
+
+        assertEquals(false, cleared.hasConfig)
+        assertEquals(null, cleared.config)
+        assertEquals(emptyList(), cleared.keys)
+        assertEquals(null, cleared.version)
+    }
+
+    @Test
     fun storesOpaqueConfigJsonAndReturnsAuthorizedStatusWithConfig() {
         val writes = mutableListOf<String>()
         val server = HttpServer.create(InetSocketAddress(0), 0)
