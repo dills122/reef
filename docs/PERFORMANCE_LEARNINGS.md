@@ -138,6 +138,11 @@ Evidence:
   stayed `0`. The preflight smoke also caught a lifecycle regression in the new
   function replacement: unfilled open orders rendered `filled_quantity_units`
   as `''` instead of `0`.
+- `reports/do-benchmark/do-benchmark-20260717T151610Z/`: after fixing the
+  lifecycle zero rendering in the `0043` function replacement, the same `5k`
+  full-projection shape passed strict freshness with `299,955`
+  attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`,
+  p95 `63.53ms`, p99 `108.11ms`, and projection DB deadlocks `0`.
 
 Database pressure in the patched `5k` run:
 
@@ -168,6 +173,10 @@ Database pressure in the patched `5k` run:
   `runtime_event_payloads` added `~296MB`, so the split moved cold JSON off the
   hot row but did not remove enough total write work to preserve `5k`
   freshness.
+- corrected hot/cold full-projection DB: about `1.89GB` WAL, `6.31KB` WAL per
+  accepted command, `2.01M` inserted tuples, `32.6k` updated tuples, and
+  `6.11GB` temp bytes. `runtime_events` grew `~347MB`; the cold
+  `runtime_event_payloads` table grew `~297MB`.
 
 Immediate implications:
 
@@ -193,10 +202,10 @@ Immediate implications:
    `5k` full-projection freshness, so do not treat it as a promotion fix.
    The next local fix moved new `runtime_events` payload JSON to
    `runtime.runtime_event_payloads` while keeping `OrderModified` lifecycle
-   facts hot on `runtime_events`; the first DO A/B reduced hot-row growth but
-   did not preserve freshness, so the next implementation step is reducing
-   remaining lifecycle/fill/event storage write shape rather than treating the
-   side-table split as a promotion fix.
+   facts hot on `runtime_events`; the corrected DO run preserved `5k/60s`
+   freshness, but total event storage remained high. The next implementation
+   step is reducing remaining lifecycle/fill/event storage write shape rather
+   than treating the side-table split as a sufficient promotion fix.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 
