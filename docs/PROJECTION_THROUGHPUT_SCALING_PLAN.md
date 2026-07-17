@@ -244,13 +244,19 @@ Target the tables that dominate the patched `5k` run.
   unlogged staging before merge.
 - Avoid writing `runtime_events` for every freshness-critical read if the read
   surface can be served from typed order/execution/trade facts.
-  - Initial runtime-event hot/cold split is in place locally: new timeline
+  - Initial runtime-event hot/cold split is in place and measured: new timeline
     projection inserts keep `runtime.runtime_events.payload_json` as `{}`,
     persist full payloads to `runtime.runtime_event_payloads`, and keep
     `OrderModified` lifecycle facts hot as typed text columns so lifecycle
-    recompute does not join or parse cold JSON. This is not promotion evidence
-    until the next DO full-projection run measures WAL/table growth and
-    freshness.
+    recompute does not join or parse cold JSON. The corrected
+    `do-benchmark-20260717T151610Z` full-projection run passed `5k/60s` with
+    zero lag/gaps; total event-storage write volume remains high.
+- Skip no-op rebuildable projection row rewrites after dirty work is selected.
+  - Initial lifecycle implementation is in place locally:
+    `runtime.runtime_project_order_lifecycle_state` still clears and counts
+    selected dirty rows as progress, but its `ON CONFLICT DO UPDATE` now has
+    `IS DISTINCT FROM` guards for business columns. Only inserted or changed
+    lifecycle rows re-dirty market snapshots.
 - Review hot projection indexes. Keep indexes required for public reads and
   replay integrity; drop or defer indexes that only serve cold inspection paths.
 - Partition large append-heavy projection tables by event stream, run/session,
@@ -402,12 +408,11 @@ structural separation:
    is available for isolated timeline pressure runs.
 5. Reduce remaining runtime-events, lifecycle/fill, and dirty-table write
    amplification. Deterministic timeline sequencing cleared the final `5k`
-   lag, but `runtime_events` still drove `~588MB` table/index growth and temp
-   bytes rose to `~5.59GB`. Dirty queues are now unlogged locally and reduced
-   dirty-table pressure, but the follow-up `5k` full run regressed to `47,088`
-   lag; keep this as diagnostic evidence and move to the next write-shape fix.
-6. Split hot `runtime_events` facts from cold timeline payload JSON and review
-   hot event indexes.
+   lag, dirty queues are unlogged, and the corrected runtime-event hot/cold
+   split passed `5k/60s` full-projection freshness. The current local follow-up
+   skips no-op lifecycle row rewrites and avoids market-snapshot fanout for
+   unchanged lifecycle rows; rerun the `5k` full gate before promoting it.
+6. Review hot `runtime_events` indexes and total event-storage row volume.
 7. Add maintained depth/top-of-book projections.
 8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.

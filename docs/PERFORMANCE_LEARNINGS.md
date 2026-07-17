@@ -206,6 +206,9 @@ Immediate implications:
    freshness, but total event storage remained high. The next implementation
    step is reducing remaining lifecycle/fill/event storage write shape rather
    than treating the side-table split as a sufficient promotion fix.
+   The follow-up lifecycle projector change keeps dirty-row clearing as the
+   progress counter but skips no-op `order_lifecycle_state` rewrites and avoids
+   market-snapshot dirty fanout when the recomputed lifecycle row is unchanged.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 

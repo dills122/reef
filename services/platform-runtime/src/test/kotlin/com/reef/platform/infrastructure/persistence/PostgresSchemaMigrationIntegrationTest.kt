@@ -231,6 +231,134 @@ class PostgresSchemaMigrationIntegrationTest {
     }
 
     @Test
+    fun lifecycleProjectionClearsDuplicateDirtyWithoutNoopRewrite() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val suffix = UUID.randomUUID().toString()
+        val orderId = "ord-idempotent-$suffix"
+        val instrumentId = "IDEMP-$suffix"
+        val sentinelUpdatedAt = "2026-07-17T00:00:00Z"
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO runtime.orders(
+                  order_id,
+                  engine_order_id,
+                  instrument_id,
+                  participant_id,
+                  account_id,
+                  side,
+                  order_type,
+                  quantity_units,
+                  limit_price,
+                  currency,
+                  time_in_force,
+                  accepted_at,
+                  client_order_id,
+                  run_id,
+                  venue_session_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, orderId)
+                ps.setString(2, "engine-$suffix")
+                ps.setString(3, instrumentId)
+                ps.setString(4, "participant-$suffix")
+                ps.setString(5, "account-$suffix")
+                ps.setString(6, "BUY")
+                ps.setString(7, "LIMIT")
+                ps.setString(8, "10")
+                ps.setString(9, "101.25")
+                ps.setString(10, "USD")
+                ps.setString(11, "DAY")
+                ps.setString(12, "2026-07-17T15:30:00Z")
+                ps.setString(13, "")
+                ps.setString(14, "run-$suffix")
+                ps.setString(15, "session-$suffix")
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?)").use { ps ->
+                ps.setString(1, orderId)
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement("SELECT runtime.runtime_project_order_lifecycle_state(100)").use { ps ->
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement("DELETE FROM runtime.market_data_snapshot_dirty WHERE instrument_id = ?").use { ps ->
+                ps.setString(1, instrumentId)
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement(
+                """
+                UPDATE runtime.order_lifecycle_state
+                SET updated_at = ?::timestamptz
+                WHERE order_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, sentinelUpdatedAt)
+                ps.setString(2, orderId)
+                assertEquals(1, ps.executeUpdate())
+            }
+
+            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?)").use { ps ->
+                ps.setString(1, orderId)
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement("SELECT runtime.runtime_project_order_lifecycle_state(100)").use { ps ->
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT
+                  EXISTS (
+                    SELECT 1
+                    FROM runtime.order_lifecycle_state
+                    WHERE order_id = ?
+                      AND updated_at = ?::timestamptz
+                  ) AS updated_at_preserved,
+                  (
+                    SELECT COUNT(*)
+                    FROM runtime.order_lifecycle_dirty
+                    WHERE order_id = ?
+                  ) AS dirty_rows,
+                  (
+                    SELECT COUNT(*)
+                    FROM runtime.market_data_snapshot_dirty
+                    WHERE instrument_id = ?
+                  ) AS market_dirty_rows
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, orderId)
+                ps.setString(2, sentinelUpdatedAt)
+                ps.setString(3, orderId)
+                ps.setString(4, instrumentId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertTrue(rs.getBoolean("updated_at_preserved"))
+                    assertEquals(0L, rs.getLong("dirty_rows"))
+                    assertEquals(0L, rs.getLong("market_dirty_rows"))
+                }
+            }
+        }
+    }
+
+    @Test
     fun migratedTablesLandInDomainSchemasWhenConfigured() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
@@ -268,6 +396,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0037_runtime_event_trade_archive_tables.sql',
                   'runtime/0038_projection_dirty_lock_order.sql',
                   'runtime/0043_runtime_event_payload_cold_table.sql',
+                  'runtime/0044_idempotent_lifecycle_projection.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -354,7 +483,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0036_canonical_archive_tables.sql",
                     "runtime/0037_runtime_event_trade_archive_tables.sql",
                     "runtime/0038_projection_dirty_lock_order.sql",
-                    "runtime/0043_runtime_event_payload_cold_table.sql"
+                    "runtime/0043_runtime_event_payload_cold_table.sql",
+                    "runtime/0044_idempotent_lifecycle_projection.sql"
                 ),
                 appliedMigrations
             )

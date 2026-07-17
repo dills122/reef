@@ -58,6 +58,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0041_deterministic_timeline_projection_sequence.sql",
       "runtime/0042_unlogged_projection_dirty_queues.sql",
       "runtime/0043_runtime_event_payload_cold_table.sql",
+      "runtime/0044_idempotent_lifecycle_projection.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -278,6 +279,19 @@ test("runtime event payload migration moves event JSON off hot rows", async () =
   assert.match(migration.sql, /'\{\}'::jsonb,\s+event->>'occurredAt'/s);
   assert.match(migration.sql, /filled_quantity_units::TEXT/);
   assert.doesNotMatch(migration.sql, /TRIM\(TRAILING '0' FROM filled_quantity_units::TEXT\)/);
+});
+
+test("idempotent lifecycle projection migration skips no-op row rewrites", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0044_idempotent_lifecycle_projection.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /INSERT INTO runtime\.order_lifecycle_state AS lifecycle/);
+  assert.match(migration.sql, /WHERE lifecycle\.engine_order_id IS DISTINCT FROM EXCLUDED\.engine_order_id/);
+  assert.match(migration.sql, /lifecycle\.limit_price_num IS DISTINCT FROM EXCLUDED\.limit_price_num/);
+  assert.match(migration.sql, /SELECT COUNT\(\*\) INTO projected_count FROM cleared/);
 });
 
 test("command outcome projection preserves command correlation metadata", async () => {
