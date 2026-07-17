@@ -183,6 +183,53 @@ Acceptance:
 - extend materializer chain
 - add happy-path and ops-realistic tests
 
+Immediate implementation target after this documentation branch merges:
+
+- add settlement fact types:
+  - `SettlementClearingSubmitted`
+  - `SettlementClearingAccepted`
+  - `SettlementClearingRejected`
+  - `SettlementNovationRecorded`
+- extend the `instant-post-trade-v1` materializer so the happy path emits:
+
+```text
+allocation
+  -> confirmation
+  -> affirmation
+  -> clearing submitted
+  -> clearing accepted
+  -> novation recorded
+  -> settlement instruction
+  -> settlement attempt
+  -> leg outcomes
+  -> ledger proof
+  -> SETTLED
+```
+
+- preserve `ops-realistic-v1` as pending workflow behavior; it must not
+  accidentally same-tick settle just because the instant profile does.
+- add a clearing-reject branch as a fact shape and test fixture, but keep full
+  clearing-reject repair workflow for the exception-queue PR unless it stays
+  small.
+- update settlement proof/facts reads so clearing and novation identifiers are
+  visible in the same evidence chain as allocation, confirmation, affirmation,
+  instruction, attempt, ledger entries, and finality.
+- add focused tests:
+  - instant happy path includes clearing and novation before instruction.
+  - ops-realistic profile produces pending post-trade state and no fake
+    `SETTLED` fact.
+  - repeat materialization remains idempotent.
+  - P2 settled-chain assertions either still pass or have a documented
+    successor assertion that includes clearing/novation.
+
+PR 2 non-goals:
+
+- no exception queue projection yet
+- no admin UI
+- no netting implementation
+- no full CCP/CNS model
+- no production external message schema
+
 ### PR 3: Exception Queue Projection
 
 - add queue projection/read API

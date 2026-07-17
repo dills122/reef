@@ -262,7 +262,8 @@ The current gaps are:
    - Sprint plan lives in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md).
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
    - Current foundation already includes instant-post-trade obligation materialization, minimal allocation/confirmation/affirmation facts, instructions, attempts, leg outcomes, ledger proof, repair commands, and proof/score reads.
-   - Next slice adds clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
+   - First build slice after this planning branch merges is clearing/novation facts: add `SettlementClearingSubmitted`, `SettlementClearingAccepted`, `SettlementClearingRejected`, and `SettlementNovationRecorded`; extend the `instant-post-trade-v1` materializer; preserve `ops-realistic-v1` pending behavior; and prove idempotent happy-path evidence before settlement instruction.
+   - Later slices add exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
    - Full CCP/CNS clearing, rich custody, production messaging schemas, and complete netted obligation settlement remain non-goals.
 
 9. Clean up documentation.
