@@ -2598,16 +2598,27 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectCanonicalCommandOutcomes(
+    fun projectCanonicalCommandOutcomes(
         projectionName: String,
         batchSize: Int,
         partitions: List<Int>,
         includeFills: Boolean,
         eventStream: String
     ): Long {
+        return projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, ProjectionStage.Full)
+    }
+
+    override fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>,
+        includeFills: Boolean,
+        eventStream: String,
+        projectionStage: ProjectionStage
+    ): Long {
         if (batchSize <= 0) return 0
-        if (projectionStoreSeparated()) {
-            return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream)
+        if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full) {
+            return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
         }
         canonicalConnection().use { conn ->
             conn.prepareStatement(
@@ -2667,7 +2678,8 @@ class PostgresRuntimePersistence(
         batchSize: Int,
         partitions: List<Int>,
         includeFills: Boolean,
-        eventStream: String
+        eventStream: String,
+        projectionStage: ProjectionStage = ProjectionStage.Full
     ): Long {
         val effectiveBatchSize = batchSize.coerceAtMost(CanonicalCommandOutcomeProjectionMaxBatchSize)
         val scopedEventStream = eventStream.trim()
@@ -2700,7 +2712,7 @@ class PostgresRuntimePersistence(
 
         return executeProjectionTransactionWithRetry(projectionName) { conn ->
             val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
-            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size, projectionStage)
             maybeFailAfterProjectorRowsBeforeWatermark(conn)
             updateProjectionWatermarks(
                 conn,
@@ -3040,13 +3052,24 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun persistSubmitOutcomePayloads(conn: Connection, payloadJson: String, expectedCount: Int) {
+    private fun persistSubmitOutcomePayloads(
+        conn: Connection,
+        payloadJson: String,
+        expectedCount: Int,
+        projectionStage: ProjectionStage = ProjectionStage.Full
+    ) {
+        val sql = if (projectionStage == ProjectionStage.Full) {
+            "SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)"
+        } else {
+            "SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb, ?)"
+        }
         conn.prepareStatement(
-            """
-            SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)
-            """.trimIndent()
+            sql
         ).use { ps ->
             ps.setString(1, payloadJson)
+            if (projectionStage != ProjectionStage.Full) {
+                ps.setString(2, projectionStage.configValue)
+            }
             ps.executeQuery().use { rs ->
                 rs.next()
                 check(rs.getLong(1) == expectedCount.toLong()) {

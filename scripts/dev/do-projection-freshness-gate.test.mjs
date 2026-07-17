@@ -19,6 +19,7 @@ assert.match(short.stdout, /max_projection_lag=0/);
 assert.match(short.stdout, /max_materialized_to_projected_gap=0/);
 assert.match(short.stdout, /max_projection_db_deadlocks=0/);
 assert.match(short.stdout, /max_projection_db_retries=0/);
+assert.match(short.stdout, /projection_stage=full/);
 assert.match(short.stdout, /stream_ack_projector_0_partitions=0,1,2,3/);
 assert.match(short.stdout, /stream_ack_projector_1_partitions=4,5,6,7/);
 assert.match(short.stdout, /stream_ack_projector_2_partitions=8,9,10,11/);
@@ -59,6 +60,7 @@ function runGatePlan(overrides) {
       REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "",
       REEF_DO_MAX_PROJECTION_DB_DEADLOCKS: "",
       REEF_DO_MAX_PROJECTION_DB_RETRIES: "",
+      REEF_DO_PROJECTION_STAGE: "",
       STREAM_ACK_PROJECTOR_0_PARTITIONS: "",
       STREAM_ACK_PROJECTOR_1_PARTITIONS: "",
       STREAM_ACK_PROJECTOR_2_PARTITIONS: "",

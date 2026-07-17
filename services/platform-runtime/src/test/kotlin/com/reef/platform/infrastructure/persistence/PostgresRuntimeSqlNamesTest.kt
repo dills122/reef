@@ -35,6 +35,8 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.reference_venue_sessions", names.referenceVenueSessions)
         assertEquals("runtime.runtime_persist_submit_outcome", names.persistSubmitOutcomeFunction)
         assertEquals("runtime.runtime_persist_submit_outcomes", names.persistSubmitOutcomesFunction)
+        assertEquals("runtime.runtime_persist_submit_outcome_status_stage", names.persistSubmitOutcomeStatusStageFunction)
+        assertEquals("runtime.runtime_persist_submit_outcome_timeline_stage", names.persistSubmitOutcomeTimelineStageFunction)
         assertEquals("runtime.runtime_append_canonical_submit_outcomes", names.appendCanonicalSubmitOutcomesFunction)
         assertEquals("runtime.runtime_project_canonical_submit_outcomes", names.projectCanonicalSubmitOutcomesFunction)
         assertEquals("runtime.runtime_project_canonical_command_outcomes", names.projectCanonicalCommandOutcomesFunction)

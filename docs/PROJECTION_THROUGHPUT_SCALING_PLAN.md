@@ -252,8 +252,9 @@ Next gates:
 2. `5k pressure-no-deadlock`: accepted/materialized/projected counts align,
    deadlocks zero, projector DB retries reported, lag reported. This is
    diagnostic, not promotion.
-3. `5k command-status-fresh`: command status and own-order lifecycle catch up to
-   lag `0`; timeline/analytics may be separate.
+3. `5k command-status-fresh`: run with
+   `REEF_DO_PROJECTION_STAGE=command-status`; command status and own-order
+   lifecycle catch up to lag `0`; timeline/analytics may be separate.
 4. `5k full-projection-fresh`: all current projection stages catch up to lag
    `0`.
 5. `7.5k` and `10k` projection pressure/freshness gates only after `5k` is
@@ -294,6 +295,8 @@ structural separation:
    Initial bounded retry metrics, diagnostics fields, stress report deltas, and
    DO report gates are in place.
 3. Split `runtime.runtime_persist_submit_outcomes` into projection stages.
+   Initial SQL stage wrappers and `STREAM_ACK_PROJECTION_STAGE=command-status`
+   are in place; default `full` behavior remains unchanged.
 4. Reduce trace/event/dirty-table write amplification.
 5. Add maintained depth/top-of-book projections.
 6. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per

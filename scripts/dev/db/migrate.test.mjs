@@ -54,6 +54,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0037_runtime_event_trade_archive_tables.sql",
       "runtime/0038_projection_dirty_lock_order.sql",
       "runtime/0039_command_outcome_projection_metadata.sql",
+      "runtime/0040_split_submit_outcome_projection_stages.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -259,6 +260,20 @@ test("command outcome projection preserves command correlation metadata", async 
   assert.match(migration.sql, /'traceId', COALESCE\(NULLIF\(command_payload->>'traceId', ''\), command_id\)/);
   assert.match(migration.sql, /'causationId', COALESCE\(NULLIF\(command_payload->>'causationId', ''\), command_id\)/);
   assert.match(migration.sql, /'correlationId', COALESCE\(NULLIF\(command_payload->>'correlationId', ''\), command_id\)/);
+});
+
+test("submit outcome projection migration splits command-status and timeline stages", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0040_split_submit_outcome_projection_stages.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /runtime\.runtime_persist_submit_outcome_status_stage/);
+  assert.match(migration.sql, /runtime\.runtime_persist_submit_outcome_timeline_stage/);
+  assert.match(migration.sql, /p_projection_stage TEXT/);
+  assert.match(migration.sql, /'command-status', 'status', 'lifecycle', 'core'/);
+  assert.match(migration.sql, /RETURN runtime\.runtime_persist_submit_outcomes\(p_outcomes, 'full'\)/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

@@ -50,6 +50,8 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_validate_reference_data",
                 "runtime.runtime_persist_submit_outcome",
                 "runtime.runtime_persist_submit_outcomes",
+                "runtime.runtime_persist_submit_outcome_status_stage",
+                "runtime.runtime_persist_submit_outcome_timeline_stage",
                 "runtime.runtime_append_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_command_outcomes",

@@ -148,12 +148,21 @@ class NoopRuntimePersistence : RuntimePersistence {
 
     override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long = 0
 
-    override fun projectCanonicalCommandOutcomes(
+    fun projectCanonicalCommandOutcomes(
         projectionName: String,
         batchSize: Int,
         partitions: List<Int>,
         includeFills: Boolean,
         eventStream: String
+    ): Long = 0
+
+    override fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>,
+        includeFills: Boolean,
+        eventStream: String,
+        projectionStage: ProjectionStage
     ): Long = 0
 
     override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus {

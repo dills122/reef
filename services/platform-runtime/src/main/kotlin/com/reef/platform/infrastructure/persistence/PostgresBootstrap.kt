@@ -106,6 +106,8 @@ object PostgresSchemaRequirements {
                 names.validateReferenceDataFunction,
                 names.persistSubmitOutcomeFunction,
                 names.persistSubmitOutcomesFunction,
+                names.persistSubmitOutcomeStatusStageFunction,
+                names.persistSubmitOutcomeTimelineStageFunction,
                 names.appendCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalCommandOutcomesFunction,

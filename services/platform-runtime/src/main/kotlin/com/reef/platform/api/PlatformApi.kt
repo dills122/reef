@@ -23,6 +23,7 @@ import com.reef.platform.infrastructure.persistence.MarketDataDepthSnapshot
 import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
 import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
@@ -122,9 +123,10 @@ class PlatformApi(
         batchSize: Int,
         partitions: List<Int> = emptyList(),
         includeFills: Boolean = true,
-        eventStream: String = ""
+        eventStream: String = "",
+        projectionStage: ProjectionStage = ProjectionStage.Full
     ): Long {
-        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream)
+        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
     }
 
     fun projectionStatus(

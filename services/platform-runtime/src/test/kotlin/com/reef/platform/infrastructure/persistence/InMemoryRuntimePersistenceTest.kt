@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class InMemoryRuntimePersistenceTest {
     @Test
@@ -322,6 +323,33 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(0, status.lag)
         assertEquals(42L, status.watermarks.single().lastPartitionSequence)
         assertEquals(42L, status.watermarks.single().canonicalMaxPartitionSequence)
+    }
+
+    @Test
+    fun commandStatusProjectionStageSkipsTimelineEvents() {
+        val persistence = InMemoryRuntimePersistence()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(venueEventBatch()))
+        assertEquals(
+            1,
+            persistence.projectCanonicalCommandOutcomes(
+                projectionName = "runtime-command-status",
+                batchSize = 10,
+                partitions = emptyList(),
+                includeFills = true,
+                eventStream = "",
+                projectionStage = ProjectionStage.CommandStatus
+            )
+        )
+
+        val result = persistence.submitResult("cmd-1")
+        assertNotNull(result)
+        assertEquals("evt-1", result.accepted?.eventId)
+        assertTrue(persistence.eventsForOrder("ord-1").isEmpty())
+
+        val status = persistence.projectionStatus("runtime-command-status", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(42L, status.watermarks.single().lastPartitionSequence)
     }
 
     @Test

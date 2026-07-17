@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.persistence.ProjectionPersistenceRetryMetrics
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 
 /**
@@ -56,6 +57,7 @@ internal class DiagnosticsGateway(
     private val streamAckProjectionName: String,
     private val streamAckProjectionSource: CanonicalProjectionSource,
     private val streamAckProjectionEventStream: String,
+    private val streamAckProjectionStage: ProjectionStage,
     private val projectorPartitions: () -> List<Int>
 ) {
     fun projectorStatusJson(): String {
@@ -69,6 +71,7 @@ internal class DiagnosticsGateway(
             "implementation" to "canonical-submit-projector",
             "source" to streamAckProjectionSource.configValue,
             "eventStream" to streamAckProjectionEventStream,
+            "projectionStage" to streamAckProjectionStage.configValue,
             "projectionName" to status.projectionName,
             "partitions" to partitions,
             "projectedCount" to status.projectedCount,

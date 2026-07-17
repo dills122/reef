@@ -200,6 +200,22 @@ data class VenueEventBatchCommandReference(
     val resultPayloadJson: String
 )
 
+enum class ProjectionStage(val configValue: String) {
+    Full("full"),
+    CommandStatus("command-status");
+
+    companion object {
+        fun fromConfig(raw: String): ProjectionStage {
+            val normalized = raw.trim().lowercase()
+            return when (normalized) {
+                "", "full", "all" -> Full
+                "command-status", "status", "lifecycle", "core" -> CommandStatus
+                else -> throw IllegalArgumentException("Unsupported projection stage: $raw")
+            }
+        }
+    }
+}
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -279,7 +295,8 @@ interface RuntimePersistence {
         batchSize: Int,
         partitions: List<Int> = emptyList(),
         includeFills: Boolean = true,
-        eventStream: String = ""
+        eventStream: String = "",
+        projectionStage: ProjectionStage = ProjectionStage.Full
     ): Long {
         return 0
     }

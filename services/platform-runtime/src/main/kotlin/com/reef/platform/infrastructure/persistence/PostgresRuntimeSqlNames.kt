@@ -40,6 +40,8 @@ data class PostgresRuntimeSqlNames(
     val validateReferenceDataFunction = qualify(runtimeSchemaName, "runtime_validate_reference_data")
     val persistSubmitOutcomeFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcome")
     val persistSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcomes")
+    val persistSubmitOutcomeStatusStageFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcome_status_stage")
+    val persistSubmitOutcomeTimelineStageFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcome_timeline_stage")
     val appendCanonicalSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_append_canonical_submit_outcomes")
     val projectCanonicalSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_project_canonical_submit_outcomes")
     val projectCanonicalCommandOutcomesFunction = qualify(runtimeSchemaName, "runtime_project_canonical_command_outcomes")
