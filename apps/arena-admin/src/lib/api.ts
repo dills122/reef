@@ -31,26 +31,39 @@ export type SessionUser = {
 	roles: string[];
 };
 
-const operatorRoles = new Set(['operator', 'secret-admin', 'platform-admin', 'arena-operator']);
+const operatorRoles = new Set([
+	'operator',
+	'site-operator',
+	'game-admin',
+	'secret-admin',
+	'platform-admin',
+	'arena-operator'
+]);
 const botAdminRoles = new Set([
 	'participant',
 	'reviewer',
 	'operator',
+	'site-operator',
+	'game-admin',
 	'secret-admin',
 	'platform-admin',
 	'arena-operator'
 ]);
 
+function normalizedRole(role: string): string {
+	return role.trim().toLowerCase().replaceAll('_', '-');
+}
+
 export function hasOperatorAccess(user: SessionUser): boolean {
 	const trustState = (user.trustState ?? '').toLowerCase();
 	if (trustState && trustState !== 'trusted') return false;
-	return user.roles.some((role) => operatorRoles.has(role));
+	return user.roles.some((role) => operatorRoles.has(normalizedRole(role)));
 }
 
 export function hasBotAdminAccess(user: SessionUser): boolean {
 	const trustState = (user.trustState ?? '').toLowerCase();
 	if (trustState === 'banned') return false;
-	return user.roles.some((role) => botAdminRoles.has(role));
+	return user.roles.some((role) => botAdminRoles.has(normalizedRole(role)));
 }
 
 export type ArenaBot = {
