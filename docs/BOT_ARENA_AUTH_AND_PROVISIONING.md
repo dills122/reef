@@ -653,37 +653,55 @@ and relevant object ids. Audit records must not contain secret values.
   users satisfy `arena.admin` for GitHub-authenticated browser requests without
   a duplicate runtime role binding. Runtime role bindings remain for CLI,
   service-token actors, and non-browser command paths.
-- Run the hosted/local arena-admin auth configuration test now that the admin
-  panels read live `/admin/v1` data. Current local stack returns
-  `{"error":"admin auth is not configured"}` from `/admin/auth/session`, so a
-  signed-in browser test is blocked until `platform-api` runs with:
+- Run the local arena-admin auth smoke with real Admin DB auth, not fixture mode.
+  `platform-api` must run with:
 
   ```text
+  REEF_ENV=local
   PLATFORM_ADMIN_AUTH_ENABLED=true
   ADMIN_SESSION_COOKIE_SECURE=false
+  ADMIN_POSTGRES_JDBC_URL=<optional; defaults to RUNTIME_POSTGRES_JDBC_URL>
+  ADMIN_POSTGRES_USER=<optional; defaults to RUNTIME_POSTGRES_USER>
+  ADMIN_POSTGRES_PASSWORD=<optional; defaults to RUNTIME_POSTGRES_PASSWORD>
   GITHUB_OAUTH_CLIENT_ID=<local GitHub OAuth app client id>
   GITHUB_OAUTH_CLIENT_SECRET=<local GitHub OAuth app secret>
   GITHUB_OAUTH_REDIRECT_URI=http://localhost:8080/admin/auth/github/callback
+  ```
+
+  Keep these disabled for the live auth smoke:
+
+  ```text
+  LOCAL_DEV_ADMIN_AUTH_BYPASS=false
+  PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN=false
+  PUBLIC_ARENA_LOCAL_DEV_FIXTURES=false
   ```
 
   Test flow:
 
   ```text
   1. Restart platform-api with the auth environment above and Admin DB access.
-  2. Open http://127.0.0.1:5173/admin.
-  3. Complete GitHub OAuth login.
-  4. Grant Admin DB `operator` or `platform-admin` to the logged-in Reef user
-     and set trust state to `trusted`.
-  5. Confirm the admin page shows live bots/runs instead of the sign-in or error state.
-  6. Seed admin.user_bot_ownerships for at least one bot and confirm owner/trust metadata renders.
-  7. Seed a freeze enforcement event and confirm the bot state renders as frozen.
+  2. Open http://127.0.0.1:5173/admin and complete GitHub OAuth once.
+  3. Seed that existing Admin DB user:
+     REEF_ENV=local make dev-admin-auth-local-seed ARGS="--github-login=<login> --role=operator"
+  4. Run:
+     make dev-smoke-admin-auth-local
+  5. Start arena-admin without fixture flags and open /admin, /admin/access, and /bot-admin.
   ```
 
-  The expected final evidence is a browser pass with no console errors plus
-  successful GETs for `/admin/v1/arena/bots`, `/admin/v1/arena/runs`,
-  `/admin/v1/arena/run-bot-results`,
-  `/admin/v1/arena/run-enforcement-events`, and
-  `/admin/v1/arena/leaderboard` using the GitHub session cookie.
+  `scripts/dev/admin-auth-local-seed.mjs` refuses to run unless an explicit
+  local/dev/test profile is set and talks only to the local Docker Compose
+  Postgres service. `scripts/dev/arena-admin-auth-local-smoke.mjs` fails if
+  `LOCAL_DEV_ADMIN_AUTH_BYPASS` or the public arena-admin fixture flags are
+  enabled.
+- Guard production arena-admin builds against local fixture leakage:
+
+  ```text
+  bun run --cwd apps/arena-admin build:guarded
+  ```
+
+  The guard scans the static build output for local fixture marker strings and
+  the public local-dev flag names. The fixture code is wrapped in
+  `import.meta.env.DEV`, so production bundles should tree-shake it out.
 - Add Admin API authorization middleware that binds actor identity from the
   authenticated principal, not caller-controlled headers.
 - Move CI-to-Admin API auth from scoped bearer token to GitHub Actions OIDC.

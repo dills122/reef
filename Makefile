@@ -23,7 +23,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
-.PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-control-room
+.PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-smoke-admin-auth-local dev-control-room
 .PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-replay
 .PHONY: dev-throughput-campaign dev-throughput-compare
@@ -422,6 +422,14 @@ dev-admin:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	@if [ -z "$(CMD)" ]; then echo 'usage: make dev-admin CMD="instrument-upsert AAPL AAPL"'; exit 1; fi
 	$(JS_RUNTIME) scripts/dev/admin.mjs $(CMD)
+
+dev-admin-auth-local-seed:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/admin-auth-local-seed.mjs $(ARGS)
+
+dev-smoke-admin-auth-local:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/arena-admin-auth-local-smoke.mjs
 
 dev-control-room:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
