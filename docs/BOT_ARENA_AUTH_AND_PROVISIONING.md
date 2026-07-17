@@ -685,19 +685,23 @@ and relevant object ids. Audit records must not contain secret values.
 
   ```text
   1. Restart platform-api with the auth environment above and Admin DB access.
-  2. Open http://127.0.0.1:5173/admin and complete GitHub OAuth once.
+  2. Open http://localhost:5174/admin and complete GitHub OAuth once.
   3. Seed that existing Admin DB user:
      REEF_ENV=local make dev-admin-auth-local-seed ARGS="--github-login=<login> --role=operator"
-  4. Run:
+  4. Seed a local owned bot for the real owner-scoped `/bot-admin` page:
+     REEF_ENV=local make dev-admin-owned-bot-local-seed ARGS="--github-login=<login>"
+  5. Run:
      make dev-smoke-admin-auth-local
-  5. Start arena-admin without fixture flags and open /admin, /admin/access, and /bot-admin.
+  6. Start arena-admin without fixture flags and open /admin, /admin/access, and /bot-admin.
   ```
 
   `scripts/dev/admin-auth-local-seed.mjs` refuses to run unless an explicit
   local/dev/test profile is set and talks only to the local Docker Compose
-  Postgres service. `scripts/dev/arena-admin-auth-local-smoke.mjs` fails if
-  `LOCAL_DEV_ADMIN_AUTH_BYPASS` or the public arena-admin fixture flags are
-  enabled.
+  Postgres service. `scripts/dev/admin-owned-bot-local-seed.mjs` has the same
+  local-profile guard and writes one demo arena bot plus the Admin DB ownership
+  row for the selected GitHub-backed user. `scripts/dev/arena-admin-auth-local-smoke.mjs`
+  fails if `LOCAL_DEV_ADMIN_AUTH_BYPASS` or the public arena-admin fixture flags
+  are enabled.
 - Guard production arena-admin builds against local fixture leakage:
 
   ```text
