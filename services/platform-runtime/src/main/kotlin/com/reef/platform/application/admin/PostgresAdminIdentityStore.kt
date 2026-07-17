@@ -180,6 +180,28 @@ class PostgresAdminIdentityStore(
         }
     }
 
+    override fun users(limit: Int): List<AdminUser> {
+        val boundedLimit = limit.coerceIn(1, 500)
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT reef_user_id, github_user_id, github_login, display_name,
+                       trust_state, created_at, last_seen_at, updated_at
+                FROM ${names.users}
+                ORDER BY last_seen_at DESC, reef_user_id
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, boundedLimit)
+                ps.executeQuery().use { rs ->
+                    val values = mutableListOf<AdminUser>()
+                    while (rs.next()) values += userFrom(rs)
+                    return values
+                }
+            }
+        }
+    }
+
     override fun userByGithubUserId(githubUserId: Long): AdminUser? {
         val id = AdminIdentityValidation.requireGitHubUserId(githubUserId)
         connection().use { conn ->
@@ -262,6 +284,20 @@ class PostgresAdminIdentityStore(
             }
         }
         return binding
+    }
+
+    override fun revokeRole(reefUserId: String, roleId: String) {
+        val userId = AdminIdentityValidation.reefUserId(reefUserId)
+        val role = AdminIdentityValidation.roleId(roleId)
+        connection().use { conn ->
+            conn.prepareStatement(
+                "DELETE FROM ${names.userRoles} WHERE reef_user_id = ? AND role_id = ?"
+            ).use { ps ->
+                ps.setString(1, userId)
+                ps.setString(2, role)
+                ps.executeUpdate()
+            }
+        }
     }
 
     override fun rolesForUser(reefUserId: String): List<AdminUserRole> {

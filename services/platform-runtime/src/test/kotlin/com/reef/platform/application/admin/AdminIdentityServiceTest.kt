@@ -92,6 +92,129 @@ class AdminIdentityServiceTest {
     }
 
     @Test
+    fun trustedOperatorCanManageReviewerRoleAndNonBannedTrustStatesWithReason() {
+        val operator = service.ensureGitHubUser(GitHubUserIdentity(100, "operator"))
+        val target = service.ensureGitHubUser(GitHubUserIdentity(101, "target"))
+        service.updateTrustState("bootstrap", operator.reefUserId, AdminTrustState.Trusted)
+        service.assignRole("bootstrap", operator.reefUserId, AdminIdentityService.RoleOperator)
+
+        val binding = service.assignRoleByOperator(
+            operator.reefUserId,
+            target.reefUserId,
+            AdminIdentityService.RoleReviewer,
+            "ready to review submissions"
+        )
+        val updated = service.updateTrustStateByOperator(
+            operator.reefUserId,
+            target.reefUserId,
+            AdminTrustState.Limited,
+            "temporary moderation"
+        )
+
+        assertEquals(AdminIdentityService.RoleReviewer, binding.roleId)
+        assertEquals(AdminTrustState.Limited, updated.trustState)
+        assertEquals(
+            listOf(
+                "AdminUserCreated",
+                "AdminUserRoleAssigned",
+                "AdminAccessRoleAssigned",
+                "AdminAccessTrustStateChanged"
+            ),
+            store.auditEvents("admin-user", target.reefUserId).map { it.eventType }
+        )
+    }
+
+    @Test
+    fun operatorCannotAssignPrivilegedRolesOrBanUsers() {
+        val operator = service.ensureGitHubUser(GitHubUserIdentity(110, "operator-two"))
+        val target = service.ensureGitHubUser(GitHubUserIdentity(111, "target-two"))
+        service.updateTrustState("bootstrap", operator.reefUserId, AdminTrustState.Trusted)
+        service.assignRole("bootstrap", operator.reefUserId, AdminIdentityService.RoleOperator)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.assignRoleByOperator(
+                operator.reefUserId,
+                target.reefUserId,
+                AdminIdentityService.RoleOperator,
+                "promote to operator"
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.updateTrustStateByOperator(
+                operator.reefUserId,
+                target.reefUserId,
+                AdminTrustState.Banned,
+                "ban requested"
+            )
+        }
+    }
+
+    @Test
+    fun trustedPlatformAdminCanManagePrivilegedRolesAndBans() {
+        val platformAdmin = service.ensureGitHubUser(GitHubUserIdentity(120, "platform-admin"))
+        val target = service.ensureGitHubUser(GitHubUserIdentity(121, "target-three"))
+        service.updateTrustState("bootstrap", platformAdmin.reefUserId, AdminTrustState.Trusted)
+        service.assignRole("bootstrap", platformAdmin.reefUserId, AdminIdentityService.RolePlatformAdmin)
+
+        service.assignRoleByOperator(
+            platformAdmin.reefUserId,
+            target.reefUserId,
+            AdminIdentityService.RoleOperator,
+            "trusted operations owner"
+        )
+        service.updateTrustStateByOperator(
+            platformAdmin.reefUserId,
+            target.reefUserId,
+            AdminTrustState.Banned,
+            "account compromise"
+        )
+
+        assertEquals(
+            listOf(AdminIdentityService.RoleParticipant, AdminIdentityService.RoleOperator),
+            service.rolesForUser(target.reefUserId).map { it.roleId }
+        )
+        assertEquals(AdminTrustState.Banned, service.user(target.reefUserId)?.trustState)
+    }
+
+    @Test
+    fun accessMutationsRequireReasonAndRoleRevocationPolicy() {
+        val platformAdmin = service.ensureGitHubUser(GitHubUserIdentity(130, "platform-admin-two"))
+        val target = service.ensureGitHubUser(GitHubUserIdentity(131, "target-four"))
+        service.updateTrustState("bootstrap", platformAdmin.reefUserId, AdminTrustState.Trusted)
+        service.assignRole("bootstrap", platformAdmin.reefUserId, AdminIdentityService.RolePlatformAdmin)
+        service.assignRole("bootstrap", target.reefUserId, AdminIdentityService.RoleReviewer)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.assignRoleByOperator(
+                platformAdmin.reefUserId,
+                target.reefUserId,
+                AdminIdentityService.RoleOperator,
+                " "
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.revokeRoleByOperator(
+                platformAdmin.reefUserId,
+                target.reefUserId,
+                AdminIdentityService.RoleParticipant,
+                "remove participant"
+            )
+        }
+
+        service.revokeRoleByOperator(
+            platformAdmin.reefUserId,
+            target.reefUserId,
+            AdminIdentityService.RoleReviewer,
+            "reviewer no longer needed"
+        )
+
+        assertEquals(
+            listOf(AdminIdentityService.RoleParticipant),
+            service.rolesForUser(target.reefUserId).map { it.roleId }
+        )
+    }
+
+    @Test
     fun rejectsInvalidGithubIdentityAndLimits() {
         assertFailsWith<IllegalArgumentException> {
             service.ensureGitHubUser(GitHubUserIdentity(0, "octo"))

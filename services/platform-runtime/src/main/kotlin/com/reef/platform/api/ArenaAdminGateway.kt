@@ -28,6 +28,8 @@ import com.reef.platform.application.arena.ArenaRunEnforcementEvent
 import com.reef.platform.application.arena.ArenaRunRecord
 import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.BotConfigSecretService
+import com.reef.platform.application.arena.LocalDevBotConfigService
 import com.reef.platform.application.arena.OpenBaoBotConfigService
 import com.reef.platform.application.arena.OpenBaoBotConfigServiceConfig
 import com.reef.platform.application.arena.OpenBaoClientException
@@ -933,9 +935,11 @@ internal class ArenaAdminGateway(
         return arenaAdminActor()
     }
 
-    private fun openBaoBotConfigService(): OpenBaoBotConfigService {
+    private fun openBaoBotConfigService(): BotConfigSecretService {
         val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
-            .ifBlank { throw IllegalArgumentException("BAO_ADDR is not configured") }
+        if (baoAddr.isBlank()) {
+            return localDevBotConfigService()
+        }
         val roleId = RuntimeEnv.string("BAO_BOT_CONFIG_ROLE_ID", "")
             .ifBlank { throw IllegalArgumentException("BAO_BOT_CONFIG_ROLE_ID is not configured") }
         val secretId = RuntimeEnv.string("BAO_BOT_CONFIG_SECRET_ID", "")
@@ -947,6 +951,23 @@ internal class ArenaAdminGateway(
                 secretId = secretId
             )
         )
+    }
+
+    private fun localDevBotConfigService(): BotConfigSecretService {
+        val store = RuntimeEnv.string("LOCAL_DEV_BOT_CONFIG_STORE", "").trim().lowercase()
+        val profile = listOf(
+            RuntimeEnv.string("REEF_ENV", ""),
+            RuntimeEnv.string("PLATFORM_RUNTIME_PROFILE", ""),
+            RuntimeEnv.string("ENVIRONMENT", ""),
+            RuntimeEnv.string("APP_ENV", "")
+        )
+            .map { it.trim().lowercase() }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+        if (store == "memory" && profile in setOf("local", "dev", "development", "test", "ci")) {
+            return LocalDevBotConfigService.shared
+        }
+        throw IllegalArgumentException("BAO_ADDR is not configured")
     }
 
     private fun openBaoOwnerIdentity(bot: ArenaBot): String? {

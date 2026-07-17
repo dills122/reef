@@ -269,6 +269,11 @@ server-side service token. Scoped service token families are route-specific:
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
 /admin/v1/arena/bots/config             -> admin
 /admin/v1/arena/bot-versions            -> ci, admin
+GET /admin/v1/access/users              -> admin
+GET /admin/v1/access/roles              -> admin
+POST /admin/v1/access/users/trust-state -> admin
+POST /admin/v1/access/users/roles       -> admin
+POST /admin/v1/access/users/roles/revoke -> admin
 GET /admin/v1/arena/runs                -> ci, admin
 GET /admin/v1/arena/run-bot-results     -> ci, admin
 GET /admin/v1/arena/run-enforcement-events -> ci, admin
@@ -285,6 +290,16 @@ GET /admin/v1/arena/leaderboard         -> ci, admin
 /admin/v1/settlement/reverse-ledger-entry -> admin
 /admin/v1/settlement/obligations/materialize -> admin
 ```
+
+Access-management browser sessions require a trusted Admin DB `operator` or
+`platform-admin`. The `/admin/access` page lists Admin DB users, roles, trust
+state, and bot ownerships, then writes trust-state and role mutations through the
+routes above. The gateway performs the coarse operator/platform-admin session
+check; `AdminIdentityService` applies the finer policy: operators may assign or
+revoke `reviewer` and move users among `new`, `trusted`, and `limited`, while
+`platform-admin` is required for `operator`, `secret-admin`, `platform-admin`,
+`participant`, and `banned` changes. Every mutation requires a reason and is
+written to `admin.audit_events`.
 
 The existing static bearer-token environment variables remain as compatibility
 fallbacks:
@@ -638,37 +653,72 @@ and relevant object ids. Audit records must not contain secret values.
   users satisfy `arena.admin` for GitHub-authenticated browser requests without
   a duplicate runtime role binding. Runtime role bindings remain for CLI,
   service-token actors, and non-browser command paths.
-- Run the hosted/local arena-admin auth configuration test now that the admin
-  panels read live `/admin/v1` data. Current local stack returns
-  `{"error":"admin auth is not configured"}` from `/admin/auth/session`, so a
-  signed-in browser test is blocked until `platform-api` runs with:
+- Run the local arena-admin auth smoke with real Admin DB auth, not fixture mode.
+  `platform-api` must run with:
 
   ```text
+  REEF_ENV=local
   PLATFORM_ADMIN_AUTH_ENABLED=true
   ADMIN_SESSION_COOKIE_SECURE=false
+  ADMIN_POSTGRES_JDBC_URL=<optional; defaults to RUNTIME_POSTGRES_JDBC_URL>
+  ADMIN_POSTGRES_USER=<optional; defaults to RUNTIME_POSTGRES_USER>
+  ADMIN_POSTGRES_PASSWORD=<optional; defaults to RUNTIME_POSTGRES_PASSWORD>
   GITHUB_OAUTH_CLIENT_ID=<local GitHub OAuth app client id>
   GITHUB_OAUTH_CLIENT_SECRET=<local GitHub OAuth app secret>
   GITHUB_OAUTH_REDIRECT_URI=http://localhost:8080/admin/auth/github/callback
+  LOCAL_DEV_ADMIN_UI_BASE_URL=http://localhost:5174
+  ```
+
+  `LOCAL_DEV_ADMIN_UI_BASE_URL` is ignored unless `REEF_ENV=local`. It keeps
+  `redirectPath` relative and allowlisted while sending the browser back to the
+  Vite admin UI after GitHub sets the platform session cookie.
+
+  Keep these disabled for the live auth smoke:
+
+  ```text
+  LOCAL_DEV_ADMIN_AUTH_BYPASS=false
+  PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN=false
+  PUBLIC_ARENA_LOCAL_DEV_FIXTURES=false
   ```
 
   Test flow:
 
   ```text
   1. Restart platform-api with the auth environment above and Admin DB access.
-  2. Open http://127.0.0.1:5173/admin.
-  3. Complete GitHub OAuth login.
-  4. Grant Admin DB `operator` or `platform-admin` to the logged-in Reef user
-     and set trust state to `trusted`.
-  5. Confirm the admin page shows live bots/runs instead of the sign-in or error state.
-  6. Seed admin.user_bot_ownerships for at least one bot and confirm owner/trust metadata renders.
-  7. Seed a freeze enforcement event and confirm the bot state renders as frozen.
+  2. Open http://localhost:5174/admin and complete GitHub OAuth once.
+  3. Seed that existing Admin DB user:
+     REEF_ENV=local make dev-admin-auth-local-seed ARGS="--github-login=<login> --role=operator"
+  4. Seed a local owned bot for the real owner-scoped `/bot-admin` page:
+     REEF_ENV=local make dev-admin-owned-bot-local-seed ARGS="--github-login=<login>"
+  5. Run:
+     make dev-smoke-admin-auth-local
+  6. Start arena-admin without fixture flags and open /admin, /admin/access, and /bot-admin.
   ```
 
-  The expected final evidence is a browser pass with no console errors plus
-  successful GETs for `/admin/v1/arena/bots`, `/admin/v1/arena/runs`,
-  `/admin/v1/arena/run-bot-results`,
-  `/admin/v1/arena/run-enforcement-events`, and
-  `/admin/v1/arena/leaderboard` using the GitHub session cookie.
+  `scripts/dev/admin-auth-local-seed.mjs` refuses to run unless an explicit
+  local/dev/test profile is set and talks only to the local Docker Compose
+  Postgres service. `scripts/dev/admin-owned-bot-local-seed.mjs` has the same
+  local-profile guard and writes one demo arena bot plus the Admin DB ownership
+  row for the selected GitHub-backed user. `scripts/dev/arena-admin-auth-local-smoke.mjs`
+  fails if `LOCAL_DEV_ADMIN_AUTH_BYPASS` or the public arena-admin fixture flags
+  are enabled.
+- The main local Compose stack does not start OpenBao. `compose.local.yml`
+  sets `REEF_ENV=local` and `LOCAL_DEV_BOT_CONFIG_STORE=memory` for
+  `platform-api`, and the runtime only honors that fallback when
+  `REEF_ENV`/profile is local/dev/test/ci and
+  `BAO_ADDR` is absent. This keeps owner config editing testable in the local
+  admin UI without shipping an OpenBao bypass to hosted environments. If
+  `BAO_ADDR` is configured, the runtime uses the dedicated OpenBao AppRole path
+  instead.
+- Guard production arena-admin builds against local fixture leakage:
+
+  ```text
+  bun run --cwd apps/arena-admin build:guarded
+  ```
+
+  The guard scans the static build output for local fixture marker strings and
+  the public local-dev flag names. The fixture code is wrapped in
+  `import.meta.env.DEV`, so production bundles should tree-shake it out.
 - Add Admin API authorization middleware that binds actor identity from the
   authenticated principal, not caller-controlled headers.
 - Move CI-to-Admin API auth from scoped bearer token to GitHub Actions OIDC.

@@ -1,9 +1,20 @@
 <script lang="ts">
-	import { fetchSession, githubLoginUrl, hasOperatorAccess, type SessionUser } from '$lib/api';
+	import { page } from '$app/state';
+	import {
+		displayRoles,
+		fetchSession,
+		githubLoginUrl,
+		hasOperatorAccess,
+		type SessionUser
+	} from '$lib/api';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let { children } = $props();
 	let session = $state<SessionUser | null | 'loading'>('loading');
+	const adminNavLinks = [
+		{ href: '/admin', label: 'runs' },
+		{ href: '/admin/access', label: 'access' }
+	];
 
 	$effect(() => {
 		fetchSession().then((result) => {
@@ -22,7 +33,7 @@
 			This area is gated to Reef operators. Sign in with the GitHub account tied to your admin
 			role.
 		</p>
-		<Button href={githubLoginUrl('/admin')}>sign in with github</Button>
+		<Button href={githubLoginUrl(page.url.pathname)}>sign in with github</Button>
 	</div>
 {:else if !hasOperatorAccess(session)}
 	<div class="flex flex-col items-start gap-4">
@@ -39,17 +50,26 @@
 			</p>
 			<p class="mt-3">
 				<span class="font-bold uppercase tracking-normal">roles</span><br />
-				{session.roles.length ? session.roles.join(', ') : 'none'}
+				{displayRoles(session.roles)}
 			</p>
 		</div>
 		<Button href="/">back to arena</Button>
 	</div>
 {:else}
-	<div class="mb-6 flex items-baseline justify-between border-b border-rule pb-4">
-		<p class="text-sm text-muted">
-			signed in as <span class="text-ink">{session.githubLogin}</span>
-		</p>
-		<p class="text-xs text-muted">{session.roles.join(', ')}</p>
-	</div>
+	<nav class="mb-6 flex flex-wrap gap-2 border-b border-rule pb-3 text-sm">
+		{#each adminNavLinks as link (link.href)}
+			<a
+				href={link.href}
+				class="border px-3 py-2 font-bold no-underline"
+				class:border-accent={page.url.pathname === link.href}
+				class:bg-accent-soft={page.url.pathname === link.href}
+				class:text-ink={page.url.pathname === link.href}
+				class:border-rule={page.url.pathname !== link.href}
+				class:text-muted={page.url.pathname !== link.href}
+			>
+				{link.label}
+			</a>
+		{/each}
+	</nav>
 	{@render children()}
 {/if}
