@@ -381,7 +381,7 @@ BEGIN
       event->>'occurredAt'
     FROM ordered_events
     JOIN trace_starts ON trace_starts.trace_id = ordered_events.event->>'traceId'
-    ORDER BY ordered_events.outcome_ordinality, ordered_events.event_ordinality
+    ORDER BY ordered_events.event->>'eventId'
     ON CONFLICT (event_id) DO NOTHING
     RETURNING 1
   )

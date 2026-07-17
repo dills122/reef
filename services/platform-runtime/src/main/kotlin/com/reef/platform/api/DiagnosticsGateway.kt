@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.persistence.ProjectionPersistenceRetryMetrics
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 
 /**
@@ -61,6 +62,7 @@ internal class DiagnosticsGateway(
         val partitions = projectorPartitions()
         val status = api.projectionStatus(streamAckProjectionName, partitions, streamAckProjectionSource.configValue)
         val metrics = CanonicalProjectionMetrics.snapshot()
+        val retryMetrics = ProjectionPersistenceRetryMetrics.snapshot()
         return JsonCodec.writeObject(
             "role" to runtimeRole.configValue,
             "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
@@ -77,7 +79,12 @@ internal class DiagnosticsGateway(
                 "emptyPolls" to metrics.emptyPolls,
                 "lastProjectedAt" to metrics.lastProjectedAt,
                 "lastFailedAt" to metrics.lastFailedAt,
-                "lastError" to metrics.lastError
+                "lastError" to metrics.lastError,
+                "retryAttempts" to retryMetrics.retryAttempts,
+                "retryExhausted" to retryMetrics.retryExhausted,
+                "lastRetryAt" to retryMetrics.lastRetryAt,
+                "lastRetrySqlState" to retryMetrics.lastRetrySqlState,
+                "lastRetryError" to retryMetrics.lastRetryError
             ),
             "watermarks" to status.watermarks.map { watermark ->
                 mapOf(

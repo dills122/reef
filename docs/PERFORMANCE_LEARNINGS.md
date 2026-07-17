@@ -90,6 +90,57 @@ Immediate implications:
 2. The short named projection gate is green. The next projection performance gate should raise read-model freshness toward the `10k` materializer baseline while preserving separate reporting for accepted, materialized, projected, lag, and replay checks.
 3. Do not use these short `2.5k` runs as UI/control-room capacity claims; they prove read-model catch-up for the venue-event projection path only.
 
+## DigitalOcean Projection 5k Pressure Knee (July 17, 2026)
+
+The July 17 c-16 runs established the current read-model freshness knee. The
+venue-core path held `5k rps`; projection freshness did not.
+
+Evidence:
+
+- `reports/do-benchmark/do-benchmark-20260717T014839Z/`: corrected `2.5k`
+  projection freshness run passed with `149,975` attempted/accepted/direct-acked/materialized/projected,
+  lag `0`, gaps `0`, p95 `31.31ms`, p99 `79.38ms`.
+- `reports/do-benchmark/do-benchmark-20260717T015658Z/`: `5k` pressure run
+  before deterministic runtime-event insert ordering accepted/direct-acked/materialized
+  `299,950` commands with p95 `67.57ms` and p99 `138.57ms`, but projection
+  ended with projected `298,116`, lag `1,834`, materialized/projected gap
+  `1,834`, one projector failure, and one projection-postgres deadlock inside
+  `runtime.runtime_persist_submit_outcomes` while inserting `runtime_events`.
+- `reports/do-benchmark/do-benchmark-20260717T020807Z/`: after ordering
+  `runtime_events` inserts by `event_id`, the same `5k` pressure shape
+  accepted/direct-acked/materialized/projected `299,952` commands with p95
+  `69.92ms` and p99 `136.68ms`; deadlocks fell to `0` and the
+  materialized/projected count gap closed to `0`, but final projection
+  watermark lag remained `1,367`, concentrated in partitions `8-11`.
+
+Database pressure in the patched `5k` run:
+
+- canonical runtime DB: about `729MB` WAL, `2.43KB` WAL per accepted command,
+  `299,952` canonical command outcomes, `6,603` venue-event batches, and no
+  deadlocks.
+- projection DB: about `2.01GB` WAL, `6.71KB` WAL per accepted command,
+  `2.05M` inserted tuples, `47k` updated tuples, `5.03GB` temp bytes, and no
+  deadlocks after deterministic event insert ordering.
+- hottest projection tables: `runtime_events`, `executions`, `trades`,
+  `orders`, `order_lifecycle_state`, `submit_results`,
+  `runtime_trace_sequences`, dirty queues, and market-data projection tables.
+
+Immediate implications:
+
+1. The current `5k` bottleneck is not API intake, direct matching consumption,
+   durable venue-event publication, or compact canonical materialization.
+2. Projection write amplification is the active knee. The projection path is
+   doing several million row mutations and multiple GB of WAL/temp work for a
+   one-minute `5k` sample.
+3. Deterministic index-key ordering is worth keeping: it removed the observed
+   deadlock/count-gap failure mode, but it does not solve zero-lag freshness.
+4. The next fixes should split the monolithic projection function, reduce
+   `runtime_events`/trace/dirty-table write amplification, and give read
+   surfaces explicit freshness classes instead of forcing every query table to
+   share the same SLO.
+5. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+   as the implementation ladder before raising projection gates above `2.5k`.
+
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.

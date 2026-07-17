@@ -25,8 +25,68 @@ import com.reef.platform.infrastructure.config.RuntimeEnv
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLException
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import javax.sql.DataSource
+
+data class ProjectionPersistenceRetryStats(
+    val retryAttempts: Long,
+    val retryExhausted: Long,
+    val lastRetryAt: String,
+    val lastRetrySqlState: String,
+    val lastRetryError: String
+)
+
+object ProjectionPersistenceRetryMetrics {
+    private val retryAttempts = AtomicLong(0)
+    private val retryExhausted = AtomicLong(0)
+    private val lastRetryAtEpochMs = AtomicLong(0)
+    @Volatile
+    private var lastRetrySqlState: String = ""
+    @Volatile
+    private var lastRetryError: String = ""
+
+    fun recordRetry(sqlState: String, error: String) {
+        retryAttempts.incrementAndGet()
+        recordLastRetry(sqlState, error)
+    }
+
+    fun recordRetryExhausted(sqlState: String, error: String) {
+        retryExhausted.incrementAndGet()
+        recordLastRetry(sqlState, error)
+    }
+
+    fun snapshot(): ProjectionPersistenceRetryStats {
+        return ProjectionPersistenceRetryStats(
+            retryAttempts = retryAttempts.get(),
+            retryExhausted = retryExhausted.get(),
+            lastRetryAt = instantString(lastRetryAtEpochMs.get()),
+            lastRetrySqlState = lastRetrySqlState,
+            lastRetryError = lastRetryError
+        )
+    }
+
+    fun resetForTests() {
+        retryAttempts.set(0)
+        retryExhausted.set(0)
+        lastRetryAtEpochMs.set(0)
+        lastRetrySqlState = ""
+        lastRetryError = ""
+    }
+
+    private fun recordLastRetry(sqlState: String, error: String) {
+        lastRetryAtEpochMs.set(System.currentTimeMillis())
+        lastRetrySqlState = sqlState
+        lastRetryError = error
+    }
+
+    private fun instantString(epochMs: Long): String {
+        if (epochMs <= 0) return ""
+        return Instant.ofEpochMilli(epochMs).toString()
+    }
+}
 
 class PostgresRuntimePersistence(
     private val dataSource: DataSource,
@@ -46,6 +106,10 @@ class PostgresRuntimePersistence(
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED", true)
     private val streamAckCanonicalQueryIndexesEnabled: Boolean =
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED", true)
+    private val projectorDbRetryAttempts: Int =
+        RuntimeEnv.int("STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS", 3, min = 1)
+    private val projectorDbRetryBackoffMs: Long =
+        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L)
 
     private data class ProjectionCandidate(
         val partitionId: Int,
@@ -1537,7 +1601,7 @@ class PostgresRuntimePersistence(
                           event->>'occurredAt'
                         FROM ordered_events
                         JOIN trace_starts ON trace_starts.trace_id = ordered_events.event->>'traceId'
-                        ORDER BY ordered_events.outcome_ordinality, ordered_events.event_ordinality
+                        ORDER BY ordered_events.event->>'eventId'
                         ON CONFLICT (event_id) DO NOTHING
                         RETURNING 1
                       )
@@ -2589,24 +2653,12 @@ class PostgresRuntimePersistence(
             .take(batchSize)
         if (candidates.isEmpty()) return 0
 
-        projectionConnection().use { conn ->
-            val previousAutoCommit = conn.autoCommit
-            conn.autoCommit = false
-            try {
-                val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
-                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
-                maybeFailAfterProjectorRowsBeforeWatermark(conn)
-                updateProjectionWatermarks(conn, projectionName, candidates)
-                conn.commit()
-                return candidates.size.toLong()
-            } catch (ex: Exception) {
-                conn.rollback()
-                recordProjectionFailure(conn, projectionName, ex.message ?: ex::class.simpleName ?: "unknown")
-                conn.commit()
-                throw ex
-            } finally {
-                conn.autoCommit = previousAutoCommit
-            }
+        return executeProjectionTransactionWithRetry(projectionName) { conn ->
+            val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
+            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            updateProjectionWatermarks(conn, projectionName, candidates)
+            candidates.size.toLong()
         }
     }
 
@@ -2646,35 +2698,96 @@ class PostgresRuntimePersistence(
             .take(effectiveBatchSize)
         if (candidates.isEmpty()) return 0
 
-        projectionConnection().use { conn ->
-            val previousAutoCommit = conn.autoCommit
-            conn.autoCommit = false
-            try {
-                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
-                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
-                maybeFailAfterProjectorRowsBeforeWatermark(conn)
-                updateProjectionWatermarks(
-                    conn,
-                    projectionName,
-                    candidates.map {
-                        ProjectionCandidate(
-                            partitionId = it.partitionId,
-                            partitionSequence = it.partitionSequence,
-                            resultPayload = ""
-                        )
-                    }
-                )
-                conn.commit()
-                return candidates.size.toLong()
-            } catch (ex: Exception) {
-                conn.rollback()
-                recordProjectionFailure(conn, projectionName, ex.message ?: ex::class.simpleName ?: "unknown")
-                conn.commit()
-                throw ex
-            } finally {
-                conn.autoCommit = previousAutoCommit
-            }
+        return executeProjectionTransactionWithRetry(projectionName) { conn ->
+            val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
+            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            updateProjectionWatermarks(
+                conn,
+                projectionName,
+                candidates.map {
+                    ProjectionCandidate(
+                        partitionId = it.partitionId,
+                        partitionSequence = it.partitionSequence,
+                        resultPayload = ""
+                    )
+                }
+            )
+            candidates.size.toLong()
         }
+    }
+
+    private fun executeProjectionTransactionWithRetry(
+        projectionName: String,
+        operation: (Connection) -> Long
+    ): Long {
+        var attempt = 1
+        while (true) {
+            projectionConnection().use { conn ->
+                val previousAutoCommit = conn.autoCommit
+                conn.autoCommit = false
+                try {
+                    val result = operation(conn)
+                    conn.commit()
+                    return result
+                } catch (ex: Exception) {
+                    rollbackQuietly(conn)
+                    val sqlState = retryableProjectionSqlState(ex)
+                    if (sqlState != null && attempt < projectorDbRetryAttempts) {
+                        ProjectionPersistenceRetryMetrics.recordRetry(sqlState, ex.message ?: ex::class.simpleName ?: "unknown")
+                    } else {
+                        if (sqlState != null) {
+                            ProjectionPersistenceRetryMetrics.recordRetryExhausted(sqlState, ex.message ?: ex::class.simpleName ?: "unknown")
+                        }
+                        recordProjectionFailure(conn, projectionName, projectionFailureMessage(ex))
+                        conn.commit()
+                        throw ex
+                    }
+                } finally {
+                    conn.autoCommit = previousAutoCommit
+                }
+            }
+            sleepBeforeProjectionRetry(attempt)
+            attempt += 1
+        }
+    }
+
+    private fun sleepBeforeProjectionRetry(attempt: Int) {
+        if (projectorDbRetryBackoffMs <= 0L) return
+        Thread.sleep(projectorDbRetryBackoffMs * attempt.coerceAtLeast(1))
+    }
+
+    private fun rollbackQuietly(conn: Connection) {
+        try {
+            conn.rollback()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun retryableProjectionSqlState(error: Throwable): String? {
+        val sqlState = sqlState(error) ?: return null
+        return when (sqlState) {
+            "40001", "40P01", "55P03" -> sqlState
+            else -> null
+        }
+    }
+
+    private fun sqlState(error: Throwable?): String? {
+        var current = error
+        while (current != null) {
+            if (current is SQLException) {
+                val state = current.sqlState
+                if (!state.isNullOrBlank()) return state
+            }
+            current = current.cause
+        }
+        return null
+    }
+
+    private fun projectionFailureMessage(error: Throwable): String {
+        val state = sqlState(error)
+        val message = error.message ?: error::class.simpleName ?: "unknown"
+        return if (state.isNullOrBlank()) message else "SQLSTATE $state: $message"
     }
 
     private fun maybeFailAfterProjectorRowsBeforeWatermark(conn: Connection) {
