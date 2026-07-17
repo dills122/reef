@@ -1,158 +1,11 @@
--- Preserve first persisted command outcomes and return real append counts.
+-- Split submit outcome projection into freshness-critical and timeline stages.
 --
--- Canonical facts must be immutable once written. Projection rows can still be
--- rebuilt elsewhere, but command-result audit rows should not be overwritten by
--- retries or duplicate projector runs.
+-- The one-argument runtime.runtime_persist_submit_outcomes(jsonb) contract
+-- remains full-fidelity. The two-argument form lets pressure runs project the
+-- command-status/lifecycle inputs without also maintaining runtime_events and
+-- trace sequence rows in the same batch.
 
-CREATE OR REPLACE FUNCTION runtime.runtime_append_canonical_submit_outcomes(
-  p_outcomes JSONB
-)
-RETURNS BIGINT
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  appended_count BIGINT := 0;
-BEGIN
-  IF p_outcomes IS NULL THEN
-    RETURN 0;
-  END IF;
-
-  IF jsonb_typeof(p_outcomes) <> 'array' THEN
-    RAISE EXCEPTION 'canonical submit outcomes payload must be a JSON array';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM jsonb_array_elements(p_outcomes) AS outcome
-    JOIN runtime.canonical_command_results existing
-      ON existing.command_id = outcome->>'commandId'
-    WHERE existing.run_id IS DISTINCT FROM COALESCE(outcome->>'runId', '')
-       OR existing.venue_session_id IS DISTINCT FROM COALESCE(outcome->>'venueSessionId', '')
-       OR existing.partition_id IS DISTINCT FROM COALESCE((outcome->>'partitionId')::INTEGER, -1)
-       OR existing.partition_seq IS DISTINCT FROM COALESCE((outcome->>'partitionSequence')::BIGINT, 0)
-       OR existing.stream_name IS DISTINCT FROM COALESCE(outcome->>'streamName', '')
-       OR existing.stream_seq IS DISTINCT FROM COALESCE((outcome->>'streamSequence')::BIGINT, 0)
-       OR existing.idempotency_key IS DISTINCT FROM COALESCE(outcome->>'idempotencyKey', '')
-       OR existing.payload_hash IS DISTINCT FROM COALESCE(outcome->>'payloadHash', '')
-       OR existing.instrument_id IS DISTINCT FROM COALESCE(outcome->>'instrumentId', '')
-       OR existing.command_type IS DISTINCT FROM COALESCE(outcome->>'commandType', '')
-       OR existing.result_status IS DISTINCT FROM COALESCE(outcome->>'resultStatus', '')
-       OR existing.reject_code IS DISTINCT FROM COALESCE(outcome->>'rejectCode', '')
-       OR existing.accepted_at IS DISTINCT FROM COALESCE(outcome->>'acceptedAt', '')
-       OR existing.completed_at IS DISTINCT FROM COALESCE(outcome->>'completedAt', '')
-       OR existing.engine_shard_id IS DISTINCT FROM COALESCE(outcome->>'engineShardId', '')
-       OR existing.result_payload IS DISTINCT FROM COALESCE(outcome->'resultPayload', '{}'::jsonb)
-  ) THEN
-    RAISE EXCEPTION 'canonical command result conflict for existing command_id';
-  END IF;
-
-  WITH outcomes AS (
-    SELECT outcome, ordinality::BIGINT AS outcome_ordinality
-    FROM jsonb_array_elements(p_outcomes) WITH ORDINALITY AS outcome_rows(outcome, ordinality)
-  ),
-  insert_results AS (
-    INSERT INTO runtime.canonical_command_results(
-      command_id,
-      run_id,
-      venue_session_id,
-      partition_id,
-      partition_seq,
-      stream_name,
-      stream_seq,
-      idempotency_key,
-      payload_hash,
-      instrument_id,
-      command_type,
-      result_status,
-      reject_code,
-      accepted_at,
-      completed_at,
-      engine_shard_id,
-      result_payload
-    )
-    SELECT
-      outcome->>'commandId',
-      COALESCE(outcome->>'runId', ''),
-      COALESCE(outcome->>'venueSessionId', ''),
-      COALESCE((outcome->>'partitionId')::INTEGER, -1),
-      COALESCE((outcome->>'partitionSequence')::BIGINT, 0),
-      COALESCE(outcome->>'streamName', ''),
-      COALESCE((outcome->>'streamSequence')::BIGINT, 0),
-      COALESCE(outcome->>'idempotencyKey', ''),
-      COALESCE(outcome->>'payloadHash', ''),
-      COALESCE(outcome->>'instrumentId', ''),
-      COALESCE(outcome->>'commandType', ''),
-      COALESCE(outcome->>'resultStatus', ''),
-      COALESCE(outcome->>'rejectCode', ''),
-      COALESCE(outcome->>'acceptedAt', ''),
-      COALESCE(outcome->>'completedAt', ''),
-      COALESCE(outcome->>'engineShardId', ''),
-      COALESCE(outcome->'resultPayload', '{}'::jsonb)
-    FROM outcomes
-    ON CONFLICT (command_id) DO NOTHING
-    RETURNING 1
-  ),
-  parsed_events AS (
-    SELECT
-      outcome,
-      event,
-      event_ordinality::INTEGER AS deterministic_event_index
-    FROM outcomes
-    CROSS JOIN LATERAL jsonb_array_elements(
-      CASE
-        WHEN COALESCE(NULLIF(current_setting('reef.stream_ack_canonical_event_rows_enabled', TRUE), ''), 'true')::BOOLEAN
-          AND jsonb_typeof(outcome->'events') = 'array' THEN outcome->'events'
-        ELSE '[]'::jsonb
-      END
-    ) WITH ORDINALITY AS event_rows(event, event_ordinality)
-  ),
-  insert_events AS (
-    INSERT INTO runtime.canonical_venue_events(
-      event_id,
-      run_id,
-      venue_session_id,
-      partition_id,
-      partition_seq,
-      event_seq,
-      command_id,
-      event_type,
-      aggregate_type,
-      aggregate_id,
-      instrument_id,
-      deterministic_event_index,
-      payload,
-      emitted_at
-    )
-    SELECT
-      event->>'eventId',
-      COALESCE(outcome->>'runId', ''),
-      COALESCE(outcome->>'venueSessionId', ''),
-      COALESCE((outcome->>'partitionId')::INTEGER, -1),
-      COALESCE((outcome->>'partitionSequence')::BIGINT, 0),
-      COALESCE((outcome->>'partitionSequence')::BIGINT, 0) * 1000 + deterministic_event_index,
-      outcome->>'commandId',
-      COALESCE(event->>'eventType', ''),
-      CASE
-        WHEN event->>'eventType' = 'ExecutionCreated' THEN 'execution'
-        WHEN event->>'eventType' = 'TradeCreated' THEN 'trade'
-        ELSE 'order'
-      END,
-      COALESCE(event->>'orderId', event->>'eventId', ''),
-      COALESCE(outcome->>'instrumentId', ''),
-      deterministic_event_index,
-      event,
-      COALESCE(event->>'occurredAt', outcome->>'completedAt', '')
-    FROM parsed_events
-    ON CONFLICT (event_id) DO NOTHING
-    RETURNING 1
-  )
-  SELECT COUNT(*) INTO appended_count FROM insert_results;
-
-  RETURN appended_count;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcomes(
+CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcome_status_stage(
   p_outcomes JSONB
 )
 RETURNS BIGINT
@@ -319,14 +172,47 @@ BEGIN
   mark_dirty AS (
     INSERT INTO runtime.order_lifecycle_dirty(order_id)
     SELECT order_id FROM dirty_ids
-    ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now()
+    ON CONFLICT (order_id) DO NOTHING
     RETURNING 1
+  )
+  SELECT COUNT(*) INTO persisted_count FROM outcomes;
+
+  RETURN persisted_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcome_timeline_stage(
+  p_outcomes JSONB
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  persisted_count BIGINT := 0;
+BEGIN
+  IF p_outcomes IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  IF jsonb_typeof(p_outcomes) <> 'array' THEN
+    RAISE EXCEPTION 'runtime submit outcomes payload must be a JSON array';
+  END IF;
+
+  WITH outcomes AS (
+    SELECT outcome, ordinality::BIGINT AS outcome_ordinality
+    FROM jsonb_array_elements(p_outcomes) WITH ORDINALITY AS outcome_rows(outcome, ordinality)
   ),
   parsed_events AS (
     SELECT
       event,
       outcomes.outcome_ordinality,
-      event_ordinality::BIGINT AS event_ordinality
+      event_ordinality::BIGINT AS event_ordinality,
+      CASE
+        WHEN COALESCE(outcome->>'streamSequence', '') ~ '^[0-9]+$'
+         AND (outcome->>'streamSequence')::NUMERIC BETWEEN 1 AND 92233720368547758
+        THEN (outcome->>'streamSequence')::BIGINT
+        ELSE NULL
+      END AS stream_sequence
     FROM outcomes
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE
@@ -335,9 +221,19 @@ BEGIN
       END
     ) WITH ORDINALITY AS event_rows(event, event_ordinality)
   ),
+  deterministic_events AS (
+    SELECT *
+    FROM parsed_events
+    WHERE stream_sequence IS NOT NULL
+  ),
+  legacy_events AS (
+    SELECT *
+    FROM parsed_events
+    WHERE stream_sequence IS NULL
+  ),
   trace_counts AS (
     SELECT event->>'traceId' AS trace_id, COUNT(*)::BIGINT AS event_count
-    FROM parsed_events
+    FROM legacy_events
     GROUP BY event->>'traceId'
   ),
   trace_allocations AS (
@@ -355,16 +251,36 @@ BEGIN
   ),
   ordered_events AS (
     SELECT
-      parsed.event,
-      parsed.outcome_ordinality,
-      parsed.event_ordinality,
+      legacy.event,
+      legacy.outcome_ordinality,
+      legacy.event_ordinality,
       row_number() OVER (
-        PARTITION BY parsed.event->>'traceId'
-        ORDER BY parsed.outcome_ordinality, parsed.event_ordinality
+        PARTITION BY legacy.event->>'traceId'
+        ORDER BY legacy.outcome_ordinality, legacy.event_ordinality
       ) - 1 AS trace_offset
-    FROM parsed_events parsed
+    FROM legacy_events legacy
   ),
-  insert_events AS (
+  insert_deterministic_events AS (
+    INSERT INTO runtime.runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
+    SELECT
+      event->>'eventId',
+      event->>'eventType',
+      event->>'orderId',
+      event->>'traceId',
+      event->>'causationId',
+      event->>'correlationId',
+      COALESCE(event->>'actorId', ''),
+      event->>'producer',
+      event->>'schemaVersion',
+      deterministic_events.stream_sequence * 100 + deterministic_events.event_ordinality,
+      COALESCE(event->'payloadJson', '{}'::jsonb),
+      event->>'occurredAt'
+    FROM deterministic_events
+    ORDER BY deterministic_events.event->>'eventId'
+    ON CONFLICT (event_id) DO NOTHING
+    RETURNING 1
+  ),
+  insert_legacy_events AS (
     INSERT INTO runtime.runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
     SELECT
       event->>'eventId',
@@ -391,14 +307,42 @@ BEGIN
 END;
 $$;
 
-CREATE INDEX IF NOT EXISTS idx_order_lifecycle_state_book_numeric_price
-  ON runtime.order_lifecycle_state(
-    instrument_id,
-    status,
-    side,
-    ((limit_price)::NUMERIC)
-  )
-  WHERE order_type = 'LIMIT'
-    AND status IN ('OPEN', 'PARTIALLY_FILLED')
-    AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
-    AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$';
+CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcomes(
+  p_outcomes JSONB,
+  p_projection_stage TEXT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  normalized_stage TEXT := LOWER(COALESCE(NULLIF(p_projection_stage, ''), 'full'));
+  persisted_count BIGINT := 0;
+BEGIN
+  IF normalized_stage IN ('full', 'all') THEN
+    persisted_count := runtime.runtime_persist_submit_outcome_status_stage(p_outcomes);
+    PERFORM runtime.runtime_persist_submit_outcome_timeline_stage(p_outcomes);
+    RETURN persisted_count;
+  END IF;
+
+  IF normalized_stage IN ('command-status', 'status', 'lifecycle', 'core') THEN
+    RETURN runtime.runtime_persist_submit_outcome_status_stage(p_outcomes);
+  END IF;
+
+  IF normalized_stage IN ('timeline', 'event-timeline', 'events') THEN
+    RETURN runtime.runtime_persist_submit_outcome_timeline_stage(p_outcomes);
+  END IF;
+
+  RAISE EXCEPTION 'unsupported submit outcome projection stage: %', p_projection_stage;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcomes(
+  p_outcomes JSONB
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN runtime.runtime_persist_submit_outcomes(p_outcomes, 'full');
+END;
+$$;

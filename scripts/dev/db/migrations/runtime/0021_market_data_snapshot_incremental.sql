@@ -5,7 +5,7 @@
 -- whether that instrument's book changed. Track which instruments were touched by the
 -- last order_lifecycle_state projection cycle and only recompute those.
 
-CREATE TABLE IF NOT EXISTS runtime.market_data_snapshot_dirty (
+CREATE UNLOGGED TABLE IF NOT EXISTS runtime.market_data_snapshot_dirty (
   instrument_id TEXT PRIMARY KEY,
   dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -166,7 +166,7 @@ BEGIN
   mark_market_data_dirty AS (
     INSERT INTO runtime.market_data_snapshot_dirty(instrument_id)
     SELECT DISTINCT instrument_id FROM calculated
-    ON CONFLICT (instrument_id) DO UPDATE SET dirtied_at = now()
+    ON CONFLICT (instrument_id) DO NOTHING
     RETURNING 1
   ),
   cleared AS (

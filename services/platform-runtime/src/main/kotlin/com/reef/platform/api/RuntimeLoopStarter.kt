@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.defaultRuntimePersistence
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 import java.time.Duration
 
 /**
@@ -26,6 +27,7 @@ internal class RuntimeLoopStarter(
     private val streamAckProjectionName: String,
     private val streamAckProjectionSource: CanonicalProjectionSource,
     private val streamAckProjectionEventStream: String,
+    private val streamAckProjectionStage: ProjectionStage,
     private val streamAckProjectorBatchSize: Int,
     private val streamAckProjectorPollMs: Long,
     private val marketDataProjectorEnabled: Boolean,
@@ -77,6 +79,7 @@ internal class RuntimeLoopStarter(
             projectionName = streamAckProjectionName,
             projectionSource = streamAckProjectionSource,
             eventStream = streamAckProjectionEventStream,
+            projectionStage = streamAckProjectionStage,
             partitions = partitions,
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,

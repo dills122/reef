@@ -93,6 +93,7 @@ const projectionResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-
     REEF_DO_MIN_PROJECTED_RPS: "2400",
     REEF_DO_MAX_PROJECTION_LAG: "0",
     REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "0",
+    REEF_DO_MAX_PROJECTION_DB_RETRIES: "0",
   },
   encoding: "utf8",
 });
@@ -172,6 +173,27 @@ assert.equal(projectionGapResult.status, 1);
 assert.match(projectionGapResult.stderr, /actual projected rps 2395\.00 < required 2400\.00/);
 assert.match(projectionGapResult.stderr, /actual projection lag 2\.00 > required 0\.00/);
 assert.match(projectionGapResult.stderr, /materialized\/projected gap 10\.00 > required 0\.00/);
+
+const projectionRetryArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-retry-"));
+writeMaterializerProjectionReport(projectionRetryArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  retryDelta: 1,
+});
+writeTelemetry(projectionRetryArtifactDir);
+const projectionRetryResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionRetryArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_MAX_PROJECTION_DB_RETRIES: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionRetryResult.status, 1);
+assert.match(projectionRetryResult.stderr, /streamAckProjector\.delta\.retryDelta 1\.00 > required 0\.00/);
 
 const arenaArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-"));
 writeArenaReport(arenaArtifactDir, { healthStatus: "warn" });
@@ -560,11 +582,21 @@ function writeMaterializerProjectionReport(dir, name, rate, total, options) {
           delta: {
             projectedDelta: options.projected,
             failedDelta: 0,
+            retryDelta: options.retryDelta ?? 0,
+            retryExhaustedDelta: options.retryExhaustedDelta ?? 0,
             afterLag: options.lag,
           },
           after: {
             enabled: true,
-            metrics: { failed: 0, lastError: "" },
+            metrics: {
+              failed: 0,
+              lastError: "",
+              retryAttempts: options.retryDelta ?? 0,
+              retryExhausted: options.retryExhaustedDelta ?? 0,
+              lastRetryAt: "",
+              lastRetrySqlState: "",
+              lastRetryError: "",
+            },
             watermarks: [],
           },
           probes: { after: { ok: true, status: 200 } },

@@ -25,8 +25,68 @@ import com.reef.platform.infrastructure.config.RuntimeEnv
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLException
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import javax.sql.DataSource
+
+data class ProjectionPersistenceRetryStats(
+    val retryAttempts: Long,
+    val retryExhausted: Long,
+    val lastRetryAt: String,
+    val lastRetrySqlState: String,
+    val lastRetryError: String
+)
+
+object ProjectionPersistenceRetryMetrics {
+    private val retryAttempts = AtomicLong(0)
+    private val retryExhausted = AtomicLong(0)
+    private val lastRetryAtEpochMs = AtomicLong(0)
+    @Volatile
+    private var lastRetrySqlState: String = ""
+    @Volatile
+    private var lastRetryError: String = ""
+
+    fun recordRetry(sqlState: String, error: String) {
+        retryAttempts.incrementAndGet()
+        recordLastRetry(sqlState, error)
+    }
+
+    fun recordRetryExhausted(sqlState: String, error: String) {
+        retryExhausted.incrementAndGet()
+        recordLastRetry(sqlState, error)
+    }
+
+    fun snapshot(): ProjectionPersistenceRetryStats {
+        return ProjectionPersistenceRetryStats(
+            retryAttempts = retryAttempts.get(),
+            retryExhausted = retryExhausted.get(),
+            lastRetryAt = instantString(lastRetryAtEpochMs.get()),
+            lastRetrySqlState = lastRetrySqlState,
+            lastRetryError = lastRetryError
+        )
+    }
+
+    fun resetForTests() {
+        retryAttempts.set(0)
+        retryExhausted.set(0)
+        lastRetryAtEpochMs.set(0)
+        lastRetrySqlState = ""
+        lastRetryError = ""
+    }
+
+    private fun recordLastRetry(sqlState: String, error: String) {
+        lastRetryAtEpochMs.set(System.currentTimeMillis())
+        lastRetrySqlState = sqlState
+        lastRetryError = error
+    }
+
+    private fun instantString(epochMs: Long): String {
+        if (epochMs <= 0) return ""
+        return Instant.ofEpochMilli(epochMs).toString()
+    }
+}
 
 class PostgresRuntimePersistence(
     private val dataSource: DataSource,
@@ -46,6 +106,10 @@ class PostgresRuntimePersistence(
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED", true)
     private val streamAckCanonicalQueryIndexesEnabled: Boolean =
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED", true)
+    private val projectorDbRetryAttempts: Int =
+        RuntimeEnv.int("STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS", 3, min = 1)
+    private val projectorDbRetryBackoffMs: Long =
+        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L)
 
     private data class ProjectionCandidate(
         val partitionId: Int,
@@ -367,6 +431,8 @@ class PostgresRuntimePersistence(
                       sequence_number BIGINT NOT NULL,
                       payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
                       occurred_at TEXT NOT NULL,
+                      modify_quantity_units TEXT NOT NULL DEFAULT '',
+                      modify_limit_price TEXT NOT NULL DEFAULT '',
                       event_id_uuid UUID,
                       occurred_at_ts TIMESTAMPTZ
                     )
@@ -387,8 +453,23 @@ class PostgresRuntimePersistence(
                 stmt.execute(
                     """
                     ALTER TABLE ${names.runtimeEvents}
+                    ADD COLUMN IF NOT EXISTS modify_quantity_units TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS modify_limit_price TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.runtimeEvents}
                     ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
                     ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeEventPayloads} (
+                      event_id TEXT PRIMARY KEY,
+                      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
+                    )
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -453,12 +534,6 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_event
-                    ON ${names.runtimeEvents}(occurred_at DESC, event_id DESC)
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_typed
                     ON ${names.runtimeEvents}(occurred_at_ts DESC, event_id_uuid DESC)
                     WHERE occurred_at_ts IS NOT NULL
@@ -469,6 +544,20 @@ class PostgresRuntimePersistence(
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_order_occurred_typed
                     ON ${names.runtimeEvents}(order_id, occurred_at_ts DESC, event_id_uuid DESC)
                     WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_order_modified_lifecycle
+                    ON ${names.runtimeEvents}(
+                      order_id,
+                      occurred_at_ts DESC NULLS LAST,
+                      occurred_at DESC,
+                      sequence_number DESC,
+                      event_id_uuid DESC NULLS LAST,
+                      event_id DESC
+                    )
+                    WHERE event_type = 'OrderModified'
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -1293,7 +1382,7 @@ class PostgresRuntimePersistence(
                         SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
                       ) dirty_ids
                       WHERE COALESCE(order_id, '') <> ''
-                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now();
+                      ON CONFLICT (order_id) DO NOTHING;
 
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
@@ -1537,7 +1626,7 @@ class PostgresRuntimePersistence(
                           event->>'occurredAt'
                         FROM ordered_events
                         JOIN trace_starts ON trace_starts.trace_id = ordered_events.event->>'traceId'
-                        ORDER BY ordered_events.outcome_ordinality, ordered_events.event_ordinality
+                        ORDER BY ordered_events.event->>'eventId'
                         ON CONFLICT (event_id) DO NOTHING
                         RETURNING 1
                       )
@@ -2534,16 +2623,27 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectCanonicalCommandOutcomes(
+    fun projectCanonicalCommandOutcomes(
         projectionName: String,
         batchSize: Int,
         partitions: List<Int>,
         includeFills: Boolean,
         eventStream: String
     ): Long {
+        return projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, ProjectionStage.Full)
+    }
+
+    override fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>,
+        includeFills: Boolean,
+        eventStream: String,
+        projectionStage: ProjectionStage
+    ): Long {
         if (batchSize <= 0) return 0
-        if (projectionStoreSeparated()) {
-            return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream)
+        if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full) {
+            return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
         }
         canonicalConnection().use { conn ->
             conn.prepareStatement(
@@ -2589,24 +2689,12 @@ class PostgresRuntimePersistence(
             .take(batchSize)
         if (candidates.isEmpty()) return 0
 
-        projectionConnection().use { conn ->
-            val previousAutoCommit = conn.autoCommit
-            conn.autoCommit = false
-            try {
-                val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
-                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
-                maybeFailAfterProjectorRowsBeforeWatermark(conn)
-                updateProjectionWatermarks(conn, projectionName, candidates)
-                conn.commit()
-                return candidates.size.toLong()
-            } catch (ex: Exception) {
-                conn.rollback()
-                recordProjectionFailure(conn, projectionName, ex.message ?: ex::class.simpleName ?: "unknown")
-                conn.commit()
-                throw ex
-            } finally {
-                conn.autoCommit = previousAutoCommit
-            }
+        return executeProjectionTransactionWithRetry(projectionName) { conn ->
+            val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
+            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            updateProjectionWatermarks(conn, projectionName, candidates)
+            candidates.size.toLong()
         }
     }
 
@@ -2615,7 +2703,8 @@ class PostgresRuntimePersistence(
         batchSize: Int,
         partitions: List<Int>,
         includeFills: Boolean,
-        eventStream: String
+        eventStream: String,
+        projectionStage: ProjectionStage = ProjectionStage.Full
     ): Long {
         val effectiveBatchSize = batchSize.coerceAtMost(CanonicalCommandOutcomeProjectionMaxBatchSize)
         val scopedEventStream = eventStream.trim()
@@ -2646,35 +2735,96 @@ class PostgresRuntimePersistence(
             .take(effectiveBatchSize)
         if (candidates.isEmpty()) return 0
 
-        projectionConnection().use { conn ->
-            val previousAutoCommit = conn.autoCommit
-            conn.autoCommit = false
-            try {
-                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
-                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
-                maybeFailAfterProjectorRowsBeforeWatermark(conn)
-                updateProjectionWatermarks(
-                    conn,
-                    projectionName,
-                    candidates.map {
-                        ProjectionCandidate(
-                            partitionId = it.partitionId,
-                            partitionSequence = it.partitionSequence,
-                            resultPayload = ""
-                        )
-                    }
-                )
-                conn.commit()
-                return candidates.size.toLong()
-            } catch (ex: Exception) {
-                conn.rollback()
-                recordProjectionFailure(conn, projectionName, ex.message ?: ex::class.simpleName ?: "unknown")
-                conn.commit()
-                throw ex
-            } finally {
-                conn.autoCommit = previousAutoCommit
-            }
+        return executeProjectionTransactionWithRetry(projectionName) { conn ->
+            val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
+            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size, projectionStage)
+            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            updateProjectionWatermarks(
+                conn,
+                projectionName,
+                candidates.map {
+                    ProjectionCandidate(
+                        partitionId = it.partitionId,
+                        partitionSequence = it.partitionSequence,
+                        resultPayload = ""
+                    )
+                }
+            )
+            candidates.size.toLong()
         }
+    }
+
+    private fun executeProjectionTransactionWithRetry(
+        projectionName: String,
+        operation: (Connection) -> Long
+    ): Long {
+        var attempt = 1
+        while (true) {
+            projectionConnection().use { conn ->
+                val previousAutoCommit = conn.autoCommit
+                conn.autoCommit = false
+                try {
+                    val result = operation(conn)
+                    conn.commit()
+                    return result
+                } catch (ex: Exception) {
+                    rollbackQuietly(conn)
+                    val sqlState = retryableProjectionSqlState(ex)
+                    if (sqlState != null && attempt < projectorDbRetryAttempts) {
+                        ProjectionPersistenceRetryMetrics.recordRetry(sqlState, ex.message ?: ex::class.simpleName ?: "unknown")
+                    } else {
+                        if (sqlState != null) {
+                            ProjectionPersistenceRetryMetrics.recordRetryExhausted(sqlState, ex.message ?: ex::class.simpleName ?: "unknown")
+                        }
+                        recordProjectionFailure(conn, projectionName, projectionFailureMessage(ex))
+                        conn.commit()
+                        throw ex
+                    }
+                } finally {
+                    conn.autoCommit = previousAutoCommit
+                }
+            }
+            sleepBeforeProjectionRetry(attempt)
+            attempt += 1
+        }
+    }
+
+    private fun sleepBeforeProjectionRetry(attempt: Int) {
+        if (projectorDbRetryBackoffMs <= 0L) return
+        Thread.sleep(projectorDbRetryBackoffMs * attempt.coerceAtLeast(1))
+    }
+
+    private fun rollbackQuietly(conn: Connection) {
+        try {
+            conn.rollback()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun retryableProjectionSqlState(error: Throwable): String? {
+        val sqlState = sqlState(error) ?: return null
+        return when (sqlState) {
+            "40001", "40P01", "55P03" -> sqlState
+            else -> null
+        }
+    }
+
+    private fun sqlState(error: Throwable?): String? {
+        var current = error
+        while (current != null) {
+            if (current is SQLException) {
+                val state = current.sqlState
+                if (!state.isNullOrBlank()) return state
+            }
+            current = current.cause
+        }
+        return null
+    }
+
+    private fun projectionFailureMessage(error: Throwable): String {
+        val state = sqlState(error)
+        val message = error.message ?: error::class.simpleName ?: "unknown"
+        return if (state.isNullOrBlank()) message else "SQLSTATE $state: $message"
     }
 
     private fun maybeFailAfterProjectorRowsBeforeWatermark(conn: Connection) {
@@ -2927,13 +3077,24 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun persistSubmitOutcomePayloads(conn: Connection, payloadJson: String, expectedCount: Int) {
+    private fun persistSubmitOutcomePayloads(
+        conn: Connection,
+        payloadJson: String,
+        expectedCount: Int,
+        projectionStage: ProjectionStage = ProjectionStage.Full
+    ) {
+        val sql = if (projectionStage == ProjectionStage.Full) {
+            "SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)"
+        } else {
+            "SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb, ?)"
+        }
         conn.prepareStatement(
-            """
-            SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)
-            """.trimIndent()
+            sql
         ).use { ps ->
             ps.setString(1, payloadJson)
+            if (projectionStage != ProjectionStage.Full) {
+                ps.setString(2, projectionStage.configValue)
+            }
             ps.executeQuery().use { rs ->
                 rs.next()
                 check(rs.getLong(1) == expectedCount.toLong()) {
@@ -3339,12 +3500,17 @@ class PostgresRuntimePersistence(
                     latest_modify AS (
                       SELECT DISTINCT ON (order_id)
                         order_id,
-                        COALESCE(NULLIF(payload_json->>'quantityUnits', ''), '') AS modified_quantity_units,
-                        COALESCE(NULLIF(payload_json->>'limitPrice', ''), '') AS modified_limit_price,
+                        COALESCE(NULLIF(modify_quantity_units, ''), '') AS modified_quantity_units,
+                        COALESCE(NULLIF(modify_limit_price, ''), '') AS modified_limit_price,
                         occurred_at
                       FROM ${names.runtimeEvents}
                       WHERE event_type = 'OrderModified'
-                      ORDER BY order_id, occurred_at DESC, sequence_number DESC, event_id DESC
+                      ORDER BY order_id,
+                        occurred_at_ts DESC NULLS LAST,
+                        occurred_at DESC,
+                        sequence_number DESC,
+                        event_id_uuid DESC NULLS LAST,
+                        event_id DESC
                     ),
                     order_event_state AS (
                       SELECT
@@ -4071,14 +4237,30 @@ class PostgresRuntimePersistence(
                 val nextByTrace = startByTrace.toMutableMap()
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+                    INSERT INTO ${names.runtimeEvents}(
+                      event_id,
+                      event_type,
+                      order_id,
+                      trace_id,
+                      causation_id,
+                      correlation_id,
+                      actor_id,
+                      producer,
+                      schema_version,
+                      sequence_number,
+                      payload_json,
+                      occurred_at,
+                      modify_quantity_units,
+                      modify_limit_price
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?)
                     ON CONFLICT (event_id) DO NOTHING
                     """.trimIndent()
                 ).use { ps ->
                     events.forEach { event ->
                         val sequence = nextByTrace.getValue(event.traceId)
                         nextByTrace[event.traceId] = sequence + 1
+                        val modifyFacts = event.modifyFacts()
                         ps.setString(1, event.eventId)
                         ps.setString(2, event.eventType)
                         ps.setString(3, event.orderId)
@@ -4089,8 +4271,25 @@ class PostgresRuntimePersistence(
                         ps.setString(8, event.producer)
                         ps.setString(9, event.schemaVersion)
                         ps.setLong(10, sequence)
-                        ps.setString(11, event.payloadJson)
-                        ps.setString(12, event.occurredAt)
+                        ps.setString(11, event.occurredAt)
+                        ps.setString(12, modifyFacts.quantityUnits)
+                        ps.setString(13, modifyFacts.limitPrice)
+                        ps.addBatch()
+                    }
+                    ps.executeBatch()
+                }
+                conn.prepareStatement(
+                    """
+                    INSERT INTO ${names.runtimeEventPayloads}(event_id, payload_json)
+                    VALUES (?, ?::jsonb)
+                    ON CONFLICT (event_id) DO NOTHING
+                    """.trimIndent()
+                ).use { ps ->
+                    events.forEach { event ->
+                        val payload = event.payloadJson.ifBlank { "{}" }
+                        if (payload == "{}") return@forEach
+                        ps.setString(1, event.eventId)
+                        ps.setString(2, payload)
                         ps.addBatch()
                     }
                     ps.executeBatch()
@@ -4104,6 +4303,20 @@ class PostgresRuntimePersistence(
             }
         }
     }
+
+    private fun RuntimeEvent.modifyFacts(): RuntimeEventModifyFacts {
+        if (eventType != "OrderModified") return RuntimeEventModifyFacts()
+        val payload = JsonCodec.parseLegacyObjectOrEmpty(payloadJson)
+        return RuntimeEventModifyFacts(
+            quantityUnits = payload.string("quantityUnits"),
+            limitPrice = payload.string("limitPrice")
+        )
+    }
+
+    private data class RuntimeEventModifyFacts(
+        val quantityUnits: String = "",
+        val limitPrice: String = ""
+    )
 
     override fun acceptedOrder(orderId: String): PersistedOrder? {
         projectionConnection().use { conn ->
@@ -4492,23 +4705,57 @@ class PostgresRuntimePersistence(
     }
 
     override fun eventsForOrder(orderId: String): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} WHERE order_id = ? ORDER BY trace_id, sequence_number",
+        """
+        $runtimeEventSelect
+        WHERE events.order_id = ?
+        ORDER BY events.trace_id, events.sequence_number
+        """.trimIndent(),
         orderId
     )
 
     override fun eventsForTrace(traceId: String): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} WHERE trace_id = ? ORDER BY sequence_number",
+        """
+        $runtimeEventSelect
+        WHERE events.trace_id = ?
+        ORDER BY events.sequence_number
+        """.trimIndent(),
         traceId
     )
 
     override fun events(): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} ORDER BY trace_id, sequence_number"
+        """
+        $runtimeEventSelect
+        ORDER BY events.trace_id, events.sequence_number
+        """.trimIndent()
     )
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
+        """
+        $runtimeEventSelect
+        ORDER BY events.occurred_at_ts DESC NULLS LAST, events.event_id_uuid DESC NULLS LAST, events.event_id DESC
+        LIMIT ?::integer
+        """.trimIndent(),
         limit.coerceIn(0, 500).toString()
     ).asReversed()
+
+    private val runtimeEventSelect: String
+        get() = """
+            SELECT
+              events.event_id,
+              events.event_type,
+              events.order_id,
+              events.trace_id,
+              events.causation_id,
+              events.correlation_id,
+              events.actor_id,
+              events.producer,
+              events.schema_version,
+              events.sequence_number,
+              COALESCE(payloads.payload_json, events.payload_json)::TEXT AS payload_json,
+              events.occurred_at
+            FROM ${names.runtimeEvents} events
+            LEFT JOIN ${names.runtimeEventPayloads} payloads ON payloads.event_id = events.event_id
+        """.trimIndent()
 
     private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = projectionQueryList(sql, *params) {
         RuntimeEvent(
@@ -4669,7 +4916,8 @@ class PostgresRuntimePersistence(
                     occurredAt = occurredAt,
                     payloadJson = resultPayloadJson.ifBlank { "{}" }
                 )
-            )
+            ),
+            streamSequence = streamSequence
         )
     }
 

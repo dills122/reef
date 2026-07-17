@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -17,6 +18,8 @@ class CanonicalProjectionWorker(
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
     private val includeFills: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_INCLUDE_FILLS", true),
+    private val projectionStage: ProjectionStage =
+        ProjectionStage.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_STAGE", ProjectionStage.Full.configValue)),
     private val stopAfterFailure: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", false),
     private val workerName: String = "reef-canonical-projection-worker"
 ) {
@@ -44,7 +47,14 @@ class CanonicalProjectionWorker(
             HotPathMetrics.time("projector.${projectionSource.metricName}") {
                 when (projectionSource) {
                     CanonicalProjectionSource.CanonicalSubmit -> api.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
-                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream)
+                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(
+                        projectionName,
+                        batchSize,
+                        partitions,
+                        includeFills,
+                        eventStream,
+                        projectionStage
+                    )
                 }
             }.also { projected ->
                 if (projected > 0) {

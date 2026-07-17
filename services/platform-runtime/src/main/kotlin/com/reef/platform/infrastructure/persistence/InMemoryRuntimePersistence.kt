@@ -431,12 +431,23 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return outcomes.size.toLong()
     }
 
-    override fun projectCanonicalCommandOutcomes(
+    fun projectCanonicalCommandOutcomes(
         projectionName: String,
         batchSize: Int,
         partitions: List<Int>,
         includeFills: Boolean,
         eventStream: String
+    ): Long {
+        return projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, ProjectionStage.Full)
+    }
+
+    override fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>,
+        includeFills: Boolean,
+        eventStream: String,
+        projectionStage: ProjectionStage
     ): Long {
         if (batchSize <= 0) return 0
         val partitionSet = partitions.toSet()
@@ -455,8 +466,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .take(batchSize)
         if (outcomes.isEmpty()) return 0
         outcomes.forEach { outcome ->
-            saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
-            saveEvent(outcome.toRuntimeEvent())
+            if (projectionStage != ProjectionStage.Timeline) {
+                saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
+            }
+            if (projectionStage != ProjectionStage.CommandStatus) {
+                saveEvent(outcome.toRuntimeEvent())
+            }
         }
         outcomes
             .groupBy { it.partition }

@@ -184,6 +184,26 @@ class PostgresRuntimePersistenceTest {
         val event = persistence.eventsForTrace(traceId).first()
         assertEquals("trader-$suffix", event.actorId)
         assertTrue(event.payloadJson.contains("postgres-runtime-persistence-test"))
+
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  events.payload_json::text AS hot_payload,
+                  payloads.payload_json->>'source' AS cold_source
+                FROM runtime.runtime_events events
+                JOIN runtime.runtime_event_payloads payloads ON payloads.event_id = events.event_id
+                WHERE events.event_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, "evt-order-accepted-$suffix")
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals("{}", rs.getString("hot_payload"))
+                    assertEquals("postgres-runtime-persistence-test", rs.getString("cold_source"))
+                }
+            }
+        }
     }
 
     @Test

@@ -27,6 +27,7 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.ReferenceDataValidation
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
@@ -300,11 +301,12 @@ class OrderApplicationService(
         batchSize: Int,
         partitions: List<Int> = emptyList(),
         includeFills: Boolean = true,
-        eventStream: String = ""
+        eventStream: String = "",
+        projectionStage: ProjectionStage = ProjectionStage.Full
     ): Long {
         if (batchSize <= 0) return 0
         return HotPathMetrics.time("runtime.persistence.projectCanonicalCommandOutcomes") {
-            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream)
+            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
         }
     }
 

@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class InMemoryRuntimePersistenceTest {
     @Test
@@ -322,6 +323,67 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(0, status.lag)
         assertEquals(42L, status.watermarks.single().lastPartitionSequence)
         assertEquals(42L, status.watermarks.single().canonicalMaxPartitionSequence)
+    }
+
+    @Test
+    fun commandStatusProjectionStageSkipsTimelineEvents() {
+        val persistence = InMemoryRuntimePersistence()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(venueEventBatch()))
+        assertEquals(
+            1,
+            persistence.projectCanonicalCommandOutcomes(
+                projectionName = "runtime-command-status",
+                batchSize = 10,
+                partitions = emptyList(),
+                includeFills = true,
+                eventStream = "",
+                projectionStage = ProjectionStage.CommandStatus
+            )
+        )
+
+        val result = persistence.submitResult("cmd-1")
+        assertNotNull(result)
+        assertEquals("evt-1", result.accepted?.eventId)
+        assertTrue(persistence.eventsForOrder("ord-1").isEmpty())
+
+        val status = persistence.projectionStatus("runtime-command-status", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(42L, status.watermarks.single().lastPartitionSequence)
+    }
+
+    @Test
+    fun timelineProjectionStageSkipsSubmitStatusRows() {
+        val persistence = InMemoryRuntimePersistence()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(venueEventBatch()))
+        assertEquals(
+            1,
+            persistence.projectCanonicalCommandOutcomes(
+                projectionName = "runtime-timeline",
+                batchSize = 10,
+                partitions = emptyList(),
+                includeFills = true,
+                eventStream = "",
+                projectionStage = ProjectionStage.Timeline
+            )
+        )
+
+        assertEquals(null, persistence.submitResult("cmd-1"))
+        val events = persistence.eventsForOrder("ord-1")
+        assertEquals(1, events.size)
+        assertEquals("OrderAccepted", events.first().eventType)
+
+        val status = persistence.projectionStatus("runtime-timeline", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(42L, status.watermarks.single().lastPartitionSequence)
+    }
+
+    @Test
+    fun projectionStageParsesTimelineAliases() {
+        assertEquals(ProjectionStage.Timeline, ProjectionStage.fromConfig("timeline"))
+        assertEquals(ProjectionStage.Timeline, ProjectionStage.fromConfig("events"))
+        assertEquals(ProjectionStage.Timeline, ProjectionStage.fromConfig("event-timeline"))
     }
 
     @Test

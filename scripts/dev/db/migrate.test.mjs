@@ -54,6 +54,13 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0037_runtime_event_trade_archive_tables.sql",
       "runtime/0038_projection_dirty_lock_order.sql",
       "runtime/0039_command_outcome_projection_metadata.sql",
+      "runtime/0040_split_submit_outcome_projection_stages.sql",
+      "runtime/0041_deterministic_timeline_projection_sequence.sql",
+      "runtime/0042_unlogged_projection_dirty_queues.sql",
+      "runtime/0043_runtime_event_payload_cold_table.sql",
+      "runtime/0044_idempotent_lifecycle_projection.sql",
+      "runtime/0045_drop_legacy_runtime_event_indexes.sql",
+      "runtime/0046_order_modified_lifecycle_index.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -248,6 +255,60 @@ test("runtime projection lock-order migration hardens dirty queues", async () =>
   assert.match(migration.sql, /DELETE FROM runtime\.market_data_snapshot_dirty dirty\s+USING selected_dirty/);
 });
 
+test("runtime dirty queue migration moves rebuildable queues out of WAL", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0042_unlogged_projection_dirty_queues.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.order_lifecycle_dirty SET UNLOGGED/);
+  assert.match(migration.sql, /ALTER TABLE runtime\.market_data_snapshot_dirty SET UNLOGGED/);
+});
+
+test("runtime event payload migration moves event JSON off hot rows", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0043_runtime_event_payload_cold_table.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE TABLE IF NOT EXISTS runtime\.runtime_event_payloads/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS modify_quantity_units TEXT/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS modify_limit_price TEXT/);
+  assert.match(migration.sql, /INSERT INTO runtime\.runtime_event_payloads\(event_id, payload_json\)/);
+  assert.match(migration.sql, /payload_json,\s+occurred_at,\s+modify_quantity_units,\s+modify_limit_price/s);
+  assert.match(migration.sql, /'\{\}'::jsonb,\s+event->>'occurredAt'/s);
+  assert.match(migration.sql, /filled_quantity_units::TEXT/);
+  assert.doesNotMatch(migration.sql, /TRIM\(TRAILING '0' FROM filled_quantity_units::TEXT\)/);
+});
+
+test("idempotent lifecycle projection migration skips no-op row rewrites", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0044_idempotent_lifecycle_projection.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /INSERT INTO runtime\.order_lifecycle_state AS lifecycle/);
+  assert.match(migration.sql, /WHERE lifecycle\.engine_order_id IS DISTINCT FROM EXCLUDED\.engine_order_id/);
+  assert.match(migration.sql, /lifecycle\.limit_price_num IS DISTINCT FROM EXCLUDED\.limit_price_num/);
+  assert.match(migration.sql, /SELECT COUNT\(\*\) INTO projected_count FROM cleared/);
+});
+
+test("runtime event index migration drops legacy all-event indexes", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0045_drop_legacy_runtime_event_indexes.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.runtime_events_occurred_at_idx/);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.runtime_events_trace_seq_idx/);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.idx_runtime_events_occurred_event/);
+  assert.doesNotMatch(migration.sql, /runtime_events_order_occurred_idx/);
+});
+
 test("command outcome projection preserves command correlation metadata", async () => {
   const migrations = await discoverMigrations(migrationsRoot);
   const migration = migrations.find(
@@ -259,6 +320,20 @@ test("command outcome projection preserves command correlation metadata", async 
   assert.match(migration.sql, /'traceId', COALESCE\(NULLIF\(command_payload->>'traceId', ''\), command_id\)/);
   assert.match(migration.sql, /'causationId', COALESCE\(NULLIF\(command_payload->>'causationId', ''\), command_id\)/);
   assert.match(migration.sql, /'correlationId', COALESCE\(NULLIF\(command_payload->>'correlationId', ''\), command_id\)/);
+});
+
+test("submit outcome projection migration splits command-status and timeline stages", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0040_split_submit_outcome_projection_stages.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /runtime\.runtime_persist_submit_outcome_status_stage/);
+  assert.match(migration.sql, /runtime\.runtime_persist_submit_outcome_timeline_stage/);
+  assert.match(migration.sql, /p_projection_stage TEXT/);
+  assert.match(migration.sql, /'command-status', 'status', 'lifecycle', 'core'/);
+  assert.match(migration.sql, /RETURN runtime\.runtime_persist_submit_outcomes\(p_outcomes, 'full'\)/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

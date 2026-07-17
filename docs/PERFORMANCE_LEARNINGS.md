@@ -90,6 +90,162 @@ Immediate implications:
 2. The short named projection gate is green. The next projection performance gate should raise read-model freshness toward the `10k` materializer baseline while preserving separate reporting for accepted, materialized, projected, lag, and replay checks.
 3. Do not use these short `2.5k` runs as UI/control-room capacity claims; they prove read-model catch-up for the venue-event projection path only.
 
+## DigitalOcean Projection 5k Pressure Knee (July 17, 2026)
+
+The July 17 c-16 runs established the current read-model freshness knee. The
+venue-core path held `5k rps`; projection freshness did not.
+
+Evidence:
+
+- `reports/do-benchmark/do-benchmark-20260717T014839Z/`: corrected `2.5k`
+  projection freshness run passed with `149,975` attempted/accepted/direct-acked/materialized/projected,
+  lag `0`, gaps `0`, p95 `31.31ms`, p99 `79.38ms`.
+- `reports/do-benchmark/do-benchmark-20260717T015658Z/`: `5k` pressure run
+  before deterministic runtime-event insert ordering accepted/direct-acked/materialized
+  `299,950` commands with p95 `67.57ms` and p99 `138.57ms`, but projection
+  ended with projected `298,116`, lag `1,834`, materialized/projected gap
+  `1,834`, one projector failure, and one projection-postgres deadlock inside
+  `runtime.runtime_persist_submit_outcomes` while inserting `runtime_events`.
+- `reports/do-benchmark/do-benchmark-20260717T020807Z/`: after ordering
+  `runtime_events` inserts by `event_id`, the same `5k` pressure shape
+  accepted/direct-acked/materialized/projected `299,952` commands with p95
+  `69.92ms` and p99 `136.68ms`; deadlocks fell to `0` and the
+  materialized/projected count gap closed to `0`, but final projection
+  watermark lag remained `1,367`, concentrated in partitions `8-11`.
+- `reports/do-benchmark/do-benchmark-20260717T131344Z/`: after splitting
+  projection stages and fixing Docker Compose pass-through for
+  `STREAM_ACK_PROJECTION_STAGE`, the `5k` `command-status` run accepted,
+  direct-acked, materialized, and projected `299,955` commands with p95
+  `74.49ms`, p99 `112.93ms`, projection lag `0`, materialized/projected gap
+  `0`, projector failures/retries `0`, and projection-postgres deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260717T134058Z/`: after deterministic
+  timeline sequencing removed the trace allocator from new canonical payloads,
+  the `5k` full-projection run accepted, direct-acked, materialized, and
+  projected `299,804` commands with p95 `71.89ms`, p99 `112.89ms`, projection
+  lag `0`, materialized/projected gap `0`, projector failures/retries `0`, and
+  projection-postgres deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260717T142157Z/`: after making dirty
+  queues unlogged and avoiding redundant dirty conflict updates, the `5k`
+  full-projection run accepted/direct-acked/materialized `299,954` commands
+  with p95 `64.41ms` and p99 `105.69ms`, but projected only `252,866` and
+  ended with projection lag/materialized gap `47,088`. Projector
+  failures/retries/deadlocks stayed `0`.
+- `reports/do-benchmark/do-benchmark-20260717T145907Z/`: after splitting new
+  runtime event payloads into `runtime.runtime_event_payloads`, the `5k`
+  full-projection run accepted/direct-acked/materialized `299,953` commands
+  with p95 `74.55ms` and p99 `117.68ms`, but projected only `288,761` and
+  ended with projection lag/materialized gap `11,192`. Projection DB deadlocks
+  stayed `0`. The preflight smoke also caught a lifecycle regression in the new
+  function replacement: unfilled open orders rendered `filled_quantity_units`
+  as `''` instead of `0`.
+- `reports/do-benchmark/do-benchmark-20260717T151610Z/`: after fixing the
+  lifecycle zero rendering in the `0043` function replacement, the same `5k`
+  full-projection shape passed strict freshness with `299,955`
+  attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`,
+  p95 `63.53ms`, p99 `108.11ms`, and projection DB deadlocks `0`.
+- `reports/do-benchmark/do-benchmark-20260717T163043Z/`: after adding the
+  lifecycle no-op rewrite guard, the same `5k` full-projection shape
+  accepted/direct-acked/materialized `300,015` commands with p95 `71.77ms` and
+  p99 `111.94ms`, but projected only `288,242` and ended with projection lag
+  `13,773` and materialized/projected gap `11,773`. Projector
+  failures/retries/deadlocks stayed `0`.
+- `reports/do-benchmark/do-benchmark-20260717T170604Z/`: after dropping three
+  legacy all-event runtime-event indexes, the same `5k` full-projection shape
+  accepted/direct-acked/materialized `300,000` commands with p95 `76.46ms` and
+  p99 `119.44ms`, projected `298,353`, and ended with projection
+  lag/materialized gap `1,647`. Projector failures/retries/deadlocks stayed
+  `0`.
+
+Database pressure in the patched `5k` run:
+
+- canonical runtime DB: about `729MB` WAL, `2.43KB` WAL per accepted command,
+  `299,952` canonical command outcomes, `6,603` venue-event batches, and no
+  deadlocks.
+- projection DB: about `2.01GB` WAL, `6.71KB` WAL per accepted command,
+  `2.05M` inserted tuples, `47k` updated tuples, `5.03GB` temp bytes, and no
+  deadlocks after deterministic event insert ordering.
+- hottest projection tables: `runtime_events`, `executions`, `trades`,
+  `orders`, `order_lifecycle_state`, `submit_results`,
+  `runtime_trace_sequences`, dirty queues, and market-data projection tables.
+- command-status stage projection DB: about `1.22GB` WAL, `4.06KB` WAL per
+  accepted command, `1.48M` inserted tuples, `47k` updated tuples, `3.87GB`
+  temp bytes, and no `runtime_events` or `runtime_trace_sequences` row growth.
+- deterministic-timeline full projection DB: about `1.94GB` WAL, `6.48KB` WAL
+  per accepted command, `1.75M` inserted tuples, `47k` updated tuples, `5.59GB`
+  temp bytes, all projector partition watermarks at lag `0`, and no tracked
+  `runtime_trace_sequences` table growth. `runtime_events` remained the hottest
+  table with `270,015` inserts and about `588MB` table/index growth.
+- unlogged dirty-queue A/B DB: about `1.79GB` WAL, `5.98KB` WAL per accepted
+  command, `1.73M` inserted tuples, `25k` updated tuples, `5.60GB` temp bytes,
+  dirty-queue updates `0`, `order_lifecycle_dirty` growth down to `~13.9MB`,
+  but final projection lag `47,088`.
+- runtime-event hot/cold A/B DB: about `1.88GB` WAL, `6.27KB` WAL per accepted
+  command, `2.00M` inserted tuples, `27.5k` updated tuples, `6.14GB` temp
+  bytes. `runtime_events` growth fell to `~335MB`, but
+  `runtime_event_payloads` added `~296MB`, so the split moved cold JSON off the
+  hot row but did not remove enough total write work to preserve `5k`
+  freshness.
+- corrected hot/cold full-projection DB: about `1.89GB` WAL, `6.31KB` WAL per
+  accepted command, `2.01M` inserted tuples, `32.6k` updated tuples, and
+  `6.11GB` temp bytes. `runtime_events` grew `~347MB`; the cold
+  `runtime_event_payloads` table grew `~297MB`.
+- lifecycle no-op rewrite A/B DB: about `1.90GB` WAL, `6.32KB` WAL per
+  accepted command, `2.01M` inserted tuples, `32.1k` updated tuples, and
+  `6.11GB` temp bytes. `runtime_events` grew `~345MB`; the cold
+  `runtime_event_payloads` table grew `~297MB`; lifecycle updates remained in
+  the same range, so the guard did not move the bottleneck.
+- runtime-event legacy index cut DB: about `1.77GB` WAL, `5.92KB` WAL per
+  accepted command, `2.02M` inserted tuples, `33.7k` updated tuples, and
+  `7.72GB` temp bytes. `runtime_events` index growth fell to `~173MB` from
+  `~243-245MB` in prior comparable runs, but `runtime_event_payloads` stayed
+  around `~297MB` and temp bytes rose, so row/payload/temp work remains.
+
+Immediate implications:
+
+1. The current `5k` bottleneck is not API intake, direct matching consumption,
+   durable venue-event publication, or compact canonical materialization.
+2. Projection write amplification is the active knee. The projection path is
+   doing several million row mutations and multiple GB of WAL/temp work for a
+   one-minute `5k` sample.
+3. Deterministic index-key ordering is worth keeping: it removed the observed
+   deadlock/count-gap failure mode, but it does not solve zero-lag freshness.
+4. The projection-stage split is a valid direction: command-status plus
+   own-order lifecycle freshness is green at `5k`, and full projection is now
+   green at `5k/60s` after deterministic timeline sequencing. Keep separate
+   SLOs for command status, lifecycle, timeline, market data, and analytics
+   instead of forcing every query table to share one freshness claim.
+5. The next fixes should reduce `runtime_events`, remaining dirty-table, and
+   lifecycle/fill write amplification before promoting longer `5k` soaks or
+   `7.5k`/`10k` projection gates.
+6. Dirty queue state is rebuildable and should not consume durable WAL budget:
+   the local follow-up makes `order_lifecycle_dirty` and
+   `market_data_snapshot_dirty` unlogged and avoids redundant conflict updates.
+   The remote comparison lowered dirty-table pressure but did not preserve
+   `5k` full-projection freshness, so do not treat it as a promotion fix.
+   The next local fix moved new `runtime_events` payload JSON to
+   `runtime.runtime_event_payloads` while keeping `OrderModified` lifecycle
+   facts hot on `runtime_events`; the corrected DO run preserved `5k/60s`
+   freshness, but total event storage remained high. The next implementation
+   step is reducing remaining lifecycle/fill/event storage write shape rather
+   than treating the side-table split as a sufficient promotion fix.
+   The follow-up lifecycle projector change keeps dirty-row clearing as the
+   progress counter but skips no-op `order_lifecycle_state` rewrites and avoids
+   market-snapshot dirty fanout when the recomputed lifecycle row is unchanged.
+   The remote A/B showed that this is correct write hygiene but not enough to
+   preserve `5k` full-projection freshness; event/payload/index volume remains
+   the next target.
+   The next local event-index slice drops three legacy all-event indexes and
+   aligns recent event reads with the typed timestamp index. The remote A/B
+   confirmed the expected index-byte reduction and much smaller final lag, but
+   strict freshness still failed; next work should focus on the broad
+   order-scoped lifecycle index and total event/payload row volume.
+   The follow-up local slice replaces that broad order-scoped runtime-event
+   index with a partial `OrderModified` lifecycle index and keeps the typed
+   order/timestamp index for all-event lifecycle rollup. Measure this in the
+   next `5k` full-projection gate before cutting payload/event rows.
+7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+   as the implementation ladder before raising projection gates above `2.5k`.
+
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.

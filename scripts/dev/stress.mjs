@@ -81,6 +81,7 @@ const failOnStreamAckProjectorFailures =
 const maxStreamAckProjectorFailedDelta = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_FAILED_DELTA", "0"));
 const maxStreamAckProjectorLag = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_LAG", "0"));
 const maxStreamAckProjectionGap = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTION_GAP", "0"));
+const maxStreamAckProjectorRetryDelta = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA", "0"));
 const streamAckProjectorDrainWaitMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS", "0"));
 const streamAckProjectorDrainPollMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS", "1000"));
 const streamAckProjectorUrls = parseCsvStrings(
@@ -1031,9 +1032,14 @@ function aggregateStreamAckProjectorStatus(probes) {
     projected: 0,
     failed: 0,
     emptyPolls: 0,
+    retryAttempts: 0,
+    retryExhausted: 0,
     lastProjectedAt: "",
     lastFailedAt: "",
     lastError: "",
+    lastRetryAt: "",
+    lastRetrySqlState: "",
+    lastRetryError: "",
   };
   let projectedCount = 0;
   let statusLag = 0;
@@ -1043,9 +1049,14 @@ function aggregateStreamAckProjectorStatus(probes) {
     metrics.projected += Number(rawMetrics.projected ?? 0);
     metrics.failed += Number(rawMetrics.failed ?? 0);
     metrics.emptyPolls += Number(rawMetrics.emptyPolls ?? 0);
+    metrics.retryAttempts += Number(rawMetrics.retryAttempts ?? 0);
+    metrics.retryExhausted += Number(rawMetrics.retryExhausted ?? 0);
     metrics.lastProjectedAt = maxIso(metrics.lastProjectedAt, rawMetrics.lastProjectedAt ?? "");
     metrics.lastFailedAt = maxIso(metrics.lastFailedAt, rawMetrics.lastFailedAt ?? "");
     metrics.lastError = rawMetrics.lastError || metrics.lastError;
+    metrics.lastRetryAt = maxIso(metrics.lastRetryAt, rawMetrics.lastRetryAt ?? "");
+    metrics.lastRetrySqlState = rawMetrics.lastRetrySqlState || metrics.lastRetrySqlState;
+    metrics.lastRetryError = rawMetrics.lastRetryError || metrics.lastRetryError;
     projectedCount = Math.max(projectedCount, Number(projector.status.projectedCount ?? 0));
     statusLag += Number(projector.status.lag ?? 0);
     rawWatermarks.push(...(projector.status.watermarks ?? []));
@@ -1056,6 +1067,7 @@ function aggregateStreamAckProjectorStatus(probes) {
     enabled: projectors.some((projector) => projector.status.status === "running"),
     implementation: projectors.find((projector) => projector.status.implementation)?.status.implementation ?? "",
     projectionName: projectors.find((projector) => projector.status.projectionName)?.status.projectionName ?? "",
+    projectionStage: projectors.find((projector) => projector.status.projectionStage)?.status.projectionStage ?? "",
     projectedCount,
     lag,
     metrics,
@@ -1063,6 +1075,7 @@ function aggregateStreamAckProjectorStatus(probes) {
       index: projector.index,
       url: projector.url,
       status: projector.status.status,
+      projectionStage: projector.status.projectionStage ?? "",
       partitions: projector.status.partitions ?? [],
       projectedCount: projector.status.projectedCount,
       lag: projector.status.lag,
@@ -1460,6 +1473,8 @@ function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, a
     const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
     const projectedDelta = Number(after?.metrics?.projected ?? 0) - Number(before?.metrics?.projected ?? 0);
     const failedDelta = Number(after?.metrics?.failed ?? 0) - Number(before?.metrics?.failed ?? 0);
+    const retryDelta = Number(after?.metrics?.retryAttempts ?? 0) - Number(before?.metrics?.retryAttempts ?? 0);
+    const retryExhaustedDelta = Number(after?.metrics?.retryExhausted ?? 0) - Number(before?.metrics?.retryExhausted ?? 0);
     const lagDelta = Number(after?.lag ?? 0) - Number(before?.lag ?? 0);
     report.streamAckProjector = {
       before,
@@ -1468,6 +1483,8 @@ function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, a
         projectedDelta,
         projectedRps: durationSeconds > 0 ? projectedDelta / durationSeconds : 0,
         failedDelta,
+        retryDelta,
+        retryExhaustedDelta,
         lagDelta,
         beforeLag: Number(before?.lag ?? 0),
         afterLag: Number(after?.lag ?? 0),
@@ -2412,10 +2429,18 @@ function evaluateStreamAckProjectorGuardrail(reportFiles) {
       );
       const projectedDelta = Number(report.streamAckProjector.delta.projectedDelta ?? 0);
       const failedDelta = Number(report.streamAckProjector.delta.failedDelta ?? 0);
+      const retryDelta = Number(report.streamAckProjector.delta.retryDelta ?? 0);
+      const retryExhaustedDelta = Number(report.streamAckProjector.delta.retryExhaustedDelta ?? 0);
       const afterLag = Number(report.streamAckProjector.delta.afterLag ?? 0);
       const projectionGap = Math.max(expectedProjected - projectedDelta, 0);
       if (failedDelta > maxStreamAckProjectorFailedDelta) {
         failures.push(`${path}: stream-ack projector failedDelta ${failedDelta} > ${maxStreamAckProjectorFailedDelta}`);
+      }
+      if (retryDelta > maxStreamAckProjectorRetryDelta) {
+        failures.push(`${path}: stream-ack projector retryDelta ${retryDelta} > ${maxStreamAckProjectorRetryDelta}`);
+      }
+      if (retryExhaustedDelta > 0) {
+        failures.push(`${path}: stream-ack projector retryExhaustedDelta ${retryExhaustedDelta} > 0`);
       }
       if (afterLag > maxStreamAckProjectorLag) {
         failures.push(`${path}: stream-ack projector afterLag ${afterLag} > ${maxStreamAckProjectorLag}`);

@@ -21,6 +21,7 @@ const minProjectedRps = parseOptionalNumber(process.env.REEF_DO_MIN_PROJECTED_RP
 const maxProjectionLag = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_LAG);
 const maxMaterializedToProjectedGap = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP);
 const maxProjectionDbDeadlocks = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_DB_DEADLOCKS);
+const maxProjectionDbRetries = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_DB_RETRIES);
 const minStreamDirectActivePartitions = parseOptionalNumber(process.env.REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS);
 const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW);
 const maxArenaFinalCompletionLagMs = parseOptionalNonNegativeNumber(process.env.REEF_DO_ARENA_MAX_FINAL_COMPLETION_LAG_MS);
@@ -221,6 +222,15 @@ function validateMaterializerProjectionReport(label, report) {
   }
 
   checkZero(label, "streamAckProjector.delta.failedDelta", projectorDelta.failedDelta);
+  checkZero(label, "streamAckProjector.delta.retryExhaustedDelta", projectorDelta.retryExhaustedDelta);
+  if (maxProjectionDbRetries !== undefined) {
+    const retryDelta = Number(projectorDelta.retryDelta ?? 0);
+    if (retryDelta > maxProjectionDbRetries) {
+      failures.push(
+        `${label}: streamAckProjector.delta.retryDelta ${formatNumber(retryDelta)} > required ${formatNumber(maxProjectionDbRetries)}`,
+      );
+    }
+  }
   const projected = Number(projectorDelta.projectedDelta ?? 0);
   if (projected <= 0) {
     failures.push(`${label}: streamAckProjector.delta.projectedDelta must be > 0`);

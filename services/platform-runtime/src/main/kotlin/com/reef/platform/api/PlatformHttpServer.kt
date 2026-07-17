@@ -89,6 +89,7 @@ import com.reef.platform.application.settlement.TradeSettlementObligationMateria
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
@@ -506,6 +507,8 @@ class PlatformHttpServer(
     private val streamAckProjectionSource: CanonicalProjectionSource =
         CanonicalProjectionSource.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_SOURCE", CanonicalProjectionSource.CanonicalSubmit.configValue)),
     private val streamAckProjectionEventStream: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_EVENT_STREAM", ""),
+    private val streamAckProjectionStage: ProjectionStage =
+        ProjectionStage.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_STAGE", ProjectionStage.Full.configValue)),
     private val streamAckProjectorPartitions: String = RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", "all"),
     private val streamAckProjectorBatchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val streamAckProjectorPollMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
@@ -628,6 +631,7 @@ class PlatformHttpServer(
         streamAckProjectionName = streamAckProjectionName,
         streamAckProjectionSource = streamAckProjectionSource,
         streamAckProjectionEventStream = streamAckProjectionEventStream,
+        streamAckProjectionStage = streamAckProjectionStage,
         streamAckProjectorBatchSize = streamAckProjectorBatchSize,
         streamAckProjectorPollMs = streamAckProjectorPollMs,
         marketDataProjectorEnabled = marketDataProjectorEnabled,
@@ -688,6 +692,7 @@ class PlatformHttpServer(
         streamAckProjectionName = streamAckProjectionName,
         streamAckProjectionSource = streamAckProjectionSource,
         streamAckProjectionEventStream = streamAckProjectionEventStream,
+        streamAckProjectionStage = streamAckProjectionStage,
         projectorPartitions = { runtimeLoopStarter.projectorPartitions() }
     )
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
@@ -1529,6 +1534,7 @@ class PlatformHttpServer(
                 "streamAckProjectionName" to streamAckProjectionName,
                 "streamAckProjectionSource" to streamAckProjectionSource.configValue,
                 "streamAckProjectionEventStream" to streamAckProjectionEventStream,
+                "streamAckProjectionStage" to streamAckProjectionStage.configValue,
                 "streamAckProjectorPartitions" to streamAckProjectorPartitions,
                 "marketDataProjectorEnabled" to marketDataProjectorEnabled,
                 "orderLifecycleProjectorEnabled" to orderLifecycleProjectorEnabled,

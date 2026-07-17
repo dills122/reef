@@ -36,6 +36,392 @@ import kotlin.test.assertTrue
 
 class PostgresSchemaMigrationIntegrationTest {
     @Test
+    fun projectionDirtyQueuesAreUnloggedAfterMigration() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT relname, relpersistence
+                FROM pg_class
+                WHERE relnamespace = 'runtime'::regnamespace
+                  AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty')
+                ORDER BY relname
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) {
+                        rows.add("${rs.getString("relname")}:${rs.getString("relpersistence")}")
+                    }
+                    assertEquals(
+                        listOf(
+                            "market_data_snapshot_dirty:u",
+                            "order_lifecycle_dirty:u"
+                        ),
+                        rows
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun legacyRuntimeEventIndexesAreDroppedAfterMigration() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'runtime'
+                  AND tablename = 'runtime_events'
+                  AND indexname IN (
+                    'runtime_events_occurred_at_idx',
+                    'runtime_events_trace_seq_idx',
+                    'idx_runtime_events_occurred_event',
+                    'runtime_events_order_occurred_idx'
+                  )
+                ORDER BY indexname
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("indexname"))
+                    assertEquals(emptyList(), rows)
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'runtime'
+                  AND tablename = 'runtime_events'
+                  AND indexname IN (
+                    'idx_runtime_events_trace_sequence',
+                    'idx_runtime_events_order_trace_sequence',
+                    'idx_runtime_events_occurred_typed',
+                    'idx_runtime_events_order_occurred_typed',
+                    'idx_runtime_events_order_modified_lifecycle'
+                  )
+                ORDER BY indexname
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("indexname"))
+                    assertEquals(
+                        listOf(
+                            "idx_runtime_events_occurred_typed",
+                            "idx_runtime_events_order_modified_lifecycle",
+                            "idx_runtime_events_order_occurred_typed",
+                            "idx_runtime_events_order_trace_sequence",
+                            "idx_runtime_events_trace_sequence"
+                        ),
+                        rows
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun timelineProjectionUsesStreamSequenceWithoutTraceAllocatorWhenPresent() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val eventId = "evt-deterministic-${UUID.randomUUID()}"
+        val traceId = "trace-deterministic-${UUID.randomUUID()}"
+        val payload = """
+            [
+              {
+                "commandId": "cmd-$eventId",
+                "resultType": "accepted",
+                "eventId": "$eventId",
+                "orderId": "ord-$eventId",
+                "engineOrderId": "eng-$eventId",
+                "code": "",
+                "reason": "",
+                "occurredAt": "2026-07-17T14:00:00Z",
+                "streamSequence": "12345",
+                "acceptedOrder": null,
+                "executions": [],
+                "trades": [],
+                "events": [
+                  {
+                    "eventId": "$eventId",
+                    "eventType": "OrderAccepted",
+                    "orderId": "ord-$eventId",
+                    "traceId": "$traceId",
+                    "causationId": "cmd-$eventId",
+                    "correlationId": "corr-$eventId",
+                    "actorId": "",
+                    "producer": "timeline-test",
+                    "schemaVersion": "v1",
+                    "occurredAt": "2026-07-17T14:00:00Z",
+                    "payloadJson": {"source": "deterministic-sequence-test"}
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_timeline_stage(?::jsonb)").use { ps ->
+                ps.setString(1, payload)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT sequence_number
+                FROM runtime.runtime_events
+                WHERE event_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, eventId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(1234501L, rs.getLong("sequence_number"))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT COUNT(*) AS allocator_rows
+                FROM runtime.runtime_trace_sequences
+                WHERE trace_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, traceId)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(0L, rs.getLong("allocator_rows"))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun timelineProjectionStoresRuntimeEventPayloadsColdAndKeepsModifyFactsHot() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val eventId = "evt-cold-payload-${UUID.randomUUID()}"
+        val traceId = "trace-cold-payload-${UUID.randomUUID()}"
+        val payload = """
+            [
+              {
+                "commandId": "cmd-$eventId",
+                "resultType": "accepted",
+                "eventId": "$eventId",
+                "orderId": "ord-$eventId",
+                "engineOrderId": "eng-$eventId",
+                "code": "",
+                "reason": "",
+                "occurredAt": "2026-07-17T15:00:00Z",
+                "streamSequence": "22345",
+                "acceptedOrder": null,
+                "executions": [],
+                "trades": [],
+                "events": [
+                  {
+                    "eventId": "$eventId",
+                    "eventType": "OrderModified",
+                    "orderId": "ord-$eventId",
+                    "traceId": "$traceId",
+                    "causationId": "cmd-$eventId",
+                    "correlationId": "corr-$eventId",
+                    "actorId": "",
+                    "producer": "timeline-test",
+                    "schemaVersion": "v1",
+                    "occurredAt": "2026-07-17T15:00:00Z",
+                    "payloadJson": {
+                      "quantityUnits": "42",
+                      "limitPrice": "101.25",
+                      "source": "cold-payload-test"
+                    }
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_timeline_stage(?::jsonb)").use { ps ->
+                ps.setString(1, payload)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT
+                  events.payload_json::text AS hot_payload,
+                  events.modify_quantity_units,
+                  events.modify_limit_price,
+                  payloads.payload_json->>'source' AS cold_source,
+                  payloads.payload_json->>'quantityUnits' AS cold_quantity_units
+                FROM runtime.runtime_events events
+                JOIN runtime.runtime_event_payloads payloads ON payloads.event_id = events.event_id
+                WHERE events.event_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, eventId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals("{}", rs.getString("hot_payload"))
+                    assertEquals("42", rs.getString("modify_quantity_units"))
+                    assertEquals("101.25", rs.getString("modify_limit_price"))
+                    assertEquals("cold-payload-test", rs.getString("cold_source"))
+                    assertEquals("42", rs.getString("cold_quantity_units"))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun lifecycleProjectionClearsDuplicateDirtyWithoutNoopRewrite() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val suffix = UUID.randomUUID().toString()
+        val orderId = "ord-idempotent-$suffix"
+        val instrumentId = "IDEMP-$suffix"
+        val sentinelUpdatedAt = "2026-07-17T00:00:00Z"
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO runtime.orders(
+                  order_id,
+                  engine_order_id,
+                  instrument_id,
+                  participant_id,
+                  account_id,
+                  side,
+                  order_type,
+                  quantity_units,
+                  limit_price,
+                  currency,
+                  time_in_force,
+                  accepted_at,
+                  client_order_id,
+                  run_id,
+                  venue_session_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, orderId)
+                ps.setString(2, "engine-$suffix")
+                ps.setString(3, instrumentId)
+                ps.setString(4, "participant-$suffix")
+                ps.setString(5, "account-$suffix")
+                ps.setString(6, "BUY")
+                ps.setString(7, "LIMIT")
+                ps.setString(8, "10")
+                ps.setString(9, "101.25")
+                ps.setString(10, "USD")
+                ps.setString(11, "DAY")
+                ps.setString(12, "2026-07-17T15:30:00Z")
+                ps.setString(13, "")
+                ps.setString(14, "run-$suffix")
+                ps.setString(15, "session-$suffix")
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?)").use { ps ->
+                ps.setString(1, orderId)
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement("SELECT runtime.runtime_project_order_lifecycle_state(100)").use { ps ->
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement("DELETE FROM runtime.market_data_snapshot_dirty WHERE instrument_id = ?").use { ps ->
+                ps.setString(1, instrumentId)
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement(
+                """
+                UPDATE runtime.order_lifecycle_state
+                SET updated_at = ?::timestamptz
+                WHERE order_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, sentinelUpdatedAt)
+                ps.setString(2, orderId)
+                assertEquals(1, ps.executeUpdate())
+            }
+
+            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?)").use { ps ->
+                ps.setString(1, orderId)
+                ps.executeUpdate()
+            }
+
+            conn.prepareStatement("SELECT runtime.runtime_project_order_lifecycle_state(100)").use { ps ->
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(1L, rs.getLong(1))
+                }
+            }
+
+            conn.prepareStatement(
+                """
+                SELECT
+                  EXISTS (
+                    SELECT 1
+                    FROM runtime.order_lifecycle_state
+                    WHERE order_id = ?
+                      AND updated_at = ?::timestamptz
+                  ) AS updated_at_preserved,
+                  (
+                    SELECT COUNT(*)
+                    FROM runtime.order_lifecycle_dirty
+                    WHERE order_id = ?
+                  ) AS dirty_rows,
+                  (
+                    SELECT COUNT(*)
+                    FROM runtime.market_data_snapshot_dirty
+                    WHERE instrument_id = ?
+                  ) AS market_dirty_rows
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, orderId)
+                ps.setString(2, sentinelUpdatedAt)
+                ps.setString(3, orderId)
+                ps.setString(4, instrumentId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertTrue(rs.getBoolean("updated_at_preserved"))
+                    assertEquals(0L, rs.getLong("dirty_rows"))
+                    assertEquals(0L, rs.getLong("market_dirty_rows"))
+                }
+            }
+        }
+    }
+
+    @Test
     fun migratedTablesLandInDomainSchemasWhenConfigured() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
@@ -72,6 +458,10 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0036_canonical_archive_tables.sql',
                   'runtime/0037_runtime_event_trade_archive_tables.sql',
                   'runtime/0038_projection_dirty_lock_order.sql',
+                  'runtime/0043_runtime_event_payload_cold_table.sql',
+                  'runtime/0044_idempotent_lifecycle_projection.sql',
+                  'runtime/0045_drop_legacy_runtime_event_indexes.sql',
+                  'runtime/0046_order_modified_lifecycle_index.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -157,7 +547,11 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0034_post_trade_profile_references.sql",
                     "runtime/0036_canonical_archive_tables.sql",
                     "runtime/0037_runtime_event_trade_archive_tables.sql",
-                    "runtime/0038_projection_dirty_lock_order.sql"
+                    "runtime/0038_projection_dirty_lock_order.sql",
+                    "runtime/0043_runtime_event_payload_cold_table.sql",
+                    "runtime/0044_idempotent_lifecycle_projection.sql",
+                    "runtime/0045_drop_legacy_runtime_event_indexes.sql",
+                    "runtime/0046_order_modified_lifecycle_index.sql"
                 ),
                 appliedMigrations
             )
@@ -184,6 +578,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.orders",
                 "runtime.reference_instruments",
                 "runtime.runtime_events",
+                "runtime.runtime_event_payloads",
                 "runtime.runtime_events_archive",
                 "runtime.runtime_events_archive_default",
                 "runtime.submit_results",
@@ -215,6 +610,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     'trades_archive',
                     'trades_archive_default',
                     'runtime_events',
+                    'runtime_event_payloads',
                     'runtime_events_archive',
                     'runtime_events_archive_default',
                     'submit_results',
@@ -448,6 +844,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'occurred_at_ts',
                     'actor_id',
                     'payload_json',
+                    'modify_quantity_units',
+                    'modify_limit_price',
                     'sequence_number'
                   )
                 ORDER BY column_name
@@ -465,12 +863,42 @@ class PostgresSchemaMigrationIntegrationTest {
                     "actor_id:text",
                     "event_id:text",
                     "event_id_uuid:uuid",
+                    "modify_limit_price:text",
+                    "modify_quantity_units:text",
                     "occurred_at:text",
                     "occurred_at_ts:timestamp with time zone",
                     "payload_json:jsonb",
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val runtimeEventPayloadColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'runtime_event_payloads'
+                  AND column_name IN (
+                    'event_id',
+                    'payload_json'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "event_id:text",
+                    "payload_json:jsonb"
+                ),
+                runtimeEventPayloadColumns
             )
 
             val submitResultColumns = conn.prepareStatement(
@@ -686,6 +1114,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'runtime_validate_reference_data',
                     'runtime_persist_submit_outcome',
                     'runtime_persist_submit_outcomes',
+                    'runtime_persist_submit_outcome_status_stage',
+                    'runtime_persist_submit_outcome_timeline_stage',
                     'runtime_append_canonical_submit_outcomes',
                     'runtime_project_canonical_submit_outcomes',
                     'runtime_project_canonical_command_outcomes',
@@ -705,6 +1135,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime.runtime_validate_reference_data",
                     "runtime.runtime_persist_submit_outcome",
                     "runtime.runtime_persist_submit_outcomes",
+                    "runtime.runtime_persist_submit_outcome_status_stage",
+                    "runtime.runtime_persist_submit_outcome_timeline_stage",
                     "runtime.runtime_append_canonical_submit_outcomes",
                     "runtime.runtime_project_canonical_submit_outcomes",
                     "runtime.runtime_project_canonical_command_outcomes",
@@ -834,6 +1266,8 @@ class PostgresSchemaMigrationIntegrationTest {
         val botId = "bot-$suffix"
         val versionId = "v1"
         val runId = "run-$suffix"
+        val modeId = "hosted-sim-$suffix"
+        val scoringPolicyVersion = "score-$suffix"
         val controlPlane = ArenaControlPlaneService(store) { Instant.parse("2026-07-05T12:00:00Z") }
 
         controlPlane.registerBot(
@@ -889,7 +1323,7 @@ class PostgresSchemaMigrationIntegrationTest {
         controlPlane.registerRun(
             RegisterArenaRunCommand(
                 runId = runId,
-                modeId = "hosted-sim",
+                modeId = modeId,
                 scenarioId = "scenario-schema",
                 seed = 42,
                 policyVersion = "policy-v1",
@@ -903,7 +1337,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 runId = runId,
                 botId = botId,
                 versionId = versionId,
-                scoringPolicyVersion = "score-v1",
+                scoringPolicyVersion = scoringPolicyVersion,
                 finalEquity = 1_025_000,
                 realizedPnl = 25_000,
                 maxDrawdown = 1_000,
@@ -923,7 +1357,7 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals("maxInventory", store.runtimeConfigDescriptors(botId, versionId).single().key)
         assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
         assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
-        assertEquals(botId, store.leaderboard("hosted-sim", "score-v1").single().botId)
+        assertEquals(botId, store.leaderboard(modeId, scoringPolicyVersion).single().botId)
     }
 
     @Test
