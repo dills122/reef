@@ -4741,7 +4741,10 @@ class PlatformHttpServerBoundaryTest {
             assertContains(exceptions.body, "\"exceptionsCount\":1")
             assertContains(exceptions.body, "\"openCount\":1")
             assertContains(exceptions.body, "\"exceptionType\":\"SETTLEMENT_BREAK\"")
+            assertContains(exceptions.body, "\"severity\":\"MEDIUM\"")
+            assertContains(exceptions.body, "\"ownerRole\":\"SETTLEMENT_OPS\"")
             assertContains(exceptions.body, "\"actionRequired\":\"POST_CASH_LEG_REPAIR\"")
+            assertContains(exceptions.body, "\"repairAction\":\"POST_CASH_LEG_REPAIR\"")
 
             val missingOccurredAtRepair = post(
                 server.address.port,

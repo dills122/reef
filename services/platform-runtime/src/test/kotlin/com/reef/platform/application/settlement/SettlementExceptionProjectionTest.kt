@@ -29,15 +29,29 @@ class SettlementExceptionProjectionTest {
         val clearing = projection.exceptions.single { it.exceptionType == SettlementExceptionTypeClearingRejected }
         assertEquals("clearing-rejection-1", clearing.settlementExceptionId)
         assertEquals(SettlementExceptionOpenState, clearing.exceptionState)
+        assertEquals(SettlementExceptionSeverityHigh, clearing.severity)
+        assertEquals(SettlementExceptionOwnerRole, clearing.ownerRole)
         assertEquals(SettlementExceptionActionClearingReview, clearing.actionRequired)
+        assertEquals(SettlementClearingRejectedReason, clearing.reason)
         assertEquals("clearing-submission-1", clearing.settlementClearingSubmissionId)
+        assertEquals("corr-1", clearing.correlationId)
+        assertEquals(Instant.parse("2026-01-01T00:00:02Z"), clearing.openedAt)
+        assertEquals(Instant.parse("2026-01-01T00:00:02Z"), clearing.lastUpdatedAt)
+        assertEquals(null, clearing.resolvedAt)
         assertEquals("trade-clearing", clearing.tradeId)
 
         val settlementBreak = projection.exceptions.single { it.exceptionType == SettlementExceptionTypeSettlementBreak }
         assertEquals("break-1", settlementBreak.settlementExceptionId)
         assertEquals(SettlementRepairPostedState, settlementBreak.exceptionState)
+        assertEquals(SettlementExceptionSeverityMedium, settlementBreak.severity)
+        assertEquals(SettlementExceptionOwnerRole, settlementBreak.ownerRole)
         assertEquals(SettlementExceptionActionAwaitingRetry, settlementBreak.actionRequired)
+        assertEquals(SettlementRepairPostedActionSecurity, settlementBreak.repairAction)
         assertEquals("repair-1", settlementBreak.settlementRepairId)
+        assertEquals("ops-1", settlementBreak.actorId)
+        assertEquals("corr-1", settlementBreak.correlationId)
+        assertEquals(Instant.parse("2026-01-01T00:00:03Z"), settlementBreak.openedAt)
+        assertEquals(Instant.parse("2026-01-01T00:00:04Z"), settlementBreak.lastUpdatedAt)
         assertEquals("trade-break", settlementBreak.tradeId)
     }
 
@@ -60,6 +74,7 @@ class SettlementExceptionProjectionTest {
         assertEquals(SettlementExceptionResolvedState, projection.exceptions.single().exceptionState)
         assertEquals(SettlementExceptionActionNone, projection.exceptions.single().actionRequired)
         assertEquals("resolution-1", projection.exceptions.single().settlementResolutionId)
+        assertEquals(Instant.parse("2026-01-01T00:00:05Z"), projection.exceptions.single().resolvedAt)
     }
 
     private fun obligation(id: String, tradeId: String): SettlementObligationCreatedFact {

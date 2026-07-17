@@ -11,6 +11,9 @@ const val SettlementExceptionActionPostCashRepair = "POST_CASH_LEG_REPAIR"
 const val SettlementExceptionActionPostSecurityRepair = "POST_SECURITY_LEG_REPAIR"
 const val SettlementExceptionActionAwaitingRetry = "AWAITING_RETRY"
 const val SettlementExceptionActionNone = "NONE"
+const val SettlementExceptionSeverityHigh = "HIGH"
+const val SettlementExceptionSeverityMedium = "MEDIUM"
+const val SettlementExceptionOwnerRole = "SETTLEMENT_OPS"
 
 data class SettlementExceptionQueueView(
     val scenarioRunId: String,
@@ -27,6 +30,8 @@ data class SettlementExceptionView(
     val settlementExceptionId: String,
     val exceptionType: String,
     val exceptionState: String,
+    val severity: String,
+    val ownerRole: String,
     val actionRequired: String,
     val reason: String,
     val settlementObligationId: String,
@@ -42,8 +47,14 @@ data class SettlementExceptionView(
     val settlementBreakId: String,
     val settlementRepairId: String,
     val settlementResolutionId: String,
+    val repairAction: String,
+    val actorId: String,
+    val correlationId: String,
     val postTradeProfileId: String,
     val postTradePolicyVersion: Int,
+    val openedAt: Instant,
+    val lastUpdatedAt: Instant,
+    val resolvedAt: Instant?,
     val occurredAt: Instant,
     val updatedAt: Instant
 )
@@ -59,6 +70,8 @@ object SettlementExceptionProjection {
                 settlementExceptionId = rejection.settlementClearingRejectionId,
                 exceptionType = SettlementExceptionTypeClearingRejected,
                 exceptionState = SettlementExceptionOpenState,
+                severity = SettlementExceptionSeverityHigh,
+                ownerRole = SettlementExceptionOwnerRole,
                 actionRequired = SettlementExceptionActionClearingReview,
                 reason = rejection.reason,
                 settlementObligationId = obligation.settlementObligationId,
@@ -74,8 +87,14 @@ object SettlementExceptionProjection {
                 settlementBreakId = "",
                 settlementRepairId = "",
                 settlementResolutionId = "",
+                repairAction = "",
+                actorId = "",
+                correlationId = rejection.correlationId,
                 postTradeProfileId = rejection.postTradeProfileId,
                 postTradePolicyVersion = rejection.postTradePolicyVersion,
+                openedAt = rejection.occurredAt,
+                lastUpdatedAt = rejection.occurredAt,
+                resolvedAt = null,
                 occurredAt = rejection.occurredAt,
                 updatedAt = rejection.occurredAt
             )
@@ -88,12 +107,21 @@ object SettlementExceptionProjection {
             val resolution = resolutionsByBreak[breakFact.settlementBreakId]
                 .orEmpty()
                 .maxWithOrNull(compareBy<SettlementResolvedFact> { it.occurredAt }.thenBy { it.settlementResolutionId })
+            val expectedRepairAction = when (breakFact.reason) {
+                SettlementBreakOpenedReason -> SettlementRepairPostedActionCash
+                SettlementBreakOpenedReasonSecurity -> SettlementRepairPostedActionSecurity
+                else -> ""
+            }
+            val updatedAt = listOfNotNull(breakFact.occurredAt, repair?.occurredAt, resolution?.occurredAt).maxOrNull()
+                ?: breakFact.occurredAt
             SettlementExceptionView(
                 settlementExceptionId = breakFact.settlementBreakId,
                 exceptionType = SettlementExceptionTypeSettlementBreak,
                 exceptionState = resolution?.exceptionState
                     ?: repair?.let { SettlementRepairPostedState }
                     ?: SettlementExceptionOpenState,
+                severity = SettlementExceptionSeverityMedium,
+                ownerRole = SettlementExceptionOwnerRole,
                 actionRequired = when {
                     resolution != null -> SettlementExceptionActionNone
                     repair != null -> SettlementExceptionActionAwaitingRetry
@@ -115,11 +143,16 @@ object SettlementExceptionProjection {
                 settlementBreakId = breakFact.settlementBreakId,
                 settlementRepairId = repair?.settlementRepairId.orEmpty(),
                 settlementResolutionId = resolution?.settlementResolutionId.orEmpty(),
+                repairAction = repair?.repairAction ?: expectedRepairAction,
+                actorId = resolution?.let { repair?.actorId }.orEmpty().ifBlank { repair?.actorId.orEmpty() },
+                correlationId = resolution?.correlationId ?: repair?.correlationId ?: breakFact.correlationId,
                 postTradeProfileId = breakFact.postTradeProfileId,
                 postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                openedAt = breakFact.occurredAt,
+                lastUpdatedAt = updatedAt,
+                resolvedAt = resolution?.occurredAt,
                 occurredAt = breakFact.occurredAt,
-                updatedAt = listOfNotNull(breakFact.occurredAt, repair?.occurredAt, resolution?.occurredAt).maxOrNull()
-                    ?: breakFact.occurredAt
+                updatedAt = updatedAt
             )
         }
         val exceptions = (clearingExceptions + settlementBreakExceptions)

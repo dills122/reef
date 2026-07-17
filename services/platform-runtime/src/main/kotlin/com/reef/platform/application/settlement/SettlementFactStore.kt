@@ -19,7 +19,7 @@ const val SettlementAffirmationActorId = "post-trade-auto-affirmer"
 const val SettlementClearingSubmittedState = "CLEARING_SUBMITTED"
 const val SettlementClearingAcceptedState = "CLEARING_ACCEPTED"
 const val SettlementClearingRejectedState = "CLEARING_REJECTED"
-const val SettlementClearingRejectedReason = "CLEARING_REJECTED_BY_CLEARINGHOUSE"
+const val SettlementClearingRejectedReason = "CLEARING_REJECT"
 const val SettlementNovationRecordedState = "NOVATION_RECORDED"
 const val SettlementInstructionCreatedState = "INSTRUCTION_CREATED"
 const val SettlementInstructionTypeDvp = "DVP"
@@ -638,7 +638,7 @@ class PostgresSettlementFactStore(
                       post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
-                      reason TEXT NOT NULL CHECK (reason = 'CLEARING_REJECTED_BY_CLEARINGHOUSE'),
+                      reason TEXT NOT NULL CHECK (reason = 'CLEARING_REJECT'),
                       state TEXT NOT NULL CHECK (state = 'CLEARING_REJECTED'),
                       occurred_at TIMESTAMPTZ NOT NULL,
                       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
