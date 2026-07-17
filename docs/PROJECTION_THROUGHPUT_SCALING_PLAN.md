@@ -301,6 +301,12 @@ Target the tables that dominate the patched `5k` run.
     intentionally retained until lifecycle modification lookup moves to a
     dedicated typed or partial index. The remote A/B confirmed the expected
     index-byte reduction and lower WAL per command, but zero-lag still failed.
+  - Follow-up local slice is in place: latest `OrderModified` lookup now has a
+    partial `idx_runtime_events_order_modified_lifecycle` index ordered by
+    typed timestamp/sequence/event id, and the broad legacy
+    `runtime_events_order_occurred_idx` is dropped. The all-event lifecycle
+    rollup still has the existing order-scoped trace/timestamp indexes; only
+    the modification lookup gets a dedicated partial index.
 - Partition large append-heavy projection tables by event stream, run/session,
   projection partition, or time where that reduces B-tree contention and vacuum
   pressure without harming point lookups.
@@ -456,10 +462,11 @@ structural separation:
    treat it as a promotion fix.
 6. Review hot `runtime_events` indexes and total event-storage row volume.
    Initial legacy all-event index removal is measured: event index bytes fell
-   materially and lag improved, but zero-lag still failed. Next cut is moving
-   lifecycle modification lookup to a narrow typed or partial index, dropping
-   the broad order-scoped runtime-event index, and then attacking payload/event
-   row volume.
+   materially and lag improved, but zero-lag still failed. The next local cut
+   is implemented: lifecycle modification lookup uses a narrow partial index
+   and the broad order-scoped runtime-event index is dropped. The next DO run
+   should measure whether this closes the remaining `1,647` row lag before
+   moving to payload/event row-volume cuts.
 7. Add maintained depth/top-of-book projections.
 8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
    command.

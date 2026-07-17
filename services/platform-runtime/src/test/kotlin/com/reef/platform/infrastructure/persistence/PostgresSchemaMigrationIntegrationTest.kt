@@ -84,7 +84,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   AND indexname IN (
                     'runtime_events_occurred_at_idx',
                     'runtime_events_trace_seq_idx',
-                    'idx_runtime_events_occurred_event'
+                    'idx_runtime_events_occurred_event',
+                    'runtime_events_order_occurred_idx'
                   )
                 ORDER BY indexname
                 """.trimIndent()
@@ -106,7 +107,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'idx_runtime_events_trace_sequence',
                     'idx_runtime_events_order_trace_sequence',
                     'idx_runtime_events_occurred_typed',
-                    'idx_runtime_events_order_occurred_typed'
+                    'idx_runtime_events_order_occurred_typed',
+                    'idx_runtime_events_order_modified_lifecycle'
                   )
                 ORDER BY indexname
                 """.trimIndent()
@@ -117,6 +119,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     assertEquals(
                         listOf(
                             "idx_runtime_events_occurred_typed",
+                            "idx_runtime_events_order_modified_lifecycle",
                             "idx_runtime_events_order_occurred_typed",
                             "idx_runtime_events_order_trace_sequence",
                             "idx_runtime_events_trace_sequence"
@@ -458,6 +461,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0043_runtime_event_payload_cold_table.sql',
                   'runtime/0044_idempotent_lifecycle_projection.sql',
                   'runtime/0045_drop_legacy_runtime_event_indexes.sql',
+                  'runtime/0046_order_modified_lifecycle_index.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -546,7 +550,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0038_projection_dirty_lock_order.sql",
                     "runtime/0043_runtime_event_payload_cold_table.sql",
                     "runtime/0044_idempotent_lifecycle_projection.sql",
-                    "runtime/0045_drop_legacy_runtime_event_indexes.sql"
+                    "runtime/0045_drop_legacy_runtime_event_indexes.sql",
+                    "runtime/0046_order_modified_lifecycle_index.sql"
                 ),
                 appliedMigrations
             )

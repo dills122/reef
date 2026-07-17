@@ -548,6 +548,20 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_order_modified_lifecycle
+                    ON ${names.runtimeEvents}(
+                      order_id,
+                      occurred_at_ts DESC NULLS LAST,
+                      occurred_at DESC,
+                      sequence_number DESC,
+                      event_id_uuid DESC NULLS LAST,
+                      event_id DESC
+                    )
+                    WHERE event_type = 'OrderModified'
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE INDEX IF NOT EXISTS idx_executions_order_occurred
                     ON ${names.executions}(order_id, occurred_at)
                     """.trimIndent()
@@ -3491,7 +3505,12 @@ class PostgresRuntimePersistence(
                         occurred_at
                       FROM ${names.runtimeEvents}
                       WHERE event_type = 'OrderModified'
-                      ORDER BY order_id, occurred_at DESC, sequence_number DESC, event_id DESC
+                      ORDER BY order_id,
+                        occurred_at_ts DESC NULLS LAST,
+                        occurred_at DESC,
+                        sequence_number DESC,
+                        event_id_uuid DESC NULLS LAST,
+                        event_id DESC
                     ),
                     order_event_state AS (
                       SELECT

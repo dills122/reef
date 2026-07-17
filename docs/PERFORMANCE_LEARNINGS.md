@@ -239,6 +239,10 @@ Immediate implications:
    confirmed the expected index-byte reduction and much smaller final lag, but
    strict freshness still failed; next work should focus on the broad
    order-scoped lifecycle index and total event/payload row volume.
+   The follow-up local slice replaces that broad order-scoped runtime-event
+   index with a partial `OrderModified` lifecycle index and keeps the typed
+   order/timestamp index for all-event lifecycle rollup. Measure this in the
+   next `5k` full-projection gate before cutting payload/event rows.
 7. Use [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md)
    as the implementation ladder before raising projection gates above `2.5k`.
 
