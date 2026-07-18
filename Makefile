@@ -11,7 +11,7 @@ SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
 .PHONY: test lint check-scripts check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
-.PHONY: test-go test-platform-runtime test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
+.PHONY: test-go test-platform-runtime test-reef-core build-reef-core test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
 .PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
@@ -72,6 +72,14 @@ bench-platform-runtime-check:
 
 test-platform-runtime:
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew test
+
+build-reef-core:
+	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew clean jar
+	@! jar tf $(PLATFORM_RUNTIME_DIR)/build/libs/platform-runtime.jar | grep -i 'arena' >/dev/null
+
+test-reef-core:
+	@$(MAKE) check-reef-arena-boundaries
+	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew -PreefCore test
 
 test-bot-sdk:
 	@$(MAKE) check-bun-runtime
