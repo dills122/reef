@@ -23,8 +23,6 @@ class PostgresAdminIdentityStore(
                         users = names.users,
                         roles = names.roles,
                         userRoles = names.userRoles,
-                        userBotLimits = names.userBotLimits,
-                        userBotOwnerships = names.userBotOwnerships,
                         auditEvents = names.auditEvents
                     )
                 )
@@ -71,36 +69,6 @@ class PostgresAdminIdentityStore(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS ${names.userBotLimits} (
-                      reef_user_id TEXT PRIMARY KEY REFERENCES ${names.users}(reef_user_id),
-                      max_bots INTEGER NOT NULL,
-                      max_active_bots INTEGER NOT NULL,
-                      max_version_submissions_per_day INTEGER NOT NULL,
-                      updated_by TEXT NOT NULL,
-                      updated_at TIMESTAMPTZ NOT NULL,
-                      CHECK (max_bots >= 0),
-                      CHECK (max_active_bots >= 0),
-                      CHECK (max_active_bots <= max_bots),
-                      CHECK (max_version_submissions_per_day >= 0)
-                    )
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS ${names.userBotOwnerships} (
-                      reef_user_id TEXT NOT NULL REFERENCES ${names.users}(reef_user_id),
-                      bot_id TEXT NOT NULL,
-                      ownership_state TEXT NOT NULL DEFAULT 'owner',
-                      assigned_by TEXT NOT NULL,
-                      assigned_at TIMESTAMPTZ NOT NULL,
-                      PRIMARY KEY (reef_user_id, bot_id),
-                      CHECK (bot_id ~ '^[a-z0-9][a-z0-9._-]{2,63}$'),
-                      CHECK (ownership_state IN ('owner', 'maintainer', 'revoked'))
-                    )
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
                     CREATE TABLE IF NOT EXISTS ${names.auditEvents} (
                       event_id TEXT PRIMARY KEY,
                       actor_id TEXT NOT NULL,
@@ -114,7 +82,6 @@ class PostgresAdminIdentityStore(
                 )
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_admin_users_github_login ON ${names.users}(github_login)")
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_admin_user_roles_role ON ${names.userRoles}(role_id)")
-                stmt.execute("CREATE INDEX IF NOT EXISTS idx_admin_bot_ownerships_bot ON ${names.userBotOwnerships}(bot_id)")
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_admin_audit_target
@@ -313,111 +280,6 @@ class PostgresAdminIdentityStore(
         ) { rs -> userRoleFrom(rs) }
     }
 
-    override fun saveUserBotLimit(limit: AdminUserBotLimit): AdminUserBotLimit {
-        AdminIdentityValidation.reefUserId(limit.reefUserId)
-        AdminIdentityValidation.actorId(limit.updatedBy)
-        AdminIdentityValidation.userBotLimit(limit)
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                INSERT INTO ${names.userBotLimits}(
-                  reef_user_id, max_bots, max_active_bots,
-                  max_version_submissions_per_day, updated_by, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT (reef_user_id) DO UPDATE SET
-                  max_bots = EXCLUDED.max_bots,
-                  max_active_bots = EXCLUDED.max_active_bots,
-                  max_version_submissions_per_day = EXCLUDED.max_version_submissions_per_day,
-                  updated_by = EXCLUDED.updated_by,
-                  updated_at = EXCLUDED.updated_at
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, limit.reefUserId)
-                ps.setInt(2, limit.maxBots)
-                ps.setInt(3, limit.maxActiveBots)
-                ps.setInt(4, limit.maxVersionSubmissionsPerDay)
-                ps.setString(5, limit.updatedBy)
-                ps.setTimestamp(6, Timestamp.from(limit.updatedAt))
-                ps.executeUpdate()
-            }
-        }
-        return limit
-    }
-
-    override fun userBotLimit(reefUserId: String): AdminUserBotLimit? {
-        val userId = AdminIdentityValidation.reefUserId(reefUserId)
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT reef_user_id, max_bots, max_active_bots,
-                       max_version_submissions_per_day, updated_by, updated_at
-                FROM ${names.userBotLimits}
-                WHERE reef_user_id = ?
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, userId)
-                ps.executeQuery().use { rs ->
-                    return if (rs.next()) userBotLimitFrom(rs) else null
-                }
-            }
-        }
-    }
-
-    override fun saveBotOwnership(ownership: AdminUserBotOwnership): AdminUserBotOwnership {
-        AdminIdentityValidation.reefUserId(ownership.reefUserId)
-        AdminIdentityValidation.botId(ownership.botId)
-        AdminIdentityValidation.actorId(ownership.assignedBy)
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                INSERT INTO ${names.userBotOwnerships}(
-                  reef_user_id, bot_id, ownership_state, assigned_by, assigned_at
-                )
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (reef_user_id, bot_id) DO UPDATE SET
-                  ownership_state = EXCLUDED.ownership_state,
-                  assigned_by = EXCLUDED.assigned_by,
-                  assigned_at = EXCLUDED.assigned_at
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, ownership.reefUserId)
-                ps.setString(2, ownership.botId)
-                ps.setString(3, ownership.ownershipState.dbValue)
-                ps.setString(4, ownership.assignedBy)
-                ps.setTimestamp(5, Timestamp.from(ownership.assignedAt))
-                ps.executeUpdate()
-            }
-        }
-        return ownership
-    }
-
-    override fun botOwnershipsForUser(reefUserId: String): List<AdminUserBotOwnership> {
-        val userId = AdminIdentityValidation.reefUserId(reefUserId)
-        return queryList(
-            """
-            SELECT reef_user_id, bot_id, ownership_state, assigned_by, assigned_at
-            FROM ${names.userBotOwnerships}
-            WHERE reef_user_id = ?
-            ORDER BY bot_id
-            """.trimIndent(),
-            userId
-        ) { rs -> botOwnershipFrom(rs) }
-    }
-
-    override fun botOwnerships(botId: String): List<AdminUserBotOwnership> {
-        val bot = AdminIdentityValidation.botId(botId)
-        return queryList(
-            """
-            SELECT reef_user_id, bot_id, ownership_state, assigned_by, assigned_at
-            FROM ${names.userBotOwnerships}
-            WHERE bot_id = ?
-            ORDER BY reef_user_id
-            """.trimIndent(),
-            bot
-        ) { rs -> botOwnershipFrom(rs) }
-    }
-
     override fun appendAuditEvent(event: AdminIdentityAuditEvent) {
         AdminIdentityValidation.actorId(event.actorId)
         AdminIdentityValidation.eventType(event.eventType)
@@ -498,27 +360,6 @@ class PostgresAdminIdentityStore(
         return AdminUserRole(
             reefUserId = rs.getString("reef_user_id"),
             roleId = rs.getString("role_id"),
-            assignedBy = rs.getString("assigned_by"),
-            assignedAt = rs.getTimestamp("assigned_at").toInstant()
-        )
-    }
-
-    private fun userBotLimitFrom(rs: ResultSet): AdminUserBotLimit {
-        return AdminUserBotLimit(
-            reefUserId = rs.getString("reef_user_id"),
-            maxBots = rs.getInt("max_bots"),
-            maxActiveBots = rs.getInt("max_active_bots"),
-            maxVersionSubmissionsPerDay = rs.getInt("max_version_submissions_per_day"),
-            updatedBy = rs.getString("updated_by"),
-            updatedAt = rs.getTimestamp("updated_at").toInstant()
-        )
-    }
-
-    private fun botOwnershipFrom(rs: ResultSet): AdminUserBotOwnership {
-        return AdminUserBotOwnership(
-            reefUserId = rs.getString("reef_user_id"),
-            botId = rs.getString("bot_id"),
-            ownershipState = AdminBotOwnershipState.fromDb(rs.getString("ownership_state")),
             assignedBy = rs.getString("assigned_by"),
             assignedAt = rs.getTimestamp("assigned_at").toInstant()
         )

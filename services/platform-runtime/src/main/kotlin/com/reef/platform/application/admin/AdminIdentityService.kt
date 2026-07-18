@@ -9,32 +9,9 @@ data class GitHubUserIdentity(
     val displayName: String = ""
 )
 
-data class AdminBotLimitCommand(
-    val reefUserId: String,
-    val maxBots: Int,
-    val maxActiveBots: Int,
-    val maxVersionSubmissionsPerDay: Int
-)
-
-data class AdminBotOwnershipCommand(
-    val reefUserId: String,
-    val botId: String,
-    val ownershipState: AdminBotOwnershipState = AdminBotOwnershipState.Owner
-)
-
-data class AdminBotOwnerMetadata(
-    val reefUserId: String,
-    val githubLogin: String,
-    val displayName: String,
-    val trustState: AdminTrustState,
-    val ownershipState: AdminBotOwnershipState,
-    val assignedAt: Instant
-)
-
 data class AdminAccessUserSummary(
     val user: AdminUser,
-    val roles: List<AdminUserRole>,
-    val botOwnerships: List<AdminUserBotOwnership>
+    val roles: List<AdminUserRole>
 )
 
 class AdminIdentityService(
@@ -82,16 +59,6 @@ class AdminIdentityService(
                 roleId = RoleParticipant,
                 assignedBy = actor,
                 assignedAt = seenAt
-            )
-        )
-        store.saveUserBotLimit(
-            AdminUserBotLimit(
-                reefUserId = created.reefUserId,
-                maxBots = DefaultMaxBots,
-                maxActiveBots = DefaultMaxActiveBots,
-                maxVersionSubmissionsPerDay = DefaultMaxVersionSubmissionsPerDay,
-                updatedBy = actor,
-                updatedAt = seenAt
             )
         )
         audit(actor, "AdminUserCreated", "admin-user", created.reefUserId, "githubLogin=$login")
@@ -167,93 +134,20 @@ class AdminIdentityService(
         audit(actor, "AdminAccessRoleRevoked", "admin-user", userId, "roleId=$role,reason=$detail")
     }
 
-    fun updateBotLimits(actorId: String, command: AdminBotLimitCommand): AdminUserBotLimit {
-        val actor = AdminIdentityValidation.actorId(actorId)
-        val userId = AdminIdentityValidation.reefUserId(command.reefUserId)
-        require(store.userByReefUserId(userId) != null) { "Unknown admin user: $userId" }
-        val limit = AdminUserBotLimit(
-            reefUserId = userId,
-            maxBots = command.maxBots,
-            maxActiveBots = command.maxActiveBots,
-            maxVersionSubmissionsPerDay = command.maxVersionSubmissionsPerDay,
-            updatedBy = actor,
-            updatedAt = now()
-        )
-        AdminIdentityValidation.userBotLimit(limit)
-        store.saveUserBotLimit(limit)
-        audit(
-            actor,
-            "AdminUserBotLimitsUpdated",
-            "admin-user",
-            userId,
-            "maxBots=${command.maxBots},maxActiveBots=${command.maxActiveBots}"
-        )
-        return limit
-    }
-
-    fun assignBotOwnership(actorId: String, command: AdminBotOwnershipCommand): AdminUserBotOwnership {
-        val actor = AdminIdentityValidation.actorId(actorId)
-        val userId = AdminIdentityValidation.reefUserId(command.reefUserId)
-        val bot = AdminIdentityValidation.botId(command.botId)
-        require(store.userByReefUserId(userId) != null) { "Unknown admin user: $userId" }
-        val ownership = AdminUserBotOwnership(
-            reefUserId = userId,
-            botId = bot,
-            ownershipState = command.ownershipState,
-            assignedBy = actor,
-            assignedAt = now()
-        )
-        store.saveBotOwnership(ownership)
-        audit(
-            actor,
-            "AdminUserBotOwnershipAssigned",
-            "arena-bot",
-            ownership.botId,
-            "reefUserId=${ownership.reefUserId},state=${ownership.ownershipState.dbValue}"
-        )
-        return ownership
-    }
-
     fun rolesForUser(reefUserId: String): List<AdminUserRole> = store.rolesForUser(reefUserId)
 
     fun accessUsers(limit: Int = 100): List<AdminAccessUserSummary> {
         return store.users(limit.coerceIn(1, 500)).map { user ->
             AdminAccessUserSummary(
                 user = user,
-                roles = store.rolesForUser(user.reefUserId),
-                botOwnerships = store.botOwnershipsForUser(user.reefUserId)
-                    .filter { it.ownershipState != AdminBotOwnershipState.Revoked }
+                roles = store.rolesForUser(user.reefUserId)
             )
         }
     }
 
     fun roles(): List<AdminRole> = store.roles()
 
-    fun botLimit(reefUserId: String): AdminUserBotLimit? = store.userBotLimit(reefUserId)
-
     fun user(reefUserId: String): AdminUser? = store.userByReefUserId(reefUserId)
-
-    fun botOwnershipsForUser(reefUserId: String): List<AdminUserBotOwnership> {
-        return store.botOwnershipsForUser(reefUserId)
-            .filter { it.ownershipState != AdminBotOwnershipState.Revoked }
-    }
-
-    fun botOwnerMetadata(botId: String): List<AdminBotOwnerMetadata> {
-        return store.botOwnerships(botId)
-            .filter { it.ownershipState != AdminBotOwnershipState.Revoked }
-            .mapNotNull { ownership ->
-                store.userByReefUserId(ownership.reefUserId)?.let { user ->
-                    AdminBotOwnerMetadata(
-                        reefUserId = user.reefUserId,
-                        githubLogin = user.githubLogin,
-                        displayName = user.displayName,
-                        trustState = user.trustState,
-                        ownershipState = ownership.ownershipState,
-                        assignedAt = ownership.assignedAt
-                    )
-                }
-            }
-    }
 
     fun recordControlPlaneAudit(actorId: String, eventType: String, targetType: String, targetId: String, detail: String) {
         audit(actorId, eventType, targetType, targetId, detail)
@@ -328,10 +222,6 @@ class AdminIdentityService(
         const val RoleOperator = "operator"
         const val RoleSecretAdmin = "secret-admin"
         const val RolePlatformAdmin = "platform-admin"
-        const val DefaultMaxBots = 3
-        const val DefaultMaxActiveBots = 1
-        const val DefaultMaxVersionSubmissionsPerDay = 10
-
         val BaselineRoles = linkedMapOf(
             RoleParticipant to "Can own accepted bots and manage own bot config",
             RoleReviewer to "Can review bot submissions",

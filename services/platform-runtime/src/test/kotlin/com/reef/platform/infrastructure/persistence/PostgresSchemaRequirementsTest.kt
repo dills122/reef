@@ -330,14 +330,12 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
-    fun adminIdentityRequirementsCoverUserRoleLimitAndAuditObjects() {
+    fun adminIdentityRequirementsCoverUserRoleAndAuditObjects() {
         val names = PostgresAdminIdentitySqlNames()
         val requirements = PostgresSchemaRequirements.adminIdentity(
             users = names.users,
             roles = names.roles,
             userRoles = names.userRoles,
-            userBotLimits = names.userBotLimits,
-            userBotOwnerships = names.userBotOwnerships,
             auditEvents = names.auditEvents
         )
 
@@ -346,8 +344,6 @@ class PostgresSchemaRequirementsTest {
                 "admin.users",
                 "admin.roles",
                 "admin.user_roles",
-                "admin.user_bot_limits",
-                "admin.user_bot_ownerships",
                 "admin.audit_events"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
@@ -360,10 +356,6 @@ class PostgresSchemaRequirementsTest {
                         "admin.users.github_user_id:bigint",
                         "admin.users.trust_state:text",
                         "admin.user_roles.role_id:text",
-                        "admin.user_bot_limits.max_bots:integer",
-                        "admin.user_bot_limits.max_active_bots:integer",
-                        "admin.user_bot_ownerships.bot_id:text",
-                        "admin.user_bot_ownerships.ownership_state:text",
                         "admin.audit_events.event_type:text",
                         "admin.audit_events.target_id:text"
                     )

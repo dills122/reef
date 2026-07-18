@@ -649,23 +649,17 @@ object PostgresSchemaRequirements {
         users: String,
         roles: String,
         userRoles: String,
-        userBotLimits: String,
-        userBotOwnerships: String,
         auditEvents: String
     ): PostgresSchemaRequirement {
         val usersTable = PostgresSchemaObject.parse(users)
         val rolesTable = PostgresSchemaObject.parse(roles)
         val userRolesTable = PostgresSchemaObject.parse(userRoles)
-        val limitsTable = PostgresSchemaObject.parse(userBotLimits)
-        val ownershipsTable = PostgresSchemaObject.parse(userBotOwnerships)
         val auditTable = PostgresSchemaObject.parse(auditEvents)
         return PostgresSchemaRequirement(
             tables = listOf(
                 usersTable,
                 rolesTable,
                 userRolesTable,
-                limitsTable,
-                ownershipsTable,
                 auditTable
             ),
             columns = listOf(
@@ -682,11 +676,6 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(userRolesTable, "reef_user_id", "text"),
                 PostgresSchemaColumn(userRolesTable, "role_id", "text"),
                 PostgresSchemaColumn(userRolesTable, "assigned_by", "text"),
-                PostgresSchemaColumn(limitsTable, "max_bots", "integer"),
-                PostgresSchemaColumn(limitsTable, "max_active_bots", "integer"),
-                PostgresSchemaColumn(limitsTable, "max_version_submissions_per_day", "integer"),
-                PostgresSchemaColumn(ownershipsTable, "bot_id", "text"),
-                PostgresSchemaColumn(ownershipsTable, "ownership_state", "text"),
                 PostgresSchemaColumn(auditTable, "event_id", "text"),
                 PostgresSchemaColumn(auditTable, "actor_id", "text"),
                 PostgresSchemaColumn(auditTable, "event_type", "text"),

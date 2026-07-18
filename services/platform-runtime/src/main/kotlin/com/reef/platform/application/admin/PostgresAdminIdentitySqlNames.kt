@@ -7,8 +7,6 @@ data class PostgresAdminIdentitySqlNames(
     val users = "$schemaName.users"
     val roles = "$schemaName.roles"
     val userRoles = "$schemaName.user_roles"
-    val userBotLimits = "$schemaName.user_bot_limits"
-    val userBotOwnerships = "$schemaName.user_bot_ownerships"
     val auditEvents = "$schemaName.audit_events"
 
     private fun safeIdentifier(candidate: String): String {

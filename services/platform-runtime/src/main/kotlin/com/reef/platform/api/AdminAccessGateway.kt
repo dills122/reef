@@ -5,7 +5,6 @@ import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminRole
 import com.reef.platform.application.admin.AdminTrustState
 import com.reef.platform.application.admin.AdminUser
-import com.reef.platform.application.admin.AdminUserBotOwnership
 import com.reef.platform.application.admin.AdminUserRole
 
 /**
@@ -126,8 +125,7 @@ internal class AdminAccessGateway(
 
     private fun userSummaryJson(summary: AdminAccessUserSummary): Map<String, Any?> {
         return userJson(summary.user) + mapOf(
-            "roles" to summary.roles.map(::roleBindingJson),
-            "botOwnerships" to summary.botOwnerships.map(::botOwnershipJson)
+            "roles" to summary.roles.map(::roleBindingJson)
         )
     }
 
@@ -161,13 +159,4 @@ internal class AdminAccessGateway(
         )
     }
 
-    private fun botOwnershipJson(ownership: AdminUserBotOwnership): Map<String, Any?> {
-        return linkedMapOf(
-            "reefUserId" to ownership.reefUserId,
-            "botId" to ownership.botId,
-            "ownershipState" to ownership.ownershipState.dbValue,
-            "assignedBy" to ownership.assignedBy,
-            "assignedAt" to ownership.assignedAt.toString()
-        )
-    }
 }
