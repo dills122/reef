@@ -4,6 +4,7 @@ import com.reef.platform.api.*
 
 import com.reef.platform.application.admin.AdminActor
 import com.reef.arena.controlplane.application.ArenaAdminApplicationService
+import com.reef.arena.controlplane.arena.ArenaBotEntitlementStore
 import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
@@ -51,7 +52,8 @@ private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "p
 internal class ArenaAdminGateway(
     private val arenaAdminService: ArenaAdminApplicationService?,
     private val adminIdentityService: AdminIdentityService?,
-    private val analyticsRunExportService: SimulationRunExportService?
+    private val analyticsRunExportService: SimulationRunExportService?,
+    private val arenaBotEntitlementStore: ArenaBotEntitlementStore? = null
 ) : OptionalProductRouteExtension {
     private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
     override val internalPaths = listOf(
