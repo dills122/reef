@@ -39,7 +39,7 @@ jobs:
           else
             changed_paths="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")"
           fi
-          if printf '%s\n' "$changed_paths" | grep -Eq '^(services/(platform-runtime|matching-engine|simulator)/|\.github/workflows/container-images\.yml$)'; then
+          if printf '%s\n' "$changed_paths" | grep -Eq '^(services/(platform-runtime|arena-control-plane|matching-engine|simulator)/|\.github/workflows/container-images\.yml$)'; then
             echo "image_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "image_changed=false" >> "$GITHUB_OUTPUT"
@@ -56,6 +56,9 @@ jobs:
           - image: reef-platform-runtime
             context: services/platform-runtime
             dockerfile: services/platform-runtime/Dockerfile
+          - image: reef-arena-platform-runtime
+            context: .
+            dockerfile: services/arena-control-plane/Dockerfile
           - image: reef-matching-engine
             context: services/matching-engine
             dockerfile: services/matching-engine/Dockerfile
@@ -120,13 +123,16 @@ jobs:
             echo ""
             echo "Docker Hub tags:"
             echo "- ${DOCKERHUB_NAMESPACE}/reef-platform-runtime:sha-${short_sha}"
+            echo "- ${DOCKERHUB_NAMESPACE}/reef-arena-platform-runtime:sha-${short_sha}"
             echo "- ${DOCKERHUB_NAMESPACE}/reef-matching-engine:sha-${short_sha}"
             echo "- ${DOCKERHUB_NAMESPACE}/reef-simulator:sha-${short_sha}"
             if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
               echo "- ${DOCKERHUB_NAMESPACE}/reef-platform-runtime:master"
+              echo "- ${DOCKERHUB_NAMESPACE}/reef-arena-platform-runtime:master"
               echo "- ${DOCKERHUB_NAMESPACE}/reef-matching-engine:master"
               echo "- ${DOCKERHUB_NAMESPACE}/reef-simulator:master"
               echo "- ${DOCKERHUB_NAMESPACE}/reef-platform-runtime:latest"
+              echo "- ${DOCKERHUB_NAMESPACE}/reef-arena-platform-runtime:latest"
               echo "- ${DOCKERHUB_NAMESPACE}/reef-matching-engine:latest"
               echo "- ${DOCKERHUB_NAMESPACE}/reef-simulator:latest"
             fi
