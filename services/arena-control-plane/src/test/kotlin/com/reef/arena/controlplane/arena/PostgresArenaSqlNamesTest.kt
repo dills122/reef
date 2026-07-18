@@ -21,6 +21,8 @@ class PostgresArenaSqlNamesTest {
         assertEquals("arena.run_bot_results", names.runBotResults)
         assertEquals("arena.run_enforcement_events", names.runEnforcementEvents)
         assertEquals("arena.runtime_config_descriptors", names.runtimeConfigDescriptors)
+        assertEquals("arena.user_bot_limits", names.userBotLimits)
+        assertEquals("arena.user_bot_ownerships", names.userBotOwnerships)
     }
 
     @Test
@@ -56,6 +58,24 @@ class PostgresArenaSqlNamesTest {
                 "arena.run_bot_results.disqualified:boolean", "arena.run_bot_results.score_eligible:boolean",
                 "arena.run_bot_results.public_leaderboard:boolean", "arena.run_enforcement_events.reason_code:text",
                 "arena.runtime_config_descriptors.secret_path:text"
+            )
+        ))
+    }
+
+    @Test
+    fun entitlementRequirementsCoverArenaOwnedEntitlementObjects() {
+        val requirements = ArenaPostgresSchemaRequirements.entitlements(PostgresArenaSqlNames())
+
+        assertEquals(
+            setOf("arena.user_bot_limits", "arena.user_bot_ownerships"),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.containsAll(
+            setOf(
+                "arena.user_bot_limits.max_bots:integer",
+                "arena.user_bot_limits.max_active_bots:integer",
+                "arena.user_bot_ownerships.bot_id:text",
+                "arena.user_bot_ownerships.ownership_state:text"
             )
         ))
     }

@@ -5,6 +5,27 @@ import com.reef.platform.infrastructure.persistence.PostgresSchemaObject
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirement
 
 object ArenaPostgresSchemaRequirements {
+    fun entitlements(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
+        val limitsTable = PostgresSchemaObject.parse(names.userBotLimits)
+        val ownershipsTable = PostgresSchemaObject.parse(names.userBotOwnerships)
+        return PostgresSchemaRequirement(
+            tables = listOf(limitsTable, ownershipsTable),
+            columns = listOf(
+                PostgresSchemaColumn(limitsTable, "reef_user_id", "text"),
+                PostgresSchemaColumn(limitsTable, "max_bots", "integer"),
+                PostgresSchemaColumn(limitsTable, "max_active_bots", "integer"),
+                PostgresSchemaColumn(limitsTable, "max_version_submissions_per_day", "integer"),
+                PostgresSchemaColumn(limitsTable, "updated_by", "text"),
+                PostgresSchemaColumn(limitsTable, "updated_at", "timestamp with time zone"),
+                PostgresSchemaColumn(ownershipsTable, "reef_user_id", "text"),
+                PostgresSchemaColumn(ownershipsTable, "bot_id", "text"),
+                PostgresSchemaColumn(ownershipsTable, "ownership_state", "text"),
+                PostgresSchemaColumn(ownershipsTable, "assigned_by", "text"),
+                PostgresSchemaColumn(ownershipsTable, "assigned_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun registry(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
         val botsTable = PostgresSchemaObject.parse(names.bots)
         val versionsTable = PostgresSchemaObject.parse(names.botVersions)
