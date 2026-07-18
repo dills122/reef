@@ -99,11 +99,10 @@ arena.user_bot_ownerships
 ```
 
 The control plane joins Arena ownership with the Admin identity record only at
-the Arena adapter. Reef-only deployments never require these tables. Existing
-`admin.user_bot_limits` and `admin.user_bot_ownerships` are legacy data during
-the staged cutover: backfill them into Arena before deploying the Arena runtime
-and retain them until the operational retention window closes. Do not drop or
-alter the applied Admin migration in place.
+the Arena adapter. Reef-only deployments never require these tables. This is a
+pre-release cutover: `admin/0004_remove_legacy_arena_entitlements.sql` removes
+the superseded Admin tables after the Arena migration has created their owned
+replacements. Do not alter the applied Admin migration in place.
 
 OAuth states, browser session tokens, and service tokens must be stored as
 server-side hashes only. Raw token values are returned once at issue time and
