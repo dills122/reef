@@ -3,7 +3,6 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.api.PostgresBoundarySqlNames
 import com.reef.platform.application.admin.PostgresAdminAuthSqlNames
 import com.reef.platform.application.admin.PostgresAdminIdentitySqlNames
-import com.reef.platform.application.arena.PostgresArenaSqlNames
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -325,80 +324,6 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.reference_venue_sessions" }
-                .map { "${it.qualifiedName}:${it.expectedDataType}" }
-                .toSet()
-        )
-    }
-
-    @Test
-    fun arenaRegistryRequirementsCoverControlPlaneObjects() {
-        val names = PostgresArenaSqlNames()
-        val requirements = PostgresSchemaRequirements.arenaRegistry(
-            bots = names.bots,
-            botVersions = names.botVersions,
-            qualificationReports = names.qualificationReports,
-            qualificationReportIssues = names.qualificationReportIssues,
-            operatorDecisions = names.operatorDecisions,
-            runRecords = names.runRecords,
-            runBotVersions = names.runBotVersions,
-            runBotResults = names.runBotResults,
-            runEnforcementEvents = names.runEnforcementEvents,
-            runtimeConfigDescriptors = names.runtimeConfigDescriptors
-        )
-
-        assertEquals(
-            setOf(
-                "arena.bots",
-                "arena.bot_versions",
-                "arena.qualification_reports",
-                "arena.qualification_report_issues",
-                "arena.operator_decisions",
-                "arena.run_records",
-                "arena.run_bot_versions",
-                "arena.run_bot_results",
-                "arena.run_enforcement_events",
-                "arena.runtime_config_descriptors"
-            ),
-            requirements.tables.map { it.qualifiedName }.toSet()
-        )
-        assertTrue(
-            requirements.columns
-                .map { "${it.qualifiedName}:${it.expectedDataType}" }
-                .containsAll(
-                    setOf(
-                        "arena.bot_versions.status:text",
-                        "arena.run_records.seed:bigint",
-                        "arena.run_bot_results.final_equity:bigint",
-                        "arena.run_bot_results.disqualified:boolean",
-                        "arena.run_bot_results.score_eligible:boolean",
-                        "arena.run_bot_results.public_leaderboard:boolean",
-                        "arena.run_enforcement_events.reason_code:text",
-                        "arena.run_enforcement_events.counters_json:text",
-                        "arena.runtime_config_descriptors.secret_path:text",
-                        "arena.runtime_config_descriptors.required:boolean"
-                    )
-                )
-        )
-        assertEquals(
-            setOf(
-                "arena.run_bot_results.run_id:text",
-                "arena.run_bot_results.bot_id:text",
-                "arena.run_bot_results.version_id:text",
-                "arena.run_bot_results.scoring_policy_version:text",
-                "arena.run_bot_results.final_equity:bigint",
-                "arena.run_bot_results.realized_pnl:bigint",
-                "arena.run_bot_results.max_drawdown:bigint",
-                "arena.run_bot_results.actions_proposed:integer",
-                "arena.run_bot_results.order_actions_proposed:integer",
-                "arena.run_bot_results.data_calls:integer",
-                "arena.run_bot_results.signals_generated:integer",
-                "arena.run_bot_results.disqualified:boolean",
-                "arena.run_bot_results.score_eligible:boolean",
-                "arena.run_bot_results.public_leaderboard:boolean",
-                "arena.run_bot_results.created_at:timestamp with time zone"
-            ),
-            requirements.columns
-                .filter { it.table.qualifiedName == "arena.run_bot_results" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

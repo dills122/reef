@@ -1,7 +1,6 @@
 package com.reef.arena.controlplane.arena
 
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
-import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import java.sql.Connection
 import java.sql.ResultSet
@@ -19,18 +18,7 @@ class PostgresArenaBotRegistryStore(
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
                 PostgresSchemaValidator.validate(
                     conn,
-                    PostgresSchemaRequirements.arenaRegistry(
-                        bots = names.bots,
-                        botVersions = names.botVersions,
-                        qualificationReports = names.qualificationReports,
-                        qualificationReportIssues = names.qualificationReportIssues,
-                        operatorDecisions = names.operatorDecisions,
-                        runRecords = names.runRecords,
-                        runBotVersions = names.runBotVersions,
-                        runBotResults = names.runBotResults,
-                        runEnforcementEvents = names.runEnforcementEvents,
-                        runtimeConfigDescriptors = names.runtimeConfigDescriptors
-                    )
+                    ArenaPostgresSchemaRequirements.registry(names)
                 )
                 return@use
             }
