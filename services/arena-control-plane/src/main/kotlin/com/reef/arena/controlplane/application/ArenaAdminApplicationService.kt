@@ -43,6 +43,10 @@ import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import java.time.Instant
 import java.util.UUID
 
+private object ArenaPermission {
+    const val Admin = "arena.admin"
+}
+
 data class AdminActor(
     val actorId: String,
     val correlationId: String = "",
@@ -326,7 +330,7 @@ class ArenaAdminApplicationService(
     fun simulationState(): SimulationControlState = simulationState
 
     fun registerArenaBot(actor: AdminActor, command: ArenaBotRegistrationCommand): ArenaBot {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val bot = arenaControlPlane().registerBot(
             RegisterArenaBotCommand(
                 botId = command.botId,
@@ -348,7 +352,7 @@ class ArenaAdminApplicationService(
         actor: AdminActor,
         command: ArenaBotVersionRegistrationCommand
     ): ArenaBotVersion {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val version = arenaControlPlane().registerVersion(
             RegisterArenaBotVersionCommand(
                 botId = command.botId,
@@ -365,7 +369,7 @@ class ArenaAdminApplicationService(
     }
 
     fun transitionArenaBotVersion(actor: AdminActor, command: ArenaBotVersionDecisionCommand): ArenaBotVersion {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val service = arenaControlPlane()
         val updated = service.transitionVersion(
             botId = command.botId,
@@ -386,7 +390,7 @@ class ArenaAdminApplicationService(
     }
 
     fun arenaBot(actor: AdminActor, botId: String): ArenaBot? {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().bot(botId)
     }
 
@@ -395,7 +399,7 @@ class ArenaAdminApplicationService(
     }
 
     fun arenaBots(actor: AdminActor, limit: Int = 50): List<ArenaBot> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().bots(limit)
     }
 
@@ -405,22 +409,22 @@ class ArenaAdminApplicationService(
     }
 
     fun arenaBotVersion(actor: AdminActor, botId: String, versionId: String): ArenaBotVersion? {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().version(botId, versionId)
     }
 
     fun arenaQualificationReports(actor: AdminActor, botId: String, versionId: String): List<ArenaQualificationReport> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().qualificationReports(botId, versionId)
     }
 
     fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().operatorDecisions(botId, versionId)
     }
 
     fun registerArenaRun(actor: AdminActor, command: ArenaRunRegistrationCommand): ArenaRunRecord {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val run = arenaControlPlane().registerRun(
             RegisterArenaRunCommand(
                 runId = command.runId,
@@ -436,29 +440,29 @@ class ArenaAdminApplicationService(
     }
 
     fun updateArenaRunStatus(actor: AdminActor, command: ArenaRunStatusCommand): ArenaRunRecord {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val run = arenaControlPlane().updateRunStatus(command.runId, command.status)
         emitAudit(actor, "AdminArenaRunStatusUpdated", command.runId, "status=${command.status.name}")
         return run
     }
 
     fun arenaRun(actor: AdminActor, runId: String): ArenaRunRecord? {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().runRecord(runId)
     }
 
     fun arenaRuns(actor: AdminActor, limit: Int): List<ArenaRunRecord> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().runs(limit)
     }
 
     fun arenaRunBotResults(actor: AdminActor, runId: String): List<ArenaRunBotResult> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaControlPlane().runBotResults(runId)
     }
 
     fun arenaRunEnforcementEvents(actor: AdminActor, runId: String): List<ArenaRunEnforcementEvent> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaControlPlane().runEnforcementEvents(runId)
     }
 
@@ -466,7 +470,7 @@ class ArenaAdminApplicationService(
         actor: AdminActor,
         command: ArenaRunBotResultIngestionCommand
     ): ArenaRunBotResult {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val result = arenaControlPlane().recordRunBotResult(
             ArenaRunBotResult(
                 runId = command.runId,
@@ -499,7 +503,7 @@ class ArenaAdminApplicationService(
         actor: AdminActor,
         command: ArenaRunEnforcementEventIngestionCommand
     ): ArenaRunEnforcementEvent {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         val event = arenaControlPlane().recordRunEnforcementEvent(
             ArenaRunEnforcementEvent(
                 runId = command.runId,
@@ -527,7 +531,7 @@ class ArenaAdminApplicationService(
         botId: String,
         versionId: String
     ): List<ArenaRuntimeConfigDescriptor> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().runtimeConfigDescriptors(botId, versionId)
     }
 
@@ -537,7 +541,7 @@ class ArenaAdminApplicationService(
         scoringPolicyVersion: String,
         limit: Int = 50
     ): List<ArenaLeaderboardEntry> {
-        requirePermission(actor, Permission.ARENA_ADMIN)
+        requirePermission(actor, ArenaPermission.Admin)
         return arenaStore().leaderboard(modeId, scoringPolicyVersion, limit)
     }
 
@@ -683,7 +687,7 @@ class ArenaAdminApplicationService(
         if (user.trustState != AdminTrustState.Trusted) return false
         val roles = identity.rolesForUser(actorId).map { it.roleId }.toSet()
         return when (permission) {
-            Permission.ARENA_ADMIN -> roles.any {
+            ArenaPermission.Admin -> roles.any {
                 it == AdminIdentityService.RoleOperator || it == AdminIdentityService.RolePlatformAdmin
             }
             else -> false
