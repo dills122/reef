@@ -50,9 +50,9 @@ private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "p
 internal class ArenaAdminGateway(
     private val arenaAdminService: ArenaAdminApplicationService?,
     private val adminIdentityService: AdminIdentityService?,
-    private val analyticsRunExportService: SimulationRunExportService?,
-    private val currentPrincipal: () -> AdminRequestPrincipal
+    private val analyticsRunExportService: SimulationRunExportService?
 ) : OptionalProductRouteExtension {
+    private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
     override val internalPaths = listOf(
         "/internal/admin/arena/bots", "/internal/admin/arena/my/bots", "/internal/admin/arena/bot-versions",
         "/internal/admin/arena/bot-versions/transition", "/internal/admin/arena/qualification-reports",
@@ -65,7 +65,16 @@ internal class ArenaAdminGateway(
     )
     override val publicReadPaths = listOf("/api/v1/arena/leaderboard")
 
-    override fun handleInternal(method: String, path: String, query: String?, body: String): PlatformHotPathResponse? = when (path) {
+    override fun handleInternal(
+        method: String,
+        path: String,
+        query: String?,
+        body: String,
+        principal: AdminRequestPrincipal
+    ): PlatformHotPathResponse? {
+        requestPrincipal.set(principal)
+        return try {
+            when (path) {
         "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotResponse(query) }, { registerArenaBotResponse(body) })
         "/internal/admin/arena/my/bots" -> getResponseOnly(method) { arenaMyBotsResponse(query) }
         "/internal/admin/arena/bot-versions" -> getOrPost(method, { arenaBotVersionResponse(query) }, { registerArenaBotVersionResponse(body) })
@@ -83,13 +92,20 @@ internal class ArenaAdminGateway(
         "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
         "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
         "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
-        else -> null
+                else -> null
+            }
+        } finally {
+            requestPrincipal.remove()
+        }
     }
 
     override fun handlePublicRead(path: String, query: String?): PlatformHotPathResponse? = when (path) {
         "/api/v1/arena/leaderboard" -> arenaLeaderboardPublicResponse(query)
         else -> null
     }
+
+    private fun currentPrincipal(): AdminRequestPrincipal =
+        requestPrincipal.get() ?: error("Arena gateway request principal is unavailable")
 
     private fun getResponseOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
         if (method == "GET") response() else methodNotAllowedResponse()

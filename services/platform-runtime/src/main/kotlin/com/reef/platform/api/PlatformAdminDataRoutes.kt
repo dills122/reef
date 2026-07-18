@@ -16,6 +16,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
  */
 internal class PlatformAdminDataRoutes(
     private val optionalProductRouteExtensions: List<OptionalProductRouteExtension>,
+    private val currentAdminPrincipal: () -> AdminRequestPrincipal,
     private val settlementAdminGateway: SettlementAdminGateway,
     private val healthJson: () -> String,
     private val readinessJson: () -> String,
@@ -97,7 +98,7 @@ internal class PlatformAdminDataRoutes(
             "/internal/market-data/projector/status" -> getOnly(method) { marketDataProjectorStatsJson() }
             "/internal/order-lifecycle/projector/status" -> getOnly(method) { orderLifecycleProjectorStatsJson() }
             else -> optionalProductRouteExtensions.firstNotNullOfOrNull {
-                it.handleInternal(method, path, query, body)
+                it.handleInternal(method, path, query, body, currentAdminPrincipal())
             }
         }
     }

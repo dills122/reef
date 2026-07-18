@@ -585,6 +585,7 @@ class PlatformHttpServer(
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
         PlatformAdminDataRoutes(
             optionalProductRouteExtensions = optionalProductRouteExtensions,
+            currentAdminPrincipal = { currentAdminPrincipal() },
             settlementAdminGateway = settlementAdminGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
