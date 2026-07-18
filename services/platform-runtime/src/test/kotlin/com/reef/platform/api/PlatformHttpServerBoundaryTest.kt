@@ -314,6 +314,10 @@ class PlatformHttpServerBoundaryTest {
             adminGatewayRouteFor("/admin/v1/arena/my/bots", "GET")
         )
         assertEquals(
+            null,
+            adminGatewayRouteFor("/admin/v1/arena/my/bots", "GET", arenaRoutesEnabled = false)
+        )
+        assertEquals(
             AdminGatewayRoute(
                 "/internal/admin/settlement/facts",
                 "admin",
@@ -867,26 +871,10 @@ class PlatformHttpServerBoundaryTest {
                 headers,
                 """{"scenarioRunId":"p2-denied-admin-gateway"}"""
             )
-            val openBaoProvision = post(
-                server.address.port,
-                "/admin/v1/arena/bots/openbao-provision",
-                headers,
-                """
-                    {
-                      "githubOidcToken": "token",
-                      "submitterIdentity": "attacker",
-                      "botId": "bot-1",
-                      "flow": "add"
-                    }
-                """.trimIndent()
-            )
-
             listOf(accountRisk, priceCollar, circuitBreaker, settlementFacts, settlementMaterialize).forEach { response ->
                 assertEquals(403, response.status, response.body)
                 assertContains(response.body, "trusted admin identity is required")
             }
-            assertEquals(403, openBaoProvision.status, openBaoProvision.body)
-            assertContains(openBaoProvision.body, "trusted admin identity is required")
 
             auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
             val trustedWithoutRole = post(server.address.port, "/admin/v1/risk/account-controls", headers, "{}")
@@ -1787,8 +1775,7 @@ class PlatformHttpServerBoundaryTest {
                 "/api/v1/settlement/obligations/run-public-denied",
                 "/api/v1/settlement/ledger/run-public-denied",
                 "/api/v1/settlement/proof/run-public-denied",
-                "/api/v1/settlement/score/run-public-denied",
-                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2"
+                "/api/v1/settlement/score/run-public-denied"
             ).forEach { path ->
                 val response = get(server.address.port, path)
 

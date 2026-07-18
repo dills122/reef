@@ -282,17 +282,6 @@ class PlatformApi(
                     scope = "scenario-settlement-score",
                     requiredQuery = emptyList(),
                     optionalQuery = emptyList()
-                ),
-                surfaceAvailability(
-                    name = "arenaLeaderboard",
-                    endpoint = "/api/v1/arena/leaderboard",
-                    source = "arena.run_bot_results + arena.bots",
-                    freshness = "durable rows written after run completion",
-                    status = venueStatus,
-                    scope = "public-game-data",
-                    requiredQuery = listOf("modeId", "scoringPolicyVersion"),
-                    optionalQuery = listOf("limit"),
-                    notes = "rows are pre-filtered by score_eligible/public_leaderboard/disqualified at the query level"
                 )
             )
         )

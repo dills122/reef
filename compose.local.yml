@@ -101,40 +101,6 @@ services:
       timeout: 3s
       retries: 20
 
-  arena-postgres:
-    image: postgres:16-alpine
-    container_name: reef-arena-postgres
-    command:
-      - "postgres"
-      - "-c"
-      - "max_connections=${REEF_ARENA_PG_MAX_CONNECTIONS:-80}"
-      - "-c"
-      - "max_wal_size=${REEF_ARENA_PG_MAX_WAL_SIZE:-4GB}"
-      - "-c"
-      - "min_wal_size=${REEF_ARENA_PG_MIN_WAL_SIZE:-1GB}"
-      - "-c"
-      - "checkpoint_timeout=${REEF_ARENA_PG_CHECKPOINT_TIMEOUT:-15min}"
-      - "-c"
-      - "checkpoint_completion_target=${REEF_ARENA_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
-      - "-c"
-      - "wal_compression=${REEF_ARENA_PG_WAL_COMPRESSION:-on}"
-      - "-c"
-      - "log_checkpoints=${REEF_ARENA_PG_LOG_CHECKPOINTS:-on}"
-    environment:
-      POSTGRES_DB: reef
-      POSTGRES_USER: reef
-      POSTGRES_PASSWORD: reef
-    ports:
-      - "${REEF_ARENA_POSTGRES_HOST_PORT:-5435}:5432"
-    volumes:
-      - reef-arena-postgres-data:/var/lib/postgresql/data
-      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   redis:
     image: redis:7-alpine
     container_name: reef-redis
@@ -238,7 +204,6 @@ services:
   platform-api:
     container_name: reef-platform-api
     environment:
-      PLATFORM_ARENA_ADMIN_ENABLED: "${PLATFORM_ARENA_ADMIN_ENABLED:-true}"
       REEF_ENV: "${REEF_ENV:-local}"
       LOCAL_DEV_ADMIN_UI_BASE_URL: "${LOCAL_DEV_ADMIN_UI_BASE_URL:-http://localhost:5174}"
       ADMIN_SESSION_COOKIE_SECURE: "${ADMIN_SESSION_COOKIE_SECURE:-false}"
@@ -311,6 +276,5 @@ volumes:
   reef-postgres-data:
   reef-boundary-postgres-data:
   reef-projection-postgres-data:
-  reef-arena-postgres-data:
   reef-nats-data:
   reef-redpanda-data:

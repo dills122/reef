@@ -95,6 +95,18 @@ make dev-compose-config ARGS="--services"
 bun scripts/dev/reef-dev.mjs stack compose-config --services
 ```
 
+This is the Reef-only profile. Start the Arena overlay only when working on
+Arena-owned behavior:
+
+```bash
+make dev-up-arena
+```
+
+It adds `compose.arena.yml` and runs the Arena migration target; it is not a
+dependency of `make dev-up` or `make dev-smoke`.
+Use `make dev-reset-arena`, `make dev-smoke-arena`, and `make dev-down-arena`
+for the corresponding overlay lifecycle operations.
+
 If Bun is missing locally, install it before running bot SDK, arena, or
 package-dependent repo automation. Plain Node-compatible stack commands can
 temporarily run with:

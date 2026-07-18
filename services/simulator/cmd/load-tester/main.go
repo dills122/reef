@@ -616,7 +616,7 @@ func defaultConfigFromEnv() Config {
 		LegacyInternalRoute: envBool("REEF_LEGACY_INTERNAL_ROUTE", false),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
 		APIBearerToken:      envOr("REEF_API_BEARER_TOKEN", ""),
-		AdminAPIBearerToken: envOr("REEF_ADMIN_API_BEARER_TOKEN", envOr("ADMIN_API_TOKEN", envOr("ARENA_ADMIN_API_TOKEN", ""))),
+		AdminAPIBearerToken: envOr("REEF_ADMIN_API_BEARER_TOKEN", envOr("ADMIN_API_TOKEN", "")),
 		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
 		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
 	}

@@ -1,0 +1,48 @@
+services:
+  platform-api:
+    environment:
+      ARENA_POSTGRES_JDBC_URL: "${ARENA_POSTGRES_JDBC_URL:-jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena}"
+      ARENA_POSTGRES_USER: "${ARENA_POSTGRES_USER:-reef}"
+      ARENA_POSTGRES_PASSWORD: "${ARENA_POSTGRES_PASSWORD:-reef}"
+      ARENA_ADMIN_API_TOKEN: "${ARENA_ADMIN_API_TOKEN:-}"
+      PLATFORM_ARENA_ADMIN_ENABLED: "${PLATFORM_ARENA_ADMIN_ENABLED:-true}"
+    depends_on:
+      arena-postgres:
+        condition: service_healthy
+
+  arena-postgres:
+    image: postgres:16-alpine
+    container_name: reef-arena-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_ARENA_PG_MAX_CONNECTIONS:-80}"
+      - "-c"
+      - "max_wal_size=${REEF_ARENA_PG_MAX_WAL_SIZE:-4GB}"
+      - "-c"
+      - "min_wal_size=${REEF_ARENA_PG_MIN_WAL_SIZE:-1GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_ARENA_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_ARENA_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_ARENA_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_ARENA_PG_LOG_CHECKPOINTS:-on}"
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_ARENA_POSTGRES_HOST_PORT:-5435}:5432"
+    volumes:
+      - reef-arena-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  reef-arena-postgres-data:

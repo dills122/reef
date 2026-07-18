@@ -9,6 +9,9 @@ This is the **next implementation sprint after this documentation branch is
 reviewed and merged**. This document authorizes no code changes on the current
 branch.
 
+The observed pre-sprint implementation inventory is recorded in
+[`REEF_BOT_ARENA_SEPARATION_READINESS.md`](./REEF_BOT_ARENA_SEPARATION_READINESS.md).
+
 The sprint closes the gap between the intended product relationship and the
 current packaging:
 

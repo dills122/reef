@@ -1,40 +1,43 @@
-package com.reef.platform.api
+package com.reef.arena.controlplane.api
+
+import com.reef.platform.api.*
 
 import com.reef.platform.application.admin.AdminActor
-import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminIdentityService
-import com.reef.platform.application.admin.ArenaBotRegistrationCommand
-import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
-import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
-import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
-import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionCommand
-import com.reef.platform.application.admin.ArenaRunRegistrationCommand
-import com.reef.platform.application.admin.ArenaRunStatusCommand
+import com.reef.platform.application.admin.AdminServiceTokenFamily
+import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
+import com.reef.arena.controlplane.application.ArenaBotVersionDecisionCommand
+import com.reef.arena.controlplane.application.ArenaBotVersionRegistrationCommand
+import com.reef.arena.controlplane.application.ArenaRunBotResultIngestionCommand
+import com.reef.arena.controlplane.application.ArenaRunEnforcementEventIngestionCommand
+import com.reef.arena.controlplane.application.ArenaRunRegistrationCommand
+import com.reef.arena.controlplane.application.ArenaRunStatusCommand
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.analytics.BotRunPerformanceSummaryRecord
 import com.reef.platform.application.analytics.SimulationRunExportCommand
 import com.reef.platform.application.analytics.SimulationRunExportRecord
 import com.reef.platform.application.analytics.SimulationRunExportService
-import com.reef.platform.application.arena.ArenaBot
-import com.reef.platform.application.arena.ArenaBotVersion
-import com.reef.platform.application.arena.ArenaBotVersionStatus
-import com.reef.platform.application.arena.ArenaLeaderboardEntry
-import com.reef.platform.application.arena.ArenaOperatorDecision
-import com.reef.platform.application.arena.ArenaQualificationReport
-import com.reef.platform.application.arena.ArenaRunBotResult
-import com.reef.platform.application.arena.ArenaRunBotVersionRef
-import com.reef.platform.application.arena.ArenaRunEnforcementEvent
-import com.reef.platform.application.arena.ArenaRunRecord
-import com.reef.platform.application.arena.ArenaRunStatus
-import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
-import com.reef.platform.application.arena.BotConfigSecretService
-import com.reef.platform.application.arena.LocalDevBotConfigService
-import com.reef.platform.application.arena.OpenBaoBotConfigService
-import com.reef.platform.application.arena.OpenBaoBotConfigServiceConfig
-import com.reef.platform.application.arena.OpenBaoClientException
-import com.reef.platform.application.arena.OpenBaoProvisioningConfig
-import com.reef.platform.application.arena.OpenBaoProvisioningService
+import com.reef.arena.controlplane.arena.ArenaBot
+import com.reef.arena.controlplane.arena.ArenaBotVersion
+import com.reef.arena.controlplane.arena.ArenaBotVersionStatus
+import com.reef.arena.controlplane.arena.ArenaLeaderboardEntry
+import com.reef.arena.controlplane.arena.ArenaOperatorDecision
+import com.reef.arena.controlplane.arena.ArenaQualificationReport
+import com.reef.arena.controlplane.arena.ArenaRunBotResult
+import com.reef.arena.controlplane.arena.ArenaRunBotVersionRef
+import com.reef.arena.controlplane.arena.ArenaRunEnforcementEvent
+import com.reef.arena.controlplane.arena.ArenaRunRecord
+import com.reef.arena.controlplane.arena.ArenaRunStatus
+import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
+import com.reef.arena.controlplane.arena.BotConfigSecretService
+import com.reef.arena.controlplane.arena.LocalDevBotConfigService
+import com.reef.arena.controlplane.arena.OpenBaoBotConfigService
+import com.reef.arena.controlplane.arena.OpenBaoBotConfigServiceConfig
+import com.reef.arena.controlplane.arena.OpenBaoClientException
+import com.reef.arena.controlplane.arena.OpenBaoProvisioningConfig
+import com.reef.arena.controlplane.arena.OpenBaoProvisioningService
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
@@ -42,15 +45,111 @@ private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "p
 /**
  * Owns arena bot/version registration, run/leaderboard admin CRUD, per-bot OpenBao
  * secret config, and analytics run-export ingestion+query. These share one class
- * because they're all admin/data internal routes over the same AdminApplicationService,
+ * because they're all admin/data internal routes over the same ArenaAdminApplicationService,
  * not because they're one bounded context — see docs/steering/kotlin.md.
  */
 internal class ArenaAdminGateway(
-    private val arenaAdminService: AdminApplicationService?,
+    private val arenaAdminService: ArenaAdminApplicationService?,
     private val adminIdentityService: AdminIdentityService?,
-    private val analyticsRunExportService: SimulationRunExportService?,
-    private val adminSessionAuth: AdminSessionAuth
-) {
+    private val analyticsRunExportService: SimulationRunExportService?
+) : OptionalProductRouteExtension {
+    private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
+    override val internalPaths = listOf(
+        "/internal/admin/arena/bots", "/internal/admin/arena/my/bots", "/internal/admin/arena/bot-versions",
+        "/internal/admin/arena/bot-versions/transition", "/internal/admin/arena/qualification-reports",
+        "/internal/admin/arena/operator-decisions", "/internal/admin/arena/runtime-config-descriptors",
+        "/internal/admin/arena/runs", "/internal/admin/arena/runs/status", "/internal/admin/arena/run-bot-results",
+        "/internal/admin/arena/run-enforcement-events", "/internal/admin/arena/leaderboard",
+        "/internal/admin/arena/bots/openbao-provision", "/internal/admin/arena/bots/ownership",
+        "/internal/admin/arena/bots/config", "/internal/admin/analytics/run-exports",
+        "/internal/admin/analytics/run-bot-summaries"
+    )
+    override val publicReadPaths = listOf("/api/v1/arena/leaderboard")
+    override val adminRoutes = listOf(
+        adminRoute("/admin/v1/arena/bots", setOf("GET", "POST"), "/internal/admin/arena/bots", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/my/bots", setOf("GET"), "/internal/admin/arena/my/bots", "arena", emptySet()),
+        adminRoute("/admin/v1/arena/bots/openbao-provision", setOf("POST"), "/internal/admin/arena/bots/openbao-provision", "arena", arenaTokens, secretRoles),
+        adminRoute("/admin/v1/arena/bots/ownership", setOf("POST"), "/internal/admin/arena/bots/ownership", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/bots/config", setOf("GET", "POST", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
+        adminRoute("/admin/v1/arena/bot-versions", setOf("GET", "POST"), "/internal/admin/arena/bot-versions", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/bot-versions/transition", setOf("POST"), "/internal/admin/arena/bot-versions/transition", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/runs", setOf("GET", "POST"), "/internal/admin/arena/runs", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/runs/status", setOf("POST"), "/internal/admin/arena/runs/status", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/run-bot-results", setOf("GET", "POST"), "/internal/admin/arena/run-bot-results", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/run-enforcement-events", setOf("GET", "POST"), "/internal/admin/arena/run-enforcement-events", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/leaderboard", setOf("GET"), "/internal/admin/arena/leaderboard", "arena", arenaTokens, operatorRoles)
+    )
+
+    override fun handleInternal(
+        method: String,
+        path: String,
+        query: String?,
+        body: String,
+        principal: AdminRequestPrincipal
+    ): PlatformHotPathResponse? {
+        requestPrincipal.set(principal)
+        return try {
+            when (path) {
+        "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotResponse(query) }, { registerArenaBotResponse(body) })
+        "/internal/admin/arena/my/bots" -> getResponseOnly(method) { arenaMyBotsResponse(query) }
+        "/internal/admin/arena/bot-versions" -> getOrPost(method, { arenaBotVersionResponse(query) }, { registerArenaBotVersionResponse(body) })
+        "/internal/admin/arena/bot-versions/transition" -> postOnly(method) { transitionArenaBotVersionResponse(body) }
+        "/internal/admin/arena/qualification-reports" -> getResponseOnly(method) { arenaQualificationReportsResponse(query) }
+        "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) { arenaOperatorDecisionsResponse(query) }
+        "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) { arenaRuntimeConfigDescriptorsResponse(query) }
+        "/internal/admin/arena/runs" -> getOrPost(method, { arenaRunResponse(query) }, { registerArenaRunResponse(body) })
+        "/internal/admin/arena/runs/status" -> postOnly(method) { updateArenaRunStatusResponse(body) }
+        "/internal/admin/arena/run-bot-results" -> getOrPost(method, { arenaRunBotResultsResponse(query) }, { recordArenaRunBotResultResponse(body) })
+        "/internal/admin/arena/run-enforcement-events" -> getOrPost(method, { arenaRunEnforcementEventsResponse(query) }, { recordArenaRunEnforcementEventResponse(body) })
+        "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardResponse(query) }
+        "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionResponse(body) }
+        "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipResponse(body) }
+        "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
+        "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
+        "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
+                else -> null
+            }
+        } finally {
+            requestPrincipal.remove()
+        }
+    }
+
+    override fun handlePublicRead(path: String, query: String?): PlatformHotPathResponse? = when (path) {
+        "/api/v1/arena/leaderboard" -> arenaLeaderboardPublicResponse(query)
+        else -> null
+    }
+
+    private fun currentPrincipal(): AdminRequestPrincipal =
+        requestPrincipal.get() ?: error("Arena gateway request principal is unavailable")
+
+    private fun adminRoute(
+        externalPath: String,
+        methods: Set<String>,
+        internalPath: String,
+        fallbackTokenFamily: String,
+        serviceTokenFamilies: Set<AdminServiceTokenFamily>,
+        sessionRoles: Set<String> = emptySet()
+    ) = OptionalProductAdminRoute(externalPath, methods, internalPath, fallbackTokenFamily, serviceTokenFamilies, sessionRoles)
+
+    private companion object {
+        val arenaTokens = setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        val adminTokens = setOf(AdminServiceTokenFamily.Admin)
+        val operatorRoles = setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+        val secretRoles = setOf(AdminIdentityService.RoleSecretAdmin, AdminIdentityService.RolePlatformAdmin)
+    }
+
+    private fun getResponseOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
+        if (method == "GET") response() else methodNotAllowedResponse()
+
+    private fun postOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
+        if (method == "POST") response() else methodNotAllowedResponse()
+
+    private fun getOrPost(method: String, getResponse: () -> PlatformHotPathResponse, postResponse: () -> PlatformHotPathResponse): PlatformHotPathResponse = when (method) {
+        "GET" -> getResponse()
+        "POST" -> postResponse()
+        else -> methodNotAllowedResponse()
+    }
+
     fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
@@ -213,7 +312,7 @@ internal class ArenaAdminGateway(
         }
         return try {
             val githubUserId = json.requiredLong("githubUserId")
-            val actor = adminSessionAuth.currentPrincipal().actorId
+            val actor = currentPrincipal().actorId
             if (actor.startsWith("user-gh-")) {
                 val roles = identity.rolesForUser(actor).map { it.roleId }.toSet()
                 if (roles.none { it in adminBotConfigPrivilegedRoles }) {
@@ -261,7 +360,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaBotOpenBaoConfigStatusResponse(
-        service: AdminApplicationService,
+        service: ArenaAdminApplicationService,
         query: String?
     ): PlatformHotPathResponse {
         val botId = queryValue(query, "botId")
@@ -302,7 +401,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaBotOpenBaoConfigReplaceResponse(
-        service: AdminApplicationService,
+        service: ArenaAdminApplicationService,
         body: String
     ): PlatformHotPathResponse {
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
@@ -319,7 +418,7 @@ internal class ArenaAdminGateway(
             if (!canManageBotOpenBaoConfig(bot.botId, write = true)) {
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
-            val actor = adminSessionAuth.currentPrincipal().actorId
+            val actor = currentPrincipal().actorId
             val result = openBaoBotConfigService().replaceConfig(ownerIdentity, bot.botId, configJson, actor)
             recordAdminControlPlaneAudit(
                 actor,
@@ -351,7 +450,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaBotOpenBaoConfigDeleteResponse(
-        service: AdminApplicationService,
+        service: ArenaAdminApplicationService,
         query: String?
     ): PlatformHotPathResponse {
         val botId = queryValue(query, "botId")
@@ -367,7 +466,7 @@ internal class ArenaAdminGateway(
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
             openBaoBotConfigService().deleteConfig(ownerIdentity, bot.botId)
-            val actor = adminSessionAuth.currentPrincipal().actorId
+            val actor = currentPrincipal().actorId
             val secretPath = "secret/bots/$ownerIdentity/${bot.botId}"
             recordAdminControlPlaneAudit(
                 actor,
@@ -417,7 +516,7 @@ internal class ArenaAdminGateway(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         val identity = adminIdentityService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
-        val actorId = adminSessionAuth.currentPrincipal().actorId
+        val actorId = currentPrincipal().actorId
         if (!actorId.startsWith("user-gh-")) {
             return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "GitHub user session is required"))
         }
@@ -446,7 +545,7 @@ internal class ArenaAdminGateway(
     }
 
     // botId omitted -> roster listing, most-recently-registered first.
-    private fun arenaBotsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
+    private fun arenaBotsListResponse(service: ArenaAdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
             val bots = service.arenaBots(arenaAdminActor(query), limit)
@@ -550,7 +649,7 @@ internal class ArenaAdminGateway(
     }
 
     // runId omitted -> recent run listing, most-recently-created first.
-    private fun arenaRunsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
+    private fun arenaRunsListResponse(service: ArenaAdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
             val runs = service.arenaRuns(arenaAdminActor(query), limit)
@@ -923,7 +1022,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaAdminActor(): AdminActor {
-        val principal = adminSessionAuth.currentPrincipal()
+        val principal = currentPrincipal()
         return AdminActor(
             actorId = principal.actorId,
             correlationId = principal.correlationId,
@@ -980,7 +1079,7 @@ internal class ArenaAdminGateway(
 
     private fun canManageBotOpenBaoConfig(botId: String, write: Boolean): Boolean {
         val identityService = adminIdentityService ?: return true
-        val actorId = adminSessionAuth.currentPrincipal().actorId
+        val actorId = currentPrincipal().actorId
         if (!actorId.startsWith("user-gh-")) return true
         val user = identityService.user(actorId) ?: return false
         if (user.trustState.dbValue == "banned") return false

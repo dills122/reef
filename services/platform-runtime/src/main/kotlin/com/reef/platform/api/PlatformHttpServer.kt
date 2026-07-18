@@ -2,48 +2,14 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminActor
-import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.AdminAuthService
-import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
-import com.reef.platform.application.admin.ArenaBotRegistrationCommand
-import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
-import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
-import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionCommand
-import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
-import com.reef.platform.application.admin.ArenaRunRegistrationCommand
-import com.reef.platform.application.admin.ArenaRunStatusCommand
 import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.admin.PostgresAdminAuthStore
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
-import com.reef.platform.application.analytics.BotRunPerformanceSummaryRecord
-import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
-import com.reef.platform.application.analytics.PostgresAnalyticsSqlNames
-import com.reef.platform.application.analytics.PostgresSimulationRunExportStore
-import com.reef.platform.application.analytics.SimulationRunExportCommand
-import com.reef.platform.application.analytics.SimulationRunExportRecord
-import com.reef.platform.application.analytics.SimulationRunExportService
-import com.reef.platform.application.arena.ArenaBot
-import com.reef.platform.application.arena.ArenaBotVersion
-import com.reef.platform.application.arena.ArenaBotVersionStatus
-import com.reef.platform.application.arena.ArenaLeaderboardEntry
-import com.reef.platform.application.arena.ArenaOperatorDecision
-import com.reef.platform.application.arena.ArenaQualificationReport
-import com.reef.platform.application.arena.ArenaRunBotResult
-import com.reef.platform.application.arena.ArenaRunEnforcementEvent
-import com.reef.platform.application.arena.ArenaRunBotVersionRef
-import com.reef.platform.application.arena.ArenaRunRecord
-import com.reef.platform.application.arena.ArenaRunStatus
-import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
-import com.reef.platform.application.arena.OpenBaoBotConfigService
-import com.reef.platform.application.arena.OpenBaoBotConfigServiceConfig
-import com.reef.platform.application.arena.OpenBaoClientException
-import com.reef.platform.application.arena.OpenBaoProvisioningConfig
-import com.reef.platform.application.arena.OpenBaoProvisioningService
-import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
 import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
@@ -130,17 +96,31 @@ internal data class AdminGatewayRoute(
     val sessionRoles: Set<String> = emptySet()
 )
 
+private fun OptionalProductAdminRoute.toAdminGatewayRoute(): AdminGatewayRoute = AdminGatewayRoute(
+    internalPath = internalPath,
+    fallbackTokenFamily = fallbackTokenFamily,
+    serviceTokenFamilies = serviceTokenFamilies,
+    sessionRoles = sessionRoles
+)
+
 private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
 private val adminGatewaySecretAdminRoles = setOf(
     AdminIdentityService.RoleSecretAdmin,
     AdminIdentityService.RolePlatformAdmin
 )
-private val adminGatewayArenaAdminRoles = setOf(
+private val adminGatewayOperatorRoles = setOf(
     AdminIdentityService.RoleOperator,
     AdminIdentityService.RolePlatformAdmin
 )
 
-internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminGatewayRoute? = when (path) {
+internal fun adminGatewayRouteFor(
+    path: String,
+    method: String = "POST",
+    optionalProductRoutes: List<OptionalProductAdminRoute> = emptyList(),
+): AdminGatewayRoute? {
+    optionalProductRoutes.firstOrNull { it.externalPath == path && method in it.methods }
+        ?.let { return it.toAdminGatewayRoute() }
+    return when (path) {
     "/admin/v1/reference/instruments" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute("/reference/instruments", "admin", setOf(AdminServiceTokenFamily.Admin))
     } else {
@@ -171,7 +151,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "/internal/admin/access/users",
             "admin",
             setOf(AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
+            adminGatewayOperatorRoles
         )
     } else {
         null
@@ -181,7 +161,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "/internal/admin/access/roles",
             "admin",
             setOf(AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
+            adminGatewayOperatorRoles
         )
     } else {
         null
@@ -191,7 +171,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "/internal/admin/access/users/trust-state",
             "admin",
             setOf(AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
+            adminGatewayOperatorRoles
         )
     } else {
         null
@@ -201,7 +181,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "/internal/admin/access/users/roles",
             "admin",
             setOf(AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
+            adminGatewayOperatorRoles
         )
     } else {
         null
@@ -211,118 +191,11 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "/internal/admin/access/users/roles/revoke",
             "admin",
             setOf(AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
+            adminGatewayOperatorRoles
         )
     } else {
         null
     }
-    "/admin/v1/arena/bots" -> AdminGatewayRoute(
-        "/internal/admin/arena/bots",
-        "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-        adminGatewayArenaAdminRoles
-    )
-    "/admin/v1/arena/my/bots" -> if (method == "GET") {
-        AdminGatewayRoute(
-            "/internal/admin/arena/my/bots",
-            "arena",
-            emptySet()
-        )
-    } else {
-        null
-    }
-    "/admin/v1/arena/bots/openbao-provision" ->
-        AdminGatewayRoute(
-            "/internal/admin/arena/bots/openbao-provision",
-            "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-            adminGatewaySecretAdminRoles
-        )
-    "/admin/v1/arena/bots/ownership" -> AdminGatewayRoute(
-        "/internal/admin/arena/bots/ownership",
-        "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-        adminGatewayArenaAdminRoles
-    )
-    "/admin/v1/arena/bots/config" -> AdminGatewayRoute(
-        "/internal/admin/arena/bots/config",
-        "admin",
-        setOf(AdminServiceTokenFamily.Admin)
-    )
-    "/admin/v1/arena/bot-versions" -> AdminGatewayRoute(
-        "/internal/admin/arena/bot-versions",
-        "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-        adminGatewayArenaAdminRoles
-    )
-    "/admin/v1/arena/bot-versions/transition" -> AdminGatewayRoute(
-        "/internal/admin/arena/bot-versions/transition",
-        "arena",
-        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-        adminGatewayArenaAdminRoles
-    )
-    "/admin/v1/arena/runs" -> if (method in setOf("GET", "POST")) {
-        AdminGatewayRoute(
-            "/internal/admin/arena/runs",
-            "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
-        )
-    } else {
-        null
-    }
-    "/admin/v1/arena/runs/status" -> if (method == "POST") {
-        AdminGatewayRoute(
-            "/internal/admin/arena/runs/status",
-            "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
-        )
-    } else {
-        null
-    }
-    "/admin/v1/arena/run-bot-results" -> if (method in setOf("GET", "POST")) {
-        AdminGatewayRoute(
-            "/internal/admin/arena/run-bot-results",
-            "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
-        )
-    } else {
-        null
-    }
-    "/admin/v1/arena/run-enforcement-events" -> if (method in setOf("GET", "POST")) {
-        AdminGatewayRoute(
-            "/internal/admin/arena/run-enforcement-events",
-            "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
-        )
-    } else {
-        null
-    }
-    "/admin/v1/arena/leaderboard" -> if (method == "GET") {
-        AdminGatewayRoute(
-            "/internal/admin/arena/leaderboard",
-            "arena",
-            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-            adminGatewayArenaAdminRoles
-        )
-    } else {
-        null
-    }
-    "/admin/v1/analytics/run-exports" -> AdminGatewayRoute(
-        "/internal/admin/analytics/run-exports",
-        "analytics",
-        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
-        adminGatewayPlatformAdminRoles
-    )
-    "/admin/v1/analytics/run-bot-summaries" -> AdminGatewayRoute(
-        "/internal/admin/analytics/run-bot-summaries",
-        "analytics",
-        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
-        adminGatewayPlatformAdminRoles
-    )
     // GET reads the boundary's read-only mirror; POST writes through the admin
     // mutation path. Same public path, two different internal targets.
     "/admin/v1/risk/account-controls" -> AdminGatewayRoute(
@@ -380,6 +253,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         adminGatewayPlatformAdminRoles
     )
     else -> null
+    }
 }
 
 private data class PreparedApiV1Mutation(
@@ -401,7 +275,7 @@ private sealed class PreparedApiV1MutationResult {
 // handling live in AdminSessionAuth.kt (see adminSessionAuth field below).
 private val localDeploymentProfiles = setOf("", "local", "dev", "development", "test", "ci")
 
-// adminBotConfigPrivilegedRoles moved to ArenaAdminGateway.kt (its only user).
+
 
 internal val apiV1OrderMutationRoutes = setOf(
     "/api/v1/orders/submit",
@@ -436,11 +310,9 @@ class PlatformHttpServer(
     private val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
     private val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
-    private val arenaAdminService: AdminApplicationService? = null,
     private val adminAuthService: AdminAuthService? = null,
     private val adminIdentityService: AdminIdentityService? = null,
     private val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
-    private val analyticsRunExportService: SimulationRunExportService? = null,
     private val settlementFactStore: SettlementFactStore? = null,
     private val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     private val defaultPostTradeProfileId: String =
@@ -545,7 +417,8 @@ class PlatformHttpServer(
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false),
     private val localDevAdminAuthBypass: Boolean = localDevAdminAuthBypassEnabled(),
     private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv(),
-    private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl()
+    private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl(),
+    private val productRouteExtensions: List<OptionalProductRouteExtension> = loadOptionalProductRouteExtensions()
 ) {
     companion object {
         private val streamPublishTimeoutExecutor = ScheduledThreadPoolExecutor(1) { runnable ->
@@ -563,7 +436,6 @@ class PlatformHttpServer(
         RuntimeEnv.string("ADMIN_SESSION_COOKIE_NAME", "reef_admin_session").trim().ifBlank { "reef_admin_session" }
     private val adminSessionCookieSecure: Boolean = RuntimeEnv.bool("ADMIN_SESSION_COOKIE_SECURE", true)
     private val adminSessionAuth = AdminSessionAuth(
-        arenaAdminService = arenaAdminService,
         adminAuthService = adminAuthService,
         adminIdentityService = adminIdentityService,
         adminGitHubOAuthClient = adminGitHubOAuthClient,
@@ -581,12 +453,8 @@ class PlatformHttpServer(
         venueSessionPostTradeProfileLookup = venueSessionPostTradeProfileLookup,
         adminSessionAuth = adminSessionAuth
     )
-    private val arenaAdminGateway = ArenaAdminGateway(
-        arenaAdminService = arenaAdminService,
-        adminIdentityService = adminIdentityService,
-        analyticsRunExportService = analyticsRunExportService,
-        adminSessionAuth = adminSessionAuth
-    )
+    private val optionalProductRouteExtensions: List<OptionalProductRouteExtension> =
+        productRouteExtensions
     private val adminAccessGateway = AdminAccessGateway(
         adminIdentityService = adminIdentityService,
         adminSessionAuth = adminSessionAuth
@@ -726,7 +594,8 @@ class PlatformHttpServer(
     }
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
         PlatformAdminDataRoutes(
-            arenaAdminGateway = arenaAdminGateway,
+            optionalProductRouteExtensions = optionalProductRouteExtensions,
+            currentAdminPrincipal = { currentAdminPrincipal() },
             settlementAdminGateway = settlementAdminGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
@@ -766,11 +635,9 @@ class PlatformHttpServer(
         commandCircuitBreakerStore = deps.commandCircuitBreakerStore,
         instrumentPriceCollarCheck = deps.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
-        arenaAdminService = deps.arenaAdminService,
         adminAuthService = deps.adminAuthService,
         adminIdentityService = deps.adminIdentityService,
         adminGitHubOAuthClient = deps.adminGitHubOAuthClient,
-        analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
         settlementObligationMaterializer = deps.settlementObligationMaterializer,
         postTradeProfileResolver = deps.postTradeProfileResolver,
@@ -878,21 +745,7 @@ class PlatformHttpServer(
             }
         }
 
-        for (path in listOf(
-            "/admin/v1/arena/bots",
-            "/admin/v1/arena/my/bots",
-            "/admin/v1/arena/bots/openbao-provision",
-            "/admin/v1/arena/bots/ownership",
-            "/admin/v1/arena/bots/config",
-            "/admin/v1/arena/bot-versions",
-            "/admin/v1/arena/bot-versions/transition",
-            "/admin/v1/arena/runs",
-            "/admin/v1/arena/runs/status",
-            "/admin/v1/arena/run-bot-results",
-            "/admin/v1/arena/run-enforcement-events",
-            "/admin/v1/arena/leaderboard",
-            "/admin/v1/analytics/run-exports",
-            "/admin/v1/analytics/run-bot-summaries",
+        val adminGatewayPaths = listOf(
             "/admin/v1/reference/instruments",
             "/admin/v1/reference/participants",
             "/admin/v1/reference/accounts",
@@ -912,7 +765,8 @@ class PlatformHttpServer(
             "/admin/v1/settlement/force-settle",
             "/admin/v1/settlement/reverse-ledger-entry",
             "/admin/v1/settlement/obligations/materialize"
-        )) {
+        ) + optionalProductRouteExtensions.flatMap { extension -> extension.adminRoutes.map { it.externalPath } }
+        for (path in adminGatewayPaths.distinct()) {
             server.createContext(path) { exchange ->
                 if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
                 handleAdminGatewayRoute(exchange)
@@ -1241,17 +1095,22 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
         }
 
-        server.createContext("/api/v1/arena/leaderboard") { exchange ->
-            if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
+        optionalProductRouteExtensions.forEach { extension ->
+            extension.publicReadPaths.forEach { path ->
+                server.createContext(path) { exchange ->
+                if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
+                if (exchange.requestMethod != "GET") {
+                    methodNotAllowed(exchange)
+                    return@createContext
+                }
+                if (!allowApiV1Read(exchange, path)) {
+                    return@createContext
+                }
+                val response = extension.handlePublicRead(path, exchange.requestURI.rawQuery)
+                    ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "product route not found"))
+                writeHotPathResponse(exchange, response)
+                }
             }
-            if (!allowApiV1Read(exchange, "/api/v1/arena/leaderboard")) {
-                return@createContext
-            }
-            val response = arenaAdminGateway.arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
-            writeJson(exchange, response.status, response.body)
         }
 
         server.createContext("/api/v1/market-data/bars/") { exchange ->
@@ -1494,8 +1353,6 @@ class PlatformHttpServer(
         val marketDataProjectorRequired = runtimeLoopStarter.marketDataProjectorShouldStart()
         val orderLifecycleProjectorRequired = runtimeLoopStarter.orderLifecycleProjectorShouldStart()
         val adminStoreRequired = runtimeRole.publicHttpEnabled && (
-            arenaAdminService != null ||
-                analyticsRunExportService != null ||
                 settlementFactStore != null ||
                 accountRiskControlStore != null ||
                 commandCircuitBreakerStore != null ||
@@ -1558,8 +1415,6 @@ class PlatformHttpServer(
                 "accountRiskControlStore" to (accountRiskControlStore != null),
                 "commandCircuitBreakerStore" to (commandCircuitBreakerStore != null),
                 "instrumentPriceCollarStore" to (instrumentPriceCollarStore != null),
-                "arenaAdminService" to (arenaAdminService != null),
-                "analyticsRunExportService" to (analyticsRunExportService != null),
                 "settlementFactStore" to (settlementFactStore != null),
                 "commandStatusLookup" to (commandStatusLookup != null),
                 "streamCommandIntakeStore" to (streamCommandIntakeStore != null),
@@ -1626,7 +1481,11 @@ class PlatformHttpServer(
 
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
         if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return
-        val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod)
+        val route = adminGatewayRouteFor(
+            exchange.requestURI.path,
+            exchange.requestMethod,
+            optionalProductRouteExtensions.flatMap { it.adminRoutes }
+        )
         if (route == null) {
             exchange.sendResponseHeaders(404, -1)
             exchange.close()
@@ -1654,7 +1513,11 @@ class PlatformHttpServer(
     }
 
     private fun handleAdminGatewayRequest(request: PlatformHotPathRequest): PlatformHotPathResponse {
-        val route = adminGatewayRouteFor(request.path, request.method)
+        val route = adminGatewayRouteFor(
+            request.path,
+            request.method,
+            optionalProductRouteExtensions.flatMap { it.adminRoutes }
+        )
             ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
         val principal = authorizeAdminGateway(request, route)
             ?: return unauthorizedAdminGatewayResponse(route)
@@ -1900,9 +1763,11 @@ class PlatformHttpServer(
                 )
                 PlatformHotPathResponse(status = 200, body = response)
             }
-            request.path == "/api/v1/arena/leaderboard" && request.method == "GET" -> {
-                val readError = apiV1ReadErrorResponse(request, "/api/v1/arena/leaderboard")
-                readError ?: arenaAdminGateway.arenaLeaderboardPublicResponse(request.query)
+            request.method == "GET" && optionalProductRouteExtensions.any { request.path in it.publicReadPaths } -> {
+                val readError = apiV1ReadErrorResponse(request, request.path)
+                readError ?: optionalProductRouteExtensions.firstNotNullOfOrNull {
+                    it.handlePublicRead(request.path, request.query)
+                }
             }
             request.path.startsWith("/api/v1/market-data/bars/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/bars/{instrumentId}")
@@ -3686,29 +3551,28 @@ internal fun rootMessage(failure: Throwable): String {
 // executionsForParticipant) treat limit=0 as "no LIMIT clause at all",
 // which is safe for trusted internal callers but not for a value taken
 // directly off an external request's query string.
-internal fun boundedQueryLimit(raw: String, defaultValue: Int, max: Int = 500): Int {
+fun boundedQueryLimit(raw: String, defaultValue: Int, max: Int = 500): Int {
     val parsed = raw.toIntOrNull()
     if (parsed == null || parsed <= 0) return defaultValue
     return parsed.coerceAtMost(max)
 }
 
-// defaultBoundary/defaultAdminHttpAuth/defaultArenaAdminService/
-// defaultAnalyticsRunExportService/defaultSettlementFactStore (composition-root
+// defaultBoundary/defaultAdminHttpAuth/defaultSettlementFactStore (composition-root
 // wiring) live in PlatformHttpServerBootstrap.kt.
 
-internal fun JsonDocument.requiredLong(key: String): Long {
+fun JsonDocument.requiredLong(key: String): Long {
     return string(key).toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
 }
 
-internal fun JsonDocument.requiredInt(key: String): Int {
+fun JsonDocument.requiredInt(key: String): Int {
     return string(key).toIntOrNull() ?: throw IllegalArgumentException("$key must be an integer")
 }
 
-internal fun JsonDocument.boolean(key: String): Boolean {
+fun JsonDocument.boolean(key: String): Boolean {
     return string(key).equals("true", ignoreCase = true)
 }
 
-internal fun JsonDocument.booleanOrDefault(key: String, fallback: Boolean): Boolean {
+fun JsonDocument.booleanOrDefault(key: String, fallback: Boolean): Boolean {
     return if (has(key)) boolean(key) else fallback
 }
 
@@ -3722,11 +3586,9 @@ data class ServerBoundaryDeps(
     val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
     val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
-    val arenaAdminService: AdminApplicationService? = null,
     val adminAuthService: AdminAuthService? = null,
     val adminIdentityService: AdminIdentityService? = null,
     val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
-    val analyticsRunExportService: SimulationRunExportService? = null,
     val settlementFactStore: SettlementFactStore? = null,
     val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     val postTradeProfileResolver: PostTradeProfileResolver =

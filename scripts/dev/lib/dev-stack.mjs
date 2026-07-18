@@ -1,5 +1,5 @@
 import { env as readEnv, run as runCommand } from "./dev-utils.mjs";
-import { composeArgs } from "./compose-utils.mjs";
+import { composeArgs, composeFiles } from "./compose-utils.mjs";
 
 export async function devUp(options = {}) {
   const context = createContext(options);
@@ -58,6 +58,10 @@ function configureComposeProfiles(context) {
 }
 
 async function startPostgres(context) {
+  const services = ["postgres", "boundary-postgres", "projection-postgres"];
+  if (composeFiles(context.processEnv).includes("compose.arena.yml")) {
+    services.push("arena-postgres");
+  }
   await context.run("docker", composeArgs([
     "up",
     "-d",
@@ -65,10 +69,7 @@ async function startPostgres(context) {
     "--wait",
     "--wait-timeout",
     context.waitTimeoutSeconds,
-    "postgres",
-    "boundary-postgres",
-    "projection-postgres",
-    "arena-postgres",
+    ...services,
   ], context.processEnv));
 }
 

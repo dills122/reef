@@ -1,17 +1,11 @@
 package com.reef.platform.api
 
-import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.AdminAuthService
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
 import com.reef.platform.application.admin.PostgresAdminAuthStore
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
-import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
-import com.reef.platform.application.analytics.PostgresAnalyticsSqlNames
-import com.reef.platform.application.analytics.PostgresSimulationRunExportStore
-import com.reef.platform.application.analytics.SimulationRunExportService
-import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
@@ -80,11 +74,9 @@ internal fun defaultBoundary(): ServerBoundaryDeps {
         commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
-        arenaAdminService = defaultArenaAdminService(hooks, adminHttpAuth?.identityService),
         adminAuthService = adminHttpAuth?.authService,
         adminIdentityService = adminHttpAuth?.identityService,
         adminGitHubOAuthClient = adminHttpAuth?.githubOAuthClient,
-        analyticsRunExportService = defaultAnalyticsRunExportService(),
         settlementFactStore = settlementFactStore,
         settlementObligationMaterializer = settlementFactStore?.let {
             TradeSettlementObligationMaterializer(
@@ -153,52 +145,6 @@ private fun defaultAdminHttpAuth(): AdminHttpAuthDefaults? {
         identityService = identityService,
         githubOAuthClient = githubClient
     )
-}
-
-private fun defaultArenaAdminService(
-    hooks: BoundaryHooks,
-    adminIdentityService: AdminIdentityService?
-): AdminApplicationService? {
-    if (!RuntimeEnv.bool("PLATFORM_ARENA_ADMIN_ENABLED", false)) return null
-    val jdbcUrl = RuntimeEnv.string("ARENA_POSTGRES_JDBC_URL", "")
-        .ifBlank { error("ARENA_POSTGRES_JDBC_URL is required when PLATFORM_ARENA_ADMIN_ENABLED=true") }
-    val dataSource = postgresDataSourceFromEnv(
-        jdbcUrl = jdbcUrl,
-        userKey = "ARENA_POSTGRES_USER",
-        userFallback = "reef",
-        passwordKey = "ARENA_POSTGRES_PASSWORD",
-        passwordFallback = "reef",
-        poolName = "arena-admin"
-    )
-    return AdminApplicationService(
-        runtimePersistence = defaultRuntimePersistence(),
-        arenaRegistryStore = PostgresArenaBotRegistryStore(dataSource = dataSource),
-        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore,
-        adminIdentityService = adminIdentityService
-    )
-}
-
-private fun defaultAnalyticsRunExportService(): SimulationRunExportService? {
-    val jdbcUrl = RuntimeEnv.string("ANALYTICS_POSTGRES_JDBC_URL", "")
-    val enabled = RuntimeEnv.bool("PLATFORM_ANALYTICS_EXPORT_ENABLED", jdbcUrl.isNotBlank())
-    if (!enabled) return null
-    val store = if (jdbcUrl.isBlank()) {
-        InMemorySimulationRunExportStore()
-    } else {
-        val schema = RuntimeEnv.string("ANALYTICS_POSTGRES_SCHEMA", "analytics")
-        PostgresSimulationRunExportStore(
-            dataSource = postgresDataSourceFromEnv(
-                jdbcUrl = jdbcUrl,
-                userKey = "ANALYTICS_POSTGRES_USER",
-                userFallback = "reef",
-                passwordKey = "ANALYTICS_POSTGRES_PASSWORD",
-                passwordFallback = "reef",
-                poolName = "analytics-run-export"
-            ),
-            names = PostgresAnalyticsSqlNames(schema)
-        )
-    }
-    return SimulationRunExportService(store)
 }
 
 private fun defaultSettlementFactStore(): SettlementFactStore? {

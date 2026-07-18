@@ -1,4 +1,4 @@
-package com.reef.platform.application.arena
+package com.reef.arena.controlplane.arena
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -35,16 +35,11 @@ x-platform-runtime-environment: &platform-runtime-environment
   RUNTIME_DB_URL: "${RUNTIME_DB_URL:-jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary}"
   RUNTIME_DB_USER: "${RUNTIME_DB_USER:-reef}"
   RUNTIME_DB_PASSWORD: "${RUNTIME_DB_PASSWORD:-reef}"
-  ARENA_POSTGRES_JDBC_URL: "${ARENA_POSTGRES_JDBC_URL:-jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena}"
-  ARENA_POSTGRES_USER: "${ARENA_POSTGRES_USER:-reef}"
-  ARENA_POSTGRES_PASSWORD: "${ARENA_POSTGRES_PASSWORD:-reef}"
-  PLATFORM_ARENA_ADMIN_ENABLED: "${PLATFORM_ARENA_ADMIN_ENABLED:-false}"
   PLATFORM_ADMIN_AUTH_ENABLED: "${PLATFORM_ADMIN_AUTH_ENABLED:-false}"
   REEF_ENV: "${REEF_ENV:-}"
   LOCAL_DEV_ADMIN_AUTH_BYPASS: "${LOCAL_DEV_ADMIN_AUTH_BYPASS:-false}"
   LOCAL_DEV_ADMIN_UI_BASE_URL: "${LOCAL_DEV_ADMIN_UI_BASE_URL:-}"
   ADMIN_API_TOKEN: "${ADMIN_API_TOKEN:-}"
-  ARENA_ADMIN_API_TOKEN: "${ARENA_ADMIN_API_TOKEN:-}"
   ANALYTICS_EXPORT_API_TOKEN: "${ANALYTICS_EXPORT_API_TOKEN:-}"
   ADMIN_POSTGRES_JDBC_URL: "${ADMIN_POSTGRES_JDBC_URL:-}"
   ADMIN_POSTGRES_USER: "${ADMIN_POSTGRES_USER:-}"
@@ -203,8 +198,6 @@ x-platform-runtime-service: &platform-runtime-service
     boundary-postgres:
       condition: service_healthy
     projection-postgres:
-      condition: service_healthy
-    arena-postgres:
       condition: service_healthy
     matching-engine:
       condition: service_healthy
