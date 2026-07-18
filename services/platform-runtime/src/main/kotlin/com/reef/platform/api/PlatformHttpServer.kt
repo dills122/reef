@@ -96,6 +96,13 @@ internal data class AdminGatewayRoute(
     val sessionRoles: Set<String> = emptySet()
 )
 
+private fun OptionalProductAdminRoute.toAdminGatewayRoute(): AdminGatewayRoute = AdminGatewayRoute(
+    internalPath = internalPath,
+    fallbackTokenFamily = fallbackTokenFamily,
+    serviceTokenFamilies = serviceTokenFamilies,
+    sessionRoles = sessionRoles
+)
+
 private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
 private val adminGatewaySecretAdminRoles = setOf(
     AdminIdentityService.RoleSecretAdmin,
@@ -109,7 +116,10 @@ private val adminGatewayOperatorRoles = setOf(
 internal fun adminGatewayRouteFor(
     path: String,
     method: String = "POST",
+    optionalProductRoutes: List<OptionalProductAdminRoute> = emptyList(),
 ): AdminGatewayRoute? {
+    optionalProductRoutes.firstOrNull { it.externalPath == path && method in it.methods }
+        ?.let { return it.toAdminGatewayRoute() }
     return when (path) {
     "/admin/v1/reference/instruments" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute("/reference/instruments", "admin", setOf(AdminServiceTokenFamily.Admin))
@@ -735,7 +745,7 @@ class PlatformHttpServer(
             }
         }
 
-        for (path in listOf(
+        val adminGatewayPaths = listOf(
             "/admin/v1/reference/instruments",
             "/admin/v1/reference/participants",
             "/admin/v1/reference/accounts",
@@ -755,7 +765,8 @@ class PlatformHttpServer(
             "/admin/v1/settlement/force-settle",
             "/admin/v1/settlement/reverse-ledger-entry",
             "/admin/v1/settlement/obligations/materialize"
-        )) {
+        ) + optionalProductRouteExtensions.flatMap { extension -> extension.adminRoutes.map { it.externalPath } }
+        for (path in adminGatewayPaths.distinct()) {
             server.createContext(path) { exchange ->
                 if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
                 handleAdminGatewayRoute(exchange)
@@ -1470,7 +1481,11 @@ class PlatformHttpServer(
 
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
         if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return
-        val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod)
+        val route = adminGatewayRouteFor(
+            exchange.requestURI.path,
+            exchange.requestMethod,
+            optionalProductRouteExtensions.flatMap { it.adminRoutes }
+        )
         if (route == null) {
             exchange.sendResponseHeaders(404, -1)
             exchange.close()
@@ -1498,7 +1513,11 @@ class PlatformHttpServer(
     }
 
     private fun handleAdminGatewayRequest(request: PlatformHotPathRequest): PlatformHotPathResponse {
-        val route = adminGatewayRouteFor(request.path, request.method)
+        val route = adminGatewayRouteFor(
+            request.path,
+            request.method,
+            optionalProductRouteExtensions.flatMap { it.adminRoutes }
+        )
             ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
         val principal = authorizeAdminGateway(request, route)
             ?: return unauthorizedAdminGatewayResponse(route)

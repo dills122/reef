@@ -6,6 +6,7 @@ import com.reef.platform.application.admin.AdminActor
 import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminIdentityService
+import com.reef.platform.application.admin.AdminServiceTokenFamily
 import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionDecisionCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionRegistrationCommand
@@ -64,6 +65,20 @@ internal class ArenaAdminGateway(
         "/internal/admin/analytics/run-bot-summaries"
     )
     override val publicReadPaths = listOf("/api/v1/arena/leaderboard")
+    override val adminRoutes = listOf(
+        adminRoute("/admin/v1/arena/bots", setOf("GET", "POST"), "/internal/admin/arena/bots", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/my/bots", setOf("GET"), "/internal/admin/arena/my/bots", "arena", emptySet()),
+        adminRoute("/admin/v1/arena/bots/openbao-provision", setOf("POST"), "/internal/admin/arena/bots/openbao-provision", "arena", arenaTokens, secretRoles),
+        adminRoute("/admin/v1/arena/bots/ownership", setOf("POST"), "/internal/admin/arena/bots/ownership", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/bots/config", setOf("GET", "POST", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
+        adminRoute("/admin/v1/arena/bot-versions", setOf("GET", "POST"), "/internal/admin/arena/bot-versions", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/bot-versions/transition", setOf("POST"), "/internal/admin/arena/bot-versions/transition", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/runs", setOf("GET", "POST"), "/internal/admin/arena/runs", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/runs/status", setOf("POST"), "/internal/admin/arena/runs/status", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/run-bot-results", setOf("GET", "POST"), "/internal/admin/arena/run-bot-results", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/run-enforcement-events", setOf("GET", "POST"), "/internal/admin/arena/run-enforcement-events", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/leaderboard", setOf("GET"), "/internal/admin/arena/leaderboard", "arena", arenaTokens, operatorRoles)
+    )
 
     override fun handleInternal(
         method: String,
@@ -106,6 +121,22 @@ internal class ArenaAdminGateway(
 
     private fun currentPrincipal(): AdminRequestPrincipal =
         requestPrincipal.get() ?: error("Arena gateway request principal is unavailable")
+
+    private fun adminRoute(
+        externalPath: String,
+        methods: Set<String>,
+        internalPath: String,
+        fallbackTokenFamily: String,
+        serviceTokenFamilies: Set<AdminServiceTokenFamily>,
+        sessionRoles: Set<String> = emptySet()
+    ) = OptionalProductAdminRoute(externalPath, methods, internalPath, fallbackTokenFamily, serviceTokenFamilies, sessionRoles)
+
+    private companion object {
+        val arenaTokens = setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        val adminTokens = setOf(AdminServiceTokenFamily.Admin)
+        val operatorRoles = setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
+        val secretRoles = setOf(AdminIdentityService.RoleSecretAdmin, AdminIdentityService.RolePlatformAdmin)
+    }
 
     private fun getResponseOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
         if (method == "GET") response() else methodNotAllowedResponse()
