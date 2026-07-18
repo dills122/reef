@@ -1,5 +1,13 @@
 # Bot Arena Plan
 
+Implementation status (2026-07-18): this remains the long-form product and
+architecture plan. It is not the release checklist. The control plane, hosted
+admin app, public leaderboard read, same-repository bot submission pipeline,
+OpenBao provisioning, and post-merge registry sync have advanced beyond several
+older rollout descriptions in this file. Use
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for the
+current release call and [`WORK_PLAN.md`](./WORK_PLAN.md) for execution order.
+
 ## Purpose
 
 This document captures the current direction for adding a tournament-style trading bot arena to Reef.

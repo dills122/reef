@@ -14,6 +14,9 @@ These shape current work:
 
 - `CURRENT_STATUS.md`
 - `WORK_PLAN.md`
+- `BOT_ARENA_RELEASE_READINESS.md` while external bot intake is an active release goal
+- `BOT_ARENA_INVITE_PREVIEW_SPRINT.md` while the invite-only fork preview is active
+- `REEF_BOT_ARENA_SEPARATION_SPRINT.md` until standalone Reef separation is promoted
 - `DECISIONS.md`
 - steering docs under `docs/steering/`
 - current contract and boundary docs

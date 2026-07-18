@@ -1,5 +1,14 @@
 # Bot Arena Auth And Provisioning
 
+Release status (2026-07-18): the same-repository smoke-bot flow has passed end
+to end, but the trusted provisioning workflow deliberately rejects fork PRs.
+The chosen target is an invite-only, fork-based preview with a maintainer-gated
+trusted handoff; it is not yet available to ordinary GitHub contributors.
+Track implementation in
+[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
+and the release gates in
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
+
 ## Purpose
 
 This document fixes the target authentication and provisioning model for public
@@ -437,21 +446,28 @@ BAO_BOT_CONFIG_SECRET_ID=...
 
 ```text
 1. User signs into the admin app with GitHub.
-2. User forks or branches the repository and creates a bot submission.
-3. User opens a PR.
-4. CI validates manifest, static/security checks, sandbox behavior, and resource limits.
-5. Human reviewer approves the submission intent.
-6. CI/Admin API provisions or verifies the Reef user and OpenBao bot slice.
-7. PR check confirms the slice exists.
-8. Maintainer merges the PR.
-9. Bot version becomes accepted.
-10. User enters or updates config blob in the admin app.
-11. Run eligibility turns green only after required runtime config is ready.
+2. User opens a bot-submission PR from a fork.
+3. Untrusted CI validates manifest, static/security checks, sandbox behavior, and resource limits without hosted credentials.
+4. Submission enters pending_invite_review; opening a PR does not imply admission or a place in the next game.
+5. Maintainer approves the immutable GitHub user id, ownership intent, bot limit, and reviewed head SHA.
+6. A trusted base-branch workflow provisions or verifies the Reef user and OpenBao bot slice without executing fork code.
+7. User enters required config in the admin app before merge; readiness records only descriptors and hashes, never secret values.
+8. PR check confirms approval, SHA-bound checks, provisioning, and config readiness.
+9. Maintainer merges the PR before the run-window cutoff.
+10. Registry sync rebuilds from master, verifies source/artifact hashes, and records the accepted bot version.
+11. The eligibility evaluator may add that immutable version to a future locked roster.
 ```
 
 OpenBao slice provisioning should happen before merge. Secret/config completeness
 should gate run eligibility, not merge, because config values are user-managed
 opaque data and should not be exposed to CI or reviewers.
+
+The same-repository version of this flow is proven. The fork-based trusted
+handoff is the selected preview target but is not implemented today because the
+trusted workflow deliberately rejects a different `head_repository`. Do not
+grant hosted credentials or OIDC permission to the workflow that executes
+submitted code. Admission and run cutoffs are defined in
+[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
 
 ### Existing Bot Update
 
@@ -548,6 +564,11 @@ job name directly. Non-bot branches get a successful
 submission branches get a failing status because they cannot receive trusted
 provisioning privileges.
 
+Live configuration warning (verified 2026-07-18): `master` currently requires
+only `validate-manifest` and `scan-and-sandbox-test`, requires zero approving
+reviews, and does not require `registry-diff-and-provision`. The text above is
+the required target contract, not the current repository enforcement.
+
 After merge, `.github/workflows/bot-registry-sync.yml` syncs changed
 `bots/*/bot.json` manifests into the hosted arena registry. It registers the bot
 metadata through `/admin/v1/arena/bots`, builds the hosted artifact to derive the
@@ -642,7 +663,11 @@ and relevant object ids. Audit records must not contain secret values.
 
 ## Open Follow-Ups
 
-- Implement Admin DB user, role, trust-state, ownership, and audit tables.
+- ~~Implement Admin DB user, role, trust-state, ownership, and audit tables.~~
+  Done: admin migrations `0003_admin_identity.sql` and
+  `0004_admin_auth_sessions.sql` plus the Kotlin Postgres stores cover users,
+  roles, trust state, limits, ownership, audit, OAuth state, sessions, and
+  service tokens.
 - ~~Add GitHub OAuth login to the admin app.~~ Done: `apps/arena-admin` has a
   working GitHub login, and Caddy now reverse-proxies `/admin/auth/*`,
   `/admin/v1/*`, and `/api/v1/*` same-origin with the static app (previously
@@ -724,13 +749,18 @@ and relevant object ids. Audit records must not contain secret values.
   The guard scans the static build output for local fixture marker strings and
   the public local-dev flag names. The fixture code is wrapped in
   `import.meta.env.DEV`, so production bundles should tree-shake it out.
-- Add Admin API authorization middleware that binds actor identity from the
-  authenticated principal, not caller-controlled headers.
+- ~~Add Admin API authorization middleware that binds actor identity from the
+  authenticated principal, not caller-controlled headers.~~ Done for the
+  browser/session and service-token admin routes; keep object-level regression
+  coverage as the surface expands.
 - Move CI-to-Admin API auth from scoped bearer token to GitHub Actions OIDC.
 - ~~Add pre-merge OpenBao-slice verification check.~~ Done:
   `scripts/dev/bot-submission-provision-openbao.mjs` calls
   `/admin/v1/arena/bots/openbao-provision` in real CI mode and keeps explicit
   dry-run mode for local workflow checks.
-- Add participant config editor backed by Admin API and OpenBao.
-- Define public bot submission contract after the current bot testing bugs are
-  worked out.
+- ~~Add participant config editor backed by Admin API and OpenBao.~~ Done in the
+  owner-scoped `/bot-admin` surface; it still needs a named external-participant
+  hosted proof before launch promotion.
+- Define and prove the fork-safe public bot submission contract. The current
+  same-repository branch workflow is an invite-only preview path, not an open
+  contributor path.

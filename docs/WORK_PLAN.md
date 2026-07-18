@@ -20,6 +20,9 @@ Active execution planning starts from:
 - [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
 - [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md)
 - [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md)
+- [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+- [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 - [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md)
 - [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
@@ -54,13 +57,13 @@ Current deployment assumptions:
 - API/control-plane hardening follows [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): raw `/internal/*` remains local/migration only, external admin/data must use versioned gateway contracts, and non-local runtime profiles must fail closed on unsafe boundary defaults
 - raw internal HTTP caller status is inventoried in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 - Bot Arena Phase 1 local evidence now has two named gates: `make dev-smoke-bot-arena-local-persist` for the positive live `/api/v1` path with persisted run results, and `make dev-smoke-bot-arena-local-negative` for deterministic freeze/disqualification evidence. Both persist via loopback-only admin calls from inside `platform-api`, keeping raw `/internal/*` off the host/public surface. Static operator evidence is generated with `make dev-render-bot-arena-report` and compared across run artifacts with `make dev-render-bot-arena-report-index`.
-- Bot Arena's next planning milestone is the simulation tuning sprint in [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md): formalize the run diagnostic bundle, public/admin leaderboard split, bot data interface policy, starter bot/persona catalog, safety checklist, and public-submission readiness tasks before treating external bot submissions as launch-ready.
+- Bot Arena's chosen next release is an invite-only, fork-based preview. The next implementation sprint is first the Reef/Arena separation in [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md); only after that gate is promoted does [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md) begin. [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) remains the release gate. Same-repository submission is proven, while fork admission and its maintainer-gated trusted handoff are not yet implemented.
 - Post-trade's next planning milestone is the lifecycle sprint in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md): add clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for happy path plus failure/repair paths.
 - Documentation cleanup follows [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md): keep active docs as current operating guidance, move superseded planning docs to `docs/archive/`, and preserve evidence instead of deleting it.
 
 ## Current Execution Checkpoint
 
-Active checkpoint: API/control-plane hardening on top of the proven durable direct materializer path, plus targeted projection/read-model scaling from the current `2.5k` green gate toward the `5k` freshness knee.
+Active venue-core checkpoint: API/control-plane hardening on top of the proven durable direct materializer path, plus targeted projection/read-model scaling from the current `2.5k` green gate toward the `5k` freshness knee. The next bounded product sprint after this documentation branch merges is the Reef/Arena separation at step 6.
 
 Target path:
 
@@ -194,6 +197,7 @@ The current gaps are:
 - first deterministic lifecycle scenarios are locked locally with promoted assertion evidence: P1 combines the 2026-07-14 zero-lag `sync-result` report with the 2026-07-15 same-run direct-stream replay report, and P2 combines public settlement facts readback, direct-stream replay/checksum evidence, and the settled `instant-post-trade-v1` chain proof
 - post-trade workflows are moving from scenario-locked proof into a focused lifecycle V1 sprint: clearing/novation facts, exception queue v1, operator-readable lifecycle state, and happy/failure scenario evidence
 - Bot Arena score-v1 correctness gate is locked locally and on DigitalOcean: local reset-to-reset `5m` proof passed and hosted run `do-benchmark-20260714T010045Z` passed the `15m` arena artifact gate. The active follow-up is hosted arena pacing lag cleanup, not score-v1 correctness.
+- Bot Arena's selected next release is an invite-only fork preview, but it is not ready to advertise: forked bot PRs are rejected by trusted provisioning, live branch protection does not require the provisioning status, live protection requires zero approvals, external onboarding is incomplete, and the deployed public leaderboard has no scored runs.
 
 ## Active Execution Ladder
 
@@ -250,18 +254,34 @@ The current gaps are:
    - For this pacing-lag cleanup, a short hosted sequence is enough before returning to a full soak: `make do-arena-pacing-lag-gate ARGS=run-destroy` defaults to `5m`, `5m`, and `7.5m` arena samples, each requiring hardening `pass`, health `pass`, projection drain, and `finalCompletionLagMs < 30000`.
    - 2026-07-14 short hosted pacing evidence passed on c-8 source-built workers with scheduled-event projection drain: `do-benchmark-20260714T021445Z` (`5m`, final completion lag `4.19ms`, `2313` completed), `do-benchmark-20260714T022948Z` (`5m`, lag `277.68ms`, `2321` completed), and `do-benchmark-20260714T024455Z` (`7.5m`, lag `7.64ms`, `3491` completed). All three had hardening `pass`, health `pass`, projection lag `0`, zero timeouts, zero failed ticks, and zero command accounting gaps. This closes the pacing-lag cleanup gate; a later full `15m` rerun can be kept as soak confidence rather than the immediate correctness blocker.
 
-6. Plan Bot Arena simulation tuning readiness.
+6. Execute the Reef/Bot Arena separation sprint.
+   - Use [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md) for the 10-working-day implementation sequence.
+   - Make `services/platform-runtime` a Reef-only artifact; move Arena implementation, routes, persistence, migrations, and bootstrap ownership behind an Arena-owned module/artifact.
+   - Replace direct Arena risk dependencies with generic Reef extension contracts that contain no Arena domain vocabulary.
+   - Make Compose base Reef-only and enable Arena through an explicit overlay.
+   - Add Reef-only build, test, start, smoke, route-absence, artifact-content, and dependency gates.
+   - Promote only after Reef-only and Arena-enabled runs from the same commit prove identical canonical Reef facts and matching-engine artifacts.
+
+7. Execute the Bot Arena invite-preview sprint after separation promotion.
+   - Use [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md) for the 15-working-day implementation sequence and [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for go/no-go.
+   - Accept fork PRs into `pending_invite_review`; keep all fork-controlled execution untrusted and credential-free.
+   - Add maintainer approval plus a SHA-bound, base-branch trusted provisioning handoff so required config can be completed before merge.
+   - Enforce the `T-72h` invitation, `T-48h` merge-readiness, and `T-24h` immutable-roster cutoffs with persisted eligibility facts and reason codes.
+   - Rerun the promoted Reef-only separation gates as regression checks.
+   - Version and resolve actor composition, scoring, risk, and economic policy independently, then execute the recorded local/hosted calibration matrix and external-account E2E rehearsals.
+
+8. Plan Bot Arena simulation tuning readiness.
    - Use [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md) as the tasking source for the next arena milestone.
    - Keep the simulation-tuning gate separate from the public-submission gate. Controlled local/hosted test simulations should move forward on diagnostic export, report comparison, starter bot calibration, leaderboard/analytics contracts, and data-interface hardening while GitHub/OpenBao/review/branch-protection work remains a separate public-readiness track.
    - First build follow-up after planning should be the `runId` diagnostic bundle, because tuning, safety review, leaderboard trust, and bot behavior debugging all depend on complete run inspection.
 
-7. Lock first lifecycle scenarios.
+9. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
    - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures encode the target scenario shape, and 2026-07-14 local live reports are promoted under `reports/scenario-assertions/`.
    - Remaining lock work: none for the local P1/P2 scenario-lock criteria. Future reruns can add confidence, but the current promoted evidence already separates P1 zero-lag projection freshness from direct-stream replay proof and proves P2 settled-chain facts through the public settlement read.
 
-8. Execute the post-trade lifecycle V1 sprint.
+10. Execute the post-trade lifecycle V1 sprint.
    - Sprint plan lives in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md).
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
    - Current foundation already includes instant-post-trade obligation materialization, minimal allocation/confirmation/affirmation facts, instructions, attempts, leg outcomes, ledger proof, repair commands, and proof/score reads.
@@ -269,7 +289,7 @@ The current gaps are:
    - Later slices add exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
    - Full CCP/CNS clearing, rich custody, production messaging schemas, and complete netted obligation settlement remain non-goals.
 
-9. Clean up documentation.
+11. Clean up documentation.
    - Use [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md) as the guide.
    - Keep this file as the active execution ladder.
    - Move superseded planning docs into `docs/archive/` only after active links are replaced.

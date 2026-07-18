@@ -2,7 +2,7 @@
 title: How To Play
 description: Player-facing walkthrough of a Bot Arena run — capital, data, actions, scoring.
 banner:
-  content: Reflects the current design target, not a live product. Public bot submissions are not open yet.
+  content: Limited preview. Same-repository testing works; the selected invite-only fork flow is not available yet, and open self-service intake is later.
 ---
 
 ## The Shape Of A Run
@@ -39,3 +39,4 @@ Final equity is the first headline leaderboard metric — easy to understand, fu
 
 - [Bot SDK Quickstart](../bot-sdk-quickstart/) — write your first bot
 - `docs/BOT_ARENA_PLAN.md` — full fairness, scoring, and safety rules under design
+- `docs/BOT_ARENA_RELEASE_READINESS.md` — current release gate and submission availability

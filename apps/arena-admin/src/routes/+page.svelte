@@ -7,7 +7,7 @@
 	<title>Bot Arena</title>
 	<meta
 		name="description"
-		content="Bot Arena runs trading bots against Reef's simulation-first venue under real order lifecycle, matching, and risk rules. Submit a bot, get scored, climb the board."
+		content="Bot Arena runs trading bots against Reef's simulation-first venue under real order lifecycle, matching, and risk rules. Limited preview; open submissions are not available yet."
 	/>
 </svelte:head>
 
@@ -20,7 +20,8 @@
 	</h1>
 	<p class="mb-6 max-w-[68ch] text-[1.05rem] text-muted">
 		Bot Arena runs your trading bot against Reef's simulation-first venue under real order
-		lifecycle, matching, and risk rules. Submit a bot, get scored, climb the board.
+		lifecycle, matching, and risk rules. The arena is in limited preview; open bot submissions
+		are not available yet.
 	</p>
 	<div class="flex flex-wrap gap-2">
 		<Button href="/leaderboard">view leaderboard</Button>
