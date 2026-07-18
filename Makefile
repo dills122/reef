@@ -10,11 +10,11 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test lint check-scripts check-js-runtime check-bun-runtime check-bot-sdk-js-deps
+.PHONY: test lint check-scripts check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
-.PHONY: dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
-.PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-reset dev-db-migrate
+.PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
+.PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
 .PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results
 .PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-hardening-bot-arena-local
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
@@ -43,6 +43,9 @@ lint:
 
 check-scripts:
 	node scripts/dev/script-surface-check.mjs
+
+check-reef-arena-boundaries:
+	node scripts/dev/reef-arena-boundary-check.mjs
 
 check-proto-additive:
 	./scripts/check-proto-additive.sh
@@ -148,6 +151,12 @@ dev-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up
 
+dev-up-reef: dev-up
+
+dev-up-arena:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" REEF_ARENA_POSTGRES_MIGRATIONS=1 DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up
+
 backbone-local-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/backbone-local.mjs up
@@ -212,9 +221,17 @@ dev-down:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack down
 
+dev-down-arena:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack down
+
 dev-reset:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack reset
+
+dev-reset-arena:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" REEF_ARENA_POSTGRES_MIGRATIONS=1 DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack reset
 
 dev-db-migrate:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -223,6 +240,12 @@ dev-db-migrate:
 dev-smoke:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/smoke.mjs
+
+dev-smoke-reef: dev-smoke
+
+dev-smoke-arena:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" $(JS_RUNTIME) scripts/dev/smoke.mjs
 
 kube-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

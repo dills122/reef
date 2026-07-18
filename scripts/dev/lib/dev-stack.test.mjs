@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { devReset, devUp } from "./dev-stack.mjs";
 
-const databaseServices = ["postgres", "boundary-postgres", "projection-postgres", "arena-postgres"];
+const databaseServices = ["postgres", "boundary-postgres", "projection-postgres"];
 const compose = ["compose", "-f", "compose.base.yml", "-f", "compose.local.yml"];
 
 test("devUp starts postgres, runs migrations, then starts full stack", async () => {
@@ -125,6 +125,25 @@ test("devUp can use an explicit compatibility compose file", async () => {
     ["docker", [...layeredCompose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
     ["docker", [...layeredCompose, "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "300"]],
+  ]);
+});
+
+test("devUp starts Arena storage only when the Arena overlay is selected", async () => {
+  const calls = [];
+  const processEnv = {
+    DEV_COMPOSE_FILES: "compose.base.yml,compose.local.yml,compose.arena.yml",
+  };
+
+  await devUp({
+    env: envFrom({ JS_RUNTIME: "node" }),
+    processEnv,
+    log: () => {},
+    run: async (cmd, args) => calls.push([cmd, args]),
+  });
+
+  assert.deepEqual(calls[0], [
+    "docker",
+    [...compose, "-f", "compose.arena.yml", "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices, "arena-postgres"],
   ]);
 });
 

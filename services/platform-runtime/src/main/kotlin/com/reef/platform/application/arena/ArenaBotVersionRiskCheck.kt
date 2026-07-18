@@ -1,16 +1,14 @@
 package com.reef.platform.application.arena
 
-import com.reef.platform.api.AccountRiskCheck
+import com.reef.platform.api.AccountRiskCheckExtension
 import com.reef.platform.api.AccountRiskCheckRequest
 import com.reef.platform.api.AccountRiskCheckResult
 import com.reef.platform.api.AccountRiskDecision
-import com.reef.platform.api.AllowAllAccountRiskCheck
 
 class ArenaBotVersionRiskCheck(
-    private val store: ArenaBotRegistryStore,
-    private val delegate: AccountRiskCheck = AllowAllAccountRiskCheck()
-) : AccountRiskCheck {
-    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+    private val store: ArenaBotRegistryStore
+) : AccountRiskCheckExtension {
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult? {
         val botId = request.botId
         val botVersion = request.botVersion
         if (botId.isNotBlank() && botVersion.isNotBlank()) {
@@ -22,7 +20,7 @@ class ArenaBotVersionRiskCheck(
                 )
             }
         }
-        return delegate.evaluate(request)
+        return null
     }
 
     private companion object {

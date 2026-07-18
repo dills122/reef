@@ -2,6 +2,8 @@ package com.reef.platform.application.arena
 
 import com.reef.platform.api.AccountRiskCheckRequest
 import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.api.AllowAllAccountRiskCheck
+import com.reef.platform.api.ChainedAccountRiskCheck
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,7 +12,7 @@ class ArenaBotVersionRiskCheckTest {
     @Test
     fun rejectsDisabledBotVersionBeforeDelegateRiskCheck() {
         val store = seededStore(ArenaBotVersionStatus.Quarantined)
-        val check = ArenaBotVersionRiskCheck(store)
+        val check = chainedCheck(store)
 
         val result = check.evaluate(accountRiskRequest(botVersion = "v1"))
 
@@ -22,7 +24,7 @@ class ArenaBotVersionRiskCheckTest {
     @Test
     fun allowsApprovedBotVersionToContinue() {
         val store = seededStore(ArenaBotVersionStatus.Approved)
-        val check = ArenaBotVersionRiskCheck(store)
+        val check = chainedCheck(store)
 
         val result = check.evaluate(accountRiskRequest(botVersion = "v1"))
 
@@ -32,7 +34,7 @@ class ArenaBotVersionRiskCheckTest {
     @Test
     fun ignoresRequestsWithoutBotVersion() {
         val store = seededStore(ArenaBotVersionStatus.Quarantined)
-        val check = ArenaBotVersionRiskCheck(store)
+        val check = chainedCheck(store)
 
         val result = check.evaluate(accountRiskRequest(botVersion = ""))
 
@@ -96,5 +98,9 @@ class ArenaBotVersionRiskCheckTest {
             orderId = "ord-1",
             payloadHash = "hash-1"
         )
+    }
+
+    private fun chainedCheck(store: InMemoryArenaBotRegistryStore): ChainedAccountRiskCheck {
+        return ChainedAccountRiskCheck(AllowAllAccountRiskCheck(), listOf(ArenaBotVersionRiskCheck(store)))
     }
 }

@@ -45,6 +45,9 @@ Local automation now uses layered Compose files by default:
 
 - `compose.base.yml` defines the shared platform runtime and matching-engine service shape.
 - `compose.local.yml` adds local data services, observability services, host ports, container names, and volumes.
+- `compose.arena.yml` is an explicit optional overlay that owns Arena storage and
+  Arena runtime configuration. Use `make dev-up-arena`; the default `make dev-up`
+  remains Reef-only.
 - `docker-compose.yml` remains as a compatibility monolith while the split settles.
 
 Inspect the resolved stack before starting containers:

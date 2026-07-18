@@ -1,7 +1,5 @@
 package com.reef.platform.api
 
-import com.reef.platform.application.arena.ArenaBotVersionRiskCheck
-import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
@@ -119,6 +117,28 @@ data class AccountRiskCheckResult(
 
 interface AccountRiskCheck {
     fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult
+}
+
+/**
+ * Optional, product-neutral pre-acceptance policy. Returning null delegates to
+ * the next check; a non-allow result stops command acceptance before durable
+ * ingress. Implementations belong to the optional product that owns the
+ * policy, not to the Reef boundary.
+ */
+fun interface AccountRiskCheckExtension {
+    fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult?
+}
+
+class ChainedAccountRiskCheck(
+    private val primary: AccountRiskCheck,
+    private val extensions: List<AccountRiskCheckExtension>
+) : AccountRiskCheck {
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        extensions.forEach { extension ->
+            extension.evaluate(request)?.let { return it }
+        }
+        return primary.evaluate(request)
+    }
 }
 
 data class AccountRiskControl(
@@ -1791,7 +1811,10 @@ private fun isLocalBoundaryProfile(lookup: (String) -> String?): Boolean {
     return profile in setOf("local", "dev", "development", "test", "ci")
 }
 
-fun defaultBoundaryHooks(lookup: (String) -> String? = System::getenv): BoundaryHooks {
+fun defaultBoundaryHooks(
+    lookup: (String) -> String? = System::getenv,
+    accountRiskExtensions: List<AccountRiskCheckExtension> = emptyList()
+): BoundaryHooks {
     val commandProcessingMode = CommandProcessingMode.fromEnv()
     validateBoundaryDeploymentModes(lookup)
     val authMode = (lookup("EXTERNAL_API_AUTH_MODE") ?: "allow-all").lowercase()
@@ -1858,19 +1881,10 @@ fun defaultBoundaryHooks(lookup: (String) -> String? = System::getenv): Boundary
         }
         else -> AllowAllAccountRiskCheck()
     }
-    val accountRiskCheck = if (envBool(lookup("EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED"), false)) {
-        val jdbcUrl = lookup("ARENA_POSTGRES_JDBC_URL")
-            ?: error("ARENA_POSTGRES_JDBC_URL is required when EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=true")
-        val dbUser = lookup("ARENA_POSTGRES_USER") ?: "reef"
-        val dbPassword = lookup("ARENA_POSTGRES_PASSWORD") ?: "reef"
-        ArenaBotVersionRiskCheck(
-            store = PostgresArenaBotRegistryStore(
-                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-bot-version-risk")
-            ),
-            delegate = baseAccountRiskCheck
-        )
-    } else {
+    val accountRiskCheck = if (accountRiskExtensions.isEmpty()) {
         baseAccountRiskCheck
+    } else {
+        ChainedAccountRiskCheck(baseAccountRiskCheck, accountRiskExtensions)
     }
 
     val circuitBreakerMode = (lookup("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()

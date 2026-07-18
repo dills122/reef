@@ -179,7 +179,7 @@ function migrationTargets() {
       domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"],
     });
   }
-  if (env("REEF_ARENA_POSTGRES_MIGRATIONS", "1") !== "0") {
+  if (env("REEF_ARENA_POSTGRES_MIGRATIONS", "0") === "1") {
     targets.push({
       label: "arena",
       service: env("REEF_ARENA_POSTGRES_SERVICE", "arena-postgres"),

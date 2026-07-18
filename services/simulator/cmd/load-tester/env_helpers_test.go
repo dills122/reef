@@ -110,8 +110,6 @@ func TestEnvBool(t *testing.T) {
 func TestDefaultConfigUsesAdminApiTokenForAdminSeedRoutes(t *testing.T) {
 	t.Setenv("REEF_ADMIN_API_BEARER_TOKEN", "")
 	t.Setenv("ADMIN_API_TOKEN", "admin-token")
-	t.Setenv("ARENA_ADMIN_API_TOKEN", "arena-token")
-
 	cfg := defaultConfigFromEnv()
 
 	if cfg.AdminAPIBearerToken != "admin-token" {
