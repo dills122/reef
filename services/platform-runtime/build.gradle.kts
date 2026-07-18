@@ -47,19 +47,17 @@ tasks.test {
     finalizedBy(tasks.jacocoTestReport)
 }
 
-if (providers.gradleProperty("reefCore").isPresent) {
-    sourceSets.named("test") {
-        kotlin.exclude(
-            "com/reef/platform/admin/AdminCliAdapterTest.kt",
-            "com/reef/platform/api/AdminJsonValidationTest.kt",
-            "com/reef/platform/api/PlatformHttpServerBoundaryTest.kt",
-            "com/reef/platform/api/PlatformHttpServerHelpersTest.kt",
-            "com/reef/platform/application/admin/AdminApplicationServiceTest.kt",
-            "com/reef/platform/application/arena/**",
-            "com/reef/platform/infrastructure/persistence/PostgresSchemaMigrationIntegrationTest.kt",
-            "com/reef/platform/infrastructure/persistence/PostgresSchemaRequirementsTest.kt"
-        )
-    }
+sourceSets.named("test") {
+    kotlin.exclude(
+        "com/reef/platform/admin/AdminCliAdapterTest.kt",
+        "com/reef/platform/api/AdminJsonValidationTest.kt",
+        "com/reef/platform/api/PlatformHttpServerBoundaryTest.kt",
+        "com/reef/platform/api/PlatformHttpServerHelpersTest.kt",
+        "com/reef/platform/application/admin/AdminApplicationServiceTest.kt",
+        "com/reef/platform/application/arena/**",
+        "com/reef/platform/infrastructure/persistence/PostgresSchemaMigrationIntegrationTest.kt",
+        "com/reef/platform/infrastructure/persistence/PostgresSchemaRequirementsTest.kt"
+    )
 }
 
 tasks.jacocoTestReport {
