@@ -5,7 +5,6 @@ import com.reef.platform.api.*
 import com.reef.platform.application.admin.AdminActor
 import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.arena.controlplane.arena.ArenaBotEntitlementStore
-import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
 import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
@@ -21,6 +20,8 @@ import com.reef.platform.application.analytics.SimulationRunExportCommand
 import com.reef.platform.application.analytics.SimulationRunExportRecord
 import com.reef.platform.application.analytics.SimulationRunExportService
 import com.reef.arena.controlplane.arena.ArenaBot
+import com.reef.arena.controlplane.arena.ArenaBotOwnership
+import com.reef.arena.controlplane.arena.ArenaBotOwnershipState
 import com.reef.arena.controlplane.arena.ArenaBotVersion
 import com.reef.arena.controlplane.arena.ArenaBotVersionStatus
 import com.reef.arena.controlplane.arena.ArenaLeaderboardEntry
@@ -337,10 +338,9 @@ internal class ArenaAdminGateway(
                 ),
                 actorId = actor
             )
-            val ownership = identity.assignBotOwnership(
-                actor,
-                AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = botId)
-            )
+            val ownership = (arenaBotEntitlementStore
+                ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena entitlement store unavailable")))
+                .saveBotOwnership(ArenaBotOwnership(user.reefUserId, botId, ArenaBotOwnershipState.Owner, actor, java.time.Instant.now()))
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject(
@@ -537,7 +537,10 @@ internal class ArenaAdminGateway(
         }
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
-            val ownerships = identity.botOwnershipsForUser(actorId)
+            val ownerships = (arenaBotEntitlementStore
+                ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena entitlement store unavailable")))
+                .botOwnershipsForUser(actorId)
+                .filter { it.ownershipState != ArenaBotOwnershipState.Revoked }
                 .sortedByDescending { it.assignedAt }
                 .take(limit.coerceIn(1, 500))
             val bots = service.arenaBotsById(ownerships.map { it.botId }, limit)
@@ -1080,8 +1083,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun openBaoOwnerIdentity(bot: ArenaBot): String? {
-        val owner = adminIdentityService?.botOwnerMetadata(bot.botId)
-            .orEmpty()
+        val owner = botOwnerMetadata(bot.botId)
             .firstOrNull()
             ?.githubLogin
         return owner?.ifBlank { null } ?: bot.metadata.publisher.takeIf { it.isNotBlank() }
@@ -1094,7 +1096,7 @@ internal class ArenaAdminGateway(
         val user = identityService.user(actorId) ?: return false
         if (user.trustState.dbValue == "banned") return false
         if (write && user.trustState.dbValue == "limited") return false
-        return identityService.botOwnerMetadata(botId).any { owner ->
+        return botOwnerMetadata(botId).any { owner ->
             owner.reefUserId == actorId && owner.ownershipState.dbValue in setOf("owner", "maintainer")
         }
     }
@@ -1106,7 +1108,7 @@ internal class ArenaAdminGateway(
     ): PlatformHotPathResponse? {
         val identityService = adminIdentityService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
-        val owners = identityService.botOwnerMetadata(botId)
+        val owners = botOwnerMetadata(botId)
         if (owners.isEmpty()) {
             return if (flow == "add") {
                 null
@@ -1151,7 +1153,7 @@ internal class ArenaAdminGateway(
                 "description" to bot.metadata.description,
                 "version" to bot.metadata.version
             ),
-            "owners" to adminIdentityService?.botOwnerMetadata(bot.botId).orEmpty().map { owner ->
+            "owners" to botOwnerMetadata(bot.botId).map { owner ->
                 mapOf(
                     "reefUserId" to owner.reefUserId,
                     "githubLogin" to owner.githubLogin,
@@ -1164,6 +1166,41 @@ internal class ArenaAdminGateway(
             "createdAt" to bot.createdAt.toString()
         )
     }
+
+    /**
+     * Ownership is Arena state; identity and trust remain platform-owned. Joining them
+     * at this adapter keeps the optional product boundary explicit and avoids exposing
+     * Arena entitlements through the Reef identity store.
+     */
+    private fun botOwnerMetadata(botId: String): List<ArenaBotOwnerMetadata> {
+        val identityService = adminIdentityService ?: return emptyList()
+        val entitlementStore = arenaBotEntitlementStore ?: return emptyList()
+        return entitlementStore.botOwnerships(botId)
+            .asSequence()
+            .filter { it.ownershipState != ArenaBotOwnershipState.Revoked }
+            .mapNotNull { ownership ->
+                identityService.user(ownership.reefUserId)?.let { user ->
+                    ArenaBotOwnerMetadata(
+                        reefUserId = user.reefUserId,
+                        githubLogin = user.githubLogin,
+                        displayName = user.displayName,
+                        trustState = user.trustState,
+                        ownershipState = ownership.ownershipState,
+                        assignedAt = ownership.assignedAt
+                    )
+                }
+            }
+            .toList()
+    }
+
+    private data class ArenaBotOwnerMetadata(
+        val reefUserId: String,
+        val githubLogin: String,
+        val displayName: String,
+        val trustState: com.reef.platform.application.admin.AdminTrustState,
+        val ownershipState: ArenaBotOwnershipState,
+        val assignedAt: java.time.Instant
+    )
 
     private fun arenaBotVersionJson(version: ArenaBotVersion): Map<String, Any?> {
         return mapOf(
