@@ -255,11 +255,15 @@ dev-smoke:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/smoke.mjs
 
-dev-smoke-reef: dev-smoke
+dev-smoke-reef:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/smoke.mjs
+	DEV_OPTIONAL_PRODUCT_PROFILE=reef $(JS_RUNTIME) scripts/dev/optional-product-route-smoke.mjs
 
 dev-smoke-arena:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" $(JS_RUNTIME) scripts/dev/smoke.mjs
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" DEV_OPTIONAL_PRODUCT_PROFILE=arena $(JS_RUNTIME) scripts/dev/optional-product-route-smoke.mjs
 
 kube-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
