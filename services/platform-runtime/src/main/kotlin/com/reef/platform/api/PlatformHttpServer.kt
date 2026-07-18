@@ -595,6 +595,8 @@ class PlatformHttpServer(
         analyticsRunExportService = analyticsRunExportService,
         adminSessionAuth = adminSessionAuth
     )
+    private val optionalProductRouteExtensions: List<OptionalProductRouteExtension> =
+        if (arenaAdminService != null || analyticsRunExportService != null) listOf(arenaAdminGateway) else emptyList()
     private val adminAccessGateway = AdminAccessGateway(
         adminIdentityService = adminIdentityService,
         adminSessionAuth = adminSessionAuth
@@ -734,8 +736,7 @@ class PlatformHttpServer(
     }
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
         PlatformAdminDataRoutes(
-            arenaAdminGateway = arenaAdminGateway,
-            arenaRoutesEnabled = arenaRoutesEnabled,
+            optionalProductRouteExtensions = optionalProductRouteExtensions,
             settlementAdminGateway = settlementAdminGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
@@ -1250,18 +1251,21 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
         }
 
-        if (arenaRoutesEnabled) {
-            server.createContext("/api/v1/arena/leaderboard") { exchange ->
+        optionalProductRouteExtensions.forEach { extension ->
+            extension.publicReadPaths.forEach { path ->
+                server.createContext(path) { exchange ->
                 if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
                 if (exchange.requestMethod != "GET") {
                     methodNotAllowed(exchange)
                     return@createContext
                 }
-                if (!allowApiV1Read(exchange, "/api/v1/arena/leaderboard")) {
+                if (!allowApiV1Read(exchange, path)) {
                     return@createContext
                 }
-                val response = arenaAdminGateway.arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
-                writeJson(exchange, response.status, response.body)
+                val response = extension.handlePublicRead(path, exchange.requestURI.rawQuery)
+                    ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "product route not found"))
+                writeHotPathResponse(exchange, response)
+                }
             }
         }
 
@@ -1911,9 +1915,11 @@ class PlatformHttpServer(
                 )
                 PlatformHotPathResponse(status = 200, body = response)
             }
-            arenaRoutesEnabled && request.path == "/api/v1/arena/leaderboard" && request.method == "GET" -> {
-                val readError = apiV1ReadErrorResponse(request, "/api/v1/arena/leaderboard")
-                readError ?: arenaAdminGateway.arenaLeaderboardPublicResponse(request.query)
+            request.method == "GET" && optionalProductRouteExtensions.any { request.path in it.publicReadPaths } -> {
+                val readError = apiV1ReadErrorResponse(request, request.path)
+                readError ?: optionalProductRouteExtensions.firstNotNullOfOrNull {
+                    it.handlePublicRead(request.path, request.query)
+                }
             }
             request.path.startsWith("/api/v1/market-data/bars/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/bars/{instrumentId}")

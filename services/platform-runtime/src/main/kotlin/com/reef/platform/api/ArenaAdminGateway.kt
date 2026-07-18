@@ -50,7 +50,57 @@ internal class ArenaAdminGateway(
     private val adminIdentityService: AdminIdentityService?,
     private val analyticsRunExportService: SimulationRunExportService?,
     private val adminSessionAuth: AdminSessionAuth
-) {
+) : OptionalProductRouteExtension {
+    override val internalPaths = listOf(
+        "/internal/admin/arena/bots", "/internal/admin/arena/my/bots", "/internal/admin/arena/bot-versions",
+        "/internal/admin/arena/bot-versions/transition", "/internal/admin/arena/qualification-reports",
+        "/internal/admin/arena/operator-decisions", "/internal/admin/arena/runtime-config-descriptors",
+        "/internal/admin/arena/runs", "/internal/admin/arena/runs/status", "/internal/admin/arena/run-bot-results",
+        "/internal/admin/arena/run-enforcement-events", "/internal/admin/arena/leaderboard",
+        "/internal/admin/arena/bots/openbao-provision", "/internal/admin/arena/bots/ownership",
+        "/internal/admin/arena/bots/config", "/internal/admin/analytics/run-exports",
+        "/internal/admin/analytics/run-bot-summaries"
+    )
+    override val publicReadPaths = listOf("/api/v1/arena/leaderboard")
+
+    override fun handleInternal(method: String, path: String, query: String?, body: String): PlatformHotPathResponse? = when (path) {
+        "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotResponse(query) }, { registerArenaBotResponse(body) })
+        "/internal/admin/arena/my/bots" -> getResponseOnly(method) { arenaMyBotsResponse(query) }
+        "/internal/admin/arena/bot-versions" -> getOrPost(method, { arenaBotVersionResponse(query) }, { registerArenaBotVersionResponse(body) })
+        "/internal/admin/arena/bot-versions/transition" -> postOnly(method) { transitionArenaBotVersionResponse(body) }
+        "/internal/admin/arena/qualification-reports" -> getResponseOnly(method) { arenaQualificationReportsResponse(query) }
+        "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) { arenaOperatorDecisionsResponse(query) }
+        "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) { arenaRuntimeConfigDescriptorsResponse(query) }
+        "/internal/admin/arena/runs" -> getOrPost(method, { arenaRunResponse(query) }, { registerArenaRunResponse(body) })
+        "/internal/admin/arena/runs/status" -> postOnly(method) { updateArenaRunStatusResponse(body) }
+        "/internal/admin/arena/run-bot-results" -> getOrPost(method, { arenaRunBotResultsResponse(query) }, { recordArenaRunBotResultResponse(body) })
+        "/internal/admin/arena/run-enforcement-events" -> getOrPost(method, { arenaRunEnforcementEventsResponse(query) }, { recordArenaRunEnforcementEventResponse(body) })
+        "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardResponse(query) }
+        "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionResponse(body) }
+        "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipResponse(body) }
+        "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
+        "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
+        "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
+        else -> null
+    }
+
+    override fun handlePublicRead(path: String, query: String?): PlatformHotPathResponse? = when (path) {
+        "/api/v1/arena/leaderboard" -> arenaLeaderboardPublicResponse(query)
+        else -> null
+    }
+
+    private fun getResponseOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
+        if (method == "GET") response() else methodNotAllowedResponse()
+
+    private fun postOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
+        if (method == "POST") response() else methodNotAllowedResponse()
+
+    private fun getOrPost(method: String, getResponse: () -> PlatformHotPathResponse, postResponse: () -> PlatformHotPathResponse): PlatformHotPathResponse = when (method) {
+        "GET" -> getResponse()
+        "POST" -> postResponse()
+        else -> methodNotAllowedResponse()
+    }
+
     fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
