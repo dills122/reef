@@ -32,26 +32,33 @@ Early product slices:
 - `stock-data` seed service: seed-once Tiingo/fake provider boundary, normalized snapshots, batch seed hash, Postgres or in-memory persistence, and `/v1/seed-snapshots`.
 - Bot SDK live read clients for market data, bars, own orders, and data availability; hosted/local reports can distinguish `fixture` versus `live` read mode.
 - Bot Arena local gates: persisted positive/negative smoke, static operator reports, and shared-time multi-instrument simulation proof with 5 active symbols and 18 bots.
+- Bot Arena hosted/control-plane slices: GitHub OAuth and Admin DB identity, public landing/leaderboard, owner-scoped bot config, container-isolated PR qualification, trusted OpenBao provisioning, and post-merge registry sync. A same-repository smoke bot passed the complete internal submission lifecycle.
 
 ## Still Planned
 
 - Rich platform UI and operator workflows.
-- Full post-trade lifecycle: allocation, confirmation, affirmation, clearing, novation, netting, and exception UI.
+- Remaining post-trade depth and operator UX beyond the implemented allocation/confirmation/affirmation, clearing/novation, obligation/instruction/attempt, ledger, break/repair, and exception-queue facts.
 - Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
 - Broader analytics facts, dashboards, and reports beyond initial run export.
-- Public bot submission flow, hosted sandbox execution at scale, production leaderboard service, and full scoring policies.
-- Projection/read-model freshness under the same durable venue-event load. A short July 12 `2.5k rps` DigitalOcean projection gate passed; it is not yet the same claim as the `10k` venue-core materializer baseline.
-- Complete scenario locking for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`, even though local live assertions now exist for both paths.
+- Standalone Reef packaging: Arena implementation classes, routes, and default
+  database requirements are still co-packaged with the Kotlin runtime today.
+  The next sprint extracts the Arena-owned artifact and Compose overlay and
+  proves Reef-only build, start, smoke, and route absence.
+- Invite-only fork submission, external contributor onboarding, hosted hostile-code execution at scale, replay UI, and final scoring policies. Trusted provisioning currently rejects forks; the proven path is same-repository only.
+- Longer or higher-rate full-projection soaks. Full projection passed a short `5k/60s` gate, but write amplification remains high and is not yet promoted to the `10k` venue-core materializer claim.
+- Broader scenario campaigns beyond the now-promoted local P1/P2 locks and replay evidence.
 
 ## Active Architecture Direction
 
-The high-throughput path is organized around one promise: if Reef says `202 Accepted`, the configured durable ingress producer acknowledged the command. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. The direct-stream plus venue-event-materializer path is now the canonical `10k` venue-core baseline; the active promotion work is proving projection/read-model freshness and replay under that same durable load. Speed work must not weaken audit, replay, or acceptance semantics.
+The high-throughput path is organized around one promise: if Reef says `202 Accepted`, the configured durable ingress producer acknowledged the command. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. The direct-stream plus venue-event-materializer path is the canonical `10k` venue-core baseline; full projection has a separate short `5k/60s` green gate, and the next scaling concern is lowering projection write amplification before longer or higher-rate promotion. Speed work must not weaken audit, replay, or acceptance semantics.
 
-The first deterministic scenarios now have clear target stories. P1 proves a hidden-cross trade lifecycle. P2 proves a settlement break and repair path. The assertion surfaces exist; the remaining work is making live gates prove those stories consistently from platform facts.
+The first deterministic scenarios now have promoted target stories. P1 proves a hidden-cross trade lifecycle and P2 proves a settlement break and repair path, with direct-stream replay/checksum evidence kept separate from projection-freshness claims.
 
 ## Learn More
 
 - `docs/CURRENT_STATUS.md` — the full, most current snapshot (source of truth for this page)
+- `docs/BOT_ARENA_RELEASE_READINESS.md` — current external-submission release gate
+- `docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md` — next implementation sprint and standalone Reef gates
 - `docs/DECISIONS.md` — accepted architecture decisions
 - `docs/WORK_PLAN.md` — active execution ladder
 - `docs/SCENARIO_CONTRACTS.md` and `docs/SCENARIO_ASSERTION_PLAN.md` — first-wave scenario gates

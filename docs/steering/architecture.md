@@ -77,6 +77,15 @@ Persist canonical command results and lifecycle events before acknowledging cons
 
 Submit, cancel, and modify commands that affect the same venue session and instrument must enter the same deterministic processing lane unless the lifecycle model proves a different concurrency design is correct.
 
+### 10. Optional products depend on Reef, never the reverse
+
+Bot Arena and future optional products may consume versioned Reef public,
+admin, message, and protobuf contracts. Reef domain/application code, release
+artifacts, routes, databases, migrations, readiness, and base deployment must
+not depend on their implementations. Feature flags are activation controls, not
+proof of packaging separation. Use separate modules/artifacts plus explicit
+deployment overlays, and enforce the dependency direction automatically.
+
 ## Bounded Contexts
 
 The initial domain breakdown should follow these contexts:

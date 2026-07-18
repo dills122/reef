@@ -18,7 +18,7 @@ export default defineConfig({
         { icon: "github", label: "GitHub", href: "https://github.com/dills122/reef" },
       ],
       editLink: {
-        baseUrl: "https://github.com/dills122/reef/edit/main/apps/docs-site/",
+        baseUrl: "https://github.com/dills122/reef/edit/master/apps/docs-site/",
       },
       sidebar: [
         {

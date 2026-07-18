@@ -4,7 +4,7 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-17.
+Last aligned: 2026-07-18.
 
 ## Current Project State
 
@@ -30,6 +30,26 @@ Current product split:
 - Bot Arena is a bot trading competition/game that uses Reef as its simulation
   environment. It should keep using Reef's public command, market-data,
   settlement, and admin contracts rather than becoming a parallel platform.
+
+Bot Arena release call:
+
+- the platform is ready for an operator-controlled preview with built-in bots
+  and same-repository test submissions; the chosen next release is an
+  invite-only, fork-based preview, not open self-service intake
+- the same-repository smoke bot proved validation, container isolation,
+  provisioning, merge, and registry sync; the deployed public leaderboard is
+  healthy but currently has no public scored runs
+- external users normally submit from forks, while the trusted provisioning
+  workflow currently rejects forked bot PRs
+- live `master` protection, verified 2026-07-18, requires the manifest and
+  sandbox checks but not `registry-diff-and-provision`, and requires zero human
+  approvals; this does not enforce the accepted D-051 launch contract
+- use [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
+  for admission, cutoff, policy, and recorded-run tasking; first execute
+  [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+  to make Reef independently buildable and deployable; use
+  [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for
+  launch gates and current blockers
 
 ## Active Architecture Direction
 
@@ -57,6 +77,7 @@ Current decision anchors:
 - D-050 keeps one post-trade domain model with policy/timing profiles (`ops-realistic-v1` industry-baseline default, `instant-post-trade-v1` for simulator/game runs) rather than separate settlement models; see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md).
 - D-051 makes GitHub the first human identity provider for Bot Arena, keyed by GitHub's immutable numeric user id; see [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md).
 - D-052 defines the Bot Arena admin UI (`apps/arena-admin`, SvelteKit static, deployed behind Caddy on the backbone host): public landing/leaderboard pages plus a GitHub-OAuth-gated admin area. Public leaderboard reads land under the venue-intake `/api/v1/...` family, not `/admin/v1/...`; game types move from a free-form `mode_id` string to a seeded `arena.game_modes` reference table with a `mandatory` flag, with per-bot opt-out deferred past v1.
+- D-053 makes Reef/Arena separation a build and deployment invariant: Reef must build, test, start, and run without Arena code or infrastructure; Arena depends on Reef contracts through an Arena-owned artifact/overlay; feature flags and JVM tree shaking are not the opt-out mechanism. Execute [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md) before invite-preview implementation.
 - Stream command envelope tests now prove submit and cancel commands for the same `runId + venueSessionId + instrumentId` share the same partition lane, and stream-ack HTTP boundary tests prove cancels missing hot-path routing metadata are rejected before intake reservation or durable publish.
 - Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 - The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results`, `runtime_events`, and accepted submit `orders`. No-DB direct-consume batches carry the compact `acceptedOrder` projection fact; `command_log.command_payloads` is a fallback for older or command-log-backed batches.
@@ -84,7 +105,7 @@ This is a short summary of the single active execution ladder in [`WORK_PLAN.md`
 
 1. Keep the current durable-acceptance contracts stable while using the D-041 Redpanda/Kafka-compatible hot-ingress plus D-043 venue-event materializer path as the canonical `10k` venue-core baseline.
 2. Keep projection/read-model freshness evidence separate from canonical materialization: the short `2.5k` full gate is green, `5k` command-status/lifecycle freshness is green, full event/timeline freshness at `5k/60s` is now green after deterministic timeline sequencing, and projection scaling work should follow [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md) without redefining `venue-core` command acceptance as UI/control-room freshness.
-3. Complete the API/control-plane hardening backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): remaining account/object authorization, `/internal/*` caller migration from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, richer readiness, deterministic stream lane keys, and fail-closed non-local profiles. This is the next implementation track now that the short projection gate is green.
+3. Complete the API/control-plane hardening backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): remaining account/object authorization, `/internal/*` caller migration from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, richer readiness, deterministic stream lane keys, and fail-closed non-local profiles. This remains the active venue-core backlog; the next bounded product sprint is the Reef/Arena separation at item 10.
 4. Implement the command intake contract in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit/cancel first, hot cancel metadata enforcement, stable `202` response, provider-neutral status, duplicate idempotency tests, and accepted/materialized drain accounting.
 5. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
 6. Harden canonical persistence through venue event batch materialization with the remaining crash/restart tests, deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
@@ -95,9 +116,10 @@ This is a short summary of the single active execution ladder in [`WORK_PLAN.md`
    - 2026-07-15 local P1 direct-stream same-run replay report passed with 44 assertions; report: `reports/scenario-assertions/p1-golden-hidden-cross-replay-live-20260714.json`, replay artifact: `reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json`. It combines run-scoped command ids, canonical command status from `platform-projector-0`, exact replay counters for the same three P1 commands, and native `visibilityTimeline` proof that public depth did not expose the hidden resting sell before first execution. P1 is locked locally by combining the 2026-07-14 zero-lag `sync-result` report for projection freshness with this direct-stream replay report for same-run durable evidence. The retained direct-stream report's `/api/v1/data/availability` lag rows of `4` are global retained-stack lag evidence, not the P1 zero-lag projection claim; use `--require-zero-projection-lag` only on a stack expected to be globally drained.
    - 2026-07-14 local P2 command smoke passed; report: `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json`. The P2 live assertion passed after seeding settlement facts with `make dev-seed-p2-settlement-facts SCENARIO_RUN_ID=p2-settlement-break-repair-live-20260714`; report: `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json`. The assertion run proved command completion plus the settlement exception chain from `/api/v1/settlement/facts/{scenarioRunId}`: one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping.
    - 2026-07-15 local P2 direct-stream settled-chain report passed with public settlement facts readback; report: `reports/scenario-assertions/p2-settlement-break-repair-settled-live-public-20260715c.json`, public facts readback artifact: `reports/scenario-assertions/p2-settlement-break-repair-settled-facts-public-20260715c.json`, replay artifact: `reports/scenario-assertions/p2-settlement-break-repair-replay-check-20260715c.json`. It combines run-scoped command ids, canonical command status from `platform-projector-0`, exact replay counters for the same two P2 commands, and a minimal `instant-post-trade-v1` settled chain read from `/api/v1/settlement/facts/{scenarioRunId}`: obligation, allocation, confirmation, affirmation, instruction, attempt, cash/security leg outcomes, ledger entries, and `SETTLED` finality.
-10. Keep Bot Arena Phase 1 moving without overlapping the real-time stress dashboard work: score-v1 correctness is promotion-ready after local reset-to-reset and hosted `15m` evidence, and short hosted pacing cleanup evidence is green. The next arena planning milestone is [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md): task the run diagnostic bundle, public/admin leaderboard split, analytics export, bot data-interface policy, starter bot/persona catalog, safety gates, and public-submission readiness checklist.
-11. Start the focused post-trade lifecycle sprint in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). Target clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
-12. Run documentation cleanup as a separate bounded stream using [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md): keep active docs short, move superseded planning docs into `docs/archive/`, and preserve benchmark/security/decision evidence.
+10. Execute [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md) next: make the Reef runtime artifact, Compose base, database/readiness contract, routes, and test/smoke path independent of Arena; retain Arena through an explicit downstream module/artifact and overlay; prove identical canonical Reef facts and matching-engine artifacts between profiles.
+11. After separation promotion, execute the invite-only fork preview in [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md): implement pending admission and maintainer-gated trusted provisioning, enforce the `T-72h`/`T-48h`/`T-24h` eligibility window, version actor/economic policies, and complete recorded local, hosted, and external-account E2E runs. Track go/no-go in [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
+12. Start the focused post-trade lifecycle sprint in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). Target clearing/novation facts, exception queue v1, operator-readable lifecycle state, and scenario evidence for instant happy path, cash fail/repair, security fail/repair, and ops-realistic pending behavior.
+13. Run documentation cleanup as a separate bounded stream using [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md): keep active docs short, move superseded planning docs into `docs/archive/`, and preserve benchmark/security/decision evidence.
 
 ## Documentation Map
 
@@ -119,7 +141,7 @@ Use these docs for active work:
 - Settlement and clearing strategy: [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
 - Post-trade lifecycle sprint: [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md)
 - Command intake process: [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
-- Bot Arena docs, current-to-oldest: admin UI follow-ups [`BOT_ARENA_ADMIN_UI_FOLLOW_UPS.md`](./BOT_ARENA_ADMIN_UI_FOLLOW_UPS.md), main plan [`BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md), simulation tuning sprint [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md), auth/provisioning [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md), DO soak checklist [`BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md`](./BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md), phase 1 readiness [`BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./BOT_ARENA_PHASE_1_READINESS_PLAN.md), runner bench [`BOT_ARENA_RUNNER_BENCH.md`](./BOT_ARENA_RUNNER_BENCH.md); intake gap analysis is superseded by the auth/provisioning model and archived at [`archive/ARENA_INTAKE_GAP_ANALYSIS.md`](./archive/ARENA_INTAKE_GAP_ANALYSIS.md)
+- Bot Arena docs, current-to-oldest: separation execution [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md), invite-preview execution [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md), release gate [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md), admin UI follow-ups [`BOT_ARENA_ADMIN_UI_FOLLOW_UPS.md`](./BOT_ARENA_ADMIN_UI_FOLLOW_UPS.md), main plan [`BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md), simulation tuning sprint [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md), auth/provisioning [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md), DO soak checklist [`BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md`](./BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md), phase 1 readiness [`BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./BOT_ARENA_PHASE_1_READINESS_PLAN.md), runner bench [`BOT_ARENA_RUNNER_BENCH.md`](./BOT_ARENA_RUNNER_BENCH.md); intake gap analysis is superseded by the auth/provisioning model and archived at [`archive/ARENA_INTAKE_GAP_ANALYSIS.md`](./archive/ARENA_INTAKE_GAP_ANALYSIS.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./archive/ROADMAP.md)
 - Decisions: [`DECISIONS.md`](./DECISIONS.md)

@@ -28,6 +28,15 @@ Bot Arena can make Reef easier to demo and tune, but it must not redefine the
 core platform model or become a shortcut around Reef's venue, post-trade,
 audit, or replay rules.
 
+This is also a build and deployment boundary. Reef must build, test, start, and
+run its supported workflows without Arena code or infrastructure. Arena may
+depend on versioned Reef contracts, but Reef release artifacts, routes,
+databases, readiness, and Compose base must not depend on Arena implementations.
+The repository remains a monorepo; artifact exclusion and explicit deployment
+composition provide opt-out, not runtime flags or JVM tree shaking alone. See
+[`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+and D-053 in [`docs/DECISIONS.md`](./docs/DECISIONS.md).
+
 ## Vision
 
 Reef should feel like a real institutional market-infrastructure platform under the hood, while remaining approachable as a local development environment and portfolio-grade demo tool.

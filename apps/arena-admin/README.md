@@ -1,42 +1,44 @@
-# sv
+# Reef Bot Arena App
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit static application for the Bot Arena public landing page, game-mode
+descriptions, public leaderboard, participant bot configuration, and
+GitHub-authenticated operator workflows.
 
-## Creating a project
+The deployed app is an operational backbone surface, not the source of trading
+or scoring truth. It reads versioned `/api/v1/arena/...` public routes and
+authenticated `/admin/v1/...` routes from `platform-runtime` through Caddy.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Local Development
 
-```sh
-# create a new project
-npx sv create my-app
+From the repository root:
+
+```bash
+bun install --frozen-lockfile
+bun run arena-admin:dev
 ```
 
-To recreate this project with the same configuration:
+Copy `.env.example` to `.env` in this directory when a non-default API base or
+explicit local fixture mode is required. Local fixture flags are development
+only and must not appear in production output.
 
-```sh
-# recreate this project
-npx sv@0.16.2 create --template minimal --types ts --no-install arena-admin
+## Verification
+
+```bash
+bun run arena-admin:check
+bun run arena-admin:build:guarded
+bun run arena-admin:ui-audit
 ```
 
-## Developing
+The guarded build scans the static output for local fixture markers. CI also
+runs the Svelte typecheck and static build.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+For the real GitHub OAuth/Admin DB local smoke, environment requirements, and
+owner-config setup, see
+[`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](../../docs/BOT_ARENA_AUTH_AND_PROVISIONING.md).
+For launch status and external-submission blockers, see
+[`docs/BOT_ARENA_RELEASE_READINESS.md`](../../docs/BOT_ARENA_RELEASE_READINESS.md).
 
-```sh
-npm run dev
+## Release Status
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+The app and same-repository test-submission path are in limited preview. Open
+fork-based bot submissions are not available yet.

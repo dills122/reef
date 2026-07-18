@@ -784,7 +784,13 @@ Summary:
 - public bot submissions are delayed until built-in/local bots prove replay, scoring, sandboxing, and operator controls (Rollout Plan Phase 5 gated behind Phases 1-4).
 - arena metadata, leaderboards, bot registry, run history, and replay indexes stay outside the trading hot-path database; Redis is ephemeral coordination/cache only, never the sole durable store for competition records.
 - the run plane is designed for early horizontal scale by tournament run, shard, instrument group, and sandbox worker; it inherits the throughput target from `docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md` (`7500`+ completed commands/sec per runtime+engine instance) and uses `docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md` as the target venue-ingress design for high-throughput bot traffic.
-- current implementation state (`ArenaControlPlaneService`, `ArenaBotRegistryStore`/`PostgresArenaBotRegistryStore`, `ArenaBotVersionRiskCheck`) is early Rollout Plan Phase 1 (control-plane registry only); no sandbox execution, modular game modes, UI, or public submissions exist yet.
+- implementation state when D-045 was accepted was early Rollout Plan Phase 1
+  (control-plane registry only). This is historical context, not a current
+  inventory: D-051 and D-052 plus the July 2026 implementation added hosted
+  isolation gates, the Arena UI, public leaderboard reads, auth/ownership,
+  same-repository submission, provisioning, and registry sync. Open fork-based
+  submissions remain blocked; see
+  [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
 
 Primary references:
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
@@ -943,3 +949,50 @@ Primary references:
 - [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - [`docs/steering/astro.md`](./steering/astro.md)
+
+### D-053: Reef And Bot Arena Product And Artifact Separation
+
+Status: accepted
+
+Summary:
+- Reef and Bot Arena are related but separate products. Reef owns venue intake,
+  matching, market data, post-trade, settlement, replay, audit, and general
+  simulation behavior. Bot Arena is an optional downstream game that consumes
+  Reef contracts.
+- Bot Arena may require Reef to run a game. Reef must not require Bot Arena to
+  build, test, start, become ready, or provide its supported standalone
+  behavior.
+- the monorepo remains. This decision requires artifact, dependency, route,
+  persistence, and deployment separation; it does not require an immediate
+  network-service extraction.
+- `services/platform-runtime` is a Reef-only release artifact. Arena registry,
+  ownership/config orchestration, admission, leaderboard, run-result ingestion,
+  and Arena HTTP routes belong to an Arena-owned module or artifact.
+- Reef may define generic extension contracts for optional actor admission or
+  account risk. Reef code cannot import Arena implementations or express those
+  contracts using Arena statuses, leaderboard, roster, scoring, or invitation
+  concepts.
+- Arena routes are absent from Reef-only deployments. Feature-disabled routes
+  returning unavailable responses do not prove separation.
+- the Reef Compose base has no Arena database, environment, service, volume,
+  migration, or readiness dependency. Arena is enabled through an explicit
+  overlay/profile.
+- general scenarios remain Reef-owned. Arena modes, competitor/house actor
+  composition, economic policy, scoring policy, admission windows, Bot SDK,
+  sandbox runner, and Arena UI are Arena-owned.
+- artifact exclusion, not JVM tree shaking, is the supported opt-out mechanism.
+- the matching-engine artifact and Reef canonical behavior are identical
+  between Reef-only and Arena-enabled profiles for the same commit.
+- this separation sprint is the next implementation milestone. Invite-only
+  fork admission implementation begins only after separation evidence is
+  reviewed and promoted.
+- D-053 supersedes the parts of D-046 and D-052 that assumed Arena registry or
+  public leaderboard implementation would remain compiled into the Reef
+  `platform-runtime`; their product, infrastructure, and API intent otherwise
+  remains accepted.
+
+Primary references:
+- [`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+- [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md#product-boundary)
+- [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
+- [`docs/steering/architecture.md`](./steering/architecture.md)

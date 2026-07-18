@@ -45,6 +45,8 @@ contracts/
   proto/                       Versionable inter-service contracts
 packages/
   scenario-definitions/        Reusable simulation inputs and scenario files
+  bot-sdk/                     Repository-local ReefBotV1 authoring contract, examples, and fixtures
+bots/                          Submitted bot manifests and source accepted through the repository workflow
 scripts/
   dev/                         Local stack, smoke, stress, replay, admin, and migration automation
   ci/                          CI guardrails and coverage helpers
@@ -108,6 +110,13 @@ Pull requests and branch pushes run:
 - matching-engine benchmark guardrails
 - platform-runtime performance guardrails
 - Postgres schema placement and migration integration checks
+- Bot SDK typecheck/qualification, hosted container-isolation, and Arena admin app checks
+
+Bot-submission branches also run manifest validation and container-isolated bot
+qualification. The full same-repository smoke path has passed, but open
+fork-based submissions are not available yet. See
+[`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md)
+for the verified release matrix and blockers.
 
 Coverage reports are uploaded as GitHub Actions artifacts and summarized in the workflow run. CI enforces hard per-module coverage minimums rather than one repository-wide percentage: `services/matching-engine` must stay at or above 76% (via `scripts/ci/go-coverage.sh`), `services/simulator` must stay at or above 71% (same script), and `services/platform-runtime` enforces a 58% instruction-coverage minimum through Gradle's `jacocoTestCoverageVerification` (`violationRules` block in `build.gradle.kts`).
 
@@ -154,13 +163,14 @@ Surface-specific steering:
 
 ## Current Development Focus
 
-The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md) and [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md). At a high level:
+The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md) and [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md). The next Bot Arena-related implementation milestone is the Reef/Arena separation in [`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md), followed by invite-preview execution in [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md); release gates remain in [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md). At a high level:
 
 1. Keep validating hot-ingress paths with durable command-log, direct stream, and explicit partition semantics.
 2. Preserve deterministic lane assignment for matching-sensitive submit/cancel/modify commands.
 3. Expand lifecycle projections and query/timeline views without leaking projection concerns into canonical write logic.
 4. Build simulator control-room workflows over the existing CLI/report artifacts.
 5. Add post-trade workflows after replay and lifecycle assertions are stable.
+6. Deliver the invite-only, fork-based Bot Arena preview and its recorded E2E calibration campaign before advertising external submissions.
 
 ## Recommended Next Gates
 

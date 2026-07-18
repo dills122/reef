@@ -11,7 +11,15 @@ This is not the public-submission or hosted-tournament milestone. Phase 1 is the
 operator-controlled/local proof that the arena model works before exposing it to
 external bot authors.
 
-Status note (2026-07-09): this file is now partly historical. The local Phase 1 positive and negative persisted gates, static operator report rendering, leaderboard readback, and shared-time multi-instrument local proof have landed. Current Bot Arena execution order lives in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder) and [`BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md`](./BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md). Do not treat the "Build Soon" sections below as a second active ladder when they describe shipped local pieces.
+Status note (updated 2026-07-18): this file is historical Phase 1 planning. The
+local gates described here landed, and later work added the hosted admin app,
+public leaderboard read, identity/ownership stores, same-repository submission
+pipeline, OpenBao provisioning, and registry sync. Current execution lives in
+[`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder); external submission
+status lives in
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md). Do not
+use the non-goals or recommended work order below as current implementation
+claims.
 
 ## Current Foundations
 
