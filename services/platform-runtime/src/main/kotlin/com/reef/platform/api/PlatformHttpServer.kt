@@ -93,14 +93,18 @@ internal data class AdminGatewayRoute(
     val internalPath: String,
     val fallbackTokenFamily: String,
     val serviceTokenFamilies: Set<AdminServiceTokenFamily>,
-    val sessionRoles: Set<String> = emptySet()
+    val sessionRoles: Set<String> = emptySet(),
+    val fallbackTokenEnv: String? = null,
+    val fallbackActorEnv: String? = null
 )
 
 private fun OptionalProductAdminRoute.toAdminGatewayRoute(): AdminGatewayRoute = AdminGatewayRoute(
     internalPath = internalPath,
-    fallbackTokenFamily = fallbackTokenFamily,
+    fallbackTokenFamily = "optional-product",
     serviceTokenFamilies = serviceTokenFamilies,
-    sessionRoles = sessionRoles
+    sessionRoles = sessionRoles,
+    fallbackTokenEnv = fallbackTokenEnv,
+    fallbackActorEnv = fallbackActorEnv
 )
 
 private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)

@@ -7,7 +7,8 @@ data class OptionalProductAdminRoute(
     val externalPath: String,
     val methods: Set<String>,
     val internalPath: String,
-    val fallbackTokenFamily: String,
+    val fallbackTokenEnv: String,
+    val fallbackActorEnv: String,
     val serviceTokenFamilies: Set<AdminServiceTokenFamily>,
     val sessionRoles: Set<String> = emptySet()
 )

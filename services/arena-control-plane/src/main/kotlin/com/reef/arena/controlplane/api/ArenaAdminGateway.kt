@@ -126,10 +126,18 @@ internal class ArenaAdminGateway(
         externalPath: String,
         methods: Set<String>,
         internalPath: String,
-        fallbackTokenFamily: String,
+        _fallbackTokenFamily: String,
         serviceTokenFamilies: Set<AdminServiceTokenFamily>,
         sessionRoles: Set<String> = emptySet()
-    ) = OptionalProductAdminRoute(externalPath, methods, internalPath, fallbackTokenFamily, serviceTokenFamilies, sessionRoles)
+    ) = OptionalProductAdminRoute(
+        externalPath,
+        methods,
+        internalPath,
+        "ARENA_ADMIN_API_TOKEN",
+        "ARENA_ADMIN_API_ACTOR_ID",
+        serviceTokenFamilies,
+        sessionRoles
+    )
 
     private companion object {
         val arenaTokens = setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
