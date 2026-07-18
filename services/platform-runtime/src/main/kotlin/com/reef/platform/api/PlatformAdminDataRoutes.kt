@@ -17,6 +17,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
  */
 internal class PlatformAdminDataRoutes(
     private val arenaAdminGateway: ArenaAdminGateway,
+    private val arenaRoutesEnabled: Boolean,
     private val settlementAdminGateway: SettlementAdminGateway,
     private val healthJson: () -> String,
     private val readinessJson: () -> String,
@@ -38,7 +39,8 @@ internal class PlatformAdminDataRoutes(
     private val marketDataProjectorStatsJson: () -> String,
     private val orderLifecycleProjectorStatsJson: () -> String
 ) {
-    val paths: List<String> = listOf(
+    val paths: List<String> = buildList {
+        addAll(listOf(
         "/health",
         "/healthz",
         "/readyz",
@@ -50,6 +52,9 @@ internal class PlatformAdminDataRoutes(
         "/internal/admin/account-risk/controls",
         "/internal/admin/circuit-breakers",
         "/internal/admin/price-collars",
+        ))
+        if (arenaRoutesEnabled) {
+            addAll(listOf(
         "/internal/admin/arena/bots",
         "/internal/admin/arena/my/bots",
         "/internal/admin/arena/bot-versions",
@@ -65,6 +70,9 @@ internal class PlatformAdminDataRoutes(
         "/internal/admin/arena/bots/openbao-provision",
         "/internal/admin/arena/bots/ownership",
         "/internal/admin/arena/bots/config",
+            ))
+        }
+        addAll(listOf(
         "/internal/admin/analytics/run-exports",
         "/internal/admin/analytics/run-bot-summaries",
         "/internal/perf/hot-path",
@@ -77,9 +85,11 @@ internal class PlatformAdminDataRoutes(
         "/internal/projector/status",
         "/internal/market-data/projector/status",
         "/internal/order-lifecycle/projector/status"
-    )
+        ))
+    }
 
     fun handle(method: String, path: String, query: String?, body: String = ""): PlatformHotPathResponse? {
+        if (!arenaRoutesEnabled && path.startsWith("/internal/admin/arena/")) return null
         return when (path) {
             "/health" -> getOnly(method) { healthJson() }
             "/healthz" -> getOnly(method) { healthJson() }

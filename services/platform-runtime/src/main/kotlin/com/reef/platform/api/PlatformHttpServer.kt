@@ -140,7 +140,13 @@ private val adminGatewayArenaAdminRoles = setOf(
     AdminIdentityService.RolePlatformAdmin
 )
 
-internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminGatewayRoute? = when (path) {
+internal fun adminGatewayRouteFor(
+    path: String,
+    method: String = "POST",
+    arenaRoutesEnabled: Boolean = true
+): AdminGatewayRoute? {
+    if (!arenaRoutesEnabled && path.startsWith("/admin/v1/arena/")) return null
+    return when (path) {
     "/admin/v1/reference/instruments" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute("/reference/instruments", "admin", setOf(AdminServiceTokenFamily.Admin))
     } else {
@@ -380,6 +386,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         adminGatewayPlatformAdminRoles
     )
     else -> null
+    }
 }
 
 private data class PreparedApiV1Mutation(
@@ -547,6 +554,7 @@ class PlatformHttpServer(
     private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv(),
     private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl()
 ) {
+    private val arenaRoutesEnabled: Boolean = arenaAdminService != null
     companion object {
         private val streamPublishTimeoutExecutor = ScheduledThreadPoolExecutor(1) { runnable ->
             Thread(runnable, "reef-stream-publish-timeout").apply { isDaemon = true }
@@ -727,6 +735,7 @@ class PlatformHttpServer(
     private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
         PlatformAdminDataRoutes(
             arenaAdminGateway = arenaAdminGateway,
+            arenaRoutesEnabled = arenaRoutesEnabled,
             settlementAdminGateway = settlementAdminGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
@@ -1241,17 +1250,19 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
         }
 
-        server.createContext("/api/v1/arena/leaderboard") { exchange ->
-            if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
+        if (arenaRoutesEnabled) {
+            server.createContext("/api/v1/arena/leaderboard") { exchange ->
+                if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
+                if (exchange.requestMethod != "GET") {
+                    methodNotAllowed(exchange)
+                    return@createContext
+                }
+                if (!allowApiV1Read(exchange, "/api/v1/arena/leaderboard")) {
+                    return@createContext
+                }
+                val response = arenaAdminGateway.arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
+                writeJson(exchange, response.status, response.body)
             }
-            if (!allowApiV1Read(exchange, "/api/v1/arena/leaderboard")) {
-                return@createContext
-            }
-            val response = arenaAdminGateway.arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
-            writeJson(exchange, response.status, response.body)
         }
 
         server.createContext("/api/v1/market-data/bars/") { exchange ->
@@ -1626,7 +1637,7 @@ class PlatformHttpServer(
 
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
         if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return
-        val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod)
+        val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod, arenaRoutesEnabled)
         if (route == null) {
             exchange.sendResponseHeaders(404, -1)
             exchange.close()
@@ -1654,7 +1665,7 @@ class PlatformHttpServer(
     }
 
     private fun handleAdminGatewayRequest(request: PlatformHotPathRequest): PlatformHotPathResponse {
-        val route = adminGatewayRouteFor(request.path, request.method)
+        val route = adminGatewayRouteFor(request.path, request.method, arenaRoutesEnabled)
             ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
         val principal = authorizeAdminGateway(request, route)
             ?: return unauthorizedAdminGatewayResponse(route)
@@ -1900,7 +1911,7 @@ class PlatformHttpServer(
                 )
                 PlatformHotPathResponse(status = 200, body = response)
             }
-            request.path == "/api/v1/arena/leaderboard" && request.method == "GET" -> {
+            arenaRoutesEnabled && request.path == "/api/v1/arena/leaderboard" && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/arena/leaderboard")
                 readError ?: arenaAdminGateway.arenaLeaderboardPublicResponse(request.query)
             }

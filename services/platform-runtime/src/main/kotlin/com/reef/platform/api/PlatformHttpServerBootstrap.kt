@@ -11,7 +11,6 @@ import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
 import com.reef.platform.application.analytics.PostgresAnalyticsSqlNames
 import com.reef.platform.application.analytics.PostgresSimulationRunExportStore
 import com.reef.platform.application.analytics.SimulationRunExportService
-import com.reef.platform.application.arena.ArenaBotVersionRiskCheck
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
@@ -53,7 +52,7 @@ private fun postgresDataSourceFromEnv(
 }
 
 internal fun defaultBoundary(): ServerBoundaryDeps {
-    val hooks = defaultBoundaryHooks(accountRiskExtensions = defaultAccountRiskExtensions())
+    val hooks = defaultBoundaryHooks()
     PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
     val runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver")
     val adminHttpAuth = defaultAdminHttpAuth()
@@ -116,26 +115,6 @@ internal fun defaultBoundary(): ServerBoundaryDeps {
         streamCommandHealthCheck = streamPublisher as? StreamCommandHealthCheck,
         streamCommandConfig = StreamCommandConfig(),
         commandProcessingMode = hooks.commandProcessingMode
-    )
-}
-
-private fun defaultAccountRiskExtensions(): List<AccountRiskCheckExtension> {
-    if (!RuntimeEnv.bool("EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED", false)) return emptyList()
-    val jdbcUrl = RuntimeEnv.string("ARENA_POSTGRES_JDBC_URL", "")
-        .ifBlank { error("ARENA_POSTGRES_JDBC_URL is required when EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=true") }
-    return listOf(
-        ArenaBotVersionRiskCheck(
-            store = PostgresArenaBotRegistryStore(
-                dataSource = postgresDataSourceFromEnv(
-                    jdbcUrl = jdbcUrl,
-                    userKey = "ARENA_POSTGRES_USER",
-                    userFallback = "reef",
-                    passwordKey = "ARENA_POSTGRES_PASSWORD",
-                    passwordFallback = "reef",
-                    poolName = "arena-bot-version-risk"
-                )
-            )
-        )
     )
 }
 

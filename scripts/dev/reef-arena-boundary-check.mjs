@@ -10,6 +10,11 @@ assertNoMatch(
   /com\.reef\.platform\.application\.arena/,
   "the Reef external boundary must not import an Arena implementation"
 );
+assertNoMatch(
+  "services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformHttpServerBootstrap.kt",
+  /ArenaBotVersionRiskCheck/,
+  "the Reef bootstrap must discover optional admission policy instead of constructing an Arena risk check"
+);
 assertNoMatchInTree(
   "services/matching-engine",
   new Set([".go"]),

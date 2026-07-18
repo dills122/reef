@@ -7,6 +7,7 @@ import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
 import java.math.BigDecimal
 import java.time.Instant
+import java.util.ServiceLoader
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -127,6 +128,10 @@ interface AccountRiskCheck {
  */
 fun interface AccountRiskCheckExtension {
     fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult?
+}
+
+fun interface AccountRiskCheckExtensionProvider {
+    fun extensions(lookup: (String) -> String?): List<AccountRiskCheckExtension>
 }
 
 class ChainedAccountRiskCheck(
@@ -1881,10 +1886,13 @@ fun defaultBoundaryHooks(
         }
         else -> AllowAllAccountRiskCheck()
     }
-    val accountRiskCheck = if (accountRiskExtensions.isEmpty()) {
+    val discoveredExtensions = ServiceLoader.load(AccountRiskCheckExtensionProvider::class.java)
+        .flatMap { provider -> provider.extensions(lookup) }
+    val allAccountRiskExtensions = accountRiskExtensions + discoveredExtensions
+    val accountRiskCheck = if (allAccountRiskExtensions.isEmpty()) {
         baseAccountRiskCheck
     } else {
-        ChainedAccountRiskCheck(baseAccountRiskCheck, accountRiskExtensions)
+        ChainedAccountRiskCheck(baseAccountRiskCheck, allAccountRiskExtensions)
     }
 
     val circuitBreakerMode = (lookup("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()
