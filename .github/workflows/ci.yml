@@ -320,7 +320,6 @@ jobs:
       - name: Apply migrations
         run: JS_RUNTIME=node REEF_ARENA_POSTGRES_MIGRATIONS=1 make dev-db-migrate
       - name: Run schema placement integration test
-        working-directory: services/arena-control-plane
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
           RUNTIME_POSTGRES_USER_TEST: reef
@@ -328,7 +327,7 @@ jobs:
           ARENA_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5435/reef
           ARENA_POSTGRES_USER_TEST: reef
           ARENA_POSTGRES_PASSWORD_TEST: reef
-        run: ../platform-runtime/gradlew --no-daemon jar && ../platform-runtime/gradlew --no-daemon test --tests com.reef.arena.controlplane.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime jar && ./services/platform-runtime/gradlew --no-daemon -p services/arena-control-plane test --tests com.reef.arena.controlplane.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
       - name: Dump Postgres logs on failure
         if: failure()
         run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml logs postgres boundary-postgres projection-postgres arena-postgres
