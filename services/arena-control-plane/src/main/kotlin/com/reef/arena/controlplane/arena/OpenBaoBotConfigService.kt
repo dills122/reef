@@ -1,4 +1,4 @@
-package com.reef.platform.application.arena
+package com.reef.arena.controlplane.arena
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.json.JsonMapper

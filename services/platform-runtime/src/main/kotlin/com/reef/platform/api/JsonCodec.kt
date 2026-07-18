@@ -46,7 +46,7 @@ object JsonCodec {
         return mapper.writeValueAsString(node)
     }
 
-    internal fun writeNode(node: JsonNode): String = mapper.writeValueAsString(node)
+    fun writeNode(node: JsonNode): String = mapper.writeValueAsString(node)
 
     fun rawJsonOrText(value: String): JsonNode {
         return try {

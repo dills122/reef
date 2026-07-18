@@ -1,4 +1,4 @@
-package com.reef.platform.application.arena
+package com.reef.arena.controlplane.arena
 
 class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     private val bots = linkedMapOf<String, ArenaBot>()

@@ -1,40 +1,42 @@
-package com.reef.platform.api
+package com.reef.arena.controlplane.api
+
+import com.reef.platform.api.*
 
 import com.reef.platform.application.admin.AdminActor
-import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminIdentityService
-import com.reef.platform.application.admin.ArenaBotRegistrationCommand
-import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
-import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
-import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
-import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionCommand
-import com.reef.platform.application.admin.ArenaRunRegistrationCommand
-import com.reef.platform.application.admin.ArenaRunStatusCommand
+import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
+import com.reef.arena.controlplane.application.ArenaBotVersionDecisionCommand
+import com.reef.arena.controlplane.application.ArenaBotVersionRegistrationCommand
+import com.reef.arena.controlplane.application.ArenaRunBotResultIngestionCommand
+import com.reef.arena.controlplane.application.ArenaRunEnforcementEventIngestionCommand
+import com.reef.arena.controlplane.application.ArenaRunRegistrationCommand
+import com.reef.arena.controlplane.application.ArenaRunStatusCommand
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.analytics.BotRunPerformanceSummaryRecord
 import com.reef.platform.application.analytics.SimulationRunExportCommand
 import com.reef.platform.application.analytics.SimulationRunExportRecord
 import com.reef.platform.application.analytics.SimulationRunExportService
-import com.reef.platform.application.arena.ArenaBot
-import com.reef.platform.application.arena.ArenaBotVersion
-import com.reef.platform.application.arena.ArenaBotVersionStatus
-import com.reef.platform.application.arena.ArenaLeaderboardEntry
-import com.reef.platform.application.arena.ArenaOperatorDecision
-import com.reef.platform.application.arena.ArenaQualificationReport
-import com.reef.platform.application.arena.ArenaRunBotResult
-import com.reef.platform.application.arena.ArenaRunBotVersionRef
-import com.reef.platform.application.arena.ArenaRunEnforcementEvent
-import com.reef.platform.application.arena.ArenaRunRecord
-import com.reef.platform.application.arena.ArenaRunStatus
-import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
-import com.reef.platform.application.arena.BotConfigSecretService
-import com.reef.platform.application.arena.LocalDevBotConfigService
-import com.reef.platform.application.arena.OpenBaoBotConfigService
-import com.reef.platform.application.arena.OpenBaoBotConfigServiceConfig
-import com.reef.platform.application.arena.OpenBaoClientException
-import com.reef.platform.application.arena.OpenBaoProvisioningConfig
-import com.reef.platform.application.arena.OpenBaoProvisioningService
+import com.reef.arena.controlplane.arena.ArenaBot
+import com.reef.arena.controlplane.arena.ArenaBotVersion
+import com.reef.arena.controlplane.arena.ArenaBotVersionStatus
+import com.reef.arena.controlplane.arena.ArenaLeaderboardEntry
+import com.reef.arena.controlplane.arena.ArenaOperatorDecision
+import com.reef.arena.controlplane.arena.ArenaQualificationReport
+import com.reef.arena.controlplane.arena.ArenaRunBotResult
+import com.reef.arena.controlplane.arena.ArenaRunBotVersionRef
+import com.reef.arena.controlplane.arena.ArenaRunEnforcementEvent
+import com.reef.arena.controlplane.arena.ArenaRunRecord
+import com.reef.arena.controlplane.arena.ArenaRunStatus
+import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
+import com.reef.arena.controlplane.arena.BotConfigSecretService
+import com.reef.arena.controlplane.arena.LocalDevBotConfigService
+import com.reef.arena.controlplane.arena.OpenBaoBotConfigService
+import com.reef.arena.controlplane.arena.OpenBaoBotConfigServiceConfig
+import com.reef.arena.controlplane.arena.OpenBaoClientException
+import com.reef.arena.controlplane.arena.OpenBaoProvisioningConfig
+import com.reef.arena.controlplane.arena.OpenBaoProvisioningService
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
@@ -42,14 +44,14 @@ private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "p
 /**
  * Owns arena bot/version registration, run/leaderboard admin CRUD, per-bot OpenBao
  * secret config, and analytics run-export ingestion+query. These share one class
- * because they're all admin/data internal routes over the same AdminApplicationService,
+ * because they're all admin/data internal routes over the same ArenaAdminApplicationService,
  * not because they're one bounded context — see docs/steering/kotlin.md.
  */
 internal class ArenaAdminGateway(
-    private val arenaAdminService: AdminApplicationService?,
+    private val arenaAdminService: ArenaAdminApplicationService?,
     private val adminIdentityService: AdminIdentityService?,
     private val analyticsRunExportService: SimulationRunExportService?,
-    private val adminSessionAuth: AdminSessionAuth
+    private val currentPrincipal: () -> AdminRequestPrincipal
 ) : OptionalProductRouteExtension {
     override val internalPaths = listOf(
         "/internal/admin/arena/bots", "/internal/admin/arena/my/bots", "/internal/admin/arena/bot-versions",
@@ -263,7 +265,7 @@ internal class ArenaAdminGateway(
         }
         return try {
             val githubUserId = json.requiredLong("githubUserId")
-            val actor = adminSessionAuth.currentPrincipal().actorId
+            val actor = currentPrincipal().actorId
             if (actor.startsWith("user-gh-")) {
                 val roles = identity.rolesForUser(actor).map { it.roleId }.toSet()
                 if (roles.none { it in adminBotConfigPrivilegedRoles }) {
@@ -311,7 +313,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaBotOpenBaoConfigStatusResponse(
-        service: AdminApplicationService,
+        service: ArenaAdminApplicationService,
         query: String?
     ): PlatformHotPathResponse {
         val botId = queryValue(query, "botId")
@@ -352,7 +354,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaBotOpenBaoConfigReplaceResponse(
-        service: AdminApplicationService,
+        service: ArenaAdminApplicationService,
         body: String
     ): PlatformHotPathResponse {
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
@@ -369,7 +371,7 @@ internal class ArenaAdminGateway(
             if (!canManageBotOpenBaoConfig(bot.botId, write = true)) {
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
-            val actor = adminSessionAuth.currentPrincipal().actorId
+            val actor = currentPrincipal().actorId
             val result = openBaoBotConfigService().replaceConfig(ownerIdentity, bot.botId, configJson, actor)
             recordAdminControlPlaneAudit(
                 actor,
@@ -401,7 +403,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaBotOpenBaoConfigDeleteResponse(
-        service: AdminApplicationService,
+        service: ArenaAdminApplicationService,
         query: String?
     ): PlatformHotPathResponse {
         val botId = queryValue(query, "botId")
@@ -417,7 +419,7 @@ internal class ArenaAdminGateway(
                 return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
             }
             openBaoBotConfigService().deleteConfig(ownerIdentity, bot.botId)
-            val actor = adminSessionAuth.currentPrincipal().actorId
+            val actor = currentPrincipal().actorId
             val secretPath = "secret/bots/$ownerIdentity/${bot.botId}"
             recordAdminControlPlaneAudit(
                 actor,
@@ -467,7 +469,7 @@ internal class ArenaAdminGateway(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         val identity = adminIdentityService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
-        val actorId = adminSessionAuth.currentPrincipal().actorId
+        val actorId = currentPrincipal().actorId
         if (!actorId.startsWith("user-gh-")) {
             return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "GitHub user session is required"))
         }
@@ -496,7 +498,7 @@ internal class ArenaAdminGateway(
     }
 
     // botId omitted -> roster listing, most-recently-registered first.
-    private fun arenaBotsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
+    private fun arenaBotsListResponse(service: ArenaAdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
             val bots = service.arenaBots(arenaAdminActor(query), limit)
@@ -600,7 +602,7 @@ internal class ArenaAdminGateway(
     }
 
     // runId omitted -> recent run listing, most-recently-created first.
-    private fun arenaRunsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
+    private fun arenaRunsListResponse(service: ArenaAdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
             val runs = service.arenaRuns(arenaAdminActor(query), limit)
@@ -973,7 +975,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun arenaAdminActor(): AdminActor {
-        val principal = adminSessionAuth.currentPrincipal()
+        val principal = currentPrincipal()
         return AdminActor(
             actorId = principal.actorId,
             correlationId = principal.correlationId,
@@ -1030,7 +1032,7 @@ internal class ArenaAdminGateway(
 
     private fun canManageBotOpenBaoConfig(botId: String, write: Boolean): Boolean {
         val identityService = adminIdentityService ?: return true
-        val actorId = adminSessionAuth.currentPrincipal().actorId
+        val actorId = currentPrincipal().actorId
         if (!actorId.startsWith("user-gh-")) return true
         val user = identityService.user(actorId) ?: return false
         if (user.trustState.dbValue == "banned") return false

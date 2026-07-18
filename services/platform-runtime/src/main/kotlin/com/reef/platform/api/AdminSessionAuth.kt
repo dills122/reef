@@ -1,6 +1,5 @@
 package com.reef.platform.api
 
-import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.AdminAuthService
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
@@ -46,7 +45,6 @@ enum class InternalHttpExposureMode {
  * duration of a request so downstream gateways can read it via [currentPrincipal].
  */
 internal class AdminSessionAuth(
-    private val arenaAdminService: AdminApplicationService?,
     private val adminAuthService: AdminAuthService?,
     private val adminIdentityService: AdminIdentityService?,
     private val adminGitHubOAuthClient: AdminGitHubOAuthClient?,
@@ -149,11 +147,7 @@ internal class AdminSessionAuth(
                     ?.rolesForUser(session.reefUserId)
                     ?.map { it.roleId }
                     .orEmpty()
-                val runtimeRoles = arenaAdminService
-                    ?.listActorRoles(session.reefUserId)
-                    ?.map { it.roleId }
-                    .orEmpty()
-                val roles = (identityRoles + runtimeRoles).distinct().sorted()
+                val roles = identityRoles.distinct().sorted()
                 writeJson(
                     exchange,
                     200,

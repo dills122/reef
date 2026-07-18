@@ -150,11 +150,11 @@ internal class PlatformAdminDataRoutes(
     }
 }
 
-internal fun methodNotAllowedResponse(): PlatformHotPathResponse {
+fun methodNotAllowedResponse(): PlatformHotPathResponse {
     return PlatformHotPathResponse(status = 405, body = "", contentType = null)
 }
 
-internal fun queryValue(query: String?, key: String): String {
+fun queryValue(query: String?, key: String): String {
     if (query.isNullOrBlank()) return ""
     val values = query.split("&")
     for (value in values) {

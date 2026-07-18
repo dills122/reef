@@ -1,4 +1,4 @@
-package com.reef.platform.application.arena
+package com.reef.arena.controlplane.arena
 
 data class PostgresArenaSqlNames(
     private val schema: String = "arena"

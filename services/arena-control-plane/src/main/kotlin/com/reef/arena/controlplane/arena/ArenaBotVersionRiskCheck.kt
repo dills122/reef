@@ -1,4 +1,4 @@
-package com.reef.platform.application.arena
+package com.reef.arena.controlplane.arena
 
 import com.reef.platform.api.AccountRiskCheckExtension
 import com.reef.platform.api.AccountRiskCheckRequest
