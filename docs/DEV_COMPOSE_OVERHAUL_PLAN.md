@@ -4,7 +4,7 @@
 
 Reduce local-development configuration noise without removing the throughput and deployment tuning knobs Reef needs for deterministic replay, durable command intake, and performance evidence.
 
-The current root `docker-compose.yml` is a valid working stack, but it mixes local ergonomics, runtime mode selection, benchmark tuning, optional services, and hosted-deployment shape in one file. The target is layered Compose configuration with explicit operational intent.
+The local stack is expressed as layered Compose configuration with explicit operational intent.
 
 ## External Check
 
@@ -21,7 +21,6 @@ Docker's current Compose guidance supports this direction:
 Keep the service-owned Dockerfiles in their current service directories. Split Compose by operational intent:
 
 ```text
-docker-compose.yml              compatibility entrypoint during migration
 compose.base.yml                shared service topology and health checks
 compose.local.yml               local ports, local data services, dev credentials
 compose.local.stream-ack.yml    local durable stream-ack topology
@@ -32,21 +31,19 @@ compose.hosted.<provider>.yml   provider-specific overrides only when needed
 
 Provider-specific files should wait for real differences. Avoid splitting by subsystem alone; too many small files would make the stack harder to reason about than the monolith.
 
-## First Slice
+## Completed Foundation
 
-The first implementation slice keeps `docker-compose.yml` as a compatibility file and adds central Compose-file selection:
+The initial implementation added central Compose-file selection:
 
 - `REEF_COMPOSE_FILES` or `DEV_COMPOSE_FILES` can opt into an ordered file list.
 - The default local dev stack is `compose.base.yml,compose.local.yml`.
 - `make dev-compose-config ARGS="--services"` or `bun scripts/dev/reef-dev.mjs stack compose-config --services` prints the resolved configuration.
-- Dev stack scripts should call the shared Compose helper instead of hard-coding `docker-compose.yml`.
-
-This lets later commits move YAML into layered files while preserving the existing Make targets.
+- Dev stack scripts call the shared Compose helper instead of hard-coding Compose files.
 
 ## Migration Phases
 
-1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` delegates to `reef-dev.mjs stack compose-config`, `make dev-compose-parity` delegates to `reef-dev.mjs stack compose-parity`, and dev scripts call the shared Compose helper.
-2. Add `compose.base.yml` and `compose.local.yml` while keeping `docker-compose.yml` working. Done: both files exist, and `reef-dev.mjs stack compose-parity` (run by `make dev-compose-parity`) fails the build if `docker-compose.yml` config output diverges from `compose.base.yml` + `compose.local.yml` merged config. `docker-compose.yml` remains the full monolith kept in parity with the layered files rather than being removed.
+1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` delegates to `reef-dev.mjs stack compose-config`, and dev scripts call the shared Compose helper.
+2. Establish the Reef-only base/local split and the explicit Arena overlay. Done: `compose.base.yml` and `compose.local.yml` are canonical; `compose.arena.yml` is opt-in. The root compatibility monolith was retired to prevent optional-product coupling and configuration drift.
 3. Move stream-ack and materializer shape into local overlays. Not started: no `compose.local.stream-ack.yml` exists.
 4. Move benchmark-only no-DB/direct-stream settings into a benchmark overlay. Not started: no `compose.local.benchmark.yml` exists.
 5. Add hosted overlays only after the local split is stable. Not started: no `compose.hosted*.yml` files exist.

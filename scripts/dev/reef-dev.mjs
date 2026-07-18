@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
 
 import { deriveDevUrls, env, loadDotEnv, run, setDefault, waitForHttp } from "./lib/dev-utils.mjs";
 import { STACK_PROFILES, runStackDown, runStackReset, runStackUp } from "./lib/dev-stack-profiles.mjs";
@@ -12,8 +10,6 @@ import { printStreamProfileSummary, streamProfileNames, validateStreamProfile } 
 import { aggregateReports } from "./lib/report-taxonomy.mjs";
 
 const args = process.argv.slice(2);
-const execFileAsync = promisify(execFile);
-
 try {
   await main(args);
 } catch (error) {
@@ -79,9 +75,6 @@ async function runStackCommand(command, profile, rest = []) {
       loadDotEnv();
       console.log(`compose files: ${composeFiles().join(", ")}`);
       await run("docker", composeArgs(["config", ...[profile, ...rest].filter(Boolean)]));
-      return;
-    case "compose-parity":
-      await runComposeParity();
       return;
     default:
       throw new Error(`unknown stack command: ${command ?? ""}`);
@@ -188,7 +181,6 @@ function printUsage() {
   bun scripts/dev/reef-dev.mjs stack down
   bun scripts/dev/reef-dev.mjs stack reset
   bun scripts/dev/reef-dev.mjs stack compose-config [docker-compose-config-args]
-  bun scripts/dev/reef-dev.mjs stack compose-parity
   bun scripts/dev/reef-dev.mjs stress run [runtime-nodb|captured-ack|stream-ack|stream-direct-nodb]
   bun scripts/dev/reef-dev.mjs links [codex|claude] [--dry-run]
   bun scripts/dev/reef-dev.mjs stream validate [${streamProfileNames.join("|")}]
@@ -205,7 +197,7 @@ compat aliases:
 function printList() {
   console.log("reef-dev commands:");
   console.log(`  stack profiles: ${[...STACK_PROFILES].join(", ")}`);
-  console.log("  stack commands: up, down, reset, compose-config, compose-parity");
+  console.log("  stack commands: up, down, reset, compose-config");
   console.log(`  stress profiles: ${[...STRESS_PROFILES].join(", ")}`);
   console.log("  sim commands: run, batch");
   console.log(`  stream validation profiles: ${streamProfileNames.join(", ")}`);
@@ -307,32 +299,6 @@ function restoreEnv(name, value) {
   }
 }
 
-async function runComposeParity() {
-  const monolithArgs = ["compose", "-f", "docker-compose.yml", "config"];
-  const layeredArgs = ["compose", "-f", "compose.base.yml", "-f", "compose.local.yml", "config"];
-
-  const monolith = await dockerComposeConfig(monolithArgs);
-  const layered = await dockerComposeConfig(layeredArgs);
-
-  if (monolith !== layered) {
-    console.error("Compose config parity failed: docker-compose.yml differs from compose.base.yml + compose.local.yml.");
-    console.error("Run this for details:");
-    console.error("  docker compose -f docker-compose.yml config > /tmp/reef-compose-monolith.yml");
-    console.error("  docker compose -f compose.base.yml -f compose.local.yml config > /tmp/reef-compose-layered.yml");
-    console.error("  diff -u /tmp/reef-compose-monolith.yml /tmp/reef-compose-layered.yml");
-    process.exit(1);
-  }
-
-  console.log("Compose config parity OK: docker-compose.yml matches compose.base.yml + compose.local.yml.");
-}
-
-async function dockerComposeConfig(composeArgv) {
-  const { stdout } = await execFileAsync("docker", composeArgv, {
-    cwd: process.cwd(),
-    maxBuffer: 20 * 1024 * 1024,
-  });
-  return stdout;
-}
 
 function applyStreamProfileValidationDefaults(profileName) {
   setDefault("RUNTIME_PERSISTENCE", "noop");

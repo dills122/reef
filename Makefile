@@ -14,7 +14,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
-.PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
+.PHONY: dev-compose-config dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
 .PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-arena-isolation
 .PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-hardening-bot-arena-local
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
@@ -222,10 +222,6 @@ dev-up-stream-direct-nodb:
 dev-compose-config:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stack compose-config $(ARGS)
-
-dev-compose-parity:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stack compose-parity
 
 dev-validate-stream-profile:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

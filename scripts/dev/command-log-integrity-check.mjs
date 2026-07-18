@@ -78,7 +78,9 @@ async function execPsql({ service, dbUser, dbName, sql }) {
     [
       "compose",
       "-f",
-      "docker-compose.yml",
+      "compose.base.yml",
+      "-f",
+      "compose.local.yml",
       "exec",
       "-T",
       service,

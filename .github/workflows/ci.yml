@@ -251,10 +251,10 @@ jobs:
           path: replay-artifacts/persona-session
       - name: Dump stack logs on failure
         if: failure()
-        run: docker compose -f docker-compose.yml logs
+        run: docker compose -f compose.base.yml -f compose.local.yml logs
       - name: Stop stack
         if: always()
-        run: docker compose -f docker-compose.yml down --volumes --remove-orphans
+        run: docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans
 
   container-builds:
     runs-on: ubuntu-latest

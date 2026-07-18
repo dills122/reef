@@ -105,29 +105,6 @@ test("devReset skips smoke by default", async () => {
   assert.ok(logs.some((message) => message.includes("skipping smoke verification")));
 });
 
-test("devUp can use an explicit compatibility compose file", async () => {
-  const calls = [];
-  const processEnv = {
-    REEF_COMPOSE_FILES: "docker-compose.yml",
-  };
-
-  await devUp({
-    env: envFrom({ JS_RUNTIME: "node" }),
-    processEnv,
-    log: () => {},
-    run: async (cmd, args) => {
-      calls.push([cmd, args]);
-    },
-  });
-
-  const layeredCompose = ["compose", "-f", "docker-compose.yml"];
-  assert.deepEqual(calls, [
-    ["docker", [...layeredCompose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
-    ["node", ["scripts/dev/db/migrate.mjs"]],
-    ["docker", [...layeredCompose, "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "300"]],
-  ]);
-});
-
 test("devUp starts Arena storage only when the Arena overlay is selected", async () => {
   const calls = [];
   const processEnv = {
