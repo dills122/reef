@@ -11,7 +11,7 @@ internal data class PlatformHotPathRequest(
     val body: String = ""
 )
 
-internal data class PlatformHotPathResponse(
+data class PlatformHotPathResponse(
     val status: Int,
     val body: String = "",
     val contentType: String? = "application/json"

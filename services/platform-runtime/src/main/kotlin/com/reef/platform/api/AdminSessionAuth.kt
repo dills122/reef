@@ -15,7 +15,7 @@ import java.net.URI
 import java.net.URLDecoder
 import java.time.Instant
 
-internal data class AdminRequestPrincipal(
+data class AdminRequestPrincipal(
     val actorId: String,
     val correlationId: String,
     val occurredAt: String

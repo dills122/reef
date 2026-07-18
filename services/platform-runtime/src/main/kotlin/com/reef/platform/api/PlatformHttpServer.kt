@@ -552,7 +552,8 @@ class PlatformHttpServer(
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false),
     private val localDevAdminAuthBypass: Boolean = localDevAdminAuthBypassEnabled(),
     private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv(),
-    private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl()
+    private val localDevAdminUiBaseUrl: String? = localDevAdminUiBaseUrl(),
+    private val productRouteExtensions: List<OptionalProductRouteExtension> = loadOptionalProductRouteExtensions()
 ) {
     private val arenaRoutesEnabled: Boolean = arenaAdminService != null
     companion object {
@@ -596,7 +597,7 @@ class PlatformHttpServer(
         adminSessionAuth = adminSessionAuth
     )
     private val optionalProductRouteExtensions: List<OptionalProductRouteExtension> =
-        if (arenaAdminService != null || analyticsRunExportService != null) listOf(arenaAdminGateway) else emptyList()
+        productRouteExtensions + if (arenaAdminService != null || analyticsRunExportService != null) listOf(arenaAdminGateway) else emptyList()
     private val adminAccessGateway = AdminAccessGateway(
         adminIdentityService = adminIdentityService,
         adminSessionAuth = adminSessionAuth
