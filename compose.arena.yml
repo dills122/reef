@@ -1,5 +1,9 @@
 services:
   platform-api:
+    image: ${REEF_ARENA_PLATFORM_RUNTIME_IMAGE:-reef-arena-platform-runtime}
+    build:
+      context: .
+      dockerfile: services/arena-control-plane/Dockerfile
     environment:
       ARENA_POSTGRES_JDBC_URL: "${ARENA_POSTGRES_JDBC_URL:-jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena}"
       ARENA_POSTGRES_USER: "${ARENA_POSTGRES_USER:-reef}"
