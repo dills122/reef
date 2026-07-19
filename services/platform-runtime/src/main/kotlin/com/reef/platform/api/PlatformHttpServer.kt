@@ -458,7 +458,7 @@ class PlatformHttpServer(
         adminSessionAuth = adminSessionAuth
     )
     private val optionalProductRouteExtensions: List<OptionalProductRouteExtension> =
-        productRouteExtensions
+        validateOptionalProductRouteExtensions(productRouteExtensions)
     private val adminAccessGateway = AdminAccessGateway(
         adminIdentityService = adminIdentityService,
         adminSessionAuth = adminSessionAuth

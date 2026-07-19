@@ -36,6 +36,39 @@ fun interface OptionalProductRouteExtensionProvider {
 }
 
 fun loadOptionalProductRouteExtensions(): List<OptionalProductRouteExtension> {
-    return ServiceLoader.load(OptionalProductRouteExtensionProvider::class.java)
+    return validateOptionalProductRouteExtensions(
+        ServiceLoader.load(OptionalProductRouteExtensionProvider::class.java)
         .flatMap { it.extensions() }
+    )
+}
+
+/**
+ * Fails startup deterministically when independently-owned products claim the
+ * same route. Without this guard, dispatch order would choose one extension
+ * silently (and JDK HttpServer rejects duplicate public contexts later).
+ */
+fun validateOptionalProductRouteExtensions(
+    extensions: List<OptionalProductRouteExtension>
+): List<OptionalProductRouteExtension> {
+    fun requireUnique(kind: String, values: List<String>) {
+        val duplicates = values.groupingBy { it }.eachCount()
+            .filterValues { it > 1 }
+            .keys
+            .sorted()
+        require(duplicates.isEmpty()) {
+            "duplicate optional product $kind: ${duplicates.joinToString(", ")}"
+        }
+    }
+
+    requireUnique("internal path", extensions.flatMap { it.internalPaths })
+    requireUnique("public read path", extensions.flatMap { it.publicReadPaths })
+    requireUnique(
+        "admin route",
+        extensions.flatMap { extension ->
+            extension.adminRoutes.flatMap { route ->
+                route.methods.map { method -> "$method ${route.externalPath}" }
+            }
+        }
+    )
+    return extensions
 }

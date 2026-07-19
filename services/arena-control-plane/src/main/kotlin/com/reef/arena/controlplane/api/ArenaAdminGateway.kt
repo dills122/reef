@@ -73,7 +73,7 @@ internal class ArenaAdminGateway(
         adminRoute("/admin/v1/arena/my/bots", setOf("GET"), "/internal/admin/arena/my/bots", "arena", emptySet()),
         adminRoute("/admin/v1/arena/bots/openbao-provision", setOf("POST"), "/internal/admin/arena/bots/openbao-provision", "arena", arenaTokens, secretRoles),
         adminRoute("/admin/v1/arena/bots/ownership", setOf("POST"), "/internal/admin/arena/bots/ownership", "arena", arenaTokens, operatorRoles),
-        adminRoute("/admin/v1/arena/bots/config", setOf("GET", "POST", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
+        adminRoute("/admin/v1/arena/bots/config", setOf("GET", "PUT", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
         adminRoute("/admin/v1/arena/bot-versions", setOf("GET", "POST"), "/internal/admin/arena/bot-versions", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/bot-versions/transition", setOf("POST"), "/internal/admin/arena/bot-versions/transition", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/runs", setOf("GET", "POST"), "/internal/admin/arena/runs", "arena", arenaTokens, operatorRoles),
