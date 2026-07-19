@@ -107,7 +107,8 @@ jobs:
         run: |
           bun scripts/dev/bot-sdk-test-bot.mjs \
             "bots/${BOT_NAME}/index.ts" \
-            --isolation=container
+            --isolation=container \
+            --wall-timeout-ms=15000
 
   # Off-convention PRs skip the pipeline above entirely (see detect-flow).
   # This job catches the case that would otherwise slip through silently:
