@@ -21,7 +21,6 @@ class PostgresArenaSqlNamesTest {
         assertEquals("arena.run_bot_results", names.runBotResults)
         assertEquals("arena.run_enforcement_events", names.runEnforcementEvents)
         assertEquals("arena.runtime_config_descriptors", names.runtimeConfigDescriptors)
-        assertEquals("arena.user_bot_limits", names.userBotLimits)
         assertEquals("arena.user_bot_ownerships", names.userBotOwnerships)
     }
 
@@ -67,13 +66,11 @@ class PostgresArenaSqlNamesTest {
         val requirements = ArenaPostgresSchemaRequirements.entitlements(PostgresArenaSqlNames())
 
         assertEquals(
-            setOf("arena.user_bot_limits", "arena.user_bot_ownerships"),
+            setOf("arena.user_bot_ownerships"),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
         assertTrue(requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.containsAll(
             setOf(
-                "arena.user_bot_limits.max_bots:integer",
-                "arena.user_bot_limits.max_active_bots:integer",
                 "arena.user_bot_ownerships.bot_id:text",
                 "arena.user_bot_ownerships.ownership_state:text"
             )

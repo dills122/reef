@@ -67,7 +67,7 @@ timestamps and the policy version that produced them.
 | Time | Gate | Required state |
 | --- | --- | --- |
 | Continuous | Submission intake | Fork PR may be opened at any time and enters `pending_invite_review`. No place in the next run is implied. |
-| `T-72h` | Invite decision cutoff | Maintainer invite approval exists; immutable GitHub user identity, trust state, ownership intent, and bot limit checks pass. |
+| `T-72h` | Invite decision cutoff | Maintainer invite approval exists; immutable GitHub user identity, trust state, and ownership intent checks pass. |
 | `T-72h` to `T-48h` | Provision/config window | Untrusted checks are green; trusted workflow provisions the bot slice; participant enters required config; config descriptor validation passes. |
 | `T-48h` | Merge-readiness cutoff | Reviewed head SHA is unchanged; manifest, sandbox, provisioning, ownership, and config-readiness checks are green; human approval exists. |
 | `T-48h` to `T-24h` | Merge and registry window | Maintainer merges; registry sync rebuilds from `master`; source/artifact hashes match; version reaches the preview-eligible lifecycle state. |

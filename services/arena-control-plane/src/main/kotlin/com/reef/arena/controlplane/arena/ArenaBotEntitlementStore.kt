@@ -2,20 +2,6 @@ package com.reef.arena.controlplane.arena
 
 import java.time.Instant
 
-/**
- * Arena-owned access limits for a Reef identity. Identity existence is checked by the
- * caller against the platform identity service; the entitlement record itself belongs
- * to Arena because it governs Arena bot lifecycle access.
- */
-data class ArenaUserBotLimit(
-    val reefUserId: String,
-    val maxBots: Int,
-    val maxActiveBots: Int,
-    val maxVersionSubmissionsPerDay: Int,
-    val updatedBy: String,
-    val updatedAt: Instant
-)
-
 enum class ArenaBotOwnershipState(val dbValue: String) {
     Owner("owner"),
     Maintainer("maintainer"),
@@ -38,28 +24,13 @@ data class ArenaBotOwnership(
 )
 
 interface ArenaBotEntitlementStore {
-    fun saveUserBotLimit(limit: ArenaUserBotLimit): ArenaUserBotLimit
-    fun userBotLimit(reefUserId: String): ArenaUserBotLimit?
     fun saveBotOwnership(ownership: ArenaBotOwnership): ArenaBotOwnership
     fun botOwnershipsForUser(reefUserId: String): List<ArenaBotOwnership>
     fun botOwnerships(botId: String): List<ArenaBotOwnership>
 }
 
 class InMemoryArenaBotEntitlementStore : ArenaBotEntitlementStore {
-    private val limits = linkedMapOf<String, ArenaUserBotLimit>()
     private val ownerships = linkedMapOf<Pair<String, String>, ArenaBotOwnership>()
-
-    override fun saveUserBotLimit(limit: ArenaUserBotLimit): ArenaUserBotLimit {
-        ArenaBotEntitlementValidation.reefUserId(limit.reefUserId)
-        ArenaBotEntitlementValidation.actorId(limit.updatedBy)
-        ArenaBotEntitlementValidation.userBotLimit(limit)
-        limits[limit.reefUserId] = limit
-        return limit
-    }
-
-    override fun userBotLimit(reefUserId: String): ArenaUserBotLimit? {
-        return limits[ArenaBotEntitlementValidation.reefUserId(reefUserId)]
-    }
 
     override fun saveBotOwnership(ownership: ArenaBotOwnership): ArenaBotOwnership {
         ArenaBotEntitlementValidation.reefUserId(ownership.reefUserId)
@@ -103,12 +74,4 @@ object ArenaBotEntitlementValidation {
         return id
     }
 
-    fun userBotLimit(limit: ArenaUserBotLimit) {
-        require(limit.maxBots >= 0) { "maxBots must be non-negative" }
-        require(limit.maxActiveBots >= 0) { "maxActiveBots must be non-negative" }
-        require(limit.maxActiveBots <= limit.maxBots) { "maxActiveBots cannot exceed maxBots" }
-        require(limit.maxVersionSubmissionsPerDay >= 0) {
-            "maxVersionSubmissionsPerDay must be non-negative"
-        }
-    }
 }

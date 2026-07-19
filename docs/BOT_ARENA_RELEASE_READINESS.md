@@ -60,7 +60,7 @@ separate from trusted provisioning.
 Accept fork PRs, but keep admission invite-only:
 
 1. A fork PR runs untrusted validation and enters `pending_invite_review`.
-2. A maintainer reviews the user, ownership intent, bot limits, and immutable
+2. A maintainer reviews the user, ownership intent, and immutable
    head SHA. No review-time SLA is promised during the preview.
 3. Approval triggers trusted provisioning from base-branch code and immutable
    PR metadata. The trusted job never executes fork-controlled code.

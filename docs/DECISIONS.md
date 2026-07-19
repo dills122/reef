@@ -915,7 +915,7 @@ Status: accepted
 Summary:
 - GitHub is the first human identity provider for Bot Arena because a GitHub account is already required for pull-request based bot submission.
 - Reef keys users by GitHub's immutable numeric user id; usernames and email addresses are display/contact attributes only.
-- Reef Admin DB is the source of truth for local user records, roles, trust state, and audit events. Arena owns bot ownership and bot limits; the optional Arena adapter joins those records with Reef identity only when Arena is installed.
+- Reef Admin DB is the source of truth for local user records, roles, trust state, and audit events. Arena owns bot ownership; the optional Arena adapter joins those records with Reef identity only when Arena is installed.
 - Reef roles are enforced locally. GitHub repository role may seed reviewer/operator/platform-admin candidates, but `secret-admin` and continuing authorization must be explicit Reef assignments.
 - GitHub App support is deferred. MVP uses GitHub OAuth for the admin app, GitHub Actions for CI gates and comments/status, and the existing scoped Admin API token until GitHub Actions OIDC replaces it.
 - Participants normally configure bot secrets through the web admin app. Direct OpenBao login is an operator escape hatch, not the normal participant path.

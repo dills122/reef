@@ -26,22 +26,6 @@ class PostgresArenaBotEntitlementStore(
                 stmt.execute("CREATE SCHEMA IF NOT EXISTS ${names.schemaName}")
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS ${names.userBotLimits} (
-                      reef_user_id TEXT PRIMARY KEY,
-                      max_bots INTEGER NOT NULL,
-                      max_active_bots INTEGER NOT NULL,
-                      max_version_submissions_per_day INTEGER NOT NULL,
-                      updated_by TEXT NOT NULL,
-                      updated_at TIMESTAMPTZ NOT NULL,
-                      CHECK (max_bots >= 0),
-                      CHECK (max_active_bots >= 0),
-                      CHECK (max_active_bots <= max_bots),
-                      CHECK (max_version_submissions_per_day >= 0)
-                    )
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
                     CREATE TABLE IF NOT EXISTS ${names.userBotOwnerships} (
                       reef_user_id TEXT NOT NULL,
                       bot_id TEXT NOT NULL,
@@ -55,53 +39,6 @@ class PostgresArenaBotEntitlementStore(
                     """.trimIndent()
                 )
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_bot_ownerships_bot ON ${names.userBotOwnerships}(bot_id)")
-            }
-        }
-    }
-
-    override fun saveUserBotLimit(limit: ArenaUserBotLimit): ArenaUserBotLimit {
-        ArenaBotEntitlementValidation.reefUserId(limit.reefUserId)
-        ArenaBotEntitlementValidation.actorId(limit.updatedBy)
-        ArenaBotEntitlementValidation.userBotLimit(limit)
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                INSERT INTO ${names.userBotLimits}(
-                  reef_user_id, max_bots, max_active_bots,
-                  max_version_submissions_per_day, updated_by, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT (reef_user_id) DO UPDATE SET
-                  max_bots = EXCLUDED.max_bots,
-                  max_active_bots = EXCLUDED.max_active_bots,
-                  max_version_submissions_per_day = EXCLUDED.max_version_submissions_per_day,
-                  updated_by = EXCLUDED.updated_by,
-                  updated_at = EXCLUDED.updated_at
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, limit.reefUserId)
-                ps.setInt(2, limit.maxBots)
-                ps.setInt(3, limit.maxActiveBots)
-                ps.setInt(4, limit.maxVersionSubmissionsPerDay)
-                ps.setString(5, limit.updatedBy)
-                ps.setTimestamp(6, Timestamp.from(limit.updatedAt))
-                ps.executeUpdate()
-            }
-        }
-        return limit
-    }
-
-    override fun userBotLimit(reefUserId: String): ArenaUserBotLimit? {
-        val userId = ArenaBotEntitlementValidation.reefUserId(reefUserId)
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT reef_user_id, max_bots, max_active_bots,
-                       max_version_submissions_per_day, updated_by, updated_at
-                FROM ${names.userBotLimits} WHERE reef_user_id = ?
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, userId)
-                ps.executeQuery().use { rs -> return if (rs.next()) rs.toArenaUserBotLimit() else null }
             }
         }
     }
@@ -160,15 +97,6 @@ class PostgresArenaBotEntitlementStore(
     }
 
     private fun connection(): Connection = dataSource.connection
-
-    private fun ResultSet.toArenaUserBotLimit() = ArenaUserBotLimit(
-        reefUserId = getString("reef_user_id"),
-        maxBots = getInt("max_bots"),
-        maxActiveBots = getInt("max_active_bots"),
-        maxVersionSubmissionsPerDay = getInt("max_version_submissions_per_day"),
-        updatedBy = getString("updated_by"),
-        updatedAt = getTimestamp("updated_at").toInstant()
-    )
 
     private fun ResultSet.toArenaBotOwnership() = ArenaBotOwnership(
         reefUserId = getString("reef_user_id"),
