@@ -328,13 +328,7 @@ class AdminApplicationService(
         val identity = adminIdentityService ?: return false
         val user = identity.user(actorId) ?: return false
         if (user.trustState != AdminTrustState.Trusted) return false
-        val roles = identity.rolesForUser(actorId).map { it.roleId }.toSet()
-        return when (permission) {
-            Permission.ARENA_ADMIN -> roles.any {
-                it == AdminIdentityService.RoleOperator || it == AdminIdentityService.RolePlatformAdmin
-            }
-            else -> false
-        }
+        return false
     }
 }
 

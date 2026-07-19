@@ -42,6 +42,16 @@ assertMatch(
   /arena-postgres/,
   "the Arena overlay must own Arena storage"
 );
+assertMatch(
+  "compose.arena.yml",
+  /services\/arena-control-plane\/Dockerfile/,
+  "the Arena overlay must select the Arena-enabled runtime artifact"
+);
+assertMatch(
+  "services/arena-control-plane/Dockerfile",
+  /arena-control-plane\.jar/,
+  "the Arena artifact must package its extension jar outside the Reef image"
+);
 
 if (failures.length > 0) {
   console.error(`Reef/Arena boundary check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`);

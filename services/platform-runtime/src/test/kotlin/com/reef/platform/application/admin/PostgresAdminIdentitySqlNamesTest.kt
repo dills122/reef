@@ -13,8 +13,6 @@ class PostgresAdminIdentitySqlNamesTest {
         assertEquals("admin.users", names.users)
         assertEquals("admin.roles", names.roles)
         assertEquals("admin.user_roles", names.userRoles)
-        assertEquals("admin.user_bot_limits", names.userBotLimits)
-        assertEquals("admin.user_bot_ownerships", names.userBotOwnerships)
         assertEquals("admin.audit_events", names.auditEvents)
     }
 

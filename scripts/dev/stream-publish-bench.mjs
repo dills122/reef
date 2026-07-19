@@ -21,7 +21,9 @@ const envArgs = Object.entries(process.env)
 await run("docker", [
   "compose",
   "-f",
-  "docker-compose.yml",
+  "compose.base.yml",
+  "-f",
+  "compose.local.yml",
   "exec",
   "-T",
   ...envArgs,

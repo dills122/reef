@@ -48,22 +48,12 @@ Local automation now uses layered Compose files by default:
 - `compose.arena.yml` is an explicit optional overlay that owns Arena storage and
   Arena runtime configuration. Use `make dev-up-arena`; the default `make dev-up`
   remains Reef-only.
-- `docker-compose.yml` remains as a compatibility monolith while the split settles.
 
 Inspect the resolved stack before starting containers:
 
 ```bash
 make dev-compose-config ARGS="--services"
 bun scripts/dev/reef-dev.mjs stack compose-config --services
-make dev-compose-parity
-bun scripts/dev/reef-dev.mjs stack compose-parity
-```
-
-Use the compatibility monolith only when debugging the migration:
-
-```bash
-REEF_COMPOSE_FILES=docker-compose.yml make dev-compose-config ARGS="--services"
-REEF_COMPOSE_FILES=docker-compose.yml bun scripts/dev/reef-dev.mjs stack compose-config --services
 ```
 
 Install Bun before running bot SDK, arena, or package-dependent repo automation.
@@ -452,7 +442,7 @@ make dev-stress-stream-direct-nodb
 
 The stream ingress listener is mounted on `REEF_STREAM_INGRESS_HOST_PORT`/`STREAM_INGRESS_PORT` (`8090` by default). Frames are newline-delimited submit-command JSON payloads; the runtime validates the same command body as `/api/v1/orders/submit` and returns a newline-delimited status code after the durable command-log ack. Error frames include `status<TAB>jsonBody` for diagnostics.
 
-When `STREAM_ACK_LOG_PROVIDER=redpanda`, the direct no-DB helper defaults local runs to `STREAM_ACK_PARTITION_COUNT=16` and `MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0..15` so a retained single-node Redpanda broker does not exhaust its partition memory reservation. Override those values explicitly for provisioned DO or multi-broker tests. If local startup fails with `Can not increase partition count due to memory limit`, delete stale benchmark topics with `docker compose -f docker-compose.yml exec -T redpanda rpk topic delete ...` or reset the Redpanda volume before rerunning.
+When `STREAM_ACK_LOG_PROVIDER=redpanda`, the direct no-DB helper defaults local runs to `STREAM_ACK_PARTITION_COUNT=16` and `MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0..15` so a retained single-node Redpanda broker does not exhaust its partition memory reservation. Override those values explicitly for provisioned DO or multi-broker tests. If local startup fails with `Can not increase partition count due to memory limit`, delete stale benchmark topics with `docker compose -f compose.base.yml -f compose.local.yml exec -T redpanda rpk topic delete ...` or reset the Redpanda volume before rerunning.
 
 Each direct no-DB report includes:
 

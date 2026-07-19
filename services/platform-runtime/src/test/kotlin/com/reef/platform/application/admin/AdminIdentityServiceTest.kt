@@ -17,7 +17,7 @@ class AdminIdentityServiceTest {
     )
 
     @Test
-    fun ensuresGithubUserWithParticipantRoleAndDefaultLimits() {
+    fun ensuresGithubUserWithParticipantRole() {
         val user = service.ensureGitHubUser(
             GitHubUserIdentity(
                 githubUserId = 12345,
@@ -29,17 +29,6 @@ class AdminIdentityServiceTest {
         assertEquals("user-gh-12345", user.reefUserId)
         assertEquals(AdminTrustState.New, user.trustState)
         assertEquals(listOf(AdminIdentityService.RoleParticipant), service.rolesForUser(user.reefUserId).map { it.roleId })
-        assertEquals(
-            AdminUserBotLimit(
-                reefUserId = user.reefUserId,
-                maxBots = AdminIdentityService.DefaultMaxBots,
-                maxActiveBots = AdminIdentityService.DefaultMaxActiveBots,
-                maxVersionSubmissionsPerDay = AdminIdentityService.DefaultMaxVersionSubmissionsPerDay,
-                updatedBy = "github-oauth",
-                updatedAt = clock
-            ),
-            service.botLimit(user.reefUserId)
-        )
         assertEquals(
             listOf("AdminUserCreated"),
             store.auditEvents("admin-user", user.reefUserId).map { it.eventType }
@@ -67,27 +56,13 @@ class AdminIdentityServiceTest {
     }
 
     @Test
-    fun assignsRoleAndBotOwnership() {
+    fun assignsRole() {
         val user = service.ensureGitHubUser(GitHubUserIdentity(999, "bot-maker"))
 
         service.assignRole("operator-1", user.reefUserId, AdminIdentityService.RoleReviewer)
-        val ownership = service.assignBotOwnership(
-            "operator-1",
-            AdminBotOwnershipCommand(
-                reefUserId = user.reefUserId,
-                botId = "sample-bot",
-                ownershipState = AdminBotOwnershipState.Owner
-            )
-        )
-
         assertEquals(
             listOf(AdminIdentityService.RoleParticipant, AdminIdentityService.RoleReviewer),
             service.rolesForUser(user.reefUserId).map { it.roleId }
-        )
-        assertEquals(ownership, store.botOwnerships("sample-bot").single())
-        assertEquals(
-            listOf("AdminUserBotOwnershipAssigned"),
-            store.auditEvents("arena-bot", "sample-bot").map { it.eventType }
         )
     }
 
@@ -215,7 +190,7 @@ class AdminIdentityServiceTest {
     }
 
     @Test
-    fun rejectsInvalidGithubIdentityAndLimits() {
+    fun rejectsInvalidGithubIdentity() {
         assertFailsWith<IllegalArgumentException> {
             service.ensureGitHubUser(GitHubUserIdentity(0, "octo"))
         }
@@ -226,38 +201,7 @@ class AdminIdentityServiceTest {
             service.ensureGitHubUser(GitHubUserIdentity(2, "-octo"))
         }
 
-        val user = service.ensureGitHubUser(GitHubUserIdentity(1, "octo"))
-        assertFailsWith<IllegalArgumentException> {
-            service.updateBotLimits(
-                "operator-1",
-                AdminBotLimitCommand(
-                    reefUserId = user.reefUserId,
-                    maxBots = -1,
-                    maxActiveBots = 1,
-                    maxVersionSubmissionsPerDay = 1
-                )
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            service.updateBotLimits(
-                "operator-1",
-                AdminBotLimitCommand(
-                    reefUserId = user.reefUserId,
-                    maxBots = 1,
-                    maxActiveBots = 2,
-                    maxVersionSubmissionsPerDay = 1
-                )
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            service.assignBotOwnership(
-                "operator-1",
-                AdminBotOwnershipCommand(
-                    reefUserId = user.reefUserId,
-                    botId = "../../bad"
-                )
-            )
-        }
+        service.ensureGitHubUser(GitHubUserIdentity(1, "octo"))
         assertNotNull(store.userByGithubUserId(1))
     }
 }

@@ -12,7 +12,12 @@ class ArenaBotVersionRiskCheck(
         val botId = request.botId
         val botVersion = request.botVersion
         if (botId.isNotBlank() && botVersion.isNotBlank()) {
-            val version = store.version(botId, botVersion)
+            val version = try {
+                store.version(botId, botVersion)
+            } catch (_: Exception) {
+                // Arena is optional: an unavailable Arena store must not block Reef intake.
+                return null
+            }
             if (version != null && version.status !in RuntimeAllowedStatuses) {
                 return AccountRiskCheckResult(
                     decision = AccountRiskDecision.DISABLED_BOT,

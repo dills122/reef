@@ -330,11 +330,7 @@ internal class AdminSessionAuth(
             }
         }
 
-        val envName = when (route.fallbackTokenFamily) {
-            "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
-            "admin" -> "ADMIN_API_TOKEN"
-            else -> "ARENA_ADMIN_API_TOKEN"
-        }
+        val envName = adminGatewayFallbackTokenEnv(route)
         val token = RuntimeEnv.string(envName, "", envLookup)
         val expected = "Bearer $token"
         if (token.isNotBlank() && headerValue(exchange, "Authorization") == expected) {
@@ -415,10 +411,10 @@ internal class AdminSessionAuth(
     }
 
     private fun staticFallbackActorId(route: AdminGatewayRoute): String {
-        val familyActorEnv = when (route.fallbackTokenFamily) {
+        val familyActorEnv = route.fallbackActorEnv ?: when (route.fallbackTokenFamily) {
             "analytics" -> "ANALYTICS_EXPORT_API_ACTOR_ID"
             "admin" -> "ADMIN_API_ACTOR_ID"
-            else -> "ARENA_ADMIN_API_ACTOR_ID"
+            else -> error("optional product routes must declare a fallback actor environment variable")
         }
         return RuntimeEnv.string(
             familyActorEnv,
@@ -428,10 +424,10 @@ internal class AdminSessionAuth(
     }
 
     private fun adminGatewayFallbackTokenEnv(route: AdminGatewayRoute): String {
-        return when (route.fallbackTokenFamily) {
+        return route.fallbackTokenEnv ?: when (route.fallbackTokenFamily) {
             "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
             "admin" -> "ADMIN_API_TOKEN"
-            else -> "ARENA_ADMIN_API_TOKEN"
+            else -> error("optional product routes must declare a fallback token environment variable")
         }
     }
 

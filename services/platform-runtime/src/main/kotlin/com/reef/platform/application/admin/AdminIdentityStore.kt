@@ -16,19 +16,6 @@ enum class AdminTrustState(val dbValue: String) {
     }
 }
 
-enum class AdminBotOwnershipState(val dbValue: String) {
-    Owner("owner"),
-    Maintainer("maintainer"),
-    Revoked("revoked");
-
-    companion object {
-        fun fromDb(value: String): AdminBotOwnershipState {
-            return entries.firstOrNull { it.dbValue == value }
-                ?: throw IllegalArgumentException("Unsupported admin bot ownership state: $value")
-        }
-    }
-}
-
 data class AdminUser(
     val reefUserId: String,
     val githubUserId: Long,
@@ -53,23 +40,6 @@ data class AdminUserRole(
     val assignedAt: Instant
 )
 
-data class AdminUserBotLimit(
-    val reefUserId: String,
-    val maxBots: Int,
-    val maxActiveBots: Int,
-    val maxVersionSubmissionsPerDay: Int,
-    val updatedBy: String,
-    val updatedAt: Instant
-)
-
-data class AdminUserBotOwnership(
-    val reefUserId: String,
-    val botId: String,
-    val ownershipState: AdminBotOwnershipState,
-    val assignedBy: String,
-    val assignedAt: Instant
-)
-
 data class AdminIdentityAuditEvent(
     val eventId: String,
     val actorId: String,
@@ -85,7 +55,6 @@ object AdminIdentityValidation {
     private val reefUserIdPattern = Regex("user-gh-[1-9][0-9]{0,19}")
     private val roleIdPattern = Regex("[a-z][a-z0-9-]{0,63}")
     private val actorIdPattern = Regex("[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,127}")
-    private val botIdPattern = Regex("[a-z0-9][a-z0-9._-]{2,63}")
     private val eventTypePattern = Regex("[A-Za-z][A-Za-z0-9_-]{0,79}")
 
     fun requireGitHubUserId(githubUserId: Long): Long {
@@ -125,12 +94,6 @@ object AdminIdentityValidation {
         return id
     }
 
-    fun botId(value: String): String {
-        val id = value.trim()
-        require(botIdPattern.matches(id)) { "invalid botId" }
-        return id
-    }
-
     fun eventType(value: String): String {
         val eventType = value.trim()
         require(eventTypePattern.matches(eventType)) { "invalid eventType" }
@@ -144,14 +107,6 @@ object AdminIdentityValidation {
         return value
     }
 
-    fun userBotLimit(limit: AdminUserBotLimit) {
-        require(limit.maxBots >= 0) { "maxBots must be non-negative" }
-        require(limit.maxActiveBots >= 0) { "maxActiveBots must be non-negative" }
-        require(limit.maxActiveBots <= limit.maxBots) { "maxActiveBots cannot exceed maxBots" }
-        require(limit.maxVersionSubmissionsPerDay >= 0) {
-            "maxVersionSubmissionsPerDay must be non-negative"
-        }
-    }
 }
 
 interface AdminIdentityStore {
@@ -165,11 +120,6 @@ interface AdminIdentityStore {
     fun assignRole(binding: AdminUserRole): AdminUserRole
     fun revokeRole(reefUserId: String, roleId: String)
     fun rolesForUser(reefUserId: String): List<AdminUserRole>
-    fun saveUserBotLimit(limit: AdminUserBotLimit): AdminUserBotLimit
-    fun userBotLimit(reefUserId: String): AdminUserBotLimit?
-    fun saveBotOwnership(ownership: AdminUserBotOwnership): AdminUserBotOwnership
-    fun botOwnershipsForUser(reefUserId: String): List<AdminUserBotOwnership>
-    fun botOwnerships(botId: String): List<AdminUserBotOwnership>
     fun appendAuditEvent(event: AdminIdentityAuditEvent)
     fun auditEvents(targetType: String, targetId: String): List<AdminIdentityAuditEvent>
 }
@@ -179,8 +129,6 @@ class InMemoryAdminIdentityStore : AdminIdentityStore {
     private val githubUsers = linkedMapOf<Long, String>()
     private val roles = linkedMapOf<String, AdminRole>()
     private val userRoles = linkedMapOf<Pair<String, String>, AdminUserRole>()
-    private val limits = linkedMapOf<String, AdminUserBotLimit>()
-    private val ownerships = linkedMapOf<Pair<String, String>, AdminUserBotOwnership>()
     private val auditEvents = mutableListOf<AdminIdentityAuditEvent>()
 
     override fun saveUser(user: AdminUser): AdminUser {
@@ -241,38 +189,6 @@ class InMemoryAdminIdentityStore : AdminIdentityStore {
     override fun rolesForUser(reefUserId: String): List<AdminUserRole> {
         val userId = AdminIdentityValidation.reefUserId(reefUserId)
         return userRoles.values.filter { it.reefUserId == userId }
-    }
-
-    override fun saveUserBotLimit(limit: AdminUserBotLimit): AdminUserBotLimit {
-        AdminIdentityValidation.reefUserId(limit.reefUserId)
-        AdminIdentityValidation.actorId(limit.updatedBy)
-        AdminIdentityValidation.userBotLimit(limit)
-        require(users.containsKey(limit.reefUserId)) { "Unknown admin user: ${limit.reefUserId}" }
-        limits[limit.reefUserId] = limit
-        return limit
-    }
-
-    override fun userBotLimit(reefUserId: String): AdminUserBotLimit? {
-        return limits[AdminIdentityValidation.reefUserId(reefUserId)]
-    }
-
-    override fun saveBotOwnership(ownership: AdminUserBotOwnership): AdminUserBotOwnership {
-        AdminIdentityValidation.reefUserId(ownership.reefUserId)
-        AdminIdentityValidation.botId(ownership.botId)
-        AdminIdentityValidation.actorId(ownership.assignedBy)
-        require(users.containsKey(ownership.reefUserId)) { "Unknown admin user: ${ownership.reefUserId}" }
-        ownerships[ownership.reefUserId to ownership.botId] = ownership
-        return ownership
-    }
-
-    override fun botOwnershipsForUser(reefUserId: String): List<AdminUserBotOwnership> {
-        val userId = AdminIdentityValidation.reefUserId(reefUserId)
-        return ownerships.values.filter { it.reefUserId == userId }
-    }
-
-    override fun botOwnerships(botId: String): List<AdminUserBotOwnership> {
-        val bot = AdminIdentityValidation.botId(botId)
-        return ownerships.values.filter { it.botId == bot }
     }
 
     override fun appendAuditEvent(event: AdminIdentityAuditEvent) {

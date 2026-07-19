@@ -31,6 +31,9 @@ jobs:
           - name: platform-runtime
             context: services/platform-runtime
             dockerfile: services/platform-runtime/Dockerfile
+          - name: arena-platform-runtime
+            context: .
+            dockerfile: services/arena-control-plane/Dockerfile
     steps:
       - uses: actions/checkout@v6
 

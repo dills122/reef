@@ -14,8 +14,8 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
-.PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
-.PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results
+.PHONY: dev-compose-config dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
+.PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-arena-isolation
 .PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-hardening-bot-arena-local
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
@@ -223,10 +223,6 @@ dev-compose-config:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stack compose-config $(ARGS)
 
-dev-compose-parity:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stack compose-parity
-
 dev-validate-stream-profile:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stream validate $(PROFILE)
@@ -255,11 +251,19 @@ dev-smoke:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/smoke.mjs
 
-dev-smoke-reef: dev-smoke
+dev-smoke-reef:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/smoke.mjs
+	DEV_OPTIONAL_PRODUCT_PROFILE=reef $(JS_RUNTIME) scripts/dev/optional-product-route-smoke.mjs
 
 dev-smoke-arena:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" $(JS_RUNTIME) scripts/dev/smoke.mjs
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" DEV_OPTIONAL_PRODUCT_PROFILE=arena $(JS_RUNTIME) scripts/dev/optional-product-route-smoke.mjs
+
+dev-smoke-arena-isolation:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_FILES="compose.base.yml,compose.local.yml,compose.arena.yml" $(JS_RUNTIME) scripts/dev/arena-failure-isolation-smoke.mjs
 
 kube-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

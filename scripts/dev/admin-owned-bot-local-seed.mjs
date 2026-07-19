@@ -85,6 +85,34 @@ ON CONFLICT (bot_id) DO UPDATE SET
 );
 
 await runPsql(
+  arenaDbService,
+  arenaDbUser,
+  arenaDbName,
+  [
+    "-v",
+    `reef_user_id=${user.reefUserId}`,
+    "-v",
+    `bot_id=${bot.botId}`,
+    "-v",
+    `actor_id=${actorId}`,
+    "-v",
+    `reason=${reason}`,
+  ],
+  `
+BEGIN;
+
+INSERT INTO arena.user_bot_ownerships (reef_user_id, bot_id, ownership_state, assigned_by, assigned_at)
+VALUES (:'reef_user_id', :'bot_id', 'owner', :'actor_id', now())
+ON CONFLICT (reef_user_id, bot_id) DO UPDATE SET
+  ownership_state = 'owner',
+  assigned_by = EXCLUDED.assigned_by,
+  assigned_at = EXCLUDED.assigned_at;
+
+COMMIT;
+`,
+);
+
+await runPsql(
   adminDbService,
   adminDbUser,
   adminDbName,
@@ -101,18 +129,11 @@ await runPsql(
   `
 BEGIN;
 
-INSERT INTO admin.user_bot_ownerships (reef_user_id, bot_id, ownership_state, assigned_by, assigned_at)
-VALUES (:'reef_user_id', :'bot_id', 'owner', :'actor_id', now())
-ON CONFLICT (reef_user_id, bot_id) DO UPDATE SET
-  ownership_state = 'owner',
-  assigned_by = EXCLUDED.assigned_by,
-  assigned_at = EXCLUDED.assigned_at;
-
 INSERT INTO admin.audit_events(event_id, actor_id, event_type, target_type, target_id, detail, occurred_at)
 VALUES (
   'local-owned-bot-seed-' || extract(epoch from clock_timestamp())::text,
   :'actor_id',
-  'AdminBotOwnershipAssigned',
+  'ArenaBotOwnershipAssigned',
   'arena-bot',
   :'bot_id',
   'reefUserId=' || :'reef_user_id' || ',reason=' || :'reason',

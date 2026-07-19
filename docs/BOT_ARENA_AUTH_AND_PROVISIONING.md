@@ -18,8 +18,8 @@ OpenBao secret path, and the pre-merge gates around bot acceptance.
 The core rule is separation of responsibility:
 
 - GitHub proves human identity.
-- Reef Admin DB owns local users, roles, trust state, bot ownership, limits, and
-  audit records.
+- Reef Admin DB owns local users, roles, trust state, and audit records; Arena
+  owns bot ownership and limits.
 - Reef Admin API mediates durable control-plane operations.
 - OpenBao stores bot and service secrets.
 - Runtime services read OpenBao through service credentials, not through user
@@ -85,13 +85,24 @@ Initial Admin DB tables:
 admin.users
 admin.roles
 admin.user_roles
-admin.user_bot_limits
-admin.user_bot_ownerships
 admin.audit_events
 admin.oauth_states
 admin.sessions
 admin.service_tokens
 ```
+
+Arena entitlement tables:
+
+```text
+arena.user_bot_limits
+arena.user_bot_ownerships
+```
+
+The control plane joins Arena ownership with the Admin identity record only at
+the Arena adapter. Reef-only deployments never require these tables. This is a
+pre-release cutover: `admin/0004_remove_legacy_arena_entitlements.sql` removes
+the superseded Admin tables after the Arena migration has created their owned
+replacements. Do not alter the applied Admin migration in place.
 
 OAuth states, browser session tokens, and service tokens must be stored as
 server-side hashes only. Raw token values are returned once at issue time and
