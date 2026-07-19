@@ -5,6 +5,7 @@ import com.reef.arena.controlplane.arena.ArenaBot
 import com.reef.arena.controlplane.arena.ArenaBotMetadata
 import com.reef.arena.controlplane.arena.InMemoryArenaBotEntitlementStore
 import com.reef.arena.controlplane.arena.InMemoryArenaBotRegistryStore
+import com.reef.arena.controlplane.arena.InMemoryArenaSubmissionAdmissionStore
 import com.reef.platform.api.AdminRequestPrincipal
 import com.reef.platform.api.OptionalProductAdminRoute
 import com.reef.platform.api.OptionalProductRouteExtension
@@ -88,6 +89,34 @@ class ArenaAdminGatewayTest {
         )
 
         assertEquals(200, response?.status)
+    }
+
+    @Test
+    fun recordsAndApprovesShaBoundForkAdmission() {
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(arenaRegistryStore = InMemoryArenaBotRegistryStore()),
+            adminIdentityService = null,
+            analyticsRunExportService = null,
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val sha = "a".repeat(40)
+        val body = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"sample-bot","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+
+        val pending = gateway.handleInternal("POST", "/internal/admin/arena/submission-admissions", null, body, AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-19T00:00:00Z"))
+        val approved = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions/approve",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","reason":"invite verified"}""",
+            AdminRequestPrincipal("operator-1", "test", "2026-07-19T00:00:00Z")
+        )
+
+        assertEquals(200, pending?.status)
+        assertTrue(pending!!.body.contains("pending_invite_review"))
+        assertEquals(200, approved?.status)
+        assertTrue(approved!!.body.contains("invite_approved"))
+        assertEquals("operator-1", admissions.admission("dills122/reef", 42)?.invitationActor)
     }
 
     @Test
