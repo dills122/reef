@@ -18,6 +18,10 @@ loadDotEnv();
 // STREAM_ACK_PROJECTOR_ENABLED=false. This script and the ablation ladder need that flag
 // controllable per rung, so it is left as a plain setDefault below instead.
 setValue("RUNTIME_PERSISTENCE", "noop");
+// The load tester seeds reference data through the authenticated admin gateway.
+// Keep the local stress profile runnable from the documented empty-token .env
+// shape while allowing callers to replace this with their own local token.
+setDefault("ADMIN_API_TOKEN", "local-materializer-stress-admin");
 setValue("EXTERNAL_API_IDEMPOTENCY_STORE", "inmemory");
 setValue("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setValue("EXTERNAL_API_COMMAND_LOG_MODE", "disabled");
