@@ -152,7 +152,7 @@ jobs:
           node scripts/dev/bot-submission-commit-status.mjs
           exit 1
       - name: Mark invite review pending
-        if: steps.classify.outputs.classification == 'pending'
+        if: steps.classify.outputs.classification == 'pending' && steps.admission.outputs.state != 'invite_approved'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
@@ -162,7 +162,7 @@ jobs:
         run: node scripts/dev/bot-submission-commit-status.mjs
       - name: Registry diff (new bot vs existing bot)
         id: registry-diff
-        if: steps.classify.outputs.trusted-bot == 'true' && steps.classify.outputs.flow != 'remove'
+        if: (steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved') && steps.classify.outputs.flow != 'remove'
         env:
           ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
           ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
@@ -170,7 +170,7 @@ jobs:
         run: node scripts/dev/bot-submission-registry-diff.mjs "$BOT_NAME"
       - name: OpenBao provisioning
         id: openbao-provision
-        if: steps.classify.outputs.trusted-bot == 'true'
+        if: steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved'
         continue-on-error: true
         env:
           ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}

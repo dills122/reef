@@ -404,7 +404,11 @@ internal class ArenaAdminGateway(
                     repository = json.string("repository"),
                     pullRequestNumber = json.requiredLong("pullRequestNumber"),
                     approvedHeadSha = json.string("headSha"),
-                    actorId = currentPrincipal().actorId,
+                    // A workflow service token has its own fixed subject. The
+                    // trusted approval workflow supplies the separately verified
+                    // GitHub maintainer identity so the durable audit record names
+                    // the reviewer, not the automation credential.
+                    actorId = json.string("approverActorId").ifBlank { currentPrincipal().actorId },
                     reason = json.string("reason"),
                     occurredAt = java.time.Instant.now()
                 )

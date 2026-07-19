@@ -108,7 +108,7 @@ class ArenaAdminGatewayTest {
             "POST",
             "/internal/admin/arena/submission-admissions/approve",
             null,
-            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","reason":"invite verified"}""",
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","approverActorId":"user-gh-999","reason":"invite verified"}""",
             AdminRequestPrincipal("operator-1", "test", "2026-07-19T00:00:00Z")
         )
 
@@ -116,7 +116,7 @@ class ArenaAdminGatewayTest {
         assertTrue(pending!!.body.contains("pending_invite_review"))
         assertEquals(200, approved?.status)
         assertTrue(approved!!.body.contains("invite_approved"))
-        assertEquals("operator-1", admissions.admission("dills122/reef", 42)?.invitationActor)
+        assertEquals("user-gh-999", admissions.admission("dills122/reef", 42)?.invitationActor)
     }
 
     @Test
