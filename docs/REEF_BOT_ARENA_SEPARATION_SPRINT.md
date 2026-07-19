@@ -5,9 +5,10 @@
 Make Reef a first-class standalone product at build, test, runtime, and
 deployment boundaries before implementing invite-only Bot Arena intake.
 
-This is the **next implementation sprint after this documentation branch is
-reviewed and merged**. This document authorizes no code changes on the current
-branch.
+This sprint was implemented and promoted on 2026-07-19. The recorded evidence
+and repeatable comparison are in
+[`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+This document remains the implementation contract and design record.
 
 The observed pre-sprint implementation inventory is recorded in
 [`REEF_BOT_ARENA_SEPARATION_READINESS.md`](./REEF_BOT_ARENA_SEPARATION_READINESS.md).
@@ -33,8 +34,8 @@ Sprint outcome:
 > complete game stack through versioned Reef contracts without changing Reef
 > venue semantics or the matching-engine artifact.
 
-This sprint is complete only when both Reef-only and Arena-enabled evidence is
-recorded from the same commit.
+This sprint completed with Reef-only and Arena-enabled evidence recorded from
+the same promotion commit; see the promotion record above.
 
 ## Locked Separation Decisions
 

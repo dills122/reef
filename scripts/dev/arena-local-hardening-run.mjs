@@ -36,6 +36,8 @@ const passthrough = args.filter((arg) =>
 );
 const hasReportShapeOverride = passthrough.some((arg) => arg.startsWith("--report-shape="));
 const hasCommandWaitModeOverride = passthrough.some((arg) => arg.startsWith("--command-wait-mode="));
+const hasProjectionDrainCadenceOverride = passthrough.some((arg) => arg.startsWith("--projection-drain-cadence="));
+const hasPaceTicksOverride = passthrough.includes("--pace-ticks");
 
 const runArgs = [
   "scripts/dev/arena-local-tick-run.mjs",
@@ -49,6 +51,8 @@ const runArgs = [
   ...(hasCommandWaitModeOverride ? [] : ["--command-wait-mode=terminal"]),
   `--projection-drain-timeout-ms=${config.projectionDrainTimeoutMs}`,
   `--projection-drain-poll-ms=${config.projectionDrainPollMs}`,
+  ...(hasProjectionDrainCadenceOverride ? [] : ["--projection-drain-cadence=final"]),
+  ...(hasPaceTicksOverride ? [] : ["--pace-ticks"]),
   "--require-projection-drain",
   ...(hasReportShapeOverride ? [] : ["--report-shape=compact"]),
   `--out=${config.out}`,
@@ -59,6 +63,9 @@ if (config.inputReport.length === 0) {
   const result = spawnSync(process.execPath, runArgs, {
     cwd: new URL("../../", import.meta.url).pathname,
     stdio: "inherit",
+    // Preserve a bounded outer timeout while allowing the runner to drain projections,
+    // collect bounded venue readback, and write its report after the paced schedule.
+    timeout: Math.max(300_000, config.durationSeconds * 1000 + config.projectionDrainTimeoutMs + 240_000),
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);

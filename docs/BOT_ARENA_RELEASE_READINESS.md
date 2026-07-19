@@ -111,7 +111,7 @@ codes, emergency-removal rules, and evidence envelope.
 
 ### Required For Invite-Only Fork Preview
 
-- Reef-only and Arena-enabled separation gates are promoted from the same commit
+- Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
 - branch protection requires one human approval
 - branch protection requires trusted provisioning for bot submissions
 - fork-safe pending, approval, trusted provisioning, and denial paths are drilled
@@ -136,8 +136,8 @@ codes, emergency-removal rules, and evidence envelope.
 
 ## Next Engineering Priority
 
-If external bot submission is the release objective, execute the Reef/Arena
-separation sprint first, then prioritize intake implementation and repository
+If external bot submission is the release objective, the Reef/Arena separation
+prerequisite is now promoted; prioritize intake implementation and repository
 enforcement above further projection throughput tuning. Current projection
 evidence is sufficient for a bounded preview. Write amplification remains
 important for longer and higher-rate seasons, but it does not explain why an

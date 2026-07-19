@@ -43,6 +43,7 @@ const config = {
   runnerMaxOutputBytes: numberOption("--runner-max-output-bytes", 1024 * 1024),
   runnerRequestTimeoutMs: numberOption("--runner-request-timeout-ms", 10000),
   submitMode: stringOption("--submit-mode", "dry-run"),
+  readMode: stringOption("--read-mode", "fixture"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
   arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
   adminApiToken: stringOption("--admin-api-token", env("ADMIN_API_TOKEN", "")),
@@ -87,6 +88,9 @@ const runnerContainerNetwork = config.runnerContainerNetwork.length > 0
     : "none";
 if (!["dry-run", "live"].includes(config.submitMode)) {
   throw new Error(`unsupported --submit-mode=${config.submitMode}; expected dry-run or live`);
+}
+if (!["fixture", "live"].includes(config.readMode)) {
+  throw new Error(`unsupported --read-mode=${config.readMode}; expected fixture or live`);
 }
 if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
   throw new Error(`unsupported --command-wait-mode=${config.commandWaitMode}; expected terminal, accepted, or none`);
@@ -137,47 +141,64 @@ let sharedWorker;
 async function main() {
   const startedAt = performance.now();
   const startedAtIso = new Date().toISOString();
+  const phaseTimings = [];
+
+  const runPhase = async (name, action) => {
+    const phaseStartedAt = performance.now();
+    console.log(`arena phase start: ${name}`);
+    try {
+      return await action();
+    } finally {
+      const elapsedMs = Math.round(performance.now() - phaseStartedAt);
+      phaseTimings.push({ name, elapsedMs });
+      console.log(`arena phase complete: ${name} elapsedMs=${elapsedMs}`);
+    }
+  };
 
   try {
     if (config.runnerWorkerScope === "shared") {
-      sharedWorker = await startRunnerWorker("arena-tick-worker-0");
+      sharedWorker = await runPhase("start-shared-worker", () => startRunnerWorker("arena-tick-worker-0"));
     }
     if (config.submitMode === "live") {
-      await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
-      await assertLiveMarketQualityProjectors();
-      if (config.seedReference) {
-        await seedReferenceData(selectedBots);
-      }
-    }
-    const bots = [];
-    for (const bot of selectedBots) {
-      const botWorker = config.runnerWorkerScope === "per-bot"
-        ? await startRunnerWorker(`arena-tick-worker-${safeWorkerId(bot.botId)}`)
-        : sharedWorker;
-      bots.push({
-        ...bot,
-        worker: botWorker,
-        identityKey: botIdentityKey(bot),
-        artifact: buildArtifact(bot.entryPath, bot.botId),
-        runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
+      await runPhase("prepare-live-venue", async () => {
+        await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+        await assertLiveMarketQualityProjectors();
+        if (config.seedReference) {
+          await seedReferenceData(selectedBots);
+        }
       });
     }
-    for (const bot of bots) {
-      bot.loadResult = await loadBotInWorker(bot);
-    }
+    const bots = [];
+    await runPhase("prepare-bots", async () => {
+      for (const bot of selectedBots) {
+        const botWorker = config.runnerWorkerScope === "per-bot"
+          ? await startRunnerWorker(`arena-tick-worker-${safeWorkerId(bot.botId)}`)
+          : sharedWorker;
+        bots.push({
+          ...bot,
+          worker: botWorker,
+          identityKey: botIdentityKey(bot),
+          artifact: buildArtifact(bot.entryPath, bot.botId),
+          runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
+        });
+      }
+      for (const bot of bots) {
+        bot.loadResult = await loadBotInWorker(bot);
+      }
+    });
 
     const healthSamples = [];
-    const arenaRun = await runArenaSessions(bots, healthSamples);
+    const arenaRun = await runPhase("run-scheduled-ticks", () => runArenaSessions(bots, healthSamples));
     const sessionReports = arenaRun.sessionReports;
     const enforcementEvents = sessionReports.flatMap((result) => enforceBot(result.bot, result));
 
     const baseBotResults = scoreBots(sessionReports, enforcementEvents);
-    const venueReadback = await collectVenueReadback(baseBotResults);
-    const botResults = attachScoreBreakdowns(enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
+    const venueReadback = await runPhase("collect-venue-readback", () => collectVenueReadback(baseBotResults));
+    const botResults = await runPhase("score-results", () => attachScoreBreakdowns(enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
       fallbackInstruments: mode.instruments ?? [],
-    }), scoreContext());
+    }), scoreContext()));
     const completedAtIso = new Date().toISOString();
-    const report = buildReport({
+    const report = await runPhase("build-report", () => buildReport({
       botResults,
       enforcementEvents,
       sessionReports,
@@ -187,9 +208,10 @@ async function main() {
       startedAt: startedAtIso,
       completedAt: completedAtIso,
       elapsedMs: performance.now() - startedAt,
-    });
-    report.persistence = await persistArenaResults(report);
-    await writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 });
+      phaseTimings,
+    }));
+    report.persistence = await runPhase("persist-arena-results", () => persistArenaResults(report));
+    await runPhase("write-report", () => writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 }));
     assertExpectedFreezeBots(report);
     console.log(`arena local tick run complete: ${resolve(config.out)}`);
     console.log(
@@ -320,7 +342,7 @@ async function runArenaSessions(bots, healthSamples) {
     });
   }
 
-  for (const session of sessions) {
+  await Promise.all(sessions.map(async (session) => {
     if (session.start.ok && !session.workerFailed) {
       try {
         session.stop = await session.worker.request(
@@ -354,7 +376,9 @@ async function runArenaSessions(bots, healthSamples) {
         error: runnerIssue("runner_worker_stop_skipped", "worker already failed"),
       };
     }
-    console.log(`arena bot complete ${sessions.indexOf(session) + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
+  }));
+  for (const [index, session] of sessions.entries()) {
+    console.log(`arena bot complete ${index + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
   }
 
   return {
@@ -397,7 +421,7 @@ async function startBotSession(bot) {
         botKey: bot.botId,
         sessionId,
         fixture,
-        ...(config.submitMode === "live"
+        ...(config.submitMode === "live" && config.readMode === "live"
           ? {
               liveClientOptions: {
                 baseUrl: workerVenueUrl(),
@@ -1021,7 +1045,7 @@ function summarizeConductMetrics(session, counters, enforcement) {
   };
 }
 
-function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, pacingSamples, startedAt, completedAt, elapsedMs }) {
+function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, pacingSamples, startedAt, completedAt, elapsedMs, phaseTimings }) {
   const tickResults = sessionReports.flatMap((session) => session.ticks);
   const commandStatusSummary = summarizeCommandStatuses(tickResults);
   const totals = tickResults.reduce(
@@ -1086,6 +1110,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     scoringAssumptions: scoringAssumptions(),
     status,
     elapsedMs,
+    phaseTimings,
     totals,
     commandAccounting: {
       draftCommands: totals.venueCommands,
@@ -1142,6 +1167,7 @@ function compactArenaReport(report) {
     scoringAssumptions: report.scoringAssumptions,
     status: report.status,
     elapsedMs: report.elapsedMs,
+    phaseTimings: report.phaseTimings,
     totals: report.totals,
     commandAccounting: report.commandAccounting,
     commandStatusSummary: report.commandStatusSummary,
@@ -1987,24 +2013,25 @@ async function collectVenueReadback(botResults) {
   }
   const baseUrl = config.venueUrl.replace(/\/$/, "");
   const availability = await waitForDataAvailability(baseUrl);
-  const snapshots = [];
-  for (const instrumentId of mode.instruments ?? ["AAPL"]) {
-    snapshots.push({
+  const snapshots = await Promise.all((mode.instruments ?? ["AAPL"]).map(async (instrumentId) => ({
       instrumentId,
       ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`, readbackHeaders())),
-    });
-  }
-  const ownOrders = [];
-  for (const result of botResults) {
+    })));
+  const ownOrders = await mapWithConcurrency(botResults, 6, async (result) => {
     const participantId = participantIdForBot(result);
-    ownOrders.push({
+    const [current, history, fills] = await Promise.all([
+      getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
+    ]);
+    return {
       botId: result.botId,
       participantId,
-      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
-      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
-      fills: await getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
-    });
-  }
+      current,
+      history,
+      fills,
+    };
+  });
   return {
     mode: config.submitMode,
     skipped: false,
@@ -2017,6 +2044,20 @@ async function collectVenueReadback(botResults) {
     ownOrders,
     executionSummary: summarizeVenueReadbackExecutions(ownOrders),
   };
+}
+
+async function mapWithConcurrency(values, concurrency, action) {
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), values.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await action(values[index], index);
+    }
+  }));
+  return results;
 }
 
 function summarizeVenueReadbackExecutions(ownOrders) {
@@ -2668,7 +2709,8 @@ class RunnerWorker {
     this.nextId = 1;
     this.pending = new Map();
     this.buffer = "";
-    this.outputBytes = 0;
+    this.stderrOutputBytes = 0;
+    this.unsolicitedOutputBytes = 0;
   }
 
   async start() {
@@ -2686,11 +2728,14 @@ class RunnerWorker {
     this.child.stdout.setEncoding("utf8");
     this.child.stderr.setEncoding("utf8");
     this.child.stdout.on("data", (chunk) => {
-      if (!this.recordOutput(chunk)) return;
       this.handleStdout(chunk);
     });
     this.child.stderr.on("data", (chunk) => {
-      if (!this.recordOutput(chunk)) return;
+      this.stderrOutputBytes += Buffer.byteLength(chunk);
+      if (this.stderrOutputBytes > config.runnerMaxOutputBytes) {
+        this.failOutputLimit();
+        return;
+      }
       process.stderr.write(`[${this.workerId}] ${chunk}`);
     });
     this.child.on("close", (code) => {
@@ -2702,11 +2747,7 @@ class RunnerWorker {
     await this.request({ type: "heartbeat" });
   }
 
-  recordOutput(chunk) {
-    this.outputBytes += Buffer.byteLength(chunk);
-    if (this.outputBytes <= config.runnerMaxOutputBytes) {
-      return true;
-    }
+  failOutputLimit() {
     if (this.child !== undefined && !this.child.killed) {
       this.child.kill("SIGKILL");
     }
@@ -2714,7 +2755,6 @@ class RunnerWorker {
       pending.reject(new Error(`${this.workerId} exceeded output limit ${config.runnerMaxOutputBytes} bytes`));
     }
     this.pending.clear();
-    return false;
   }
 
   request(message, timeoutMs = 10000) {
@@ -2749,14 +2789,33 @@ class RunnerWorker {
       const line = this.buffer.slice(0, newlineIndex);
       this.buffer = this.buffer.slice(newlineIndex + 1);
       if (line.trim().length > 0) {
-        const response = JSON.parse(line);
+        if (Buffer.byteLength(line) > config.runnerMaxOutputBytes) {
+          this.failOutputLimit();
+          return;
+        }
+        let response;
+        try {
+          response = JSON.parse(line);
+        } catch {
+          this.failOutputLimit();
+          return;
+        }
         const pending = this.pending.get(response.id);
         if (pending !== undefined) {
           this.pending.delete(response.id);
           pending.resolve(response);
+        } else {
+          this.unsolicitedOutputBytes += Buffer.byteLength(line) + 1;
+          if (this.unsolicitedOutputBytes > config.runnerMaxOutputBytes) {
+            this.failOutputLimit();
+            return;
+          }
         }
       }
       newlineIndex = this.buffer.indexOf("\n");
+    }
+    if (Buffer.byteLength(this.buffer) > config.runnerMaxOutputBytes) {
+      this.failOutputLimit();
     }
   }
 

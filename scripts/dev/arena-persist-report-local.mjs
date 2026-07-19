@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { composeArgs } from "./lib/compose-utils.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const reportPath = args.report;
@@ -174,8 +175,7 @@ function request(method, path, payload, options = {}) {
 }
 
 function curlRequest(method, path, payload) {
-  const command = [
-    "compose",
+  const command = composeArgs([
     "exec",
     "-T",
     service,
@@ -191,7 +191,7 @@ function curlRequest(method, path, payload) {
     `X-Reef-Actor-Id: ${actorId}`,
     "-H",
     `X-Correlation-Id: ${correlationId}`,
-  ];
+  ]);
   if (arenaAdminApiToken.trim() !== "") {
     command.push("-H", `Authorization: Bearer ${arenaAdminApiToken}`);
   }

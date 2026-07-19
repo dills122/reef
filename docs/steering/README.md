@@ -8,7 +8,8 @@ These documents define how Reef should be built as the repository grows into the
 - [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
 - [Bot Arena Release Readiness](../BOT_ARENA_RELEASE_READINESS.md): verified preview/public-submission matrix, blockers, launch gates, and current release call
 - [Bot Arena Invite Preview Sprint](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md): fork-safe admission, cutoff policy, policy calibration, and recorded E2E run plan after separation promotion
-- [Reef And Bot Arena Separation Sprint](../REEF_BOT_ARENA_SEPARATION_SPRINT.md): next sprint for artifact, dependency, route, persistence, Compose, and standalone Reef separation
+- [Reef And Bot Arena Separation Promotion](../REEF_BOT_ARENA_SEPARATION_PROMOTION.md): recorded artifact, route, Compose, isolation, and P1 equivalence evidence
+- [Reef And Bot Arena Separation Sprint](../REEF_BOT_ARENA_SEPARATION_SPRINT.md): implemented artifact, dependency, route, persistence, Compose, and standalone Reef separation design record
 - [Documentation Cleanup Plan](../DOCUMENTATION_CLEANUP_PLAN.md): active vs historical document rules and archive cleanup queue
 - [Engineering Delivery Policy](../ENGINEERING_DELIVERY_POLICY.md): delivery mode matrix, refactor triggers, and non-negotiable feature-test requirements
 - [Repository Scope And Priorities](./repository-scope-and-priorities.md): repo-level correctness, throughput, audit, replay, and safe-change priorities

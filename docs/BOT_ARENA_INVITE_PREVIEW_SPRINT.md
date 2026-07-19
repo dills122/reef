@@ -12,8 +12,9 @@ This sprint combines three previously separate concerns:
 - bot persona and economic-policy calibration
 
 [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
-is a hard prerequisite and the next implementation sprint. Invite-preview code
-work does not begin until the separation evidence is reviewed and promoted.
+was a hard prerequisite. Its evidence was promoted on 2026-07-19; see
+[`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+Invite-preview code may now begin, subject to the release gates below.
 
 The current release gate remains
 [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md). This file
