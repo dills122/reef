@@ -19,6 +19,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: read
   pull-requests: read
 
@@ -77,3 +78,11 @@ jobs:
             --header "authorization: Bearer ${ARENA_ADMIN_API_TOKEN}" \
             --header "content-type: application/json" \
             --data-binary @/tmp/reef-admission-approval.json
+      - name: Dispatch trusted provisioning
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run bot-submission-provision.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "${{ github.event.repository.default_branch }}" \
+            -f "pr_number=$PR_NUMBER"

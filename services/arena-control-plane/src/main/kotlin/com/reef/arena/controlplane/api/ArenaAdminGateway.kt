@@ -7,6 +7,7 @@ import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.arena.controlplane.arena.ArenaBotEntitlementStore
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
+import com.reef.platform.application.admin.AdminTrustState
 import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionDecisionCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionRegistrationCommand
@@ -399,16 +400,21 @@ internal class ArenaAdminGateway(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena submission admission store unavailable"))
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
+            val repository = json.string("repository")
+            val pullRequestNumber = json.requiredLong("pullRequestNumber")
+            // A workflow service token has its own fixed subject. The trusted
+            // approval workflow supplies the separately verified GitHub
+            // maintainer identity so the durable audit record names the
+            // reviewer, not the automation credential.
+            val reviewerActorId = json.string("approverActorId").ifBlank { currentPrincipal().actorId }
+            invitationApprovalAuthorizationError(store, repository, pullRequestNumber, reviewerActorId)
+                ?.let { return it }
             val admission = store.approveInvite(
                 ApproveArenaSubmissionInviteCommand(
-                    repository = json.string("repository"),
-                    pullRequestNumber = json.requiredLong("pullRequestNumber"),
+                    repository = repository,
+                    pullRequestNumber = pullRequestNumber,
                     approvedHeadSha = json.string("headSha"),
-                    // A workflow service token has its own fixed subject. The
-                    // trusted approval workflow supplies the separately verified
-                    // GitHub maintainer identity so the durable audit record names
-                    // the reviewer, not the automation credential.
-                    actorId = json.string("approverActorId").ifBlank { currentPrincipal().actorId },
+                    actorId = reviewerActorId,
                     reason = json.string("reason"),
                     occurredAt = java.time.Instant.now()
                 )
@@ -419,6 +425,35 @@ internal class ArenaAdminGateway(
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena submission approval failed")))
         }
+    }
+
+    private fun invitationApprovalAuthorizationError(
+        store: ArenaSubmissionAdmissionStore,
+        repository: String,
+        pullRequestNumber: Long,
+        reviewerActorId: String
+    ): PlatformHotPathResponse? {
+        val admission = store.admission(repository, pullRequestNumber)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "submission admission not found"))
+        val identities = adminIdentityService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena identity service unavailable"))
+        val reviewer = identities.user(reviewerActorId)
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "invitation reviewer is not an Arena identity"))
+        val reviewerRoles = identities.rolesForUser(reviewer.reefUserId).map { it.roleId }.toSet()
+        if (reviewer.trustState != AdminTrustState.Trusted || reviewerRoles.intersect(operatorRoles).isEmpty()) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "invitation reviewer is not a trusted Arena operator"))
+        }
+        val submitterId = "user-gh-${admission.githubUserId}"
+        val submitter = identities.user(submitterId)
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "submission participant is not an Arena identity"))
+        if (submitter.trustState != AdminTrustState.Trusted || !submitter.githubLogin.equals(admission.githubLogin, ignoreCase = true)) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "submission participant is not trusted for Arena admission"))
+        }
+        val ownerships = arenaBotEntitlementStore?.botOwnerships(admission.botId).orEmpty()
+        if (ownerships.isNotEmpty() && ownerships.none { it.reefUserId == submitterId && it.ownershipState == ArenaBotOwnershipState.Owner }) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "submission participant does not own this Arena bot"))
+        }
+        return null
     }
 
     fun arenaBotOpenBaoConfigResponse(method: String, query: String?, body: String): PlatformHotPathResponse {
