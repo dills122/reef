@@ -22,9 +22,9 @@ remaining blocker is the public intake trust model and its enforcement:
 
 - fork submissions need a named external-account proof through approval,
   provisioning, merge, and registry sync
-- repository protection needs the trusted `registry-diff-and-provision` status.
-  The workflow publishes a successful no-op status for ordinary PRs, so the
-  status can be required without blocking non-bot work.
+- repository protection requires the trusted `registry-diff-and-provision`
+  status. The workflow publishes a successful no-op status for ordinary PRs,
+  so this does not block non-bot work.
 - GitHub's branch-level approval requirement is not conditional on bot branch
   conventions. During preview, bot-specific human review is enforced by the
   trusted maintainer-only approval workflow, which binds the reviewer identity
@@ -46,7 +46,7 @@ separate from trusted provisioning.
 | Same-repository submission | Proven | PR #177 passed manifest validation, sandbox testing, trusted provisioning, merge, and later registry sync | Collaborator/invite-only submissions are viable. |
 | External fork submission | Locally verified; external proof pending | Forks persist `pending_invite_review`; trusted manual approval binds maintainer GitHub identity and exact SHA; changed SHA resets approval | Do not advertise the flow until a named external account completes it. |
 | Required human review | Implemented for bot submissions | `Bot Submission Invite Approval` requires a `maintain` or `admin` GitHub actor and records that immutable identity with the exact SHA | This is intentionally bot-specific; do not apply a global PR approval count solely for this preview gate. |
-| Required trusted provisioning | Ready for protection configuration | `registry-diff-and-provision` is pending until a fork is approved, succeeds after trusted provisioning, and succeeds as a no-op for non-bot PRs | Safe to require globally without blocking ordinary PRs. |
+| Required trusted provisioning | Enforced | Live `master` protection requires `registry-diff-and-provision`; it is pending until a fork is approved, succeeds after trusted provisioning, and succeeds as a no-op for non-bot PRs | Bot submissions cannot merge without the trusted provisioning outcome; ordinary PRs remain unblocked. |
 | Hosted credentials | Configured | Repository secret names include `ARENA_ADMIN_API_URL` and `ARENA_ADMIN_API_TOKEN`; values were not inspected | Hosted workflow prerequisites exist. |
 | Post-merge registry sync | Proven for internal smoke | `Bot Registry Sync` passed after the smoke bot merged and has subsequent green runs | Durable registration path exists for merged manifests. |
 | Admin identity and ownership | Implemented | Admin DB migrations and Kotlin stores cover GitHub-backed users, roles, trust state, limits, ownership, audit, OAuth state, and sessions | The earlier “implement Admin DB tables” follow-up is stale. |
