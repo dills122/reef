@@ -241,9 +241,11 @@ jobs:
           exit "$status"
       - name: Comment OpenBao provisioning result
         if: always() && steps.openbao-provision.outputs.result != ''
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
           BOT_ID: ${{ steps.classify.outputs.bot-name }}
+          SUBMITTER_IDENTITY: ${{ steps.metadata.outputs.submitter-github-login }}
           PROVISION_FLOW: ${{ steps.openbao-provision.outputs.flow }}
           PROVISION_RESULT: ${{ steps.openbao-provision.outputs.result }}
           PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
