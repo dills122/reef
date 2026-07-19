@@ -2761,7 +2761,6 @@ func commandStatusScenarioRunID(status commandStatusBody) string {
 func commandStatusHasCanonicalScopeEvidence(status commandStatusBody) bool {
 	return strings.TrimSpace(status.CommandStream) != "" ||
 		strings.TrimSpace(status.EventStream) != "" ||
-		strings.TrimSpace(status.ResponsePayloadJSON) != "" ||
 		strings.TrimSpace(status.ResultPayloadJSON) != ""
 }
 

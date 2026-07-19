@@ -97,6 +97,15 @@ func TestScenarioSmokeDryRunCanScopeCommandIDsToRun(t *testing.T) {
 	}
 }
 
+func TestCommandStatusScopeIgnoresCapturedResponsePayload(t *testing.T) {
+	status := commandStatusBody{
+		ResponsePayloadJSON: `{"accepted":{"orderId":"order-1"}}`,
+	}
+	if commandStatusHasCanonicalScopeEvidence(status) {
+		t.Fatal("captured synchronous response must not be treated as canonical scope evidence")
+	}
+}
+
 func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
 	var mu sync.Mutex
 	posts := make([]string, 0)
