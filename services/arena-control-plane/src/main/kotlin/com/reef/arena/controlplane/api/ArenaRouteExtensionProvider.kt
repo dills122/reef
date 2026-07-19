@@ -48,7 +48,10 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
         )
         return listOf(
             ArenaAdminGateway(
-                arenaAdminService = ArenaAdminApplicationService(arenaRegistryStore = store),
+                arenaAdminService = ArenaAdminApplicationService(
+                    arenaRegistryStore = store,
+                    adminIdentityService = adminIdentityService
+                ),
                 adminIdentityService = adminIdentityService,
                 arenaBotEntitlementStore = entitlementStore,
                 analyticsRunExportService = null
