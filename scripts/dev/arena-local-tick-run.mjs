@@ -43,6 +43,7 @@ const config = {
   runnerMaxOutputBytes: numberOption("--runner-max-output-bytes", 1024 * 1024),
   runnerRequestTimeoutMs: numberOption("--runner-request-timeout-ms", 10000),
   submitMode: stringOption("--submit-mode", "dry-run"),
+  readMode: stringOption("--read-mode", "fixture"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
   arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
   adminApiToken: stringOption("--admin-api-token", env("ADMIN_API_TOKEN", "")),
@@ -87,6 +88,9 @@ const runnerContainerNetwork = config.runnerContainerNetwork.length > 0
     : "none";
 if (!["dry-run", "live"].includes(config.submitMode)) {
   throw new Error(`unsupported --submit-mode=${config.submitMode}; expected dry-run or live`);
+}
+if (!["fixture", "live"].includes(config.readMode)) {
+  throw new Error(`unsupported --read-mode=${config.readMode}; expected fixture or live`);
 }
 if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
   throw new Error(`unsupported --command-wait-mode=${config.commandWaitMode}; expected terminal, accepted, or none`);
@@ -397,7 +401,7 @@ async function startBotSession(bot) {
         botKey: bot.botId,
         sessionId,
         fixture,
-        ...(config.submitMode === "live"
+        ...(config.submitMode === "live" && config.readMode === "live"
           ? {
               liveClientOptions: {
                 baseUrl: workerVenueUrl(),
