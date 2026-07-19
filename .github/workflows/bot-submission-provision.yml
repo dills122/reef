@@ -9,6 +9,12 @@ on:
       - Bot Submission
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Approved fork bot-submission PR number
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,15 +27,12 @@ jobs:
   provision:
     runs-on: ubuntu-latest
     if: |
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.pull_requests[0].number != ''
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.pull_requests[0].number != '')
     env:
-      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-      HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      SUBMITTER_IDENTITY: ${{ github.event.workflow_run.actor.login }}
-      PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+      PR_NUMBER: ${{ inputs.pr_number || github.event.workflow_run.pull_requests[0].number }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,8 +40,35 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - name: Resolve current pull request metadata
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/reef-bot-submission-pr.json
+          node -e '
+            const fs = require("fs");
+            const pr = JSON.parse(fs.readFileSync("/tmp/reef-bot-submission-pr.json", "utf8"));
+            const values = {
+              "head-branch": pr.head?.ref,
+              "head-repository": pr.head?.repo?.full_name,
+              "head-owner-login": pr.head?.repo?.owner?.login,
+              "head-sha": pr.head?.sha,
+              "submitter-github-id": pr.user?.id,
+              "submitter-github-login": pr.user?.login,
+            };
+            for (const [key, value] of Object.entries(values)) {
+              if (typeof value !== "string" && typeof value !== "number") throw new Error(`missing trusted PR metadata: ${key}`);
+              const text = String(value);
+              if (/\\r|\\n/.test(text)) throw new Error(`unsafe trusted PR metadata: ${key}`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${text}\\n`);
+            }
+          '
       - name: Classify trusted provisioning inputs
         id: classify
+        env:
+          HEAD_BRANCH: ${{ steps.metadata.outputs.head-branch }}
+          HEAD_REPOSITORY: ${{ steps.metadata.outputs.head-repository }}
         run: |
           branch="$HEAD_BRANCH"
           case "$branch" in
@@ -55,16 +85,18 @@ jobs:
               exit 0
               ;;
           esac
+          bot_name="${branch#bots/*/}"
           if [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
             {
               echo "is-bot=true"
               echo "trusted-bot=false"
-              echo "classification=failure"
-              echo "message=forked bot submissions cannot run trusted provisioning"
+              echo "classification=pending"
+              echo "flow=$flow"
+              echo "bot-name=$bot_name"
+              echo "message=forked bot submission is pending invite review"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          bot_name="${branch#bots/*/}"
           if ! node scripts/dev/bot-submission-registry-diff.mjs "$bot_name" --validate-only >/tmp/reef-bot-id-validation.log 2>&1; then
             {
               echo "is-bot=true"
@@ -83,43 +115,80 @@ jobs:
             echo "flow=$flow"
             echo "bot-name=$bot_name"
           } >> "$GITHUB_OUTPUT"
-      - name: Skip non-bot branch provisioning status
+      - name: Record fork submission admission
+        id: admission
+        if: steps.classify.outputs.classification == 'pending' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+        env:
+          ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
+          ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
+          BOT_SUBMISSION_ADMISSION_MODE: real
+          BOT_NAME: ${{ steps.classify.outputs.bot-name }}
+          HEAD_REPOSITORY: ${{ steps.metadata.outputs.head-repository }}
+          HEAD_OWNER_LOGIN: ${{ steps.metadata.outputs.head-owner-login }}
+          HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
+          SUBMITTER_GITHUB_ID: ${{ steps.metadata.outputs.submitter-github-id }}
+          SUBMITTER_GITHUB_LOGIN: ${{ steps.metadata.outputs.submitter-github-login }}
+        run: |
+          result=$(node scripts/dev/bot-submission-record-admission.mjs)
+          state=$(printf '%s' "$result" | node -e 'let raw=""; process.stdin.on("data", chunk => raw += chunk).on("end", () => { const state = JSON.parse(raw).admission?.state; if (!state) process.exit(1); process.stdout.write(state); })')
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+      - name: Resolve non-bot branch provisioning status
+        id: non-bot-status
         if: steps.classify.outputs.classification == 'skip'
-        run: echo "No bot submission provisioning status required for ${HEAD_BRANCH}"
+        env:
+          UPSTREAM_CONCLUSION: ${{ github.event_name == 'workflow_dispatch' && 'success' || github.event.workflow_run.conclusion }}
+        run: |
+          if [ "$UPSTREAM_CONCLUSION" = "success" ]; then
+            echo "state=success" >> "$GITHUB_OUTPUT"
+            echo "description=Not a bot submission" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=failure" >> "$GITHUB_OUTPUT"
+            echo "description=Bot Submission workflow did not pass" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Mark non-bot branch provisioning status
+        if: steps.classify.outputs.classification == 'skip'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
+          STATUS_STATE: ${{ steps.non-bot-status.outputs.state }}
+          STATUS_DESCRIPTION: ${{ steps.non-bot-status.outputs.description }}
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Fail after a non-bot upstream validation failure
+        if: steps.classify.outputs.classification == 'skip' && github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion != 'success'
+        run: exit 1
       - name: Mark provisioning status pending
         if: steps.classify.outputs.classification != 'skip'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
           STATUS_STATE: pending
           STATUS_DESCRIPTION: Bot submission provisioning is queued
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
         run: node scripts/dev/bot-submission-commit-status.mjs
       - name: Mark upstream bot submission failure
-        if: steps.classify.outputs.classification != 'skip' && github.event.workflow_run.conclusion != 'success'
+        if: steps.classify.outputs.classification != 'skip' && github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion != 'success'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
           STATUS_STATE: failure
           STATUS_DESCRIPTION: Bot Submission workflow did not pass
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
         run: |
           node scripts/dev/bot-submission-commit-status.mjs
           exit 1
-      - name: Mark untrusted bot submission failure
-        if: steps.classify.outputs.classification == 'failure'
+      - name: Mark invite review pending
+        if: steps.classify.outputs.classification == 'pending' && steps.admission.outputs.state != 'invite_approved'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
-          STATUS_STATE: failure
-          STATUS_DESCRIPTION: Trusted provisioning inputs rejected
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: Fork submission is pending invite review
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: |
-          node scripts/dev/bot-submission-commit-status.mjs
-          exit 1
+        run: node scripts/dev/bot-submission-commit-status.mjs
       - name: Registry diff (new bot vs existing bot)
         id: registry-diff
-        if: steps.classify.outputs.trusted-bot == 'true' && steps.classify.outputs.flow != 'remove'
+        if: (steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved') && steps.classify.outputs.flow != 'remove'
         env:
           ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
           ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
@@ -127,7 +196,7 @@ jobs:
         run: node scripts/dev/bot-submission-registry-diff.mjs "$BOT_NAME"
       - name: OpenBao provisioning
         id: openbao-provision
-        if: steps.classify.outputs.trusted-bot == 'true'
+        if: steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved'
         continue-on-error: true
         env:
           ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
@@ -136,6 +205,7 @@ jobs:
           BOT_NAME: ${{ steps.classify.outputs.bot-name }}
           REQUESTED_FLOW: ${{ steps.classify.outputs.flow }}
           REGISTRY_FLOW: ${{ steps.registry-diff.outputs.flow }}
+          SUBMITTER_IDENTITY: ${{ steps.metadata.outputs.submitter-github-login }}
         run: |
           if [ "$REQUESTED_FLOW" = "remove" ]; then
             provision_flow="remove"
@@ -183,7 +253,7 @@ jobs:
         if: steps.openbao-provision.outputs['exit-code'] == '0'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
           STATUS_STATE: success
           STATUS_DESCRIPTION: OpenBao provisioning completed
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
@@ -192,7 +262,7 @@ jobs:
         if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] != '0'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          STATUS_SHA: ${{ env.HEAD_SHA }}
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
           STATUS_STATE: failure
           STATUS_DESCRIPTION: OpenBao provisioning failed
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}

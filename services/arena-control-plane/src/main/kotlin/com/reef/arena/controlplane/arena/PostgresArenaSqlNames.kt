@@ -15,6 +15,7 @@ data class PostgresArenaSqlNames(
     val runEnforcementEvents = qualify("run_enforcement_events")
     val runtimeConfigDescriptors = qualify("runtime_config_descriptors")
     val userBotOwnerships = qualify("user_bot_ownerships")
+    val submissionAdmissions = qualify("submission_admissions")
 
     private fun schemaOrDefault(schema: String): String {
         val candidate = schema.trim().ifBlank { "arena" }

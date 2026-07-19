@@ -5,6 +5,7 @@ import com.reef.arena.controlplane.arena.ArenaBot
 import com.reef.arena.controlplane.arena.ArenaBotMetadata
 import com.reef.arena.controlplane.arena.InMemoryArenaBotEntitlementStore
 import com.reef.arena.controlplane.arena.InMemoryArenaBotRegistryStore
+import com.reef.arena.controlplane.arena.InMemoryArenaSubmissionAdmissionStore
 import com.reef.platform.api.AdminRequestPrincipal
 import com.reef.platform.api.OptionalProductAdminRoute
 import com.reef.platform.api.OptionalProductRouteExtension
@@ -12,6 +13,8 @@ import com.reef.platform.api.PlatformHotPathResponse
 import com.reef.platform.api.validateOptionalProductRouteExtensions
 import com.reef.platform.application.admin.AdminServiceTokenFamily
 import com.reef.platform.application.admin.AdminIdentityService
+import com.reef.platform.application.admin.AdminTrustState
+import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.admin.InMemoryAdminIdentityStore
 import java.time.Instant
 import kotlin.test.Test
@@ -91,6 +94,88 @@ class ArenaAdminGatewayTest {
     }
 
     @Test
+    fun recordsAndApprovesShaBoundForkAdmission() {
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val identities = trustedAdmissionIdentities()
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(arenaRegistryStore = InMemoryArenaBotRegistryStore()),
+            adminIdentityService = identities,
+            analyticsRunExportService = null,
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val sha = "a".repeat(40)
+        val body = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"sample-bot","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+
+        val pending = gateway.handleInternal("POST", "/internal/admin/arena/submission-admissions", null, body, AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-19T00:00:00Z"))
+        val approved = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions/approve",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","approverActorId":"user-gh-999","reason":"invite verified"}""",
+            AdminRequestPrincipal("operator-1", "test", "2026-07-19T00:00:00Z")
+        )
+
+        assertEquals(200, pending?.status)
+        assertTrue(pending!!.body.contains("pending_invite_review"))
+        assertEquals(200, approved?.status)
+        assertTrue(approved!!.body.contains("invite_approved"))
+        assertEquals("user-gh-999", admissions.admission("dills122/reef", 42)?.invitationActor)
+    }
+
+    @Test
+    fun rejectsInvitationApprovalWhenParticipantIsNotTrusted() {
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val identities = trustedAdmissionIdentities(participantTrusted = false)
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(arenaRegistryStore = InMemoryArenaBotRegistryStore()),
+            adminIdentityService = identities,
+            analyticsRunExportService = null,
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val sha = "a".repeat(40)
+        val body = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"sample-bot","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+
+        gateway.handleInternal("POST", "/internal/admin/arena/submission-admissions", null, body, AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-19T00:00:00Z"))
+        val response = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions/approve",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","approverActorId":"user-gh-999","reason":"invite verified"}""",
+            AdminRequestPrincipal("operator-1", "test", "2026-07-19T00:00:00Z")
+        )
+
+        assertEquals(403, response?.status)
+        assertTrue(response!!.body.contains("participant is not trusted"))
+        assertTrue(admissions.admission("dills122/reef", 42)?.state?.dbValue == "pending_invite_review")
+    }
+
+    @Test
+    fun rejectsInvitationApprovalWhenReviewerIsNotTrustedOperator() {
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val identities = trustedAdmissionIdentities(reviewerTrusted = false)
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(arenaRegistryStore = InMemoryArenaBotRegistryStore()),
+            adminIdentityService = identities,
+            analyticsRunExportService = null,
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val sha = "a".repeat(40)
+        val body = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"sample-bot","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+
+        gateway.handleInternal("POST", "/internal/admin/arena/submission-admissions", null, body, AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-19T00:00:00Z"))
+        val response = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions/approve",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","approverActorId":"user-gh-999","reason":"invite verified"}""",
+            AdminRequestPrincipal("operator-1", "test", "2026-07-19T00:00:00Z")
+        )
+
+        assertEquals(403, response?.status)
+        assertTrue(response!!.body.contains("reviewer is not a trusted Arena operator"))
+    }
+
+    @Test
     fun storesOwnershipInArenaAndReturnsOnlyActiveOwnedBots() {
         val registry = InMemoryArenaBotRegistryStore().apply {
             saveBot(
@@ -129,5 +214,22 @@ class ArenaAdminGatewayTest {
         assertEquals("sample-bot", entitlements.botOwnershipsForUser("user-gh-123").single().botId)
         assertEquals(200, myBots?.status)
         assertTrue(myBots!!.body.contains("sample-bot"))
+    }
+
+    private fun trustedAdmissionIdentities(
+        participantTrusted: Boolean = true,
+        reviewerTrusted: Boolean = true
+    ): AdminIdentityService {
+        val identities = AdminIdentityService(InMemoryAdminIdentityStore())
+        val reviewer = identities.ensureGitHubUser(GitHubUserIdentity(999, "reviewer"))
+        if (reviewerTrusted) {
+            identities.updateTrustState("bootstrap", reviewer.reefUserId, AdminTrustState.Trusted)
+            identities.assignRole("bootstrap", reviewer.reefUserId, AdminIdentityService.RoleOperator)
+        }
+        val participant = identities.ensureGitHubUser(GitHubUserIdentity(123, "octo"))
+        if (participantTrusted) {
+            identities.updateTrustState("bootstrap", participant.reefUserId, AdminTrustState.Trusted)
+        }
+        return identities
     }
 }

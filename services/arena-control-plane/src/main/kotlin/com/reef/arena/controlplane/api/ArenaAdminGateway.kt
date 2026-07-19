@@ -7,6 +7,7 @@ import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.arena.controlplane.arena.ArenaBotEntitlementStore
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
+import com.reef.platform.application.admin.AdminTrustState
 import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionDecisionCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionRegistrationCommand
@@ -33,6 +34,8 @@ import com.reef.arena.controlplane.arena.ArenaRunEnforcementEvent
 import com.reef.arena.controlplane.arena.ArenaRunRecord
 import com.reef.arena.controlplane.arena.ArenaRunStatus
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
+import com.reef.arena.controlplane.arena.ArenaSubmissionAdmission
+import com.reef.arena.controlplane.arena.ArenaSubmissionAdmissionStore
 import com.reef.arena.controlplane.arena.BotConfigSecretService
 import com.reef.arena.controlplane.arena.LocalDevBotConfigService
 import com.reef.arena.controlplane.arena.OpenBaoBotConfigService
@@ -40,6 +43,8 @@ import com.reef.arena.controlplane.arena.OpenBaoBotConfigServiceConfig
 import com.reef.arena.controlplane.arena.OpenBaoClientException
 import com.reef.arena.controlplane.arena.OpenBaoProvisioningConfig
 import com.reef.arena.controlplane.arena.OpenBaoProvisioningService
+import com.reef.arena.controlplane.arena.ApproveArenaSubmissionInviteCommand
+import com.reef.arena.controlplane.arena.RecordArenaSubmissionPendingCommand
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
@@ -54,7 +59,8 @@ internal class ArenaAdminGateway(
     private val arenaAdminService: ArenaAdminApplicationService?,
     private val adminIdentityService: AdminIdentityService?,
     private val analyticsRunExportService: SimulationRunExportService?,
-    private val arenaBotEntitlementStore: ArenaBotEntitlementStore? = null
+    private val arenaBotEntitlementStore: ArenaBotEntitlementStore? = null,
+    private val arenaSubmissionAdmissionStore: ArenaSubmissionAdmissionStore? = null
 ) : OptionalProductRouteExtension {
     private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
     override val internalPaths = listOf(
@@ -64,6 +70,7 @@ internal class ArenaAdminGateway(
         "/internal/admin/arena/runs", "/internal/admin/arena/runs/status", "/internal/admin/arena/run-bot-results",
         "/internal/admin/arena/run-enforcement-events", "/internal/admin/arena/leaderboard",
         "/internal/admin/arena/bots/openbao-provision", "/internal/admin/arena/bots/ownership",
+        "/internal/admin/arena/submission-admissions", "/internal/admin/arena/submission-admissions/approve",
         "/internal/admin/arena/bots/config", "/internal/admin/analytics/run-exports",
         "/internal/admin/analytics/run-bot-summaries"
     )
@@ -73,6 +80,8 @@ internal class ArenaAdminGateway(
         adminRoute("/admin/v1/arena/my/bots", setOf("GET"), "/internal/admin/arena/my/bots", "arena", emptySet()),
         adminRoute("/admin/v1/arena/bots/openbao-provision", setOf("POST"), "/internal/admin/arena/bots/openbao-provision", "arena", arenaTokens, secretRoles),
         adminRoute("/admin/v1/arena/bots/ownership", setOf("POST"), "/internal/admin/arena/bots/ownership", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/submission-admissions", setOf("POST"), "/internal/admin/arena/submission-admissions", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/submission-admissions/approve", setOf("POST"), "/internal/admin/arena/submission-admissions/approve", "admin", adminTokens, operatorRoles),
         adminRoute("/admin/v1/arena/bots/config", setOf("GET", "PUT", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
         adminRoute("/admin/v1/arena/bot-versions", setOf("GET", "POST"), "/internal/admin/arena/bot-versions", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/bot-versions/transition", setOf("POST"), "/internal/admin/arena/bot-versions/transition", "arena", arenaTokens, operatorRoles),
@@ -107,6 +116,8 @@ internal class ArenaAdminGateway(
         "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardResponse(query) }
         "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionResponse(body) }
         "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipResponse(body) }
+        "/internal/admin/arena/submission-admissions" -> postOnly(method) { recordArenaSubmissionAdmissionResponse(body) }
+        "/internal/admin/arena/submission-admissions/approve" -> postOnly(method) { approveArenaSubmissionAdmissionResponse(body) }
         "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
         "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
         "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
@@ -356,6 +367,93 @@ internal class ArenaAdminGateway(
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot ownership assignment failed")))
         }
+    }
+
+    fun recordArenaSubmissionAdmissionResponse(body: String): PlatformHotPathResponse {
+        val store = arenaSubmissionAdmissionStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena submission admission store unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return try {
+            val admission = store.recordPending(
+                RecordArenaSubmissionPendingCommand(
+                    repository = json.string("repository"),
+                    pullRequestNumber = json.requiredLong("pullRequestNumber"),
+                    botId = json.string("botId"),
+                    headRepository = json.string("headRepository"),
+                    headOwnerLogin = json.string("headOwnerLogin"),
+                    githubUserId = json.requiredLong("githubUserId"),
+                    githubLogin = json.string("githubLogin"),
+                    headSha = json.string("headSha"),
+                    occurredAt = java.time.Instant.now()
+                )
+            )
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "admission" to arenaSubmissionAdmissionJson(admission)))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena submission admission")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena submission admission failed")))
+        }
+    }
+
+    fun approveArenaSubmissionAdmissionResponse(body: String): PlatformHotPathResponse {
+        val store = arenaSubmissionAdmissionStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena submission admission store unavailable"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return try {
+            val repository = json.string("repository")
+            val pullRequestNumber = json.requiredLong("pullRequestNumber")
+            // A workflow service token has its own fixed subject. The trusted
+            // approval workflow supplies the separately verified GitHub
+            // maintainer identity so the durable audit record names the
+            // reviewer, not the automation credential.
+            val reviewerActorId = json.string("approverActorId").ifBlank { currentPrincipal().actorId }
+            invitationApprovalAuthorizationError(store, repository, pullRequestNumber, reviewerActorId)
+                ?.let { return it }
+            val admission = store.approveInvite(
+                ApproveArenaSubmissionInviteCommand(
+                    repository = repository,
+                    pullRequestNumber = pullRequestNumber,
+                    approvedHeadSha = json.string("headSha"),
+                    actorId = reviewerActorId,
+                    reason = json.string("reason"),
+                    occurredAt = java.time.Instant.now()
+                )
+            )
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "admission" to arenaSubmissionAdmissionJson(admission)))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena submission approval")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena submission approval failed")))
+        }
+    }
+
+    private fun invitationApprovalAuthorizationError(
+        store: ArenaSubmissionAdmissionStore,
+        repository: String,
+        pullRequestNumber: Long,
+        reviewerActorId: String
+    ): PlatformHotPathResponse? {
+        val admission = store.admission(repository, pullRequestNumber)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "submission admission not found"))
+        val identities = adminIdentityService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena identity service unavailable"))
+        val reviewer = identities.user(reviewerActorId)
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "invitation reviewer is not an Arena identity"))
+        val reviewerRoles = identities.rolesForUser(reviewer.reefUserId).map { it.roleId }.toSet()
+        if (reviewer.trustState != AdminTrustState.Trusted || reviewerRoles.intersect(operatorRoles).isEmpty()) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "invitation reviewer is not a trusted Arena operator"))
+        }
+        val submitterId = "user-gh-${admission.githubUserId}"
+        val submitter = identities.user(submitterId)
+            ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "submission participant is not an Arena identity"))
+        if (submitter.trustState != AdminTrustState.Trusted || !submitter.githubLogin.equals(admission.githubLogin, ignoreCase = true)) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "submission participant is not trusted for Arena admission"))
+        }
+        val ownerships = arenaBotEntitlementStore?.botOwnerships(admission.botId).orEmpty()
+        if (ownerships.isNotEmpty() && ownerships.none { it.reefUserId == submitterId && it.ownershipState == ArenaBotOwnershipState.Owner }) {
+            return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "submission participant does not own this Arena bot"))
+        }
+        return null
     }
 
     fun arenaBotOpenBaoConfigResponse(method: String, query: String?, body: String): PlatformHotPathResponse {
@@ -1302,6 +1400,23 @@ internal class ArenaAdminGateway(
             "occurredAt" to event.occurredAt.toString()
         )
     }
+
+    private fun arenaSubmissionAdmissionJson(admission: ArenaSubmissionAdmission): Map<String, Any?> = mapOf(
+        "repository" to admission.repository,
+        "pullRequestNumber" to admission.pullRequestNumber,
+        "botId" to admission.botId,
+        "headRepository" to admission.headRepository,
+        "headOwnerLogin" to admission.headOwnerLogin,
+        "githubUserId" to admission.githubUserId,
+        "githubLogin" to admission.githubLogin,
+        "headSha" to admission.headSha,
+        "state" to admission.state.dbValue,
+        "invitationActor" to admission.invitationActor,
+        "invitationReason" to admission.invitationReason,
+        "invitedAt" to admission.invitedAt?.toString(),
+        "createdAt" to admission.createdAt.toString(),
+        "updatedAt" to admission.updatedAt.toString()
+    )
 
     private fun arenaLeaderboardEntryJson(entry: ArenaLeaderboardEntry): Map<String, Any?> {
         return mapOf(

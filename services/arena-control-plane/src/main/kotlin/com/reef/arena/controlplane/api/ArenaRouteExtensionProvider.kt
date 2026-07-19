@@ -3,6 +3,7 @@ package com.reef.arena.controlplane.api
 import com.reef.arena.controlplane.application.ArenaAdminApplicationService
 import com.reef.arena.controlplane.arena.PostgresArenaBotEntitlementStore
 import com.reef.arena.controlplane.arena.PostgresArenaBotRegistryStore
+import com.reef.arena.controlplane.arena.PostgresArenaSubmissionAdmissionStore
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
 import com.reef.platform.api.OptionalProductRouteExtension
@@ -46,6 +47,14 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
                 "arena-entitlements"
             )
         )
+        val submissionAdmissionStore = PostgresArenaSubmissionAdmissionStore(
+            RuntimeDataSources.dataSource(
+                jdbcUrl,
+                RuntimeEnv.string("ARENA_POSTGRES_USER", "reef"),
+                RuntimeEnv.string("ARENA_POSTGRES_PASSWORD", "reef"),
+                "arena-submission-admissions"
+            )
+        )
         return listOf(
             ArenaAdminGateway(
                 arenaAdminService = ArenaAdminApplicationService(
@@ -54,6 +63,7 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
                 ),
                 adminIdentityService = adminIdentityService,
                 arenaBotEntitlementStore = entitlementStore,
+                arenaSubmissionAdmissionStore = submissionAdmissionStore,
                 analyticsRunExportService = null
             )
         )

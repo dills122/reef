@@ -110,6 +110,8 @@ test-bot-sdk:
 	bun scripts/dev/openbao-runtime-config.test.mjs
 	bun scripts/dev/bot-submission-validate.test.mjs
 	bun scripts/dev/bot-submission-commit-status.test.mjs
+	bun scripts/dev/bot-submission-record-admission.test.mjs
+	bun scripts/dev/bot-submission-invite-workflow.test.mjs
 	bun scripts/dev/bot-submission-provision-openbao.test.mjs
 	bun scripts/dev/bot-sdk-test-bot.test.mjs
 	bun scripts/dev/arena-ingest-bot-run-result.test.mjs
@@ -129,6 +131,8 @@ test-bot-sdk:
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
 	node --check scripts/dev/bot-sdk-test-bot.mjs
 	node --check scripts/dev/bot-submission-provision-openbao.mjs
+	node --check scripts/dev/bot-submission-record-admission.mjs
+	node --check scripts/dev/bot-submission-invite-workflow.test.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
