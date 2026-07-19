@@ -128,9 +128,31 @@ jobs:
           result=$(node scripts/dev/bot-submission-record-admission.mjs)
           state=$(printf '%s' "$result" | node -e 'let raw=""; process.stdin.on("data", chunk => raw += chunk).on("end", () => { const state = JSON.parse(raw).admission?.state; if (!state) process.exit(1); process.stdout.write(state); })')
           echo "state=$state" >> "$GITHUB_OUTPUT"
-      - name: Skip non-bot branch provisioning status
+      - name: Resolve non-bot branch provisioning status
+        id: non-bot-status
         if: steps.classify.outputs.classification == 'skip'
-        run: echo "No bot submission provisioning status required for ${HEAD_BRANCH}"
+        env:
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          if [ "$UPSTREAM_CONCLUSION" = "success" ]; then
+            echo "state=success" >> "$GITHUB_OUTPUT"
+            echo "description=Not a bot submission" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=failure" >> "$GITHUB_OUTPUT"
+            echo "description=Bot Submission workflow did not pass" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Mark non-bot branch provisioning status
+        if: steps.classify.outputs.classification == 'skip'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}
+          STATUS_STATE: ${{ steps.non-bot-status.outputs.state }}
+          STATUS_DESCRIPTION: ${{ steps.non-bot-status.outputs.description }}
+          STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
+        run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Fail after a non-bot upstream validation failure
+        if: steps.classify.outputs.classification == 'skip' && github.event.workflow_run.conclusion != 'success'
+        run: exit 1
       - name: Mark provisioning status pending
         if: steps.classify.outputs.classification != 'skip'
         env:

@@ -9,6 +9,8 @@ assert.match(provision, /ref: \$\{\{ github\.event\.repository\.default_branch \
 assert.match(provision, /Record fork submission admission/);
 assert.match(provision, /steps\.admission\.outputs\.state == 'invite_approved'/);
 assert.match(provision, /steps\.admission\.outputs\.state != 'invite_approved'/);
+assert.match(provision, /Mark non-bot branch provisioning status/);
+assert.match(provision, /description=Not a bot submission/);
 
 assert.doesNotMatch(approval, /pull_request_target/);
 assert.match(approval, /workflow_dispatch:/);

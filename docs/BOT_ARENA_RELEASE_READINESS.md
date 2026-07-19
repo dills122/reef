@@ -6,26 +6,29 @@ This is the current release gate for accepting external Bot Arena submissions.
 It separates implemented capability from repository or hosted configuration and
 from evidence that has actually been observed.
 
-Last verified: 2026-07-18.
+Last verified: 2026-07-19.
 
 ## Release Call
 
 Bot Arena is ready for an operator-controlled preview with built-in bots and
 same-repository test submissions. The chosen next release is an **invite-only,
-fork-based preview**. That target is not implemented end to end yet, and Bot
-Arena is **not ready to advertise open or self-service external submissions**.
+fork-based preview**. The code path is implemented locally, but Bot Arena is
+**not ready to advertise open or self-service external submissions** until the
+named external-fork proof is complete.
 
 The venue, SDK, isolation gate, registry, hosted admin surface, public
 leaderboard read, and same-repository submission proof are substantial. The
 remaining blocker is the public intake trust model and its enforcement:
 
-- ordinary contributors submit from forks, but the trusted provisioning
-  workflow currently rejects every forked bot-submission PR
-- live `master` protection requires `validate-manifest` and
-  `scan-and-sandbox-test`, but does not require the trusted
-  `registry-diff-and-provision` status
-- live `master` protection requires zero approving reviews, while D-051 and the
-  submission docs require a human approval
+- fork submissions need a named external-account proof through approval,
+  provisioning, merge, and registry sync
+- repository protection needs the trusted `registry-diff-and-provision` status.
+  The workflow publishes a successful no-op status for ordinary PRs, so the
+  status can be required without blocking non-bot work.
+- GitHub's branch-level approval requirement is not conditional on bot branch
+  conventions. During preview, bot-specific human review is enforced by the
+  trusted maintainer-only approval workflow, which binds the reviewer identity
+  and exact SHA before provisioning.
 - no external/fork submission has completed the full lifecycle; the only merged
   proof is the owner-controlled `bots/add/dsteele-smoke-bot` PR
 
@@ -41,9 +44,9 @@ separate from trusted provisioning.
 | Untrusted test isolation | Ready for preview | Bot submission CI uses `--isolation=container`; container defaults to no network, read-only repository mount, tmpfs, and CPU/memory/PID caps | Suitable for a controlled preview; continue treating the sandbox as hostile-code infrastructure. |
 | Manifest and dependency policy | Ready for preview | `bot-submission-validate.mjs`, approved-package manifest, hosted artifact build, import scan, and negative fixtures | The automated pre-merge gate is real, but policy and issue messaging remain versioned pre-release contracts. |
 | Same-repository submission | Proven | PR #177 passed manifest validation, sandbox testing, trusted provisioning, merge, and later registry sync | Collaborator/invite-only submissions are viable. |
-| External fork submission | Blocked | `.github/workflows/bot-submission-provision.yml` classifies a different `head_repository` as failure | Public contributors cannot complete the documented flow. |
-| Required human review | Blocked in repository settings | Live `master` protection reported `required_approving_review_count: 0` on 2026-07-18 | The accepted human gate is not enforced. |
-| Required trusted provisioning | Blocked in repository settings | Live required contexts contain only `validate-manifest` and `scan-and-sandbox-test` | A bot PR can satisfy configured checks without the documented provisioning gate. |
+| External fork submission | Locally verified; external proof pending | Forks persist `pending_invite_review`; trusted manual approval binds maintainer GitHub identity and exact SHA; changed SHA resets approval | Do not advertise the flow until a named external account completes it. |
+| Required human review | Implemented for bot submissions | `Bot Submission Invite Approval` requires a `maintain` or `admin` GitHub actor and records that immutable identity with the exact SHA | This is intentionally bot-specific; do not apply a global PR approval count solely for this preview gate. |
+| Required trusted provisioning | Ready for protection configuration | `registry-diff-and-provision` is pending until a fork is approved, succeeds after trusted provisioning, and succeeds as a no-op for non-bot PRs | Safe to require globally without blocking ordinary PRs. |
 | Hosted credentials | Configured | Repository secret names include `ARENA_ADMIN_API_URL` and `ARENA_ADMIN_API_TOKEN`; values were not inspected | Hosted workflow prerequisites exist. |
 | Post-merge registry sync | Proven for internal smoke | `Bot Registry Sync` passed after the smoke bot merged and has subsequent green runs | Durable registration path exists for merged manifests. |
 | Admin identity and ownership | Implemented | Admin DB migrations and Kotlin stores cover GitHub-backed users, roles, trust state, limits, ownership, audit, OAuth state, and sessions | The earlier “implement Admin DB tables” follow-up is stale. |
@@ -112,8 +115,7 @@ codes, emergency-removal rules, and evidence envelope.
 ### Required For Invite-Only Fork Preview
 
 - Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
-- branch protection requires one human approval
-- branch protection requires trusted provisioning for bot submissions
+- branch protection requires `registry-diff-and-provision`; ordinary PRs receive a successful no-op result, while bot submissions remain pending until trusted admission/provisioning completes
 - fork-safe pending, approval, trusted provisioning, and denial paths are drilled
 - fork-based add, update, and remove lifecycle is drilled with an external test account
 - owner config write and run eligibility are verified with a participant role
