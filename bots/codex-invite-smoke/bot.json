@@ -1,0 +1,14 @@
+{
+  "botId": "codex-invite-smoke",
+  "fileName": "index.ts",
+  "metadata": {
+    "name": "codex-invite-smoke",
+    "publisher": "dills122",
+    "email": "15662762+dills122@users.noreply.github.com",
+    "version": "1.0.0",
+    "sdkVersion": "1.5.0",
+    "botApiVersion": "v1",
+    "description": "Disposable smoke-test bot for the invite-only fork submission workflow.",
+    "tags": ["smoke", "invite-preview", "hosted-ci"]
+  }
+}
