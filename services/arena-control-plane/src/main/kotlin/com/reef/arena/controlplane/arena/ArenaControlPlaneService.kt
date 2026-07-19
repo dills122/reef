@@ -185,6 +185,17 @@ interface ArenaBotRegistryStore {
     fun saveQualificationReport(report: ArenaQualificationReport)
     fun qualificationReports(botId: String, versionId: String): List<ArenaQualificationReport>
     fun saveOperatorDecision(decision: ArenaOperatorDecision)
+    /**
+     * Persists a version state change with its mandatory operator decision.
+     *
+     * Stores with transaction support must override this so the version cannot
+     * advance without the audit fact that explains it. The default keeps small
+     * in-memory/test stores source-compatible.
+     */
+    fun saveVersionTransition(version: ArenaBotVersion, decision: ArenaOperatorDecision) {
+        saveVersion(version)
+        saveOperatorDecision(decision)
+    }
     fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision>
     fun saveRunRecord(runRecord: ArenaRunRecord)
     fun runRecord(runId: String): ArenaRunRecord?
@@ -291,8 +302,8 @@ class ArenaControlPlaneService(
             "invalid bot version transition: ${version.status} -> $toStatus"
         }
         val updated = version.copy(status = toStatus)
-        store.saveVersion(updated)
-        store.saveOperatorDecision(
+        store.saveVersionTransition(
+            updated,
             ArenaOperatorDecision(
                 botId = botId,
                 versionId = versionId,

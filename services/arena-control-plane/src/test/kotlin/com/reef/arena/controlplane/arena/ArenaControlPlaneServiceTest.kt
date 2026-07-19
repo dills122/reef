@@ -91,6 +91,32 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
+    fun leavesVersionUnchangedWhenAtomicTransitionPersistenceFails() {
+        val backing = InMemoryArenaBotRegistryStore()
+        val store = object : ArenaBotRegistryStore by backing {
+            override fun saveVersion(version: ArenaBotVersion): Nothing = error("individual version writes are not allowed for transitions")
+            override fun saveOperatorDecision(decision: ArenaOperatorDecision): Nothing = error("individual decision writes are not allowed for transitions")
+            override fun saveVersionTransition(version: ArenaBotVersion, decision: ArenaOperatorDecision): Nothing =
+                error("simulated decision persistence failure")
+        }
+        val service = ArenaControlPlaneService(store) { fixedNow }
+        backing.saveBot(registerBotCommand().let { ArenaBot(it.botId, it.fileName, it.metadata, fixedNow) })
+        backing.saveVersion(
+            ArenaBotVersion(
+                "sample-bot", "v1", "sha256:source", "sha256:artifact", "1.5.0", "v1", "sha256:deps",
+                ArenaBotVersionStatus.Draft, fixedNow
+            )
+        )
+
+        assertFailsWith<IllegalStateException> {
+            service.transitionVersion("sample-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-1")
+        }
+
+        assertEquals(ArenaBotVersionStatus.Draft, backing.version("sample-bot", "v1")?.status)
+        assertTrue(backing.operatorDecisions("sample-bot", "v1").isEmpty())
+    }
+
+    @Test
     fun rejectsInvalidLifecycleTransitions() {
         val service = seededService(InMemoryArenaBotRegistryStore())
 
