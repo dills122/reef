@@ -14,7 +14,9 @@ if (!["reef", "arena"].includes(profile)) {
 }
 
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
-const response = await fetch(leaderboardUrl);
+const response = await fetch(leaderboardUrl, {
+  headers: { "X-Client-Id": "optional-product-smoke" },
+});
 
 if (profile === "reef") {
   if (response.status !== 404) {
