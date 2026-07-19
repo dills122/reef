@@ -324,7 +324,7 @@ async function runArenaSessions(bots, healthSamples) {
     });
   }
 
-  for (const session of sessions) {
+  await Promise.all(sessions.map(async (session) => {
     if (session.start.ok && !session.workerFailed) {
       try {
         session.stop = await session.worker.request(
@@ -358,7 +358,9 @@ async function runArenaSessions(bots, healthSamples) {
         error: runnerIssue("runner_worker_stop_skipped", "worker already failed"),
       };
     }
-    console.log(`arena bot complete ${sessions.indexOf(session) + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
+  }));
+  for (const [index, session] of sessions.entries()) {
+    console.log(`arena bot complete ${index + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
   }
 
   return {
