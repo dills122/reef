@@ -25,7 +25,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-admin-owned-bot-local-seed dev-smoke-admin-auth-local dev-control-room
 .PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
-.PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-replay
+.PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-compare-reef-arena-separation dev-replay
 .PHONY: dev-throughput-campaign dev-throughput-compare
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
 .PHONY: kube-materializer-scale kube-autoscale-apply kube-smoke-venue-event-materializer kube-port-forward
@@ -511,6 +511,10 @@ docs-site-build:
 dev-scenario-drift-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/scenario-drift-check.mjs $(ARGS)
+
+dev-compare-reef-arena-separation:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/compare-reef-arena-separation-reports.mjs $(ARGS)
 
 dev-replay:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
