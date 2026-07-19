@@ -307,7 +307,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid submitterIdentity or botId")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao provisioning failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao provisioning failed"))
         }
     }
 
@@ -404,7 +404,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config lookup failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao bot config lookup failed"))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config lookup failed")))
         }
@@ -453,7 +453,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config write failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao bot config write failed"))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config write failed")))
         }
@@ -499,7 +499,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config delete failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao bot config delete failed"))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config delete failed")))
         }

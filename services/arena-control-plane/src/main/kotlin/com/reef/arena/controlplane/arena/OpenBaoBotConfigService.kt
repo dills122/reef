@@ -167,12 +167,18 @@ class OpenBaoBotConfigService(
     }
 
     private fun request(request: HttpRequest, allowNotFound: Boolean = false): HttpResponse<String> {
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = execute(request)
         if (allowNotFound && response.statusCode() == 404) return response
         if (response.statusCode() !in 200..299) {
-            throw OpenBaoClientException("OpenBao request to ${request.uri()} failed (${response.statusCode()}): ${response.body()}")
+            throw OpenBaoClientException("OpenBao request failed with status ${response.statusCode()}")
         }
         return response
+    }
+
+    private fun execute(request: HttpRequest): HttpResponse<String> = try {
+        httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+    } catch (_: Exception) {
+        throw OpenBaoClientException("OpenBao request failed")
     }
 
     private fun parseResponseObject(body: String): JsonNode {
@@ -180,8 +186,8 @@ class OpenBaoBotConfigService(
             val node = mapper.readTree(body)
             require(node != null && node.isObject) { "json payload must be an object" }
             node
-        } catch (ex: Exception) {
-            throw OpenBaoClientException("OpenBao response was invalid JSON: ${ex.message ?: "invalid json payload"}")
+        } catch (_: Exception) {
+            throw OpenBaoClientException("OpenBao response was invalid JSON")
         }
     }
 

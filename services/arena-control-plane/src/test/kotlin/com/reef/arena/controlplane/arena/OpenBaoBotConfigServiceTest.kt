@@ -124,6 +124,34 @@ class OpenBaoBotConfigServiceTest {
         assertContains(error.message ?: "", "bot config key")
     }
 
+    @Test
+    fun requestFailureDoesNotIncludeOpenBaoResponseBody() {
+        val upstreamSecret = "vault-error-internal-token"
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        server.createContext("/v1/auth/approle/login") { exchange ->
+            json(exchange, 500, """{"errors":["$upstreamSecret"]}""")
+        }
+        server.start()
+        try {
+            val service = OpenBaoBotConfigService(
+                OpenBaoBotConfigServiceConfig(
+                    baoAddr = "http://127.0.0.1:${server.address.port}",
+                    roleId = "role-id",
+                    secretId = "secret-id"
+                )
+            )
+
+            val error = assertFailsWith<OpenBaoClientException> {
+                service.status("dills122", "sample-bot")
+            }
+
+            assertEquals("OpenBao request failed with status 500", error.message)
+            assertFalse(error.message.orEmpty().contains(upstreamSecret))
+        } finally {
+            server.stop(0)
+        }
+    }
+
     private fun json(exchange: com.sun.net.httpserver.HttpExchange, status: Int, body: String) {
         val bytes = body.toByteArray()
         exchange.responseHeaders.add("content-type", "application/json")
