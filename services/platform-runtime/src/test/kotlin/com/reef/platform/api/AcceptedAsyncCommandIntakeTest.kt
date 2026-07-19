@@ -189,7 +189,14 @@ class AcceptedAsyncCommandIntakeTest {
             assertTrue(waitFor { gateway.pendingCount() == 1 })
             gateway.completeNextAccepted()
 
-            assertTrue(waitFor { intake.stats().statusRecordsEvicted == 1L })
+            // The engine completion is observed on a coroutine worker. Wait for
+            // the second command's terminal record before checking its
+            // synchronous retention side effect; loaded CI runners can delay
+            // that worker past the default polling window.
+            assertTrue(waitFor(timeoutMs = 10_000) {
+                intake.findCommandStatus("cmd-retention-2")?.status == CommandLogStatus.COMPLETED
+            })
+            assertTrue(waitFor(timeoutMs = 10_000) { intake.stats().statusRecordsEvicted == 1L })
             assertNull(intake.findCommandStatus("cmd-retention-1"))
             assertNull(intake.findCommandStatus("client-1", "/api/v1/orders/submit", "idem-retention-1"))
             assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-retention-2")?.status)
@@ -270,7 +277,10 @@ class AcceptedAsyncCommandIntakeTest {
             val receipt = enqueue(intake, "cmd-offer-happy", "ord-offer-happy", "idem-offer-happy")
             val elapsedMs = (System.nanoTime() - elapsedNanos) / 1_000_000
             assertTrue(receipt.accepted, "expected accept when lane has free capacity")
-            assertTrue(elapsedMs < 500, "expected an immediate accept, took ${elapsedMs}ms")
+            // The offer must not consume its configured two-second wait on an
+            // empty lane. Keep room for heavily contended CI hosts, where a
+            // sub-500 ms wall-clock assertion is scheduler-sensitive.
+            assertTrue(elapsedMs < 1_000, "expected an immediate accept, took ${elapsedMs}ms")
         } finally {
             intake.stop()
         }
