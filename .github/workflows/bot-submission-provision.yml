@@ -60,8 +60,8 @@ jobs:
             for (const [key, value] of Object.entries(values)) {
               if (typeof value !== "string" && typeof value !== "number") throw new Error(`missing trusted PR metadata: ${key}`);
               const text = String(value);
-              if (/\\r|\\n/.test(text)) throw new Error(`unsafe trusted PR metadata: ${key}`);
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${text}\\n`);
+              if (/\r|\n/.test(text)) throw new Error(`unsafe trusted PR metadata: ${key}`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${text}\n`);
             }
           '
       - name: Classify trusted provisioning inputs
