@@ -19,6 +19,29 @@ object ArenaPostgresSchemaRequirements {
         )
     }
 
+    fun submissionAdmissions(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
+        val admissionsTable = PostgresSchemaObject.parse(names.submissionAdmissions)
+        return PostgresSchemaRequirement(
+            tables = listOf(admissionsTable),
+            columns = listOf(
+                PostgresSchemaColumn(admissionsTable, "repository", "text"),
+                PostgresSchemaColumn(admissionsTable, "pull_request_number", "bigint"),
+                PostgresSchemaColumn(admissionsTable, "bot_id", "text"),
+                PostgresSchemaColumn(admissionsTable, "head_repository", "text"),
+                PostgresSchemaColumn(admissionsTable, "head_owner_login", "text"),
+                PostgresSchemaColumn(admissionsTable, "github_user_id", "bigint"),
+                PostgresSchemaColumn(admissionsTable, "github_login", "text"),
+                PostgresSchemaColumn(admissionsTable, "head_sha", "text"),
+                PostgresSchemaColumn(admissionsTable, "state", "text"),
+                PostgresSchemaColumn(admissionsTable, "invitation_actor", "text"),
+                PostgresSchemaColumn(admissionsTable, "invitation_reason", "text"),
+                PostgresSchemaColumn(admissionsTable, "invited_at", "timestamp with time zone"),
+                PostgresSchemaColumn(admissionsTable, "created_at", "timestamp with time zone"),
+                PostgresSchemaColumn(admissionsTable, "updated_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun registry(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
         val botsTable = PostgresSchemaObject.parse(names.bots)
         val versionsTable = PostgresSchemaObject.parse(names.botVersions)

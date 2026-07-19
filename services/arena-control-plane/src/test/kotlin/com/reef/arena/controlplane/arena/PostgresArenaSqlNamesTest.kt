@@ -22,6 +22,7 @@ class PostgresArenaSqlNamesTest {
         assertEquals("arena.run_enforcement_events", names.runEnforcementEvents)
         assertEquals("arena.runtime_config_descriptors", names.runtimeConfigDescriptors)
         assertEquals("arena.user_bot_ownerships", names.userBotOwnerships)
+        assertEquals("arena.submission_admissions", names.submissionAdmissions)
     }
 
     @Test
@@ -73,6 +74,20 @@ class PostgresArenaSqlNamesTest {
             setOf(
                 "arena.user_bot_ownerships.bot_id:text",
                 "arena.user_bot_ownerships.ownership_state:text"
+            )
+        ))
+    }
+
+    @Test
+    fun admissionRequirementsCoverArenaOwnedPreMergeObjects() {
+        val requirements = ArenaPostgresSchemaRequirements.submissionAdmissions(PostgresArenaSqlNames())
+
+        assertEquals(setOf("arena.submission_admissions"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertTrue(requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.containsAll(
+            setOf(
+                "arena.submission_admissions.github_user_id:bigint",
+                "arena.submission_admissions.head_sha:text",
+                "arena.submission_admissions.invited_at:timestamp with time zone"
             )
         ))
     }
