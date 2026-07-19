@@ -63,7 +63,9 @@ if (config.inputReport.length === 0) {
   const result = spawnSync(process.execPath, runArgs, {
     cwd: new URL("../../", import.meta.url).pathname,
     stdio: "inherit",
-    timeout: Math.max(120_000, config.durationSeconds * 1000 + config.projectionDrainTimeoutMs + 60_000),
+    // Preserve a bounded outer timeout while allowing the runner to drain projections,
+    // collect bounded venue readback, and write its report after the paced schedule.
+    timeout: Math.max(300_000, config.durationSeconds * 1000 + config.projectionDrainTimeoutMs + 240_000),
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);

@@ -141,47 +141,64 @@ let sharedWorker;
 async function main() {
   const startedAt = performance.now();
   const startedAtIso = new Date().toISOString();
+  const phaseTimings = [];
+
+  const runPhase = async (name, action) => {
+    const phaseStartedAt = performance.now();
+    console.log(`arena phase start: ${name}`);
+    try {
+      return await action();
+    } finally {
+      const elapsedMs = Math.round(performance.now() - phaseStartedAt);
+      phaseTimings.push({ name, elapsedMs });
+      console.log(`arena phase complete: ${name} elapsedMs=${elapsedMs}`);
+    }
+  };
 
   try {
     if (config.runnerWorkerScope === "shared") {
-      sharedWorker = await startRunnerWorker("arena-tick-worker-0");
+      sharedWorker = await runPhase("start-shared-worker", () => startRunnerWorker("arena-tick-worker-0"));
     }
     if (config.submitMode === "live") {
-      await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
-      await assertLiveMarketQualityProjectors();
-      if (config.seedReference) {
-        await seedReferenceData(selectedBots);
-      }
-    }
-    const bots = [];
-    for (const bot of selectedBots) {
-      const botWorker = config.runnerWorkerScope === "per-bot"
-        ? await startRunnerWorker(`arena-tick-worker-${safeWorkerId(bot.botId)}`)
-        : sharedWorker;
-      bots.push({
-        ...bot,
-        worker: botWorker,
-        identityKey: botIdentityKey(bot),
-        artifact: buildArtifact(bot.entryPath, bot.botId),
-        runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
+      await runPhase("prepare-live-venue", async () => {
+        await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+        await assertLiveMarketQualityProjectors();
+        if (config.seedReference) {
+          await seedReferenceData(selectedBots);
+        }
       });
     }
-    for (const bot of bots) {
-      bot.loadResult = await loadBotInWorker(bot);
-    }
+    const bots = [];
+    await runPhase("prepare-bots", async () => {
+      for (const bot of selectedBots) {
+        const botWorker = config.runnerWorkerScope === "per-bot"
+          ? await startRunnerWorker(`arena-tick-worker-${safeWorkerId(bot.botId)}`)
+          : sharedWorker;
+        bots.push({
+          ...bot,
+          worker: botWorker,
+          identityKey: botIdentityKey(bot),
+          artifact: buildArtifact(bot.entryPath, bot.botId),
+          runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
+        });
+      }
+      for (const bot of bots) {
+        bot.loadResult = await loadBotInWorker(bot);
+      }
+    });
 
     const healthSamples = [];
-    const arenaRun = await runArenaSessions(bots, healthSamples);
+    const arenaRun = await runPhase("run-scheduled-ticks", () => runArenaSessions(bots, healthSamples));
     const sessionReports = arenaRun.sessionReports;
     const enforcementEvents = sessionReports.flatMap((result) => enforceBot(result.bot, result));
 
     const baseBotResults = scoreBots(sessionReports, enforcementEvents);
-    const venueReadback = await collectVenueReadback(baseBotResults);
-    const botResults = attachScoreBreakdowns(enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
+    const venueReadback = await runPhase("collect-venue-readback", () => collectVenueReadback(baseBotResults));
+    const botResults = await runPhase("score-results", () => attachScoreBreakdowns(enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
       fallbackInstruments: mode.instruments ?? [],
-    }), scoreContext());
+    }), scoreContext()));
     const completedAtIso = new Date().toISOString();
-    const report = buildReport({
+    const report = await runPhase("build-report", () => buildReport({
       botResults,
       enforcementEvents,
       sessionReports,
@@ -191,9 +208,10 @@ async function main() {
       startedAt: startedAtIso,
       completedAt: completedAtIso,
       elapsedMs: performance.now() - startedAt,
-    });
-    report.persistence = await persistArenaResults(report);
-    await writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 });
+      phaseTimings,
+    }));
+    report.persistence = await runPhase("persist-arena-results", () => persistArenaResults(report));
+    await runPhase("write-report", () => writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 }));
     assertExpectedFreezeBots(report);
     console.log(`arena local tick run complete: ${resolve(config.out)}`);
     console.log(
@@ -1027,7 +1045,7 @@ function summarizeConductMetrics(session, counters, enforcement) {
   };
 }
 
-function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, pacingSamples, startedAt, completedAt, elapsedMs }) {
+function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, pacingSamples, startedAt, completedAt, elapsedMs, phaseTimings }) {
   const tickResults = sessionReports.flatMap((session) => session.ticks);
   const commandStatusSummary = summarizeCommandStatuses(tickResults);
   const totals = tickResults.reduce(
@@ -1092,6 +1110,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     scoringAssumptions: scoringAssumptions(),
     status,
     elapsedMs,
+    phaseTimings,
     totals,
     commandAccounting: {
       draftCommands: totals.venueCommands,
@@ -1148,6 +1167,7 @@ function compactArenaReport(report) {
     scoringAssumptions: report.scoringAssumptions,
     status: report.status,
     elapsedMs: report.elapsedMs,
+    phaseTimings: report.phaseTimings,
     totals: report.totals,
     commandAccounting: report.commandAccounting,
     commandStatusSummary: report.commandStatusSummary,
@@ -1993,24 +2013,25 @@ async function collectVenueReadback(botResults) {
   }
   const baseUrl = config.venueUrl.replace(/\/$/, "");
   const availability = await waitForDataAvailability(baseUrl);
-  const snapshots = [];
-  for (const instrumentId of mode.instruments ?? ["AAPL"]) {
-    snapshots.push({
+  const snapshots = await Promise.all((mode.instruments ?? ["AAPL"]).map(async (instrumentId) => ({
       instrumentId,
       ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`, readbackHeaders())),
-    });
-  }
-  const ownOrders = [];
-  for (const result of botResults) {
+    })));
+  const ownOrders = await mapWithConcurrency(botResults, 6, async (result) => {
     const participantId = participantIdForBot(result);
-    ownOrders.push({
+    const [current, history, fills] = await Promise.all([
+      getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
+    ]);
+    return {
       botId: result.botId,
       participantId,
-      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
-      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
-      fills: await getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
-    });
-  }
+      current,
+      history,
+      fills,
+    };
+  });
   return {
     mode: config.submitMode,
     skipped: false,
@@ -2023,6 +2044,20 @@ async function collectVenueReadback(botResults) {
     ownOrders,
     executionSummary: summarizeVenueReadbackExecutions(ownOrders),
   };
+}
+
+async function mapWithConcurrency(values, concurrency, action) {
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), values.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await action(values[index], index);
+    }
+  }));
+  return results;
 }
 
 function summarizeVenueReadbackExecutions(ownOrders) {
