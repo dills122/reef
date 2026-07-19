@@ -120,6 +120,7 @@ test-bot-sdk:
 	bun scripts/dev/arena-actor-profile-behavior.test.mjs
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
 	bun scripts/dev/arena-runner-isolation-failure.test.mjs
+	bun scripts/dev/arena-runner-output-limit.test.mjs
 	bun scripts/dev/large-json-writer.test.mjs
 	bun scripts/dev/arena-local-tick-report-writer.test.mjs
 	bun scripts/dev/compare-arena-score-v1-proof.test.mjs

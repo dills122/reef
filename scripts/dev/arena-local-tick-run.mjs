@@ -2709,7 +2709,8 @@ class RunnerWorker {
     this.nextId = 1;
     this.pending = new Map();
     this.buffer = "";
-    this.outputBytes = 0;
+    this.stderrOutputBytes = 0;
+    this.unsolicitedOutputBytes = 0;
   }
 
   async start() {
@@ -2727,11 +2728,14 @@ class RunnerWorker {
     this.child.stdout.setEncoding("utf8");
     this.child.stderr.setEncoding("utf8");
     this.child.stdout.on("data", (chunk) => {
-      if (!this.recordOutput(chunk)) return;
       this.handleStdout(chunk);
     });
     this.child.stderr.on("data", (chunk) => {
-      if (!this.recordOutput(chunk)) return;
+      this.stderrOutputBytes += Buffer.byteLength(chunk);
+      if (this.stderrOutputBytes > config.runnerMaxOutputBytes) {
+        this.failOutputLimit();
+        return;
+      }
       process.stderr.write(`[${this.workerId}] ${chunk}`);
     });
     this.child.on("close", (code) => {
@@ -2743,11 +2747,7 @@ class RunnerWorker {
     await this.request({ type: "heartbeat" });
   }
 
-  recordOutput(chunk) {
-    this.outputBytes += Buffer.byteLength(chunk);
-    if (this.outputBytes <= config.runnerMaxOutputBytes) {
-      return true;
-    }
+  failOutputLimit() {
     if (this.child !== undefined && !this.child.killed) {
       this.child.kill("SIGKILL");
     }
@@ -2755,7 +2755,6 @@ class RunnerWorker {
       pending.reject(new Error(`${this.workerId} exceeded output limit ${config.runnerMaxOutputBytes} bytes`));
     }
     this.pending.clear();
-    return false;
   }
 
   request(message, timeoutMs = 10000) {
@@ -2790,14 +2789,33 @@ class RunnerWorker {
       const line = this.buffer.slice(0, newlineIndex);
       this.buffer = this.buffer.slice(newlineIndex + 1);
       if (line.trim().length > 0) {
-        const response = JSON.parse(line);
+        if (Buffer.byteLength(line) > config.runnerMaxOutputBytes) {
+          this.failOutputLimit();
+          return;
+        }
+        let response;
+        try {
+          response = JSON.parse(line);
+        } catch {
+          this.failOutputLimit();
+          return;
+        }
         const pending = this.pending.get(response.id);
         if (pending !== undefined) {
           this.pending.delete(response.id);
           pending.resolve(response);
+        } else {
+          this.unsolicitedOutputBytes += Buffer.byteLength(line) + 1;
+          if (this.unsolicitedOutputBytes > config.runnerMaxOutputBytes) {
+            this.failOutputLimit();
+            return;
+          }
         }
       }
       newlineIndex = this.buffer.indexOf("\n");
+    }
+    if (Buffer.byteLength(this.buffer) > config.runnerMaxOutputBytes) {
+      this.failOutputLimit();
     }
   }
 
