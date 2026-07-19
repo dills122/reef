@@ -79,6 +79,7 @@ build-reef-core:
 
 test-reef-core:
 	@$(MAKE) check-reef-arena-boundaries
+	$(JS_RUNTIME) scripts/dev/compare-reef-arena-separation-reports.test.mjs
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew test
 
 build-arena-control-plane: build-reef-core

@@ -983,9 +983,10 @@ Summary:
 - artifact exclusion, not JVM tree shaking, is the supported opt-out mechanism.
 - the matching-engine artifact and Reef canonical behavior are identical
   between Reef-only and Arena-enabled profiles for the same commit.
-- this separation sprint is the next implementation milestone. Invite-only
-  fork admission implementation begins only after separation evidence is
-  reviewed and promoted.
+- the separation sprint was implemented and promoted on 2026-07-19; see
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  Invite-only fork admission implementation may proceed subject to its own
+  release gates.
 - D-053 supersedes the parts of D-046 and D-052 that assumed Arena registry or
   public leaderboard implementation would remain compiled into the Reef
   `platform-runtime`; their product, infrastructure, and API intent otherwise
