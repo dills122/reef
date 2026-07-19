@@ -79,7 +79,7 @@ build-reef-core:
 
 test-reef-core:
 	@$(MAKE) check-reef-arena-boundaries
-	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew -PreefCore test
+	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew test
 
 build-arena-control-plane: build-reef-core
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew -p ../arena-control-plane jar

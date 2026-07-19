@@ -73,7 +73,7 @@ internal class ArenaAdminGateway(
         adminRoute("/admin/v1/arena/my/bots", setOf("GET"), "/internal/admin/arena/my/bots", "arena", emptySet()),
         adminRoute("/admin/v1/arena/bots/openbao-provision", setOf("POST"), "/internal/admin/arena/bots/openbao-provision", "arena", arenaTokens, secretRoles),
         adminRoute("/admin/v1/arena/bots/ownership", setOf("POST"), "/internal/admin/arena/bots/ownership", "arena", arenaTokens, operatorRoles),
-        adminRoute("/admin/v1/arena/bots/config", setOf("GET", "POST", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
+        adminRoute("/admin/v1/arena/bots/config", setOf("GET", "PUT", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
         adminRoute("/admin/v1/arena/bot-versions", setOf("GET", "POST"), "/internal/admin/arena/bot-versions", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/bot-versions/transition", setOf("POST"), "/internal/admin/arena/bot-versions/transition", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/runs", setOf("GET", "POST"), "/internal/admin/arena/runs", "arena", arenaTokens, operatorRoles),
@@ -307,7 +307,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid submitterIdentity or botId")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao provisioning failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao provisioning failed"))
         }
     }
 
@@ -404,7 +404,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config lookup failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao bot config lookup failed"))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config lookup failed")))
         }
@@ -453,7 +453,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config write failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao bot config write failed"))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config write failed")))
         }
@@ -499,7 +499,7 @@ internal class ArenaAdminGateway(
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
         } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config delete failed")))
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to "OpenBao bot config delete failed"))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config delete failed")))
         }

@@ -91,10 +91,9 @@ admin.sessions
 admin.service_tokens
 ```
 
-Arena entitlement tables:
+Arena ownership table:
 
 ```text
-arena.user_bot_limits
 arena.user_bot_ownerships
 ```
 
@@ -460,7 +459,7 @@ BAO_BOT_CONFIG_SECRET_ID=...
 2. User opens a bot-submission PR from a fork.
 3. Untrusted CI validates manifest, static/security checks, sandbox behavior, and resource limits without hosted credentials.
 4. Submission enters pending_invite_review; opening a PR does not imply admission or a place in the next game.
-5. Maintainer approves the immutable GitHub user id, ownership intent, bot limit, and reviewed head SHA.
+5. Maintainer approves the immutable GitHub user id, ownership intent, and reviewed head SHA.
 6. A trusted base-branch workflow provisions or verifies the Reef user and OpenBao bot slice without executing fork code.
 7. User enters required config in the admin app before merge; readiness records only descriptors and hashes, never secret values.
 8. PR check confirms approval, SHA-bound checks, provisioning, and config readiness.

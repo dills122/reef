@@ -5,6 +5,7 @@ import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.AllowAllAccountRiskCheck
 import com.reef.platform.api.ChainedAccountRiskCheck
 import java.time.Instant
+import java.util.concurrent.Executor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -39,6 +40,46 @@ class ArenaBotVersionRiskCheckTest {
         val result = check.evaluate(accountRiskRequest(botVersion = ""))
 
         assertEquals(AccountRiskDecision.ALLOW, result.decision)
+    }
+
+    @Test
+    fun refreshesOutsideTheIngressPathAndUsesTheCachedVersion() {
+        val executor = QueuedExecutor()
+        val store = seededStore(ArenaBotVersionStatus.Quarantined)
+        val check = ArenaBotVersionRiskCheck(store, refreshExecutor = executor)
+
+        assertEquals(null, check.evaluate(accountRiskRequest(botVersion = "v1")))
+        assertEquals(1, executor.size)
+
+        executor.runNext()
+
+        assertEquals(AccountRiskDecision.DISABLED_BOT, check.evaluate(accountRiskRequest(botVersion = "v1"))?.decision)
+    }
+
+    @Test
+    fun backsOffAfterArenaStoreFailureWithoutBlockingOrRetryingEveryRequest() {
+        val executor = QueuedExecutor()
+        var now = 0L
+        val store = object : ArenaBotRegistryStore by seededStore(ArenaBotVersionStatus.Quarantined) {
+            override fun version(botId: String, versionId: String): ArenaBotVersion? = error("arena database unavailable")
+        }
+        val check = ArenaBotVersionRiskCheck(
+            store = store,
+            refreshExecutor = executor,
+            nanoTime = { now },
+            failureBackoffNanos = 10
+        )
+
+        assertEquals(null, check.evaluate(accountRiskRequest(botVersion = "v1")))
+        assertEquals(1, executor.size)
+        executor.runNext()
+
+        assertEquals(null, check.evaluate(accountRiskRequest(botVersion = "v1")))
+        assertEquals(0, executor.size)
+
+        now = 10
+        assertEquals(null, check.evaluate(accountRiskRequest(botVersion = "v1")))
+        assertEquals(1, executor.size)
     }
 
     private fun seededStore(status: ArenaBotVersionStatus): InMemoryArenaBotRegistryStore {
@@ -101,6 +142,23 @@ class ArenaBotVersionRiskCheckTest {
     }
 
     private fun chainedCheck(store: InMemoryArenaBotRegistryStore): ChainedAccountRiskCheck {
-        return ChainedAccountRiskCheck(AllowAllAccountRiskCheck(), listOf(ArenaBotVersionRiskCheck(store)))
+        return ChainedAccountRiskCheck(
+            AllowAllAccountRiskCheck(),
+            listOf(ArenaBotVersionRiskCheck(store, refreshExecutor = Executor { it.run() }))
+        )
+    }
+
+    private class QueuedExecutor : Executor {
+        private val commands = ArrayDeque<Runnable>()
+
+        val size: Int get() = commands.size
+
+        override fun execute(command: Runnable) {
+            commands.addLast(command)
+        }
+
+        fun runNext() {
+            commands.removeFirst().run()
+        }
     }
 }

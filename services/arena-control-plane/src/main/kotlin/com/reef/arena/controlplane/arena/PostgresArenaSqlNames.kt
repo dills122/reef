@@ -14,7 +14,6 @@ data class PostgresArenaSqlNames(
     val runBotResults = qualify("run_bot_results")
     val runEnforcementEvents = qualify("run_enforcement_events")
     val runtimeConfigDescriptors = qualify("runtime_config_descriptors")
-    val userBotLimits = qualify("user_bot_limits")
     val userBotOwnerships = qualify("user_bot_ownerships")
 
     private fun schemaOrDefault(schema: String): String {

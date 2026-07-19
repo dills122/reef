@@ -6,6 +6,7 @@ import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class OpenBaoProvisioningServiceTest {
     @Test
@@ -32,6 +33,37 @@ class OpenBaoProvisioningServiceTest {
             }
 
             assertContains(error.message ?: "", "OpenBao jwt login response was invalid JSON")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun jwtLoginFailureDoesNotIncludeOpenBaoResponseBody() {
+        val upstreamSecret = "vault-error-internal-token"
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        server.createContext("/v1/auth/jwt/login") { exchange ->
+            val body = """{"errors":["$upstreamSecret"]}"""
+            exchange.sendResponseHeaders(403, body.toByteArray().size.toLong())
+            exchange.responseBody.use { it.write(body.toByteArray()) }
+        }
+        server.start()
+        try {
+            val service = OpenBaoProvisioningService(
+                OpenBaoProvisioningConfig("http://127.0.0.1:${server.address.port}")
+            )
+
+            val error = assertFailsWith<OpenBaoClientException> {
+                service.provisionBotSecretSlice(
+                    githubOidcToken = githubOidcToken(actor = "submitter-1"),
+                    submitterIdentity = "submitter-1",
+                    botId = "bot-1",
+                    secretData = emptyMap()
+                )
+            }
+
+            assertContains(error.message ?: "", "OpenBao request failed with status 403")
+            assertFalse(error.message.orEmpty().contains(upstreamSecret))
         } finally {
             server.stop(0)
         }

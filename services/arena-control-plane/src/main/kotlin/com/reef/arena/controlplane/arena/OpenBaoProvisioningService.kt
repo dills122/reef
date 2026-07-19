@@ -103,8 +103,8 @@ class OpenBaoProvisioningService(
         val response = send(request)
         val json = try {
             JsonCodec.parseObject(response.body())
-        } catch (ex: IllegalArgumentException) {
-            throw OpenBaoClientException("OpenBao jwt login response was invalid JSON: ${ex.message ?: "invalid json payload"}")
+        } catch (_: IllegalArgumentException) {
+            throw OpenBaoClientException("OpenBao jwt login response was invalid JSON")
         }
         val clientToken = json.obj("auth").string("client_token")
         if (clientToken.isBlank()) {
@@ -129,18 +129,24 @@ class OpenBaoProvisioningService(
             .header("X-Vault-Token", baoToken)
             .DELETE()
             .build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = execute(request)
         if (response.statusCode() !in 200..299 && response.statusCode() != 404) {
-            throw OpenBaoClientException("OpenBao secret delete failed (${response.statusCode()}): ${response.body()}")
+            throw OpenBaoClientException("OpenBao secret delete failed with status ${response.statusCode()}")
         }
     }
 
     private fun send(request: HttpRequest): HttpResponse<String> {
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = execute(request)
         if (response.statusCode() !in 200..299) {
-            throw OpenBaoClientException("OpenBao request to ${request.uri()} failed (${response.statusCode()}): ${response.body()}")
+            throw OpenBaoClientException("OpenBao request failed with status ${response.statusCode()}")
         }
         return response
+    }
+
+    private fun execute(request: HttpRequest): HttpResponse<String> = try {
+        httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+    } catch (_: Exception) {
+        throw OpenBaoClientException("OpenBao request failed")
     }
 
     private fun dataPath(submitterIdentity: String, botId: String) =

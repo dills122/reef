@@ -301,7 +301,7 @@ This gate is for controlled built-in and local test bots.
 This gate is for external users submitting bots to real arena games.
 
 - GitHub OAuth/user model is live for the admin app
-- user ownership, roles, trust state, and bot limits are enforced
+- user ownership, roles, and trust state are enforced
 - PR submission flow validates manifest, source policy, dependencies, and hosted
   fixture behavior
 - trusted provisioning flow writes OpenBao slices without exposing privileged

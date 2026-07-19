@@ -271,7 +271,32 @@ class PostgresArenaBotRegistryStore(
 
     override fun saveVersion(version: ArenaBotVersion) {
         connection().use { conn ->
-            conn.prepareStatement(
+            saveVersion(conn, version)
+        }
+    }
+
+    override fun saveVersionTransition(version: ArenaBotVersion, decision: ArenaOperatorDecision) {
+        require(version.botId == decision.botId && version.versionId == decision.versionId) {
+            "version transition decision must target the saved version"
+        }
+        connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                saveVersion(conn, version)
+                saveOperatorDecision(conn, decision)
+                conn.commit()
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    private fun saveVersion(conn: Connection, version: ArenaBotVersion) {
+        conn.prepareStatement(
                 """
                 INSERT INTO ${names.botVersions}(
                   bot_id, version_id, source_hash, artifact_hash, sdk_version, api_version,
@@ -299,7 +324,6 @@ class PostgresArenaBotRegistryStore(
                 ps.setTimestamp(9, Timestamp.from(version.createdAt))
                 ps.executeUpdate()
             }
-        }
     }
 
     override fun version(botId: String, versionId: String): ArenaBotVersion? {
@@ -397,7 +421,12 @@ class PostgresArenaBotRegistryStore(
 
     override fun saveOperatorDecision(decision: ArenaOperatorDecision) {
         connection().use { conn ->
-            conn.prepareStatement(
+            saveOperatorDecision(conn, decision)
+        }
+    }
+
+    private fun saveOperatorDecision(conn: Connection, decision: ArenaOperatorDecision) {
+        conn.prepareStatement(
                 """
                 INSERT INTO ${names.operatorDecisions}(
                   bot_id, version_id, from_status, to_status, actor_id, reason, correlation_id, occurred_at
@@ -415,7 +444,6 @@ class PostgresArenaBotRegistryStore(
                 ps.setTimestamp(8, Timestamp.from(decision.occurredAt))
                 ps.executeUpdate()
             }
-        }
     }
 
     override fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision> {
