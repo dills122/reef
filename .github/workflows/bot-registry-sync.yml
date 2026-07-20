@@ -25,7 +25,7 @@ jobs:
       ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
       ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
