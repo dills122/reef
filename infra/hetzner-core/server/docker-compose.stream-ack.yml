@@ -36,7 +36,7 @@ services:
 
   nats-box:
     <<: *app-hardening
-    image: natsio/nats-box:0.18.0
+    image: natsio/nats-box:0.19.7
     profiles:
       - manual
     networks:
