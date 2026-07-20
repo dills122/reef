@@ -13,7 +13,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
     implementation("org.postgresql:postgresql:42.7.13")
-    implementation("com.zaxxer:HikariCP:5.1.0")
+    implementation("com.zaxxer:HikariCP:7.1.0")
     testImplementation(kotlin("test"))
 }
 
