@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/reef-load-tester ./cmd/load-tester
 
-FROM alpine:3.20 AS debug
+FROM alpine:3.24 AS debug
 LABEL org.opencontainers.image.source="https://github.com/dills122/reef"
 LABEL org.opencontainers.image.description="Reef simulator load tester debug image"
 RUN apk add --no-cache ca-certificates curl drill iproute2 netcat-openbsd wget \
