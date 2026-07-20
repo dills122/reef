@@ -29,7 +29,10 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.pull_requests[0].number != '')
+       github.event.workflow_run.pull_requests[0].number != '' &&
+       (startsWith(github.event.workflow_run.head_branch, 'bots/add/') ||
+        startsWith(github.event.workflow_run.head_branch, 'bots/update/') ||
+        startsWith(github.event.workflow_run.head_branch, 'bots/remove/')))
     env:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       PR_NUMBER: ${{ inputs.pr_number || github.event.workflow_run.pull_requests[0].number }}
