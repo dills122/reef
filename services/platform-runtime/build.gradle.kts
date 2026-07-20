@@ -44,19 +44,19 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+    dependsOn("verifyNoTestSourceExclusions")
     finalizedBy(tasks.jacocoTestReport)
 }
 
-sourceSets.named("test") {
-    kotlin.exclude(
-        "com/reef/platform/admin/AdminCliAdapterTest.kt",
-        "com/reef/platform/api/AdminJsonValidationTest.kt",
-        "com/reef/platform/api/PlatformHttpServerBoundaryTest.kt",
-        "com/reef/platform/api/PlatformHttpServerHelpersTest.kt",
-        "com/reef/platform/application/admin/AdminApplicationServiceTest.kt",
-        "com/reef/platform/application/arena/**",
-        "com/reef/platform/infrastructure/persistence/PostgresSchemaRequirementsTest.kt"
-    )
+tasks.register("verifyNoTestSourceExclusions") {
+    group = "verification"
+    description = "Fails when platform-runtime Kotlin tests are hidden with source-set exclusions."
+    doLast {
+        val exclusions = kotlin.sourceSets.getByName("test").kotlin.excludes.sorted()
+        check(exclusions.isEmpty()) {
+            "platform-runtime test source exclusions are forbidden; move product-owned tests or repair stale tests instead: ${exclusions.joinToString()}"
+        }
+    }
 }
 
 tasks.jacocoTestReport {
@@ -89,7 +89,7 @@ tasks.jacocoTestCoverageVerification {
         rule {
             limit {
                 counter = "INSTRUCTION"
-                minimum = "0.40".toBigDecimal()
+                minimum = "0.61".toBigDecimal()
             }
         }
     }

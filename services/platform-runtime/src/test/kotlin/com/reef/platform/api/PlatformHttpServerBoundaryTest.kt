@@ -2,8 +2,6 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminAuthService
-import com.reef.platform.application.admin.AdminApplicationService
-import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
@@ -11,23 +9,6 @@ import com.reef.platform.application.admin.AdminTrustState
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.admin.InMemoryAdminAuthStore
 import com.reef.platform.application.admin.InMemoryAdminIdentityStore
-import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
-import com.reef.platform.application.analytics.SimulationRunExportService
-import com.reef.platform.application.arena.ArenaBot
-import com.reef.platform.application.arena.ArenaBotMetadata
-import com.reef.platform.application.arena.ArenaBotVersionStatus
-import com.reef.platform.application.arena.ArenaControlPlaneService
-import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
-import com.reef.platform.application.arena.ArenaQualificationStatus
-import com.reef.platform.application.arena.ArenaRunBotResult
-import com.reef.platform.application.arena.ArenaRunBotVersionRef
-import com.reef.platform.application.arena.ArenaRunRecord
-import com.reef.platform.application.arena.ArenaRunStatus
-import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
-import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
-import com.reef.platform.application.arena.RegisterArenaBotCommand
-import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
-import com.reef.platform.application.arena.RegisterArenaRunCommand
 import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
 import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
@@ -59,7 +40,6 @@ import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import com.sun.net.httpserver.Headers
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.util.Base64
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -84,7 +64,7 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun adminGatewayRouteMapIncludesRiskControlAliases() {
+    fun adminGatewayRouteMapIncludesCoreAliasesAndExcludesOptionalProducts() {
         assertEquals(
             AdminGatewayRoute(
                 "/reference/instruments",
@@ -92,38 +72,6 @@ class PlatformHttpServerBoundaryTest {
                 setOf(AdminServiceTokenFamily.Admin)
             ),
             adminGatewayRouteFor("/admin/v1/reference/instruments", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/reference/participants",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin)
-            ),
-            adminGatewayRouteFor("/admin/v1/reference/participants", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/reference/accounts",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin)
-            ),
-            adminGatewayRouteFor("/admin/v1/reference/accounts", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/auth/roles",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin)
-            ),
-            adminGatewayRouteFor("/admin/v1/auth/roles", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/auth/actor-roles",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin)
-            ),
-            adminGatewayRouteFor("/admin/v1/auth/actor-roles", "POST")
         )
         assertEquals(
             AdminGatewayRoute(
@@ -135,215 +83,139 @@ class PlatformHttpServerBoundaryTest {
             adminGatewayRouteFor("/admin/v1/access/users", "GET")
         )
         assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/access/roles",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/access/roles", "GET")
+            "/internal/admin/account-risk/controls",
+            adminGatewayRouteFor("/admin/v1/risk/account-controls", "POST")?.internalPath
         )
         assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/access/users/trust-state",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/access/users/trust-state", "POST")
+            "/internal/boundary/account-risk/controls",
+            adminGatewayRouteFor("/admin/v1/risk/account-controls", "GET")?.internalPath
         )
         assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/access/users/roles",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/access/users/roles", "POST")
+            "/internal/admin/settlement/facts",
+            adminGatewayRouteFor("/admin/v1/settlement/facts", "POST")?.internalPath
         )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/access/users/roles/revoke",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/access/users/roles/revoke", "POST")
+        assertEquals(null, adminGatewayRouteFor("/admin/v1/arena/bots", "GET"))
+        assertEquals(null, adminGatewayRouteFor("/admin/v1/analytics/run-exports", "GET"))
+    }
+
+    @Test
+    fun optionalProductRouteComposesThroughCoreAdminGateway() {
+        val extension = object : OptionalProductRouteExtension {
+            override val internalPaths = listOf("/internal/admin/example")
+            override val publicReadPaths = emptyList<String>()
+            override val adminRoutes = listOf(
+                OptionalProductAdminRoute(
+                    externalPath = "/admin/v1/example",
+                    methods = setOf("GET"),
+                    internalPath = "/internal/admin/example",
+                    fallbackTokenEnv = "EXAMPLE_API_TOKEN",
+                    fallbackActorEnv = "EXAMPLE_API_ACTOR_ID",
+                    serviceTokenFamilies = setOf(AdminServiceTokenFamily.Admin)
+                )
+            )
+
+            override fun handleInternal(
+                method: String,
+                path: String,
+                query: String?,
+                body: String,
+                principal: AdminRequestPrincipal
+            ): PlatformHotPathResponse? {
+                if (path != "/internal/admin/example") return null
+                return PlatformHotPathResponse(
+                    200,
+                    JsonCodec.writeObject(
+                        "method" to method,
+                        "actorId" to principal.actorId
+                    )
+                )
+            }
+
+            override fun handlePublicRead(path: String, query: String?): PlatformHotPathResponse? = null
+        }
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            localDevAdminAuthBypass = true,
+            productRouteExtensions = listOf(extension)
         )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/analytics/run-exports",
-                "analytics",
-                setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/analytics/run-exports")
+        try {
+            val allowed = get(server.address.port, "/admin/v1/example")
+            val unsupportedMethod = post(server.address.port, "/admin/v1/example", emptyMap(), "{}")
+
+            assertEquals(200, allowed.status, allowed.body)
+            assertContains(allowed.body, "\"method\":\"GET\"")
+            assertContains(allowed.body, "\"actorId\":\"admin-cli\"")
+            assertEquals(404, unsupportedMethod.status, unsupportedMethod.body)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun optionalProductRouteEnforcesDeclaredServiceTokenFamily() {
+        val extension = object : OptionalProductRouteExtension {
+            override val internalPaths = listOf("/internal/admin/example")
+            override val publicReadPaths = emptyList<String>()
+            override val adminRoutes = listOf(
+                OptionalProductAdminRoute(
+                    externalPath = "/admin/v1/example",
+                    methods = setOf("GET"),
+                    internalPath = "/internal/admin/example",
+                    fallbackTokenEnv = "EXAMPLE_API_TOKEN",
+                    fallbackActorEnv = "EXAMPLE_API_ACTOR_ID",
+                    serviceTokenFamilies = setOf(AdminServiceTokenFamily.Admin)
+                )
+            )
+
+            override fun handleInternal(
+                method: String,
+                path: String,
+                query: String?,
+                body: String,
+                principal: AdminRequestPrincipal
+            ): PlatformHotPathResponse? = if (path == "/internal/admin/example") {
+                PlatformHotPathResponse(200, JsonCodec.writeObject("actorId" to principal.actorId))
+            } else {
+                null
+            }
+
+            override fun handlePublicRead(path: String, query: String?): PlatformHotPathResponse? = null
+        }
+        val auth = testAdminAuth()
+        val adminToken = auth.authService.issueServiceToken(
+            AdminServiceTokenFamily.Admin,
+            "admin-service",
+            ttl = null
         )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/analytics/run-bot-summaries",
-                "analytics",
-                setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/analytics/run-bot-summaries")
+        val simToken = auth.authService.issueServiceToken(
+            AdminServiceTokenFamily.Sim,
+            "sim-service",
+            ttl = null
         )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/account-risk/controls",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/risk/account-controls")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            productRouteExtensions = listOf(extension)
         )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/circuit-breakers",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/risk/circuit-breakers")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/price-collars",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/risk/price-collars")
-        )
-        // GET reads the boundary's read-only mirror instead of the write path.
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/boundary/account-risk/controls",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/risk/account-controls", "GET")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/boundary/circuit-breakers",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/risk/circuit-breakers", "GET")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/boundary/price-collars",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/risk/price-collars", "GET")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/bot-versions",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/bot-versions")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/bot-versions/transition",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/bot-versions/transition")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/runs",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/runs", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/runs/status",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/runs/status", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/run-bot-results",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/run-bot-results", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/run-enforcement-events",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/run-enforcement-events", "POST")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/bots/config",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/bots/config", "PUT")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/my/bots",
-                "arena",
-                emptySet()
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/my/bots", "GET")
-        )
-        assertEquals(
-            null,
-            adminGatewayRouteFor("/admin/v1/arena/my/bots", "GET", arenaRoutesEnabled = false)
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/settlement/facts",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/settlement/facts")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/settlement/obligations/materialize",
-                "admin",
-                setOf(AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/settlement/obligations/materialize")
-        )
-        assertEquals(
-            AdminGatewayRoute(
-                "/internal/admin/arena/bots/openbao-provision",
-                "arena",
-                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin),
-                setOf(AdminIdentityService.RoleSecretAdmin, AdminIdentityService.RolePlatformAdmin)
-            ),
-            adminGatewayRouteFor("/admin/v1/arena/bots/openbao-provision")
-        )
+        try {
+            val denied = get(
+                server.address.port,
+                "/admin/v1/example",
+                mapOf("Authorization" to "Bearer ${simToken.token}")
+            )
+            val allowed = get(
+                server.address.port,
+                "/admin/v1/example",
+                mapOf("Authorization" to "Bearer ${adminToken.token}")
+            )
+
+            assertEquals(401, denied.status, denied.body)
+            assertEquals(200, allowed.status, allowed.body)
+            assertContains(allowed.body, "\"actorId\":\"admin-service\"")
+        } finally {
+            server.stop(0)
+        }
     }
 
     @Test
@@ -545,28 +417,20 @@ class PlatformHttpServerBoundaryTest {
 
     @Test
     fun localDevAdminAuthBypassAllowsAdminGatewayWithoutCookie() {
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com"),
-                createdAt = java.time.Instant.parse("2026-07-05T12:00:00Z")
-            )
-        )
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
-            localDevAdminAuthBypass = true,
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = arenaStore
-            )
+            localDevAdminAuthBypass = true
         )
         try {
-            val response = get(server.address.port, "/admin/v1/arena/bots")
+            val response = post(
+                server.address.port,
+                "/admin/v1/reference/instruments",
+                emptyMap(),
+                """{"instrumentId":"LOCAL","symbol":"LOCAL"}"""
+            )
 
             assertEquals(200, response.status)
-            assertContains(response.body, "\"botId\":\"bot-1\"")
+            assertContains(response.body, "\"instrumentId\":\"LOCAL\"")
         } finally {
             server.stop(0)
         }
@@ -577,10 +441,6 @@ class PlatformHttpServerBoundaryTest {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
         grantTrustedPlatformAdmin(auth, user.reefUserId)
-        auth.identityService.assignBotOwnership(
-            "admin-cli",
-            AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = "bot-1")
-        )
         val session = auth.authService.createSession(user.reefUserId)
         val serviceToken = auth.authService.issueServiceToken(
             tokenFamily = AdminServiceTokenFamily.Admin,
@@ -803,10 +663,9 @@ class PlatformHttpServerBoundaryTest {
 
     @Test
     fun adminGatewayStaticFallbackTokenBindsActorFromConfig() {
-        val route = adminGatewayRouteFor("/admin/v1/arena/bots", "POST")
-            ?: error("expected arena admin gateway route")
+        val route = adminGatewayRouteFor("/admin/v1/reference/instruments", "POST")
+            ?: error("expected reference-data admin gateway route")
         val auth = AdminSessionAuth(
-            arenaAdminService = null,
             adminAuthService = null,
             adminIdentityService = null,
             adminGitHubOAuthClient = null,
@@ -815,13 +674,12 @@ class PlatformHttpServerBoundaryTest {
             localDevAdminAuthBypass = false,
             internalHttpExposureMode = InternalHttpExposureMode.LocalOnly,
             envLookup = mapOf(
-                "ARENA_ADMIN_API_TOKEN" to "arena-token",
-                "ARENA_ADMIN_API_ACTOR_ID" to "bot-submission-ci",
-                "ADMIN_ACTOR_ID" to "admin-cli"
+                "ADMIN_API_TOKEN" to "admin-token",
+                "ADMIN_ACTOR_ID" to "setup-admin"
             )::get
         )
         val headers = Headers().apply {
-            add("Authorization", "Bearer arena-token")
+            add("Authorization", "Bearer admin-token")
             add("X-Reef-Actor-Id", "admin-cli")
             add("X-Correlation-Id", "corr-static-token")
         }
@@ -829,7 +687,7 @@ class PlatformHttpServerBoundaryTest {
         val principal = auth.authorizeGateway(
             PlatformHotPathRequest(
                 method = "POST",
-                path = "/admin/v1/arena/bots",
+                path = "/admin/v1/reference/instruments",
                 query = null,
                 headers = headers,
                 remoteAddress = "203.0.113.10",
@@ -838,7 +696,7 @@ class PlatformHttpServerBoundaryTest {
             route
         )
 
-        assertEquals("bot-submission-ci", principal?.actorId)
+        assertEquals("setup-admin", principal?.actorId)
         assertEquals("corr-static-token", principal?.correlationId)
     }
 
@@ -886,162 +744,18 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun adminGatewayAnalyticsReadsRequireTrustedPlatformAdminSession() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val analyticsService = SimulationRunExportService(InMemorySimulationRunExportStore())
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            analyticsRunExportService = analyticsService
-        )
-        try {
-            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
-            val exportDenied = get(server.address.port, "/admin/v1/analytics/run-exports?limit=5", headers)
-            val summariesDenied = get(server.address.port, "/admin/v1/analytics/run-bot-summaries?runId=run-1", headers)
-
-            assertEquals(403, exportDenied.status, exportDenied.body)
-            assertContains(exportDenied.body, "trusted admin identity is required")
-            assertEquals(403, summariesDenied.status, summariesDenied.body)
-            assertContains(summariesDenied.body, "trusted admin identity is required")
-
-            grantTrustedPlatformAdmin(auth, user.reefUserId)
-            val exportAllowed = get(server.address.port, "/admin/v1/analytics/run-exports?limit=5", headers)
-            assertEquals(200, exportAllowed.status, exportAllowed.body)
-            assertContains(exportAllowed.body, "\"exportsCount\":0")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayOpenBaoProvisioningBindsSubmitterToOidcActorAndBotOwner() {
-        val auth = testAdminAuth()
-        val owner = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        auth.identityService.assignBotOwnership(
-            "admin-cli",
-            AdminBotOwnershipCommand(reefUserId = owner.reefUserId, botId = "bot-1")
-        )
-        val serviceToken = auth.authService.issueServiceToken(
-            tokenFamily = AdminServiceTokenFamily.Ci,
-            subjectActorId = "bot-submission-ci",
-            ttl = null
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = InMemoryArenaBotRegistryStore()
-            )
-        )
-        try {
-            val headers = mapOf("Authorization" to "Bearer ${serviceToken.token}")
-            val submitterMismatch = post(
-                server.address.port,
-                "/admin/v1/arena/bots/openbao-provision",
-                headers,
-                openBaoProvisionBody(
-                    githubOidcToken = githubOidcToken(actor = "octo"),
-                    submitterIdentity = "attacker",
-                    botId = "bot-1",
-                    flow = "remove"
-                )
-            )
-            val wrongOwner = post(
-                server.address.port,
-                "/admin/v1/arena/bots/openbao-provision",
-                headers,
-                openBaoProvisionBody(
-                    githubOidcToken = githubOidcToken(actor = "attacker"),
-                    submitterIdentity = "attacker",
-                    botId = "bot-1",
-                    flow = "remove"
-                )
-            )
-            val ownerAllowedUntilOpenBaoConfig = post(
-                server.address.port,
-                "/admin/v1/arena/bots/openbao-provision",
-                headers,
-                openBaoProvisionBody(
-                    githubOidcToken = githubOidcToken(actor = "octo"),
-                    submitterIdentity = "octo",
-                    botId = "bot-1",
-                    flow = "remove"
-                )
-            )
-
-            assertEquals(400, submitterMismatch.status, submitterMismatch.body)
-            assertContains(submitterMismatch.body, "submitterIdentity must match GitHub OIDC actor")
-            assertEquals(403, wrongOwner.status, wrongOwner.body)
-            assertContains(wrongOwner.body, "not authorized for OpenBao bot secret slice")
-            assertEquals(503, ownerAllowedUntilOpenBaoConfig.status, ownerAllowedUntilOpenBaoConfig.body)
-            assertContains(ownerAllowedUntilOpenBaoConfig.body, "BAO_ADDR is not configured")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayOpenBaoProvisioningRejectsWrongServiceTokenFamily() {
-        val auth = testAdminAuth()
-        val serviceToken = auth.authService.issueServiceToken(
-            tokenFamily = AdminServiceTokenFamily.Sim,
-            subjectActorId = "sim-runner",
-            ttl = null
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = InMemoryArenaBotRegistryStore()
-            )
-        )
-        try {
-            val response = post(
-                server.address.port,
-                "/admin/v1/arena/bots/openbao-provision",
-                headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
-                body = openBaoProvisionBody(
-                    githubOidcToken = githubOidcToken(actor = "octo"),
-                    submitterIdentity = "octo",
-                    botId = "bot-1",
-                    flow = "add"
-                )
-            )
-
-            assertEquals(401, response.status, response.body)
-            assertContains(response.body, "unauthorized")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
     fun adminGatewayUnknownBearerTokenReturnsCleanUnauthorizedWhenAdminAuthEnabled() {
         val auth = testAdminAuth()
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
             adminAuthService = auth.authService,
             adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = InMemoryArenaBotRegistryStore()
-            )
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
         )
         try {
             val response = get(
                 server.address.port,
-                "/admin/v1/arena/bots?botId=bot-1",
+                "/admin/v1/reference/instruments",
                 headers = mapOf("Authorization" to "Bearer static-fallback-token")
             )
 
@@ -1093,342 +807,6 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
-    fun adminGatewayArenaBotsReadRequiresTrustedOperatorSession() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = arenaStore
-            )
-        )
-        try {
-            val response = get(
-                server.address.port,
-                "/admin/v1/arena/bots?botId=bot-1",
-                headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
-            )
-
-            assertEquals(403, response.status)
-            assertContains(response.body, "trusted admin identity is required")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayArenaBotsListReturnsRosterWhenBotIdOmitted() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val persistence = InMemoryRuntimePersistence()
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com"),
-                createdAt = now
-            )
-        )
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-2",
-                fileName = "bot-2.ts",
-                metadata = ArenaBotMetadata(name = "Bot 2", publisher = "Publisher", email = "p2@example.com"),
-                createdAt = now.plusSeconds(1)
-            )
-        )
-        grantTrustedOperator(auth, user.reefUserId)
-        auth.identityService.assignBotOwnership(
-            "admin-cli",
-            AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = "bot-1")
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            runtimePersistence = persistence,
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = persistence,
-                arenaRegistryStore = arenaStore,
-                adminIdentityService = auth.identityService
-            )
-        )
-        try {
-            val response = get(
-                server.address.port,
-                "/admin/v1/arena/bots",
-                headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
-            )
-
-            assertEquals(200, response.status)
-            assertContains(response.body, "\"bots\":[")
-            assertContains(response.body, "\"botId\":\"bot-1\"")
-            assertContains(response.body, "\"botId\":\"bot-2\"")
-            assertContains(response.body, "\"owners\":[")
-            assertContains(response.body, "\"githubLogin\":\"octo\"")
-            assertContains(response.body, "\"trustState\":\"trusted\"")
-            assertContains(response.body, "\"ownershipState\":\"owner\"")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayMyArenaBotsReturnsOnlySessionOwnedBots() {
-        val auth = testAdminAuth()
-        val owner = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val other = auth.identityService.ensureGitHubUser(GitHubUserIdentity(67890, "mona"))
-        val ownerSession = auth.authService.createSession(owner.reefUserId)
-        val otherSession = auth.authService.createSession(other.reefUserId)
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "octo", email = "p1@example.com"),
-                createdAt = now
-            )
-        )
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-2",
-                fileName = "bot-2.ts",
-                metadata = ArenaBotMetadata(name = "Bot 2", publisher = "mona", email = "p2@example.com"),
-                createdAt = now.plusSeconds(1)
-            )
-        )
-        auth.identityService.assignBotOwnership(
-            "admin-cli",
-            AdminBotOwnershipCommand(reefUserId = owner.reefUserId, botId = "bot-1")
-        )
-        auth.identityService.assignBotOwnership(
-            "admin-cli",
-            AdminBotOwnershipCommand(reefUserId = other.reefUserId, botId = "bot-2")
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = arenaStore
-            )
-        )
-        try {
-            val ownerResponse = get(
-                server.address.port,
-                "/admin/v1/arena/my/bots",
-                headers = mapOf("Cookie" to "reef_admin_session=${ownerSession.token}")
-            )
-            val otherResponse = get(
-                server.address.port,
-                "/admin/v1/arena/my/bots",
-                headers = mapOf("Cookie" to "reef_admin_session=${otherSession.token}")
-            )
-
-            assertEquals(200, ownerResponse.status, ownerResponse.body)
-            assertContains(ownerResponse.body, "\"reefUserId\":\"${owner.reefUserId}\"")
-            assertContains(ownerResponse.body, "\"botId\":\"bot-1\"")
-            assertContains(ownerResponse.body, "\"githubLogin\":\"octo\"")
-            assertFalse(ownerResponse.body.contains("\"botId\":\"bot-2\""), ownerResponse.body)
-
-            assertEquals(200, otherResponse.status, otherResponse.body)
-            assertContains(otherResponse.body, "\"reefUserId\":\"${other.reefUserId}\"")
-            assertContains(otherResponse.body, "\"botId\":\"bot-2\"")
-            assertContains(otherResponse.body, "\"githubLogin\":\"mona\"")
-            assertFalse(otherResponse.body.contains("\"botId\":\"bot-1\""), otherResponse.body)
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayAssignsBotOwnershipFromGitHubIdentity() {
-        val auth = testAdminAuth()
-        val serviceToken = auth.authService.issueServiceToken(
-            tokenFamily = AdminServiceTokenFamily.Ci,
-            subjectActorId = "bot-registry-sync",
-            ttl = null
-        )
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = arenaStore
-            )
-        )
-        try {
-            val response = post(
-                server.address.port,
-                "/admin/v1/arena/bots/ownership",
-                headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
-                body = """
-                    {
-                      "botId": "bot-1",
-                      "githubUserId": 12345,
-                      "githubLogin": "octo",
-                      "displayName": "Octo User"
-                    }
-                """.trimIndent()
-            )
-
-            assertEquals(200, response.status)
-            assertContains(response.body, "\"botId\":\"bot-1\"")
-            assertContains(response.body, "\"reefUserId\":\"user-gh-12345\"")
-            assertContains(response.body, "\"githubLogin\":\"octo\"")
-            val ownership = auth.identityService.botOwnerMetadata("bot-1").single()
-            assertEquals("user-gh-12345", ownership.reefUserId)
-            assertEquals("owner", ownership.ownershipState.dbValue)
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayRejectsParticipantBotOwnershipAssignment() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
-        val session = auth.authService.createSession(user.reefUserId)
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = InMemoryArenaBotRegistryStore()
-            )
-        )
-        try {
-            val response = post(
-                server.address.port,
-                "/admin/v1/arena/bots/ownership",
-                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
-                body = """
-                    {
-                      "botId": "bot-1",
-                      "githubUserId": 12345,
-                      "githubLogin": "octo"
-                    }
-                """.trimIndent()
-            )
-
-            assertEquals(403, response.status)
-            assertContains(response.body, "admin role required")
-            assertTrue(auth.identityService.botOwnerMetadata("bot-1").isEmpty())
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayArenaRunsReadReturnsRecentRunsResultsAndLeaderboard() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val persistence = InMemoryRuntimePersistence()
-        grantTrustedOperator(auth, user.reefUserId)
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com"),
-                createdAt = now
-            )
-        )
-        arenaStore.saveRunRecord(
-            ArenaRunRecord(
-                runId = "run-1",
-                modeId = "hosted-sim",
-                scenarioId = "scenario-1",
-                seed = 42,
-                policyVersion = "policy-v1",
-                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1")),
-                status = ArenaRunStatus.Completed,
-                createdAt = now
-            )
-        )
-        arenaStore.saveRunBotResult(
-            ArenaRunBotResult(
-                runId = "run-1",
-                botId = "bot-1",
-                versionId = "v1",
-                scoringPolicyVersion = "score-v2",
-                finalEquity = 1030000,
-                realizedPnl = 30000,
-                maxDrawdown = 900,
-                actionsProposed = 13,
-                orderActionsProposed = 9,
-                dataCalls = 21,
-                signalsGenerated = 5,
-                disqualified = false,
-                createdAt = now
-            )
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            runtimePersistence = persistence,
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = persistence,
-                arenaRegistryStore = arenaStore,
-                adminIdentityService = auth.identityService
-            )
-        )
-        try {
-            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
-            val runs = get(server.address.port, "/admin/v1/arena/runs", headers = headers)
-            val results = get(server.address.port, "/admin/v1/arena/run-bot-results?runId=run-1", headers = headers)
-            val enforcementEvents = get(
-                server.address.port,
-                "/admin/v1/arena/run-enforcement-events?runId=run-1",
-                headers = headers
-            )
-            val leaderboard = get(
-                server.address.port,
-                "/admin/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
-                headers = headers
-            )
-
-            assertEquals(200, runs.status)
-            assertContains(runs.body, "\"runs\":[")
-            assertContains(runs.body, "\"runId\":\"run-1\"")
-            assertContains(runs.body, "\"status\":\"Completed\"")
-            assertEquals(200, results.status)
-            assertContains(results.body, "\"results\":[")
-            assertContains(results.body, "\"scoringPolicyVersion\":\"score-v2\"")
-            assertEquals(200, enforcementEvents.status)
-            assertContains(enforcementEvents.body, "\"events\":[]")
-            assertEquals(200, leaderboard.status)
-            assertContains(leaderboard.body, "\"entries\":[")
-            assertContains(leaderboard.body, "\"botName\":\"Bot 1\"")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
     fun adminGatewayRiskAccountControlsGetReturnsCurrentState() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
@@ -1461,246 +839,6 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"scopeId\":\"bot-1\"")
             assertContains(response.body, "\"decision\":\"DISABLED_BOT\"")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayArenaBotVersionRegisterWorksThroughPublicGateway() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val persistence = InMemoryRuntimePersistence()
-        grantTrustedOperator(auth, user.reefUserId)
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
-        controlPlane.registerBot(
-            RegisterArenaBotCommand(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com")
-            )
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            runtimePersistence = persistence,
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = persistence,
-                arenaRegistryStore = arenaStore,
-                adminIdentityService = auth.identityService
-            )
-        )
-        try {
-            val response = post(
-                server.address.port,
-                "/admin/v1/arena/bot-versions",
-                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
-                body = """
-                    {
-                      "botId": "bot-1",
-                      "versionId": "v1",
-                      "sourceHash": "sha256:source",
-                      "artifactHash": "sha256:artifact",
-                      "sdkVersion": "1.5.0",
-                      "apiVersion": "v1",
-                      "dependencyManifestHash": "sha256:deps"
-                    }
-                """.trimIndent()
-            )
-
-            assertEquals(200, response.status)
-            assertContains(response.body, "\"botId\":\"bot-1\"")
-            assertContains(response.body, "\"versionId\":\"v1\"")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayArenaBotVersionTransitionBansThroughPublicGateway() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val persistence = InMemoryRuntimePersistence()
-        grantTrustedOperator(auth, user.reefUserId)
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
-        controlPlane.registerBot(
-            RegisterArenaBotCommand(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com")
-            )
-        )
-        controlPlane.registerVersion(
-            RegisterArenaBotVersionCommand(
-                botId = "bot-1",
-                versionId = "v1",
-                sourceHash = "sha256:source",
-                artifactHash = "sha256:artifact",
-                sdkVersion = "1.5.0",
-                apiVersion = "v1",
-                dependencyManifestHash = "sha256:deps"
-            )
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            runtimePersistence = persistence,
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = persistence,
-                arenaRegistryStore = arenaStore,
-                adminIdentityService = auth.identityService
-            )
-        )
-        try {
-            val response = post(
-                server.address.port,
-                "/admin/v1/arena/bot-versions/transition",
-                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
-                body = """{"botId":"bot-1","versionId":"v1","status":"banned","reason":"policy violation"}"""
-            )
-
-            assertEquals(200, response.status)
-            assertContains(response.body, "\"botVersionStatus\":\"Banned\"")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun adminGatewayArenaRunResultWritesWorkThroughPublicGateway() {
-        val auth = testAdminAuth()
-        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
-        val session = auth.authService.createSession(user.reefUserId)
-        val persistence = InMemoryRuntimePersistence()
-        grantTrustedOperator(auth, user.reefUserId)
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
-        controlPlane.registerBot(
-            RegisterArenaBotCommand(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com")
-            )
-        )
-        controlPlane.registerVersion(
-            RegisterArenaBotVersionCommand(
-                botId = "bot-1",
-                versionId = "v1",
-                sourceHash = "sha256:source",
-                artifactHash = "sha256:artifact",
-                sdkVersion = "1.5.0",
-                apiVersion = "v1",
-                dependencyManifestHash = "sha256:deps"
-            )
-        )
-        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Submitted, user.reefUserId, "submitted", "corr")
-        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.ChecksPassed, user.reefUserId, "checks passed", "corr")
-        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Approved, user.reefUserId, "approved", "corr")
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            runtimePersistence = persistence,
-            adminAuthService = auth.authService,
-            adminIdentityService = auth.identityService,
-            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = persistence,
-                arenaRegistryStore = arenaStore,
-                adminIdentityService = auth.identityService
-            )
-        )
-        try {
-            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
-            val run = post(
-                server.address.port,
-                "/admin/v1/arena/runs",
-                headers = headers,
-                body = """
-                    {
-                      "runId":"run-1",
-                      "modeId":"hosted-sim",
-                      "scenarioId":"scenario-1",
-                      "seed":42,
-                      "policyVersion":"policy-v1",
-                      "botVersions":[{"botId":"bot-1","versionId":"v1"}]
-                    }
-                """.trimIndent()
-            )
-            val running = post(
-                server.address.port,
-                "/admin/v1/arena/runs/status",
-                headers = headers,
-                body = """{"runId":"run-1","status":"running"}"""
-            )
-            val completed = post(
-                server.address.port,
-                "/admin/v1/arena/runs/status",
-                headers = headers,
-                body = """{"runId":"run-1","status":"completed"}"""
-            )
-            val result = post(
-                server.address.port,
-                "/admin/v1/arena/run-bot-results",
-                headers = headers,
-                body = """
-                    {
-                      "runId":"run-1",
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "scoringPolicyVersion":"score-v2",
-                      "finalEquity":1030000,
-                      "realizedPnl":30000,
-                      "maxDrawdown":900,
-                      "actionsProposed":13,
-                      "orderActionsProposed":9,
-                      "dataCalls":21,
-                      "signalsGenerated":5,
-                      "disqualified":false
-                    }
-                """.trimIndent()
-            )
-            val enforcement = post(
-                server.address.port,
-                "/admin/v1/arena/run-enforcement-events",
-                headers = headers,
-                body = """
-                    {
-                      "runId":"run-1",
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "decision":"warn",
-                      "reasonCode":"TEST_WARN",
-                      "reason":"test warning",
-                      "policyVersion":"policy-v1",
-                      "countersJson":"{}"
-                    }
-                """.trimIndent()
-            )
-            val readResults = get(
-                server.address.port,
-                "/admin/v1/arena/run-bot-results?runId=run-1",
-                headers = headers
-            )
-            val leaderboard = get(
-                server.address.port,
-                "/admin/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
-                headers = headers
-            )
-
-            assertEquals(200, run.status)
-            assertEquals(200, running.status)
-            assertEquals(200, completed.status)
-            assertEquals(200, result.status)
-            assertEquals(200, enforcement.status)
-            assertContains(readResults.body, "\"finalEquity\":1030000")
-            assertContains(leaderboard.body, "\"botId\":\"bot-1\"")
         } finally {
             server.stop(0)
         }
@@ -1750,8 +888,8 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/proof/{scenarioRunId}\"")
             assertContains(response.body, "\"name\":\"settlementScore\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/score/{scenarioRunId}\"")
-            assertContains(response.body, "\"name\":\"arenaLeaderboard\"")
-            assertContains(response.body, "\"endpoint\":\"/api/v1/arena/leaderboard\"")
+            assertFalse(response.body.contains("\"name\":\"arenaLeaderboard\""))
+            assertFalse(response.body.contains("/api/v1/arena/leaderboard"))
         } finally {
             server.stop(0)
         }
@@ -1782,98 +920,6 @@ class PlatformHttpServerBoundaryTest {
                 assertEquals(401, response.status, path)
                 assertContains(response.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
             }
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun apiV1ArenaLeaderboardReturnsPublicSafeEntriesWithBotMetadata() {
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
-        arenaStore.saveBot(
-            ArenaBot(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(
-                    name = "Bot 1",
-                    publisher = "Publisher",
-                    email = "publisher@example.com"
-                ),
-                createdAt = now
-            )
-        )
-        arenaStore.saveRunRecord(
-            ArenaRunRecord(
-                runId = "run-1",
-                modeId = "hosted-sim",
-                scenarioId = "scenario-1",
-                seed = 42,
-                policyVersion = "policy-v1",
-                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1")),
-                status = ArenaRunStatus.Completed,
-                createdAt = now
-            )
-        )
-        arenaStore.saveRunBotResult(
-            ArenaRunBotResult(
-                runId = "run-1",
-                botId = "bot-1",
-                versionId = "v1",
-                scoringPolicyVersion = "score-v2",
-                finalEquity = 1030000,
-                realizedPnl = 30000,
-                maxDrawdown = 900,
-                actionsProposed = 13,
-                orderActionsProposed = 9,
-                dataCalls = 21,
-                signalsGenerated = 5,
-                disqualified = false,
-                createdAt = now
-            )
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl(
-                envLookup(
-                    "REEF_ENV" to "local",
-                    "LOCAL_DEV_ADMIN_UI_BASE_URL" to "http://localhost:5174"
-                )
-            ),
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = arenaStore
-            )
-        )
-        try {
-            val preflight = options(
-                server.address.port,
-                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
-                headers = mapOf(
-                    "Origin" to "http://localhost:5174",
-                    "Access-Control-Request-Method" to "GET",
-                    "Access-Control-Request-Headers" to "x-client-id"
-                )
-            )
-            val missingParams = get(server.address.port, "/api/v1/arena/leaderboard", apiReadHeaders())
-            val leaderboard = get(
-                server.address.port,
-                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
-                apiReadHeaders()
-            )
-
-            assertEquals(204, preflight.status)
-            assertEquals("http://localhost:5174", responseHeader(preflight, "Access-Control-Allow-Origin"))
-            assertEquals("x-client-id", responseHeader(preflight, "Access-Control-Allow-Headers"))
-            assertEquals(400, missingParams.status)
-            assertEquals(200, leaderboard.status)
-            assertContains(leaderboard.body, "\"modeId\":\"hosted-sim\"")
-            assertContains(leaderboard.body, "\"scoringPolicyVersion\":\"score-v2\"")
-            assertContains(leaderboard.body, "\"rank\":1")
-            assertContains(leaderboard.body, "\"botId\":\"bot-1\"")
-            assertContains(leaderboard.body, "\"botName\":\"Bot 1\"")
-            assertContains(leaderboard.body, "\"ownerHandle\":\"Publisher\"")
-            assertContains(leaderboard.body, "\"finalEquity\":1030000")
         } finally {
             server.stop(0)
         }
@@ -3973,393 +3019,6 @@ class PlatformHttpServerBoundaryTest {
             assertContains(auditEvents.single().payloadJson, "\"decision\":\"DISABLED_BOT\"")
             assertContains(auditEvents.single().payloadJson, "\"maxQuantityUnits\":\"100\"")
             assertContains(auditEvents.single().payloadJson, "\"maxNotional\":\"15025000000000\"")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun internalAdminArenaBotVersionEndpointTransitionsVersionAndAuditsChange() {
-        val accountRiskStore = RecordingAccountRiskStore()
-        val persistence = InMemoryRuntimePersistence()
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val arenaAdminService = AdminApplicationService(
-            runtimePersistence = persistence,
-            arenaRegistryStore = arenaStore,
-            accountRiskControlStore = accountRiskStore
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            accountRiskCheck = accountRiskStore,
-            runtimePersistence = persistence,
-            arenaAdminService = arenaAdminService
-        )
-        try {
-            val registeredBot = post(
-                port = server.address.port,
-                path = "/internal/admin/arena/bots",
-                headers = emptyMap(),
-                body = """
-                    {
-                      "botId":"bot-1",
-                      "fileName":"bot-1.ts",
-                      "name":"Bot 1",
-                      "publisher":"Publisher",
-                      "email":"publisher@example.com",
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-admin-arena"
-                    }
-                """.trimIndent()
-            )
-            val registeredVersion = post(
-                port = server.address.port,
-                path = "/internal/admin/arena/bot-versions",
-                headers = mapOf("X-Reef-Actor-Id" to "admin-cli", "X-Correlation-Id" to "corr-admin-arena"),
-                body = """
-                    {
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "sourceHash":"sha256:source",
-                      "artifactHash":"sha256:artifact",
-                      "sdkVersion":"1.5.0",
-                      "apiVersion":"v1",
-                      "dependencyManifestHash":"sha256:deps",
-                      "actorId":"spoofed-admin",
-                      "correlationId":"spoofed-corr"
-                    }
-                """.trimIndent()
-            )
-            val response = post(
-                port = server.address.port,
-                path = "/internal/admin/arena/bot-versions/transition",
-                headers = mapOf("X-Reef-Actor-Id" to "admin-cli", "X-Correlation-Id" to "corr-admin-arena"),
-                body = """
-                    {
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "status":"quarantined",
-                      "reason":"scanner regression",
-                      "actorId":"spoofed-admin",
-                      "correlationId":"spoofed-corr"
-                    }
-                """.trimIndent()
-            )
-            val auditEvents = persistence.eventsForTrace("admin:admin-cli")
-
-            assertEquals(200, registeredBot.status)
-            assertContains(registeredBot.body, "\"botId\":\"bot-1\"")
-            assertEquals(200, registeredVersion.status)
-            assertContains(registeredVersion.body, "\"botVersionStatus\":\"Draft\"")
-            assertEquals(200, response.status)
-            assertContains(response.body, "\"status\":\"ok\"")
-            assertContains(response.body, "\"botVersionStatus\":\"Quarantined\"")
-            assertEquals(AccountRiskDecision.DISABLED_BOT, accountRiskStore.listControls().single().decision)
-            assertTrue(auditEvents.any { it.eventType == "AdminArenaBotVersionTransitioned" })
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun internalAdminArenaReadEndpointsReturnRegistryControlPlaneState() {
-        val persistence = InMemoryRuntimePersistence()
-        val arenaStore = InMemoryArenaBotRegistryStore()
-        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
-        controlPlane.registerBot(
-            RegisterArenaBotCommand(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(
-                    name = "Bot 1",
-                    publisher = "Publisher",
-                    email = "publisher@example.com",
-                    description = "test bot",
-                    version = "1.0.0"
-                )
-            )
-        )
-        controlPlane.registerVersion(
-            RegisterArenaBotVersionCommand(
-                botId = "bot-1",
-                versionId = "v1",
-                sourceHash = "sha256:source",
-                artifactHash = "sha256:artifact",
-                sdkVersion = "1.5.0",
-                apiVersion = "v1",
-                dependencyManifestHash = "sha256:deps"
-            )
-        )
-        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Submitted, "scanner", "submitted", "corr")
-        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.ChecksPassed, "scanner", "checks passed", "corr")
-        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Approved, "admin-cli", "approved", "corr")
-        controlPlane.recordQualificationReport(
-            botId = "bot-1",
-            versionId = "v1",
-            reportId = "report-1",
-            status = ArenaQualificationStatus.Passed,
-            issues = listOf("scanner ok"),
-            policyVersion = "policy-v1"
-        )
-        controlPlane.replaceRuntimeConfigDescriptors(
-            "bot-1",
-            "v1",
-            listOf(
-                ArenaRuntimeConfigDescriptor(
-                    botId = "bot-1",
-                    versionId = "v1",
-                    key = "maxInventory",
-                    provider = ArenaRuntimeConfigProvider.OpenBao,
-                    secretPath = "kv/bots/bot-1/v1",
-                    required = true,
-                    description = "inventory cap"
-                )
-            )
-        )
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            runtimePersistence = persistence,
-            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
-        )
-        try {
-            val registeredRun = post(
-                server.address.port,
-                "/internal/admin/arena/runs",
-                emptyMap(),
-                """
-                    {
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-run-register",
-                      "runId":"run-1",
-                      "modeId":"hosted-sim",
-                      "scenarioId":"scenario-1",
-                      "seed":42,
-                      "policyVersion":"policy-v1",
-                      "botVersions":[{"botId":"bot-1","versionId":"v1"}]
-                    }
-                """.trimIndent()
-            )
-            val runningRun = post(
-                server.address.port,
-                "/internal/admin/arena/runs/status",
-                emptyMap(),
-                """
-                    {
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-run-running",
-                      "runId":"run-1",
-                      "status":"running"
-                    }
-                """.trimIndent()
-            )
-            val completedRun = post(
-                server.address.port,
-                "/internal/admin/arena/runs/status",
-                emptyMap(),
-                """
-                    {
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-run-completed",
-                      "runId":"run-1",
-                      "status":"completed"
-                    }
-                """.trimIndent()
-            )
-            val postedResult = post(
-                server.address.port,
-                "/internal/admin/arena/run-bot-results",
-                emptyMap(),
-                """
-                    {
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-run-result",
-                      "runId":"run-1",
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "scoringPolicyVersion":"score-v2",
-                      "finalEquity":1030000,
-                      "realizedPnl":30000,
-                      "maxDrawdown":900,
-                      "actionsProposed":13,
-                      "orderActionsProposed":9,
-                      "dataCalls":21,
-                      "signalsGenerated":5,
-                      "disqualified":false
-                    }
-                """.trimIndent()
-            )
-            val postedEnforcementEvent = post(
-                server.address.port,
-                "/internal/admin/arena/run-enforcement-events",
-                emptyMap(),
-                """
-                    {
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-run-enforcement",
-                      "runId":"run-1",
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "decision":"freeze",
-                      "reasonCode":"tick_policy_violation",
-                      "reason":"max actions exceeded",
-                      "policyVersion":"arena-risk-v0",
-                      "countersJson":"{\"maxActionsPerTick\":11}"
-                    }
-                """.trimIndent()
-            )
-            val bot = get(server.address.port, "/internal/admin/arena/bots?botId=bot-1")
-            val version = get(server.address.port, "/internal/admin/arena/bot-versions?botId=bot-1&versionId=v1")
-            val reports = get(server.address.port, "/internal/admin/arena/qualification-reports?botId=bot-1&versionId=v1")
-            val decisions = get(server.address.port, "/internal/admin/arena/operator-decisions?botId=bot-1&versionId=v1")
-            val descriptors = get(server.address.port, "/internal/admin/arena/runtime-config-descriptors?botId=bot-1&versionId=v1")
-            val run = get(server.address.port, "/internal/admin/arena/runs?runId=run-1")
-            val runResults = get(server.address.port, "/internal/admin/arena/run-bot-results?runId=run-1")
-            val runEnforcementEvents = get(server.address.port, "/internal/admin/arena/run-enforcement-events?runId=run-1")
-            val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2")
-
-            assertEquals(200, registeredRun.status)
-            assertContains(registeredRun.body, "\"status\":\"Planned\"")
-            assertEquals(200, runningRun.status)
-            assertContains(runningRun.body, "\"status\":\"Running\"")
-            assertEquals(200, completedRun.status)
-            assertContains(completedRun.body, "\"status\":\"Completed\"")
-            assertEquals(200, postedResult.status)
-            assertContains(postedResult.body, "\"scoringPolicyVersion\":\"score-v2\"")
-            assertContains(postedResult.body, "\"finalEquity\":1030000")
-            assertEquals(200, postedEnforcementEvent.status)
-            assertContains(postedEnforcementEvent.body, "\"decision\":\"freeze\"")
-            assertContains(postedEnforcementEvent.body, "\"reasonCode\":\"tick_policy_violation\"")
-            assertEquals(200, bot.status)
-            assertContains(bot.body, "\"fileName\":\"bot-1.ts\"")
-            assertEquals(200, version.status)
-            assertContains(version.body, "\"status\":\"Approved\"")
-            assertEquals(200, reports.status)
-            assertContains(reports.body, "\"reportId\":\"report-1\"")
-            assertContains(reports.body, "\"issues\":[\"scanner ok\"]")
-            assertEquals(200, decisions.status)
-            assertContains(decisions.body, "\"toStatus\":\"Approved\"")
-            assertEquals(200, descriptors.status)
-            assertContains(descriptors.body, "\"key\":\"maxInventory\"")
-            assertContains(descriptors.body, "\"provider\":\"OpenBao\"")
-            assertEquals(200, run.status)
-            assertContains(run.body, "\"runId\":\"run-1\"")
-            assertContains(run.body, "\"botVersions\":[{\"botId\":\"bot-1\",\"versionId\":\"v1\"}]")
-            assertEquals(200, runResults.status)
-            assertContains(runResults.body, "\"results\":[")
-            assertContains(runResults.body, "\"scoringPolicyVersion\":\"score-v2\"")
-            assertContains(runResults.body, "\"finalEquity\":1030000")
-            assertEquals(200, runEnforcementEvents.status)
-            assertContains(runEnforcementEvents.body, "\"events\":[")
-            assertContains(runEnforcementEvents.body, "\"countersJson\":\"{\\\"maxActionsPerTick\\\":11}\"")
-            assertEquals(200, leaderboard.status)
-            assertContains(leaderboard.body, "\"rank\":1")
-            assertContains(leaderboard.body, "\"finalEquity\":1030000")
-
-            val invalidResult = post(
-                server.address.port,
-                "/internal/admin/arena/run-bot-results",
-                emptyMap(),
-                """
-                    {
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-run-result-invalid",
-                      "runId":"run-1",
-                      "botId":"bot-1",
-                      "versionId":"v1",
-                      "scoringPolicyVersion":"score-v2",
-                      "finalEquity":1030000,
-                      "realizedPnl":30000,
-                      "maxDrawdown":900,
-                      "actionsProposed":1,
-                      "orderActionsProposed":2,
-                      "dataCalls":21,
-                      "signalsGenerated":5,
-                      "disqualified":false
-                    }
-                """.trimIndent()
-            )
-            assertEquals(400, invalidResult.status)
-            assertContains(invalidResult.body, "orderActionsProposed must be less than or equal to actionsProposed")
-
-            val invalidEnforcementQuery = get(server.address.port, "/internal/admin/arena/run-enforcement-events")
-            assertEquals(400, invalidEnforcementQuery.status)
-            assertContains(invalidEnforcementQuery.body, "runId is required")
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    @Test
-    fun internalAdminAnalyticsRunExportsEndpointIngestsAndListsSimulationRunExports() {
-        val analyticsService = SimulationRunExportService(
-            InMemorySimulationRunExportStore()
-        ) { java.time.Instant.parse("2026-07-06T12:00:00Z") }
-        val server = testServerWithGateway(
-            gateway = StaticAcceptedEngineGateway(),
-            analyticsRunExportService = analyticsService
-        )
-        try {
-            val posted = post(
-                server.address.port,
-                "/internal/admin/analytics/run-exports",
-                emptyMap(),
-                """
-                    {
-                      "runId":"run-export-1",
-                      "scenarioId":"stress-smoke",
-                      "runKind":"stream-ack-soak",
-                      "source":"local",
-                      "gitSha":"abc123",
-                      "profile":"10k-15m",
-                      "startedAt":"2026-07-06T11:45:00Z",
-                      "completedAt":"2026-07-06T12:00:00Z",
-                      "status":"passed",
-                      "counts":{
-                        "attempted":600000,
-                        "accepted":599900,
-                        "completed":599800,
-                        "materialized":599800,
-                        "projected":599800,
-                        "failed":100
-                      },
-                      "latencyMs":{"p50":4.2,"p95":12.5,"p99":25.1},
-                      "artifacts":[{"type":"report","path":"artifacts/run-export-1/report.json","sha256":"sha256:report"}],
-                      "summary":{
-                        "directConsumeMatched":true,
-                        "replayAuditClean":true,
-                        "botResults":[
-                          {
-                            "botId":"bot-a",
-                            "finalEquity":1002500,
-                            "realizedPnl":2500,
-                            "maxDrawdown":125,
-                            "tradingMetrics":{"commands":{"submitted":12,"failed":1,"rejected":1,"timedOut":0}}
-                          }
-                        ],
-                        "settlementScore":{
-                          "participants":[{"participantId":"bot-a","scorePenaltyPoints":25,"agedFailCount":0}]
-                        }
-                      }
-                    }
-                """.trimIndent()
-            )
-            val fetched = get(server.address.port, "/internal/admin/analytics/run-exports?runId=run-export-1")
-            val listed = get(server.address.port, "/internal/admin/analytics/run-exports?limit=5")
-            val summaries = get(server.address.port, "/internal/admin/analytics/run-bot-summaries?runId=run-export-1")
-
-            assertEquals(200, posted.status)
-            assertContains(posted.body, "\"runId\":\"run-export-1\"")
-            assertContains(posted.body, "\"attempted\":600000")
-            assertContains(posted.body, "\"directConsumeMatched\":true")
-            assertEquals(200, fetched.status)
-            assertContains(fetched.body, "\"profile\":\"10k-15m\"")
-            assertEquals(200, listed.status)
-            assertContains(listed.body, "\"exportsCount\":1")
-            assertEquals(200, summaries.status)
-            assertContains(summaries.body, "\"summariesCount\":1")
-            assertContains(summaries.body, "\"botId\":\"bot-a\"")
-            assertContains(summaries.body, "\"finalEquity\":1002500.0")
-            assertContains(summaries.body, "\"failCount\":2")
-            assertContains(summaries.body, "\"authoritative\":false")
         } finally {
             server.stop(0)
         }
@@ -6892,41 +5551,6 @@ class PlatformHttpServerBoundaryTest {
         auth.identityService.assignRole("admin-cli", reefUserId, AdminIdentityService.RoleOperator)
     }
 
-    private fun openBaoProvisionBody(
-        githubOidcToken: String,
-        submitterIdentity: String,
-        botId: String,
-        flow: String
-    ): String {
-        return JsonCodec.writeObject(
-            "githubOidcToken" to githubOidcToken,
-            "submitterIdentity" to submitterIdentity,
-            "botId" to botId,
-            "flow" to flow
-        )
-    }
-
-    private fun githubOidcToken(
-        actor: String,
-        repository: String = "reef/reef",
-        audience: String = "reef-bot-submission-ci"
-    ): String {
-        fun encode(raw: String): String {
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
-        }
-        val header = encode("""{"alg":"none","typ":"JWT"}""")
-        val payload = encode(
-            """
-                {
-                  "actor": "$actor",
-                  "repository": "$repository",
-                  "aud": "$audience"
-                }
-            """.trimIndent()
-        )
-        return "$header.$payload.signature"
-    }
-
     private class FakeAdminGitHubOAuthClient : AdminGitHubOAuthClient {
         override fun authorizationUrl(stateToken: String): String {
             return "https://github.test/oauth?state=$stateToken"
@@ -6969,11 +5593,9 @@ class PlatformHttpServerBoundaryTest {
         commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
         instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
-        arenaAdminService: AdminApplicationService? = null,
         adminAuthService: AdminAuthService? = null,
         adminIdentityService: AdminIdentityService? = null,
         adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
-        analyticsRunExportService: SimulationRunExportService? = null,
         settlementFactStore: SettlementFactStore? = null,
         settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
         defaultPostTradeProfileId: String = DefaultPostTradeProfileId,
@@ -7000,7 +5622,8 @@ class PlatformHttpServerBoundaryTest {
         streamCommandPublishResponseTimeoutMs: Long = 2_000L,
         venueEventMaterializerEnabled: Boolean = false,
         localDevAdminUiBaseUrl: String? = null,
-        runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence()
+        runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence(),
+        productRouteExtensions: List<OptionalProductRouteExtension> = emptyList()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = runtimePersistence
         seedOrderReferenceData(persistence)
@@ -7031,11 +5654,9 @@ class PlatformHttpServerBoundaryTest {
             commandCircuitBreakerStore = commandCircuitBreakerStore,
             instrumentPriceCollarCheck = instrumentPriceCollarCheck,
             instrumentPriceCollarStore = instrumentPriceCollarStore,
-            arenaAdminService = arenaAdminService,
             adminAuthService = adminAuthService,
             adminIdentityService = adminIdentityService,
             adminGitHubOAuthClient = adminGitHubOAuthClient,
-            analyticsRunExportService = analyticsRunExportService,
             settlementFactStore = settlementFactStore,
             settlementObligationMaterializer = settlementObligationMaterializer,
             defaultPostTradeProfileId = defaultPostTradeProfileId,
@@ -7062,7 +5683,8 @@ class PlatformHttpServerBoundaryTest {
             commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled,
             localDevAdminAuthBypass = localDevAdminAuthBypass,
-            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl
+            localDevAdminUiBaseUrl = localDevAdminUiBaseUrl,
+            productRouteExtensions = productRouteExtensions
         ).start()
     }
 

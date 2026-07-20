@@ -1,5 +1,6 @@
 package com.reef.stockdata
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -69,6 +70,8 @@ class StockDataHttpServer(
             validateSeedRequest(request, security)
             val batch = workflow.seed(request.gameSeedId, request.symbols, request.asOf ?: Instant.now())
             writeJson(exchange, 200, mapper.writeValueAsString(BatchResponse.from(batch)))
+        } catch (ex: JsonProcessingException) {
+            writeJson(exchange, 400, mapper.writeValueAsString(mapOf("error" to "invalid request")))
         } catch (ex: IllegalArgumentException) {
             writeJson(exchange, 400, mapper.writeValueAsString(mapOf("error" to (ex.message ?: "invalid request"))))
         } catch (ex: StockDataSeedException) {

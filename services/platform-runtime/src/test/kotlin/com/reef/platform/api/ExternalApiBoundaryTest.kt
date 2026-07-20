@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import java.time.Instant
 
 class ExternalApiBoundaryTest {
@@ -469,6 +470,83 @@ class ExternalApiBoundaryTest {
         assertEquals(true, envBool("", true))
         assertEquals(true, envBool("   ", true))
         assertEquals(false, envBool("garbage", false))
+    }
+
+    @Test
+    fun defaultBoundaryHooksBuildsFullyInMemoryLocalDefaultsFromInjectedLookup() {
+        val hooks = defaultBoundaryHooks(
+            mapLookup(
+                "EXTERNAL_API_DEPLOYMENT_PROFILE" to "test",
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "captured-ack",
+                "EXTERNAL_API_COMMAND_CAPTURE_MODE" to "inmemory",
+                "EXTERNAL_API_COMMAND_LOG_MODE" to "disabled"
+            )
+        )
+
+        assertTrue(hooks.authHook is AllowAllAuthHook)
+        assertTrue(hooks.rateLimitHook is AllowAllRateLimitHook)
+        assertTrue(hooks.abuseProtectionHook is AllowAllAbuseProtectionHook)
+        assertTrue(hooks.accountRiskCheck is AllowAllAccountRiskCheck)
+        assertTrue(hooks.commandCircuitBreakerCheck is AllowAllCommandCircuitBreakerCheck)
+        assertTrue(hooks.instrumentPriceCollarCheck is AllowAllInstrumentPriceCollarCheck)
+        assertTrue(hooks.boundaryRejectionLog is NoopBoundaryRejectionLog)
+        assertTrue(hooks.idempotencyStore is InMemoryIdempotencyStore)
+        assertTrue(hooks.commandCaptureStore is InMemoryCommandCaptureStore)
+        assertEquals(CommandProcessingMode.CapturedAck, hooks.commandProcessingMode)
+    }
+
+    @Test
+    fun defaultBoundaryHooksBuildsConfiguredStaticGuardsAndChainsRiskExtensions() {
+        val extension = AccountRiskCheckExtension { request ->
+            if (request.botId == "extension-disabled-bot") {
+                AccountRiskCheckResult(AccountRiskDecision.DISABLED_BOT, "EXTENSION_DISABLED", "disabled by extension")
+            } else {
+                null
+            }
+        }
+        val hooks = defaultBoundaryHooks(
+            lookup = mapLookup(
+                "EXTERNAL_API_DEPLOYMENT_PROFILE" to "test",
+                "EXTERNAL_API_AUTH_MODE" to "static-token",
+                "EXTERNAL_API_TOKENS" to "client-1:token-1:actors=actor-1:participants=participant-1:accounts=account-1",
+                "EXTERNAL_API_RATE_LIMIT_MODE" to "fixed-window",
+                "EXTERNAL_API_RATE_LIMIT_MAX" to "2",
+                "EXTERNAL_API_RATE_LIMIT_WINDOW_SECONDS" to "30",
+                "EXTERNAL_API_ABUSE_BREAKER_MODE" to "reject-rate",
+                "EXTERNAL_API_ABUSE_BREAKER_ENABLED" to "true",
+                "EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED" to "true",
+                "EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS" to "3",
+                "EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS" to "15",
+                "EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS" to "45",
+                "EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES" to "validation_error",
+                "EXTERNAL_API_ABUSE_BREAKER_ROUTES" to "/api/v1/orders/submit",
+                "EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE" to "static",
+                "EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS" to "reject-account",
+                "EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS" to "slow-account",
+                "EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS" to "disabled-bot",
+                "EXTERNAL_API_COMMAND_CAPTURE_MODE" to "inmemory",
+                "EXTERNAL_API_COMMAND_LOG_MODE" to "disabled",
+                "EXTERNAL_API_IDEMPOTENCY_STORE" to "inmemory",
+                "EXTERNAL_API_BOUNDARY_REJECTION_LOG" to "off"
+            ),
+            accountRiskExtensions = listOf(extension)
+        )
+
+        assertTrue(hooks.authHook is StaticTokenAuthHook)
+        assertNull(hooks.authHook.authorize("client-1", "Bearer token-1"))
+        assertTrue(hooks.rateLimitHook is FixedWindowRateLimitHook)
+        assertTrue(hooks.abuseProtectionHook is RejectRateAbuseProtectionHook)
+        assertTrue(hooks.accountRiskCheck is ChainedAccountRiskCheck)
+        assertEquals(
+            AccountRiskDecision.DISABLED_BOT,
+            hooks.accountRiskCheck.evaluate(accountRiskRequest(botId = "extension-disabled-bot")).decision
+        )
+        assertEquals(
+            AccountRiskDecision.REJECT,
+            hooks.accountRiskCheck.evaluate(accountRiskRequest(accountId = "reject-account")).decision
+        )
+        assertTrue(hooks.commandCaptureStore is InMemoryCommandCaptureStore)
+        assertEquals(CommandProcessingMode.SyncResult, hooks.commandProcessingMode)
     }
 
     private fun accountRiskRequest(
