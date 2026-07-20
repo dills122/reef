@@ -80,7 +80,7 @@ services:
 
   openbao:
     <<: *service-hardening
-    image: openbao/openbao:2.5.5
+    image: openbao/openbao:2.6.0
     restart: unless-stopped
     command: server -config=/bao/config/openbao.hcl
     env_file:
