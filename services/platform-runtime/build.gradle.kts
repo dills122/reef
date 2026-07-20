@@ -14,7 +14,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
-    implementation("org.postgresql:postgresql:42.7.4")
+    implementation("org.postgresql:postgresql:42.7.13")
     implementation("com.zaxxer:HikariCP:7.1.0")
     implementation("io.grpc:grpc-netty-shaded:1.73.0")
     implementation("io.grpc:grpc-protobuf:1.73.0")
