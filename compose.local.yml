@@ -176,7 +176,7 @@ services:
       retries: 30
 
   jaeger:
-    image: jaegertracing/all-in-one:1.58
+    image: jaegertracing/all-in-one:1.60
     container_name: reef-jaeger
     profiles: ["observability"]
     ports:
