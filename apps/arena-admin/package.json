@@ -13,7 +13,7 @@
 		"check:watch": "bun ../../scripts/dev/arena-admin-tool.mjs check --watch"
 	},
 	"devDependencies": {
-		"@fontsource/courier-prime": "^5.2.8",
+		"@fontsource/courier-prime": "^5.3.0",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
