@@ -3,13 +3,14 @@ title: Architecture
 description: Service boundaries, bounded contexts, and repository shape.
 ---
 
-Reef is split by job, not by ceremony. One runtime handles the public API and workflow coordination, a Go engine handles matching, the simulator creates repeatable activity, and Postgres keeps the facts needed for audit and replay.
+Reef is split by job, not by ceremony. The Reef runtime handles the public API and workflow coordination, a Go engine handles matching, the simulator creates repeatable activity, and Postgres keeps the facts needed for audit and replay. Bot Arena is an optional product extension rather than a dependency of the core runtime.
 
 ## Services
 
 | Service | Language | Responsibility |
 |---|---|---|
-| `services/platform-runtime` | Kotlin | External API boundary (`/api/v1`), command handling, workflow orchestration, persistence, read models, admin surface |
+| `services/platform-runtime` | Kotlin | Reef external API boundary (`/api/v1`), command handling, workflow orchestration, persistence, read models, product-neutral extension ports, generic admin surface |
+| `services/arena-control-plane` | Kotlin | Optional Arena registry, admission, provisioning, admin routes, and bot-version risk extension |
 | `services/matching-engine` | Go | Hidden order book, matching rules, execution/order events |
 | `services/simulator` | Go | Deterministic scenario execution, seeded participant/bot traffic, replay checks, stress/load tooling |
 | `services/stock-data` | Kotlin | Seed-time-only external stock reference snapshots for game/simulation creation |
@@ -27,6 +28,11 @@ Kotlin platform runtime  (one process)
   -> Postgres            (one instance)
   -> Go matching engine  (one process)
 ```
+
+That is the default Reef-only profile (`compose.base.yml` plus
+`compose.local.yml`). `compose.arena.yml` explicitly replaces the API image
+with the Arena-enabled artifact and adds Arena storage/migrations. Reef-only
+build, route-absence, migration, and smoke gates are verified independently.
 
 The promoted high-throughput venue-core path moves the hot lane away from synchronous database writes:
 

@@ -21,6 +21,8 @@ Allowed responsibilities:
 - execution and trade information that is safe for the caller's visibility scope
 - current market-data views such as top-of-book, depth, trade tape, and bars
 - data availability and freshness metadata for those trading surfaces
+- scenario-scoped post-trade facts, obligations, exceptions, ledger proof, and score reads
+- optional-product public reads, such as the Arena leaderboard, only through explicit extension contracts
 
 Contract requirements:
 - versioned routes, currently `/api/v1/...`

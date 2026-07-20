@@ -1,6 +1,6 @@
 # Reef Architecture Infrastructure Diagrams
 
-Last aligned: 2026-07-04.
+Last aligned: 2026-07-19.
 
 This document shows the current venue-core infrastructure shape and the target direction for the next persistence, projection, and evidence slices.
 
@@ -66,7 +66,7 @@ flowchart LR
   end
 
   subgraph Settlement["Settlement (Post-Trade)"]
-    SettlementMaterializer["TradeSettlementObligationMaterializer\nobligations, instructions, attempts, breaks"]
+    SettlementMaterializer["TradeSettlementObligationMaterializer\nallocation through novation, obligations, settlement"]
     SettlementFacts[("settlement fact store\nPostgres / in-memory")]
     SettlementLedger["SettlementLedgerProjection\ncash/security balances + settlement proof"]
   end
@@ -147,13 +147,16 @@ Current important implementation pieces:
 - `runtime.canonical_command_outcomes` gives command-to-batch linkage and compact engine outcome lookup.
 - `/api/v1/commands/{commandId}` prefers canonical command outcomes when present and falls back to ingress/status surfaces while materialization catches up.
 - Compact command-outcome projection can materialize submit results and lifecycle runtime events from event-batch outcomes without returning Postgres to the matching-engine hot path.
-- Normalized orders, executions, trades, runtime events, UI views, metrics, and leaderboards remain downstream projections.
+- Normalized orders, executions, trades, runtime events, UI views, metrics, and leaderboards remain downstream projections. Full projection freshness has a separate `5k/60s` passing gate; its write amplification is not part of the `10k` venue-core claim.
 - Full order-table projection from this path uses compact submit command metadata carried in the event-batch outcome, with the durable command-payload join retained only as a fallback for older payloads.
-- `TradeSettlementObligationMaterializer` reads settled trades from the runtime projection and materializes settlement obligation/instruction/attempt/ledger facts; `SettlementLedgerProjection` derives cash/security balances and a per-settlement proof view (`cashBalanced`/`securityBalanced`) from those facts, with admin endpoints for obligation materialization and cash/security repair. This mechanism is unit/integration tested; a sustained-simulator-load soak of the full obligation-to-ledger path is not yet captured as evidence.
+- `TradeSettlementObligationMaterializer` reads settled trades from the runtime projection and materializes allocation, confirmation, affirmation, clearing, novation, obligation, instruction, attempt, leg, and ledger facts; clearing rejects and settlement breaks feed an exception-queue projection. `SettlementLedgerProjection` derives cash/security balances and per-settlement proof. These mechanisms are unit/integration and scenario tested; a sustained-simulator-load soak of the full post-trade path is not yet captured as evidence.
 
 ## Target Direction
 
-The next target is to expand lifecycle projection from compact canonical rows while keeping projection writes downstream and rebuildable. The first persistence test gate is compact visibility: durable event batch, canonical rows, projected submit result/runtime event, and idempotent projector replay.
+The direction remains to keep lifecycle projection downstream and rebuildable.
+Compact visibility and idempotent replay are implemented; the active projection
+work is reducing WAL, tuple, and temporary-file amplification before longer
+`5k` soaks or higher projection gates.
 
 ```mermaid
 flowchart LR

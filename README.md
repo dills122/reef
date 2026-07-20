@@ -37,8 +37,11 @@ runbook, and secrets checklist.
 ```text
 apps/
   docs-site/                   Astro documentation surface
+  arena-admin/                 SvelteKit Bot Arena public/admin UI
+  control-room/                Local runtime and throughput inspection UI
 services/
-  platform-runtime/            Kotlin API/runtime, command intake, persistence, projections, admin modules
+  platform-runtime/            Kotlin Reef API/runtime, command intake, persistence, projections, admin contracts
+  arena-control-plane/         Optional Kotlin Arena routes, registry, admission, provisioning, and risk extension
   matching-engine/             Go matching engine, HTTP/gRPC transports, direct stream ingestion
   simulator/                   Go load, scenario, replay, and stress tooling
 contracts/
@@ -54,7 +57,7 @@ docs/
   steering/                    Architecture, repo, language, and boundary guidance
 ```
 
-The main runtime path is API-first: manual users and simulation actors go through the same command/API surfaces. Matching-engine behavior stays isolated in Go, while the Kotlin runtime owns orchestration, persistence adapters, read models, and administrative workflows.
+The main runtime path is API-first: manual users and simulation actors go through the same command/API surfaces. Matching-engine behavior stays isolated in Go, while the Kotlin runtime owns Reef orchestration, persistence adapters, read models, and generic administrative workflows. Bot Arena is an optional product extension: its Kotlin artifact and `compose.arena.yml` overlay depend on Reef contracts, while the Reef-only artifact, routes, migrations, and default Compose profile do not depend on Arena.
 
 ## Quick Start
 
@@ -64,6 +67,14 @@ make dev-up
 make dev-smoke
 ```
 
+This starts and verifies the Reef-only profile. For Arena-owned work, use the
+explicit overlay:
+
+```bash
+make dev-up-arena
+make dev-smoke-arena
+```
+
 Common local commands:
 
 ```bash
@@ -71,6 +82,9 @@ make test
 make test-go
 make test-simulator
 make test-platform-runtime
+make test-reef-core
+make test-arena-control-plane
+make check-reef-arena-boundaries
 make check-proto-additive
 make dev-reset
 make dev-stress
@@ -111,10 +125,14 @@ Pull requests and branch pushes run:
 - platform-runtime performance guardrails
 - Postgres schema placement and migration integration checks
 - Bot SDK typecheck/qualification, hosted container-isolation, and Arena admin app checks
+- Reef-only artifact/route/Compose checks plus the optional Arena control-plane build and schema gate
 
 Bot-submission branches also run manifest validation and container-isolated bot
-qualification. The full same-repository smoke path has passed, but open
-fork-based submissions are not available yet. See
+qualification. Fork submissions now enter a persisted `pending_invite_review`
+state; a trusted base-branch workflow binds maintainer identity and the exact
+head SHA before provisioning. The path is still invite-only and has not yet
+completed its named external-account E2E proof, so open/self-service submission
+must not be advertised. See
 [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md)
 for the verified release matrix and blockers.
 
@@ -163,14 +181,14 @@ Surface-specific steering:
 
 ## Current Development Focus
 
-The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md) and [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md). The next Bot Arena-related implementation milestone is the Reef/Arena separation in [`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md), followed by invite-preview execution in [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md); release gates remain in [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md). At a high level:
+The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md) and [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md). Reef/Arena separation is promoted and recorded in [`docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md). The active Arena milestone is the invite-preview campaign in [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md); release gates remain in [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md). At a high level:
 
 1. Keep validating hot-ingress paths with durable command-log, direct stream, and explicit partition semantics.
 2. Preserve deterministic lane assignment for matching-sensitive submit/cancel/modify commands.
-3. Expand lifecycle projections and query/timeline views without leaking projection concerns into canonical write logic.
-4. Build simulator control-room workflows over the existing CLI/report artifacts.
-5. Add post-trade workflows after replay and lifecycle assertions are stable.
-6. Deliver the invite-only, fork-based Bot Arena preview and its recorded E2E calibration campaign before advertising external submissions.
+3. Resume venue-core scaling only through the bounded-working-set and compact-canonical-storage gates; the current verified ceiling remains `10k commands/sec`.
+4. Reduce projection write amplification while preserving the separate `5k/60s` full-projection freshness evidence.
+5. Harden post-trade lifecycle and exception evidence without mutating matching history.
+6. Complete the named external-account fork E2E, cutoff/roster policy, and recorded invite-preview campaign before advertising external submissions.
 
 ## Recommended Next Gates
 

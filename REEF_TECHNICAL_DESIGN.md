@@ -35,7 +35,8 @@ Reef will be built as a multi-app, multi-language platform with a modular-first 
 
 ## 3. System Shape
 
-At a high level, Reef consists of five major parts.
+At a high level, Reef consists of five core parts plus optional product
+extensions such as Bot Arena.
 
 ### 3.2 Platform runtime/API
 A Kotlin service that acts as the central platform runtime.
@@ -59,6 +60,15 @@ Responsibilities:
 - enforce per-client rate limits
 - map public contracts to internal command models
 - provide a stable integration surface decoupled from internal service transport
+
+### 3.2.2 Optional Arena control plane
+
+Bot Arena is packaged as a separate Kotlin artifact under
+`services/arena-control-plane`. It supplies Arena-owned routes, registry and
+admission persistence, provisioning workflows, and the bot-version risk
+extension through Reef's product-neutral extension ports. The default Reef
+artifact and Compose profile do not include Arena implementations or require
+Arena storage; `compose.arena.yml` opts into the extension.
 
 ### 3.3 Matching engine
 A Go service responsible for order book and matching behavior.
@@ -84,8 +94,8 @@ Responsibilities:
 Design rule:
 - simulator implementation language is less important than command-path parity, deterministic seeds, traceable run artifacts, and replay assertions.
 
-Exploratory extension:
-- [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) proposes a future tournament-style bot arena on top of the simulation control plane. The arena would use sandboxed bot execution, tested operator-controlled liquidity and background-flow bots, modular game modes, replayable runs, separate arena storage for competition metadata, and leaderboard analytics while preserving venue command-path parity.
+Optional product extension:
+- [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) defines the tournament-style bot arena on top of the simulation control plane. The current implementation includes a separate Arena control-plane artifact, sandboxed qualification/runner paths, registry and run records, separate Arena storage, admission/provisioning workflow, and leaderboard reads while preserving venue command-path parity. Modular game modes, external-account proof, and broader hosted scale remain active work.
 - [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
 
 ### 3.5 Admin operations surface (CLI first)
@@ -114,6 +124,8 @@ Start with:
 - optional in-process event bus inside Kotlin runtime
 
 This keeps development manageable while still preserving realistic boundaries.
+Optional products may add a separate artifact and deployment overlay, but must
+not become dependencies of this Reef base.
 
 ### Phase 2: asynchronous backbone
 Add:
@@ -772,6 +784,7 @@ reef/
 
   services/
     platform-runtime/     # Kotlin platform runtime
+    arena-control-plane/  # optional Kotlin Arena product extension
     simulator/            # Go simulator/load-testing harness
     matching-engine/      # Go matching engine
 
@@ -864,11 +877,17 @@ The project can become huge quickly. Favor a thin but coherent vertical slice fi
 
 ## 24. Immediate Next Steps
 
-1. Normalize the repository structure around apps, services, libs, infra, and docs.
-2. Define shared contracts for the initial order and execution flow.
-3. Create the Kotlin runtime skeleton with basic command handling and persistence.
-4. Create the Go engine skeleton with a minimal hidden order book.
-5. Build the first deterministic scenario that produces a full lifecycle from order submission to settlement outcome.
+1. Preserve the verified `10k commands/sec` durable venue-core baseline while
+   completing bounded-working-set and compact-canonical-storage gates before a
+   higher claim.
+2. Reduce projection write amplification without weakening the separate
+   `5k/60s` full-projection freshness evidence.
+3. Continue post-trade lifecycle and exception-operations hardening from the
+   implemented allocation-through-novation and settlement fact chain.
+4. Complete the invite-only fork preview's named external-account proof,
+   cutoff/roster policy, and recorded run campaign.
+5. Keep Reef-only and Arena-enabled artifact, route, migration, Compose, and
+   failure-isolation gates enforced in CI.
 
 ## 25. One-Sentence Architecture Statement
 

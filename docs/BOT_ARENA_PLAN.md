@@ -1,10 +1,11 @@
 # Bot Arena Plan
 
-Implementation status (2026-07-18): this remains the long-form product and
+Implementation status (2026-07-19): this remains the long-form product and
 architecture plan. It is not the release checklist. The control plane, hosted
 admin app, public leaderboard read, same-repository bot submission pipeline,
-OpenBao provisioning, and post-merge registry sync have advanced beyond several
-older rollout descriptions in this file. Use
+OpenBao provisioning, post-merge registry sync, separate Arena artifact/overlay,
+and SHA-bound fork invite admission have advanced beyond several older rollout
+descriptions in this file. Use
 [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for the
 current release call and [`WORK_PLAN.md`](./WORK_PLAN.md) for execution order.
 
@@ -24,13 +25,18 @@ This is an active early-build planning document, not a final architecture decisi
 
 ## Current Review Status
 
-Status: accepted as an active early-build workstream for local proof; hosted/public submission design remains pre-production.
+Status: accepted as a limited-preview workstream; open/self-service submission
+remains pre-production.
 
-Current checkpoint: the Bot SDK runtime bridge, arena control-plane source facts, operator approval controls, local positive/negative persisted gates, static operator reports, and shared-time multi-instrument simulation proof exist. Bot-originated order commands use the normal venue command boundary with bot client identity, run metadata, stream-ack intake, command-log capture, canonical outcome persistence, projection, and replay-idempotency coverage. Local hardening now has an unpaced `5m` compact gate over `5` symbols and `23` bots with projector drain, per-instrument market-quality summaries, controlled house liquidity, passive contestant order hygiene, and cancel/replace coverage. The next local proof is a paced `3-5m` wall-clock gate with meaningful fill/price-movement pressure before the `15m` DigitalOcean promotion run.
+Current checkpoint: Reef/Arena separation is promoted; the Bot SDK runtime bridge, Arena control-plane source facts, operator controls, local positive/negative persisted gates, static reports, shared-time multi-instrument proof, and hosted score-v1 evidence exist. Bot-originated commands use the normal venue boundary with durable/canonical/projection/replay coverage. Fork PRs can enter pending admission and receive SHA-bound maintainer approval before trusted provisioning. The next release proof is a named external-account E2E plus persisted cutoff/roster policy and recorded preview runs, not another packaging extraction.
 
 Local hardening caveat: until market-data snapshot/depth reads are venue-session-scoped, repeated hardening runs over the same instruments can inherit previous local order-book state. Use a clean `make dev-reset` stack with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and `MARKET_DATA_PROJECTOR_ENABLED=true` before treating market-quality results as comparable.
 
-The current tasking plan for moving from controlled arena runs toward real game readiness is [`BOT_ARENA_SIMULATION_TUNING_SPRINT.md`](./BOT_ARENA_SIMULATION_TUNING_SPRINT.md). That sprint deliberately separates simulation tuning readiness from public submission readiness: run diagnostics, report comparison, starter bot calibration, leaderboard/analytics contracts, and data-interface hardening can proceed before GitHub/OpenBao/review/branch-protection work is declared launch-ready.
+The current tasking plan for the selected release is
+[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
+Simulation tuning remains supporting evidence, while
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) owns the
+go/no-go call.
 
 This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
 
@@ -81,6 +87,14 @@ difficulty buckets, leaderboard partitioning, and season aggregation questions.
 
 Status: agreed direction, 2026-07-05. This resolves the "bot creation flow" and part of "secret handling rules" items from Deferred Second Review above (line 28, line 45: secret partition activation, who provisions, isolation by bot/user). Other Deferred Second Review items (safety limits, fairness rules, order lifecycle, failure handling beyond what's listed here) remain open.
 
+Historical-scope note: this section records the initial same-repository
+provisioning design. The current fork-safe pending/approval handoff supersedes
+its statements that fork PRs are rejected or that branch protection is still a
+manual gap. Use
+[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md) and
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for the
+current contract.
+
 Submission and update path is PR-based:
 
 - branch naming is a fixed enum: `bots/add/<bot-name>`, `bots/update/<bot-name>`, `bots/remove/<bot-name>`. The branch segment is documentation/routing only, not a trust boundary — CI does not trust it for authorization decisions.
@@ -124,6 +138,10 @@ Security invariant: the pull-request workflow that checks out and executes submi
 
 ## Next Control-Plane Slice
 
+Status: implemented baseline retained as design history. Current control-plane
+work is submission admission, preview eligibility/roster policy, and external
+E2E evidence.
+
 Start with durable arena source facts before UI or leaderboard work:
 
 - bot identity and public metadata
@@ -137,7 +155,7 @@ This storage boundary should remain separate from trading hot-path state. Local 
 
 Implementation checkpoint:
 
-- `ArenaControlPlaneService` defines the first arena-owned registry boundary in platform runtime.
+- `ArenaControlPlaneService` defines the Arena-owned registry boundary in `services/arena-control-plane`.
 - `ArenaBotRegistryStore` and `InMemoryArenaBotRegistryStore` capture source facts for local tests without introducing a trading hot-path dependency.
 - `PostgresArenaBotRegistryStore` adds the first durable arena schema for registry, qualification, operator decision, and run-record facts.
 - Hosted arena admin and bot-version risk checks require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`), not the runtime or boundary datasource.
@@ -264,7 +282,8 @@ Candidate ownership:
 - `packages/bot-sdk/`: public bot authoring types, helpers, and examples
 - `packages/scenario-definitions/`: arena mode and scenario definitions
 - `services/simulator/`: arena run orchestration, seeded scheduling, replay checks
-- `services/platform-runtime/`: arena metadata, boundary enforcement hooks, leaderboard/read-model APIs where appropriate
+- `services/arena-control-plane/`: Arena metadata, admission, provisioning, route, and risk-extension implementations
+- `services/platform-runtime/`: product-neutral route/risk extension ports and Reef-owned public command/read contracts
 - `docs/`: governance, safety model, game mode specs, and operator guidance
 
 ## Bot Runtime Contract

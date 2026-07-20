@@ -6,10 +6,10 @@ description: Write, register, and run a ReefBotV1 trading bot.
 Reef bots are TypeScript classes extending `ReefBotV1`. Bots are tick-based: the harness owns scheduling, calls your bot, validates proposed actions, and only then turns approved actions into venue commands. Bots never create their own Reef clients, timers, or network connections in hosted mode.
 
 The SDK is currently repository-local and Bot Arena is in limited preview. You
-can author and qualify a bot from a Reef checkout, but the selected invite-only
-fork flow is not available yet and open self-service intake comes later. Do not
-interpret a successful local report as permission or ability to enter a public
-competition.
+can author and qualify a bot from a Reef checkout. The invite-only fork workflow
+is implemented but not yet advertised pending a named external-account E2E and
+recorded preview run; open self-service intake comes later. Do not interpret a
+successful local report as admission to a competition.
 
 ## Minimal Bot
 

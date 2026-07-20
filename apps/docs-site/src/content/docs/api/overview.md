@@ -68,11 +68,16 @@ Clients never need to know which provider is active. The public contract stays s
 | [`/api/v1/settlement/facts/{scenarioRunId}`](../settlement/) | GET | Append-only settlement facts for one scenario run |
 | [`/api/v1/settlement/obligations/{scenarioRunId}`](../settlement/) | GET | Current settlement obligation state projected from facts |
 | [`/api/v1/settlement/ledger/{scenarioRunId}`](../settlement/) | GET | Replayable balances and settlement proof totals |
+| [`/api/v1/settlement/exceptions/{scenarioRunId}`](../settlement/) | GET | Scenario-scoped clearing/settlement exception queue |
 | [`/api/v1/settlement/proof/{scenarioRunId}`](../settlement/) | GET | Replayable settlement finality proof |
 | [`/api/v1/settlement/score/{scenarioRunId}`](../settlement/) | GET | Scenario settlement score/proof summary |
+| [`/api/v1/arena/leaderboard`](../../arena/overview/) | GET | Optional Arena public leaderboard read (Arena profile only) |
 | [`/api/v1/commands/{commandId}`](../commands/) | GET | Command status lookup |
 
 `/internal/*` routes exist only as local/migration operator tooling and diagnostics — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract and must not be exposed raw outside private operator networks.
+
+The Arena leaderboard route is absent from the Reef-only artifact. In the Arena
+profile it requires `modeId` and `scoringPolicyVersion` query parameters.
 
 ## Learn More
 

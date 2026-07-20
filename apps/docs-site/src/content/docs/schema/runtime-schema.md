@@ -37,6 +37,11 @@ The first settlement slice is scenario-scoped and evidence-oriented. Current fac
 
 - resource positions
 - obligations
+- allocations
+- confirmations
+- affirmations
+- clearing submissions, acceptances, and rejections
+- novations
 - instructions
 - attempts
 - leg outcomes
@@ -46,7 +51,7 @@ The first settlement slice is scenario-scoped and evidence-oriented. Current fac
 - repairs
 - resolutions
 
-Public read APIs expose the append-only facts, projected obligation state, and replayable ledger proof through [Settlement APIs](../../api/settlement/). Full post-trade tables for allocation, confirmation, clearing, novation, and netting remain planned.
+Public read APIs expose the append-only facts, projected obligation and exception state, and replayable ledger proof through [Settlement APIs](../../api/settlement/). Richer netting, operator workflows, and broader analytics remain planned.
 
 ## Event & Outbox
 

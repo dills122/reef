@@ -31,6 +31,9 @@ remaining blocker is the public intake trust model and its enforcement:
   and exact SHA before provisioning.
 - no external/fork submission has completed the full lifecycle; the only merged
   proof is the owner-controlled `bots/add/dsteele-smoke-bot` PR
+- the separation promotion did not include a hosted deployment rehearsal; the
+  Hetzner Compose default remains the Reef-core image and must explicitly select
+  the Arena-enabled image before the next Arena cutover
 
 Do not solve the fork problem by giving PR-controlled workflows hosted secrets,
 OIDC minting permission, or a privileged checkout. Keep untrusted validation
@@ -115,6 +118,8 @@ codes, emergency-removal rules, and evidence envelope.
 ### Required For Invite-Only Fork Preview
 
 - Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
+- the hosted backbone is rehearsed with the Arena-enabled image, Arena routes
+  and storage readiness pass, and rollback to the last known-good Arena image is documented
 - branch protection requires `registry-diff-and-provision`; ordinary PRs receive a successful no-op result, while bot submissions remain pending until trusted admission/provisioning completes
 - fork-safe pending, approval, trusted provisioning, and denial paths are drilled
 - fork-based add, update, and remove lifecycle is drilled with an external test account
@@ -160,13 +165,14 @@ external user cannot submit today.
 ## Evidence Sources
 
 - `.github/workflows/bot-submission.yml`
+- `.github/workflows/bot-submission-invite-approve.yml`
 - `.github/workflows/bot-submission-provision.yml`
 - `.github/workflows/bot-registry-sync.yml`
 - `scripts/dev/bot-sdk-test-bot.mjs`
 - `scripts/dev/lib/bot-isolation.mjs`
-- `services/platform-runtime/src/main/kotlin/com/reef/platform/application/arena/`
-- `scripts/dev/db/migrations/admin/`
+- `services/arena-control-plane/`
+- `scripts/dev/db/migrations/arena/`
 - `apps/arena-admin/`
 - GitHub PR #177 and its checks
-- live `master` branch-protection response inspected 2026-07-18
+- live `master` branch-protection response inspected 2026-07-19
 - hosted Arena landing and leaderboard inspected 2026-07-18

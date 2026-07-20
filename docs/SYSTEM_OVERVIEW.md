@@ -1,6 +1,6 @@
 # Reef System Overview
 
-Last aligned: 2026-07-06.
+Last aligned: 2026-07-19.
 
 ## The Short Version
 
@@ -19,7 +19,7 @@ the venue runtime stack through the same API path as users and bots.
 
 ```text
 Always-on backbone, Hetzner
-  OpenBao, Admin API, Caddy, admin DB, analytics DB, backups
+  OpenBao, Arena-enabled Admin API, Caddy, admin DB, Arena DB, analytics DB, backups
   durable home for bot registry, secrets, admin config, analytics summaries
 
 Ephemeral run plane, DigitalOcean
@@ -43,7 +43,8 @@ Simulator/tooling
 | Thing | Always-on backbone | DO run plane | Local dev |
 |---|---:|---:|---:|
 | OpenBao | Yes | No | Optional/no |
-| Admin API | Yes | No, except test stacks | Yes, as platform runtime |
+| Reef Admin API | Yes | No, except test stacks | Yes, as platform runtime |
+| Arena control-plane extension | Arena-enabled image required | Optional | Optional `compose.arena.yml` overlay |
 | Caddy public narrow routes | Yes | No | No |
 | Admin DB | Yes | No | Local equivalent only |
 | Analytics DB | Yes | No | Local equivalent only |
@@ -88,7 +89,7 @@ Read in this order:
 | Backbone | In these docs, means the always-on Hetzner infrastructure backbone unless qualified. |
 | Runtime stack | The API/engine/stream/Postgres/materializer/projector services that run a venue. |
 | Run plane | The temporary DO host used for heavier simulation runs. |
-| Admin API | `platform-runtime` running on the backbone for registry/admin/OpenBao work. |
+| Admin API | Reef `platform-runtime` gateway plus the optional Arena control-plane extension where Arena routes are required. |
 | Materializer | Runtime role that turns durable venue event batches into canonical Postgres facts. |
 | Projector | Runtime role that turns canonical facts into read models. |
 | No-op/no-DB profile | Diagnostic profile only; not a durable production-like claim. |
@@ -97,11 +98,16 @@ Read in this order:
 
 - Hetzner backbone exists under `infra/hetzner-core`.
 - OpenBao, Caddy, `platform-runtime`, `postgres`, `postgres-admin`, and
-  `postgres-analytics` are represented in the backbone compose stack.
+  `postgres-analytics` are represented in the backbone Compose stack. The
+  checked-in runtime image default is Reef-core; an Arena-enabled deployment
+  must explicitly select `reef-arena-platform-runtime` and still needs a
+  recorded hosted rehearsal after the separation cutover.
 - DO simulation infrastructure still needs cleanup to fully mirror the Hetzner
   OpenTofu + compose + deploy-script pattern.
 - The export/cleanup service that pushes finished run summaries back to the
   backbone is planned, not complete.
-- The venue runtime stack has strong local evidence for the direct
-  command-stream -> matching-engine -> event-batch -> materializer path, but
-  still needs longer remote durability/recovery proof.
+- The venue runtime stack has a promoted DigitalOcean `10k` `soak-5m`
+  command-stream -> matching-engine -> event-batch -> materializer baseline,
+  corrected local `10k/15m` evidence, and separate `5k/60s` full-projection
+  freshness evidence. Higher venue-core claims are paused pending bounded-state
+  and compact-storage gates.

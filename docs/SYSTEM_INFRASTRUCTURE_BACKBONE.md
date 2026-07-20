@@ -1,6 +1,6 @@
 # Reef Infrastructure Backbone
 
-Last aligned: 2026-07-07.
+Last aligned: 2026-07-19.
 
 ## Purpose
 
@@ -25,7 +25,7 @@ For the one-page map of the whole system, start with
 
 | Thing | Why it lives on the backbone |
 |---|---|
-| Admin API | Durable place for arena registry, admin workflows, and bot-submission operations. |
+| Admin API | Reef gateway plus the optional Arena extension for registry, admission, provisioning, and bot-submission operations. |
 | OpenBao | Durable secret authority for bots and services. |
 | Caddy | Narrow public entry point for CI/admin routes when explicitly enabled. |
 | Admin DB | Durable user/game/meta configuration state. |
@@ -120,7 +120,7 @@ destroyed.
 
 | Service | Compose name | Status | Purpose |
 |---|---|---|---|
-| Runtime/admin API | `platform-runtime` | Present | Admin API, arena registry/control plane, bot-submission admin routes, lightweight runtime/admin workflows. |
+| Runtime/admin API | `platform-runtime` | Present | Reef admin gateway and lightweight runtime workflows. Arena registry/admission routes require the Arena-enabled image. |
 | OpenBao | `openbao` | Present | Bot/user/service secrets, runtime AppRole reads, CI JWT provisioning backend. |
 | Reverse proxy | `caddy` | Present, public profile | Publicly exposes only narrow bot-submission admin routes when enabled. |
 | Runtime Postgres | `postgres` | Present | Main lightweight runtime DB plus OpenBao storage DB in the Hetzner stack. |
@@ -142,8 +142,13 @@ is still a future split if this surface grows beyond backbone admin use.
 
 ## Admin API
 
-The backbone Admin API is the `platform-runtime` container. It is not a separate
-process today. It owns or will own:
+The backbone Admin API uses the `platform-runtime` Compose service name. Reef
+gateway behavior comes from the core runtime; Arena registry/admission behavior
+is supplied only by the Arena-enabled artifact. The checked-in Compose default
+still names `dills122/reef-platform-runtime:latest`, so the next Arena-enabled
+deployment must set `REEF_PLATFORM_RUNTIME_IMAGE` to the published
+`reef-arena-platform-runtime` image and complete a route/storage/rollback
+rehearsal. The Admin API owns or will own:
 
 - arena bot registry and version metadata
 - operator/admin game configuration

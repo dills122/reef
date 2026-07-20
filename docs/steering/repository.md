@@ -18,7 +18,8 @@ For product and architecture priorities that should guide every change, read [`r
 ## Ownership Boundaries
 
 - `apps/docs-site/` owns public/static documentation and should not contain runtime logic.
-- `services/platform-runtime/` owns API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, and admin behavior.
+- `services/platform-runtime/` owns Reef API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, product-neutral extension ports, and generic admin behavior.
+- `services/arena-control-plane/` owns optional Arena routes, registry/admission persistence, provisioning, Arena admin use cases, and the bot-version risk extension. It may depend on Reef contracts; Reef must not depend on Arena implementations.
 - `services/matching-engine/` owns deterministic matching and execution behavior, not platform workflow orchestration or persistence.
 - `services/simulator/` owns deterministic scenarios, seeded actors, replay, traffic generation, stress/load evidence, and trace validation.
 - `contracts/proto/` owns versionable inter-service contracts.
