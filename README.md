@@ -133,8 +133,10 @@ Pull requests and branch pushes run:
 
 Dependabot auto-merge is enabled only after the complete `CI` workflow succeeds
 for the PR's current head SHA. The handoff re-reads the pull request author and
-head commit before enabling squash auto-merge, so stale successful runs cannot
-approve a newer dependency update.
+head commit before acting, so stale successful runs cannot approve or update a
+newer dependency change. If the tested branch has fallen behind `master`, the
+handoff asks Dependabot to rebase it and waits for CI to rerun on the new head
+before enabling squash auto-merge.
 
 Bot-submission branches also run manifest validation and container-isolated bot
 qualification. Fork submissions now enter a persisted `pending_invite_review`

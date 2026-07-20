@@ -321,6 +321,18 @@ function checkWorkflowSecurity() {
     "test \"$current_head\" = \"$CI_HEAD_SHA\"",
     "Dependabot auto-merge must reject stale successful CI runs",
   );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    'if [ "$merge_state" = \'BEHIND\' ]; then',
+    "Dependabot auto-merge must refresh branches that fall behind master",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "gh pr comment \"$PR_NUMBER\" --repo \"$GH_REPO\" --body '@dependabot rebase'",
+    "stale Dependabot branches must request a bot-owned rebase that retriggers CI",
+  );
   requireNotIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
     dependabotAutoMerge,

@@ -48,6 +48,7 @@ assert.match(autoMerge, /on:\n  workflow_run:/);
 assert.match(autoMerge, /workflows:\n      - CI\n    types:\n      - completed/);
 assert.doesNotMatch(autoMerge, /pull_request_target:/);
 assert.match(autoMerge, /contents: write/);
+assert.match(autoMerge, /issues: write/);
 assert.match(autoMerge, /pull-requests: write/);
 assert.match(autoMerge, /github\.event\.workflow_run\.event == 'pull_request'/);
 assert.match(autoMerge, /github\.event\.workflow_run\.conclusion == 'success'/);
@@ -55,6 +56,13 @@ assert.match(autoMerge, /github\.event\.workflow_run\.actor\.login == 'dependabo
 assert.match(autoMerge, /github\.repository == 'dills122\/reef'/);
 assert.match(autoMerge, /current_head=.*gh pr view/);
 assert.match(autoMerge, /test "\$current_head" = "\$CI_HEAD_SHA"/);
+assert.match(autoMerge, /merge_state=.*mergeStateStatus/);
+assert.match(autoMerge, /if \[ "\$merge_state" = 'BEHIND' \]; then/);
+assert.match(autoMerge, /gh pr comment "\$PR_NUMBER" --repo "\$GH_REPO" --body '@dependabot rebase'/);
+assert.ok(
+  autoMerge.indexOf("@dependabot rebase") < autoMerge.indexOf('gh pr merge "$PR_NUMBER"'),
+  "stale Dependabot branches must rebase and rerun CI before auto-merge is enabled",
+);
 assert.match(autoMerge, /gh pr merge "\$PR_NUMBER" --repo "\$GH_REPO" --auto --squash/);
 assert.doesNotMatch(autoMerge, /actions\/checkout/);
 assert.doesNotMatch(autoMerge, /secrets\./);
