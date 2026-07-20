@@ -12,16 +12,16 @@ repositories {
 
 dependencies {
     implementation(kotlin("stdlib"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
     implementation("org.postgresql:postgresql:42.7.13")
     implementation("com.zaxxer:HikariCP:7.1.0")
-    implementation("io.grpc:grpc-netty-shaded:1.73.0")
-    implementation("io.grpc:grpc-protobuf:1.73.0")
-    implementation("io.grpc:grpc-stub:1.73.0")
-    implementation("io.nats:jnats:2.25.3")
-    implementation("org.apache.kafka:kafka-clients:3.9.0")
-    implementation("com.google.protobuf:protobuf-java:4.33.2")
+    implementation("io.grpc:grpc-netty-shaded:1.82.2")
+    implementation("io.grpc:grpc-protobuf:1.82.2")
+    implementation("io.grpc:grpc-stub:1.82.2")
+    implementation("io.nats:jnats:2.26.0")
+    implementation("org.apache.kafka:kafka-clients:4.3.1")
+    implementation("com.google.protobuf:protobuf-java:4.35.1")
     testImplementation(kotlin("test"))
 }
 
