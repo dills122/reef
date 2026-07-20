@@ -60,7 +60,8 @@ internal class ArenaAdminGateway(
     private val adminIdentityService: AdminIdentityService?,
     private val analyticsRunExportService: SimulationRunExportService?,
     private val arenaBotEntitlementStore: ArenaBotEntitlementStore? = null,
-    private val arenaSubmissionAdmissionStore: ArenaSubmissionAdmissionStore? = null
+    private val arenaSubmissionAdmissionStore: ArenaSubmissionAdmissionStore? = null,
+    private val botConfigSecretService: BotConfigSecretService? = null
 ) : OptionalProductRouteExtension {
     private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
     override val internalPaths = listOf(
@@ -89,7 +90,9 @@ internal class ArenaAdminGateway(
         adminRoute("/admin/v1/arena/runs/status", setOf("POST"), "/internal/admin/arena/runs/status", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/run-bot-results", setOf("GET", "POST"), "/internal/admin/arena/run-bot-results", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/run-enforcement-events", setOf("GET", "POST"), "/internal/admin/arena/run-enforcement-events", "arena", arenaTokens, operatorRoles),
-        adminRoute("/admin/v1/arena/leaderboard", setOf("GET"), "/internal/admin/arena/leaderboard", "arena", arenaTokens, operatorRoles)
+        adminRoute("/admin/v1/arena/leaderboard", setOf("GET"), "/internal/admin/arena/leaderboard", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/analytics/run-exports", setOf("POST"), "/internal/admin/analytics/run-exports", "analytics", analyticsTokens, platformAdminRoles),
+        adminRoute("/admin/v1/analytics/run-bot-summaries", setOf("GET"), "/internal/admin/analytics/run-bot-summaries", "analytics", analyticsTokens, platformAdminRoles)
     )
 
     override fun handleInternal(
@@ -140,24 +143,34 @@ internal class ArenaAdminGateway(
         externalPath: String,
         methods: Set<String>,
         internalPath: String,
-        _fallbackTokenFamily: String,
+        fallbackTokenFamily: String,
         serviceTokenFamilies: Set<AdminServiceTokenFamily>,
         sessionRoles: Set<String> = emptySet()
-    ) = OptionalProductAdminRoute(
-        externalPath,
-        methods,
-        internalPath,
-        "ARENA_ADMIN_API_TOKEN",
-        "ARENA_ADMIN_API_ACTOR_ID",
-        serviceTokenFamilies,
-        sessionRoles
-    )
+    ): OptionalProductAdminRoute {
+        val (fallbackTokenEnv, fallbackActorEnv) = when (fallbackTokenFamily) {
+            "arena" -> "ARENA_ADMIN_API_TOKEN" to "ARENA_ADMIN_API_ACTOR_ID"
+            "analytics" -> "ANALYTICS_EXPORT_API_TOKEN" to "ANALYTICS_EXPORT_API_ACTOR_ID"
+            "admin" -> "ADMIN_API_TOKEN" to "ADMIN_API_ACTOR_ID"
+            else -> error("unsupported Arena admin fallback token family: $fallbackTokenFamily")
+        }
+        return OptionalProductAdminRoute(
+            externalPath,
+            methods,
+            internalPath,
+            fallbackTokenEnv,
+            fallbackActorEnv,
+            serviceTokenFamilies,
+            sessionRoles
+        )
+    }
 
     private companion object {
         val arenaTokens = setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        val analyticsTokens = setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
         val adminTokens = setOf(AdminServiceTokenFamily.Admin)
         val operatorRoles = setOf(AdminIdentityService.RoleOperator, AdminIdentityService.RolePlatformAdmin)
         val secretRoles = setOf(AdminIdentityService.RoleSecretAdmin, AdminIdentityService.RolePlatformAdmin)
+        val platformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
     }
 
     private fun getResponseOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse =
@@ -1146,6 +1159,7 @@ internal class ArenaAdminGateway(
     }
 
     private fun openBaoBotConfigService(): BotConfigSecretService {
+        botConfigSecretService?.let { return it }
         val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
         if (baoAddr.isBlank()) {
             return localDevBotConfigService()

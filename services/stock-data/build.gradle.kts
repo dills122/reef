@@ -41,7 +41,19 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+    dependsOn("verifyNoTestSourceExclusions")
     finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.register("verifyNoTestSourceExclusions") {
+    group = "verification"
+    description = "Fails when stock-data Kotlin tests are hidden with source-set exclusions."
+    doLast {
+        val exclusions = kotlin.sourceSets.getByName("test").kotlin.excludes.sorted()
+        check(exclusions.isEmpty()) {
+            "stock-data test source exclusions are forbidden; repair or deliberately relocate stale tests instead: ${exclusions.joinToString()}"
+        }
+    }
 }
 
 tasks.jacocoTestReport {
@@ -52,4 +64,21 @@ tasks.jacocoTestReport {
         csv.required.set(true)
         html.required.set(true)
     }
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+
+    violationRules {
+        rule {
+            limit {
+                counter = "INSTRUCTION"
+                minimum = "0.75".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

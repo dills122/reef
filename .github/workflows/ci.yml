@@ -138,8 +138,30 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
-      - name: Run stock-data tests
-        run: ./gradlew --no-daemon test
+      - name: Run stock-data tests with coverage
+        run: ./gradlew --no-daemon test jacocoTestReport jacocoTestCoverageVerification
+      - name: Add coverage summary
+        run: |
+          csv="build/reports/jacoco/test/jacocoTestReport.csv"
+          awk -F, '
+            NR > 1 { missed += $4; covered += $5 }
+            END {
+              total = missed + covered
+              pct = total == 0 ? 0 : covered * 100 / total
+              print "## stock-data coverage"
+              print ""
+              print "| Module | Instruction coverage |"
+              print "| --- | ---: |"
+              printf("| services/stock-data | %.1f%% |\n", pct)
+            }
+          ' "$csv" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload stock-data coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: stock-data-coverage
+          path: |
+            services/stock-data/build/reports/jacoco/test
+            services/stock-data/build/test-results/test
 
   reef-arena-separation:
     runs-on: ubuntu-latest
@@ -160,6 +182,28 @@ jobs:
         run: make test-reef-core
       - name: Verify Arena control-plane tests
         run: make test-arena-control-plane
+      - name: Add Arena control-plane coverage summary
+        run: |
+          csv="services/arena-control-plane/build/reports/jacoco/test/jacocoTestReport.csv"
+          awk -F, '
+            NR > 1 { missed += $4; covered += $5 }
+            END {
+              total = missed + covered
+              pct = total == 0 ? 0 : covered * 100 / total
+              print "## arena-control-plane coverage"
+              print ""
+              print "| Module | Instruction coverage |"
+              print "| --- | ---: |"
+              printf("| services/arena-control-plane | %.1f%% |\n", pct)
+            }
+          ' "$csv" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Arena control-plane coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: arena-control-plane-coverage
+          path: |
+            services/arena-control-plane/build/reports/jacoco/test
+            services/arena-control-plane/build/test-results/test
       - name: Validate Reef Compose configuration
         run: make dev-compose-config ARGS='--services'
       - name: Validate Arena overlay Compose configuration

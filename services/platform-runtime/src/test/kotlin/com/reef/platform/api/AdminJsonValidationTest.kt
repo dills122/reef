@@ -1,7 +1,5 @@
 package com.reef.platform.api
 
-import com.reef.platform.application.admin.AdminApplicationService
-import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
@@ -32,24 +30,6 @@ class AdminJsonValidationTest {
     }
 
     @Test
-    fun arenaAdminWritesRejectMalformedJsonBeforeSemanticValidation() {
-        val gateway = ArenaAdminGateway(
-            arenaAdminService = AdminApplicationService(
-                runtimePersistence = InMemoryRuntimePersistence(),
-                arenaRegistryStore = InMemoryArenaBotRegistryStore()
-            ),
-            adminIdentityService = null,
-            analyticsRunExportService = null,
-            adminSessionAuth = testAdminSessionAuth()
-        )
-
-        val response = gateway.registerArenaBotResponse("""{"botId":""")
-
-        assertEquals(400, response.status)
-        assertContains(response.body, """"error":"invalid json payload"""")
-    }
-
-    @Test
     fun settlementAdminWritesRejectMalformedJsonBeforeSemanticValidation() {
         val gateway = SettlementAdminGateway(
             settlementFactStore = InMemorySettlementFactStore(),
@@ -77,7 +57,6 @@ private fun testPlatformApi(): PlatformApi {
 
 private fun testAdminSessionAuth(): AdminSessionAuth {
     return AdminSessionAuth(
-        arenaAdminService = null,
         adminAuthService = null,
         adminIdentityService = null,
         adminGitHubOAuthClient = null,

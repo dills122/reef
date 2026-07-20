@@ -90,7 +90,7 @@ build-arena-control-plane: build-reef-core
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew -p ../arena-control-plane jar
 
 test-arena-control-plane: build-arena-control-plane
-	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew -p ../arena-control-plane test
+	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew -p ../arena-control-plane test jacocoTestCoverageVerification
 
 test-bot-sdk:
 	@$(MAKE) check-bun-runtime

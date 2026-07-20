@@ -1820,7 +1820,7 @@ fun defaultBoundaryHooks(
     lookup: (String) -> String? = System::getenv,
     accountRiskExtensions: List<AccountRiskCheckExtension> = emptyList()
 ): BoundaryHooks {
-    val commandProcessingMode = CommandProcessingMode.fromEnv()
+    val commandProcessingMode = CommandProcessingMode.fromEnv(lookup)
     validateBoundaryDeploymentModes(lookup)
     val authMode = (lookup("EXTERNAL_API_AUTH_MODE") ?: "allow-all").lowercase()
     val authHook = when (authMode) {
@@ -1965,7 +1965,7 @@ fun defaultBoundaryHooks(
         boundaryRejectionLog = boundaryRejectionLog,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
-        commandCaptureStore = defaultCommandCaptureStore(commandProcessingMode),
+        commandCaptureStore = defaultCommandCaptureStore(commandProcessingMode, lookup),
         commandProcessingMode = commandProcessingMode
     )
 }
