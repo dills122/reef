@@ -370,6 +370,14 @@ jobs:
         run: tofu -chdir=infra/do-benchmark init -backend=false -input=false -lockfile=readonly && tofu -chdir=infra/do-benchmark validate
       - name: Initialize and validate Hetzner configuration
         run: tofu -chdir=infra/hetzner-core/tofu init -backend=false -input=false -lockfile=readonly && tofu -chdir=infra/hetzner-core/tofu validate
+      - name: Create placeholder hosted Compose env files
+        run: |
+          set -euo pipefail
+          secrets_dir=infra/hetzner-core/server/secrets
+          mkdir -p "$secrets_dir"
+          for name in db postgres-admin postgres-analytics openbao matching-engine platform-runtime caddy simulator; do
+            touch "$secrets_dir/$name.env"
+          done
       - name: Validate Hetzner local Compose overlay
         run: docker compose -f infra/hetzner-core/server/docker-compose.yml -f infra/hetzner-core/server/docker-compose.local.yml config --quiet
       - name: Validate Hetzner stream-ack Compose overlay

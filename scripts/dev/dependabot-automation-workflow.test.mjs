@@ -80,6 +80,8 @@ assert.match(ci, /name: deploy-receiver\n            context: infra\/hetzner-cor
 assert.match(ci, /infrastructure-config:/);
 assert.match(ci, /tofu fmt -check -recursive infra/);
 assert.equal((ci.match(/-lockfile=readonly/g) ?? []).length, 2);
+assert.match(ci, /name: Create placeholder hosted Compose env files/);
+assert.match(ci, /for name in db postgres-admin postgres-analytics openbao matching-engine platform-runtime caddy simulator/);
 assert.match(ci, /docker compose -f infra\/hetzner-core\/server\/docker-compose\.yml/);
 
 console.log("dependabot automation workflow guard checks passed");
