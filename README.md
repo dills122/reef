@@ -113,19 +113,28 @@ For setup and troubleshooting details, start with [`docs/ONBOARDING.md`](./docs/
 
 Pull requests and branch pushes run:
 
+- shared dependency/toolchain alignment checks across related service manifests, Dockerfiles, Gradle wrappers, and CI runtime pins
 - proto additive compatibility checks for contract safety
-- Go formatting, tests, and coverage for `services/matching-engine`
-- Go formatting, tests, and coverage for `services/simulator`
+- tidy-module enforcement plus Go formatting, tests, and coverage for `services/matching-engine`
+- tidy-module enforcement plus Go formatting, tests, and coverage for `services/simulator`
 - Kotlin runtime tests with Jacoco coverage for `services/platform-runtime`
+- Kotlin tests for `services/stock-data`
 - Node 22 coverage for repository dev-tooling tests under `scripts/dev`
-- deterministic replay validation for the golden persona session
-- container image build checks for `platform-runtime` and `matching-engine`
+- npm lockfile installation, typecheck, and production build for the Astro docs site
+- deterministic replay validation for the golden persona session on branch pushes and Dependabot pull requests
+- container image build checks for every service image and the deploy receiver
+- OpenTofu validation and hosted Compose-overlay validation
 - Go vulnerability scans for Go services
 - matching-engine benchmark guardrails
 - platform-runtime performance guardrails
 - Postgres schema placement and migration integration checks
 - Bot SDK typecheck/qualification, hosted container-isolation, and Arena admin app checks
 - Reef-only artifact/route/Compose checks plus the optional Arena control-plane build and schema gate
+
+Dependabot auto-merge is enabled only after the complete `CI` workflow succeeds
+for the PR's current head SHA. The handoff re-reads the pull request author and
+head commit before enabling squash auto-merge, so stale successful runs cannot
+approve a newer dependency update.
 
 Bot-submission branches also run manifest validation and container-isolated bot
 qualification. Fork submissions now enter a persisted `pending_invite_review`

@@ -8,6 +8,16 @@ on:
   pull_request:
 
 jobs:
+  dependency-alignment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Check shared dependency and toolchain alignment
+        run: make check-dependency-alignment
+
   proto-governance:
     runs-on: ubuntu-latest
     steps:
@@ -27,6 +37,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: services/matching-engine/go.mod
+      - name: Verify Go module files are tidy
+        run: go mod tidy -diff
       - name: Check gofmt
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
       - name: Run Go tests with coverage
@@ -54,6 +66,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: services/simulator/go.mod
+      - name: Verify Go module files are tidy
+        run: go mod tidy -diff
       - name: Check gofmt
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
       - name: Run simulator Go tests with coverage
@@ -109,6 +123,23 @@ jobs:
       - name: Run platform-runtime performance guardrail
         working-directory: .
         run: ./scripts/ci/check-runtime-bench.sh
+
+  kotlin-stock-data:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/stock-data
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: Run stock-data tests
+        run: ./gradlew --no-daemon test
 
   reef-arena-separation:
     runs-on: ubuntu-latest
@@ -184,6 +215,25 @@ jobs:
           name: node-dev-tooling-coverage
           path: coverage/node-dev-tooling
 
+  docs-site:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/docs-site
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/docs-site/package-lock.json
+      - name: Install docs dependencies from lockfile
+        run: npm ci --include=optional
+      - name: Typecheck docs site
+        run: npm run typecheck
+      - name: Build docs site
+        run: npm run build
+
   bot-sdk:
     runs-on: ubuntu-latest
     steps:
@@ -228,7 +278,7 @@ jobs:
 
   scenario-replay:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event.pull_request.user.login == 'dependabot[bot]'
     timeout-minutes: 25
     env:
       JS_RUNTIME: node
@@ -301,10 +351,29 @@ jobs:
           - name: simulator
             context: services/simulator
             dockerfile: services/simulator/Dockerfile
+          - name: deploy-receiver
+            context: infra/hetzner-core/server/deploy-receiver
+            dockerfile: infra/hetzner-core/server/deploy-receiver/Dockerfile
     steps:
       - uses: actions/checkout@v7
       - name: Build ${{ matrix.name }} image
         run: docker build -f "${{ matrix.dockerfile }}" -t "reef/${{ matrix.name }}:ci" "${{ matrix.context }}"
+
+  infrastructure-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
+      - name: Check OpenTofu formatting
+        run: tofu fmt -check -recursive infra
+      - name: Initialize and validate DigitalOcean benchmark configuration
+        run: tofu -chdir=infra/do-benchmark init -backend=false -input=false -lockfile=readonly && tofu -chdir=infra/do-benchmark validate
+      - name: Initialize and validate Hetzner configuration
+        run: tofu -chdir=infra/hetzner-core/tofu init -backend=false -input=false -lockfile=readonly && tofu -chdir=infra/hetzner-core/tofu validate
+      - name: Validate Hetzner local Compose overlay
+        run: docker compose -f infra/hetzner-core/server/docker-compose.yml -f infra/hetzner-core/server/docker-compose.local.yml config --quiet
+      - name: Validate Hetzner stream-ack Compose overlay
+        run: docker compose -f infra/hetzner-core/server/docker-compose.yml -f infra/hetzner-core/server/docker-compose.stream-ack.yml config --quiet
 
   go-vulnerability-scan:
     runs-on: ubuntu-latest

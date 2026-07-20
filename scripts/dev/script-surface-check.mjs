@@ -306,14 +306,20 @@ function checkWorkflowSecurity() {
   requireIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
     dependabotAutoMerge,
-    "github.event.pull_request.user.login == 'dependabot[bot]'",
-    "auto-merge workflow must be limited to Dependabot pull requests",
+    "github.event.workflow_run.actor.login == 'dependabot[bot]'",
+    "auto-merge workflow must be limited to successful Dependabot CI runs",
   );
   requireIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
     dependabotAutoMerge,
-    "gh pr merge --auto --squash",
+    "gh pr merge \"$PR_NUMBER\" --repo \"$GH_REPO\" --auto --squash",
     "Dependabot workflow must use native gated auto-merge",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "test \"$current_head\" = \"$CI_HEAD_SHA\"",
+    "Dependabot auto-merge must reject stale successful CI runs",
   );
   requireNotIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
