@@ -216,6 +216,12 @@ function checkWorkflowSecurity() {
   requireIncludes(
     ".github/workflows/bot-submission.yml",
     botSubmission,
+    "github.event.pull_request.user.login != 'dependabot[bot]'",
+    "Dependabot pull requests must skip all PR-side bot submission jobs",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission.yml",
+    botSubmission,
     "::error::Bot files changed",
     "off-convention bot changes must fail instead of warning only",
   );
@@ -272,6 +278,12 @@ function checkWorkflowSecurity() {
     botNonBotStatus,
     "statuses: write",
     "metadata-only non-bot status workflow must publish the required status",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-non-bot-status.yml",
+    botNonBotStatus,
+    "Dependabot PR; bot checks not applicable",
+    "Dependabot pull requests must receive an explicit not-applicable status",
   );
   requireIncludes(
     ".github/workflows/bot-submission-non-bot-status.yml",

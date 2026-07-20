@@ -22,6 +22,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -35,8 +36,14 @@ jobs:
             exit 0
           fi
 
+          if [ "$PR_AUTHOR" = "dependabot[bot]" ]; then
+            description="Dependabot PR; bot checks not applicable"
+          else
+            description="Not a bot submission"
+          fi
+
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=success \
             -f context=registry-diff-and-provision \
-            -f description="Not a bot submission" \
+            -f description="$description" \
             -f target_url="$STATUS_TARGET_URL"

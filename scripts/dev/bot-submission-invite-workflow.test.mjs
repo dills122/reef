@@ -4,6 +4,9 @@ import { readFile } from "node:fs/promises";
 const provision = await readFile(new URL("../../.github/workflows/bot-submission-provision.yml", import.meta.url), "utf8");
 const approval = await readFile(new URL("../../.github/workflows/bot-submission-invite-approve.yml", import.meta.url), "utf8");
 const nonBotStatus = await readFile(new URL("../../.github/workflows/bot-submission-non-bot-status.yml", import.meta.url), "utf8");
+const submission = await readFile(new URL("../../.github/workflows/bot-submission.yml", import.meta.url), "utf8");
+
+assert.match(submission, /if: github\.event\.pull_request\.user\.login != 'dependabot\[bot\]'/);
 
 assert.doesNotMatch(provision, /pull_request_target/);
 assert.match(provision, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
@@ -23,6 +26,7 @@ assert.match(nonBotStatus, /pulls\/\$\{PR_NUMBER\}\/files/);
 assert.match(nonBotStatus, /grep -q '\^bots\/'/);
 assert.match(nonBotStatus, /statuses\/\$\{HEAD_SHA\}/);
 assert.match(nonBotStatus, /context=registry-diff-and-provision/);
+assert.match(nonBotStatus, /Dependabot PR; bot checks not applicable/);
 assert.doesNotMatch(nonBotStatus, /actions\/checkout/);
 assert.doesNotMatch(nonBotStatus, /id-token: write/);
 assert.doesNotMatch(nonBotStatus, /secrets\./);

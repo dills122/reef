@@ -28,6 +28,7 @@ permissions:
 
 jobs:
   detect-flow:
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     outputs:
       flow: ${{ steps.parse.outputs.flow }}
