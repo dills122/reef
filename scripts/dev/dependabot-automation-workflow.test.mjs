@@ -43,6 +43,15 @@ assert.match(dependabot, /package-ecosystem: "github-actions"/);
 assert.match(dependabot, /day: "friday"\n      time: "18:00"/);
 assert.match(dependabot, /repository-automation:\n        patterns:\n          - "\*"/);
 assert.match(dependabot, /dependency-name: "typescript"\n        versions:\n          - ">=7"/);
+assert.equal(
+  (dependabot.match(/dependency-name: "typescript"\n        versions:\n          - ">=7"/g) ?? []).length,
+  2,
+  "TypeScript 7 must remain blocked for both Svelte and Astro tooling",
+);
+assert.match(
+  dependabot,
+  /dependency-name: "postgres"\n        update-types:\n          - "version-update:semver-major"/,
+);
 
 assert.match(autoMerge, /on:\n  workflow_run:/);
 assert.match(autoMerge, /workflows:\n      - CI\n    types:\n      - completed/);
