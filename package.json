@@ -71,6 +71,6 @@
     "ses": "^2.2.0",
     "simple-statistics": "7.9.3",
     "trading-signals": "7.4.3",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
