@@ -24,7 +24,7 @@ jobs:
         working-directory: services/matching-engine
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: services/matching-engine/go.mod
       - name: Check gofmt
@@ -51,7 +51,7 @@ jobs:
         working-directory: services/simulator
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: services/simulator/go.mod
       - name: Check gofmt
@@ -247,7 +247,7 @@ jobs:
       DEV_REPLAY_TRACE_CHECK_LIMIT: '100'
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: services/simulator/go.mod
       - uses: actions/setup-java@v5
@@ -320,7 +320,7 @@ jobs:
             workdir: services/simulator
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.go-version-file }}
       - name: Run govulncheck for ${{ matrix.name }}
