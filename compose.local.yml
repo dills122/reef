@@ -129,14 +129,14 @@ services:
       retries: 20
 
   nats-box:
-    image: natsio/nats-box:0.18.0
+    image: natsio/nats-box:0.19.7
     profiles: ["stream-ack-tools"]
     depends_on:
       nats:
         condition: service_healthy
 
   redpanda:
-    image: redpandadata/redpanda:v26.1.1
+    image: redpandadata/redpanda:v26.1.13
     container_name: reef-redpanda
     profiles: ["redpanda"]
     command:
