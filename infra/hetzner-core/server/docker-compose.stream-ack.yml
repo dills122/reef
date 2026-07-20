@@ -13,7 +13,7 @@ x-app-hardening: &app-hardening
 services:
   nats:
     <<: *service-hardening
-    image: nats:2.10-alpine
+    image: nats:2.14-alpine
     restart: unless-stopped
     command:
       - "-js"
