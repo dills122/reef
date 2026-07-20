@@ -36,7 +36,7 @@ jobs:
         working-directory: .
         run: cat coverage/matching-engine/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload matching-engine coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: matching-engine-coverage
           path: coverage/matching-engine
@@ -63,7 +63,7 @@ jobs:
         working-directory: .
         run: cat coverage/simulator/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload simulator coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: simulator-coverage
           path: coverage/simulator
@@ -100,7 +100,7 @@ jobs:
             }
           ' "$csv" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload platform-runtime coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: platform-runtime-coverage
           path: |
@@ -179,7 +179,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload Node dev-tooling coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: node-dev-tooling-coverage
           path: coverage/node-dev-tooling
@@ -269,7 +269,7 @@ jobs:
           find replay-artifacts/persona-session -name '*.check.json' -print -exec cat {} \; >> "$GITHUB_STEP_SUMMARY" || true
       - name: Upload replay artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: deterministic-replay-artifacts
           path: replay-artifacts/persona-session

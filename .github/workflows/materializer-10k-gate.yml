@@ -99,13 +99,13 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload gate log
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: materializer-10k-gate-log
           path: materializer-10k-gate.log
       - name: Upload fetched benchmark artifacts
         if: ${{ always() && inputs.command == 'run-destroy' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: materializer-10k-gate-artifacts
           path: reports/do-benchmark
