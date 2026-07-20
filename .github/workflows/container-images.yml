@@ -21,7 +21,7 @@ jobs:
     outputs:
       image_changed: ${{ steps.changed.outputs.image_changed }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Check changed paths
@@ -66,7 +66,7 @@ jobs:
             context: services/simulator
             dockerfile: services/simulator/Dockerfile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
 

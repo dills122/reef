@@ -46,7 +46,7 @@ jobs:
       DEV_STRESS_ARTIFACT_DIR: throughput-artifacts/runtime-nodb
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-nodb/runtime-nodb.json
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: services/simulator/go.mod
@@ -106,7 +106,7 @@ jobs:
       DEV_STRESS_ARTIFACT_DIR: throughput-artifacts/runtime-db
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-db/runtime-db.json
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: services/simulator/go.mod
