@@ -86,6 +86,11 @@ updates:
       - "/packages/bot-sdk"
     patterns:
       - "*"
+    ignore:
+      # svelte-check 4.7.3 crashes during startup with TypeScript 7.
+      - dependency-name: "typescript"
+        versions:
+          - ">=7"
     multi-ecosystem-group: "javascript-apps"
 
   # The docs deployment uses npm and package-lock.json in CI.
@@ -112,6 +117,11 @@ updates:
       - "/infra/hetzner-core/server"
     patterns:
       - "*"
+    ignore:
+      # PostgreSQL majors require an explicit pg_upgrade and volume migration.
+      - dependency-name: "postgres"
+        update-types:
+          - "version-update:semver-major"
     multi-ecosystem-group: "infrastructure"
 
   - package-ecosystem: "opentofu"
