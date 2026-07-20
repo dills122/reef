@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/IBM/sarama v1.60.0
-	github.com/nats-io/nats.go v1.51.0
+	github.com/nats-io/nats.go v1.52.0
 	github.com/tidwall/btree v1.8.1
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11

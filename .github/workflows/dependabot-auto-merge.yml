@@ -1,26 +1,44 @@
 name: Dependabot Auto-merge
 
 on:
-  pull_request:
-    branches:
-      - master
-      - main
+  workflow_run:
+    workflows:
+      - CI
     types:
-      - opened
-      - reopened
-      - synchronize
+      - completed
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
 
 jobs:
   enable-auto-merge:
-    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'dills122/reef'
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.repository == 'dills122/reef'
     runs-on: ubuntu-latest
     steps:
-      - name: Enable squash auto-merge
+      - name: Update stale Dependabot branch or enable squash auto-merge
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR_URL"
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$PR_NUMBER"
+          pr_author="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.user.login')"
+          current_head="$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')"
+          merge_state="$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeStateStatus --jq '.mergeStateStatus')"
+          test "$pr_author" = 'dependabot[bot]'
+          test "$current_head" = "$CI_HEAD_SHA"
+
+          if [ "$merge_state" = 'BEHIND' ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body '@dependabot rebase'
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" --repo "$GH_REPO" --auto --squash

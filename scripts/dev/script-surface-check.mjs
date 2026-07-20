@@ -306,14 +306,32 @@ function checkWorkflowSecurity() {
   requireIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
     dependabotAutoMerge,
-    "github.event.pull_request.user.login == 'dependabot[bot]'",
-    "auto-merge workflow must be limited to Dependabot pull requests",
+    "github.event.workflow_run.actor.login == 'dependabot[bot]'",
+    "auto-merge workflow must be limited to successful Dependabot CI runs",
   );
   requireIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
     dependabotAutoMerge,
-    "gh pr merge --auto --squash",
+    "gh pr merge \"$PR_NUMBER\" --repo \"$GH_REPO\" --auto --squash",
     "Dependabot workflow must use native gated auto-merge",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "test \"$current_head\" = \"$CI_HEAD_SHA\"",
+    "Dependabot auto-merge must reject stale successful CI runs",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    'if [ "$merge_state" = \'BEHIND\' ]; then',
+    "Dependabot auto-merge must refresh branches that fall behind master",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "gh pr comment \"$PR_NUMBER\" --repo \"$GH_REPO\" --body '@dependabot rebase'",
+    "stale Dependabot branches must request a bot-owned rebase that retriggers CI",
   );
   requireNotIncludes(
     ".github/workflows/dependabot-auto-merge.yml",

@@ -3,9 +3,10 @@
 
 provider "registry.opentofu.org/cloudflare/cloudflare" {
   version     = "5.22.0"
-  constraints = "5.9.0"
+  constraints = "5.22.0"
   hashes = [
     "h1:H3XmcpcMLeDyuGU6QsBXeVOB2CQGnIVRt6PJf7hfrtE=",
+    "h1:u3j/+0nmwTHvVg4lTziT8c9YvzGLlJOmFEOv/42yPuQ=",
     "zh:45f3b7c50254b1da1dc21e77e03cd1e931cab40fb75c7cba822a53ed54cd232e",
     "zh:8437138c0af1a1a557b516ca42dae54499933cc81072396abe7eefd267218f79",
     "zh:9140044a3c909e1a2767c8b2dd95370b8152bcbc7cb26c47e376e81f75512d32",
@@ -14,6 +15,7 @@ provider "registry.opentofu.org/cloudflare/cloudflare" {
     "zh:cd767016ea7382e384e560f6ddb302637ecb1b53ece15c9326032010effe6c33",
     "zh:d952f92ae1a688ed376757127ae1aa3b625571bf1fc606214a5822eae98213e0",
     "zh:f5213814c8ca0d736623438b283143b9a7f98e72ca4992eb906966e7f8cc383b",
+    "zh:f809ab383cca0a5f83072981c64208cbd7fa67e986a86ee02dd2c82333221e32",
   ]
 }
 
@@ -22,6 +24,7 @@ provider "registry.opentofu.org/hetznercloud/hcloud" {
   constraints = "~> 1.52"
   hashes = [
     "h1:4umCzzfMlXTswvnn46dX0tPNl267O72eIXRkO/+Nfng=",
+    "h1:R+S77AiRWQQnVROR+HNqMXnhX8fDxZVBG1PwlpxGyss=",
     "zh:113070176eb4fb26a3758b3d1031bb904e34a74f7c4f99f90df2301ca4468a51",
     "zh:1bfc988bdcd7c9422e09c262c736ad265a205684f0402fa4a83e63c0b08e09ea",
     "zh:37d92b4cf0f344295b0d780aabbc1408f02db31141cd4408276455a458071e54",

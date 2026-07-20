@@ -93,6 +93,11 @@ updates:
     directory: "/apps/docs-site"
     patterns:
       - "*"
+    ignore:
+      # @astrojs/check 0.9.x only supports TypeScript 5 and 6.
+      - dependency-name: "typescript"
+        versions:
+          - ">=7"
     multi-ecosystem-group: "javascript-apps"
 
   - package-ecosystem: "docker"

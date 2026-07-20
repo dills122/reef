@@ -10,7 +10,7 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test lint check-scripts check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
+.PHONY: test lint check-scripts check-dependency-alignment check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
@@ -40,9 +40,13 @@ lint:
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew compileKotlin compileTestKotlin
 	bunx --bun tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	node scripts/dev/script-surface-check.mjs
+	node scripts/ci/check-dependency-alignment.mjs
 
 check-scripts:
 	node scripts/dev/script-surface-check.mjs
+
+check-dependency-alignment:
+	node scripts/ci/check-dependency-alignment.mjs
 
 check-reef-arena-boundaries:
 	node scripts/dev/reef-arena-boundary-check.mjs
@@ -511,10 +515,10 @@ dev-scenario-golden-check:
 	$(JS_RUNTIME) scripts/dev/scenario-golden-check.mjs $(ARGS)
 
 docs-site-dev:
-	cd apps/docs-site && bun install && bun run dev
+	cd apps/docs-site && npm install && npm run dev
 
 docs-site-build:
-	cd apps/docs-site && bun install && bun run build
+	cd apps/docs-site && npm ci && npm run build
 
 dev-scenario-drift-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
