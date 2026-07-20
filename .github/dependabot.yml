@@ -1,0 +1,85 @@
+version: 2
+
+updates:
+  - package-ecosystem: "bun"
+    directories:
+      - "/"
+      - "/apps/arena-admin"
+      - "/packages/bot-sdk"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  # The docs deployment uses npm and package-lock.json in CI.
+  - package-ecosystem: "npm"
+    directory: "/apps/docs-site"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  - package-ecosystem: "gomod"
+    directories:
+      - "/services/matching-engine"
+      - "/services/simulator"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  - package-ecosystem: "gradle"
+    directories:
+      - "/services/arena-control-plane"
+      - "/services/platform-runtime"
+      - "/services/stock-data"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/infra/hetzner-core/server/deploy-receiver"
+      - "/services/arena-control-plane"
+      - "/services/matching-engine"
+      - "/services/platform-runtime"
+      - "/services/simulator"
+      - "/services/stock-data"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  - package-ecosystem: "docker-compose"
+    directories:
+      - "/"
+      - "/infra/hetzner-core/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  - package-ecosystem: "opentofu"
+    directories:
+      - "/infra/do-benchmark"
+      - "/infra/hetzner-core/tofu"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Toronto"
