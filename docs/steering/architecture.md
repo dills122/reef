@@ -22,6 +22,7 @@ Reef is expected to grow into these primary surfaces:
 
 - Astro documentation/marketing site
 - Kotlin platform runtime for APIs, workflow orchestration, persistence, and read models
+- optional Kotlin Arena control-plane artifact for Arena-owned routes, persistence, admission, provisioning, and risk extensions
 - Go matching engine for order book and matching behavior
 - Postgres for compact canonical materialization, operational projections, account/settlement state, and analytics stores, with domain split readiness
 - Kafka-compatible durable command/event streams for high-throughput venue ingress and matching event batches, with NATS JetStream retained where it fits workflow or comparison use cases
@@ -106,7 +107,7 @@ These may begin as modules in a single service, but code should still reflect th
 
 ## Initial Deployment Shape
 
-Phase 1 should bias toward a modular monolith plus separate engine:
+The Reef base should bias toward a modular monolith plus separate engine:
 
 - one Kotlin runtime/API service
 - one Go matching engine service
@@ -114,6 +115,8 @@ Phase 1 should bias toward a modular monolith plus separate engine:
 - optional in-process event dispatcher inside the Kotlin runtime
 
 This is the default unless there is a strong reason to distribute more aggressively.
+Optional products use separate artifacts and explicit deployment overlays; the
+promoted Arena profile is the first implementation of this rule.
 
 The synchronous runtime-to-engine and Postgres-heavy path is a correctness baseline and local fallback. It should not be treated as the primary path to high sustained TPS unless comparable benchmark evidence proves that posture.
 
@@ -153,8 +156,11 @@ Use this target layout as the default:
 ```text
 apps/
   docs-site/
+  arena-admin/
+  control-room/
 services/
   platform-runtime/
+  arena-control-plane/
   matching-engine/
   simulator/
 contracts/

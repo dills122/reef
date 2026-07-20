@@ -1,8 +1,8 @@
 ---
 title: Settlement APIs
-description: Current scenario-scoped settlement fact, obligation, ledger, proof, and score reads.
+description: Scenario-scoped post-trade facts, obligations, exceptions, ledger, proof, and score reads.
 banner:
-  content: Narrow P2 and instant-post-trade slice. This is evidence-oriented post-trade functionality, not the full allocation/confirmation/clearing workflow.
+  content: Evidence-oriented lifecycle slice. Allocation through novation and settlement finality are implemented; broad netting and operator UX remain later work.
 ---
 
 Settlement answers the next question after a trade: did the buyer get securities, did the seller get cash, and can we prove the path taken? Reef's first slice keeps that story narrow and inspectable. Matching history stays immutable; settlement reads durable trade facts and writes its own append-only evidence.
@@ -10,6 +10,8 @@ Settlement answers the next question after a trade: did the buyer get securities
 The current implementation supports a scenario-scoped evidence path plus instant-post-trade finality proof:
 
 - settlement obligations materialized from persisted runtime trades
+- allocation, confirmation, and affirmation facts
+- clearing submission plus acceptance/rejection and novation facts
 - deterministic settlement instructions and attempts
 - cash/security leg outcomes
 - append-only ledger proof entries
@@ -17,8 +19,9 @@ The current implementation supports a scenario-scoped evidence path plus instant
 - cash-leg and security-leg break facts when seeded resources are insufficient
 - repair facts that unlock deterministic retry attempts
 - `RESOLVED` facts for repaired exception closure
+- scenario-scoped exception queue projection over clearing rejects and settlement breaks
 
-This is not the full post-trade department yet. Allocation, confirmation, affirmation, clearing, novation, netting, exception UI, and broad analytics remain planned.
+This is not the full post-trade department yet. Richer netting, operator case management/UI, external-party workflows, and broad analytics remain planned.
 
 ## GET /api/v1/settlement/facts/{scenarioRunId}
 
@@ -28,6 +31,12 @@ Current fact families include:
 
 - resource positions used by constrained instant-mode checks
 - `SettlementObligationCreated`
+- `SettlementAllocationProposed`
+- `SettlementConfirmationGenerated`
+- `SettlementAffirmationAccepted`
+- `SettlementClearingSubmitted`
+- `SettlementClearingAccepted` or `SettlementClearingRejected`
+- `SettlementNovationRecorded` after clearing acceptance
 - `SettlementInstructionCreated`
 - `SettlementAttemptStarted`
 - settlement leg outcomes
@@ -40,7 +49,8 @@ Current fact families include:
 The response carries ordering and causation data so the chain can be checked:
 
 ```text
-trade -> obligation -> instruction -> attempt -> leg outcomes
+trade -> obligation -> allocation -> confirmation -> affirmation
+  -> clearing -> novation -> instruction -> attempt -> leg outcomes
   -> ledger proof -> SETTLED
 ```
 
@@ -69,6 +79,14 @@ Instant-post-trade happy-path settlement writes four proof entries per settled t
 
 Settlement proof is valid only when cash debits equal cash credits, security debits equal security credits, both leg outcomes succeeded, and `SettlementSettled` is present. No balanced proof, no finality claim.
 
+## GET /api/v1/settlement/exceptions/{scenarioRunId}
+
+Returns the scenario-scoped exception queue projected from clearing rejections
+and settlement breaks. The view includes open/resolved counts plus exception
+type, severity, owner role, required action, and repair action where applicable.
+It is an operator-readable projection over append-only facts, not a mutation of
+matching or settlement history.
+
 ## GET /api/v1/settlement/proof/{scenarioRunId}
 
 Returns one replay proof with trade, obligation, attempt, and ledger identifiers; final balances; settlement proof rows; profile/policy evidence; fact counts; causation-gap checks; proof status (`CLEAN` or `GAPPED`); and a deterministic checksum.
@@ -83,18 +101,20 @@ Query params: optional `asOf`, optional `agedFailAfterSeconds`.
 
 Use it for reports that need a single settlement-quality summary rather than raw facts.
 
-## Internal Seed And Repair Commands
+## Operator Seed And Repair Commands
 
-These routes are local/operator tooling, not public client APIs:
+Use the authenticated, authorized `/admin/v1` gateway for operator workflows.
+Equivalent `/internal/admin/...` handlers remain local/migration adapters and
+must not be exposed raw.
 
-| Route | Purpose |
+| Gateway route | Purpose |
 |---|---|
-| `/internal/admin/settlement/facts` | Append a scenario settlement fact bundle for smoke/evidence setup |
-| `/internal/admin/settlement/obligations/materialize` | Materialize trade-to-settlement obligations for a scenario run |
-| `/internal/admin/settlement/repairs/cash` | Post buyer cash resource repair plus `SettlementRepairPosted` |
-| `/internal/admin/settlement/repairs/security` | Post seller security resource repair plus `SettlementRepairPosted` |
-| `/internal/admin/settlement/force-settle` | Force settlement finality for controlled repair/evidence paths |
-| `/internal/admin/settlement/reverse-ledger-entry` | Append compensating reversal evidence for a ledger entry |
+| `/admin/v1/settlement/facts` | Append a scenario settlement fact bundle for smoke/evidence setup |
+| `/admin/v1/settlement/obligations/materialize` | Materialize trade-to-post-trade lifecycle facts for a scenario run |
+| `/admin/v1/settlement/repairs/cash` | Post buyer cash resource repair plus `SettlementRepairPosted` |
+| `/admin/v1/settlement/repairs/security` | Post seller security resource repair plus `SettlementRepairPosted` |
+| `/admin/v1/settlement/force-settle` | Force settlement finality for controlled repair/evidence paths |
+| `/admin/v1/settlement/reverse-ledger-entry` | Append compensating reversal evidence for a ledger entry |
 
 ## Profile Behavior
 

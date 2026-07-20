@@ -24,7 +24,7 @@ Arena data lives in its own boundary, separate from trading hot-path state:
 
 **Arena-side**: bot registry and version metadata, artifact references and validation results, tournament/season/run metadata, game-mode definitions and policy versions, score results and leaderboard read models, replay indexes, ban/quarantine/watch/throttle lists, operator audit records.
 
-Locally this can share one Postgres instance via separate schemas/databases (arena uses a distinct `ARENA_POSTGRES_*` datasource today); the design preserves a clean path to a fully separate arena Postgres instance later. The trading hot path never synchronously depends on arena analytics writes — if arena scoring or leaderboard updates fall behind, venue command handling keeps working under normal risk/boundary rules.
+Locally the Arena overlay uses a distinct `ARENA_POSTGRES_*` datasource and migrations. The default Reef profile does not start, migrate, or wait for Arena storage. The trading hot path never synchronously depends on Arena analytics writes — if scoring or leaderboard updates fall behind, venue command handling keeps working under normal Reef risk/boundary rules.
 
 ## Replay & Audit
 
@@ -38,9 +38,9 @@ Bot code is never trusted. Minimum controls: isolated execution context per bot,
 
 ## Control Plane (Built Today)
 
-`ArenaControlPlaneService` is the first arena-owned registry boundary in the platform runtime, backed by `PostgresArenaBotRegistryStore` for durable registry/qualification/operator-decision/run-record facts. Bot versions carry explicit states (`draft`, `submitted`, `checks_passed`, `approved`, `active`, `suspended`, `quarantined`, `banned`, `archived`); a quarantined or non-approved bot version is rejected before order acceptance. Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
+`services/arena-control-plane` is the Arena-owned optional artifact. `ArenaControlPlaneService` and `PostgresArenaBotRegistryStore` own durable registry/qualification/operator-decision/run-record facts, while submission-admission and entitlement stores remain Arena-owned. Bot versions carry explicit states (`draft`, `submitted`, `checks_passed`, `approved`, `active`, `suspended`, `quarantined`, `banned`, `archived`); a quarantined or non-approved bot version is rejected before order acceptance. Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
 
-Local run evidence now covers positive and negative persisted arena gates, static operator report rendering, report-index rendering, shared-time multi-instrument runs, and hosted/local report metadata that records whether reads came from fixtures or live platform read APIs. A same-repository smoke bot also passed validation, container isolation, trusted provisioning, merge, and registry sync. Open fork-based submission still needs a safe trusted handoff and a named external-user smoke before the arena is described as open.
+Local run evidence now covers positive and negative persisted arena gates, static operator report rendering, report-index rendering, shared-time multi-instrument runs, and hosted/local report metadata that records whether reads came from fixtures or live platform read APIs. A same-repository smoke bot passed validation, container isolation, trusted provisioning, merge, and registry sync. Fork admission and SHA-bound maintainer approval are implemented and locally tested; a named external-user lifecycle and recorded preview run are still required before the arena is described as open.
 
 ## Learn More
 

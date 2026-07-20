@@ -1,6 +1,6 @@
 # Reef Venue Runtime Backbone Services
 
-Last aligned: 2026-07-06.
+Last aligned: 2026-07-19.
 
 ## Purpose
 
@@ -55,7 +55,7 @@ flowchart LR
     BoundaryDB["boundary-postgres\nidempotency/intake"]
     RuntimeDB["postgres\nruntime canonical facts"]
     ProjectionDB["projection-postgres\nread models"]
-    ArenaDB["arena-postgres\nbot/arena metadata"]
+    ArenaDB["arena-postgres (optional overlay)\nbot/arena metadata"]
     StreamDisk["stream broker disk\naccepted commands/events"]
   end
 
@@ -66,7 +66,7 @@ flowchart LR
   end
 
   subgraph Settlement["Settlement (Post-Trade)"]
-    SettlementMaterializer["TradeSettlementObligationMaterializer\nobligations, instructions, attempts, breaks"]
+    SettlementMaterializer["TradeSettlementObligationMaterializer\nallocation through novation, obligations, settlement"]
     SettlementFacts[("settlement fact store\nPostgres / in-memory")]
     SettlementLedger["SettlementLedgerProjection\ncash/security balances + settlement proof"]
   end

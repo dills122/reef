@@ -1,9 +1,11 @@
 # Bot Arena Auth And Provisioning
 
-Release status (2026-07-18): the same-repository smoke-bot flow has passed end
-to end, but the trusted provisioning workflow deliberately rejects fork PRs.
-The chosen target is an invite-only, fork-based preview with a maintainer-gated
-trusted handoff; it is not yet available to ordinary GitHub contributors.
+Release status (2026-07-19): the same-repository smoke-bot flow has passed end
+to end. Fork PRs now persist as `pending_invite_review`; a maintainer-only
+base-branch workflow binds the approver's immutable GitHub identity and exact
+head SHA before automatically dispatching trusted provisioning. The path is
+locally verified but still needs a named external-account E2E before the
+invite-only preview is advertised. Open/self-service intake remains later.
 Track implementation in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 and the release gates in
@@ -19,7 +21,7 @@ The core rule is separation of responsibility:
 
 - GitHub proves human identity.
 - Reef Admin DB owns local users, roles, trust state, and audit records; Arena
-  owns bot ownership and limits.
+  owns bot ownership/entitlements and admission state.
 - Reef Admin API mediates durable control-plane operations.
 - OpenBao stores bot and service secrets.
 - Runtime services read OpenBao through service credentials, not through user
@@ -473,10 +475,11 @@ should gate run eligibility, not merge, because config values are user-managed
 opaque data and should not be exposed to CI or reviewers.
 
 The same-repository version of this flow is proven. The fork-based trusted
-handoff is the selected preview target but is not implemented today because the
-trusted workflow deliberately rejects a different `head_repository`. Do not
-grant hosted credentials or OIDC permission to the workflow that executes
-submitted code. Admission and run cutoffs are defined in
+handoff is implemented and locally verified: untrusted CI records pending
+admission, maintainer approval is SHA-bound, and only the trusted base-branch
+workflow can provision. Do not grant hosted credentials or OIDC permission to
+the workflow that executes submitted code. A named external-account E2E and
+run-window evidence are still required. Admission and run cutoffs are defined in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
 
 ### Existing Bot Update
@@ -506,7 +509,8 @@ retention and recovery policy is explicit.
 
 ## Ownership And Limits
 
-A GitHub user may own multiple bots, subject to configurable limits.
+A GitHub user may own multiple bots. No ownership-count limit is currently
+enforced; add one only with an explicit policy and tested storage/API behavior.
 
 Recommended config:
 
@@ -554,7 +558,7 @@ Required before merge:
 - sandbox/security/resource checks pass
 - human reviewer approval exists
 - user is not banned
-- configured bot ownership limits pass
+- bot ownership and trust checks pass
 - OpenBao slice exists or has been provisioned
 
 The trusted provisioning workflow posts or updates a PR comment after the hosted
@@ -570,14 +574,14 @@ status on the PR head SHA. Branch protection should require that explicit
 status context, plus the untrusted PR-side `validate-manifest` and
 `scan-and-sandbox-test` checks, rather than requiring the trusted workflow-run
 job name directly. Non-bot branches get a successful
-`registry-diff-and-provision` status with no hosted Admin API call; forked bot
-submission branches get a failing status because they cannot receive trusted
-provisioning privileges.
+`registry-diff-and-provision` status with no hosted Admin API call. Forked bot
+submission branches remain pending until the SHA-bound invite approval triggers
+trusted provisioning; a changed head SHA invalidates the approval.
 
-Live configuration warning (verified 2026-07-18): `master` currently requires
-only `validate-manifest` and `scan-and-sandbox-test`, requires zero approving
-reviews, and does not require `registry-diff-and-provision`. The text above is
-the required target contract, not the current repository enforcement.
+Live configuration (verified 2026-07-19): `master` requires
+`registry-diff-and-provision` in addition to the untrusted submission checks.
+Bot-specific human approval is enforced by the maintainer-only invite workflow
+because GitHub's branch-level review count is not conditional on bot paths.
 
 After merge, `.github/workflows/bot-registry-sync.yml` syncs changed
 `bots/*/bot.json` manifests into the hosted arena registry. It registers the bot
@@ -771,6 +775,6 @@ and relevant object ids. Audit records must not contain secret values.
 - ~~Add participant config editor backed by Admin API and OpenBao.~~ Done in the
   owner-scoped `/bot-admin` surface; it still needs a named external-participant
   hosted proof before launch promotion.
-- Define and prove the fork-safe public bot submission contract. The current
-  same-repository branch workflow is an invite-only preview path, not an open
-  contributor path.
+- Complete a named external-account E2E for the implemented fork-safe invite
+  contract, including pending admission, SHA-bound approval, trusted
+  provisioning, merge, registry sync, config, and run eligibility.

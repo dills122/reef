@@ -23,7 +23,7 @@ These documents define how Reef should be built as the repository grows into the
 - [Kotlin](./kotlin.md): platform runtime and workflow orchestration guidance
 - [Astro](./astro.md): docs and marketing site guidance
 - [Post-Match Standards](../POST_MATCH_STANDARDS.md): normative post-match roles, calendar/time config, observability, exception taxonomy, and ledger standards
-- [Post-Trade Lifecycle Sprint](../POST_TRADE_LIFECYCLE_SPRINT.md): focused next sprint for clearing/novation facts, exception queue v1, and operator-visible lifecycle evidence
+- [Post-Trade Lifecycle Sprint](../POST_TRADE_LIFECYCLE_SPRINT.md): implementation record and remaining hardening for allocation-through-novation facts, exception queue v1, and operator-visible lifecycle evidence
 - [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes
 - [Performance Library Investigation](../PERFORMANCE_LIBRARY_INVESTIGATION.md): runtime/Go library benchmark candidates and acceptance criteria
 

@@ -1,8 +1,8 @@
 ---
-title: Internal & Admin Routes
-description: Operator/diagnostic routes under /internal — not part of the public client contract.
+title: Admin & Internal Routes
+description: Versioned operator gateways and local-only /internal adapters.
 banner:
-  content: Internal-only migration/local tooling. Do not expose these routes raw, and do not build client integrations against them.
+  content: Build operator integrations against authenticated /admin/v1 gateways. /internal routes are local/migration adapters and must not be exposed raw.
 ---
 
 Routes under `/internal/*` exist for local operators, admin CLI migration tooling, smoke tests, and diagnostics. They are not versioned like `/api/v1`, can change without notice, and must not be exposed raw as a public or partner-facing surface.
@@ -21,18 +21,28 @@ These versioned admin/data routes are the externally reachable shape where expli
 
 | Route | Backs |
 |---|---|
-| `/admin/v1/arena/bots` | Arena bot registry operations |
+| `/admin/v1/reference/instruments`, `/admin/v1/reference/participants`, `/admin/v1/reference/accounts` | Reference-data reads and upserts |
+| `/admin/v1/auth/roles`, `/admin/v1/auth/actor-roles` | Reef role and actor-role administration |
+| `/admin/v1/access/users`, `/admin/v1/access/roles`, `/admin/v1/access/users/trust-state`, `/admin/v1/access/users/roles`, `/admin/v1/access/users/roles/revoke` | Admin identity, trust, and role operations |
+| `/admin/v1/arena/bots` | Arena bot registry reads and registration |
+| `/admin/v1/arena/my/bots` | Participant-scoped owned-bot read |
 | `/admin/v1/arena/bots/openbao-provision` | Narrow OpenBao bot-secret provisioning operation |
+| `/admin/v1/arena/bots/ownership` | Arena-owned user/bot entitlement assignment |
 | `/admin/v1/arena/bots/config` | Participant bot OpenBao config status, replace, and clear operations |
-| `GET /admin/v1/arena/runs` | Recent arena run reads |
-| `GET /admin/v1/arena/run-bot-results` | Per-run arena result reads |
-| `GET /admin/v1/arena/run-enforcement-events` | Per-run arena enforcement reads |
+| `/admin/v1/arena/submission-admissions`, `/admin/v1/arena/submission-admissions/approve` | Persist pending fork admission and record SHA-bound maintainer approval |
+| `/admin/v1/arena/bot-versions`, `/admin/v1/arena/bot-versions/transition` | Bot-version registration and lifecycle decisions |
+| `/admin/v1/arena/runs`, `/admin/v1/arena/runs/status` | Arena run reads/registration and status updates |
+| `/admin/v1/arena/run-bot-results` | Per-run Arena result reads/writes |
+| `/admin/v1/arena/run-enforcement-events` | Per-run Arena enforcement reads/writes |
 | `/admin/v1/arena/leaderboard` | Authenticated arena leaderboard reads for operators |
 | `/admin/v1/analytics/run-exports` | Simulation/arena run export ingestion and reads |
 | `/admin/v1/analytics/run-bot-summaries` | Recent bot/run analytics summary reads |
 | `/admin/v1/risk/account-controls` | Account/bot risk controls |
 | `/admin/v1/risk/circuit-breakers` | Command circuit breakers |
 | `/admin/v1/risk/price-collars` | Instrument price collars |
+| `/admin/v1/settlement/facts`, `/admin/v1/settlement/obligations/materialize` | Scenario fact setup and post-trade lifecycle materialization |
+| `/admin/v1/settlement/repairs/cash`, `/admin/v1/settlement/repairs/security` | Settlement resource repair actions |
+| `/admin/v1/settlement/force-settle`, `/admin/v1/settlement/reverse-ledger-entry` | Controlled finality and compensating ledger operations |
 
 ## Local/Internal Routes
 
@@ -40,6 +50,10 @@ These versioned admin/data routes are the externally reachable shape where expli
 |---|---|
 | `/internal/admin/account-risk/controls` | Manage account/bot risk pre-check controls |
 | `/internal/admin/arena/bots` | Register arena bot identity |
+| `/internal/admin/arena/my/bots` | Read the authenticated participant's owned bots |
+| `/internal/admin/arena/bots/ownership` | Assign Arena-owned bot entitlement |
+| `/internal/admin/arena/submission-admissions` | Persist pending fork admission |
+| `/internal/admin/arena/submission-admissions/approve` | Record SHA-bound maintainer admission approval |
 | `/internal/admin/arena/bot-versions` | Register arena bot versions |
 | `/internal/admin/arena/bot-versions/transition` | Transition a bot version's approval-lifecycle state |
 | `/internal/admin/arena/qualification-reports` | Read arena qualification reports |
@@ -80,7 +94,11 @@ These versioned admin/data routes are the externally reachable shape where expli
 
 Cheap liveness/readiness probes are `/health`, `/healthz`, and `/readyz`. `/readyz` is the dependency-aware readiness surface; `/healthz` is cheap liveness.
 
-Arena admin routes require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`) and `PLATFORM_ARENA_ADMIN_ENABLED=1` — see [How The Game Works](../../arena/how-the-game-works/).
+Arena routes are absent from the Reef-only artifact. They require the optional
+`services/arena-control-plane` artifact, `compose.arena.yml`, the separate Arena
+datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`,
+`ARENA_POSTGRES_PASSWORD`), and `PLATFORM_ARENA_ADMIN_ENABLED=1` — see
+[How The Game Works](../../arena/how-the-game-works/).
 
 ## Learn More
 

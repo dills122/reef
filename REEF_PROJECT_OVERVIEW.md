@@ -33,8 +33,9 @@ run its supported workflows without Arena code or infrastructure. Arena may
 depend on versioned Reef contracts, but Reef release artifacts, routes,
 databases, readiness, and Compose base must not depend on Arena implementations.
 The repository remains a monorepo; artifact exclusion and explicit deployment
-composition provide opt-out, not runtime flags or JVM tree shaking alone. See
-[`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+composition provide opt-out, not runtime flags or JVM tree shaking alone. This
+boundary is implemented and promoted; see
+[`docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md)
 and D-053 in [`docs/DECISIONS.md`](./docs/DECISIONS.md).
 
 ## Vision

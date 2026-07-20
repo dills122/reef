@@ -1,6 +1,8 @@
 # Platform Runtime
 
-This service will be the Kotlin-based central platform runtime for Reef.
+This service is the Kotlin-based Reef platform runtime. It is the core artifact
+used by the default Reef-only profile; optional products attach through
+product-neutral route and risk extension ports.
 
 Responsibilities:
 
@@ -11,9 +13,9 @@ Responsibilities:
 - publish domain events
 - build read models for UI consumption
 - integrate with the matching engine
-- host simulation control initially, unless extracted later
+- expose generic admin/data gateway contracts without importing optional-product implementations
 
-Current state:
+Current state includes:
 
 - Kotlin source and Gradle build scaffold
 - `GET /health`
@@ -23,11 +25,20 @@ Current state:
 - `POST /api/v1/orders/submit` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/cancel` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/modify` (requires `X-Client-Id` + `Idempotency-Key`)
+- `GET /api/v1/commands/{commandId}` with provider-neutral command status
+- participant-scoped own-order/fill reads, public market-data snapshots/depth/trade tape/bars, and data-availability inventory
+- scenario-scoped settlement facts, obligation, exception, ledger, proof, and score reads
 - reference data endpoints for instruments, participants, and accounts
 - query endpoints for orders, trades, events, and trace timelines
 - transport path to the Go matching engine over HTTP or gRPC
 - unit-testable API and application layers
 - runtime-to-engine transport selection (`ENGINE_TRANSPORT=http|grpc|grpc-stream`)
+
+Bot Arena is not compiled into this artifact. `services/arena-control-plane`
+provides the optional Arena route/risk extension and `compose.arena.yml` opts
+into its image and datasource. Use `make build-reef-core`,
+`make test-reef-core`, and `make check-reef-arena-boundaries` to verify this
+dependency direction.
 
 Current persistence caveat:
 
@@ -79,7 +90,7 @@ External boundary config:
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)
-- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires the configured JetStream or Kafka-compatible durable provider, and `accepted-async` is an in-memory no-DB isolation mode)
 - `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, and `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` tune the no-DB accepted-async submit intake. The default in-flight window is `32` per lane to avoid flooding the engine stream. `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` above `0` blocks the calling HTTP application thread waiting for lane capacity; `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_WAIT_MAX_CONCURRENCY` (default `8`) bounds how many application threads can be parked in that wait at once, so a backpressure spike fails fast as `429` instead of exhausting the shared HTTP thread pool. `EXTERNAL_API_ACCEPTED_ASYNC_STATUS_RETENTION_MAX_RECORDS` (default `1000000`) and `EXTERNAL_API_ACCEPTED_ASYNC_STATUS_RETENTION_TTL_MS` (default `900000`) bound in-memory command status/idempotency retention.
 - `RUNTIME_PERSISTENCE=inmemory|postgres|noop` (`noop` is benchmark-only: keeps reference/auth setup data but drops command outcomes, orders, trades, events, canonical facts, and projections)
 - `STREAM_ACK_INTAKE_STORE=postgres|inmemory` selects stream-ack idempotency/intake reservation storage. For no-DB long soaks with `inmemory`, keep `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES` positive to bound replay-window memory and use `STREAM_ACK_INMEMORY_INTAKE_SHARDS` to reduce monitor contention.

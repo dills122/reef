@@ -28,11 +28,13 @@ Inspection and replay:
 Early product slices:
 
 - Arena control plane: bot registry, bot-version approval lifecycle, operator decisions, run records, and bot-originated order flow through real venue risk checks.
+- Reef/Arena packaging separation: Reef-only artifact, routes, migrations, Compose profile, failure isolation, and P1 canonical equivalence are promoted; Arena is an optional artifact and overlay.
 - Settlement evidence: scenario facts API, obligation materializer, instant-post-trade instructions/attempts, cash/security leg outcomes, append-only ledger proof, `SETTLED` finality facts, break/repair paths, and replayable balance/proof reads.
 - `stock-data` seed service: seed-once Tiingo/fake provider boundary, normalized snapshots, batch seed hash, Postgres or in-memory persistence, and `/v1/seed-snapshots`.
 - Bot SDK live read clients for market data, bars, own orders, and data availability; hosted/local reports can distinguish `fixture` versus `live` read mode.
 - Bot Arena local gates: persisted positive/negative smoke, static operator reports, and shared-time multi-instrument simulation proof with 5 active symbols and 18 bots.
 - Bot Arena hosted/control-plane slices: GitHub OAuth and Admin DB identity, public landing/leaderboard, owner-scoped bot config, container-isolated PR qualification, trusted OpenBao provisioning, and post-merge registry sync. A same-repository smoke bot passed the complete internal submission lifecycle.
+- Invite admission: fork PRs persist as `pending_invite_review`; trusted maintainer approval binds immutable GitHub identity and exact head SHA before dispatching base-branch provisioning. Local workflow tests cover pending, approval, changed-SHA, and non-bot behavior.
 
 ## Still Planned
 
@@ -40,11 +42,12 @@ Early product slices:
 - Remaining post-trade depth and operator UX beyond the implemented allocation/confirmation/affirmation, clearing/novation, obligation/instruction/attempt, ledger, break/repair, and exception-queue facts.
 - Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
 - Broader analytics facts, dashboards, and reports beyond initial run export.
-- Standalone Reef packaging: Arena implementation classes, routes, and default
-  database requirements are still co-packaged with the Kotlin runtime today.
-  The next sprint extracts the Arena-owned artifact and Compose overlay and
-  proves Reef-only build, start, smoke, and route absence.
-- Invite-only fork submission, external contributor onboarding, hosted hostile-code execution at scale, replay UI, and final scoring policies. Trusted provisioning currently rejects forks; the proven path is same-repository only.
+- Named external-account proof of fork submission through approval,
+  provisioning, merge, registry sync, owner config, eligibility, and a recorded
+  preview run. The code path exists, but the preview is not yet open or
+  self-service.
+- Persisted `T-72h`/`T-48h`/`T-24h` eligibility and roster-lock enforcement,
+  broader hosted hostile-code execution at scale, replay UI, and final scoring/economic policies.
 - Longer or higher-rate full-projection soaks. Full projection passed a short `5k/60s` gate, but write amplification remains high and is not yet promoted to the `10k` venue-core materializer claim.
 - Broader scenario campaigns beyond the now-promoted local P1/P2 locks and replay evidence.
 
@@ -58,7 +61,8 @@ The first deterministic scenarios now have promoted target stories. P1 proves a 
 
 - `docs/CURRENT_STATUS.md` — the full, most current snapshot (source of truth for this page)
 - `docs/BOT_ARENA_RELEASE_READINESS.md` — current external-submission release gate
-- `docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md` — next implementation sprint and standalone Reef gates
+- `docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md` — promoted standalone Reef/Arena boundary evidence
+- `docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md` — active fork-preview and recorded-run work
 - `docs/DECISIONS.md` — accepted architecture decisions
 - `docs/WORK_PLAN.md` — active execution ladder
 - `docs/SCENARIO_CONTRACTS.md` and `docs/SCENARIO_ASSERTION_PLAN.md` — first-wave scenario gates

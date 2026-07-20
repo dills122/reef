@@ -152,48 +152,26 @@ Required persisted identifiers and timestamps:
 - eligibility window id, cutoff evaluation time, result, and reason codes
 - correlation id across GitHub, Admin API, OpenBao, registry, and run records
 
-## Architecture And Optionality Assessment
+## Promoted Architecture And Optionality Baseline
 
-### What Is Correct Today
+The separation prerequisite is complete and remains a release invariant:
 
-- Reef owns venue intake, matching, canonical facts, settlement, market data,
-  replay, and general simulation contracts.
-- Bot Arena calls Reef's public command/read surfaces; bot code does not get a
-  private matching path.
-- The Go matching engine contains no Arena game or scoring behavior.
-- Arena actor profiles and mode fixtures are under
-  `packages/scenario-definitions/arena/`, separate from general persona/session
-  definitions.
-- Bot authoring/runtime code is under `packages/bot-sdk/` and Arena dev scripts,
-  not in the matching engine.
-- Arena admin service construction and bot-version risk integration have
-  feature flags and are disabled by default in code.
+- `platform-runtime.jar` has no Arena classes, and `make build-reef-core` plus
+  `make test-reef-core` enforce the Reef-only artifact and behavior.
+- `services/arena-control-plane/` owns Arena routes, registry/admission stores,
+  provisioning, admin use cases, and bot-version risk integration.
+- Reef exposes product-neutral route and account-risk extension ports; it does
+  not import Arena implementations.
+- `compose.base.yml` plus `compose.local.yml` is Reef-only.
+  `compose.arena.yml` explicitly adds the Arena artifact, datasource,
+  migrations, and routes.
+- Reef route-absence, Arena route-presence, Arena-storage failure isolation,
+  matching-image equivalence, and P1 canonical equivalence are recorded in
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+- The Go matching engine remains unaware of Arena game and scoring behavior;
+  bots continue to use Reef's public venue boundary.
 
-### What Is Not Cleanly Optional Yet
-
-- Arena application classes and gateways compile into the single
-  `platform-runtime` artifact.
-- `PlatformHttpServer` imports and constructs Arena gateway types even when the
-  backing service is disabled; routes remain registered and return unavailable
-  responses rather than being absent.
-- `ExternalApiBoundary` imports the Arena registry/risk adapter directly instead
-  of depending only on a Reef-core risk extension interface.
-- default Compose always declares `ARENA_POSTGRES_*`, depends on
-  `arena-postgres`, starts that container, and creates its volume.
-- the root `make test` target includes Bot SDK/Arena tests, so there is no
-  independently named Reef-core build/test proof.
-- public leaderboard and Arena admin routes share the main runtime server.
-- Java/Kotlin bytecode is not tree-shaken in this deployment shape. Disabling a
-  flag avoids activation but does not remove Arena code or dependencies from the
-  artifact.
-- monetary policy is mostly a design document; actor fixtures and score
-  calibration exist, but there is no complete versioned economic-policy fixture
-  and resolver that owns cash, fee, rebate, credit, intervention, and lock data.
-
-Release judgment: **the conceptual dependency direction is right, but Reef-only
-deployment optionality is not yet proven and Arena is not tree-shakeable today.**
-
-## Target Module Boundary
+The dependency direction is:
 
 The required dependency direction is:
 
@@ -208,26 +186,11 @@ Reef platform runtime -> matching engine -> canonical venue/post-trade facts
 Reef must have no compile-time dependency on Arena implementations.
 ```
 
-### Required Separation Work
-
-1. Define a Reef-core application artifact and test target with no Arena source
-   set or Bot SDK dependency.
-2. Move Arena registry, leaderboard, provisioning, run-result ingestion, and
-   Arena HTTP gateways into a separate Gradle module or service artifact.
-3. Keep generic account/risk extension contracts in Reef core; implement the
-   Arena bot-version risk adapter on the Arena side and inject it only in an
-   Arena-enabled deployment.
-4. Split Compose into a Reef-core base plus an explicit Arena overlay/profile.
-   Reef core must not start or wait for `arena-postgres`.
-5. Register Arena routes only in the Arena-enabled artifact/profile.
-6. Keep `packages/scenario-definitions/arena`, `packages/bot-sdk`, Arena runner
-   scripts, and `apps/arena-admin` outside Reef-core release artifacts.
-7. Add dependency checks that fail if matching-engine or Reef-core domain code
-   imports an Arena package.
-
-This can begin as build modules in one repository. A network service extraction
-is not required merely to prove dependency direction, although the accepted
-backbone design may eventually make the Arena control plane a separate process.
+Remaining work in this sprint is preview policy and evidence, not another
+packaging extraction. A future network-service split may be justified by
+deployment or scaling needs, but it is not required for the invite preview.
+Versioned economic-policy fixtures and resolution remain incomplete and are
+tracked below.
 
 ## Persona And Economic Policy Modules
 

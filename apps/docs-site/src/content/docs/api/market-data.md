@@ -61,7 +61,7 @@ Returns participant-scoped fills by joining runtime orders and executions. Suppo
 
 ## GET /api/v1/data/availability
 
-Returns the current read-surface inventory: endpoint, source type, freshness model, visibility scope, required/optional filters, projection lag, and watermark where available. Scenario and bot reports use this to distinguish durable fact reads from projection freshness. The inventory now includes settlement facts as scenario evidence.
+Returns the current read-surface inventory: endpoint, source type, freshness model, visibility scope, required/optional filters, projection lag, and watermark where available. Scenario and bot reports use this to distinguish durable fact reads from projection freshness. The inventory includes settlement facts, obligations, ledger, exceptions, proof, and score reads; the Arena profile also contributes its public leaderboard read.
 
 ## Learn More
 

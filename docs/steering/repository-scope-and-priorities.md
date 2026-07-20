@@ -248,11 +248,17 @@ The UI and API should be honest about projection freshness.
 ## Active Boundaries
 
 - `apps/docs-site/` owns public/static documentation and should not contain runtime logic.
-- `services/platform-runtime/` owns API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, and admin behavior.
+- `services/platform-runtime/` owns Reef API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, product-neutral extension ports, and generic admin behavior.
   - It owns command acceptance semantics.
   - It owns idempotency enforcement or coordination.
   - It owns backpressure behavior.
   - It must keep hot-path persistence minimal and measurable.
+- `services/arena-control-plane/` owns optional Arena routes, registry and
+  submission-admission persistence, provisioning, Arena admin use cases, and
+  the bot-version risk extension.
+  - It depends on Reef contracts through explicit extension ports.
+  - Reef-only artifacts, routes, migrations, readiness, and Compose must not
+    depend on this module.
 - `services/matching-engine/` owns matching and execution logic, not platform workflow orchestration.
   - It should remain deterministic for the same ordered command input.
   - It should not own UI, admin, persistence, or post-trade orchestration concerns.

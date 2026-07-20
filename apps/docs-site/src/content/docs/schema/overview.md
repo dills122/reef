@@ -15,8 +15,8 @@ Reef keeps storage split by responsibility. Some tables are durable facts: what 
 | [`admin`](../boundary-auth-admin-schema/) | built | policy/config operations, including post-trade profiles |
 | `command_log` | built | append-only inbound command capture, active work queue, terminal results |
 | `account` | [planned](../planned-schema/) | users, bots, accounts, immutable ledger entries, holds, risk limits |
-| `settlement` | built, expanding | scenario-scoped obligations, instructions, attempts, leg outcomes, ledger proof, settlements, breaks, repairs, resolutions; full allocation/confirmation/clearing/netting remains planned |
-| `arena` | built | bot registry, bot versions, qualification reports, run records/results, enforcement events |
+| `settlement` | built, expanding | allocations, confirmations, affirmations, clearing acceptance/rejection, novation, obligations, instructions, attempts, leg outcomes, ledger proof, settlements, breaks, repairs, resolutions, and exception-queue projection; netting depth remains planned |
+| `arena` | built, optional | bot registry, versions, entitlements, submission admissions, qualification/operator facts, run records/results, and enforcement events; owned by the Arena overlay |
 | `stock_data` | built | per-game-seed stock snapshot facts for deterministic replay; provider calls happen once per `gameSeedId` |
 | `market_data` | runtime-backed | top-of-book/depth/read slices live in `runtime`; no dedicated schema today |
 | `orchestration` | built | scheduler definitions and run-state |
