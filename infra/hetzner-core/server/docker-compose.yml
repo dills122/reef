@@ -13,7 +13,7 @@ x-app-hardening: &app-hardening
 services:
   postgres:
     <<: *service-hardening
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     command:
       - "postgres"
@@ -46,7 +46,7 @@ services:
 
   postgres-admin:
     <<: *service-hardening
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     env_file:
       - ./secrets/postgres-admin.env
@@ -63,7 +63,7 @@ services:
 
   postgres-analytics:
     <<: *service-hardening
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     env_file:
       - ./secrets/postgres-analytics.env
