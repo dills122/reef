@@ -66,6 +66,21 @@ func TestStartRunnerWithRetryRetriesThenSucceeds(t *testing.T) {
 	}
 }
 
+func TestStartRunnerWithRetryDoesNotRetryFatalRecoveryFailure(t *testing.T) {
+	calls := 0
+	start := func(context.Context, *app.Service, RuntimeConfig) (*Runner, error) {
+		calls++
+		return nil, &fatalStartupError{cause: errors.New("command history truncated")}
+	}
+	_, err := startRunnerWithRetry(context.Background(), app.NewService(), RuntimeConfig{ConnectTimeout: time.Minute}, start)
+	if err == nil {
+		t.Fatal("expected fatal recovery error")
+	}
+	if calls != 1 {
+		t.Fatalf("fatal recovery error must not retry partially restored state, calls=%d", calls)
+	}
+}
+
 func TestStartRunnerWithRetryTimesOut(t *testing.T) {
 	start := func(context.Context, *app.Service, RuntimeConfig) (*Runner, error) {
 		return nil, errors.New("always fails")

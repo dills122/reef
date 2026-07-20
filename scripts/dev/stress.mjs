@@ -2363,7 +2363,7 @@ function venueEventMaterializerIssues(report) {
   const materializedDelta = Number(delta.materializedDelta ?? 0);
   const failedDelta = Number(delta.failedDelta ?? 0);
   const ackFailedDelta = Number(delta.ackFailedDelta ?? 0);
-  const completionGap = Math.max(acceptedCommands - materializedDelta, 0);
+  const completionGap = Math.abs(acceptedCommands - materializedDelta);
   return {
     failedDelta,
     ackFailedDelta,
@@ -2611,7 +2611,7 @@ function streamAckWorkerIssues(report) {
   const completedDelta = Number(delta.completedDelta ?? 0);
   const failedDelta = Number(delta.failedDelta ?? 0);
   const ackFailedDelta = Number(delta.ackFailedDelta ?? 0);
-  const completionGap = Math.max(acceptedCommands - completedDelta, 0);
+  const completionGap = Math.abs(acceptedCommands - completedDelta);
   return {
     failedDelta,
     ackFailedDelta,
@@ -2638,7 +2638,7 @@ function streamDirectIssues(report) {
   const nackedDelta = Number(delta.nackedDelta ?? 0);
   const termedDelta = Number(delta.termedDelta ?? 0);
   const unsupportedDelta = Number(delta.unsupportedDelta ?? 0);
-  const completionGap = Math.max(acceptedCommands - ackedDelta, 0);
+  const completionGap = Math.abs(acceptedCommands - ackedDelta);
   return {
     failedDelta,
     nackedDelta,

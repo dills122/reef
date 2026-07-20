@@ -344,7 +344,8 @@ func profilePrice(rng *rand.Rand, cfg Config, profile string, instrument *sessio
 		if span <= 0 {
 			span = maxInt64(1, (cfg.PriceMax-cfg.PriceMin)/10)
 		}
-		return randomInt64(rng, maxInt64(1, base-span), base+span)
+		price := randomInt64(rng, maxInt64(1, base-span), base+span)
+		return quantizePrice(price, instrument.PriceTickNanos)
 	}
 	switch profile {
 	case profileMarketMaker:
@@ -357,6 +358,21 @@ func profilePrice(rng *rand.Rand, cfg Config, profile string, instrument *sessio
 	default:
 		return randomInt64(rng, cfg.PriceMin, cfg.PriceMax)
 	}
+}
+
+func quantizePrice(price, tick int64) int64 {
+	if tick <= 1 {
+		return price
+	}
+	quotient := price / tick
+	remainder := price % tick
+	if remainder >= tick-remainder {
+		quotient++
+	}
+	if quotient <= 0 {
+		return tick
+	}
+	return quotient * tick
 }
 
 func chooseInstrumentForActor(rng *rand.Rand, cfg Config, actor *sessionconfig.Actor) *sessionconfig.Equity {
@@ -380,6 +396,15 @@ func chooseInstrumentForActor(rng *rand.Rand, cfg Config, actor *sessionconfig.A
 		return &cfg.MarketEquities[rng.Intn(len(cfg.MarketEquities))]
 	}
 	return &eligible[rng.Intn(len(eligible))]
+}
+
+func instrumentByID(cfg Config, instrumentID string) *sessionconfig.Equity {
+	for i := range cfg.MarketEquities {
+		if cfg.MarketEquities[i].InstrumentID == instrumentID {
+			return &cfg.MarketEquities[i]
+		}
+	}
+	return nil
 }
 
 func shouldInjectFault(rng *rand.Rand, cfg Config, faultType, instrumentID string) bool {

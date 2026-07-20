@@ -2,10 +2,8 @@ package com.reef.platform.api
 
 import org.apache.kafka.clients.producer.Callback
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.Metric
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import java.time.Duration
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -18,27 +16,25 @@ import kotlin.test.assertFailsWith
 
 class KafkaStreamCommandPublisherTest {
     @Test
-    fun kafkaPublisherRetriesRetriableCallbackFailureBeforeSurfacing503ToBoundary() {
+    fun kafkaPublisherDoesNotApplicationResendRetriableCallbackFailure() {
         val producer = ScriptedKafkaProducer(
             listOf(
-                { _, callback -> callback.onCompletion(null, TimeoutException("metadata refresh in progress")) },
-                { record, callback -> callback.onCompletion(recordMetadata(record, offset = 41L), null) }
+                { _, callback -> callback.onCompletion(null, TimeoutException("metadata refresh in progress")) }
             )
         )
         val publisher = KafkaStreamCommandPublisher(
             ackTimeout = Duration.ofSeconds(2),
             config = StreamCommandConfig(streamName = "REEF_COMMANDS", partitionCount = 1),
             maxInFlight = 1,
-            producer = producer,
-            publishRetryAttempts = 1,
-            publishRetryDelay = Duration.ZERO
+            producer = producer
         )
 
-        val ack = publisher.publishAsync(envelope()).get(2, TimeUnit.SECONDS)
+        val failure = assertFailsWith<ExecutionException> {
+            publisher.publishAsync(envelope()).get(2, TimeUnit.SECONDS)
+        }
 
-        assertEquals(2, producer.sendCount.get())
-        assertEquals("REEF_COMMANDS", ack.streamName)
-        assertEquals(42L, ack.streamSequence)
+        assertEquals(1, producer.sendCount.get())
+        assertEquals("metadata refresh in progress", failure.cause?.message)
     }
 
     @Test
@@ -52,9 +48,7 @@ class KafkaStreamCommandPublisherTest {
             ackTimeout = Duration.ofSeconds(2),
             config = StreamCommandConfig(streamName = "REEF_COMMANDS", partitionCount = 1),
             maxInFlight = 1,
-            producer = producer,
-            publishRetryAttempts = 3,
-            publishRetryDelay = Duration.ZERO
+            producer = producer
         )
 
         val failure = assertFailsWith<ExecutionException> {
@@ -63,17 +57,6 @@ class KafkaStreamCommandPublisherTest {
 
         assertEquals(1, producer.sendCount.get())
         assertEquals("bad record", failure.cause?.message)
-    }
-
-    private fun recordMetadata(record: ProducerRecord<String, String>, offset: Long): RecordMetadata {
-        return RecordMetadata(
-            TopicPartition(record.topic(), record.partition() ?: 0),
-            offset,
-            0,
-            System.currentTimeMillis(),
-            0,
-            0
-        )
     }
 
     private fun envelope(): StreamCommandEnvelope {

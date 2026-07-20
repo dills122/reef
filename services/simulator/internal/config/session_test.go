@@ -25,6 +25,7 @@ market:
     - symbol: AAPL
       instrumentId: AAPL
       startingPriceNanos: 190000000000
+      priceTickNanos: 10000000
       avgDailyVolume: 60000000
       sharesOutstanding: 15400000000
       marketCap: 2926000000000
@@ -61,6 +62,9 @@ func TestLoadSessionFileYAML(t *testing.T) {
 	if got, want := len(cfg.Actors), 2; got != want {
 		t.Fatalf("actors: got %d want %d", got, want)
 	}
+	if got := cfg.Market.Equities[0].PriceTickNanos; got != 10_000_000 {
+		t.Fatalf("price tick: got %d want 10000000", got)
+	}
 }
 
 func TestLoadSessionFileJSON(t *testing.T) {
@@ -87,6 +91,15 @@ func TestValidateSessionFileRejectsBadMix(t *testing.T) {
 	_, err := LoadSessionFile(path)
 	if err == nil || !strings.Contains(err.Error(), "mix.actions") {
 		t.Fatalf("expected mix.actions error, got: %v", err)
+	}
+}
+
+func TestValidateSessionFileRejectsNegativePriceTick(t *testing.T) {
+	broken := strings.Replace(validYAML, "priceTickNanos: 10000000", "priceTickNanos: -1", 1)
+	path := writeFile(t, "negative-price-tick.yaml", broken)
+	_, err := LoadSessionFile(path)
+	if err == nil || !strings.Contains(err.Error(), "priceTickNanos must be >= 0") {
+		t.Fatalf("expected priceTickNanos error, got: %v", err)
 	}
 }
 

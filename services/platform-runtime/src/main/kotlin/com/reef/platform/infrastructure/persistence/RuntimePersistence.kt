@@ -160,6 +160,7 @@ data class VenueEventBatchFact(
     val commandCount: Int,
     val createdAt: String,
     val payloadChecksum: String,
+    val payloadChecksumAlgorithm: String = "",
     val payloadFormat: String = "venue-event-batch-json",
     val payloadVersion: String = "v1",
     val outcomes: List<VenueCommandOutcomeFact>
@@ -312,6 +313,9 @@ interface RuntimePersistence {
     }
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return 0
+    }
+    fun materializeVenueEventBatches(batches: List<VenueEventBatchFact>): Long {
+        return batches.sumOf { materializeVenueEventBatch(it) }
     }
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return null

@@ -19,6 +19,17 @@ type Runner struct {
 	wg         sync.WaitGroup
 }
 
+type fatalStartupError struct{ cause error }
+
+func (e *fatalStartupError) Error() string { return e.cause.Error() }
+func (e *fatalStartupError) Unwrap() error { return e.cause }
+
+type kafkaRunnerLane struct {
+	partition int
+	source    *KafkaCommandSource
+	processor *Processor
+}
+
 func StartRunner(parent context.Context, service *app.Service, config RuntimeConfig) (*Runner, error) {
 	if len(config.Partitions) == 0 {
 		return nil, fmt.Errorf("matching-engine direct stream requires at least one partition")
@@ -44,6 +55,10 @@ func startRunnerWithRetry(parent context.Context, service *app.Service, config R
 		runner, err := start(parent, service, config)
 		if err == nil {
 			return runner, nil
+		}
+		var fatal *fatalStartupError
+		if errors.As(err, &fatal) {
+			return nil, err
 		}
 		lastErr = err
 		if time.Now().After(deadline) {
@@ -123,6 +138,8 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 		CommandSubjectPrefix: config.CommandSubjectPrefix,
 		EventTopic:           config.EventStream,
 		EventSubjectPrefix:   config.EventSubjectPrefix,
+		OwnershipTopic:       config.OwnershipTopic,
+		OwnershipGroup:       config.OwnershipGroup,
 		PartitionCount:       config.PartitionCount,
 		FetchTimeout:         config.FetchTimeout,
 	}
@@ -132,12 +149,11 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 	if err := EnsureKafkaTopic(kafkaConfig, config.EventStream); err != nil {
 		return nil, err
 	}
-	publisher, err := NewKafkaEventBatchPublisher(kafkaConfig)
-	if err != nil {
+	if err := EnsureKafkaTopic(kafkaConfig, config.OwnershipTopic); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
-	closers := []func() error{publisher.Close}
+	closers := []func() error{}
 	runner := &Runner{
 		cancel: cancel,
 		close: func() {
@@ -148,6 +164,13 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 			}
 		},
 	}
+	ownership, err := AcquireKafkaOwnershipLease(ctx, kafkaConfig, config.ShardID, config.Partitions)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("acquire matching-engine Kafka ownership: %w", err)
+	}
+	closers = append(closers, ownership.Close)
+	lanes := make([]kafkaRunnerLane, 0, len(config.Partitions))
 	for _, partition := range config.Partitions {
 		source, err := NewKafkaCommandSource(kafkaConfig, partition, fmt.Sprintf("%s-%s", config.DurablePrefix, PartitionToken(config.PartitionCount, partition)))
 		if err != nil {
@@ -155,8 +178,25 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 			runner.close()
 			return nil, err
 		}
-		closers = append(closers, source.Close)
-		commandSource := wrapCommandSourceWithLocalFaultHooks(source, config)
+		source.ownership = ownership
+		publisher, err := NewKafkaTransactionalEventBatchPublisher(kafkaConfig, source)
+		if err != nil {
+			source.Close()
+			cancel()
+			runner.close()
+			return nil, err
+		}
+		if config.TestFailAckOnce {
+			injectedFailureCount := &atomic.Uint64{}
+			publisher.beforeOffsetCommit = func() error {
+				if injectedFailureCount.CompareAndSwap(0, 1) {
+					return errors.New("injected matching-engine transaction offset failure before commit")
+				}
+				return nil
+			}
+		}
+		closers = append(closers, publisher.Close, source.Close)
+		commandSource := CommandSource(source)
 		eventPublisher := wrapEventBatchPublisherWithLocalFaultHooks(publisher, config)
 		processor := NewProcessor(service, commandSource, eventPublisher, ProcessorConfig{
 			ShardID:              config.ShardID,
@@ -171,14 +211,55 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 			StopAfterPublishFail: config.TestStopAfterPublishFail,
 		})
 		runner.processors = append(runner.processors, processor)
+		lanes = append(lanes, kafkaRunnerLane{
+			partition: partition,
+			source:    source,
+			processor: processor,
+		})
+	}
+
+	recoveryTimeout := config.RecoveryTimeout
+	if recoveryTimeout <= 0 {
+		recoveryTimeout = 15 * time.Minute
+	}
+	recoveryCtx, stopRecovery := context.WithTimeout(parent, recoveryTimeout)
+	defer stopRecovery()
+	for _, lane := range lanes {
+		replayed, err := lane.processor.RestoreCommitted(recoveryCtx, lane.source)
+		if err != nil {
+			cancel()
+			runner.close()
+			return nil, &fatalStartupError{cause: fmt.Errorf("matching-engine recovery failed: %w", err)}
+		}
+		if replayed > 0 {
+			log.Printf("matching-engine direct redpanda partition=%d restored commands=%d", lane.partition, replayed)
+		}
+	}
+	restoredSnapshot := service.Snapshot()
+	log.Printf(
+		"matching-engine direct redpanda recovery complete partitions=%v books=%d orders=%d checksum=%s",
+		config.Partitions,
+		restoredSnapshot.Metadata.BookCount,
+		restoredSnapshot.Metadata.OrderCount,
+		restoredSnapshot.Checksum,
+	)
+
+	for _, lane := range lanes {
 		runner.wg.Add(1)
 		go func(partition int, processor *Processor) {
 			defer runner.wg.Done()
 			log.Printf("matching-engine direct redpanda partition=%d started", partition)
 			if err := processor.Run(ctx); err != nil && ctx.Err() == nil {
 				log.Printf("matching-engine direct redpanda partition=%d stopped with error: %v", partition, err)
+				var fatal *fatalProcessorError
+				if errors.As(err, &fatal) {
+					// A fenced owner or indeterminate commit cannot keep serving a
+					// partial shard safely. Stop every lane so orchestration can
+					// start one fenced replacement and replay the committed truth.
+					cancel()
+				}
 			}
-		}(partition, processor)
+		}(lane.partition, lane.processor)
 	}
 	return runner, nil
 }
@@ -239,6 +320,17 @@ func (p *localPublishFailurePublisher) PublishEventBatch(ctx context.Context, ba
 		return errors.New("injected matching-engine event-batch publish failure before command offset commit")
 	}
 	return p.delegate.PublishEventBatch(ctx, batch)
+}
+
+func (p *localPublishFailurePublisher) PublishEventBatchAndAck(ctx context.Context, batch VenueEventBatch, deliveries []CommandDelivery) (int, error) {
+	if p.injectedFailureCount.CompareAndSwap(0, 1) {
+		return 0, errors.New("injected matching-engine event-batch publish failure before Kafka transaction")
+	}
+	atomicPublisher, ok := p.delegate.(AtomicEventBatchPublisher)
+	if !ok {
+		return 0, &fatalProcessorError{cause: errors.New("wrapped event publisher does not support atomic Kafka transactions")}
+	}
+	return atomicPublisher.PublishEventBatchAndAck(ctx, batch, deliveries)
 }
 
 func (r *Runner) Stop() {

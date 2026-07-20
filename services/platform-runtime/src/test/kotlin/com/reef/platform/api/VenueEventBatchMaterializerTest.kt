@@ -5,12 +5,27 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.nio.charset.StandardCharsets
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class VenueEventBatchMaterializerTest {
+    @Test
+    fun kafkaMaterializerReadsOnlyCommittedTransactions() {
+        val properties = kafkaVenueEventConsumerProperties(
+            bootstrapServers = "localhost:9092",
+            groupId = "test-group",
+            clientId = "test-client",
+            maxPollRecords = 50
+        )
+
+        assertEquals("read_committed", properties[ConsumerConfig.ISOLATION_LEVEL_CONFIG])
+        assertEquals("false", properties[ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG])
+        assertEquals("50", properties[ConsumerConfig.MAX_POLL_RECORDS_CONFIG])
+    }
+
     @Test
     fun materializerCommitsBatchBeforeAckingDelivery() {
         VenueEventBatchMaterializerMetrics.resetForTests()
@@ -148,7 +163,7 @@ class VenueEventBatchMaterializerTest {
     }
 
     @Test
-    fun materializerKeepsFirstOutcomeWhenRedeliveredCommandProducesConflictingResult() {
+    fun materializerRejectsDifferentBatchClaimingExistingCommand() {
         VenueEventBatchMaterializerMetrics.resetForTests()
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
@@ -197,13 +212,15 @@ class VenueEventBatchMaterializerTest {
 
         assertEquals(2, processed)
         assertEquals(1, accepted.ackCalls)
-        assertEquals(1, redeliveredRejected.ackCalls)
-        assertEquals(0, accepted.nakCalls + redeliveredRejected.nakCalls)
+        assertEquals(0, redeliveredRejected.ackCalls)
+        assertEquals(1, redeliveredRejected.nakCalls)
+        assertEquals(0, accepted.nakCalls)
         val outcome = persistence.canonicalCommandOutcome("cmd-1")
         assertNotNull(outcome)
         assertEquals("batch-crash-1", outcome.batchId)
         assertEquals("accepted", outcome.resultStatus)
         assertEquals(1L, VenueEventBatchMaterializerMetrics.snapshot().materializedOutcomes)
+        assertEquals(1L, VenueEventBatchMaterializerMetrics.snapshot().failed)
     }
 
     /**
@@ -234,7 +251,7 @@ class VenueEventBatchMaterializerTest {
         firstMaterializer.processOnce()
 
         assertEquals(1, crashingDelivery.ackAttempts)
-        assertEquals(0, crashingDelivery.nakCalls)
+        assertEquals(1, crashingDelivery.nakCalls)
         assertEquals(0, crashingDelivery.termCalls)
         val outcomeAfterCrash = persistence.canonicalCommandOutcome("cmd-1")
         assertNotNull(outcomeAfterCrash)
@@ -355,16 +372,80 @@ class VenueEventBatchMaterializerTest {
             streamSequence = 100,
             onAck = { ackOrder.add("earlier") }
         )
+        val source = FixedVenueEventBatchSource(later, earlier)
         val materializer = VenueEventBatchMaterializer(
-            source = FixedVenueEventBatchSource(later, earlier),
+            source = source,
             api = api
         )
 
         assertEquals(2, materializer.processOnce())
 
         assertEquals(listOf("earlier", "later"), ackOrder)
+        assertEquals(1, source.ackBatchCalls)
         assertNotNull(persistence.canonicalCommandOutcome("cmd-sort-earlier"))
         assertNotNull(persistence.canonicalCommandOutcome("cmd-sort-later"))
+    }
+
+    @Test
+    fun semanticChecksumMatchesMatchingEngineVectorAndRejectsBodyDrift() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val payload = semanticChecksumVectorPayload()
+        val expected = "83bf9c8f68dfe9eff49e35578ae3e20f3b4b4b4feb08f5636a677bcf9be9da7c"
+        val excluded = setOf("createdAt", "payloadChecksum", "payloadChecksumAlgorithm")
+        assertEquals(expected, JsonCodec.parseObject(payload).semanticSha256(excluded))
+
+        val persistence = InMemoryRuntimePersistence()
+        val valid = RecordingVenueEventBatchDelivery(payloadJson = payload, streamSequence = 101)
+        val drifted = RecordingVenueEventBatchDelivery(
+            payloadJson = payload.replace("eng-1", "eng-drift"),
+            streamSequence = 102
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(valid, drifted),
+            api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        )
+
+        assertEquals(2, materializer.processOnce())
+        assertEquals(1, valid.ackCalls)
+        assertEquals(1, drifted.nakCalls)
+        assertEquals(0, drifted.ackCalls + drifted.termCalls)
+        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().failed)
+    }
+
+    private fun semanticChecksumVectorPayload(): String {
+        return JsonCodec.writeObject(
+            "batchId" to "engine-0-p2-101-101",
+            "shardId" to "engine-0",
+            "partition" to 2,
+            "commandStream" to "REEF_COMMANDS",
+            "eventStream" to "REEF_VENUE_EVENTS",
+            "firstSequence" to 101L,
+            "lastSequence" to 101L,
+            "commandCount" to 1,
+            "createdAt" to "2026-07-19T12:00:00Z",
+            "payloadChecksum" to "83bf9c8f68dfe9eff49e35578ae3e20f3b4b4b4feb08f5636a677bcf9be9da7c",
+            "payloadChecksumAlgorithm" to "sha256-reef-canonical-v1",
+            "outcomes" to listOf(
+                mapOf(
+                    "commandId" to "cmd-1",
+                    "commandType" to "SubmitOrder",
+                    "streamSequence" to 101L,
+                    "deliveredCount" to 1L,
+                    "payloadHash" to "payload-hash-1",
+                    "instrumentId" to "AAPL",
+                    "orderId" to "ord-1",
+                    "status" to "accepted",
+                    "result" to mapOf(
+                        "accepted" to mapOf(
+                            "eventId" to "evt-1",
+                            "orderId" to "ord-1",
+                            "engineOrderId" to "eng-1",
+                            "occurredAt" to "2026-07-19T12:00:00Z"
+                        )
+                    )
+                )
+            )
+        )
     }
 
     private fun venueEventBatch(batchId: String, checksum: String): VenueEventBatchFact {
@@ -440,11 +521,17 @@ private class FixedVenueEventBatchSource(
     private vararg val deliveries: VenueEventBatchDelivery
 ) : VenueEventBatchSource {
     private var delivered = false
+    var ackBatchCalls = 0
 
     override fun fetch(batchSize: Int, timeout: java.time.Duration): List<VenueEventBatchDelivery> {
         if (delivered) return emptyList()
         delivered = true
         return deliveries.toList()
+    }
+
+    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>) {
+        ackBatchCalls++
+        deliveries.forEach { it.ack() }
     }
 }
 
@@ -475,7 +562,7 @@ private class RecordingVenueEventBatchDelivery(
 
 /**
  * Simulates the process exiting right at ack()/offset-commit time: the canonical
- * materialization already ran (processDelivery calls api.materializeVenueEventBatch
+ * materialization already ran (the materializer commits its parsed batch group
  * before ack), but the delivery's ack throws every time, standing in for "the process
  * crashed before the broker ever received the offset commit" so the broker will
  * redeliver this exact message.

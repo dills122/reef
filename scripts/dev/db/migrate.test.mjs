@@ -61,6 +61,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0044_idempotent_lifecycle_projection.sql",
       "runtime/0045_drop_legacy_runtime_event_indexes.sql",
       "runtime/0046_order_modified_lifecycle_index.sql",
+      "runtime/0047_venue_event_batch_integrity.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -93,6 +94,17 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0002_run_bot_performance_summaries.sql"));
+});
+
+test("venue event batch integrity migration removes duplicate index and rejects conflicts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0047_venue_event_batch_integrity.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.idx_canonical_command_outcomes_batch_seq/);
+  assert.match(migration.sql, /ON CONFLICT \(event_stream, batch_id\) DO NOTHING/);
+  assert.match(migration.sql, /duplicate commandId in venue event batch/);
+  assert.match(migration.sql, /canonical command outcome conflict/);
 });
 
 test("audit hardening migration preserves first command outcome and counts actual canonical inserts", async () => {

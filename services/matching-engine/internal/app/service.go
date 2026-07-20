@@ -968,10 +968,11 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 // direct-consume batch, so a failed durable VenueEventBatch publish can undo
 // live engine mutations without snapshotting an entire hot book.
 type BatchRollback struct {
-	service           *Service
-	instruments       map[string]*instrumentRollback
-	records           map[string]*orderRollback
-	terminalRetention terminalOrderRetentionSnapshot
+	service          *Service
+	instruments      map[string]*instrumentRollback
+	records          map[string]*orderRollback
+	terminalOrderIDs []string
+	committed        bool
 }
 
 type instrumentRollback struct {
@@ -993,10 +994,9 @@ type orderRollback struct {
 // journaled lazily on first mutation.
 func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
 	rollback := &BatchRollback{
-		service:           s,
-		instruments:       make(map[string]*instrumentRollback),
-		records:           make(map[string]*orderRollback),
-		terminalRetention: s.terminalRetention.snapshot(),
+		service:     s,
+		instruments: make(map[string]*instrumentRollback),
+		records:     make(map[string]*orderRollback),
 	}
 	for _, scope := range scopes {
 		if scope.InstrumentID == "" {
@@ -1022,7 +1022,9 @@ func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
 // Rollback restores journaled book entries and order records to their
 // pre-batch state.
 func (rb *BatchRollback) Rollback() {
-	rb.service.terminalRetention.restore(rb.terminalRetention)
+	if rb == nil || rb.committed {
+		return
+	}
 	for _, snap := range rb.instruments {
 		snap.book.mu.Lock()
 		for orderID, entry := range snap.orders {
@@ -1053,6 +1055,33 @@ func (rb *BatchRollback) Rollback() {
 		}
 		rb.service.orderIndex.restoreOrDelete(orderID, entry.existed, record)
 	}
+}
+
+// Commit applies deferred global retention mutations after the batch outcome
+// is durable. Book/order mutations are already live and need no commit work.
+func (rb *BatchRollback) Commit() {
+	if rb == nil || rb.committed {
+		return
+	}
+	rb.committed = true
+	for _, orderID := range rb.terminalOrderIDs {
+		rb.service.terminalRetention.commit(orderID, func(evictID string) {
+			evictRecord, ok := rb.service.loadOrder(evictID)
+			if !ok {
+				return
+			}
+			if evictRecord.Status == domain.OrderStatusFilled || evictRecord.Status == domain.OrderStatusCancelled {
+				rb.service.orderIndex.release(evictID)
+			}
+		})
+	}
+}
+
+func (rb *BatchRollback) trackTerminalOrder(orderID string) {
+	if rb == nil || orderID == "" {
+		return
+	}
+	rb.terminalOrderIDs = append(rb.terminalOrderIDs, orderID)
 }
 
 func (rb *BatchRollback) trackCreatedOrder(book *orderBook, record *orderRecord) {
@@ -1280,15 +1309,23 @@ func (s *Service) refreshOrderStatus(rollback *BatchRollback, record *orderRecor
 }
 
 func (s *Service) trackTerminalOrder(rollback *BatchRollback, record *orderRecord) {
+	if rollback != nil {
+		if s.terminalRetention.limit <= 0 || record.terminalTracked {
+			return
+		}
+		if record.Status != domain.OrderStatusFilled && record.Status != domain.OrderStatusCancelled {
+			return
+		}
+		record.terminalTracked = true
+		rollback.trackTerminalOrder(record.OrderID)
+		return
+	}
 	s.terminalRetention.track(record, func(evictID string) {
 		evictRecord, ok := s.loadOrder(evictID)
 		if !ok {
 			return
 		}
 		if evictRecord.Status == domain.OrderStatusFilled || evictRecord.Status == domain.OrderStatusCancelled {
-			if rollback != nil {
-				rollback.trackOrderRecord(evictRecord)
-			}
 			s.orderIndex.release(evictID)
 		}
 	})

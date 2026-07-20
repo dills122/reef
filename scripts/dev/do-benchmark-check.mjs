@@ -187,9 +187,13 @@ function validateMaterializerReport(label, report) {
     checkZero(label, "streamDirect.delta.termedDelta", directDelta.termedDelta);
     checkZero(label, "streamDirect.delta.unsupportedDelta", directDelta.unsupportedDelta);
     const accepted = Number(report.totalSuccess ?? 0);
+    const published = Number(directDelta.publishedDelta ?? 0);
     const acked = Number(directDelta.ackedDelta ?? 0);
-    if (acked < accepted) {
-      failures.push(`${label}: streamDirect accepted/acked gap ${accepted - acked} must be 0`);
+    if (published !== accepted) {
+      failures.push(`${label}: streamDirect accepted/published difference ${published - accepted} must be 0`);
+    }
+    if (acked !== accepted) {
+      failures.push(`${label}: streamDirect accepted/acked difference ${acked - accepted} must be 0`);
     }
     validateStreamDirectPartitionSpread(label, directDelta);
   }
@@ -203,8 +207,8 @@ function validateMaterializerReport(label, report) {
     checkZero(label, "venueEventMaterializer.delta.unsupportedDelta", materializerDelta.unsupportedDelta);
     const accepted = Number(report.totalSuccess ?? 0);
     const materialized = Number(materializerDelta.materializedDelta ?? 0);
-    if (materialized < accepted) {
-      failures.push(`${label}: durable-canonical accepted/materialized gap ${accepted - materialized} must be 0`);
+    if (materialized !== accepted) {
+      failures.push(`${label}: durable-canonical accepted/materialized difference ${materialized - accepted} must be 0`);
     }
   }
 }

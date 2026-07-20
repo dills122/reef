@@ -5,8 +5,11 @@ import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.common.IsolationLevel
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.Callback
 import org.apache.kafka.clients.producer.ProducerConfig
@@ -15,13 +18,13 @@ import org.apache.kafka.common.Metric
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidPartitionsException
-import org.apache.kafka.common.errors.RetriableException
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.serialization.StringSerializer
 import java.time.Duration
 import java.time.Instant
+import java.util.ArrayDeque
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Semaphore
@@ -48,8 +51,6 @@ class KafkaStreamCommandPublisher(
     private val inFlightSlots = Semaphore(maxInFlight)
     private val inFlight = AtomicInteger(0)
     private var producerOverride: KafkaCommandProducer? = null
-    private var publishRetryAttemptsOverride: Int? = null
-    private var publishRetryDelayOverride: Duration? = null
     private val producer by lazy {
         producerOverride ?: KafkaCommandProducerAdapter(
             KafkaProducer<String, String>(
@@ -57,25 +58,14 @@ class KafkaStreamCommandPublisher(
             )
         )
     }
-    private val publishRetryAttempts: Int
-        get() = publishRetryAttemptsOverride
-            ?: RuntimeEnv.int("STREAM_ACK_KAFKA_PUBLISH_RETRY_ATTEMPTS", 3, min = 0)
-    private val publishRetryDelay: Duration
-        get() = publishRetryDelayOverride
-            ?: Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_KAFKA_PUBLISH_RETRY_DELAY_MS", 25L, min = 0L))
-
     internal constructor(
         bootstrapServers: String = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
         ackTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", 2_000L, min = 1L)),
         config: StreamCommandConfig = StreamCommandConfig(),
         maxInFlight: Int = RuntimeEnv.int("STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT", 16_384, min = 1),
-        producer: KafkaCommandProducer,
-        publishRetryAttempts: Int,
-        publishRetryDelay: Duration
+        producer: KafkaCommandProducer
     ) : this(bootstrapServers, ackTimeout, config, maxInFlight) {
         this.producerOverride = producer
-        this.publishRetryAttemptsOverride = publishRetryAttempts
-        this.publishRetryDelayOverride = publishRetryDelay
         this.topicReady.set(true)
     }
 
@@ -140,25 +130,22 @@ class KafkaStreamCommandPublisher(
         val started = System.nanoTime()
         inFlight.incrementAndGet()
         val result = CompletableFuture<StreamPublishAck>()
-        sendWithRetry(record, result, started, attempt = 0, deadlineNanos = started + ackTimeout.toNanos())
+        sendOnce(record, result, started)
         return result
     }
 
-    private fun sendWithRetry(
+    private fun sendOnce(
         record: ProducerRecord<String, String>,
         result: CompletableFuture<StreamPublishAck>,
-        started: Long,
-        attempt: Int,
-        deadlineNanos: Long
+        started: Long
     ) {
         try {
             producer.send(record) { metadata, exception ->
                 if (exception != null) {
-                    if (shouldRetryPublish(exception, attempt, deadlineNanos)) {
-                        scheduleRetry(record, result, started, attempt + 1, deadlineNanos)
-                    } else {
-                        completePublish(started, result, exception)
-                    }
+                    // The idempotent Kafka producer owns retries. Re-sending a
+                    // record here starts a new producer operation and can create
+                    // a duplicate after an ambiguous callback failure.
+                    completePublish(started, result, exception)
                     return@send
                 }
                 if (metadata == null) {
@@ -175,31 +162,7 @@ class KafkaStreamCommandPublisher(
                 )
             }
         } catch (ex: Exception) {
-            if (shouldRetryPublish(ex, attempt, deadlineNanos)) {
-                scheduleRetry(record, result, started, attempt + 1, deadlineNanos)
-            } else {
-                completePublish(started, result, ex)
-            }
-        }
-    }
-
-    private fun shouldRetryPublish(exception: Exception, attempt: Int, deadlineNanos: Long): Boolean {
-        return attempt < publishRetryAttempts &&
-            System.nanoTime() < deadlineNanos &&
-            isRetriableKafkaPublishException(exception)
-    }
-
-    private fun scheduleRetry(
-        record: ProducerRecord<String, String>,
-        result: CompletableFuture<StreamPublishAck>,
-        started: Long,
-        attempt: Int,
-        deadlineNanos: Long
-    ) {
-        val remainingNanos = deadlineNanos - System.nanoTime()
-        val delayNanos = publishRetryDelay.toNanos().coerceAtMost(remainingNanos).coerceAtLeast(0L)
-        CompletableFuture.delayedExecutor(delayNanos, TimeUnit.NANOSECONDS).execute {
-            sendWithRetry(record, result, started, attempt, deadlineNanos)
+            completePublish(started, result, ex)
         }
     }
 
@@ -352,15 +315,6 @@ private class KafkaCommandProducerAdapter(private val producer: KafkaProducer<St
     override fun metrics(): Map<MetricName, Metric> = producer.metrics()
 }
 
-internal fun isRetriableKafkaPublishException(exception: Throwable): Boolean {
-    var current: Throwable? = exception
-    while (current != null) {
-        if (current is RetriableException) return true
-        current = current.cause
-    }
-    return false
-}
-
 private val KAFKA_PRODUCER_METRIC_NAMES = setOf(
     "batch-size-avg",
     "batch-size-max",
@@ -401,6 +355,7 @@ class KafkaStreamCommandSource(
     private val topic = config.streamName
     private val topicPartition = TopicPartition(topic, partition)
     private val ackedOffsets = sortedSetOf<Long>()
+    private val pendingRecords = ArrayDeque<ConsumerRecord<String, String>>()
     private var nextCommitOffset: Long? = null
     private var rewindOffset: Long? = null
     private val consumer by lazy { openConsumer() }
@@ -409,18 +364,28 @@ class KafkaStreamCommandSource(
         synchronized(this) {
             rewindOffset?.let { offset ->
                 consumer.seek(topicPartition, offset)
+                pendingRecords.removeIf { it.offset() >= offset }
                 rewindOffset = null
             }
-            return consumer.poll(timeout).records(topicPartition).take(batchSize).map { record ->
-                val subject = record.headers().lastHeader(STREAM_SUBJECT_HEADER)?.value()?.toString(Charsets.UTF_8)
-                    ?: StreamCommandWorkerFactory.subjectForPartitionCommand(config, partition, "SubmitOrder")
-                KafkaStreamCommandDelivery(
-                    subject = subject,
-                    payloadJson = record.value(),
-                    streamSequence = kafkaStreamSequence(record.partition(), record.offset()),
-                    onAck = { recordAck(record.offset()) },
-                    onNak = { recordNak(record.offset()) }
-                )
+            if (pendingRecords.isEmpty()) {
+                pendingRecords.addAll(consumer.poll(timeout).records(topicPartition))
+            }
+            val deliveryCount = minOf(batchSize, pendingRecords.size)
+            return buildList(deliveryCount) {
+                repeat(deliveryCount) {
+                    val record = pendingRecords.removeFirst()
+                    val subject = record.headers().lastHeader(STREAM_SUBJECT_HEADER)?.value()?.toString(Charsets.UTF_8)
+                        ?: StreamCommandWorkerFactory.subjectForPartitionCommand(config, partition, "SubmitOrder")
+                    add(
+                        KafkaStreamCommandDelivery(
+                            subject = subject,
+                            payloadJson = record.value(),
+                            streamSequence = kafkaStreamSequence(record.partition(), record.offset()),
+                            onAck = { recordAck(record.offset()) },
+                            onNak = { recordNak(record.offset()) }
+                        )
+                    )
+                }
             }
         }
     }
@@ -473,8 +438,9 @@ class KafkaStreamCommandSource(
 
     private fun recordAck(offset: Long) {
         synchronized(this) {
-            ackedOffsets.add(offset)
             var next = nextCommitOffset ?: beginningOffset()
+            if (offset < next) return
+            ackedOffsets.add(offset)
             while (ackedOffsets.remove(next)) {
                 next += 1
             }
@@ -508,63 +474,124 @@ class KafkaVenueEventBatchSource(
     private val ackedOffsets = mutableMapOf<TopicPartition, java.util.TreeSet<Long>>()
     private val nextCommitOffsets = mutableMapOf<TopicPartition, Long>()
     private val rewindOffsets = mutableMapOf<TopicPartition, Long>()
+    private val pendingRecords = ArrayDeque<ConsumerRecord<String, String>>()
     private val consumer by lazy { openConsumer() }
 
     override fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery> {
         synchronized(this) {
             rewindOffsets.forEach { (topicPartition, offset) ->
                 consumer.seek(topicPartition, offset)
+                pendingRecords.removeIf { record ->
+                    record.topic() == topicPartition.topic() &&
+                        record.partition() == topicPartition.partition() &&
+                        record.offset() >= offset
+                }
             }
             rewindOffsets.clear()
 
-            return consumer.poll(timeout).records(topic).take(batchSize).map { record ->
-                val topicPartition = TopicPartition(record.topic(), record.partition())
-                ensureNextCommitOffset(topicPartition)
-                val subject = record.headers().lastHeader(STREAM_SUBJECT_HEADER)?.value()?.toString(Charsets.UTF_8)
-                    ?: defaultVenueEventSubject(record.partition())
-                KafkaVenueEventBatchDelivery(
-                    subject = subject,
-                    payloadJson = record.value(),
-                    streamSequence = kafkaStreamSequence(record.partition(), record.offset()),
-                    deliveredCount = 1L,
-                    onAck = { recordAck(topicPartition, record.offset()) },
-                    onNak = { recordNak(topicPartition, record.offset()) }
-                )
+            if (pendingRecords.isEmpty()) {
+                pendingRecords.addAll(consumer.poll(timeout).records(topic))
+            }
+            val deliveryCount = minOf(batchSize, pendingRecords.size)
+            return buildList(deliveryCount) {
+                repeat(deliveryCount) {
+                    val record = pendingRecords.removeFirst()
+                    val topicPartition = TopicPartition(record.topic(), record.partition())
+                    ensureNextCommitOffset(topicPartition)
+                    val subject = record.headers().lastHeader(STREAM_SUBJECT_HEADER)?.value()?.toString(Charsets.UTF_8)
+                        ?: defaultVenueEventSubject(record.partition())
+                    add(
+                        KafkaVenueEventBatchDelivery(
+                            subject = subject,
+                            payloadJson = record.value(),
+                            streamSequence = kafkaStreamSequence(record.partition(), record.offset()),
+                            deliveredCount = 1L,
+                            topicPartition = topicPartition,
+                            offset = record.offset(),
+                            onAck = { recordAck(topicPartition, record.offset()) },
+                            onNak = { recordNak(topicPartition, record.offset()) }
+                        )
+                    )
+                }
             }
         }
     }
 
+    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>) {
+        val kafkaDeliveries = deliveries.map { delivery ->
+            require(delivery is KafkaVenueEventBatchDelivery) {
+                "Kafka venue-event source received a non-Kafka delivery"
+            }
+            delivery
+        }
+        recordAcks(kafkaDeliveries.map { it.topicPartition to it.offset })
+    }
+
     private fun openConsumer(): KafkaConsumer<String, String> {
         val consumer = KafkaConsumer<String, String>(
-            Properties().apply {
-                put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-                put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-                put(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
-                put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
-                put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
-                put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-                put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-                put(
-                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
-                    RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_KAFKA_MAX_POLL_RECORDS", RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1), min = 1).toString()
+            kafkaVenueEventConsumerProperties(
+                bootstrapServers = bootstrapServers,
+                groupId = groupId,
+                clientId = clientId,
+                maxPollRecords = RuntimeEnv.int(
+                    "VENUE_EVENT_MATERIALIZER_KAFKA_MAX_POLL_RECORDS",
+                    RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1),
+                    min = 1
                 )
+            )
+        )
+        consumer.subscribe(
+            listOf(topic),
+            object : ConsumerRebalanceListener {
+                override fun onPartitionsRevoked(partitions: Collection<TopicPartition>) {
+                    synchronized(this@KafkaVenueEventBatchSource) {
+                        clearPartitionState(partitions)
+                    }
+                }
+
+                override fun onPartitionsAssigned(partitions: Collection<TopicPartition>) {
+                    synchronized(this@KafkaVenueEventBatchSource) {
+                        clearPartitionState(partitions)
+                    }
+                }
             }
         )
-        consumer.subscribe(listOf(topic))
         return consumer
     }
 
     private fun recordAck(topicPartition: TopicPartition, offset: Long) {
+        recordAcks(listOf(topicPartition to offset))
+    }
+
+    private fun recordAcks(offsets: List<Pair<TopicPartition, Long>>) {
         synchronized(this) {
-            val acked = ackedOffsets.getOrPut(topicPartition) { sortedSetOf<Long>() }
-            acked.add(offset)
-            var next = ensureNextCommitOffset(topicPartition)
-            while (acked.remove(next)) {
-                next += 1
+            offsets.forEach { (topicPartition, offset) ->
+                val next = ensureNextCommitOffset(topicPartition)
+                if (offset >= next) {
+                    ackedOffsets.getOrPut(topicPartition) { sortedSetOf<Long>() }.add(offset)
+                }
             }
-            if (next != nextCommitOffsets[topicPartition]) {
-                consumer.commitSync(mapOf(topicPartition to OffsetAndMetadata(next)))
+            val commitOffsets = offsets.map { it.first }.distinct().mapNotNull { topicPartition ->
+                val current = ensureNextCommitOffset(topicPartition)
+                val acked = ackedOffsets.getOrPut(topicPartition) { sortedSetOf<Long>() }
+                var next = current
+                while (acked.contains(next)) next += 1
+                if (next > current) topicPartition to next else null
+            }.toMap()
+            if (commitOffsets.isEmpty()) return
+
+            try {
+                consumer.commitSync(commitOffsets.mapValues { OffsetAndMetadata(it.value) })
+            } catch (ex: Exception) {
+                commitOffsets.forEach { (topicPartition, _) ->
+                    val current = ensureNextCommitOffset(topicPartition)
+                    rewindOffsets[topicPartition] = minOf(rewindOffsets[topicPartition] ?: current, current)
+                }
+                throw ex
+            }
+            commitOffsets.forEach { (topicPartition, next) ->
                 nextCommitOffsets[topicPartition] = next
+                ackedOffsets[topicPartition]?.headSet(next)?.clear()
             }
         }
     }
@@ -582,10 +609,38 @@ class KafkaVenueEventBatchSource(
         }
     }
 
+    private fun clearPartitionState(partitions: Collection<TopicPartition>) {
+        partitions.forEach { topicPartition ->
+            ackedOffsets.remove(topicPartition)
+            nextCommitOffsets.remove(topicPartition)
+            rewindOffsets.remove(topicPartition)
+            pendingRecords.removeIf { record ->
+                record.topic() == topicPartition.topic() && record.partition() == topicPartition.partition()
+            }
+        }
+    }
+
     private fun defaultVenueEventSubject(partition: Int): String {
         val prefix = RuntimeEnv.string("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.venue.events.v1").trim('.')
         return "$prefix.${partitionToken(partition)}.VenueEventBatch"
     }
+}
+
+internal fun kafkaVenueEventConsumerProperties(
+    bootstrapServers: String,
+    groupId: String,
+    clientId: String,
+    maxPollRecords: Int
+): Properties = Properties().apply {
+    put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+    put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    put(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
+    put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+    put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+    put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().lowercase())
+    put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.coerceAtLeast(1).toString())
 }
 
 private class KafkaStreamCommandDelivery(
@@ -615,6 +670,8 @@ private class KafkaVenueEventBatchDelivery(
     override val payloadJson: String,
     override val streamSequence: Long,
     override val deliveredCount: Long,
+    val topicPartition: TopicPartition,
+    val offset: Long,
     private val onAck: () -> Unit,
     private val onNak: () -> Unit
 ) : VenueEventBatchDelivery {

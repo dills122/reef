@@ -127,6 +127,7 @@ internal fun VenueEventBatchFact.toJsonObject(): String {
         "commandCount" to commandCount.toString(),
         "createdAt" to createdAt,
         "payloadChecksum" to payloadChecksum,
+        "payloadChecksumAlgorithm" to payloadChecksumAlgorithm,
         "payloadFormat" to payloadFormat,
         "payloadVersion" to payloadVersion
     ).joinToString(",") { (key, value) ->

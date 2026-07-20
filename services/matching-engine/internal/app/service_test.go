@@ -1004,7 +1004,7 @@ func TestTerminalOrderRetentionLimitPrunesOldestTerminalState(t *testing.T) {
 	}
 }
 
-func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
+func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
 	service := NewService(WithTerminalOrderRetentionLimit(1))
 	service.SubmitOrder(domain.SubmitOrder{
 		OrderID:       "ord-sell-resting",
@@ -1028,14 +1028,14 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 	if result.Accepted == nil || len(result.Trades) != 1 {
 		t.Fatalf("expected crossing command to mutate terminal state before rollback, got %#v", result)
 	}
-	if tracked := service.terminalRetention.snapshot(); len(tracked.order)-tracked.head == 0 {
-		t.Fatal("expected failed batch mutation to touch terminal retention before rollback")
+	if tracked := service.terminalRetention.trackedOrderIDs(); len(tracked) != 0 {
+		t.Fatalf("expected terminal retention to remain deferred before publication, got %+v", tracked)
 	}
 
 	rollback.Rollback()
 
-	tracked := service.terminalRetention.snapshot()
-	if len(tracked.order)-tracked.head != 0 {
+	tracked := service.terminalRetention.trackedOrderIDs()
+	if len(tracked) != 0 {
 		t.Fatalf("expected rollback to restore empty terminal retention state, got %+v", tracked)
 	}
 	if _, ok := service.OrderState("ord-buy-failed-publish"); ok {
@@ -1050,6 +1050,51 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 	}
 	if afterChecksum := service.Snapshot().Checksum; afterChecksum != beforeChecksum {
 		t.Fatalf("expected rollback checksum %s, got %s", beforeChecksum, afterChecksum)
+	}
+}
+
+func TestBatchRollbackDoesNotEraseAnotherBatchTerminalRetentionCommit(t *testing.T) {
+	service := NewService(WithTerminalOrderRetentionLimit(10))
+	for _, instrumentID := range []string{"AAPL", "MSFT"} {
+		service.SubmitOrder(domain.SubmitOrder{
+			OrderID:       "ord-sell-" + instrumentID,
+			InstrumentID:  instrumentID,
+			Side:          domain.SideSell,
+			QuantityUnits: "100",
+			LimitPrice:    "150250000000",
+			Currency:      "USD",
+		})
+	}
+
+	failed := service.BeginBatch([]BookScope{{InstrumentID: "AAPL"}})
+	service.SubmitOrderInBatch(failed, domain.SubmitOrder{
+		OrderID:       "ord-buy-AAPL",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	succeeded := service.BeginBatch([]BookScope{{InstrumentID: "MSFT"}})
+	service.SubmitOrderInBatch(succeeded, domain.SubmitOrder{
+		OrderID:       "ord-buy-MSFT",
+		InstrumentID:  "MSFT",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	succeeded.Commit()
+	committed := service.terminalRetention.trackedOrderIDs()
+	if len(committed) == 0 {
+		t.Fatal("expected successful batch terminal orders to enter retention")
+	}
+
+	failed.Rollback()
+	tracked := service.terminalRetention.trackedOrderIDs()
+	if !reflect.DeepEqual(tracked, committed) {
+		t.Fatalf("failed batch rollback erased another batch's retention commit: before=%v after=%v", committed, tracked)
 	}
 }
 

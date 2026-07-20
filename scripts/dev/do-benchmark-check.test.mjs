@@ -77,6 +77,29 @@ const materializerResult = spawnSync(process.execPath, ["scripts/dev/do-benchmar
 assert.equal(materializerResult.status, 0, materializerResult.stderr);
 assert.match(materializerResult.stdout, /rate=10000 attempted=1000 accepted=1000 directAcked=1000 materialized=1000/);
 
+const duplicateArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-duplicate-"));
+writeMaterializerReport(duplicateArtifactDir, "rate-10000.json", 10000, 1000, {
+  published: 1001,
+  directAcked: 1001,
+  materialized: 1001,
+});
+writeTelemetry(duplicateArtifactDir);
+const duplicateResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", duplicateArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer",
+    REEF_DO_REQUIRED_RATES: "10000",
+    REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS: "4",
+    REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW: "1.1",
+  },
+  encoding: "utf8",
+});
+assert.equal(duplicateResult.status, 1);
+assert.match(duplicateResult.stderr, /accepted\/published difference 1 must be 0/);
+assert.match(duplicateResult.stderr, /accepted\/acked difference 1 must be 0/);
+assert.match(duplicateResult.stderr, /accepted\/materialized difference 1 must be 0/);
+
 const projectionArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-"));
 writeMaterializerProjectionReport(projectionArtifactDir, "rate-2500.json", 2500, 2500, {
   projected: 2500,
@@ -468,6 +491,9 @@ function writeTelemetry(dir) {
 }
 
 function writeMaterializerReport(dir, name, rate, total, options = {}) {
+  const directAcked = options.directAcked ?? total;
+  const materialized = options.materialized ?? total;
+  const published = options.published ?? total;
   const partitionDeltas =
     options.partitionDeltas ??
     [
@@ -492,16 +518,17 @@ function writeMaterializerReport(dir, name, rate, total, options = {}) {
         unitMetrics: {
           attemptedCommands: total,
           acceptedCommands: total,
-          directAckedCommands: total,
-          durableCanonicalCompletedItems: total,
+          directAckedCommands: directAcked,
+          durableCanonicalCompletedItems: materialized,
           attemptedCommandsPerSecond: rate,
           acceptedCommandsPerSecond: rate,
-          directAckedCommandsPerSecond: rate,
-          durableCanonicalCompletedPerSecond: rate,
+          directAckedCommandsPerSecond: directAcked,
+          durableCanonicalCompletedPerSecond: materialized,
         },
         streamDirect: {
           delta: {
-            ackedDelta: total,
+            publishedDelta: published,
+            ackedDelta: directAcked,
             failedDelta: 0,
             nackedDelta: 0,
             termedDelta: 0,
@@ -512,7 +539,7 @@ function writeMaterializerReport(dir, name, rate, total, options = {}) {
         },
         venueEventMaterializer: {
           delta: {
-            materializedDelta: total,
+            materializedDelta: materialized,
             failedDelta: 0,
             ackFailedDelta: 0,
             unsupportedDelta: 0,
@@ -555,6 +582,7 @@ function writeMaterializerProjectionReport(dir, name, rate, total, options) {
         },
         streamDirect: {
           delta: {
+            publishedDelta: total,
             ackedDelta: total,
             failedDelta: 0,
             nackedDelta: 0,
