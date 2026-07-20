@@ -129,7 +129,7 @@ services:
       retries: 20
 
   nats-box:
-    image: natsio/nats-box:0.18.0
+    image: natsio/nats-box:0.19.7
     profiles: ["stream-ack-tools"]
     depends_on:
       nats:
