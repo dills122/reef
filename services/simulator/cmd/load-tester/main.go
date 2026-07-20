@@ -950,7 +950,7 @@ func runWorker(
 			payload["orderId"] = order.OrderID
 			payload["instrumentId"] = order.InstrumentID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
-			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
+			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrumentByID(cfg, order.InstrumentID)))
 			status, body, err := doPOST(
 				client,
 				cfg.BaseURL+commandRoute(cfg, ActionModify),

@@ -196,4 +196,10 @@ func TestRuntimeConfigFromEnv(t *testing.T) {
 	if cfg.ConnectTimeout != 60000*time.Millisecond {
 		t.Errorf("ConnectTimeout = %v", cfg.ConnectTimeout)
 	}
+	if cfg.RecoveryTimeout != 900000*time.Millisecond {
+		t.Errorf("RecoveryTimeout = %v", cfg.RecoveryTimeout)
+	}
+	if cfg.OwnershipTopic != "REEF_ENGINE_OWNERSHIP" || cfg.OwnershipGroup != "reef-matching-engine-ownership-v1" {
+		t.Errorf("unexpected ownership config topic=%q group=%q", cfg.OwnershipTopic, cfg.OwnershipGroup)
+	}
 }

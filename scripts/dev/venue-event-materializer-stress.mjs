@@ -177,6 +177,10 @@ function writeMaterializerSpreadSessionConfig() {
 
 function materializerSpreadSessionConfig() {
   const instrumentCount = Number(process.env.DEV_STRESS_MATERIALIZER_INSTRUMENTS || "64");
+  const priceTickNanos = Number(process.env.DEV_STRESS_PRICE_TICK_NANOS || "10000000");
+  if (!Number.isSafeInteger(priceTickNanos) || priceTickNanos <= 0) {
+    throw new Error(`DEV_STRESS_PRICE_TICK_NANOS must be a positive safe integer, got ${priceTickNanos}`);
+  }
   const instruments = selectPartitionSpreadInstruments({
     runId: env("DEV_STRESS_RUN_ID", MATERIALIZER_STRESS_RUN_ID),
     venueSessionId: MATERIALIZER_STRESS_SESSION_ID,
@@ -189,6 +193,7 @@ function materializerSpreadSessionConfig() {
       `    - symbol: ${symbol}`,
       `      instrumentId: ${symbol}`,
       "      startingPriceNanos: " + base,
+      "      priceTickNanos: " + priceTickNanos,
       "      avgDailyVolume: 10000000",
       "      sharesOutstanding: 1000000000",
       "      marketCap: " + base * 10,

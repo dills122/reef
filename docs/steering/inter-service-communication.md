@@ -23,7 +23,7 @@ HTTP/JSON adapters may exist during migration.
 Internal-only capabilities should not be modeled as raw HTTP routes. If a capability is for service-to-service, operator control, health, diagnostics, or private administration, define it as a protobuf-backed interface or durable message flow first. HTTP adapters may exist during migration or local tooling, but they are not the internal contract.
 Canonical API-surface policy: [`../API_SURFACE_POLICY.md`](../API_SURFACE_POLICY.md).
 
-For high-throughput matching ingestion, do not treat per-command unary gRPC calls as the steady-state architecture. Prefer partition-owned batch/stream processing, and where durable stream/topic ingress is active, prefer matching-engine shards that consume assigned command partitions, publish canonical venue event batches, and ack or commit consumed commands after durable event publication.
+For high-throughput matching ingestion, do not treat per-command unary gRPC calls as the steady-state architecture. Prefer partition-owned batch/stream processing, and where durable stream/topic ingress is active, prefer matching-engine shards that consume assigned command partitions and publish canonical venue event batches. In the Redpanda path, event publication and consumed offsets share one broker transaction, materializers read only committed transactions, and a static Kafka ownership-group lease fences matching shard replacements before full-log recovery. Semantic full-body checksums and explicit replay/conflict evidence remain required.
 
 ### 4. Compatibility by feature flag during migration
 

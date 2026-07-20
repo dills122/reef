@@ -324,6 +324,12 @@ class OrderApplicationService(
         }
     }
 
+    fun materializeVenueEventBatches(batches: List<VenueEventBatchFact>): Long {
+        return HotPathMetrics.time("runtime.persistence.materializeVenueEventBatches") {
+            runtimePersistence.materializeVenueEventBatches(batches)
+        }
+    }
+
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return HotPathMetrics.time("runtime.persistence.canonicalCommandOutcome") {
             runtimePersistence.canonicalCommandOutcome(commandId)

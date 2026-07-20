@@ -22,6 +22,9 @@ interface VenueEventBatchDelivery {
 
 interface VenueEventBatchSource {
     fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery>
+    fun ackBatch(deliveries: List<VenueEventBatchDelivery>) {
+        deliveries.forEach { it.ack() }
+    }
 }
 
 fun venueEventBatchSourceWithLocalFaultHooks(
@@ -88,40 +91,63 @@ class VenueEventBatchMaterializer(
             deliveries.size.toLong(),
             deliveries.maxOfOrNull { it.streamSequence } ?: 0L
         )
-        deliveries.sortedBy { it.streamSequence }.forEach { delivery -> processDelivery(delivery) }
+        val parsed = deliveries.sortedBy { it.streamSequence }.mapNotNull { delivery -> parseDelivery(delivery) }
+        if (parsed.isNotEmpty()) {
+            materializeAndAck(parsed)
+        }
         return deliveries.size
     }
 
-    private fun processDelivery(delivery: VenueEventBatchDelivery) {
+    private fun parseDelivery(delivery: VenueEventBatchDelivery): ParsedVenueEventBatchDelivery? {
         val eventType = delivery.subject.substringAfterLast('.', missingDelimiterValue = "")
         if (eventType != "VenueEventBatch") {
             safeTerm(delivery)
             VenueEventBatchMaterializerMetrics.recordUnsupported()
-            return
+            return null
         }
 
         val batch = try {
             parseVenueEventBatch(delivery.payloadJson)
+        } catch (ex: VenueEventBatchChecksumException) {
+            safeNak(delivery)
+            VenueEventBatchMaterializerMetrics.recordFailed(ex.message ?: "venue event batch checksum mismatch")
+            return null
         } catch (ex: Exception) {
             safeTerm(delivery)
             VenueEventBatchMaterializerMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
-            return
+            return null
         }
+        return ParsedVenueEventBatchDelivery(delivery, batch)
+    }
 
+    private fun materializeAndAck(parsed: List<ParsedVenueEventBatchDelivery>) {
         val materializedOutcomes = try {
-            HotPathMetrics.time("venueEventMaterializer.materializeBatch") {
-                api.materializeVenueEventBatch(batch)
+            HotPathMetrics.time("venueEventMaterializer.materializeBatchGroup") {
+                api.materializeVenueEventBatches(parsed.map { it.batch })
             }
         } catch (ex: Exception) {
-            safeNak(delivery)
-            VenueEventBatchMaterializerMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
+            if (parsed.size > 1) {
+                val midpoint = parsed.size / 2
+                materializeAndAck(parsed.subList(0, midpoint))
+                materializeAndAck(parsed.subList(midpoint, parsed.size))
+            } else {
+                safeNak(parsed.single().delivery)
+                VenueEventBatchMaterializerMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
+            }
             return
         }
-        VenueEventBatchMaterializerMetrics.recordMaterialized(batch, delivery.streamSequence, materializedOutcomes)
+        val latest = parsed.maxBy { it.delivery.streamSequence }
+        VenueEventBatchMaterializerMetrics.recordMaterialized(
+            batchCount = parsed.size,
+            latestBatch = latest.batch,
+            latestStreamSequence = latest.delivery.streamSequence,
+            outcomeCount = materializedOutcomes
+        )
 
         try {
-            delivery.ack()
+            source.ackBatch(parsed.map { it.delivery })
         } catch (ex: Exception) {
+            parsed.forEach { safeNak(it.delivery) }
             VenueEventBatchMaterializerMetrics.recordAckFailed(ex.message ?: ex::class.simpleName ?: "unknown")
             if (stopAfterAckFailure) {
                 running.set(false)
@@ -132,6 +158,7 @@ class VenueEventBatchMaterializer(
 
     private fun parseVenueEventBatch(payloadJson: String): VenueEventBatchFact {
         val root = JsonCodec.parseObject(payloadJson)
+        validateSemanticChecksum(root)
         val outcomes = root.objectDocuments("outcomes").map { outcome ->
             val result = outcome.raw("result").ifBlank { "{}" }
             VenueCommandOutcomeFact(
@@ -160,10 +187,24 @@ class VenueEventBatchMaterializer(
             commandCount = root.int("commandCount"),
             createdAt = root.string("createdAt"),
             payloadChecksum = root.string("payloadChecksum"),
+            payloadChecksumAlgorithm = root.string("payloadChecksumAlgorithm"),
             payloadFormat = root.string("payloadFormat").ifBlank { "venue-event-batch-json" },
             payloadVersion = root.string("payloadVersion").ifBlank { "v1" },
             outcomes = outcomes
         )
+    }
+
+    private fun validateSemanticChecksum(root: JsonDocument) {
+        val algorithm = root.string("payloadChecksumAlgorithm")
+        if (algorithm.isBlank()) return
+        if (algorithm != VENUE_EVENT_BATCH_CHECKSUM_ALGORITHM) {
+            throw VenueEventBatchChecksumException("unsupported venue event batch checksum algorithm: $algorithm")
+        }
+        val expected = root.string("payloadChecksum")
+        val actual = root.semanticSha256(VENUE_EVENT_BATCH_CHECKSUM_EXCLUDED_FIELDS)
+        if (expected.isBlank() || actual != expected) {
+            throw VenueEventBatchChecksumException("venue event batch semantic checksum mismatch")
+        }
     }
 
     private fun JsonDocument.int(key: String): Int {
@@ -188,6 +229,20 @@ class VenueEventBatchMaterializer(
         }
     }
 }
+
+private data class ParsedVenueEventBatchDelivery(
+    val delivery: VenueEventBatchDelivery,
+    val batch: VenueEventBatchFact
+)
+
+private const val VENUE_EVENT_BATCH_CHECKSUM_ALGORITHM = "sha256-reef-canonical-v1"
+private val VENUE_EVENT_BATCH_CHECKSUM_EXCLUDED_FIELDS = setOf(
+    "createdAt",
+    "payloadChecksum",
+    "payloadChecksumAlgorithm"
+)
+
+private class VenueEventBatchChecksumException(message: String) : IllegalArgumentException(message)
 
 private class FailAckOnceVenueEventBatchSource(
     private val delegate: VenueEventBatchSource
@@ -277,14 +332,19 @@ object VenueEventBatchMaterializerMetrics {
         }
     }
 
-    fun recordMaterialized(batch: VenueEventBatchFact, streamSequence: Long, outcomeCount: Long) {
-        materialized.incrementAndGet()
+    fun recordMaterialized(
+        batchCount: Int,
+        latestBatch: VenueEventBatchFact,
+        latestStreamSequence: Long,
+        outcomeCount: Long
+    ) {
+        materialized.addAndGet(batchCount.toLong())
         materializedOutcomes.addAndGet(outcomeCount)
-        lastMaterializedBatchId = batch.batchId
-        lastMaterializedPartition.set(batch.partition.toLong())
-        lastMaterializedFirstSequence.set(batch.firstSequence)
-        lastMaterializedLastSequence.set(batch.lastSequence)
-        lastMaterializedStreamSequence.set(streamSequence)
+        lastMaterializedBatchId = latestBatch.batchId
+        lastMaterializedPartition.set(latestBatch.partition.toLong())
+        lastMaterializedFirstSequence.set(latestBatch.firstSequence)
+        lastMaterializedLastSequence.set(latestBatch.lastSequence)
+        lastMaterializedStreamSequence.set(latestStreamSequence)
         lastMaterializedAtEpochMs.set(System.currentTimeMillis())
     }
 

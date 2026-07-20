@@ -3,6 +3,7 @@ package streamdirect
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +70,19 @@ type fakeClient struct {
 	closeCalled bool
 }
 
+type fakeReplayOffsetClient struct {
+	sarama.Client
+	earliest int64
+	latest   int64
+}
+
+func (f *fakeReplayOffsetClient) GetOffset(_ string, _ int32, timestamp int64) (int64, error) {
+	if timestamp == sarama.OffsetOldest {
+		return f.earliest, nil
+	}
+	return f.latest, nil
+}
+
 func (f *fakeClient) Close() error {
 	f.closeCalled = true
 	return f.closeErr
@@ -77,6 +91,40 @@ func (f *fakeClient) Close() error {
 type fakeExternalDelivery struct {
 	acked bool
 	err   error
+}
+
+type recordingTransactionalProducer struct {
+	sarama.SyncProducer
+	beginCalls  int
+	commitCalls int
+	abortCalls  int
+	groupID     string
+	offsets     map[string][]*sarama.PartitionOffsetMetadata
+	commitErr   error
+}
+
+func (p *recordingTransactionalProducer) BeginTxn() error {
+	p.beginCalls++
+	return p.SyncProducer.BeginTxn()
+}
+
+func (p *recordingTransactionalProducer) CommitTxn() error {
+	p.commitCalls++
+	if p.commitErr != nil {
+		return p.commitErr
+	}
+	return p.SyncProducer.CommitTxn()
+}
+
+func (p *recordingTransactionalProducer) AbortTxn() error {
+	p.abortCalls++
+	return p.SyncProducer.AbortTxn()
+}
+
+func (p *recordingTransactionalProducer) AddOffsetsToTxn(offsets map[string][]*sarama.PartitionOffsetMetadata, groupID string) error {
+	p.offsets = offsets
+	p.groupID = groupID
+	return p.SyncProducer.AddOffsetsToTxn(offsets, groupID)
 }
 
 func (d *fakeExternalDelivery) Subject() string        { return "external" }
@@ -253,6 +301,58 @@ func TestKafkaCommandSourceFetchYieldsMessages(t *testing.T) {
 	}
 }
 
+func TestKafkaCommandSourceReplaysCompleteCommittedPrefixInBatches(t *testing.T) {
+	config := mocks.NewTestConfig()
+	consumer := mocks.NewConsumer(t, config)
+	partitionConsumer := consumer.ExpectConsumePartition("test-commands", 0, sarama.OffsetOldest)
+	for offset := int64(0); offset < 3; offset++ {
+		partitionConsumer.YieldMessage(&sarama.ConsumerMessage{
+			Topic:     "test-commands",
+			Partition: 0,
+			Offset:    offset,
+			Value:     []byte(`{"commandId":"cmd"}`),
+		})
+	}
+	source := &KafkaCommandSource{
+		config:        KafkaConfig{CommandTopic: "test-commands", CommandSubjectPrefix: "reef.cmd.v1", PartitionCount: 4},
+		partition:     0,
+		durableName:   "test-durable",
+		consumer:      consumer,
+		client:        &fakeReplayOffsetClient{earliest: 0, latest: 3},
+		nextOffset:    3,
+		nextOffsetSet: true,
+	}
+	batchSizes := []int{}
+	replayed, err := source.ReplayCommitted(context.Background(), 2, func(deliveries []CommandDelivery) error {
+		batchSizes = append(batchSizes, len(deliveries))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ReplayCommitted failed: %v", err)
+	}
+	if replayed != 3 || len(batchSizes) != 2 || batchSizes[0] != 2 || batchSizes[1] != 1 {
+		t.Fatalf("unexpected replay count=%d batches=%v", replayed, batchSizes)
+	}
+	if err := consumer.Close(); err != nil {
+		t.Fatalf("consumer close failed: %v", err)
+	}
+}
+
+func TestKafkaCommandSourceReplayFailsClosedOnTruncatedHistory(t *testing.T) {
+	source := &KafkaCommandSource{
+		config:        KafkaConfig{CommandTopic: "test-commands", PartitionCount: 1},
+		partition:     0,
+		durableName:   "test-durable",
+		client:        &fakeReplayOffsetClient{earliest: 1, latest: 2},
+		nextOffset:    2,
+		nextOffsetSet: true,
+	}
+	_, err := source.ReplayCommitted(context.Background(), 10, func([]CommandDelivery) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "requires complete history") {
+		t.Fatalf("expected truncated-history failure, got %v", err)
+	}
+}
+
 func TestKafkaCommandSourceFetchTimesOutWithNoMessages(t *testing.T) {
 	config := mocks.NewTestConfig()
 	consumer := mocks.NewConsumer(t, config)
@@ -325,6 +425,124 @@ func TestKafkaEventBatchPublisherPublishFails(t *testing.T) {
 		t.Error("expected publish error to propagate")
 	}
 	_ = producer.Close()
+}
+
+func TestKafkaEventBatchPublisherCommitsOutputAndCommandOffsetInOneTransaction(t *testing.T) {
+	config := mocks.NewTestConfig()
+	config.Producer.Transaction.ID = "test-lane-transaction"
+	config.Producer.Idempotent = true
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Net.MaxOpenRequests = 1
+	config.Version = sarama.V2_0_0_0
+	baseProducer := mocks.NewSyncProducer(t, config)
+	baseProducer.ExpectSendMessageAndSucceed()
+	producer := &recordingTransactionalProducer{SyncProducer: baseProducer}
+	pom := &fakePartitionOffsetManager{nextOffset: 40}
+	source := &KafkaCommandSource{
+		config:           KafkaConfig{CommandTopic: "test-commands"},
+		partition:        2,
+		durableName:      "reef-engine-direct-p02",
+		partitionManager: pom,
+		nextOffset:       40,
+		nextOffsetSet:    true,
+	}
+	publisher := &KafkaEventBatchPublisher{
+		config: KafkaConfig{
+			CommandTopic:       "test-commands",
+			EventTopic:         "test-events",
+			EventSubjectPrefix: "reef.venue.events.v1",
+			PartitionCount:     4,
+		},
+		producer: producer,
+		source:   source,
+	}
+	deliveries := []CommandDelivery{
+		&kafkaDelivery{source: source, partition: 2, offset: 40, streamSequence: kafkaStreamSequence(2, 40)},
+		&kafkaDelivery{source: source, partition: 2, offset: 41, streamSequence: kafkaStreamSequence(2, 41)},
+	}
+
+	acked, err := publisher.PublishEventBatchAndAck(context.Background(), VenueEventBatch{
+		BatchID:   "batch-atomic",
+		Partition: 2,
+	}, deliveries)
+	if err != nil {
+		t.Fatalf("PublishEventBatchAndAck failed: %v", err)
+	}
+	if acked != 2 || producer.beginCalls != 1 || producer.commitCalls != 1 || producer.abortCalls != 0 {
+		t.Fatalf("unexpected transaction calls acked=%d begin=%d commit=%d abort=%d", acked, producer.beginCalls, producer.commitCalls, producer.abortCalls)
+	}
+	if producer.groupID != source.durableName {
+		t.Fatalf("unexpected transaction group %q", producer.groupID)
+	}
+	metadata := producer.offsets["test-commands"]
+	if len(metadata) != 1 || metadata[0].Partition != 2 || metadata[0].Offset != 42 {
+		t.Fatalf("unexpected transactional offsets %#v", metadata)
+	}
+	if source.nextOffset != 42 || pom.markedCalls != 0 {
+		t.Fatalf("expected transaction-only local offset 42, next=%d nontransactionalMarks=%d", source.nextOffset, pom.markedCalls)
+	}
+	if err := baseProducer.Close(); err != nil {
+		t.Fatalf("producer close failed: %v", err)
+	}
+}
+
+func TestKafkaEventBatchPublisherAbortsBeforeOffsetCommitFailure(t *testing.T) {
+	config := mocks.NewTestConfig()
+	config.Producer.Transaction.ID = "test-lane-transaction-abort"
+	config.Producer.Idempotent = true
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Net.MaxOpenRequests = 1
+	config.Version = sarama.V2_0_0_0
+	baseProducer := mocks.NewSyncProducer(t, config)
+	baseProducer.ExpectSendMessageAndSucceed()
+	producer := &recordingTransactionalProducer{SyncProducer: baseProducer}
+	source := &KafkaCommandSource{
+		config:        KafkaConfig{CommandTopic: "test-commands"},
+		partition:     0,
+		durableName:   "reef-engine-direct-p00",
+		nextOffset:    7,
+		nextOffsetSet: true,
+	}
+	publisher := &KafkaEventBatchPublisher{
+		config: KafkaConfig{
+			CommandTopic:       "test-commands",
+			EventTopic:         "test-events",
+			EventSubjectPrefix: "reef.venue.events.v1",
+			PartitionCount:     4,
+		},
+		producer: producer,
+		source:   source,
+		beforeOffsetCommit: func() error {
+			return errors.New("injected offset failure")
+		},
+	}
+	delivery := &kafkaDelivery{source: source, partition: 0, offset: 7, streamSequence: kafkaStreamSequence(0, 7)}
+
+	if _, err := publisher.PublishEventBatchAndAck(context.Background(), VenueEventBatch{BatchID: "batch-abort"}, []CommandDelivery{delivery}); err == nil {
+		t.Fatal("expected transaction failure")
+	}
+	if producer.beginCalls != 1 || producer.commitCalls != 0 || producer.abortCalls != 1 {
+		t.Fatalf("unexpected transaction calls begin=%d commit=%d abort=%d", producer.beginCalls, producer.commitCalls, producer.abortCalls)
+	}
+	if source.nextOffset != 7 {
+		t.Fatalf("aborted transaction advanced local offset to %d", source.nextOffset)
+	}
+	if err := baseProducer.Close(); err != nil {
+		t.Fatalf("producer close failed: %v", err)
+	}
+}
+
+func TestKafkaTransactionalClientConfigFencesStableLaneAndDisablesAutoCommit(t *testing.T) {
+	cfg := newKafkaTransactionalClientConfig("test-client", "reef-engine-direct-p03-venue-events-v1")
+	if cfg.Producer.Transaction.ID != "reef-engine-direct-p03-venue-events-v1" {
+		t.Fatalf("unexpected transactional id %q", cfg.Producer.Transaction.ID)
+	}
+	if cfg.Consumer.Offsets.AutoCommit.Enable {
+		t.Fatal("transactional command consumer must not auto-commit offsets")
+	}
+	if !cfg.Producer.Idempotent || cfg.Net.MaxOpenRequests != 1 {
+		t.Fatal("transactional producer must retain idempotent ordering configuration")
+	}
 }
 
 func TestKafkaEventBatchPublisherClose(t *testing.T) {

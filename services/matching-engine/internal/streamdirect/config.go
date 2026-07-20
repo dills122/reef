@@ -17,11 +17,14 @@ type RuntimeConfig struct {
 	CommandSubjectPrefix     string
 	EventStream              string
 	EventSubjectPrefix       string
+	OwnershipTopic           string
+	OwnershipGroup           string
 	PartitionCount           int
 	Partitions               []int
 	DurablePrefix            string
 	BatchSize                int
 	ConnectTimeout           time.Duration
+	RecoveryTimeout          time.Duration
 	FetchTimeout             time.Duration
 	PollInterval             time.Duration
 	AckWait                  time.Duration
@@ -44,11 +47,14 @@ func RuntimeConfigFromEnv() RuntimeConfig {
 		CommandSubjectPrefix:     envString("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1"),
 		EventStream:              envString("MATCHING_ENGINE_EVENT_STREAM", "REEF_VENUE_EVENTS"),
 		EventSubjectPrefix:       envString("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.venue.events.v1"),
+		OwnershipTopic:           envString("MATCHING_ENGINE_OWNERSHIP_TOPIC", "REEF_ENGINE_OWNERSHIP"),
+		OwnershipGroup:           envString("MATCHING_ENGINE_OWNERSHIP_GROUP", "reef-matching-engine-ownership-v1"),
 		PartitionCount:           partitionCount,
 		Partitions:               envPartitions("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", partitionCount),
 		DurablePrefix:            envString("MATCHING_ENGINE_DIRECT_STREAM_DURABLE_PREFIX", "reef-engine-direct"),
 		BatchSize:                envInt("MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE", 500),
 		ConnectTimeout:           time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_CONNECT_TIMEOUT_MS", 60000)) * time.Millisecond,
+		RecoveryTimeout:          time.Duration(envInt("MATCHING_ENGINE_KAFKA_RECOVERY_TIMEOUT_MS", 900000)) * time.Millisecond,
 		FetchTimeout:             time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_FETCH_TIMEOUT_MS", 200)) * time.Millisecond,
 		PollInterval:             time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_POLL_MS", 5)) * time.Millisecond,
 		AckWait:                  time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS", 60000)) * time.Millisecond,

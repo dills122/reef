@@ -53,6 +53,7 @@ type Equity struct {
 	Symbol             string `json:"symbol" yaml:"symbol"`
 	InstrumentID       string `json:"instrumentId" yaml:"instrumentId"`
 	StartingPriceNanos int64  `json:"startingPriceNanos" yaml:"startingPriceNanos"`
+	PriceTickNanos     int64  `json:"priceTickNanos,omitempty" yaml:"priceTickNanos,omitempty"`
 	AvgDailyVolume     int64  `json:"avgDailyVolume" yaml:"avgDailyVolume"`
 	SharesOutstanding  int64  `json:"sharesOutstanding" yaml:"sharesOutstanding"`
 	MarketCap          int64  `json:"marketCap" yaml:"marketCap"`
@@ -202,6 +203,9 @@ func ValidateSessionFile(cfg SessionFile) error {
 		}
 		if eq.StartingPriceNanos <= 0 {
 			return fmt.Errorf("market.equities[%s].startingPriceNanos must be > 0", eq.Symbol)
+		}
+		if eq.PriceTickNanos < 0 {
+			return fmt.Errorf("market.equities[%s].priceTickNanos must be >= 0", eq.Symbol)
 		}
 		if eq.SpreadBps <= 0 || eq.VolatilityBps <= 0 {
 			return fmt.Errorf("market.equities[%s].spreadBps and volatilityBps must be > 0", eq.Symbol)

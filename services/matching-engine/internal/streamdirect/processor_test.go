@@ -11,6 +11,59 @@ import (
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
 
+type fakeCommittedReplayer struct {
+	deliveries []CommandDelivery
+}
+
+func (r *fakeCommittedReplayer) ReplayCommitted(_ context.Context, batchSize int, apply func([]CommandDelivery) error) (int, error) {
+	replayed := 0
+	for start := 0; start < len(r.deliveries); start += batchSize {
+		end := min(start+batchSize, len(r.deliveries))
+		if err := apply(r.deliveries[start:end]); err != nil {
+			return replayed, err
+		}
+		replayed += end - start
+	}
+	return replayed, nil
+}
+
+func TestProcessorRestoresCommittedCommandsWithoutRepublishingOrCountingLiveTraffic(t *testing.T) {
+	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 1, map[string]string{
+		"commandId":     "cmd-recovery",
+		"occurredAt":    "2026-07-19T18:00:00Z",
+		"orderId":       "ord-recovery",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	service := app.NewService()
+	publisher := &fakePublisher{}
+	processor := NewProcessor(service, &fakeSource{}, publisher, ProcessorConfig{BatchSize: 10})
+
+	replayed, err := processor.RestoreCommitted(context.Background(), &fakeCommittedReplayer{deliveries: []CommandDelivery{delivery}})
+	if err != nil {
+		t.Fatalf("RestoreCommitted failed: %v", err)
+	}
+	if replayed != 1 {
+		t.Fatalf("expected one replayed command, got %d", replayed)
+	}
+	if _, ok := service.OrderState("ord-recovery"); !ok {
+		t.Fatal("expected replay to rebuild order state")
+	}
+	if len(publisher.batches) != 0 {
+		t.Fatal("recovery must not republish historical event batches")
+	}
+	if stats := processor.Stats(); stats.Fetched != 0 || stats.Processed != 0 || stats.Published != 0 || stats.Acked != 0 {
+		t.Fatalf("recovery polluted live traffic counters: %#v", stats)
+	}
+}
+
 func TestProcessorPublishesEventBatchBeforeAck(t *testing.T) {
 	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 10, map[string]string{
 		"commandId":     "cmd-1",
@@ -85,6 +138,108 @@ func TestProcessorPublishesEventBatchBeforeAck(t *testing.T) {
 	}
 	if stats.LastFetchedSequence != 10 || stats.LastAckedSequence != 10 || stats.AckLag != 0 {
 		t.Fatalf("unexpected sequence diagnostics %#v", stats)
+	}
+}
+
+func TestProcessorCommitsKafkaBatchAtomically(t *testing.T) {
+	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 12, map[string]string{
+		"commandId":     "cmd-atomic",
+		"occurredAt":    "2026-07-19T18:00:00Z",
+		"orderId":       "ord-atomic",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	service := app.NewService()
+	publisher := &fakeAtomicPublisher{}
+	processor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{delivery}}, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	processed, err := processor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessOnce failed: %v", err)
+	}
+	if processed != 1 || publisher.atomicCalls != 1 || len(publisher.batches) != 1 {
+		t.Fatalf("expected one atomic batch, processed=%d calls=%d batches=%d", processed, publisher.atomicCalls, len(publisher.batches))
+	}
+	if delivery.acked != 0 || delivery.nacked != 0 {
+		t.Fatalf("atomic publisher must own offset commit, ack=%d nak=%d", delivery.acked, delivery.nacked)
+	}
+	if _, ok := service.OrderState("ord-atomic"); !ok {
+		t.Fatal("expected committed matching mutation")
+	}
+	if stats := processor.Stats(); stats.Published != 1 || stats.Acked != 1 || stats.AckLag != 0 {
+		t.Fatalf("unexpected atomic stats %#v", stats)
+	}
+}
+
+func TestProcessorRollsBackAbortedKafkaTransaction(t *testing.T) {
+	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 13, map[string]string{
+		"commandId":     "cmd-atomic-abort",
+		"occurredAt":    "2026-07-19T18:00:00Z",
+		"orderId":       "ord-atomic-abort",
+		"instrumentId":  "STK001",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	service := app.NewService()
+	publisher := &fakeAtomicPublisher{err: errors.New("transaction aborted")}
+	processor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{delivery}}, publisher, ProcessorConfig{})
+
+	if _, err := processor.ProcessOnce(context.Background()); err == nil {
+		t.Fatal("expected transaction abort error")
+	}
+	if _, ok := service.OrderState("ord-atomic-abort"); ok {
+		t.Fatal("aborted transaction must roll back matching state")
+	}
+	if delivery.nacked != 1 || delivery.acked != 0 {
+		t.Fatalf("expected aborted command rewind, ack=%d nak=%d", delivery.acked, delivery.nacked)
+	}
+}
+
+func TestProcessorFreezesLaneOnIndeterminateKafkaCommit(t *testing.T) {
+	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 14, map[string]string{
+		"commandId":     "cmd-atomic-unknown",
+		"occurredAt":    "2026-07-19T18:00:00Z",
+		"orderId":       "ord-atomic-unknown",
+		"instrumentId":  "STK001",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	service := app.NewService()
+	publisher := &fakeAtomicPublisher{err: &fatalProcessorError{
+		cause:             errors.New("commit outcome unknown"),
+		preserveMutations: true,
+	}}
+	processor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{delivery}}, publisher, ProcessorConfig{})
+
+	err := processor.Run(context.Background())
+	var fatal *fatalProcessorError
+	if !errors.As(err, &fatal) {
+		t.Fatalf("expected fatal lane error, got %v", err)
+	}
+	if _, ok := service.OrderState("ord-atomic-unknown"); !ok {
+		t.Fatal("indeterminate commit must preserve in-memory state until fenced recovery")
+	}
+	if delivery.nacked != 0 || delivery.acked != 0 {
+		t.Fatalf("indeterminate commit must not guess offset outcome, ack=%d nak=%d", delivery.acked, delivery.nacked)
 	}
 }
 
@@ -1003,6 +1158,26 @@ func (s *fakeBatchAckSource) AckBatch(deliveries []CommandDelivery) (int, error)
 type fakePublisher struct {
 	batches []VenueEventBatch
 	err     error
+}
+
+type fakeAtomicPublisher struct {
+	batches     []VenueEventBatch
+	atomicCalls int
+	err         error
+}
+
+func (p *fakeAtomicPublisher) PublishEventBatch(_ context.Context, batch VenueEventBatch) error {
+	p.batches = append(p.batches, batch)
+	return p.err
+}
+
+func (p *fakeAtomicPublisher) PublishEventBatchAndAck(_ context.Context, batch VenueEventBatch, deliveries []CommandDelivery) (int, error) {
+	p.atomicCalls++
+	p.batches = append(p.batches, batch)
+	if p.err != nil {
+		return 0, p.err
+	}
+	return len(deliveries), nil
 }
 
 func (p *fakePublisher) PublishEventBatch(_ context.Context, batch VenueEventBatch) error {

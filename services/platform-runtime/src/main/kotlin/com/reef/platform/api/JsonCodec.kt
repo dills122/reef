@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.databind.json.JsonMapper
+import java.security.MessageDigest
 
 object JsonCodec {
     private val mapper = JsonMapper.builder().build()
@@ -126,4 +127,47 @@ class JsonDocument internal constructor(
         val value = root.get(key) ?: return ""
         return JsonCodec.writeNode(value)
     }
+
+    fun semanticSha256(excludedRootFields: Set<String> = emptySet()): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        updateCanonicalDigest(digest, root, excludedRootFields, isRoot = true)
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    }
+}
+
+private fun updateCanonicalDigest(
+    digest: MessageDigest,
+    node: JsonNode,
+    excludedRootFields: Set<String>,
+    isRoot: Boolean
+) {
+    when {
+        node.isNull -> updateCanonicalToken(digest, 'n', byteArrayOf())
+        node.isBoolean -> updateCanonicalToken(digest, 'b', if (node.booleanValue()) byteArrayOf('1'.code.toByte()) else byteArrayOf('0'.code.toByte()))
+        node.isTextual -> updateCanonicalToken(digest, 's', node.textValue().toByteArray(Charsets.UTF_8))
+        node.isNumber -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
+        node.isArray -> {
+            updateCanonicalToken(digest, 'a', node.size().toString().toByteArray(Charsets.UTF_8))
+            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, isRoot = false) }
+        }
+        node.isObject -> {
+            val fields = node.fields().asSequence()
+                .filterNot { (name, _) -> isRoot && name in excludedRootFields }
+                .sortedBy { (name, _) -> name }
+                .toList()
+            updateCanonicalToken(digest, 'o', fields.size.toString().toByteArray(Charsets.UTF_8))
+            fields.forEach { (name, child) ->
+                updateCanonicalToken(digest, 's', name.toByteArray(Charsets.UTF_8))
+                updateCanonicalDigest(digest, child, excludedRootFields, isRoot = false)
+            }
+        }
+        else -> throw IllegalArgumentException("unsupported canonical checksum JSON node: ${node.nodeType}")
+    }
+}
+
+private fun updateCanonicalToken(digest: MessageDigest, kind: Char, value: ByteArray) {
+    digest.update(kind.code.toByte())
+    digest.update(value.size.toString().toByteArray(Charsets.UTF_8))
+    digest.update(':'.code.toByte())
+    digest.update(value)
 }

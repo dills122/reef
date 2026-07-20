@@ -17,11 +17,6 @@ type terminalOrderRetention struct {
 	head  int
 }
 
-type terminalOrderRetentionSnapshot struct {
-	order []string
-	head  int
-}
-
 // track records that record just reached a terminal state and, if that
 // pushes the tracked count past limit, calls evict for each order ID that
 // falls out of the retention window (skipping record's own ID, which the
@@ -34,17 +29,27 @@ func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID s
 		return
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if record.terminalTracked {
+	record.terminalTracked = true
+	t.commit(record.OrderID, evict)
+}
+
+// commit adds a terminal order to the global retention queue only after the
+// direct-consume batch that produced it has durably published its outcome.
+// Delaying this mutation keeps batch rollback local to the orders it changed;
+// a failed lane can never restore an old global queue snapshot over another
+// lane's successful work.
+func (t *terminalOrderRetention) commit(orderID string, evict func(orderID string)) {
+	if t.limit <= 0 || orderID == "" {
 		return
 	}
-	record.terminalTracked = true
-	t.order = append(t.order, record.OrderID)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.order = append(t.order, orderID)
 	for len(t.order)-t.head > t.limit {
 		evictID := t.order[t.head]
 		t.head++
-		if evictID == record.OrderID {
+		if evictID == orderID {
 			continue
 		}
 		evict(evictID)
@@ -55,18 +60,8 @@ func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID s
 	}
 }
 
-func (t *terminalOrderRetention) snapshot() terminalOrderRetentionSnapshot {
+func (t *terminalOrderRetention) trackedOrderIDs() []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return terminalOrderRetentionSnapshot{
-		order: append([]string(nil), t.order...),
-		head:  t.head,
-	}
-}
-
-func (t *terminalOrderRetention) restore(snapshot terminalOrderRetentionSnapshot) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.order = append([]string(nil), snapshot.order...)
-	t.head = snapshot.head
+	return append([]string(nil), t.order[t.head:]...)
 }

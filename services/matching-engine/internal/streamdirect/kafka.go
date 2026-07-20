@@ -22,6 +22,8 @@ type KafkaConfig struct {
 	CommandSubjectPrefix string
 	EventTopic           string
 	EventSubjectPrefix   string
+	OwnershipTopic       string
+	OwnershipGroup       string
 	PartitionCount       int
 	FetchTimeout         time.Duration
 }
@@ -37,13 +39,19 @@ type KafkaCommandSource struct {
 	mu                sync.Mutex
 	partitionConsumer sarama.PartitionConsumer
 	rewindOffset      *int64
+	nextOffset        int64
+	nextOffsetSet     bool
 	closed            bool
+	ownership         *KafkaOwnershipLease
 }
 
 type KafkaEventBatchPublisher struct {
 	config   KafkaConfig
 	client   sarama.Client
 	producer sarama.SyncProducer
+	source   *KafkaCommandSource
+
+	beforeOffsetCommit func() error
 }
 
 type kafkaDelivery struct {
@@ -111,6 +119,7 @@ func NewKafkaCommandSource(config KafkaConfig, partition int, durableName string
 		client.Close()
 		return nil, err
 	}
+	nextOffset, _ := partitionManager.NextOffset()
 	return &KafkaCommandSource{
 		config:           config,
 		partition:        int32(partition),
@@ -119,6 +128,8 @@ func NewKafkaCommandSource(config KafkaConfig, partition int, durableName string
 		consumer:         consumer,
 		offsetManager:    offsetManager,
 		partitionManager: partitionManager,
+		nextOffset:       nextOffset,
+		nextOffsetSet:    true,
 	}, nil
 }
 
@@ -139,7 +150,43 @@ func NewKafkaEventBatchPublisher(config KafkaConfig) (*KafkaEventBatchPublisher,
 	}, nil
 }
 
+func NewKafkaTransactionalEventBatchPublisher(config KafkaConfig, source *KafkaCommandSource) (*KafkaEventBatchPublisher, error) {
+	if source == nil {
+		return nil, fmt.Errorf("kafka transactional event publisher requires a command source")
+	}
+	transactionalID := kafkaTransactionalID(source.durableName)
+	clientConfig := newKafkaTransactionalClientConfig(
+		fmt.Sprintf("reef-matching-engine-transactional-%s", PartitionToken(config.PartitionCount, int(source.partition))),
+		transactionalID,
+	)
+	client, err := sarama.NewClient(kafkaBrokers(config), clientConfig)
+	if err != nil {
+		return nil, err
+	}
+	producer, err := sarama.NewSyncProducerFromClient(client)
+	if err != nil {
+		client.Close()
+		return nil, err
+	}
+	if !producer.IsTransactional() {
+		producer.Close()
+		client.Close()
+		return nil, fmt.Errorf("kafka producer %s is not transactional", transactionalID)
+	}
+	return &KafkaEventBatchPublisher{
+		config:   config,
+		client:   client,
+		producer: producer,
+		source:   source,
+	}, nil
+}
+
 func (s *KafkaCommandSource) Fetch(ctx context.Context, batchSize int, timeout time.Duration) ([]CommandDelivery, error) {
+	if s.ownership != nil {
+		if err := s.ownership.AssertOwned(s.partition); err != nil {
+			return nil, err
+		}
+	}
 	if batchSize <= 0 {
 		batchSize = 1
 	}
@@ -173,18 +220,7 @@ func (s *KafkaCommandSource) Fetch(ctx context.Context, batchSize int, timeout t
 				s.mu.Unlock()
 				return deliveries, nil
 			}
-			subject := kafkaSubject(msg.Headers)
-			if subject == "" {
-				subject = fmt.Sprintf("%s.%s._._.SubmitOrder", trimDot(s.config.CommandSubjectPrefix), PartitionToken(s.config.PartitionCount, int(msg.Partition)))
-			}
-			deliveries = append(deliveries, &kafkaDelivery{
-				source:         s,
-				subject:        subject,
-				data:           msg.Value,
-				partition:      msg.Partition,
-				offset:         msg.Offset,
-				streamSequence: kafkaStreamSequence(msg.Partition, msg.Offset),
-			})
+			deliveries = append(deliveries, s.deliveryFromMessage(msg))
 		case err, ok := <-partitionConsumer.Errors():
 			if ok && err != nil {
 				return deliveries, err
@@ -192,6 +228,115 @@ func (s *KafkaCommandSource) Fetch(ctx context.Context, batchSize int, timeout t
 		}
 	}
 	return deliveries, nil
+}
+
+func (s *KafkaCommandSource) ReplayCommitted(ctx context.Context, batchSize int, apply func([]CommandDelivery) error) (int, error) {
+	if s.ownership != nil {
+		if err := s.ownership.AssertOwned(s.partition); err != nil {
+			return 0, err
+		}
+	}
+	if batchSize <= 0 {
+		batchSize = 1
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return 0, fmt.Errorf("kafka command source %s is closed", s.durableName)
+	}
+	if s.partitionConsumer != nil {
+		s.mu.Unlock()
+		return 0, fmt.Errorf("kafka command source %s cannot replay after live consumption starts", s.durableName)
+	}
+	targetOffset := s.currentNextOffsetLocked()
+	s.mu.Unlock()
+	if targetOffset <= 0 {
+		return 0, nil
+	}
+	earliestOffset, err := s.client.GetOffset(s.config.CommandTopic, s.partition, sarama.OffsetOldest)
+	if err != nil {
+		return 0, fmt.Errorf("read Kafka recovery earliest offset partition=%d: %w", s.partition, err)
+	}
+	if earliestOffset != 0 {
+		return 0, fmt.Errorf("Kafka recovery partition=%d requires complete history from offset 0; earliest available offset is %d", s.partition, earliestOffset)
+	}
+	latestOffset, err := s.client.GetOffset(s.config.CommandTopic, s.partition, sarama.OffsetNewest)
+	if err != nil {
+		return 0, fmt.Errorf("read Kafka recovery latest offset partition=%d: %w", s.partition, err)
+	}
+	if targetOffset > latestOffset {
+		return 0, fmt.Errorf("Kafka recovery partition=%d committed offset %d exceeds latest offset %d", s.partition, targetOffset, latestOffset)
+	}
+
+	replayConsumer, err := s.consumer.ConsumePartition(s.config.CommandTopic, s.partition, sarama.OffsetOldest)
+	if err != nil {
+		return 0, fmt.Errorf("open Kafka recovery consumer partition=%d: %w", s.partition, err)
+	}
+	defer replayConsumer.Close()
+
+	expectedOffset := int64(0)
+	replayed := 0
+	batch := make([]CommandDelivery, 0, batchSize)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		if s.ownership != nil {
+			if err := s.ownership.AssertOwned(s.partition); err != nil {
+				return err
+			}
+		}
+		if err := apply(batch); err != nil {
+			return err
+		}
+		replayed += len(batch)
+		batch = make([]CommandDelivery, 0, batchSize)
+		return nil
+	}
+
+	for expectedOffset < targetOffset {
+		select {
+		case <-ctx.Done():
+			return replayed, fmt.Errorf("Kafka recovery partition=%d stopped at offset %d of %d: %w", s.partition, expectedOffset, targetOffset, ctx.Err())
+		case message, ok := <-replayConsumer.Messages():
+			if !ok {
+				return replayed, fmt.Errorf("Kafka recovery partition=%d ended at offset %d before committed offset %d", s.partition, expectedOffset, targetOffset)
+			}
+			if message.Offset != expectedOffset {
+				return replayed, fmt.Errorf("Kafka recovery partition=%d requires complete history: expected offset %d, received %d", s.partition, expectedOffset, message.Offset)
+			}
+			batch = append(batch, s.deliveryFromMessage(message))
+			expectedOffset++
+			if len(batch) == batchSize {
+				if err := flush(); err != nil {
+					return replayed, fmt.Errorf("apply Kafka recovery partition=%d ending offset=%d: %w", s.partition, expectedOffset-1, err)
+				}
+			}
+		case consumerErr, ok := <-replayConsumer.Errors():
+			if ok && consumerErr != nil {
+				return replayed, fmt.Errorf("Kafka recovery partition=%d: %w", s.partition, consumerErr)
+			}
+		}
+	}
+	if err := flush(); err != nil {
+		return replayed, fmt.Errorf("apply Kafka recovery partition=%d ending offset=%d: %w", s.partition, expectedOffset-1, err)
+	}
+	return replayed, nil
+}
+
+func (s *KafkaCommandSource) deliveryFromMessage(message *sarama.ConsumerMessage) CommandDelivery {
+	subject := kafkaSubject(message.Headers)
+	if subject == "" {
+		subject = fmt.Sprintf("%s.%s._._.SubmitOrder", trimDot(s.config.CommandSubjectPrefix), PartitionToken(s.config.PartitionCount, int(message.Partition)))
+	}
+	return &kafkaDelivery{
+		source:         s,
+		subject:        subject,
+		data:           message.Value,
+		partition:      message.Partition,
+		offset:         message.Offset,
+		streamSequence: kafkaStreamSequence(message.Partition, message.Offset),
+	}
 }
 
 func (s *KafkaCommandSource) AckBatch(deliveries []CommandDelivery) (int, error) {
@@ -218,6 +363,8 @@ func (s *KafkaCommandSource) AckBatch(deliveries []CommandDelivery) (int, error)
 	}
 	s.partitionManager.MarkOffset(nextOffset, "")
 	s.offsetManager.Commit()
+	s.nextOffset = nextOffset
+	s.nextOffsetSet = true
 	return len(offsets), nil
 }
 
@@ -232,8 +379,12 @@ func (s *KafkaCommandSource) Close() error {
 		}
 	}
 	recordErr(s.closePartitionConsumerLocked())
-	recordErr(s.partitionManager.Close())
+	// With Sarama auto-commit disabled, PartitionOffsetManager.Close waits for
+	// its errors channel to be closed by the parent OffsetManager. Mark the
+	// partition done first, close the parent, then drain the partition errors.
+	s.partitionManager.AsyncClose()
 	recordErr(s.offsetManager.Close())
+	recordErr(s.partitionManager.Close())
 	recordErr(s.consumer.Close())
 	recordErr(s.client.Close())
 	return firstErr
@@ -247,6 +398,8 @@ func (s *KafkaCommandSource) ack(offset int64) error {
 	}
 	s.partitionManager.MarkOffset(offset+1, "")
 	s.offsetManager.Commit()
+	s.nextOffset = offset + 1
+	s.nextOffsetSet = true
 	return nil
 }
 
@@ -277,7 +430,7 @@ func (s *KafkaCommandSource) partitionConsumerLocked() (sarama.PartitionConsumer
 	if s.rewindOffset != nil {
 		offset = *s.rewindOffset
 		s.rewindOffset = nil
-	} else if nextOffset, _ := s.partitionManager.NextOffset(); nextOffset >= 0 {
+	} else if nextOffset := s.currentNextOffsetLocked(); nextOffset >= 0 {
 		offset = nextOffset
 	}
 	partitionConsumer, err := s.consumer.ConsumePartition(s.config.CommandTopic, s.partition, offset)
@@ -303,16 +456,96 @@ func (p *KafkaEventBatchPublisher) PublishEventBatch(ctx context.Context, batch 
 		return ctx.Err()
 	default:
 	}
-	payload, err := json.Marshal(batch)
+	message, err := p.eventBatchMessage(batch)
 	if err != nil {
 		return err
+	}
+	_, _, err = p.producer.SendMessage(message)
+	return err
+}
+
+func (p *KafkaEventBatchPublisher) PublishEventBatchAndAck(ctx context.Context, batch VenueEventBatch, deliveries []CommandDelivery) (int, error) {
+	if p.source == nil || !p.producer.IsTransactional() {
+		return 0, &fatalProcessorError{
+			cause: fmt.Errorf("kafka event publisher is not configured for atomic publish and offset commit"),
+		}
+	}
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+	}
+	if p.source.ownership != nil {
+		if err := p.source.ownership.AssertOwned(p.source.partition); err != nil {
+			return 0, err
+		}
+	}
+
+	nextOffset, err := p.source.transactionNextOffset(deliveries)
+	if err != nil {
+		return 0, &fatalProcessorError{cause: err}
+	}
+	message, err := p.eventBatchMessage(batch)
+	if err != nil {
+		return 0, err
+	}
+	if err := p.producer.BeginTxn(); err != nil {
+		return 0, &fatalProcessorError{cause: fmt.Errorf("begin Kafka transaction: %w", err)}
+	}
+	abort := func(cause error) error {
+		if abortErr := p.producer.AbortTxn(); abortErr != nil {
+			return &fatalProcessorError{
+				cause: fmt.Errorf("%v; abort Kafka transaction: %w", cause, abortErr),
+			}
+		}
+		return cause
+	}
+
+	if _, _, err := p.producer.SendMessage(message); err != nil {
+		return 0, abort(fmt.Errorf("publish venue event batch in Kafka transaction: %w", err))
+	}
+	if p.beforeOffsetCommit != nil {
+		if err := p.beforeOffsetCommit(); err != nil {
+			return 0, abort(err)
+		}
+	}
+	offsets := map[string][]*sarama.PartitionOffsetMetadata{
+		p.config.CommandTopic: {
+			{
+				Partition: p.source.partition,
+				Offset:    nextOffset,
+			},
+		},
+	}
+	if err := p.producer.AddOffsetsToTxn(offsets, p.source.durableName); err != nil {
+		return 0, abort(fmt.Errorf("add command offsets to Kafka transaction: %w", err))
+	}
+	if p.source.ownership != nil {
+		if err := p.source.ownership.AssertOwned(p.source.partition); err != nil {
+			return 0, abort(err)
+		}
+	}
+	if err := p.producer.CommitTxn(); err != nil {
+		return 0, &fatalProcessorError{
+			cause:             fmt.Errorf("Kafka transaction commit outcome is indeterminate: %w", err),
+			preserveMutations: true,
+		}
+	}
+	p.source.recordTransactionCommitted(nextOffset)
+	return len(deliveries), nil
+}
+
+func (p *KafkaEventBatchPublisher) eventBatchMessage(batch VenueEventBatch) (*sarama.ProducerMessage, error) {
+	payload, err := json.Marshal(batch)
+	if err != nil {
+		return nil, err
 	}
 	subject := fmt.Sprintf("%s.%s.%s", trimDot(p.config.EventSubjectPrefix), PartitionToken(p.config.PartitionCount, batch.Partition), "VenueEventBatch")
 	timestamp := time.Now().UTC()
 	if parsed, parseErr := time.Parse(time.RFC3339Nano, batch.CreatedAt); parseErr == nil {
 		timestamp = parsed
 	}
-	_, _, err = p.producer.SendMessage(&sarama.ProducerMessage{
+	return &sarama.ProducerMessage{
 		Topic:     p.config.EventTopic,
 		Key:       sarama.StringEncoder(batch.BatchID),
 		Value:     sarama.ByteEncoder(payload),
@@ -321,8 +554,7 @@ func (p *KafkaEventBatchPublisher) PublishEventBatch(ctx context.Context, batch 
 		Headers: []sarama.RecordHeader{
 			{Key: []byte(kafkaStreamSubjectHeader), Value: []byte(subject)},
 		},
-	})
-	return err
+	}, nil
 }
 
 func (p *KafkaEventBatchPublisher) Close() error {
@@ -364,6 +596,56 @@ func (d *kafkaDelivery) Term() error {
 	return d.Ack()
 }
 
+func (s *KafkaCommandSource) transactionNextOffset(deliveries []CommandDelivery) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return 0, fmt.Errorf("kafka command source %s is closed", s.durableName)
+	}
+	if len(deliveries) == 0 {
+		return 0, fmt.Errorf("Kafka transaction requires at least one command delivery")
+	}
+	offsets := make([]int64, 0, len(deliveries))
+	for _, delivery := range deliveries {
+		kafkaMessage, ok := delivery.(*kafkaDelivery)
+		if !ok || kafkaMessage.source != s || kafkaMessage.partition != s.partition {
+			return 0, fmt.Errorf("Kafka transaction received a delivery outside partition %d ownership", s.partition)
+		}
+		offsets = append(offsets, kafkaMessage.offset)
+	}
+	sort.Slice(offsets, func(i, j int) bool { return offsets[i] < offsets[j] })
+	for index := 1; index < len(offsets); index++ {
+		if offsets[index] != offsets[index-1]+1 {
+			return 0, fmt.Errorf("Kafka transaction command offsets are not contiguous: %d then %d", offsets[index-1], offsets[index])
+		}
+	}
+	expectedOffset := s.currentNextOffsetLocked()
+	if expectedOffset >= 0 && offsets[0] != expectedOffset {
+		return 0, fmt.Errorf("Kafka transaction expected command offset %d, received %d", expectedOffset, offsets[0])
+	}
+	return offsets[len(offsets)-1] + 1, nil
+}
+
+func (s *KafkaCommandSource) recordTransactionCommitted(nextOffset int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nextOffset = nextOffset
+	s.nextOffsetSet = true
+}
+
+func (s *KafkaCommandSource) currentNextOffsetLocked() int64 {
+	if s.nextOffsetSet {
+		return s.nextOffset
+	}
+	if s.partitionManager == nil {
+		return sarama.OffsetOldest
+	}
+	nextOffset, _ := s.partitionManager.NextOffset()
+	s.nextOffset = nextOffset
+	s.nextOffsetSet = true
+	return nextOffset
+}
+
 func kafkaBrokers(config KafkaConfig) []string {
 	raw := strings.TrimSpace(config.BootstrapServers)
 	if raw == "" {
@@ -394,7 +676,19 @@ func newKafkaClientConfig(clientID string) *sarama.Config {
 	config.Producer.Compression = kafkaCompression(engineKafkaCompressionType())
 	config.Consumer.Return.Errors = true
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	config.Consumer.Offsets.AutoCommit.Enable = false
 	return config
+}
+
+func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
+	config := newKafkaClientConfig(clientID)
+	config.Producer.Transaction.ID = transactionalID
+	config.Producer.Transaction.Timeout = time.Duration(envInt("MATCHING_ENGINE_KAFKA_TRANSACTION_TIMEOUT_MS", 60000)) * time.Millisecond
+	return config
+}
+
+func kafkaTransactionalID(durableName string) string {
+	return strings.TrimSpace(durableName) + "-venue-events-v1"
 }
 
 func kafkaCompression(value string) sarama.CompressionCodec {

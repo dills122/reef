@@ -291,6 +291,10 @@ class PlatformApi(
         return orderService.materializeVenueEventBatch(batch)
     }
 
+    fun materializeVenueEventBatches(batches: List<VenueEventBatchFact>): Long {
+        return orderService.materializeVenueEventBatches(batches)
+    }
+
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return orderService.canonicalCommandOutcome(commandId)
     }

@@ -17,6 +17,74 @@ Capture practical speed and impact lessons so performance stays a design constra
    - `strict-lifecycle` mode to stress correctness and state-machine behavior
 8. Always compare clean-reset and aged-state runs. Short tests can look healthy while persistence pressure is building.
 
+## Local Transactional Materializer Soak and Workload-Shape Correction (July 19, 2026)
+
+The post-hardening `10k`, `1024`-worker, `15m` materializer soak completed on a
+local Docker allocation with `10` CPUs and `12.5GB` memory. This host is smaller
+than the c-16 promotion host, so the result is diagnostic evidence rather than a
+replacement for the DigitalOcean gate.
+
+Evidence: `/tmp/reef-materializer-10k-soak-15m/`.
+
+- `8,781,297` accepted, processed, published, direct-acked, and materialized;
+  all accounting gaps were `0`.
+- failures, NAKs, terms, unsupported records, and materializer ack failures were
+  all `0`; final materializer lag was `0`.
+- accepted/materialized throughput was `9,756.53/sec`; p95 was `170.90ms` and
+  p99 was `305.36ms`. The local run therefore missed the remote promotion gates
+  of `9,900/sec`, `100ms`, and `200ms` respectively.
+- all `16` direct-stream partitions were active; max/min partition skew was
+  `1.0054` (`550,263` versus `547,295` acked commands).
+- average API durable-publish ack was `13.91ms`: Kafka delegate ack `12.49ms`,
+  pipeline queue wait `1.41ms`, and slot wait `0.003ms`. Materializers retained
+  substantial CPU headroom.
+- canonical Postgres wrote `18.95GB` WAL (`2,158 bytes/accepted command`) and
+  `63,640` commits (`0.00725/command`). `canonical_command_outcomes` grew
+  `14.28GB`; `canonical_venue_event_batches` grew `2.96GB`, mostly payload/TOAST.
+  The compact-row/payload-retention A/B remains necessary before `20k` promotion.
+
+The run also exposed a benchmark-shape defect. Submit prices were random at
+one-nanodollar resolution inside each volatility band, and modify prices lost
+the order's instrument context and sampled the global cross-instrument range.
+For example, `STK001` ended with `31,548` live orders on `31,548` distinct price
+levels. Matching-engine memory grew from below `1GB` to above `4GB`; this was
+active-book growth, not evidence of terminal-retention leakage.
+
+Disposition:
+
+1. Session equities may now declare `priceTickNanos`; generated materializer
+   workloads use a realistic `$0.01`/`10,000,000`-nanodollar tick.
+2. Modify traffic now resolves the tracked order's instrument and uses its
+   starting price, volatility band, and tick instead of the global range.
+3. Keep the former nanos-random shape as an explicitly labeled pathological
+   deep-price-level test, not as the normal venue-core promotion workload.
+4. Re-run a clean short comparison, then repeat `soak-15m` on c-16 before making
+   a promoted capacity claim.
+
+Corrected local comparison evidence:
+
+- clean `60s`: `599,952` exact accepted/published/acked/materialized,
+  `9,998.04/sec`, p95 `125.37ms`, p99 `230.49ms`, zero failures/lag;
+- warm/aged `15m`: `8,999,955` exact accepted/published/acked/materialized,
+  `9,999.49/sec`, p95 `135.25ms`, p99 `213.47ms`, zero failures/lag;
+- aged partition spread remained healthy: `16` active, `1.0053` max/min skew;
+- `STK001` ended with `34,462` live orders on only `160` price levels, proving
+  tick cardinality stayed bounded while the live-order inventory continued to
+  grow under the `68/24/8` submit/modify/cancel mix;
+- matcher RSS still reached `4.14GB`. Most long-run memory growth is therefore
+  live order inventory, not price-level cardinality or terminal retention;
+- aged canonical persistence wrote `19.32GB` WAL (`2,147B/command`),
+  `14.58GB` of outcome-table storage, and `2.96GB` of batch-table storage.
+  The window also recorded `136,026` WAL-buffer-full events, `2.83GB` temp
+  bytes, and a `381s` WAL-triggered checkpoint.
+
+The corrected workload passes the local rate/accounting test but still misses
+the remote latency thresholds on this smaller host. It also establishes that a
+single `68/24/8` gate cannot answer both steady-state rate capacity and aged
+deep-book capacity. Keep separate labeled gates: one with bounded live
+inventory for rate isolation, and one with measured order/level growth for
+aged-state pressure.
+
 ## Venue Event Batch Materializer Checkpoint (July 4, 2026)
 
 Local mixed submit/modify/cancel runs validated the first compact canonical persistence slice without putting Postgres back in the matching-engine hot path.

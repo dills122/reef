@@ -5,8 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -36,6 +36,32 @@ type BatchCommandAcker interface {
 type EventBatchPublisher interface {
 	PublishEventBatch(ctx context.Context, batch VenueEventBatch) error
 }
+
+// AtomicEventBatchPublisher commits a venue-event batch and the consumed
+// command offsets in one broker transaction. Implementations must return only
+// after both become visible atomically, or after the transaction is aborted.
+type AtomicEventBatchPublisher interface {
+	PublishEventBatchAndAck(ctx context.Context, batch VenueEventBatch, deliveries []CommandDelivery) (int, error)
+}
+
+// CommittedCommandReplayer replays the durable command prefix ending at the
+// consumer group's committed transaction boundary. Replay never advances an
+// offset or republishes an event batch.
+type CommittedCommandReplayer interface {
+	ReplayCommitted(ctx context.Context, batchSize int, apply func([]CommandDelivery) error) (int, error)
+}
+
+// fatalProcessorError stops one deterministic processing lane. preserveMutations
+// is used only for an indeterminate transaction commit: continuing, rewinding,
+// or rolling back could each diverge from the broker's committed truth, so the
+// lane must remain frozen until fenced recovery resolves the outcome.
+type fatalProcessorError struct {
+	cause             error
+	preserveMutations bool
+}
+
+func (e *fatalProcessorError) Error() string { return e.cause.Error() }
+func (e *fatalProcessorError) Unwrap() error { return e.cause }
 
 type Processor struct {
 	service   *app.Service
@@ -109,6 +135,7 @@ type VenueEventBatch struct {
 	CommandCount    int                  `json:"commandCount"`
 	CreatedAt       string               `json:"createdAt"`
 	PayloadChecksum string               `json:"payloadChecksum"`
+	ChecksumAlgo    string               `json:"payloadChecksumAlgorithm,omitempty"`
 	Outcomes        []CommandOutcomeFact `json:"outcomes"`
 }
 
@@ -192,6 +219,10 @@ func (p *Processor) Run(ctx context.Context) error {
 		processed, err := p.ProcessOnce(ctx)
 		if err != nil {
 			p.recordFailure(err)
+			var fatal *fatalProcessorError
+			if errors.As(err, &fatal) {
+				return err
+			}
 			if p.config.StopAfterAckFail || p.config.StopAfterPublishFail {
 				return err
 			}
@@ -229,6 +260,21 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 		p.nakAll(ackable)
 		return len(deliveries), err
 	}
+	if atomicPublisher, ok := p.publisher.(AtomicEventBatchPublisher); ok {
+		acked, err := atomicPublisher.PublishEventBatchAndAck(ctx, batch, ackable)
+		if err != nil {
+			var fatal *fatalProcessorError
+			if errors.As(err, &fatal) && fatal.preserveMutations {
+				return len(deliveries), err
+			}
+			rollback.Rollback()
+			p.nakAll(ackable)
+			return len(deliveries), err
+		}
+		rollback.Commit()
+		p.recordPublishedAndAcked(batch, ackable, acked)
+		return len(deliveries), nil
+	}
 	if err := p.publisher.PublishEventBatch(ctx, batch); err != nil {
 		// The batch was never durably published: undo the engine-side
 		// mutations (order reservations, matches, cancels/modifies) that
@@ -240,6 +286,7 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 		p.nakAll(ackable)
 		return len(deliveries), err
 	}
+	rollback.Commit()
 	p.stats.Published.Add(uint64(len(batch.Outcomes)))
 	p.stats.LastBatchID.Store(batch.BatchID)
 	if err := p.ackAll(ackable); err != nil && p.config.StopAfterAckFail {
@@ -248,14 +295,48 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	return len(deliveries), nil
 }
 
+// RestoreCommitted rebuilds the in-memory matching state from the canonical
+// command log before a lane begins consuming new work. It deliberately does
+// not publish historical event batches: those were made visible atomically
+// with the offsets that define the replay boundary.
+func (p *Processor) RestoreCommitted(ctx context.Context, replayer CommittedCommandReplayer) (int, error) {
+	return replayer.ReplayCommitted(ctx, p.config.BatchSize, func(deliveries []CommandDelivery) error {
+		_, _, rollback, err := p.buildBatchMode(
+			deliveries,
+			time.Now().UTC().Format(time.RFC3339Nano),
+			false,
+		)
+		if err != nil {
+			if rollback != nil {
+				rollback.Rollback()
+			}
+			return err
+		}
+		rollback.Commit()
+		return nil
+	})
+}
+
+func (p *Processor) recordPublishedAndAcked(batch VenueEventBatch, deliveries []CommandDelivery, acked int) {
+	p.stats.Published.Add(uint64(len(batch.Outcomes)))
+	p.stats.LastBatchID.Store(batch.BatchID)
+	p.stats.Acked.Add(uint64(acked))
+	if acked > 0 {
+		p.stats.LastAckedAt.Store(time.Now().UTC().Format(time.RFC3339Nano))
+		p.stats.LastAckedSequence.Store(maxDeliverySequence(deliveries[:min(acked, len(deliveries))]))
+	}
+}
+
 func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, *app.BatchRollback, error) {
+	return p.buildBatchMode(deliveries, createdAt, true)
+}
+
+func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt string, recordStats bool) (VenueEventBatch, []CommandDelivery, *app.BatchRollback, error) {
 	ackable := make([]CommandDelivery, 0, len(deliveries))
 	outcomes := make([]CommandOutcomeFact, 0, len(deliveries))
 	firstSeq := uint64(0)
 	haveFirstSeq := false
 	lastSeq := uint64(0)
-	checksumInput := strings.Builder{}
-
 	bookScopes := make([]app.BookScope, 0, len(deliveries))
 	deliveryVenueSessionIDs := make([]string, len(deliveries))
 	deliveryInstrumentIDs := make([]string, len(deliveries))
@@ -289,11 +370,15 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		var fact CommandOutcomeFact
 		switch {
 		case !supported:
-			p.stats.Unsupported.Add(1)
+			if recordStats {
+				p.stats.Unsupported.Add(1)
+			}
 			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "UNSUPPORTED_COMMAND_TYPE", fmt.Sprintf("unsupported command type: %s", commandType), instrumentID)
 		case outcome.DecodeError != "":
-			p.stats.Failed.Add(1)
-			p.stats.LastError.Store(outcome.DecodeError)
+			if recordStats {
+				p.stats.Failed.Add(1)
+				p.stats.LastError.Store(outcome.DecodeError)
+			}
 			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "POISON_COMMAND_DECODE_ERROR", outcome.DecodeError, instrumentID)
 		default:
 			status := "rejected"
@@ -320,12 +405,6 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		if fact.StreamSequence > lastSeq {
 			lastSeq = fact.StreamSequence
 		}
-		checksumInput.WriteString(strconv.FormatUint(fact.StreamSequence, 10))
-		checksumInput.WriteByte(':')
-		checksumInput.WriteString(fact.CommandID)
-		checksumInput.WriteByte(':')
-		checksumInput.WriteString(fact.PayloadHash)
-		checksumInput.WriteByte(';')
 		outcomes = append(outcomes, fact)
 		ackable = append(ackable, delivery)
 	}
@@ -334,19 +413,26 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		return VenueEventBatch{}, ackable, rollback, nil
 	}
 	batch := VenueEventBatch{
-		BatchID:         fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
-		ShardID:         p.config.ShardID,
-		Partition:       p.config.Partition,
-		CommandStream:   p.config.CommandStream,
-		EventStream:     p.config.EventStreamName,
-		FirstSequence:   firstSeq,
-		LastSequence:    lastSeq,
-		CommandCount:    len(outcomes),
-		CreatedAt:       createdAt,
-		PayloadChecksum: sha256Hex([]byte(checksumInput.String())),
-		Outcomes:        outcomes,
+		BatchID:       fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
+		ShardID:       p.config.ShardID,
+		Partition:     p.config.Partition,
+		CommandStream: p.config.CommandStream,
+		EventStream:   p.config.EventStreamName,
+		FirstSequence: firstSeq,
+		LastSequence:  lastSeq,
+		CommandCount:  len(outcomes),
+		CreatedAt:     createdAt,
+		ChecksumAlgo:  venueEventBatchChecksumAlgorithm,
+		Outcomes:      outcomes,
 	}
-	p.stats.Processed.Add(uint64(len(outcomes)))
+	checksum, err := venueEventBatchChecksum(batch)
+	if err != nil {
+		return VenueEventBatch{}, ackable, rollback, err
+	}
+	batch.PayloadChecksum = checksum
+	if recordStats {
+		p.stats.Processed.Add(uint64(len(outcomes)))
+	}
 	return batch, ackable, rollback, nil
 }
 

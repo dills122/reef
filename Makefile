@@ -30,7 +30,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
 .PHONY: kube-materializer-scale kube-autoscale-apply kube-smoke-venue-event-materializer kube-port-forward
 .PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
-.PHONY: do-benchmark do-materializer-10k-gate do-projection-freshness-gate do-arena-pacing-lag-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
+.PHONY: do-benchmark do-materializer-10k-gate do-materializer-scaling-gate do-projection-freshness-gate do-arena-pacing-lag-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
 
@@ -150,6 +150,7 @@ test-bot-sdk:
 	bun scripts/dev/lib/dev-profiles.test.mjs
 	bun scripts/dev/do-benchmark-check.test.mjs
 	bun scripts/dev/do-materializer-10k-gate.test.mjs
+	bun scripts/dev/do-materializer-scaling-gate.test.mjs
 	bun scripts/dev/do-projection-freshness-gate.test.mjs
 	bun test scripts/dev/projection-replay-proof.test.mjs
 	bun scripts/dev/scenario-drift.test.mjs
@@ -539,6 +540,9 @@ do-benchmark:
 
 do-materializer-10k-gate:
 	./scripts/dev/do-materializer-10k-gate.sh $(or $(ARGS),plan)
+
+do-materializer-scaling-gate:
+	./scripts/dev/do-materializer-scaling-gate.sh $(or $(ARGS),plan)
 
 do-projection-freshness-gate:
 	./scripts/dev/do-projection-freshness-gate.sh $(or $(ARGS),plan)

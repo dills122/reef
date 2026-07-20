@@ -26,8 +26,7 @@ client / simulator / bot
   -> durable command-log publish with explicit partition
   -> 202 Accepted after durable publish ack
   -> matching-engine shard consumes assigned partition
-  -> matching engine publishes durable VenueEventBatch
-  -> matching engine commits command offset only after event-batch publish
+  -> matching engine atomically publishes VenueEventBatch and commits command offset
   -> materializer consumes VenueEventBatch
   -> materializer writes compact canonical Postgres rows
   -> materializer commits event-batch offset
@@ -158,19 +157,27 @@ Valid pending causes:
 
 - command is in broker partition backlog and has not been consumed
 - engine consumed it but failed before event-batch publication, so the command offset is uncommitted and broker redelivery will happen
-- engine published the event batch but crashed before command offset commit, so redelivery must observe deterministic command/event uniqueness and avoid duplicate outcomes
+- engine transaction commit returned an ambiguous result, so the shard fails closed and a fenced replacement replays to the broker's committed boundary
 - materializer has not yet consumed the event batch
 - materializer crashed before committing its event-batch offset, so event-batch redelivery will happen and canonical inserts must be idempotent
 
 Required guarantee:
 
 - accepted command remains durable until the matching-engine handoff is durable
-- command offset commits only after durable `VenueEventBatch` publication
+- command offset and durable `VenueEventBatch` publication share one Kafka transaction in the Redpanda path
+- matching shards hold a static Kafka ownership-group lease for their configured partition set; a replacement with the same stable shard id fences the old process
+- startup reconstructs in-memory books by replaying the complete retained command prefix to each committed transaction boundary and refuses truncated or gapped history
+- event materializers use `isolation.level=read_committed`, so aborted event batches are invisible
 - event-batch materializer offset commits only after compact canonical Postgres rows commit
+- venue event batches use a versioned semantic full-body checksum; two different
+  command outcomes may never share one batch or command identity
+- a materializer poll may commit several batch headers/outcome groups in one
+  Postgres transaction and then commit the highest contiguous event offset once
+  per assigned partition
 - redelivery is normal recovery behavior
 - deterministic IDs and uniqueness constraints prevent duplicate trades, executions, lifecycle events, and terminal outcomes
 
-After load stops and the configured drain window passes, accepted commands must equal terminal canonical outcomes. Any remaining gap fails the run and must be diagnosed as broker backlog, engine redelivery, event materializer lag, or poison command handling.
+After load stops and the configured drain window passes, accepted commands must equal published, direct-acked, and terminal canonical outcomes exactly. Both undershoot and overshoot fail the run: undershoot indicates missing/backlogged work; overshoot indicates duplicate accounting or work. Diagnose the difference as broker backlog, engine redelivery, event materializer lag, poison command handling, or duplicate publication/materialization.
 
 Poison commands must not be silently dropped. After the configured retry policy is exhausted, the engine path must publish a durable terminal failure outcome, commit the command offset, and let materialization close the accounting gap with `FAILED`.
 
@@ -342,8 +349,9 @@ Required before promoting the path:
 | cancel without routing metadata | returns `400` and performs no hot-path lookup |
 | API exits after publish ack before marker update | retry/status can recover from durable stream reference; worker repair completes marker |
 | engine exits before event-batch publish | command offset remains uncommitted and redelivery produces one outcome |
-| engine exits after event-batch publish before command offset commit | redelivery observes deterministic outcome identity and does not duplicate trades/events |
-| event-batch publisher fails | command offset remains uncommitted |
+| engine transaction aborts after event send | event batch is invisible, command offset remains uncommitted, and book mutations roll back |
+| engine transaction commit is ambiguous | shard fails closed; static-owner replacement fences it and replays to the committed boundary |
+| overlapping matching owner starts | ownership group assigns each partition once; replacement with the same stable shard id fences the old process |
 | materializer exits after Postgres commit before event offset commit | event-batch redelivery is idempotent and inserts `0` duplicate canonical rows |
 | projector exits mid-batch | replay advances watermark without duplicate read-model rows |
 | poison command exhausts retry policy | durable terminal `FAILED` outcome materializes and closes accounting |
@@ -375,7 +383,8 @@ Required first cases:
 | --- | --- | --- | --- |
 | `api-publish-ack-before-marker` | API exits after durable publish ack before boundary marker/status update | retry/status repair recovers from durable stream reference | no duplicate command, stable command status, final accepted/materialized/projected gap `0` |
 | `engine-before-event-batch-publish` | matching engine exits after consuming command before publishing `VenueEventBatch` | command offset remains uncommitted and broker redelivers | one deterministic terminal outcome, no missing outcome, command offset commits only after event-batch durability |
-| `engine-after-event-batch-before-command-offset` | matching engine publishes durable `VenueEventBatch` then exits before command offset commit | redelivery observes deterministic outcome identity | no duplicate trades/events, event-batch idempotency holds, final accepted/materialized gap `0` |
+| `engine-transaction-abort-after-send` | matching engine sends `VenueEventBatch` then aborts before transactional offset commit | broker hides the aborted batch and redelivers the command | no aborted batch reaches the materializer, book rollback succeeds, final accepted/materialized gap `0` |
+| `engine-transaction-commit-ambiguous` | transaction commit response is lost or indeterminate | shard fails closed; replacement acquires the stable ownership lease and replays to the committed boundary | one visible batch/offset result, matching checksum equals replay checksum |
 | `materializer-after-postgres-before-event-offset` | materializer commits compact canonical Postgres rows then exits before event-batch offset commit | event batch redelivers and canonical inserts are idempotent | duplicate canonical inserts `0`, missing rows `0`, extra rows `0` |
 | `projector-mid-batch` | projector exits after partially applying a batch before watermark commit | projector replays and advances watermark | duplicate read-model rows `0`, final projected gap `0`, watermark monotonic |
 | `poison-command-terminal-failed` | command repeatedly fails deterministic validation/processing after durable acceptance | retry policy exhausts and emits durable terminal `FAILED` | command offset commits after terminal failure, materialized outcome is `FAILED`, drain accounting closes |
@@ -398,8 +407,8 @@ Implement the matrix by subsystem so each change has clear ownership and evidenc
    - expected evidence: boundary/API tests plus one local smoke proving worker repair or status recovery from durable stream reference
 
 2. Matching-engine direct consumer.
-   - covers engine crash before event-batch publish, crash after event-batch publish before command offset commit, event-batch publisher failure, and poison command terminal failure
-   - expected evidence: direct consumer tests proving command offset is not committed before event-batch durability and redelivery produces one deterministic outcome
+   - covers engine crash before transaction commit, event send followed by transaction abort, ambiguous commit, ownership replacement, event-batch publisher failure, and poison command terminal failure
+   - expected evidence: broker-backed tests proving atomic event/offset visibility, aborted-batch invisibility, fenced restart recovery, and one deterministic outcome
 
 3. Venue event materializer.
    - covers materializer crash after compact canonical Postgres commit before event-batch offset commit

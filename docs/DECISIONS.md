@@ -644,7 +644,9 @@ Summary:
 - The hot-ingress implementation target is a Kafka-compatible command-log producer and matching-engine direct consumer, first tested against Redpanda, while keeping JetStream available as fallback and comparison.
 - The runtime must still return `202 Accepted` only after the configured durable command-log producer acknowledges the command.
 - The Kafka-compatible producer uses explicit command partitions, `acks=all`, idempotent producer mode, bounded application in-flight work, async send callbacks, batching, and compression.
-- The matching engine consumes assigned Kafka topic partitions directly in the no-DB path, publishes venue event batches to a Kafka-compatible event topic, and commits command offsets only after durable event-batch publication succeeds.
+- The matching engine consumes assigned Kafka topic partitions directly in the no-DB path. In Redpanda mode, one transactional producer per lane publishes the venue event batch and commits the highest contiguous command offset atomically; downstream materializers read with `isolation.level=read_committed`.
+- Engine processes acquire their configured partition set through static Kafka ownership-group membership keyed by stable shard id. A same-id replacement fences the old member; overlapping different shard configurations cannot both receive the same ownership partition.
+- Before accepting new work, a replacement replays the complete retained command prefix to every committed transaction boundary and emits a deterministic service snapshot checksum; broker-backed recovery tests compare it with the prior committed state. Missing offset zero, a history gap, or recovery timeout fails startup. Persisted snapshots remain an acceleration layer, not a source of truth.
 - Redpanda/Kafka adoption is limited to the durable ingress/log mechanics at this stage. It does not move canonical venue facts out of the matching/post-match completion boundary.
 - The next promotion gate is evidence from no-DB and stream-ack stress runs showing materially lower durable publish ack time, bounded queue/in-flight depth, no accepted/acked gap, and clean replay/audit metadata.
 
@@ -695,17 +697,20 @@ Status: accepted
 
 Summary:
 - the next persistence slice is venue event batch materialization, not more generic runtime workers calling the engine and writing normalized rows.
-- matching-engine shards may commit command offsets after they consume ordered command partitions, mutate shard-local books, and durably publish `VenueEventBatch` records.
+- Redpanda matching-engine shards atomically commit command offsets with their durably published `VenueEventBatch` records after applying ordered commands with a rollback journal.
 - Postgres materialization is asynchronous from the durable venue event stream/topic. The materializer commits its own consumed event-batch offset only after compact canonical Postgres rows commit.
 - durable venue event batches are the matching-engine recovery handoff and canonical matching ledger for engine completion. Postgres remains the compact materialized canonical/query store for command outcome lookup, replay, audit, and downstream projection.
 - initial materialization tables should include `runtime.canonical_venue_event_batches` and `runtime.canonical_command_outcomes`.
 - canonical batch rows must preserve batch id, shard id, partition id, command stream/topic, event stream/topic, first/last command sequence or offset, command count, payload checksum, payload format/version, creation time, and original batch payload or equivalent replay-safe fact payload.
+- new event batches use the versioned `sha256-reef-canonical-v1` semantic checksum over the complete canonical body, excluding only volatile checksum metadata and creation time. Legacy batches without an algorithm remain readable during migration, but conflicting bodies under one batch or command identity must fail materialization.
 - command outcome lookup rows must support status lookup, idempotent materializer replay, command-to-batch linkage, command type, result status, reject code, instrument/order identifiers, stream sequence/offset, and payload hash.
 - the first runtime source is Kafka-compatible Redpanda consumption of the configured venue event topic through `PLATFORM_RUNTIME_ROLE=materializer`; JetStream event-batch materialization can be added behind the same `VenueEventBatchSource` contract later.
 - normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
 - the first downstream projection from event-batch materialization is compact lifecycle visibility: `runtime.canonical_command_outcomes` can project submit outcomes into `submit_results` and lifecycle `runtime_events` without placing Postgres back in the matching hot path.
 - full `orders` projection from the event-batch path must not depend on API command-payload side tables. `VenueEventBatch` submit outcomes carry the compact `acceptedOrder` projection fact needed to rebuild order rows in no-DB direct-consume mode, while `command_log.command_payloads` remains a compatibility fallback for older batches and command-log-backed runs.
 - replay/checksum evidence from durable event batch to Postgres rows is required before throughput claims for this slice; the local `dev-venue-event-replay-check` path must show idempotent stored batch replay, clean command counts, payload checksums, command outcome payload hashes, stream sequence continuity, and projection watermarks where a projection name is supplied.
+- a materializer may persist one fetched group through one Postgres statement/transaction and then commit the highest contiguous event offset once per partition. A failed group must isolate poison deliveries without acknowledging them or losing healthy polled records.
+- Kafka venue-event materializers must use `read_committed`; aborted matching transactions must never reach canonical persistence.
 
 Lifecycle boundary:
 ```text

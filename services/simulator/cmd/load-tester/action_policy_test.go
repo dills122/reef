@@ -207,10 +207,46 @@ func TestProfilePrice(t *testing.T) {
 		}
 	}
 
-	instrument := &sessionconfig.Equity{StartingPriceNanos: 500, VolatilityBps: 100}
+	instrument := &sessionconfig.Equity{StartingPriceNanos: 500, VolatilityBps: 100, PriceTickNanos: 25}
 	got := profilePrice(rng, cfg, profileRetail, instrument)
 	if got <= 0 {
 		t.Errorf("profilePrice with instrument non-positive: %d", got)
+	}
+	if got%instrument.PriceTickNanos != 0 {
+		t.Errorf("profilePrice with instrument not tick-aligned: %d", got)
+	}
+}
+
+func TestQuantizePrice(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		price int64
+		tick  int64
+		want  int64
+	}{
+		{name: "disabled", price: 123, tick: 0, want: 123},
+		{name: "round down", price: 112, tick: 25, want: 100},
+		{name: "round half up", price: 113, tick: 25, want: 125},
+		{name: "positive floor", price: 1, tick: 25, want: 25},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quantizePrice(tc.price, tc.tick); got != tc.want {
+				t.Fatalf("quantizePrice(%d, %d) = %d, want %d", tc.price, tc.tick, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInstrumentByID(t *testing.T) {
+	cfg := Config{MarketEquities: []sessionconfig.Equity{
+		{InstrumentID: "AAPL", StartingPriceNanos: 100, PriceTickNanos: 5},
+		{InstrumentID: "MSFT", StartingPriceNanos: 200, PriceTickNanos: 10},
+	}}
+	if got := instrumentByID(cfg, "MSFT"); got == nil || got.PriceTickNanos != 10 {
+		t.Fatalf("instrumentByID(MSFT) = %+v", got)
+	}
+	if got := instrumentByID(cfg, "UNKNOWN"); got != nil {
+		t.Fatalf("instrumentByID(UNKNOWN) = %+v, want nil", got)
 	}
 }
 

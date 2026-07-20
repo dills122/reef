@@ -523,12 +523,51 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        val canonicalOutcomes = canonicalOutcomes(batch)
+        canonicalOutcomes.forEach { candidate ->
+            val existing = commandOutcomes[candidate.commandId] ?: return@forEach
+            check(existing == candidate) {
+                "canonical command outcome conflict for commandId ${candidate.commandId}"
+            }
+        }
         if (!recordVenueEventBatch(batch)) {
             return 0
         }
         var inserted = 0L
-        batch.outcomes.forEach { outcome ->
-            val canonical = CanonicalCommandOutcome(
+        canonicalOutcomes.forEach { canonical ->
+            if (commandOutcomes.putIfAbsent(canonical.commandId, canonical) == null) {
+                inserted++
+            }
+        }
+        return inserted
+    }
+
+    override fun materializeVenueEventBatches(batches: List<VenueEventBatchFact>): Long {
+        val validatedBatches = venueEventBatches.toMutableMap()
+        val validatedOutcomes = commandOutcomes.toMutableMap()
+        batches.forEach { batch ->
+            val existingBatch = validatedBatches[batch.batchId]
+            if (existingBatch != null) {
+                check(existingBatch.payloadChecksum == batch.payloadChecksum) {
+                    "venue event batch checksum conflict for batchId ${batch.batchId}"
+                }
+            } else {
+                validatedBatches[batch.batchId] = batch
+            }
+            canonicalOutcomes(batch).forEach { candidate ->
+                val existing = validatedOutcomes[candidate.commandId]
+                check(existing == null || existing == candidate) {
+                    "canonical command outcome conflict for commandId ${candidate.commandId}"
+                }
+                validatedOutcomes[candidate.commandId] = candidate
+            }
+        }
+        return batches.sumOf { materializeVenueEventBatch(it) }
+    }
+
+    private fun canonicalOutcomes(batch: VenueEventBatchFact): List<CanonicalCommandOutcome> {
+        return batch.outcomes.map { outcome ->
+            CanonicalCommandOutcome(
                 commandId = outcome.commandId,
                 batchId = batch.batchId,
                 shardId = batch.shardId,
@@ -545,11 +584,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 rejectCode = outcome.rejectCode,
                 resultPayloadJson = outcome.resultPayloadJson
             )
-            if (commandOutcomes.putIfAbsent(outcome.commandId, canonical) == null) {
-                inserted++
-            }
         }
-        return inserted
     }
 
     override fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
