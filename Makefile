@@ -112,6 +112,7 @@ test-bot-sdk:
 	bun scripts/dev/bot-submission-commit-status.test.mjs
 	bun scripts/dev/bot-submission-record-admission.test.mjs
 	bun scripts/dev/bot-submission-invite-workflow.test.mjs
+	bun scripts/dev/dependabot-automation-workflow.test.mjs
 	bun scripts/dev/bot-submission-provision-openbao.test.mjs
 	bun scripts/dev/bot-sdk-test-bot.test.mjs
 	bun scripts/dev/arena-ingest-bot-run-result.test.mjs

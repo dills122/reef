@@ -196,6 +196,8 @@ function runCheck(cmd, args, label) {
 function checkWorkflowSecurity() {
   const botSubmission = textFile(".github/workflows/bot-submission.yml");
   const botProvision = textFile(".github/workflows/bot-submission-provision.yml");
+  const botNonBotStatus = textFile(".github/workflows/bot-submission-non-bot-status.yml");
+  const dependabotAutoMerge = textFile(".github/workflows/dependabot-auto-merge.yml");
   const registrySync = textFile(".github/workflows/bot-registry-sync.yml");
   const publishImage = textFile(".github/workflows/publish-image.yml");
 
@@ -252,6 +254,60 @@ function checkWorkflowSecurity() {
     botProvision,
     'HEAD_REPOSITORY" != "$GITHUB_REPOSITORY"',
     "trusted provisioning workflow must reject forked PR workflow runs",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-provision.yml",
+    botProvision,
+    "startsWith(github.event.workflow_run.head_branch, 'bots/add/')",
+    "trusted provisioning workflow must avoid consuming runners for non-bot branches",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-non-bot-status.yml",
+    botNonBotStatus,
+    "pull_request_target:",
+    "metadata-only non-bot status workflow must run from trusted base-branch code",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-non-bot-status.yml",
+    botNonBotStatus,
+    "statuses: write",
+    "metadata-only non-bot status workflow must publish the required status",
+  );
+  requireIncludes(
+    ".github/workflows/bot-submission-non-bot-status.yml",
+    botNonBotStatus,
+    "grep -q '^bots/'",
+    "metadata-only status workflow must defer bot changes to trusted provisioning",
+  );
+  requireNotIncludes(
+    ".github/workflows/bot-submission-non-bot-status.yml",
+    botNonBotStatus,
+    "actions/checkout",
+    "pull_request_target status workflow must never checkout pull-request code",
+  );
+  requireNotIncludes(
+    ".github/workflows/bot-submission-non-bot-status.yml",
+    botNonBotStatus,
+    "id-token: write",
+    "metadata-only non-bot status workflow must not mint GitHub OIDC tokens",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "github.event.pull_request.user.login == 'dependabot[bot]'",
+    "auto-merge workflow must be limited to Dependabot pull requests",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "gh pr merge --auto --squash",
+    "Dependabot workflow must use native gated auto-merge",
+  );
+  requireNotIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "actions/checkout",
+    "Dependabot auto-merge workflow does not need to checkout pull-request code",
   );
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",

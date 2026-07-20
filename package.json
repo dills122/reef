@@ -31,6 +31,7 @@
     "bot-sdk:test:submission-status": "bun scripts/dev/bot-submission-commit-status.test.mjs",
     "bot-sdk:test:submission-admission": "bun scripts/dev/bot-submission-record-admission.test.mjs",
     "bot-sdk:test:submission-invite-workflow": "bun scripts/dev/bot-submission-invite-workflow.test.mjs",
+    "repo:test:dependabot-automation": "bun scripts/dev/dependabot-automation-workflow.test.mjs",
     "bot-sdk:test:openbao-provision": "bun scripts/dev/bot-submission-provision-openbao.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
     "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",

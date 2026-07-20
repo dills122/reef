@@ -1,0 +1,42 @@
+name: Bot Submission Non-bot Status
+
+# Publish the shared branch-protection context without occupying the trusted
+# provisioning workflow. This workflow never checks out or executes PR code.
+on:
+  pull_request_target:
+    branches:
+      - master
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  mark-non-bot:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Mark PRs without bot changes
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename' > /tmp/reef-pr-files.txt
+          if grep -q '^bots/' /tmp/reef-pr-files.txt; then
+            echo "Bot files changed; trusted bot provisioning owns this status."
+            exit 0
+          fi
+
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state=success \
+            -f context=registry-diff-and-provision \
+            -f description="Not a bot submission" \
+            -f target_url="$STATUS_TARGET_URL"
