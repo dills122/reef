@@ -34,11 +34,11 @@ remaining blockers are external intake proof and live economic attribution:
 - the separation promotion did not include a hosted deployment rehearsal; the
   Hetzner Compose default remains the Reef-core image and must explicitly select
   the Arena-enabled image before the next Arena cutover
-- a fresh local six-bot, roster-bound run produced real fills, but every
-  projected execution reported `liquidityRole: UNSPECIFIED`. Non-zero fee and
-  rebate reconciliation correctly failed closed, so the three-policy matrix is
-  not release evidence until live maker/taker attribution reaches projection
-  readback.
+- a local six-bot, roster-bound rehearsal produced real fills but read stale
+  `UNSPECIFIED` execution rows. The persistence and evidence paths now retain
+  maker/taker roles, reject conflicting execution replays, and scope Arena fill
+  readback to the current run and submitted order set. The three-policy matrix
+  still needs a fresh recorded pass before this becomes release evidence.
 
 Do not solve the fork problem by giving PR-controlled workflows hosted secrets,
 OIDC minting permission, or a privileged checkout. Keep untrusted validation
@@ -61,7 +61,7 @@ separate from trusted provisioning.
 | Participant config surface | Implemented, needs named external-user proof | Arena admin exposes owner-scoped bot config through the Admin API/OpenBao boundary | Keep as a preview claim until a non-operator participant completes it. |
 | Bot-version venue risk gate | Implemented and tested | `ArenaBotVersionRiskCheck` and boundary tests reject disabled/non-active versions before acceptance | Strong release foundation. |
 | Public leaderboard | Deployed, empty | Hosted `/leaderboard` loaded without console errors and used `/api/v1/arena/leaderboard`; no public scored runs were present | Do not imply an active competition yet. Seed or promote one clearly labelled preview run before launch. |
-| Run correctness and capacity | Controlled evidence; economic gate blocked | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green. The 2026-07-21 bound matrix rehearsal found live projected roles still `UNSPECIFIED`. | Do not promote non-zero economics until maker/taker role readback and the three-policy matrix pass. |
+| Run correctness and capacity | Controlled evidence; fresh economic proof pending | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green. The 2026-07-21 stale-role path is corrected with role-preserving persistence, conflict rejection, and run-scoped fill evidence; a fresh matrix has not yet been recorded. | Do not promote non-zero economics until the three-policy matrix passes on the corrected path. |
 | Projection capacity | Adequate for preview, not final target | Venue core has a `10k` materializer baseline; full projection passed `5k/60s`, with write amplification still high | Optimize before longer/high-rate public seasons, but this is not the first external-submission blocker. |
 | Public onboarding | Blocked | No contribution guide, PR template, submission checklist, or copyable bot scaffold is exposed as the authoritative external flow | Even after trust-flow resolution, users do not yet have a safe, complete submission path. |
 | Product messaging | Needs alignment | Hosted landing invites users to submit; public docs say submissions are closed | Use “limited preview” language until the gates in this document are green. |

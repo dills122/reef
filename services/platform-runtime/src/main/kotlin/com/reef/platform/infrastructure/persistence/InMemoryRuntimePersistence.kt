@@ -243,12 +243,14 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun executionsForParticipant(
         participantId: String,
         instrumentId: String,
+        runId: String,
         limit: Int
     ): List<OwnExecutionView> {
         val boundedLimit = limit.coerceIn(0, 500)
         val participantOrders = orders.values
             .filter { it.participantId == participantId }
             .filter { instrumentId.isBlank() || it.instrumentId == instrumentId }
+            .filter { runId.isBlank() || it.runId == runId }
             .associateBy { it.orderId }
         val views = executions
             .filter { participantOrders.containsKey(it.orderId) }

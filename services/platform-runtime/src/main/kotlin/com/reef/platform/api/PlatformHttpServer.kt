@@ -1177,8 +1177,9 @@ class PlatformHttpServer(
                 return@createContext
             }
             val instrumentId = queryValue(exchange, "instrumentId")
+            val runId = queryValue(exchange, "runId")
             val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
-            writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, limit = limit))
+            writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, runId = runId, limit = limit))
         }
 
         server.createContext("/trades") { exchange ->
@@ -1844,6 +1845,7 @@ class PlatformHttpServer(
             body = api.ownExecutions(
                 participantId = participantId,
                 instrumentId = queryValue(request.query, "instrumentId"),
+                runId = queryValue(request.query, "runId"),
                 limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
         )

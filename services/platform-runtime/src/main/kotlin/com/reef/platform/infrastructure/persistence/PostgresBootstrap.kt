@@ -110,6 +110,7 @@ object PostgresSchemaRequirements {
                 names.persistSubmitOutcomesFunction,
                 names.persistSubmitOutcomeStatusStageFunction,
                 names.persistSubmitOutcomeTimelineStageFunction,
+                names.rejectExecutionReplayConflictFunction,
                 names.appendCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalCommandOutcomesFunction,

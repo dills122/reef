@@ -394,6 +394,7 @@ interface RuntimePersistence {
     fun executionsForParticipant(
         participantId: String,
         instrumentId: String = "",
+        runId: String = "",
         limit: Int = 0
     ): List<OwnExecutionView> {
         return emptyList()

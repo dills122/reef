@@ -6,8 +6,10 @@ import http from "node:http";
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const commands = new Map();
 const openOrdersByParticipant = new Map();
+const submittedOrderIdsByParticipant = new Map();
 const receivedCommands = [];
 const commandStatusReads = [];
+const fillReads = [];
 const referenceWrites = [];
 let syncResultMode = false;
 let rejectArenaRunStart = false;
@@ -50,6 +52,9 @@ const server = http.createServer(async (req, res) => {
         status: "OPEN",
       });
       openOrdersByParticipant.set(participantId, orders);
+      const orderIds = submittedOrderIdsByParticipant.get(participantId) ?? [];
+      orderIds.push(body.orderId);
+      submittedOrderIdsByParticipant.set(participantId, orderIds);
     }
     if (url.pathname === "/api/v1/orders/cancel") {
       const orders = openOrdersByParticipant.get(participantId) ?? [];
@@ -106,16 +111,27 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/api/v1/orders/fills") {
     const participantId = url.searchParams.get("participantId") ?? "";
+    fillReads.push({ participantId, runId: url.searchParams.get("runId") ?? "" });
+    const currentOrderId = submittedOrderIdsByParticipant.get(participantId)?.[0];
     const fills = participantId.endsWith("builtin-mm-simple")
       ? [{
         executionId: "exec-mm-simple-1",
-        orderId: "order-mm-simple-1",
+        orderId: currentOrderId,
         instrumentId: "AAPL",
         side: "BUY",
         liquidityRole: "MAKER",
         quantityUnits: "1",
         executionPrice: "100000000000",
         occurredAt: "2026-07-04T14:30:00.000Z",
+      }, {
+        executionId: "exec-stale-1",
+        orderId: "order-from-an-earlier-attempt",
+        instrumentId: "AAPL",
+        side: "BUY",
+        liquidityRole: "UNSPECIFIED",
+        quantityUnits: "99",
+        executionPrice: "100000000000",
+        occurredAt: "2026-07-04T14:29:00.000Z",
       }]
       : [];
     return json(res, 200, {
@@ -240,6 +256,9 @@ try {
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
   assert.equal(report.executionSummary.fillCount, 1);
+  assert.ok(fillReads.length >= 5);
+  assert.ok(fillReads.every((read) => read.runId === report.runId));
+  assert.equal(report.venueReadback.ownOrders.find((entry) => entry.botId === "builtin-mm-simple")?.fills.body.meta.excludedFillCount, 1);
   const simpleMarketMaker = report.botResults.find((result) => result.botId === "builtin-mm-simple");
   assert.equal(simpleMarketMaker?.tradingMetrics.executions.fillCount, 1);
   assert.equal(simpleMarketMaker?.tradingMetrics.executions.makerFillCount, 1);

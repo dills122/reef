@@ -1485,6 +1485,21 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE OR REPLACE FUNCTION ${names.rejectExecutionReplayConflictFunction}(
+                      p_event_id TEXT
+                    )
+                    RETURNS TEXT
+                    LANGUAGE plpgsql
+                    AS $$
+                    BEGIN
+                      RAISE EXCEPTION 'execution replay conflict for existing event_id %', p_event_id
+                        USING ERRCODE = '23505';
+                    END;
+                    $$;
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE OR REPLACE FUNCTION ${names.persistSubmitOutcomesFunction}(
                       p_outcomes JSONB
                     )
@@ -1519,13 +1534,14 @@ class PostgresRuntimePersistence(
                           outcome->>'occurredAt'
                         FROM outcomes
                         ON CONFLICT (command_id) DO UPDATE SET
-                          result_type = EXCLUDED.result_type,
-                          event_id = EXCLUDED.event_id,
-                          order_id = EXCLUDED.order_id,
-                          engine_order_id = EXCLUDED.engine_order_id,
-                          code = EXCLUDED.code,
-                          reason = EXCLUDED.reason,
-                          occurred_at = EXCLUDED.occurred_at
+                          command_id = ${names.submitResults}.command_id
+                        WHERE ${names.submitResults}.result_type = EXCLUDED.result_type
+                          AND ${names.submitResults}.event_id = EXCLUDED.event_id
+                          AND ${names.submitResults}.order_id = EXCLUDED.order_id
+                          AND ${names.submitResults}.engine_order_id = EXCLUDED.engine_order_id
+                          AND ${names.submitResults}.code = EXCLUDED.code
+                          AND ${names.submitResults}.reason = EXCLUDED.reason
+                          AND ${names.submitResults}.occurred_at = EXCLUDED.occurred_at
                         RETURNING 1
                       ),
                       accepted_orders AS (
@@ -1533,7 +1549,7 @@ class PostgresRuntimePersistence(
                         FROM outcomes
                       ),
                       upsert_orders AS (
-                        INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
+                        INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id)
                         SELECT
                           accepted_order->>'orderId',
                           accepted_order->>'engineOrderId',
@@ -1546,7 +1562,10 @@ class PostgresRuntimePersistence(
                           accepted_order->>'limitPrice',
                           accepted_order->>'currency',
                           accepted_order->>'timeInForce',
-                          accepted_order->>'acceptedAt'
+                          accepted_order->>'acceptedAt',
+                          COALESCE(accepted_order->>'clientOrderId', ''),
+                          COALESCE(accepted_order->>'runId', ''),
+                          COALESCE(accepted_order->>'venueSessionId', '')
                         FROM accepted_orders
                         WHERE accepted_order IS NOT NULL
                           AND jsonb_typeof(accepted_order) = 'object'
@@ -1561,11 +1580,14 @@ class PostgresRuntimePersistence(
                           limit_price = EXCLUDED.limit_price,
                           currency = EXCLUDED.currency,
                           time_in_force = EXCLUDED.time_in_force,
-                          accepted_at = EXCLUDED.accepted_at
+                          accepted_at = EXCLUDED.accepted_at,
+                          client_order_id = EXCLUDED.client_order_id,
+                          run_id = EXCLUDED.run_id,
+                          venue_session_id = EXCLUDED.venue_session_id
                         RETURNING 1
                       ),
                       insert_executions AS (
-                        INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
+                        INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role)
                         SELECT
                           execution->>'eventId',
                           execution->>'executionId',
@@ -1574,7 +1596,8 @@ class PostgresRuntimePersistence(
                           execution->>'quantityUnits',
                           execution->>'executionPrice',
                           execution->>'currency',
-                          execution->>'occurredAt'
+                          execution->>'occurredAt',
+                          COALESCE(NULLIF(execution->>'liquidityRole', ''), 'UNSPECIFIED')
                         FROM outcomes
                         CROSS JOIN LATERAL jsonb_array_elements(
                           CASE
@@ -1582,7 +1605,27 @@ class PostgresRuntimePersistence(
                             ELSE '[]'::jsonb
                           END
                         ) AS execution
-                        ON CONFLICT (event_id) DO NOTHING
+                        ON CONFLICT (event_id) DO UPDATE SET
+                          event_id = ${names.rejectExecutionReplayConflictFunction}(EXCLUDED.event_id)
+                        WHERE ROW(
+                          ${names.executions}.execution_id,
+                          ${names.executions}.order_id,
+                          ${names.executions}.instrument_id,
+                          ${names.executions}.quantity_units,
+                          ${names.executions}.execution_price,
+                          ${names.executions}.currency,
+                          ${names.executions}.occurred_at,
+                          ${names.executions}.liquidity_role
+                        ) IS DISTINCT FROM ROW(
+                          EXCLUDED.execution_id,
+                          EXCLUDED.order_id,
+                          EXCLUDED.instrument_id,
+                          EXCLUDED.quantity_units,
+                          EXCLUDED.execution_price,
+                          EXCLUDED.currency,
+                          EXCLUDED.occurred_at,
+                          EXCLUDED.liquidity_role
+                        )
                         RETURNING 1
                       ),
                       insert_trades AS (
@@ -4222,7 +4265,27 @@ class PostgresRuntimePersistence(
                 """
                 INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (event_id) DO NOTHING
+                ON CONFLICT (event_id) DO UPDATE SET
+                  event_id = ${names.rejectExecutionReplayConflictFunction}(EXCLUDED.event_id)
+                WHERE ROW(
+                  ${names.executions}.execution_id,
+                  ${names.executions}.order_id,
+                  ${names.executions}.instrument_id,
+                  ${names.executions}.quantity_units,
+                  ${names.executions}.execution_price,
+                  ${names.executions}.currency,
+                  ${names.executions}.occurred_at,
+                  ${names.executions}.liquidity_role
+                ) IS DISTINCT FROM ROW(
+                  EXCLUDED.execution_id,
+                  EXCLUDED.order_id,
+                  EXCLUDED.instrument_id,
+                  EXCLUDED.quantity_units,
+                  EXCLUDED.execution_price,
+                  EXCLUDED.currency,
+                  EXCLUDED.occurred_at,
+                  EXCLUDED.liquidity_role
+                )
                 """.trimIndent()
             ).use { ps ->
                 executions.forEach { execution ->
@@ -4545,14 +4608,17 @@ class PostgresRuntimePersistence(
     override fun executionsForParticipant(
         participantId: String,
         instrumentId: String,
+        runId: String,
         limit: Int
     ): List<OwnExecutionView> {
         val instrumentFilter = if (instrumentId.isBlank()) "" else "AND e.instrument_id = ?"
+        val runFilter = if (runId.isBlank()) "" else "AND o.run_id = ?"
         val boundedLimit = limit.coerceIn(0, 500)
         val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
         val params = buildList {
             add(participantId)
             if (instrumentId.isNotBlank()) add(instrumentId)
+            if (runId.isNotBlank()) add(runId)
             if (boundedLimit > 0) add(boundedLimit.toString())
         }
         return projectionQueryList(
@@ -4562,6 +4628,7 @@ class PostgresRuntimePersistence(
             JOIN ${names.orders} o ON o.order_id = e.order_id
             WHERE o.participant_id = ?
             $instrumentFilter
+            $runFilter
             ORDER BY e.occurred_at_ts NULLS LAST, e.occurred_at, e.execution_id
             $limitClause
             """.trimIndent(),

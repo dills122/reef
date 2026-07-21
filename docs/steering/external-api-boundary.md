@@ -38,6 +38,9 @@ Canonical detail: [`../API_SURFACE_POLICY.md`](../API_SURFACE_POLICY.md).
 
 Current implementation checkpoint:
 - `/api/v1/orders/submit`, `/api/v1/orders/cancel`, and `/api/v1/orders/modify` exist
+- `/api/v1/orders/fills` remains participant-owned and accepts an optional
+  `runId` filter; callers producing run evidence should supply it so retained
+  executions from another run cannot enter the result
 - writes require `X-Client-Id` and `Idempotency-Key`
 - auth, rate-limit, idempotency, account-risk, abuse-protection, and command-capture hooks exist in the runtime boundary layer
 - durable boundary storage uses explicit migration-owned `boundary.*` table names in Docker/local startup

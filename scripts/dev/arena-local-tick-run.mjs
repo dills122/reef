@@ -980,6 +980,7 @@ function summarizeTradingMetrics(session, counters) {
   let sellQuantity = 0;
   let grossSubmittedQuantity = 0;
   let grossSubmittedNotional = 0;
+  const submittedOrderIds = new Set();
 
   for (const tick of session.ticks) {
     for (const command of tick.venueCommands ?? []) {
@@ -994,6 +995,9 @@ function summarizeTradingMetrics(session, counters) {
       }
 
       if (command.route === "/api/v1/orders/submit") {
+        if (typeof body.orderId === "string" && body.orderId.length > 0) {
+          submittedOrderIds.add(body.orderId);
+        }
         const quantity = numberValue(body.quantityUnits);
         const price = priceFromNanos(body.limitPrice);
         grossSubmittedQuantity += quantity;
@@ -1032,6 +1036,7 @@ function summarizeTradingMetrics(session, counters) {
       sellQuantity,
       grossSubmittedQuantity,
       grossSubmittedNotional: Number(grossSubmittedNotional.toFixed(6)),
+      submittedOrderIds: [...submittedOrderIds].sort(),
     },
     pnl: {
       realized: null,
@@ -2119,11 +2124,27 @@ async function collectVenueReadback(botResults) {
     })));
   const ownOrders = await mapWithConcurrency(botResults, 6, async (result) => {
     const participantId = participantIdForBot(result);
-    const [current, history, fills] = await Promise.all([
+    const [current, history, unscopedFills] = await Promise.all([
       getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
       getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
-      getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
+      getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&runId=${encodeURIComponent(config.runId)}&limit=200`, readbackHeaders(participantId)),
     ]);
+    const expectedOrderIds = new Set(result.tradingMetrics?.orderFlow?.submittedOrderIds ?? []);
+    const returnedFills = Array.isArray(unscopedFills.body?.fills) ? unscopedFills.body.fills : [];
+    const currentRunFills = returnedFills.filter((fill) => expectedOrderIds.has(fill.orderId));
+    const fills = {
+      ...unscopedFills,
+      body: {
+        ...unscopedFills.body,
+        meta: {
+          ...unscopedFills.body?.meta,
+          runId: config.runId,
+          expectedOrderCount: expectedOrderIds.size,
+          excludedFillCount: returnedFills.length - currentRunFills.length,
+        },
+        fills: currentRunFills,
+      },
+    };
     return {
       botId: result.botId,
       participantId,
