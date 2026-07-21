@@ -161,6 +161,13 @@ func TestSubmitOrderMatchesCrossingOrder(t *testing.T) {
 	if len(result.Executions) != 2 {
 		t.Fatalf("expected two executions, got %#v", result.Executions)
 	}
+	rolesByOrder := map[string]string{}
+	for _, execution := range result.Executions {
+		rolesByOrder[execution.OrderID] = execution.LiquidityRole
+	}
+	if rolesByOrder["ord-buy-1"] != "MAKER" || rolesByOrder["ord-sell-1"] != "TAKER" {
+		t.Fatalf("expected resting buy maker and incoming sell taker, got %#v", rolesByOrder)
+	}
 
 	if len(result.Trades) != 1 {
 		t.Fatalf("expected one trade, got %#v", result.Trades)

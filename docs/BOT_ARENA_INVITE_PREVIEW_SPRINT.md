@@ -202,7 +202,9 @@ score publication. Accepted runs now bind to the active immutable roster,
 revalidate that binding at `T0`, and carry roster, seed-set, actor-profile, and
 risk-policy hashes into persistence and reports. Zero-fee competition/house
 ledger reconciliation is implemented and fail-closed; non-zero fee/rebate
-policies remain blocked until canonical executions identify maker/taker roles.
+reconciliation now consumes canonical maker/taker roles and supports the two
+preview comparison policies. Fresh fixed-seed and hosted proof remains required
+before either non-zero policy is promoted.
 
 ## Persona And Economic Policy Modules
 
@@ -366,8 +368,11 @@ policy locks, result-to-run hash verification, terminal result immutability,
 and leaderboard lock filtering are also implemented. Run admission now binds
 to the accepted roster snapshot. The zero-fee runner emits deterministic
 competition/house reconciliation evidence and the promoted persisted smoke
-requires it to pass. Non-zero fee/rebate policies fail closed until venue
-execution facts provide canonical maker/taker attribution.
+requires it to pass. Venue execution facts now preserve canonical maker/taker
+attribution through both transports, runtime persistence, participant reads,
+and Arena diagnostics. Non-zero fee/rebate reconciliation fails closed when
+role coverage, role notional parity, or facility funding is invalid. Fresh
+fixed-seed and hosted proof remains required for the comparison policies.
 
 Deliverables:
 

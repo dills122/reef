@@ -82,6 +82,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.executions.event_id_uuid:uuid",
                 "runtime.executions.quantity_units_num:numeric",
                 "runtime.executions.execution_price_num:numeric",
+                "runtime.executions.liquidity_role:text",
                 "runtime.executions.occurred_at:text",
                 "runtime.executions.occurred_at_ts:timestamp with time zone"
             ),

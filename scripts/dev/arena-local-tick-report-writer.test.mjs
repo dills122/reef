@@ -11,6 +11,7 @@ const compactReportPath = join(dir, "arena-local-tick-run-compact.json");
 const pacedReportPath = join(dir, "arena-local-tick-run-paced.json");
 const scoreV1ReportPath = join(dir, "arena-local-tick-run-score-v1.json");
 const requiredReconciliationReportPath = join(dir, "arena-local-tick-run-reconciliation-required.json");
+const balancedFeeReportPath = join(dir, "arena-local-tick-run-balanced-fee.json");
 
 const missingRosterBinding = spawnSync(
   "bun",
@@ -204,6 +205,24 @@ assert.match(requiredReconciliationResult.stderr, /arena economic reconciliation
 const requiredReconciliationReport = JSON.parse(readFileSync(requiredReconciliationReportPath, "utf8"));
 assert.equal(requiredReconciliationReport.status, "failed_economic_reconciliation");
 assert.equal(requiredReconciliationReport.economicReconciliation.status, "fail");
+
+const balancedFeeResult = spawnSync(
+  "bun",
+  [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=1",
+    "--tick-interval-ms=500",
+    "--economic-policy-version=preview-balanced-fee-v1",
+    `--out=${balancedFeeReportPath}`,
+  ],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+assert.equal(balancedFeeResult.status, 0, `${balancedFeeResult.stdout}\n${balancedFeeResult.stderr}`);
+const balancedFeeReport = JSON.parse(readFileSync(balancedFeeReportPath, "utf8"));
+assert.equal(balancedFeeReport.mode.economicPolicyVersion, "preview-balanced-fee-v1");
+assert.equal(balancedFeeReport.economicReconciliation.requiresLiquidityRoles, true);
 
 const pacedStartedAt = Date.now();
 const pacedResult = spawnSync(

@@ -17,6 +17,7 @@ const fills = [
     executionId: "exec-buy",
     instrumentId: "AAPL",
     side: "BUY",
+    liquidityRole: "TAKER",
     quantityUnits: "3",
     executionPrice: "100000000000",
   },
@@ -24,6 +25,7 @@ const fills = [
     executionId: "exec-sell",
     instrumentId: "AAPL",
     side: "SELL",
+    liquidityRole: "MAKER",
     quantityUnits: "1",
     executionPrice: "101000000000",
   },
@@ -31,6 +33,7 @@ const fills = [
     executionId: "exec-msft",
     instrumentId: "MSFT",
     side: "SELL",
+    liquidityRole: "MAKER",
     quantityUnits: "2",
     executionPrice: "200",
   },
@@ -42,6 +45,9 @@ assert.equal(direct.executions.buyFillCount, 1);
 assert.equal(direct.executions.sellFillCount, 2);
 assert.equal(direct.executions.filledQuantity, 6);
 assert.equal(direct.executions.grossNotional, 801);
+assert.equal(direct.executions.makerNotional, 501);
+assert.equal(direct.executions.takerNotional, 300);
+assert.equal(direct.executions.liquidityRoleComplete, true);
 assert.equal(direct.executions.byInstrument.AAPL.netQuantity, 2);
 assert.equal(direct.executions.byInstrument.MSFT.netQuantity, -2);
 assert.equal(direct.pnl.cash, 201);

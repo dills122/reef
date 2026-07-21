@@ -86,7 +86,7 @@ class PostgresRuntimeJsonTest {
         assertEquals(
             "{\"eventId\":\"evt-exec-1\", \"executionId\":\"exec-1\", \"orderId\":\"ord-1\", " +
                 "\"instrumentId\":\"AAPL\", \"quantityUnits\":\"100\", \"executionPrice\":\"150250000000\", " +
-                "\"currency\":\"USD\", \"occurredAt\":\"2026-07-07T00:00:00Z\"}",
+                "\"currency\":\"USD\", \"occurredAt\":\"2026-07-07T00:00:00Z\", \"liquidityRole\":\"UNSPECIFIED\"}",
             json
         )
     }

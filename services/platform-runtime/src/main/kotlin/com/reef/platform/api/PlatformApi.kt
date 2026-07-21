@@ -727,7 +727,8 @@ class PlatformApi(
         "quantityUnits" to quantityUnits,
         "executionPrice" to executionPrice,
         "currency" to currency,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "liquidityRole" to liquidityRole
     )
 
     private fun TradeCreated.toMap(): Map<String, Any> = mapOf(
@@ -782,7 +783,8 @@ class PlatformApi(
         "quantityUnits" to quantityUnits,
         "executionPrice" to executionPrice,
         "currency" to currency,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "liquidityRole" to liquidityRole
     )
 
     private fun MarketDataSnapshot.toMap(): Map<String, Any> = mapOf(

@@ -263,7 +263,8 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     quantityUnits = execution.quantityUnits,
                     executionPrice = execution.executionPrice,
                     currency = execution.currency,
-                    occurredAt = execution.occurredAt
+                    occurredAt = execution.occurredAt,
+                    liquidityRole = execution.liquidityRole
                 )
             }
         return if (boundedLimit > 0) views.take(boundedLimit) else views

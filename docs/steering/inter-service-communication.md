@@ -99,6 +99,9 @@ Target state:
   - bidirectional stream per deterministic partition lane
 - generic workers issuing one unary `SubmitOrder` call per command are transitional scaffolding, not the target hot path.
 - bidirectional submit stream lane identity should include `runId + venueSessionId + instrumentId` once runtime command models expose those fields; instrument-only lanes are a compatibility bridge.
+- execution facts must preserve the matching engine's canonical maker/taker
+  attribution across gRPC, HTTP fallback, persistence, and participant reads;
+  downstream economic logic must not infer liquidity role from arrival order.
 
 ### Health and readiness
 

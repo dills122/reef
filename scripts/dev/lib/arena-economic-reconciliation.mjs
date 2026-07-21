@@ -3,6 +3,7 @@ import { canonicalHash } from "./arena-policy-resolver.mjs";
 export function reconcileArenaEconomics(botResults, economicPolicy) {
   const tolerance = decimal(economicPolicy.reconciliation.tolerance);
   const unsupportedPolicyTerms = nonzeroPolicyTerms(economicPolicy);
+  const requiresLiquidityRoles = roleDependentPolicyEnabled(economicPolicy);
   const actors = [...botResults]
     .sort((left, right) => left.botId.localeCompare(right.botId))
     .map((result) => actorRow(result, economicPolicy));
@@ -13,6 +14,13 @@ export function reconcileArenaEconomics(botResults, economicPolicy) {
     }
   }
   const cashTransferGap = fixed(actors.reduce((sum, actor) => sum + actor.tradingCashDelta, 0));
+  const makerNotional = fixed(actors.reduce((sum, actor) => sum + actor.makerNotional, 0));
+  const takerNotional = fixed(actors.reduce((sum, actor) => sum + actor.takerNotional, 0));
+  const liquidityRoleNotionalGap = fixed(makerNotional - takerNotional);
+  const feeReceipts = fixed(actors.reduce((sum, actor) => sum + actor.feesPaid, 0));
+  const rebatePayments = fixed(actors.reduce((sum, actor) => sum + actor.rebatesReceived, 0));
+  const facilityCashDelta = fixed(feeReceipts - rebatePayments);
+  const reconciledCashGap = fixed(actors.reduce((sum, actor) => sum + actor.economicCashDelta, 0) + facilityCashDelta);
   const unexplainedInventory = Object.fromEntries(
     Object.entries(inventoryGapByInstrument)
       .filter(([, quantity]) => Math.abs(quantity) > 1e-9)
@@ -28,9 +36,24 @@ export function reconcileArenaEconomics(botResults, economicPolicy) {
     return violations;
   });
   if (duplicateActors.length > 0) policyViolations.push(...duplicateActors.map((identity) => `${identity}:duplicate_actor`));
-  const complete = actors.every((actor) => actor.pnlAvailable);
+  if (requiresLiquidityRoles) {
+    policyViolations.push(...actors.filter((actor) => !actor.liquidityRoleComplete).map((actor) => `${actor.botId}:liquidity_role_incomplete`));
+  }
+  if (economicPolicy.rebates.fundingSource === "none" && rebatePayments > tolerance) {
+    policyViolations.push("rebates:funding_source_none");
+  }
+  if (economicPolicy.rebates.fundingSource === "taker_fees" && rebatePayments - actors.reduce((sum, actor) => sum + actor.takerFeesPaid, 0) > tolerance) {
+    policyViolations.push("rebates:exceed_taker_fees");
+  }
+  if (economicPolicy.rebates.fundingSource === "house_subsidy" && rebatePayments - decimal(economicPolicy.houseLedger.subsidyBudget) > tolerance) {
+    policyViolations.push("rebates:exceed_house_subsidy_budget");
+  }
+  const complete = actors.every((actor) => actor.pnlAvailable && (!requiresLiquidityRoles || actor.liquidityRoleComplete));
   const balanced = !economicPolicy.reconciliation.requireBalancedTransfers
-    || (Math.abs(cashTransferGap) <= tolerance && Object.keys(unexplainedInventory).length === 0);
+    || (Math.abs(cashTransferGap) <= tolerance
+      && Math.abs(reconciledCashGap) <= tolerance
+      && (!requiresLiquidityRoles || Math.abs(liquidityRoleNotionalGap) <= tolerance)
+      && Object.keys(unexplainedInventory).length === 0);
   const compliant = policyViolations.length === 0;
   const evidence = {
     schemaVersion: "reef.arena.economicReconciliation.v1",
@@ -43,14 +66,28 @@ export function reconcileArenaEconomics(botResults, economicPolicy) {
     status: complete && balanced && compliant && unsupportedPolicyTerms.length === 0 ? "pass" : "fail",
     unsupportedPolicyTerms,
     policyViolations,
+    requiresLiquidityRoles,
     actors,
     ledgers: {
       competition: summarizeLedger(actors, "competition"),
       house: summarizeLedger(actors, "house"),
     },
     declaredSources: declaredSources(actors, economicPolicy),
-    declaredSinks: economicPolicy.sinks.filter((sink) => sink.enabled),
+    declaredSinks: declaredSinks(economicPolicy, actors),
+    economicFacility: {
+      feeReceipts,
+      rebatePayments,
+      cashDelta: facilityCashDelta,
+      subsidyBudget: decimal(economicPolicy.houseLedger.subsidyBudget),
+      subsidyBudgetRemaining: economicPolicy.rebates.fundingSource === "house_subsidy"
+        ? fixed(decimal(economicPolicy.houseLedger.subsidyBudget) - rebatePayments)
+        : decimal(economicPolicy.houseLedger.subsidyBudget),
+    },
     cashTransferGap,
+    reconciledCashGap,
+    makerNotional,
+    takerNotional,
+    liquidityRoleNotionalGap,
     inventoryGapByInstrument: unexplainedInventory,
   };
   return { ...evidence, reconciliationHash: canonicalHash(evidence) };
@@ -64,6 +101,14 @@ function actorRow(result, policy) {
   const tradingCashDelta = decimal(pnl.cash ?? 0);
   const inventoryValue = decimal(pnl.inventoryValue ?? 0);
   const totalPnl = decimal(pnl.total ?? 0);
+  const executions = result.tradingMetrics?.executions ?? {};
+  const makerNotional = decimal(executions.makerNotional ?? 0);
+  const takerNotional = decimal(executions.takerNotional ?? 0);
+  const makerFeesPaid = bps(makerNotional, policy.fees.makerBps);
+  const takerFeesPaid = bps(takerNotional, policy.fees.takerBps);
+  const feesPaid = fixed(makerFeesPaid + takerFeesPaid);
+  const rebatesReceived = bps(makerNotional, policy.rebates.makerBps);
+  const economicCashDelta = fixed(tradingCashDelta - feesPaid + rebatesReceived);
   return {
     botId: result.botId,
     versionId: result.versionId,
@@ -71,12 +116,21 @@ function actorRow(result, policy) {
     ledger,
     startingCash,
     tradingCashDelta,
-    finalCash: fixed(startingCash + tradingCashDelta),
+    makerNotional,
+    takerNotional,
+    makerFeesPaid,
+    takerFeesPaid,
+    feesPaid,
+    rebatesReceived,
+    economicCashDelta,
+    finalCash: fixed(startingCash + economicCashDelta),
     inventoryValue,
-    finalEquity: fixed(startingCash + tradingCashDelta + inventoryValue),
-    totalPnl,
+    finalEquity: fixed(startingCash + economicCashDelta + inventoryValue),
+    tradingPnl: totalPnl,
+    economicPnl: fixed(totalPnl - feesPaid + rebatesReceived),
     pnlConsistencyGap: fixed(totalPnl - tradingCashDelta - inventoryValue),
     pnlAvailable: pnl.available === true,
+    liquidityRoleComplete: Number(executions.fillCount ?? 0) === 0 || executions.liquidityRoleComplete === true,
     netQuantityByInstrument: sortedNumericRecord(result.tradingMetrics?.inventory?.netQuantityByInstrument ?? {}),
   };
 }
@@ -104,10 +158,21 @@ function summarizeLedger(actors, ledger) {
     actorCount: selected.length,
     startingCash: fixed(selected.reduce((sum, actor) => sum + actor.startingCash, 0)),
     tradingCashDelta: fixed(selected.reduce((sum, actor) => sum + actor.tradingCashDelta, 0)),
+    economicCashDelta: fixed(selected.reduce((sum, actor) => sum + actor.economicCashDelta, 0)),
+    feesPaid: fixed(selected.reduce((sum, actor) => sum + actor.feesPaid, 0)),
+    rebatesReceived: fixed(selected.reduce((sum, actor) => sum + actor.rebatesReceived, 0)),
     finalCash: fixed(selected.reduce((sum, actor) => sum + actor.finalCash, 0)),
     inventoryValue: fixed(selected.reduce((sum, actor) => sum + actor.inventoryValue, 0)),
     finalEquity: fixed(selected.reduce((sum, actor) => sum + actor.finalEquity, 0)),
   };
+}
+
+function declaredSinks(policy, actors) {
+  const takerFees = fixed(actors.reduce((sum, actor) => sum + actor.takerFeesPaid, 0));
+  return policy.sinks.filter((sink) => sink.enabled).map((sink) => ({
+    ...sink,
+    amount: sink.code === "taker_fees" ? takerFees : 0,
+  }));
 }
 
 function declaredSources(actors, policy) {
@@ -128,13 +193,20 @@ function declaredSources(actors, policy) {
 
 function nonzeroPolicyTerms(policy) {
   return [
-    ["fees.makerBps", policy.fees.makerBps],
-    ["fees.takerBps", policy.fees.takerBps],
     ["fees.cancelFee", policy.fees.cancelFee],
     ["fees.borrowBps", policy.fees.borrowBps],
     ["fees.liquidationPenaltyBps", policy.fees.liquidationPenaltyBps],
-    ["rebates.makerBps", policy.rebates.makerBps],
   ].filter(([, value]) => decimal(value) !== 0).map(([name]) => name);
+}
+
+function roleDependentPolicyEnabled(policy) {
+  return decimal(policy.fees.makerBps) !== 0
+    || decimal(policy.fees.takerBps) !== 0
+    || decimal(policy.rebates.makerBps) !== 0;
+}
+
+function bps(notional, rate) {
+  return fixed(notional * decimal(rate) / 10_000);
 }
 
 function sortedNumericRecord(value) {
@@ -148,5 +220,6 @@ function decimal(value) {
 }
 
 function fixed(value) {
-  return Number(Number(value).toFixed(8));
+  const rounded = Number(Number(value).toFixed(8));
+  return Object.is(rounded, -0) ? 0 : rounded;
 }

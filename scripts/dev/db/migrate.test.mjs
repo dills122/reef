@@ -62,6 +62,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0045_drop_legacy_runtime_event_indexes.sql",
       "runtime/0046_order_modified_lifecycle_index.sql",
       "runtime/0047_venue_event_batch_integrity.sql",
+      "runtime/0048_execution_liquidity_role.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -183,6 +184,16 @@ test("typed execution and trade migration adds native market facts", async () =>
   assert.match(migration.sql, /CREATE TRIGGER executions_set_typed_facts/);
   assert.match(migration.sql, /CREATE TRIGGER trades_set_typed_facts/);
   assert.match(migration.sql, /idx_trades_instrument_occurred_typed/);
+});
+
+test("execution liquidity-role migration preserves canonical maker/taker attribution", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0048_execution_liquidity_role.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS liquidity_role TEXT NOT NULL DEFAULT 'UNSPECIFIED'/);
+  assert.match(migration.sql, /CHECK \(liquidity_role IN \('UNSPECIFIED', 'MAKER', 'TAKER'\)\)/);
+  assert.match(migration.sql, /execution->>'liquidityRole'/);
 });
 
 test("typed order migration adds native order facts", async () => {

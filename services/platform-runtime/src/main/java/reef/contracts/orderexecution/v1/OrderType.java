@@ -97,7 +97,7 @@ public enum OrderType
   }
   public static com.google.protobuf.Descriptors.EnumDescriptor
       getDescriptor() {
-    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(1);
+    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(2);
   }
 
   private static final OrderType[] VALUES = values();

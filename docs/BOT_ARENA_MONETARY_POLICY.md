@@ -460,10 +460,12 @@ actor-profile, and risk-policy locks; result ingestion must match the scoring
 lock, and terminal score publication is immutable. The zero-fee baseline now
 emits deterministic competition/house cash, inventory, source/sink, and PnL
 reconciliation evidence and can be required as a run gate. Non-zero fees and
-rebates deliberately fail that gate until canonical maker/taker attribution is
-available. Remaining quote-quality fields in item 3, full actor-profile
-coverage in 6, non-zero policy accounting, and recorded fixed-seed proof in 8
-remain active; item 7 and roster-to-run binding are complete.
+rebates now reconcile against canonical maker/taker attribution, including
+venue fee receipts, maker rebate payments, and explicit house subsidy limits.
+Missing role coverage, role notional imbalance, and underfunded facilities fail
+closed. Remaining quote-quality fields in item 3, full actor-profile coverage
+in 6, and recorded fixed-seed proof for all three policies in 8 remain active;
+item 7 and roster-to-run binding are complete.
 
 1. Add static policy fixtures under `packages/scenario-definitions/arena/`.
 2. Add `ActorProfile` fixtures with strict parameter validation and resolved

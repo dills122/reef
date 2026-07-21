@@ -1235,9 +1235,9 @@ func (s *Service) match(rollback *BatchRollback, book *orderBook, incoming resti
 		matchedUnits := minInt64(incomingRecord.RemainingQuantity, restingRecord.RemainingQuantity)
 		executionPrice := restingRecord.LimitPrice
 		if side == domain.SideBuy {
-			s.appendMatch(result, incomingRecord, restingRecord, matchedUnits, executionPrice, occurredAt)
+			s.appendMatch(result, incomingRecord, restingRecord, incomingRecord.OrderID, matchedUnits, executionPrice, occurredAt)
 		} else {
-			s.appendMatch(result, restingRecord, incomingRecord, matchedUnits, executionPrice, occurredAt)
+			s.appendMatch(result, restingRecord, incomingRecord, incomingRecord.OrderID, matchedUnits, executionPrice, occurredAt)
 		}
 
 		incomingRecord.RemainingQuantity -= matchedUnits
@@ -1252,12 +1252,20 @@ func (s *Service) match(rollback *BatchRollback, book *orderBook, incoming resti
 	}
 }
 
-func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, matchedUnits int64, executionPrice int64, occurredAt string) {
+func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, incomingOrderID string, matchedUnits int64, executionPrice int64, occurredAt string) {
 	seq := strconv.Itoa(len(result.Trades) + 1)
 	executionID := "exec-" + buyOrder.OrderID + "-" + sellOrder.OrderID + "-" + seq
 	tradeID := "trade-" + buyOrder.OrderID + "-" + sellOrder.OrderID + "-" + seq
 	matchedUnitsStr := strconv.FormatInt(matchedUnits, 10)
 	executionPriceStr := strconv.FormatInt(executionPrice, 10)
+	buyLiquidityRole := "MAKER"
+	sellLiquidityRole := "MAKER"
+	if buyOrder.OrderID == incomingOrderID {
+		buyLiquidityRole = "TAKER"
+	}
+	if sellOrder.OrderID == incomingOrderID {
+		sellLiquidityRole = "TAKER"
+	}
 
 	result.Executions = append(result.Executions,
 		domain.ExecutionCreated{
@@ -1269,6 +1277,7 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 			ExecutionPrice: executionPriceStr,
 			Currency:       buyOrder.Currency,
 			OccurredAt:     occurredAt,
+			LiquidityRole:  buyLiquidityRole,
 		},
 		domain.ExecutionCreated{
 			EventID:        "evt-execution-" + executionID + "-sell",
@@ -1279,6 +1288,7 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 			ExecutionPrice: executionPriceStr,
 			Currency:       sellOrder.Currency,
 			OccurredAt:     occurredAt,
+			LiquidityRole:  sellLiquidityRole,
 		},
 	)
 

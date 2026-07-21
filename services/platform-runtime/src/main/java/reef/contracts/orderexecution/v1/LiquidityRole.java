@@ -6,23 +6,23 @@
 package reef.contracts.orderexecution.v1;
 
 /**
- * Protobuf enum {@code reef.contracts.orderexecution.v1.TimeInForce}
+ * Protobuf enum {@code reef.contracts.orderexecution.v1.LiquidityRole}
  */
 @com.google.protobuf.Generated
-public enum TimeInForce
+public enum LiquidityRole
     implements com.google.protobuf.ProtocolMessageEnum {
   /**
-   * <code>TIME_IN_FORCE_UNSPECIFIED = 0;</code>
+   * <code>LIQUIDITY_ROLE_UNSPECIFIED = 0;</code>
    */
-  TIME_IN_FORCE_UNSPECIFIED(0),
+  LIQUIDITY_ROLE_UNSPECIFIED(0),
   /**
-   * <code>TIME_IN_FORCE_DAY = 1;</code>
+   * <code>LIQUIDITY_ROLE_MAKER = 1;</code>
    */
-  TIME_IN_FORCE_DAY(1),
+  LIQUIDITY_ROLE_MAKER(1),
   /**
-   * <code>TIME_IN_FORCE_IOC = 2;</code>
+   * <code>LIQUIDITY_ROLE_TAKER = 2;</code>
    */
-  TIME_IN_FORCE_IOC(2),
+  LIQUIDITY_ROLE_TAKER(2),
   UNRECOGNIZED(-1),
   ;
 
@@ -33,20 +33,20 @@ public enum TimeInForce
       /* minor= */ 33,
       /* patch= */ 2,
       /* suffix= */ "",
-      "TimeInForce");
+      "LiquidityRole");
   }
   /**
-   * <code>TIME_IN_FORCE_UNSPECIFIED = 0;</code>
+   * <code>LIQUIDITY_ROLE_UNSPECIFIED = 0;</code>
    */
-  public static final int TIME_IN_FORCE_UNSPECIFIED_VALUE = 0;
+  public static final int LIQUIDITY_ROLE_UNSPECIFIED_VALUE = 0;
   /**
-   * <code>TIME_IN_FORCE_DAY = 1;</code>
+   * <code>LIQUIDITY_ROLE_MAKER = 1;</code>
    */
-  public static final int TIME_IN_FORCE_DAY_VALUE = 1;
+  public static final int LIQUIDITY_ROLE_MAKER_VALUE = 1;
   /**
-   * <code>TIME_IN_FORCE_IOC = 2;</code>
+   * <code>LIQUIDITY_ROLE_TAKER = 2;</code>
    */
-  public static final int TIME_IN_FORCE_IOC_VALUE = 2;
+  public static final int LIQUIDITY_ROLE_TAKER_VALUE = 2;
 
 
   public final int getNumber() {
@@ -63,7 +63,7 @@ public enum TimeInForce
    * @deprecated Use {@link #forNumber(int)} instead.
    */
   @java.lang.Deprecated
-  public static TimeInForce valueOf(int value) {
+  public static LiquidityRole valueOf(int value) {
     return forNumber(value);
   }
 
@@ -71,24 +71,24 @@ public enum TimeInForce
    * @param value The numeric wire value of the corresponding enum entry.
    * @return The enum associated with the given numeric wire value.
    */
-  public static TimeInForce forNumber(int value) {
+  public static LiquidityRole forNumber(int value) {
     switch (value) {
-      case 0: return TIME_IN_FORCE_UNSPECIFIED;
-      case 1: return TIME_IN_FORCE_DAY;
-      case 2: return TIME_IN_FORCE_IOC;
+      case 0: return LIQUIDITY_ROLE_UNSPECIFIED;
+      case 1: return LIQUIDITY_ROLE_MAKER;
+      case 2: return LIQUIDITY_ROLE_TAKER;
       default: return null;
     }
   }
 
-  public static com.google.protobuf.Internal.EnumLiteMap<TimeInForce>
+  public static com.google.protobuf.Internal.EnumLiteMap<LiquidityRole>
       internalGetValueMap() {
     return internalValueMap;
   }
   private static final com.google.protobuf.Internal.EnumLiteMap<
-      TimeInForce> internalValueMap =
-        new com.google.protobuf.Internal.EnumLiteMap<TimeInForce>() {
-          public TimeInForce findValueByNumber(int number) {
-            return TimeInForce.forNumber(number);
+      LiquidityRole> internalValueMap =
+        new com.google.protobuf.Internal.EnumLiteMap<LiquidityRole>() {
+          public LiquidityRole findValueByNumber(int number) {
+            return LiquidityRole.forNumber(number);
           }
         };
 
@@ -106,12 +106,12 @@ public enum TimeInForce
   }
   public static com.google.protobuf.Descriptors.EnumDescriptor
       getDescriptor() {
-    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(3);
+    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(0);
   }
 
-  private static final TimeInForce[] VALUES = values();
+  private static final LiquidityRole[] VALUES = values();
 
-  public static TimeInForce valueOf(
+  public static LiquidityRole valueOf(
       com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
     if (desc.getType() != getDescriptor()) {
       throw new java.lang.IllegalArgumentException(
@@ -125,10 +125,9 @@ public enum TimeInForce
 
   private final int value;
 
-  private TimeInForce(int value) {
+  private LiquidityRole(int value) {
     this.value = value;
   }
 
-  // @@protoc_insertion_point(enum_scope:reef.contracts.orderexecution.v1.TimeInForce)
+  // @@protoc_insertion_point(enum_scope:reef.contracts.orderexecution.v1.LiquidityRole)
 }
-

@@ -776,7 +776,8 @@ class PlatformApiTest {
                     quantityUnits = "40",
                     executionPrice = "150",
                     currency = "USD",
-                    occurredAt = "2026-03-14T18:00:03Z"
+                    occurredAt = "2026-03-14T18:00:03Z",
+                    liquidityRole = "MAKER"
                 ),
                 ExecutionCreated(
                     eventId = "evt-exec-msft",
@@ -809,6 +810,7 @@ class PlatformApiTest {
         assertContains(response, "\"fills\":[{\"executionId\":\"exec-mine\"")
         assertContains(response, "\"side\":\"BUY\"")
         assertContains(response, "\"quantityUnits\":\"40\"")
+        assertContains(response, "\"liquidityRole\":\"MAKER\"")
         assertContains(response, "\"limit\":1")
         assert(!response.contains("exec-msft")) { "instrument filter not applied" }
         assert(!response.contains("exec-other")) { "other participant's fill leaked" }

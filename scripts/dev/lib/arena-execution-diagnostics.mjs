@@ -45,6 +45,11 @@ export function summarizeExecutionDiagnostics(fills, markPrices = {}, options = 
   let filledQuantity = 0;
   let grossNotional = 0;
   let cash = 0;
+  let makerFillCount = 0;
+  let takerFillCount = 0;
+  let unspecifiedLiquidityRoleFillCount = 0;
+  let makerNotional = 0;
+  let takerNotional = 0;
 
   for (const fill of fills) {
     const instrumentId = typeof fill.instrumentId === "string" && fill.instrumentId.length > 0 ? fill.instrumentId : "unknown";
@@ -52,6 +57,9 @@ export function summarizeExecutionDiagnostics(fills, markPrices = {}, options = 
     const quantity = numberValue(fill.quantityUnits);
     const price = priceFromExecutionPrice(fill.executionPrice);
     const notional = price === undefined ? 0 : quantity * price;
+    const liquidityRole = fill.liquidityRole === "MAKER" || fill.liquidityRole === "TAKER"
+      ? fill.liquidityRole
+      : "UNSPECIFIED";
     const bucket = byInstrument[instrumentId] ?? createExecutionInstrumentBucket(instrumentId);
 
     fillCount += 1;
@@ -60,6 +68,15 @@ export function summarizeExecutionDiagnostics(fills, markPrices = {}, options = 
     bucket.fillCount += 1;
     bucket.filledQuantity += quantity;
     bucket.grossNotional += notional;
+    if (liquidityRole === "MAKER") {
+      makerFillCount += 1;
+      makerNotional += notional;
+    } else if (liquidityRole === "TAKER") {
+      takerFillCount += 1;
+      takerNotional += notional;
+    } else {
+      unspecifiedLiquidityRoleFillCount += 1;
+    }
 
     if (side === "BUY") {
       buyFillCount += 1;
@@ -117,6 +134,12 @@ export function summarizeExecutionDiagnostics(fills, markPrices = {}, options = 
       sellQuantity,
       grossNotional: fixed(grossNotional),
       avgFillPrice: filledQuantity === 0 ? null : fixed(grossNotional / filledQuantity),
+      makerFillCount,
+      takerFillCount,
+      unspecifiedLiquidityRoleFillCount,
+      makerNotional: fixed(makerNotional),
+      takerNotional: fixed(takerNotional),
+      liquidityRoleComplete: unspecifiedLiquidityRoleFillCount === 0,
       byInstrument: instrumentRows,
     },
     pnl: {

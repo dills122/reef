@@ -68,7 +68,8 @@ data class ExecutionCreated(
     val quantityUnits: String,
     val executionPrice: String,
     val currency: String,
-    val occurredAt: String
+    val occurredAt: String,
+    val liquidityRole: String = "UNSPECIFIED"
 )
 
 data class TradeCreated(
@@ -127,7 +128,8 @@ data class OwnExecutionView(
     val quantityUnits: String,
     val executionPrice: String,
     val currency: String,
-    val occurredAt: String
+    val occurredAt: String,
+    val liquidityRole: String = "UNSPECIFIED"
 )
 
 data class SubmitOrderResult(

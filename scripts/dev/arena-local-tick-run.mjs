@@ -76,6 +76,7 @@ const config = {
   warmupSeconds: numberOption("--warmup-seconds", 0),
   healthSampleIntervalMs: numberOption("--health-sample-interval-ms", 0),
   scoringPolicyVersion: stringOption("--scoring-policy-version", ""),
+  economicPolicyVersion: stringOption("--economic-policy-version", ""),
   admissionWindowId: stringOption("--admission-window-id", env("ARENA_ADMISSION_WINDOW_ID", "")),
   rosterSnapshotId: stringOption("--roster-snapshot-id", env("ARENA_ROSTER_SNAPSHOT_ID", "")),
   rosterSnapshotHash: stringOption("--roster-snapshot-hash", env("ARENA_ROSTER_SNAPSHOT_HASH", "")),
@@ -138,6 +139,18 @@ if (config.scoringPolicyVersion.length > 0) {
   }
   mode.scoringPolicyVersion = config.scoringPolicyVersion;
   mode.scoringPolicyPath = `packages/scenario-definitions/arena/scoring/${config.scoringPolicyVersion}.json`;
+}
+if (config.economicPolicyVersion.length > 0) {
+  const supportedEconomicPolicies = new Set([
+    "preview-zero-fee-v1",
+    "preview-balanced-fee-v1",
+    "preview-liquidity-subsidy-v1",
+  ]);
+  if (!supportedEconomicPolicies.has(config.economicPolicyVersion)) {
+    throw new Error(`unsupported --economic-policy-version=${config.economicPolicyVersion}`);
+  }
+  mode.economicPolicyVersion = config.economicPolicyVersion;
+  mode.economicPolicyPath = `packages/scenario-definitions/arena/economics/${config.economicPolicyVersion}.json`;
 }
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};

@@ -111,6 +111,7 @@ const server = http.createServer(async (req, res) => {
         orderId: "order-mm-simple-1",
         instrumentId: "AAPL",
         side: "BUY",
+        liquidityRole: "MAKER",
         quantityUnits: "1",
         executionPrice: "100000000000",
         occurredAt: "2026-07-04T14:30:00.000Z",
@@ -206,6 +207,8 @@ try {
   assert.equal(report.executionSummary.fillCount, 1);
   const simpleMarketMaker = report.botResults.find((result) => result.botId === "builtin-mm-simple");
   assert.equal(simpleMarketMaker?.tradingMetrics.executions.fillCount, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.executions.makerFillCount, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.executions.liquidityRoleComplete, true);
   assert.equal(simpleMarketMaker?.tradingMetrics.inventory.netQuantityByInstrument.AAPL, 1);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.cash, -100);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.inventoryValue, 100.5);

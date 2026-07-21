@@ -119,6 +119,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals(1, executions.size)
         assertEquals("exec-$suffix", executions.single().executionId)
         assertEquals("150250000000", executions.single().executionPrice)
+        assertEquals("MAKER", executions.single().liquidityRole)
 
         val trades = persistence.tradesForOrder("match-order-$suffix")
         assertEquals(1, trades.size)
@@ -152,7 +153,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
                     resultPayloadJson = """
                         {
                           "accepted":{"eventId":"match-event-$suffix","engineOrderId":"match-engine-order-$suffix","occurredAt":"2026-07-04T18:02:00Z"},
-                          "executions":[{"eventId":"exec-evt-$suffix","executionId":"exec-$suffix","orderId":"match-order-$suffix","instrumentId":"AAPL","quantityUnits":"100","executionPrice":"150250000000","currency":"USD","occurredAt":"2026-07-04T18:02:00Z"}],
+                          "executions":[{"eventId":"exec-evt-$suffix","executionId":"exec-$suffix","orderId":"match-order-$suffix","instrumentId":"AAPL","quantityUnits":"100","executionPrice":"150250000000","currency":"USD","occurredAt":"2026-07-04T18:02:00Z","liquidityRole":"MAKER"}],
                           "trades":[{"eventId":"trade-evt-$suffix","tradeId":"trade-$suffix","executionId":"exec-$suffix","buyOrderId":"match-order-$suffix","sellOrderId":"resting-order-$suffix","instrumentId":"AAPL","quantityUnits":"100","price":"150250000000","currency":"USD","occurredAt":"2026-07-04T18:02:00Z"}]
                         }
                     """.trimIndent()

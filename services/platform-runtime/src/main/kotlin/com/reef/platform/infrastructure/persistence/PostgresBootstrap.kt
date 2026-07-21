@@ -129,6 +129,7 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(executions, "event_id_uuid", "uuid"),
                 PostgresSchemaColumn(executions, "quantity_units_num", "numeric"),
                 PostgresSchemaColumn(executions, "execution_price_num", "numeric"),
+                PostgresSchemaColumn(executions, "liquidity_role", "text"),
                 PostgresSchemaColumn(executions, "occurred_at", "text"),
                 PostgresSchemaColumn(executions, "occurred_at_ts", "timestamp with time zone"),
                 PostgresSchemaColumn(trades, "event_id", "text"),

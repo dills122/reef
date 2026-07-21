@@ -317,6 +317,7 @@ class PostgresRuntimePersistence(
                       execution_price TEXT NOT NULL,
                       currency TEXT NOT NULL,
                       occurred_at TEXT NOT NULL,
+                      liquidity_role TEXT NOT NULL DEFAULT 'UNSPECIFIED',
                       event_id_uuid UUID,
                       quantity_units_num NUMERIC,
                       execution_price_num NUMERIC,
@@ -330,7 +331,8 @@ class PostgresRuntimePersistence(
                     ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
                     ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC,
                     ADD COLUMN IF NOT EXISTS execution_price_num NUMERIC,
-                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ,
+                    ADD COLUMN IF NOT EXISTS liquidity_role TEXT NOT NULL DEFAULT 'UNSPECIFIED'
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -4218,8 +4220,8 @@ class PostgresRuntimePersistence(
         projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO NOTHING
                 """.trimIndent()
             ).use { ps ->
@@ -4232,6 +4234,7 @@ class PostgresRuntimePersistence(
                     ps.setString(6, execution.executionPrice)
                     ps.setString(7, execution.currency)
                     ps.setString(8, execution.occurredAt)
+                    ps.setString(9, execution.liquidityRole)
                     ps.addBatch()
                 }
                 ps.executeBatch()
@@ -4554,7 +4557,7 @@ class PostgresRuntimePersistence(
         }
         return projectionQueryList(
             """
-            SELECT e.execution_id, e.order_id, e.instrument_id, o.side, e.quantity_units, e.execution_price, e.currency, e.occurred_at
+            SELECT e.execution_id, e.order_id, e.instrument_id, o.side, e.quantity_units, e.execution_price, e.currency, e.occurred_at, e.liquidity_role
             FROM ${names.executions} e
             JOIN ${names.orders} o ON o.order_id = e.order_id
             WHERE o.participant_id = ?
@@ -4572,13 +4575,14 @@ class PostgresRuntimePersistence(
                 quantityUnits = getString("quantity_units"),
                 executionPrice = getString("execution_price"),
                 currency = getString("currency"),
-                occurredAt = getString("occurred_at")
+                occurredAt = getString("occurred_at"),
+                liquidityRole = getString("liquidity_role")
             )
         }
     }
 
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> = projectionQueryList(
-        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id",
+        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id",
         orderId
     ) {
         ExecutionCreated(
@@ -4589,7 +4593,8 @@ class PostgresRuntimePersistence(
             quantityUnits = getString("quantity_units"),
             executionPrice = getString("execution_price"),
             currency = getString("currency"),
-            occurredAt = getString("occurred_at")
+            occurredAt = getString("occurred_at"),
+            liquidityRole = getString("liquidity_role")
         )
     }
 
@@ -5003,7 +5008,8 @@ class PostgresRuntimePersistence(
                 quantityUnits = execution.string("quantityUnits"),
                 executionPrice = execution.string("executionPrice"),
                 currency = execution.string("currency"),
-                occurredAt = execution.string("occurredAt")
+                occurredAt = execution.string("occurredAt"),
+                liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" }
             )
         }
     }

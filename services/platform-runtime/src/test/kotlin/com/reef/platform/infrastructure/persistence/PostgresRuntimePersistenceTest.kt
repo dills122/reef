@@ -121,7 +121,8 @@ class PostgresRuntimePersistenceTest {
                     quantityUnits = "100",
                     executionPrice = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-07-07T00:00:00Z"
+                    occurredAt = "2026-07-07T00:00:00Z",
+                    liquidityRole = "TAKER"
                 )
             )
         )
@@ -170,7 +171,7 @@ class PostgresRuntimePersistenceTest {
         assertEquals(true, validation.accountBelongsToParticipant)
 
         assertNotNull(persistence.acceptedOrder(orderId))
-        assertEquals(1, persistence.executionsForOrder(orderId).size)
+        assertEquals("TAKER", persistence.executionsForOrder(orderId).single().liquidityRole)
         assertEquals(1, persistence.tradesForOrder(orderId).size)
         assertEquals(1, persistence.eventsForOrder(orderId).size)
         assertEquals(1, persistence.eventsForTrace(traceId).size)

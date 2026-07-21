@@ -23,6 +23,7 @@ import reef.contracts.orderexecution.v1.SubmitOrder
 import reef.contracts.orderexecution.v1.SubmitOrderResult
 import reef.contracts.orderexecution.v1.TradeCreated
 import reef.contracts.orderexecution.v1.ExecutionCreated
+import reef.contracts.orderexecution.v1.LiquidityRole
 
 class EngineTransportParityTest {
     @Test
@@ -48,7 +49,8 @@ class EngineTransportParityTest {
                       "quantityUnits":"100",
                       "executionPrice":"150250000000",
                       "currency":"USD",
-                      "occurredAt":"2026-03-14T18:00:00Z"
+                      "occurredAt":"2026-03-14T18:00:00Z",
+                      "liquidityRole":"TAKER"
                     }
                   ],
                   "trades":[
@@ -99,6 +101,7 @@ class EngineTransportParityTest {
                                         .setQuantity(OrderQuantity.newBuilder().setUnits("100").build())
                                         .setExecutionPrice(Price.newBuilder().setNanos("150250000000").setCurrency("USD").build())
                                         .setOccurredAt("2026-03-14T18:00:00Z")
+                                        .setLiquidityRole(LiquidityRole.LIQUIDITY_ROLE_TAKER)
                                         .build()
                                 )
                                 .addTrades(
