@@ -13,6 +13,7 @@ import com.reef.arena.controlplane.arena.ArenaRunBotResult
 import com.reef.arena.controlplane.arena.ArenaRunBotVersionRef
 import com.reef.arena.controlplane.arena.ArenaRunEnforcementEvent
 import com.reef.arena.controlplane.arena.ArenaRunRecord
+import com.reef.arena.controlplane.arena.ArenaRunAdmissionStore
 import com.reef.arena.controlplane.arena.ArenaRunStatus
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.RegisterArenaBotCommand
@@ -40,13 +41,14 @@ private object ArenaPermission {
 data class ArenaBotVersionDecisionCommand(val botId: String, val versionId: String, val status: ArenaBotVersionStatus, val reason: String)
 data class ArenaBotRegistrationCommand(val botId: String, val fileName: String, val name: String, val publisher: String, val email: String, val description: String = "", val version: String = "")
 data class ArenaBotVersionRegistrationCommand(val botId: String, val versionId: String, val sourceHash: String, val artifactHash: String, val sdkVersion: String, val apiVersion: String, val dependencyManifestHash: String)
-data class ArenaRunRegistrationCommand(val runId: String, val modeId: String, val scenarioId: String, val seed: Long, val policyVersion: String, val policyEnvelopeHash: String, val scoringPolicyVersion: String, val scoringPolicyHash: String, val economicPolicyVersion: String, val economicPolicyHash: String, val botVersions: List<ArenaRunBotVersionRef>)
+data class ArenaRunRegistrationCommand(val runId: String, val modeId: String, val scenarioId: String, val seed: Long, val policyVersion: String, val admissionWindowId: String, val rosterSnapshotId: String, val rosterSnapshotHash: String, val seedSetHash: String, val actorProfileVersion: String, val actorProfileHash: String, val riskPolicyHash: String, val policyEnvelopeHash: String, val scoringPolicyVersion: String, val scoringPolicyHash: String, val economicPolicyVersion: String, val economicPolicyHash: String, val botVersions: List<ArenaRunBotVersionRef>)
 data class ArenaRunStatusCommand(val runId: String, val status: ArenaRunStatus)
 data class ArenaRunBotResultIngestionCommand(val runId: String, val botId: String, val versionId: String, val scoringPolicyVersion: String, val scoringPolicyHash: String, val policyEnvelopeHash: String, val finalEquity: Long, val realizedPnl: Long, val maxDrawdown: Long, val actionsProposed: Int, val orderActionsProposed: Int, val dataCalls: Int, val signalsGenerated: Int, val disqualified: Boolean, val scoreEligible: Boolean = true, val publicLeaderboard: Boolean = true)
 data class ArenaRunEnforcementEventIngestionCommand(val runId: String, val botId: String, val versionId: String, val decision: String, val reasonCode: String, val reason: String, val policyVersion: String, val countersJson: String)
 
 class ArenaAdminApplicationService(
     private val arenaRegistryStore: ArenaBotRegistryStore,
+    private val arenaRunAdmissionStore: ArenaRunAdmissionStore? = null,
     private val accountRiskControlStore: AccountRiskControlStore? = null,
     private val adminIdentityService: AdminIdentityService? = null,
     private val now: () -> Instant = { Instant.now() }
@@ -75,9 +77,16 @@ class ArenaAdminApplicationService(
     fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> = authorized(actor) { arenaRegistryStore.operatorDecisions(botId, versionId) }
 
     fun registerArenaRun(actor: AdminActor, command: ArenaRunRegistrationCommand): ArenaRunRecord = authorized(actor) {
-        controlPlane().registerRun(RegisterArenaRunCommand(command.runId, command.modeId, command.scenarioId, command.seed, command.policyVersion, command.policyEnvelopeHash, command.scoringPolicyVersion, command.scoringPolicyHash, command.economicPolicyVersion, command.economicPolicyHash, command.botVersions))
+        verifyRosterBinding(command, requireScheduledStart = false)
+        controlPlane().registerRun(RegisterArenaRunCommand(command.runId, command.modeId, command.scenarioId, command.seed, command.policyVersion, command.admissionWindowId, command.rosterSnapshotId, command.rosterSnapshotHash, command.seedSetHash, command.actorProfileVersion, command.actorProfileHash, command.riskPolicyHash, command.policyEnvelopeHash, command.scoringPolicyVersion, command.scoringPolicyHash, command.economicPolicyVersion, command.economicPolicyHash, command.botVersions))
     }
-    fun updateArenaRunStatus(actor: AdminActor, command: ArenaRunStatusCommand): ArenaRunRecord = authorized(actor) { controlPlane().updateRunStatus(command.runId, command.status) }
+    fun updateArenaRunStatus(actor: AdminActor, command: ArenaRunStatusCommand): ArenaRunRecord = authorized(actor) {
+        if (command.status == ArenaRunStatus.Running) {
+            val run = requireNotNull(arenaRegistryStore.runRecord(command.runId)) { "unknown arena run: ${command.runId}" }
+            verifyRosterBinding(run, requireScheduledStart = true)
+        }
+        controlPlane().updateRunStatus(command.runId, command.status)
+    }
     fun arenaRun(actor: AdminActor, runId: String): ArenaRunRecord? = authorized(actor) { arenaRegistryStore.runRecord(runId) }
     fun arenaRuns(actor: AdminActor, limit: Int): List<ArenaRunRecord> = authorized(actor) { arenaRegistryStore.runs(limit) }
     fun arenaRunBotResults(actor: AdminActor, runId: String): List<ArenaRunBotResult> = authorized(actor) { controlPlane().runBotResults(runId) }
@@ -94,6 +103,94 @@ class ArenaAdminApplicationService(
     fun arenaLeaderboardPublic(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry> = arenaRegistryStore.leaderboard(modeId, scoringPolicyVersion, limit)
 
     private fun controlPlane() = ArenaControlPlaneService(arenaRegistryStore, now)
+    private fun verifyRosterBinding(command: ArenaRunRegistrationCommand, requireScheduledStart: Boolean) {
+        verifyRosterBinding(
+            command.admissionWindowId, command.rosterSnapshotId, command.rosterSnapshotHash,
+            command.modeId, command.scenarioId, command.seedSetHash,
+            command.actorProfileVersion, command.actorProfileHash,
+            command.policyVersion, command.riskPolicyHash,
+            command.scoringPolicyVersion, command.scoringPolicyHash,
+            command.economicPolicyVersion, command.economicPolicyHash,
+            command.botVersions,
+            requireScheduledStart
+        )
+    }
+    private fun verifyRosterBinding(run: ArenaRunRecord, requireScheduledStart: Boolean) {
+        verifyRosterBinding(
+            run.admissionWindowId, run.rosterSnapshotId, run.rosterSnapshotHash,
+            run.modeId, run.scenarioId, run.seedSetHash,
+            run.actorProfileVersion, run.actorProfileHash,
+            run.policyVersion, run.riskPolicyHash,
+            run.scoringPolicyVersion, run.scoringPolicyHash,
+            run.economicPolicyVersion, run.economicPolicyHash,
+            run.botVersions,
+            requireScheduledStart
+        )
+    }
+    private fun verifyRosterBinding(
+        windowId: String,
+        snapshotId: String,
+        snapshotHash: String,
+        modeId: String,
+        scenarioId: String,
+        seedSetHash: String,
+        actorProfileVersion: String,
+        actorProfileHash: String,
+        riskPolicyVersion: String,
+        riskPolicyHash: String,
+        scoringPolicyVersion: String,
+        scoringPolicyHash: String,
+        economicPolicyVersion: String,
+        economicPolicyHash: String,
+        botVersions: List<ArenaRunBotVersionRef>,
+        requireScheduledStart: Boolean
+    ) {
+        val admissionStore = requireNotNull(arenaRunAdmissionStore) { "arena run admission store is required" }
+        val window = requireNotNull(admissionStore.window(windowId)) { "unknown admission window: $windowId" }
+        val verifiedAt = now()
+        if (requireScheduledStart) {
+            require(!verifiedAt.isBefore(window.scheduledStart)) {
+                "arena run cannot start before the admission window scheduledStart"
+            }
+        } else {
+            require(!verifiedAt.isBefore(window.runInstantiationAt)) {
+                "arena run cannot be registered before the admission window runInstantiationAt"
+            }
+        }
+        val roster = requireNotNull(admissionStore.roster(windowId)) { "locked roster is required for admission window: $windowId" }
+        require(roster.snapshotId == snapshotId && roster.snapshotHash == snapshotHash) {
+            "run roster identity does not match the locked snapshot"
+        }
+        val policy = roster.policy
+        require(policy.modeId == modeId && policy.scenarioId == scenarioId && policy.seedSetHash == seedSetHash) {
+            "run mode, scenario, or seed set does not match the locked roster"
+        }
+        require(policy.actorProfileVersion == actorProfileVersion && policy.actorProfileHash == actorProfileHash) {
+            "run actor profile policy does not match the locked roster"
+        }
+        require(policy.riskPolicyVersion == riskPolicyVersion && policy.riskPolicyHash == riskPolicyHash) {
+            "run risk policy does not match the locked roster"
+        }
+        require(policy.scoringPolicyVersion == scoringPolicyVersion && policy.scoringPolicyHash == scoringPolicyHash) {
+            "run scoring policy does not match the locked roster"
+        }
+        require(policy.economicPolicyVersion == economicPolicyVersion && policy.economicPolicyHash == economicPolicyHash) {
+            "run economic policy does not match the locked roster"
+        }
+        val removed = admissionStore.removals(windowId).map { it.botId to it.versionId }.toSet()
+        val expectedEntries = roster.entries.filter { (it.botId to it.versionId) !in removed }
+        require(botVersions == expectedEntries.map { ArenaRunBotVersionRef(it.botId, it.versionId) }) {
+            "run bot composition does not match the active locked roster"
+        }
+        expectedEntries.forEach { entry ->
+            val version = requireNotNull(arenaRegistryStore.version(entry.botId, entry.versionId)) {
+                "locked roster bot version is not registered: ${entry.botId}/${entry.versionId}"
+            }
+            require(version.sourceHash == entry.sourceHash && version.artifactHash == entry.artifactHash) {
+                "registered bot artifact does not match the locked roster: ${entry.botId}/${entry.versionId}"
+            }
+        }
+    }
     private inline fun <T> authorized(actor: AdminActor, block: () -> T): T { requirePermission(actor); return block() }
     private fun requirePermission(actor: AdminActor) {
         if (!actor.actorId.startsWith("user-gh-")) return

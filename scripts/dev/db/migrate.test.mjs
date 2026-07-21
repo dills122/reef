@@ -385,6 +385,7 @@ test("routes arena migrations only to arena database target", async () => {
       "arena/0007_arena_submission_admissions.sql",
       "arena/0008_arena_admission_windows_and_rosters.sql",
       "arena/0009_arena_run_policy_locks.sql",
+      "arena/0010_arena_run_roster_binding.sql",
     ],
   );
 });

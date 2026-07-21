@@ -126,6 +126,7 @@ test-bot-sdk:
 	bun scripts/dev/arena-execution-diagnostics.test.mjs
 	bun scripts/dev/arena-policy-resolver.test.mjs
 	bun scripts/dev/arena-score-breakdown.test.mjs
+	bun scripts/dev/arena-economic-reconciliation.test.mjs
 	bun scripts/dev/arena-actor-profile-behavior.test.mjs
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
 	bun scripts/dev/arena-runner-isolation-failure.test.mjs
@@ -349,7 +350,7 @@ dev-smoke-bot-arena-local:
 
 dev-smoke-bot-arena-local-persist:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --seed-reference --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json) $(ARGS)
+	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --seed-reference --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --require-roster-binding --require-economic-reconciliation --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json) $(ARGS)
 	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.mjs --report=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json) --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json)
 
 dev-smoke-bot-arena-local-negative:

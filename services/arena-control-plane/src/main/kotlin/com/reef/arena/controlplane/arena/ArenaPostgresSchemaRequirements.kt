@@ -93,6 +93,8 @@ object ArenaPostgresSchemaRequirements {
                 PostgresSchemaColumn(reportsTable, "report_id", "text"), PostgresSchemaColumn(reportsTable, "policy_version", "text"), PostgresSchemaColumn(reportIssuesTable, "issue", "text"),
                 PostgresSchemaColumn(decisionsTable, "actor_id", "text"), PostgresSchemaColumn(decisionsTable, "to_status", "text"),
                 PostgresSchemaColumn(runsTable, "run_id", "text"), PostgresSchemaColumn(runsTable, "seed", "bigint"), PostgresSchemaColumn(runsTable, "policy_version", "text"),
+                PostgresSchemaColumn(runsTable, "admission_window_id", "text"), PostgresSchemaColumn(runsTable, "roster_snapshot_id", "text"), PostgresSchemaColumn(runsTable, "roster_snapshot_hash", "text"),
+                PostgresSchemaColumn(runsTable, "seed_set_hash", "text"), PostgresSchemaColumn(runsTable, "actor_profile_version", "text"), PostgresSchemaColumn(runsTable, "actor_profile_hash", "text"), PostgresSchemaColumn(runsTable, "risk_policy_hash", "text"),
                 PostgresSchemaColumn(runsTable, "policy_envelope_hash", "text"), PostgresSchemaColumn(runsTable, "scoring_policy_version", "text"), PostgresSchemaColumn(runsTable, "scoring_policy_hash", "text"),
                 PostgresSchemaColumn(runsTable, "economic_policy_version", "text"), PostgresSchemaColumn(runsTable, "economic_policy_hash", "text"),
                 PostgresSchemaColumn(runBotsTable, "bot_order", "integer"),

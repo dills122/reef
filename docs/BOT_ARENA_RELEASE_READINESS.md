@@ -124,7 +124,8 @@ codes, emergency-removal rules, and evidence envelope.
 - fork-safe pending, approval, trusted provisioning, and denial paths are drilled
 - fork-based add, update, and remove lifecycle is drilled with an external test account
 - owner config write and run eligibility are verified with a participant role
-- the `T-72h`/`T-48h`/`T-24h` admission and roster-lock policy is persisted and tested
+- the implemented and locally tested `T-72h`/`T-48h`/`T-24h` admission,
+  roster-lock, and `T-30m`/`T0` run-binding policy has fresh hosted evidence
 - one labelled preview run appears on the public leaderboard
 - hosted backup/restore and operator quarantine/recovery runbooks are current
 - public copy says limited preview and simulated, not real-money trading

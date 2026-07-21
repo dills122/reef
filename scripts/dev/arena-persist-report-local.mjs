@@ -18,6 +18,12 @@ if (!reportPath) {
 
 const report = JSON.parse(readFileSync(reportPath, "utf8"));
 const mode = report.mode ?? {};
+const rosterBinding = report.rosterBinding ?? {};
+for (const field of ["admissionWindowId", "rosterSnapshotId", "rosterSnapshotHash"]) {
+  if (typeof rosterBinding[field] !== "string" || rosterBinding[field].length === 0) {
+    throw new Error(`report.rosterBinding.${field} is required`);
+  }
+}
 const correlationId = `${report.runId}-local-persist`;
 const botById = new Map((report.sessionReports ?? []).map((session) => [session.bot?.botId, session.bot]).filter(([botId]) => botId));
 const botVersions = (report.botResults ?? []).map((result) => ({ botId: result.botId, versionId: result.versionId }));
@@ -67,6 +73,13 @@ operations.push(request("POST", "/admin/v1/arena/runs", {
   scenarioId: mode.scenarioId ?? `${mode.modeId}-scenario`,
   seed: Number(mode.seed ?? 0),
   policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
+  admissionWindowId: rosterBinding.admissionWindowId,
+  rosterSnapshotId: rosterBinding.rosterSnapshotId,
+  rosterSnapshotHash: rosterBinding.rosterSnapshotHash,
+  seedSetHash: mode.seedSetHash ?? report.policyEnvelope?.seedSetHash,
+  actorProfileVersion: mode.actorProfileCatalogVersion,
+  actorProfileHash: mode.actorProfileCatalogHash,
+  riskPolicyHash: mode.riskPolicyHash ?? report.policyEnvelope?.riskPolicyHash,
   policyEnvelopeHash: report.policyEnvelopeHash,
   scoringPolicyVersion: mode.scoringPolicyVersion,
   scoringPolicyHash: mode.scoringPolicyHash ?? report.policyEnvelope?.scoringPolicyHash,

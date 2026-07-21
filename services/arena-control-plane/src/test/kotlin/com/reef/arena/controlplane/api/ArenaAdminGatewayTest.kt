@@ -6,7 +6,13 @@ import com.reef.arena.controlplane.arena.ArenaBot
 import com.reef.arena.controlplane.arena.ArenaBotMetadata
 import com.reef.arena.controlplane.arena.ArenaBotVersionStatus
 import com.reef.arena.controlplane.arena.ArenaControlPlaneService
+import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
+import com.reef.arena.controlplane.arena.ArenaEligibilityOutcome
 import com.reef.arena.controlplane.arena.ArenaQualificationStatus
+import com.reef.arena.controlplane.arena.ArenaRosterCandidate
+import com.reef.arena.controlplane.arena.ArenaRosterLocker
+import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaRunEligibilityDecision
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigProvider
 import com.reef.arena.controlplane.arena.InMemoryArenaBotEntitlementStore
@@ -36,6 +42,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private const val ZERO_HASH = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 class ArenaAdminGatewayTest {
     @Test
@@ -333,7 +341,7 @@ class ArenaAdminGatewayTest {
     @Test
     fun recordsRunLifecycleAndServesAdminAndPublicLeaderboards() {
         val registry = InMemoryArenaBotRegistryStore()
-        val now = Instant.parse("2026-07-18T00:00:00Z")
+        val now = Instant.parse("2026-08-10T00:00:00Z")
         val controlPlane = ArenaControlPlaneService(registry) { now }
         controlPlane.registerBot(
             RegisterArenaBotCommand(
@@ -360,8 +368,28 @@ class ArenaAdminGatewayTest {
         ).forEach { status ->
             controlPlane.transitionVersion("bot-1", "v1", status, "admin-cli", status.name, "gateway-test")
         }
+        val admissionStore = InMemoryArenaRunAdmissionStore()
+        val window = ArenaAdmissionWindowPolicy("invite-v1").schedule(
+            "window-1", now, "UTC", Instant.parse("2026-07-18T00:00:00Z")
+        )
+        admissionStore.createWindow(window)
+        val decision = ArenaRunEligibilityDecision(
+            "evaluation-1", window.windowId, "bot-1", "v1", ArenaEligibilityOutcome.EligibleForRoster,
+            emptyList(), "sha256:source", "sha256:artifact", "sha256:config", window.rosterLockAt,
+            "gateway-test"
+        )
+        admissionStore.recordDecision(decision)
+        val policy = ArenaRosterPolicySnapshot(
+            "hosted-sim", "scenario-1", ZERO_HASH, "actors-v1", ZERO_HASH,
+            "policy-v1", ZERO_HASH, "score-v2", ZERO_HASH, "preview-zero-fee-v1", ZERO_HASH
+        )
+        val roster = ArenaRosterLocker().lock(
+            "roster-1", window, policy, listOf(ArenaRosterCandidate(decision, 10)), 1,
+            window.rosterLockAt, "admin-cli", "gateway-test"
+        ).snapshot
+        admissionStore.lockRoster(roster)
         val gateway = ArenaAdminGateway(
-            arenaAdminService = ArenaAdminApplicationService(registry, now = { now }),
+            arenaAdminService = ArenaAdminApplicationService(registry, admissionStore, now = { now }),
             adminIdentityService = null,
             analyticsRunExportService = null
         )
@@ -371,7 +399,7 @@ class ArenaAdminGatewayTest {
             "POST",
             "/internal/admin/arena/runs",
             null,
-            """{"runId":"run-1","modeId":"hosted-sim","scenarioId":"scenario-1","seed":42,"policyVersion":"policy-v1","policyEnvelopeHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","scoringPolicyVersion":"score-v2","scoringPolicyHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","economicPolicyVersion":"preview-zero-fee-v1","economicPolicyHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","botVersions":[{"botId":"bot-1","versionId":"v1"}]}""",
+            """{"runId":"run-1","modeId":"hosted-sim","scenarioId":"scenario-1","seed":42,"policyVersion":"policy-v1","admissionWindowId":"window-1","rosterSnapshotId":"roster-1","rosterSnapshotHash":"${roster.snapshotHash}","seedSetHash":"$ZERO_HASH","actorProfileVersion":"actors-v1","actorProfileHash":"$ZERO_HASH","riskPolicyHash":"$ZERO_HASH","policyEnvelopeHash":"$ZERO_HASH","scoringPolicyVersion":"score-v2","scoringPolicyHash":"$ZERO_HASH","economicPolicyVersion":"preview-zero-fee-v1","economicPolicyHash":"$ZERO_HASH","botVersions":[{"botId":"bot-1","versionId":"v1"}]}""",
             principal
         )
         val running = gateway.handleInternal(

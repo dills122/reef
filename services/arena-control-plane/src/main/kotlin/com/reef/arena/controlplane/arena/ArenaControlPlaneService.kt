@@ -78,6 +78,13 @@ data class ArenaRunRecord(
     val scenarioId: String,
     val seed: Long,
     val policyVersion: String,
+    val admissionWindowId: String,
+    val rosterSnapshotId: String,
+    val rosterSnapshotHash: String,
+    val seedSetHash: String,
+    val actorProfileVersion: String,
+    val actorProfileHash: String,
+    val riskPolicyHash: String,
     val policyEnvelopeHash: String,
     val scoringPolicyVersion: String,
     val scoringPolicyHash: String,
@@ -179,6 +186,13 @@ data class RegisterArenaRunCommand(
     val scenarioId: String,
     val seed: Long,
     val policyVersion: String,
+    val admissionWindowId: String,
+    val rosterSnapshotId: String,
+    val rosterSnapshotHash: String,
+    val seedSetHash: String,
+    val actorProfileVersion: String,
+    val actorProfileHash: String,
+    val riskPolicyHash: String,
     val policyEnvelopeHash: String,
     val scoringPolicyVersion: String,
     val scoringPolicyHash: String,
@@ -349,6 +363,13 @@ class ArenaControlPlaneService(
         require(command.modeId.isNotBlank()) { "modeId is required" }
         require(command.scenarioId.isNotBlank()) { "scenarioId is required" }
         require(command.policyVersion.isNotBlank()) { "policyVersion is required" }
+        require(command.admissionWindowId.isNotBlank()) { "admissionWindowId is required" }
+        require(command.rosterSnapshotId.isNotBlank()) { "rosterSnapshotId is required" }
+        requirePolicyHash(command.rosterSnapshotHash, "rosterSnapshotHash")
+        requirePolicyHash(command.seedSetHash, "seedSetHash")
+        require(command.actorProfileVersion.isNotBlank()) { "actorProfileVersion is required" }
+        requirePolicyHash(command.actorProfileHash, "actorProfileHash")
+        requirePolicyHash(command.riskPolicyHash, "riskPolicyHash")
         requirePolicyHash(command.policyEnvelopeHash, "policyEnvelopeHash")
         require(command.scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
         requirePolicyHash(command.scoringPolicyHash, "scoringPolicyHash")
@@ -368,6 +389,13 @@ class ArenaControlPlaneService(
             scenarioId = command.scenarioId,
             seed = command.seed,
             policyVersion = command.policyVersion,
+            admissionWindowId = command.admissionWindowId,
+            rosterSnapshotId = command.rosterSnapshotId,
+            rosterSnapshotHash = command.rosterSnapshotHash,
+            seedSetHash = command.seedSetHash,
+            actorProfileVersion = command.actorProfileVersion,
+            actorProfileHash = command.actorProfileHash,
+            riskPolicyHash = command.riskPolicyHash,
             policyEnvelopeHash = command.policyEnvelopeHash,
             scoringPolicyVersion = command.scoringPolicyVersion,
             scoringPolicyHash = command.scoringPolicyHash,

@@ -158,6 +158,9 @@ try {
     `--arena-admin-url=${baseUrl}`,
     "--seed-reference",
     "--persist-results",
+    "--admission-window-id=window-live-test",
+    "--roster-snapshot-id=roster-live-test",
+    "--roster-snapshot-hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "--command-wait-mode=accepted",
     "--require-projection-drain",
     "--skip-projector-preflight",
@@ -177,8 +180,15 @@ try {
   assert.equal(arena.bots.get("builtin-mm-simple").name, "Blue Saber Trading");
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
+  const persistedRun = arena.runs.values().next().value;
+  assert.equal(persistedRun.admissionWindowId, "window-live-test");
+  assert.equal(persistedRun.rosterSnapshotId, "roster-live-test");
+  assert.equal(persistedRun.rosterSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(arena.results.length, 5);
   const report = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-live-test.json", "utf8"));
+  assert.equal(persistedRun.seedSetHash, report.mode.seedSetHash);
+  assert.equal(persistedRun.actorProfileHash, report.mode.actorProfileCatalogHash);
+  assert.equal(persistedRun.riskPolicyHash, report.mode.riskPolicyHash);
   assert.equal(report.runPlan.tickCount, 3);
   assert.equal(report.runPlan.durationSeconds, 1.5);
   assert.equal(report.runPlan.schedulingMode, "shared-arena-time");

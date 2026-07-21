@@ -971,6 +971,13 @@ class ArenaControlPlaneServiceTest {
             scenarioId = scenarioId,
             seed = seed,
             policyVersion = policyVersion,
+            admissionWindowId = "window-1",
+            rosterSnapshotId = "roster-1",
+            rosterSnapshotHash = TEST_ROSTER_SNAPSHOT_HASH,
+            seedSetHash = TEST_SEED_SET_HASH,
+            actorProfileVersion = "actors-v1",
+            actorProfileHash = TEST_ACTOR_PROFILE_HASH,
+            riskPolicyHash = TEST_RISK_POLICY_HASH,
             policyEnvelopeHash = TEST_POLICY_ENVELOPE_HASH,
             scoringPolicyVersion = "score-v1",
             scoringPolicyHash = TEST_SCORING_POLICY_HASH,
@@ -1007,5 +1014,9 @@ class ArenaControlPlaneServiceTest {
         private const val TEST_POLICY_ENVELOPE_HASH = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
         private const val TEST_SCORING_POLICY_HASH = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
         private const val TEST_ECONOMIC_POLICY_HASH = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        private const val TEST_ROSTER_SNAPSHOT_HASH = "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+        private const val TEST_SEED_SET_HASH = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        private const val TEST_ACTOR_PROFILE_HASH = "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        private const val TEST_RISK_POLICY_HASH = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
     }
 }

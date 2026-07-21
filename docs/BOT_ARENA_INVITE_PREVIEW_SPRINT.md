@@ -198,8 +198,11 @@ caller-supplied version/hash pairs that do not match. Strict `score-v0` and
 `score-v1` fixtures now drive runner scoring, resolved scoring content is
 carried in reports, roster lock verifies its canonical hash, and accepted run
 records lock the scoring/economic/envelope versions and hashes through terminal
-score publication. Roster-to-run admission binding and economic reconciliation
-remain tracked below.
+score publication. Accepted runs now bind to the active immutable roster,
+revalidate that binding at `T0`, and carry roster, seed-set, actor-profile, and
+risk-policy hashes into persistence and reports. Zero-fee competition/house
+ledger reconciliation is implemented and fail-closed; non-zero fee/rebate
+policies remain blocked until canonical executions identify maker/taker roles.
 
 ## Persona And Economic Policy Modules
 
@@ -299,6 +302,9 @@ exclusions. Emergency removal is an immutable audit overlay between roster lock
 and `T0`: it changes the effective roster without mutating the snapshot or
 adding a replacement. Roster lock now also verifies canonical actor-catalog and
 economic-policy content before accepting their version/hash references.
+Run registration is rejected before `T-30m`, start is rejected before `T0`,
+registration/start revalidate the active locked roster and audited removals,
+and legacy unbound records cannot publish to the PostgreSQL leaderboard.
 Remaining work here is recorded hosted/external-account evidence.
 
 Deliverables:
@@ -357,9 +363,11 @@ canonical SHA-256 hashing, version/reference consistency checks, the
 roster-lock hash verification are implemented. Strict scoring-policy
 definition/reference resolution, resolved report artifacts, persisted run
 policy locks, result-to-run hash verification, terminal result immutability,
-and leaderboard lock filtering are also implemented. The next slice is binding
-run admission to the accepted roster snapshot and competition/house ledger
-reconciliation.
+and leaderboard lock filtering are also implemented. Run admission now binds
+to the accepted roster snapshot. The zero-fee runner emits deterministic
+competition/house reconciliation evidence and the promoted persisted smoke
+requires it to pass. Non-zero fee/rebate policies fail closed until venue
+execution facts provide canonical maker/taker attribution.
 
 Deliverables:
 

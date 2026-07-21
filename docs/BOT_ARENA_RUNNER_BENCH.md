@@ -704,7 +704,8 @@ Observed live smoke:
 Persisted local smoke:
 
 ```bash
-make dev-smoke-bot-arena-local-persist
+make dev-smoke-bot-arena-local-persist \
+  ARGS="--admission-window-id=<window> --roster-snapshot-id=<snapshot> --roster-snapshot-hash=<sha256>"
 ```
 
 This wraps:
@@ -712,13 +713,22 @@ This wraps:
 ```bash
 bun run arena:local-tick-run --submit-mode=live \
   --venue-url=http://127.0.0.1:8080 \
-  --arena-admin-url=http://127.0.0.1:8080 \
   --seed-reference \
-  --persist-results \
   --compartment=ses \
+  --require-roster-binding \
+  --require-economic-reconciliation \
+  --admission-window-id=<window> \
+  --roster-snapshot-id=<snapshot> \
+  --roster-snapshot-hash=<sha256> \
+  --out=/tmp/reef-arena-local-tick-run-persist.json
+bun scripts/dev/arena-persist-report-local.mjs \
+  --report=/tmp/reef-arena-local-tick-run-persist.json \
   --out=/tmp/reef-arena-local-tick-run-persist.json
 ```
 
+The persisted gate requires a pre-created admission window and locked roster;
+it never synthesizes or bypasses admission state. The zero-fee run must also
+pass competition/house cash and inventory reconciliation before publication.
 The persist path registers catalog bot metadata and versions when needed,
 registers the arena run with its canonical envelope/scoring/economic policy
 lock, transitions it to `running`, posts all `botResults` with matching hashes,

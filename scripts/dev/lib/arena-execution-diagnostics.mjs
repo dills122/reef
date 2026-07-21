@@ -4,13 +4,21 @@ export function enrichBotResultsWithExecutionDiagnostics(botResults, venueReadba
   }
   const fillsByBotId = new Map();
   for (const entry of venueReadback.ownOrders) {
-    fillsByBotId.set(entry.botId, Array.isArray(entry.fills?.body?.fills) ? entry.fills.body.fills : []);
+    const available = entry.fills?.statusCode >= 200
+      && entry.fills.statusCode < 300
+      && Array.isArray(entry.fills?.body?.fills);
+    fillsByBotId.set(entry.botId, {
+      available,
+      fills: available ? entry.fills.body.fills : [],
+    });
   }
   const markPrices = markPricesByInstrument(venueReadback, healthSamples, options);
   return botResults.map((result) => {
-    const diagnostics = summarizeExecutionDiagnostics(fillsByBotId.get(result.botId) ?? [], markPrices, {
+    const readback = fillsByBotId.get(result.botId) ?? { available: false, fills: [] };
+    const diagnostics = summarizeExecutionDiagnostics(readback.fills, markPrices, {
       healthSamples,
       adverseSelectionWindowMs: options.adverseSelectionWindowMs,
+      available: readback.available,
     });
     return {
       ...result,
@@ -112,7 +120,7 @@ export function summarizeExecutionDiagnostics(fills, markPrices = {}, options = 
       byInstrument: instrumentRows,
     },
     pnl: {
-      available: true,
+      available: options.available !== false,
       realized: null,
       unrealized: null,
       cash: fixed(cash),

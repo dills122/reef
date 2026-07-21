@@ -10,6 +10,15 @@ const reportPath = join(dir, "arena-local-tick-run.json");
 const compactReportPath = join(dir, "arena-local-tick-run-compact.json");
 const pacedReportPath = join(dir, "arena-local-tick-run-paced.json");
 const scoreV1ReportPath = join(dir, "arena-local-tick-run-score-v1.json");
+const requiredReconciliationReportPath = join(dir, "arena-local-tick-run-reconciliation-required.json");
+
+const missingRosterBinding = spawnSync(
+  "bun",
+  ["scripts/dev/arena-local-tick-run.mjs", "--require-roster-binding"],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+assert.notEqual(missingRosterBinding.status, 0);
+assert.match(missingRosterBinding.stderr, /required for persisted or roster-bound runs/);
 
 const result = spawnSync(
   "bun",
@@ -88,6 +97,11 @@ assert.equal(report.liquiditySummary.totals.activeProviderCount, 3);
 assert.equal(report.liquiditySummary.totals.submittedLimitOrders > 0, true);
 assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "AAPL").providerCount, 3);
 assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "MSFT").providerCount, 0);
+assert.equal(report.economicReconciliation.schemaVersion, "reef.arena.economicReconciliation.v1");
+assert.equal(report.economicReconciliation.economicPolicyHash, report.mode.economicPolicyHash);
+assert.equal(report.economicReconciliation.status, "fail");
+assert.equal(report.economicReconciliation.complete, false);
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.economicReconciliation.reconciliationHash));
 const marketMaker = report.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(marketMaker.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
 assert.equal(marketMaker.scoreBreakdown.formulaVersion, "shadow-score-v1");
@@ -153,6 +167,7 @@ assert.equal(compactReport.liquiditySummary.schemaVersion, "reef.arena.liquidity
 assert.equal(compactReport.liquiditySummary.totals.providerCount, 3);
 assert.equal(compactReport.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
 assert.equal(compactReport.scoringCalibration.scoreDistribution.shadowScore.count, 1);
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(compactReport.economicReconciliation.reconciliationHash));
 const compactMarketMaker = compactReport.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(compactMarketMaker.liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
 assert.equal(compactMarketMaker.liquidityDiagnostics.pointsEffect, 0);
@@ -170,6 +185,25 @@ assert.deepEqual(compactReport.commandStatusSummary.rejectedByCode, {});
 assert.deepEqual(compactReport.commandStatusSummary.rejectedByBotId, {});
 assert.equal(compactReport.marketQualitySummary.schemaVersion, "reef.arena.marketQualitySummary.v0");
 assert.ok(compactReport.marketQualitySummary.instruments.some((instrument) => instrument.instrumentId === "AAPL"));
+
+const requiredReconciliationResult = spawnSync(
+  "bun",
+  [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=1",
+    "--tick-interval-ms=500",
+    "--require-economic-reconciliation",
+    `--out=${requiredReconciliationReportPath}`,
+  ],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+assert.notEqual(requiredReconciliationResult.status, 0);
+assert.match(requiredReconciliationResult.stderr, /arena economic reconciliation failed/);
+const requiredReconciliationReport = JSON.parse(readFileSync(requiredReconciliationReportPath, "utf8"));
+assert.equal(requiredReconciliationReport.status, "failed_economic_reconciliation");
+assert.equal(requiredReconciliationReport.economicReconciliation.status, "fail");
 
 const pacedStartedAt = Date.now();
 const pacedResult = spawnSync(

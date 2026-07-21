@@ -14,11 +14,24 @@ const { runtimeUrl } = deriveDevUrls();
 const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
 const suffix = `${Date.now()}`;
 const actorId = env("ADMIN_ACTOR_ID", "admin-cli");
-const botId = env("DEV_ARENA_RUN_RESULT_SMOKE_BOT_ID", `arena-result-bot-${suffix}`);
+const botId = env("DEV_ARENA_RUN_RESULT_SMOKE_BOT_ID", "");
 const versionId = env("DEV_ARENA_RUN_RESULT_SMOKE_VERSION_ID", "v1");
 const runId = env("DEV_ARENA_RUN_RESULT_SMOKE_RUN_ID", `arena-result-run-${suffix}`);
 const modeId = env("DEV_ARENA_RUN_RESULT_SMOKE_MODE_ID", "hosted-sim-smoke");
+const scenarioId = env("DEV_ARENA_RUN_RESULT_SMOKE_SCENARIO_ID", "hosted-summary-smoke");
+const seed = Number(env("DEV_ARENA_RUN_RESULT_SMOKE_SEED", "42"));
+const riskPolicyVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_RISK_POLICY_VERSION", "policy-v1");
 const scoringPolicyVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_SCORING_POLICY_VERSION", "score-v1");
+const admissionWindowId = env("DEV_ARENA_RUN_RESULT_SMOKE_ADMISSION_WINDOW_ID", "");
+const rosterSnapshotId = env("DEV_ARENA_RUN_RESULT_SMOKE_ROSTER_SNAPSHOT_ID", "");
+const rosterSnapshotHash = env("DEV_ARENA_RUN_RESULT_SMOKE_ROSTER_SNAPSHOT_HASH", "");
+if ([botId, admissionWindowId, rosterSnapshotId, rosterSnapshotHash].some((value) => value.length === 0)) {
+  throw new Error("run-result smoke requires an existing locked-roster bot and admission window via DEV_ARENA_RUN_RESULT_SMOKE_BOT_ID, DEV_ARENA_RUN_RESULT_SMOKE_ADMISSION_WINDOW_ID, DEV_ARENA_RUN_RESULT_SMOKE_ROSTER_SNAPSHOT_ID, and DEV_ARENA_RUN_RESULT_SMOKE_ROSTER_SNAPSHOT_HASH");
+}
+const seedSetHash = env("DEV_ARENA_RUN_RESULT_SMOKE_SEED_SET_HASH", `sha256:${"5".repeat(64)}`);
+const actorProfileVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_ACTOR_PROFILE_VERSION", "actors-v1");
+const actorProfileHash = env("DEV_ARENA_RUN_RESULT_SMOKE_ACTOR_PROFILE_HASH", `sha256:${"6".repeat(64)}`);
+const riskPolicyHash = env("DEV_ARENA_RUN_RESULT_SMOKE_RISK_POLICY_HASH", `sha256:${"7".repeat(64)}`);
 const scoringPolicyHash = env(
   "DEV_ARENA_RUN_RESULT_SMOKE_SCORING_POLICY_HASH",
   "sha256:d87133eca6c0a4994fd0aa30af3108b72ac679955128f14e64335417358dd15a",
@@ -66,49 +79,21 @@ async function expectOk(method, path, payload = undefined) {
   return response;
 }
 
-async function transitionVersion(status, reason) {
-  await expectOk("POST", "/admin/v1/arena/bot-versions/transition", {
-    botId,
-    versionId,
-    status,
-    reason,
-    actorId,
-    correlationId: `arena-result-smoke-${suffix}`,
-  });
-}
-
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
-
-await expectOk("POST", "/admin/v1/arena/bots", {
-  botId,
-  fileName: `${botId}.ts`,
-  name: "Arena Result Smoke Bot",
-  publisher: "Reef Smoke",
-  email: "arena-result-smoke@example.com",
-  actorId,
-  correlationId: `arena-result-smoke-${suffix}`,
-});
-await expectOk("POST", "/admin/v1/arena/bot-versions", {
-  botId,
-  versionId,
-  sourceHash: `sha256:source-${suffix}`,
-  artifactHash: `sha256:artifact-${suffix}`,
-  sdkVersion: "1.5.0",
-  apiVersion: "v1",
-  dependencyManifestHash: `sha256:deps-${suffix}`,
-  actorId,
-  correlationId: `arena-result-smoke-${suffix}`,
-});
-await transitionVersion("submitted", "result ingestion smoke submitted");
-await transitionVersion("checks-passed", "result ingestion smoke checks passed");
-await transitionVersion("approved", "result ingestion smoke approved");
 
 await expectOk("POST", "/admin/v1/arena/runs", {
   runId,
   modeId,
-  scenarioId: "hosted-summary-smoke",
-  seed: 42,
-  policyVersion: "policy-v1",
+  scenarioId,
+  seed,
+  policyVersion: riskPolicyVersion,
+  admissionWindowId,
+  rosterSnapshotId,
+  rosterSnapshotHash,
+  seedSetHash,
+  actorProfileVersion,
+  actorProfileHash,
+  riskPolicyHash,
   policyEnvelopeHash,
   scoringPolicyVersion,
   scoringPolicyHash,

@@ -455,10 +455,15 @@ canonical actor/economic resolution and all three invite-preview economic
 fixtures. Runner reports retain resolved catalog, profile, economic, scoring,
 and composition artifacts and hashes; roster lock verifies resolved
 actor/economic/scoring content before persisting those references. Run records
-now persist the accepted envelope, scoring, and economic lock, result ingestion
-must match it, and terminal score publication is immutable. Items 3, the
-remaining actor-profile fields in 6, roster-to-run binding, and 8 remain active
-work; item 7 is complete.
+now persist the accepted envelope, scoring, economic, roster, seed-set,
+actor-profile, and risk-policy locks; result ingestion must match the scoring
+lock, and terminal score publication is immutable. The zero-fee baseline now
+emits deterministic competition/house cash, inventory, source/sink, and PnL
+reconciliation evidence and can be required as a run gate. Non-zero fees and
+rebates deliberately fail that gate until canonical maker/taker attribution is
+available. Remaining quote-quality fields in item 3, full actor-profile
+coverage in 6, non-zero policy accounting, and recorded fixed-seed proof in 8
+remain active; item 7 and roster-to-run binding are complete.
 
 1. Add static policy fixtures under `packages/scenario-definitions/arena/`.
 2. Add `ActorProfile` fixtures with strict parameter validation and resolved

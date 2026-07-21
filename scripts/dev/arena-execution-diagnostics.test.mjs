@@ -100,7 +100,7 @@ const healthSamples = [{
 const venueReadback = {
   ownOrders: [{
     botId: "bot-a",
-    fills: { body: { fills } },
+    fills: { statusCode: 200, body: { fills } },
   }],
   snapshots: [{
     instrumentId: "AAPL",
@@ -113,9 +113,15 @@ const enriched = enrichBotResultsWithExecutionDiagnostics(botResults, venueReadb
 });
 assert.equal(enriched[0].tradingMetrics.executions.fillCount, 3);
 assert.equal(enriched[0].tradingMetrics.pnl.total, 7);
+assert.equal(enriched[0].tradingMetrics.pnl.available, true);
 assert.equal(enriched[0].tradingMetrics.inventory.markPriceByInstrument.AAPL, 102);
 assert.equal(enriched[0].tradingMetrics.inventory.markPriceByInstrument.MSFT, 199);
 assert.equal(enriched[0].tradingMetrics.adverseSelection.available, false);
+
+const unavailable = enrichBotResultsWithExecutionDiagnostics(botResults, {
+  ownOrders: [{ botId: "bot-a", fills: { statusCode: 503, body: {} } }],
+}, healthSamples);
+assert.equal(unavailable[0].tradingMetrics.pnl.available, false);
 
 const dryRun = enrichBotResultsWithExecutionDiagnostics(botResults, { skipped: true }, healthSamples);
 assert.equal(dryRun, botResults);

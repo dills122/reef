@@ -57,21 +57,23 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
                 "arena-submission-admissions"
             )
         )
+        val runAdmissionStore = PostgresArenaRunAdmissionStore(
+            RuntimeDataSources.dataSource(
+                jdbcUrl,
+                RuntimeEnv.string("ARENA_POSTGRES_USER", "reef"),
+                RuntimeEnv.string("ARENA_POSTGRES_PASSWORD", "reef"),
+                "arena-run-admission"
+            )
+        )
         val runAdmissionService = ArenaRunAdmissionApplicationService(
-            PostgresArenaRunAdmissionStore(
-                RuntimeDataSources.dataSource(
-                    jdbcUrl,
-                    RuntimeEnv.string("ARENA_POSTGRES_USER", "reef"),
-                    RuntimeEnv.string("ARENA_POSTGRES_PASSWORD", "reef"),
-                    "arena-run-admission"
-                )
-            ),
+            runAdmissionStore,
             adminIdentityService = adminIdentityService
         )
         return listOf(
             ArenaAdminGateway(
                 arenaAdminService = ArenaAdminApplicationService(
                     arenaRegistryStore = store,
+                    arenaRunAdmissionStore = runAdmissionStore,
                     adminIdentityService = adminIdentityService
                 ),
                 adminIdentityService = adminIdentityService,

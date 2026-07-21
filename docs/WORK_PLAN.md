@@ -71,8 +71,8 @@ and readiness remain independent.
 1. Complete the invite-only fork preview proof.
    - Run a named external account through fork submission, pending admission,
      maintainer approval, trusted provisioning, merge, and registry sync.
-   - Persist and test the `T-72h` / `T-48h` / `T-24h` eligibility and roster
-     lock policy.
+   - Use the implemented and tested `T-72h` / `T-48h` / `T-24h` eligibility,
+     roster lock, and `T-30m`/`T0` run binding in recorded preview evidence.
    - Record local and hosted preview runs with immutable roster, policy, seed,
      artifact, replay, accounting, and scoring evidence.
    - Do not advertise open or self-service submissions before the release

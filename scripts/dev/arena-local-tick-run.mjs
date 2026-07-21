@@ -25,9 +25,11 @@ import {
   buildScoreContext,
   summarizeScoreCalibration,
 } from "./lib/arena-score-breakdown.mjs";
+import { reconcileArenaEconomics } from "./lib/arena-economic-reconciliation.mjs";
 import {
   resolveActorProfile as resolvePolicyActorProfile,
   resolveActorProfileCatalog,
+  canonicalHash,
   resolveEconomicPolicy,
   resolvePolicyComposition,
   resolveScoringPolicy,
@@ -59,6 +61,8 @@ const config = {
   openBaoToken: stringOption("--openbao-token", env("OPENBAO_TOKEN", env("VAULT_TOKEN", ""))),
   seedReference: args.includes("--seed-reference"),
   persistResults: args.includes("--persist-results"),
+  requireRosterBinding: args.includes("--require-roster-binding"),
+  requireEconomicReconciliation: args.includes("--require-economic-reconciliation"),
   actorId: stringOption("--actor-id", env("ADMIN_ACTOR_ID", "admin-cli")),
   commandTimeoutMs: numberOption("--command-timeout-ms", 15000),
   commandPollMs: numberOption("--command-poll-ms", 250),
@@ -72,6 +76,9 @@ const config = {
   warmupSeconds: numberOption("--warmup-seconds", 0),
   healthSampleIntervalMs: numberOption("--health-sample-interval-ms", 0),
   scoringPolicyVersion: stringOption("--scoring-policy-version", ""),
+  admissionWindowId: stringOption("--admission-window-id", env("ARENA_ADMISSION_WINDOW_ID", "")),
+  rosterSnapshotId: stringOption("--roster-snapshot-id", env("ARENA_ROSTER_SNAPSHOT_ID", "")),
+  rosterSnapshotHash: stringOption("--roster-snapshot-hash", env("ARENA_ROSTER_SNAPSHOT_HASH", "")),
   requireProjectionDrain: args.includes("--require-projection-drain"),
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
@@ -117,6 +124,12 @@ if (config.submitMode === "live" && config.venueUrl.length === 0) {
 if (config.persistResults && config.arenaAdminUrl.length === 0) {
   throw new Error("--arena-admin-url, ARENA_ADMIN_API_URL, --venue-url, or BOT_SDK_VENUE_URL is required when --persist-results is set");
 }
+if ((config.persistResults || config.requireRosterBinding) && [config.admissionWindowId, config.rosterSnapshotId, config.rosterSnapshotHash].some((value) => value.length === 0)) {
+  throw new Error("--admission-window-id, --roster-snapshot-id, and --roster-snapshot-hash are required for persisted or roster-bound runs");
+}
+if ((config.persistResults || config.requireRosterBinding) && !/^sha256:[a-f0-9]{64}$/.test(config.rosterSnapshotHash)) {
+  throw new Error("--roster-snapshot-hash must be a canonical sha256 digest");
+}
 
 const mode = readJson(config.mode);
 if (config.scoringPolicyVersion.length > 0) {
@@ -128,6 +141,12 @@ if (config.scoringPolicyVersion.length > 0) {
 }
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
+const seedSetHash = canonicalHash([Number(mode.seed)]);
+const riskPolicyHash = canonicalHash({
+  schemaVersion: "reef.arena.riskPolicySet.v1",
+  version: mode.riskPolicyVersion,
+  profiles: riskProfiles,
+});
 const actorProfileCatalog = resolveActorProfileCatalog(readJson(mode.actorProfileCatalogPath));
 const economicPolicy = resolveEconomicPolicy(readJson(mode.economicPolicyPath));
 const scoringPolicy = resolveScoringPolicy(readJson(mode.scoringPolicyPath));
@@ -229,6 +248,9 @@ async function main() {
     }));
     report.persistence = await runPhase("persist-arena-results", () => persistArenaResults(report));
     await runPhase("write-report", () => writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 }));
+    if (config.requireEconomicReconciliation && report.economicReconciliation.status !== "pass") {
+      throw new Error(`arena economic reconciliation failed: ${report.economicReconciliation.reconciliationHash}`);
+    }
     assertExpectedFreezeBots(report);
     console.log(`arena local tick run complete: ${resolve(config.out)}`);
     console.log(
@@ -1085,8 +1107,12 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
   const healthSummary = summarizeHealth(healthSamples, totals);
   const marketQualitySummary = summarizeMarketQuality(healthSamples);
   const botResultsWithLiquidity = attachLiquidityDiagnostics(botResults, marketQualitySummary, venueReadback);
+  const economicReconciliation = reconcileArenaEconomics(botResultsWithLiquidity, economicPolicy);
   const liquiditySummary = summarizeLiquidityProviders(botResultsWithLiquidity, marketQualitySummary);
-  const status = reportStatus(enforcementEvents, healthSummary);
+  const baseStatus = reportStatus(enforcementEvents, healthSummary);
+  const status = config.requireEconomicReconciliation && economicReconciliation.status !== "pass"
+    ? "failed_economic_reconciliation"
+    : baseStatus;
   const envelope = policyEnvelope();
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
@@ -1101,6 +1127,8 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       scoringPolicyVersion: mode.scoringPolicyVersion,
       scoringPolicyHash: scoringPolicy.contentHash,
       riskPolicyVersion: mode.riskPolicyVersion,
+      riskPolicyHash,
+      seedSetHash,
       economicPolicyVersion: mode.economicPolicyVersion,
       economicPolicyHash: economicPolicy.contentHash,
       liquidityPolicyVersion: mode.liquidityPolicyVersion,
@@ -1114,6 +1142,11 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     },
     policyEnvelope: envelope,
     policyEnvelopeHash: `sha256:${stableHash(envelope)}`,
+    rosterBinding: {
+      admissionWindowId: config.admissionWindowId,
+      rosterSnapshotId: config.rosterSnapshotId,
+      rosterSnapshotHash: config.rosterSnapshotHash,
+    },
     resolvedPolicyArtifacts: {
       scoringPolicy: policyArtifact(scoringPolicy),
       economicPolicy: policyArtifact(economicPolicy),
@@ -1155,6 +1188,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     liquiditySummary,
     executionSummary: venueReadback?.executionSummary,
     scoringCalibration: summarizeScoreCalibration(botResultsWithLiquidity),
+    economicReconciliation,
     healthSamples,
     venueReadback,
     enforcementEvents,
@@ -1185,6 +1219,7 @@ function compactArenaReport(report) {
     mode: report.mode,
     policyEnvelope: report.policyEnvelope,
     policyEnvelopeHash: report.policyEnvelopeHash,
+    rosterBinding: report.rosterBinding,
     resolvedPolicyArtifacts: report.resolvedPolicyArtifacts,
     runPlan: report.runPlan,
     expectations: report.expectations,
@@ -1206,6 +1241,7 @@ function compactArenaReport(report) {
     liquiditySummary: report.liquiditySummary,
     executionSummary: report.executionSummary,
     scoringCalibration: report.scoringCalibration,
+    economicReconciliation: report.economicReconciliation,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,
@@ -1231,6 +1267,8 @@ function policyEnvelope() {
     visibleDataPolicyVersion: mode.visibleDataPolicyVersion,
     actionPolicyVersion: mode.actionPolicyVersion,
     riskPolicyVersion: mode.riskPolicyVersion,
+    riskPolicyHash,
+    seedSetHash,
     scoringPolicyVersion: mode.scoringPolicyVersion,
     scoringPolicyHash: scoringPolicy.contentHash,
     economicPolicyVersion: mode.economicPolicyVersion,
@@ -2346,6 +2384,13 @@ async function persistArenaResults(report) {
     scenarioId: mode.scenarioId,
     seed: Number(mode.seed ?? 0),
     policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
+    admissionWindowId: config.admissionWindowId,
+    rosterSnapshotId: config.rosterSnapshotId,
+    rosterSnapshotHash: config.rosterSnapshotHash,
+    seedSetHash,
+    actorProfileVersion: actorProfileCatalog.version,
+    actorProfileHash: actorProfileCatalog.contentHash,
+    riskPolicyHash,
     policyEnvelopeHash: report.policyEnvelopeHash,
     scoringPolicyVersion: mode.scoringPolicyVersion,
     scoringPolicyHash: scoringPolicy.contentHash,

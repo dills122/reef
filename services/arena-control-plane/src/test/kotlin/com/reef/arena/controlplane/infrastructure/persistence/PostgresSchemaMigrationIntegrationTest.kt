@@ -1342,6 +1342,13 @@ class PostgresSchemaMigrationIntegrationTest {
                 scenarioId = "scenario-schema",
                 seed = 42,
                 policyVersion = "policy-v1",
+                admissionWindowId = "window-$suffix",
+                rosterSnapshotId = "roster-$suffix",
+                rosterSnapshotHash = "sha256:${"4".repeat(64)}",
+                seedSetHash = "sha256:${"5".repeat(64)}",
+                actorProfileVersion = "actors-v1",
+                actorProfileHash = "sha256:${"6".repeat(64)}",
+                riskPolicyHash = "sha256:${"7".repeat(64)}",
                 policyEnvelopeHash = policyEnvelopeHash,
                 scoringPolicyVersion = scoringPolicyVersion,
                 scoringPolicyHash = scoringPolicyHash,
@@ -1381,6 +1388,15 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals(scoringPolicyVersion, store.runRecord(runId)?.scoringPolicyVersion)
         assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
         assertEquals(botId, store.leaderboard(modeId, scoringPolicyVersion).single().botId)
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE arena.run_records SET admission_window_id = 'legacy-unbound' WHERE run_id = ?"
+            ).use { ps ->
+                ps.setString(1, runId)
+                assertEquals(1, ps.executeUpdate())
+            }
+        }
+        assertEquals(emptyList(), store.leaderboard(modeId, scoringPolicyVersion))
     }
 
     @Test
