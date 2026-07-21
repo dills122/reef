@@ -22,6 +22,25 @@ function fakeFetch(routes) {
   };
 }
 
+// every live read carries external-boundary identity; participant reads also carry object scope.
+{
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({ url, headers: init?.headers ?? {} });
+    return {
+      status: 200,
+      async text() {
+        return JSON.stringify(url.includes("orders/current") ? { orders: [] } : { snapshot: { bestBidPrice: "100000000000", bestAskPrice: "101000000000" } });
+      },
+    };
+  };
+  const options = { baseUrl: "http://venue", participantId: "p1", clientId: "bot:b1", authorization: "Bearer test", fetch: fetchImpl };
+  await createLiveMarketDataClientV1(options).snapshot("AAPL");
+  await createLiveOwnOrdersReadClientV1(options).current();
+  assert.deepEqual(requests[0].headers, { "X-Client-Id": "bot:b1", Authorization: "Bearer test" });
+  assert.deepEqual(requests.at(-1).headers, { "X-Client-Id": "bot:b1", "X-Participant-Id": "p1", Authorization: "Bearer test" });
+}
+
 // snapshot: bid+ask present -> midPrice averaged, lastPrice from tape.
 // Prices are stored venue-wide as fixed-point nanos (price_nanos = price_dollars * 1e9);
 // bestBidPrice "100250000000" is $100.25.

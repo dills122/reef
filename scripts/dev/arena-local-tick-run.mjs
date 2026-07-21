@@ -186,6 +186,7 @@ const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots);
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
 const workers = [];
 let sharedWorker;
+let arenaRunPreflight;
 
 async function main() {
   const startedAt = performance.now();
@@ -235,6 +236,9 @@ async function main() {
         bot.loadResult = await loadBotInWorker(bot);
       }
     });
+    if (config.persistResults) {
+      arenaRunPreflight = await runPhase("preflight-roster-bound-run", () => preflightArenaRun(bots));
+    }
 
     const healthSamples = [];
     const arenaRun = await runPhase("run-scheduled-ticks", () => runArenaSessions(bots, healthSamples));
@@ -478,6 +482,7 @@ async function startBotSession(bot) {
               liveClientOptions: {
                 baseUrl: workerVenueUrl(),
                 participantId: participantIdForBot(bot),
+                clientId: fixture.clientId ?? `bot:${bot.botId}`,
               },
             }
           : {}),
@@ -1159,6 +1164,9 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       admissionWindowId: config.admissionWindowId,
       rosterSnapshotId: config.rosterSnapshotId,
       rosterSnapshotHash: config.rosterSnapshotHash,
+      ...(arenaRunPreflight === undefined
+        ? {}
+        : { preflight: { status: arenaRunPreflight.status, validatedAt: arenaRunPreflight.validatedAt } }),
     },
     resolvedPolicyArtifacts: {
       scoringPolicy: policyArtifact(scoringPolicy),
@@ -2379,19 +2387,31 @@ function readbackHeaders(participantId = "") {
   };
 }
 
-async function persistArenaResults(report) {
-  if (!config.persistResults) {
-    return { enabled: false, skipped: true };
-  }
+async function preflightArenaRun(bots) {
   const baseUrl = config.arenaAdminUrl.replace(/\/$/, "");
-  const correlationId = `${config.runId}-persist`;
-  const botVersions = selectedBots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
+  const correlationId = `${config.runId}-preflight`;
   const operations = [];
-  for (const bot of selectedBots) {
+  for (const bot of bots) {
     operations.push(await ensureArenaBot(baseUrl, bot, correlationId));
     operations.push(await ensureArenaBotVersion(baseUrl, bot, correlationId));
   }
-  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs", {
+  const botVersions = bots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
+  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs", arenaRunRegistrationPayload(
+    botVersions,
+    `sha256:${stableHash(policyEnvelope())}`,
+    correlationId,
+  ), { allowAlreadyExists: true }));
+  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
+    runId: config.runId,
+    status: "running",
+    actorId: config.actorId,
+    correlationId,
+  }));
+  return { status: "pass", validatedAt: new Date().toISOString(), operations };
+}
+
+function arenaRunRegistrationPayload(botVersions, policyEnvelopeHash, correlationId) {
+  return {
     runId: config.runId,
     modeId: mode.modeId,
     scenarioId: mode.scenarioId,
@@ -2404,7 +2424,7 @@ async function persistArenaResults(report) {
     actorProfileVersion: actorProfileCatalog.version,
     actorProfileHash: actorProfileCatalog.contentHash,
     riskPolicyHash,
-    policyEnvelopeHash: report.policyEnvelopeHash,
+    policyEnvelopeHash,
     scoringPolicyVersion: mode.scoringPolicyVersion,
     scoringPolicyHash: scoringPolicy.contentHash,
     economicPolicyVersion: mode.economicPolicyVersion,
@@ -2412,13 +2432,35 @@ async function persistArenaResults(report) {
     botVersions,
     actorId: config.actorId,
     correlationId,
-  }, { allowAlreadyExists: true }));
-  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
-    runId: config.runId,
-    status: "running",
-    actorId: config.actorId,
-    correlationId,
-  }, { allowInvalidTransition: true }));
+  };
+}
+
+async function persistArenaResults(report) {
+  if (!config.persistResults) {
+    return { enabled: false, skipped: true };
+  }
+  const baseUrl = config.arenaAdminUrl.replace(/\/$/, "");
+  const correlationId = `${config.runId}-persist`;
+  const persistedBots = report.sessionReports.map((session) => session.bot);
+  const botVersions = persistedBots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
+  const operations = [...(arenaRunPreflight?.operations ?? [])];
+  if (arenaRunPreflight === undefined) {
+    for (const bot of persistedBots) {
+      operations.push(await ensureArenaBot(baseUrl, bot, correlationId));
+      operations.push(await ensureArenaBotVersion(baseUrl, bot, correlationId));
+    }
+    operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs", arenaRunRegistrationPayload(
+      botVersions,
+      report.policyEnvelopeHash,
+      correlationId,
+    ), { allowAlreadyExists: true }));
+    operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
+      runId: config.runId,
+      status: "running",
+      actorId: config.actorId,
+      correlationId,
+    }, { allowInvalidTransition: true }));
+  }
   for (const result of report.botResults) {
     const finalEquity = integerMetric(result.finalEquityDiagnostic, result.score);
     const realizedPnl = integerMetric(
@@ -2472,9 +2514,10 @@ async function persistArenaResults(report) {
     }
   }
 
+  const runCompleted = report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings";
   operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
     runId: config.runId,
-    status: report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings" ? "completed" : "failed",
+    status: runCompleted ? "completed" : "failed",
     actorId: config.actorId,
     correlationId,
   }, { allowInvalidTransition: true }));
@@ -2495,7 +2538,7 @@ async function persistArenaResults(report) {
   if (leaderboard.statusCode < 200 || leaderboard.statusCode >= 300) {
     throw new Error(`arena leaderboard readback failed (${leaderboard.statusCode}): ${JSON.stringify(leaderboard.body)}`);
   }
-  const expectsLeaderboardEntry = report.botResults.some((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified);
+  const expectsLeaderboardEntry = runCompleted && report.botResults.some((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified);
   if (leaderboardEntry === undefined && expectsLeaderboardEntry) {
     throw new Error(`arena leaderboard missing run ${config.runId}: ${JSON.stringify(leaderboard.body)}`);
   }
@@ -2533,8 +2576,8 @@ async function ensureArenaBotVersion(baseUrl, bot, correlationId) {
   const version = await postArenaOk(baseUrl, "/admin/v1/arena/bot-versions", {
     botId: bot.botId,
     versionId: bot.versionId,
-    sourceHash: `sha256:${bot.runnerKey}-source`,
-    artifactHash: `sha256:${bot.runnerKey}-artifact`,
+    sourceHash: bot.artifact.manifest.sourceHash,
+    artifactHash: bot.artifact.manifest.artifactHash,
     sdkVersion: "1.5.0",
     apiVersion: "v1",
     dependencyManifestHash: `sha256:${bot.runnerKey}-deps`,

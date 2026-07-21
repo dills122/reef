@@ -10,6 +10,7 @@ const receivedCommands = [];
 const commandStatusReads = [];
 const referenceWrites = [];
 let syncResultMode = false;
+let rejectArenaRunStart = false;
 const arena = {
   bots: new Map(),
   versions: new Map(),
@@ -151,6 +152,32 @@ try {
   );
   assert.equal(receivedCommands.length, commandCountBeforePreflight);
 
+  rejectArenaRunStart = true;
+  const commandCountBeforeRunStart = receivedCommands.length;
+  await assert.rejects(
+    run("bun", [
+      "scripts/dev/arena-local-tick-run.mjs",
+      "--run-id=arena-before-t0-test",
+      "--compartment=vm",
+      "--submit-mode=live",
+      `--venue-url=${baseUrl}`,
+      `--arena-admin-url=${baseUrl}`,
+      "--persist-results",
+      "--admission-window-id=window-before-t0-test",
+      "--roster-snapshot-id=roster-before-t0-test",
+      "--roster-snapshot-hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "--skip-projector-preflight",
+      "--out=/tmp/reef-arena-local-tick-run-before-t0-test.json",
+    ]),
+    /arena run cannot start before scheduledStart/,
+  );
+  assert.equal(receivedCommands.length, commandCountBeforeRunStart);
+  arena.runs.delete("arena-before-t0-test");
+  for (const key of arena.versions.keys()) {
+    if (key.endsWith("-arena-before-t0-test")) arena.versions.delete(key);
+  }
+  rejectArenaRunStart = false;
+
   await run("bun", [
     "scripts/dev/arena-local-tick-run.mjs",
     "--compartment=vm",
@@ -187,6 +214,14 @@ try {
   assert.equal(persistedRun.rosterSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(arena.results.length, 5);
   const report = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-live-test.json", "utf8"));
+  const simpleMarketMakerVersion = arena.versions.get(
+    `builtin-mm-simple/${report.sessionReports.find((session) => session.bot.botId === "builtin-mm-simple").bot.versionId}`,
+  );
+  const simpleMarketMakerManifest = report.sessionReports.find(
+    (session) => session.bot.botId === "builtin-mm-simple",
+  ).bot.artifact.manifest;
+  assert.equal(simpleMarketMakerVersion.sourceHash, simpleMarketMakerManifest.sourceHash);
+  assert.equal(simpleMarketMakerVersion.artifactHash, simpleMarketMakerManifest.artifactHash);
   assert.equal(persistedRun.seedSetHash, report.mode.seedSetHash);
   assert.equal(persistedRun.actorProfileHash, report.mode.actorProfileCatalogHash);
   assert.equal(persistedRun.riskPolicyHash, report.mode.riskPolicyHash);
@@ -316,6 +351,9 @@ async function handleArenaAdmin(req, res, url) {
   }
   if (req.method === "POST" && url.pathname === "/admin/v1/arena/runs/status") {
     const body = await readJson(req);
+    if (rejectArenaRunStart && body.status === "running") {
+      return json(res, 400, { error: "arena run cannot start before scheduledStart" });
+    }
     const run = arena.runs.get(body.runId);
     if (run !== undefined) run.status = body.status;
     return json(res, 200, { run });

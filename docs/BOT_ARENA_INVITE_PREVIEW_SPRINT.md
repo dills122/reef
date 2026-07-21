@@ -203,8 +203,12 @@ revalidate that binding at `T0`, and carry roster, seed-set, actor-profile, and
 risk-policy hashes into persistence and reports. Zero-fee competition/house
 ledger reconciliation is implemented and fail-closed; non-zero fee/rebate
 reconciliation now consumes canonical maker/taker roles and supports the two
-preview comparison policies. Fresh fixed-seed and hosted proof remains required
-before either non-zero policy is promoted.
+preview comparison policies. A 2026-07-21 local rehearsal verified immutable
+six-bot roster binding, deterministic artifact hashes, pre-T0 fail-closed start,
+live command completion, and real fills. It also found that live projected fills
+remain `UNSPECIFIED` rather than `MAKER`/`TAKER`; reconciliation correctly failed
+closed. Fix that end-to-end propagation, then record the fixed-seed matrix and
+hosted proof before either non-zero policy is promoted.
 
 ## Persona And Economic Policy Modules
 

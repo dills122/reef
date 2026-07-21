@@ -75,6 +75,9 @@ and readiness remain independent.
      roster lock, and `T-30m`/`T0` run binding in recorded preview evidence.
    - Record local and hosted preview runs with immutable roster, policy, seed,
      artifact, replay, accounting, and scoring evidence.
+   - Fix live execution-role propagation: the 2026-07-21 bound rehearsal
+     produced fills whose projection readback remained `UNSPECIFIED`, correctly
+     blocking the non-zero economic-policy matrix.
    - Do not advertise open or self-service submissions before the release
      matrix is green.
 

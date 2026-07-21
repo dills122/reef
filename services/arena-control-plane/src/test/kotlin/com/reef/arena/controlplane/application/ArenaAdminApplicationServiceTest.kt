@@ -81,8 +81,17 @@ class ArenaAdminApplicationServiceTest {
         var now = Instant.parse("2026-07-20T00:00:00Z")
         val arenaStore = seededArenaStore()
         val controlPlane = ArenaControlPlaneService(arenaStore) { now }
+        controlPlane.registerBot(
+            RegisterArenaBotCommand("bot-2", "bot-2.ts", ArenaBotMetadata("Bot 2", "Publisher", "publisher@example.com"))
+        )
+        controlPlane.registerVersion(
+            RegisterArenaBotVersionCommand("bot-2", "v1", "sha256:source-2", "sha256:artifact-2", "1.5.0", "v1", "sha256:deps-2")
+        )
         listOf(ArenaBotVersionStatus.Submitted, ArenaBotVersionStatus.ChecksPassed, ArenaBotVersionStatus.Approved)
-            .forEach { controlPlane.transitionVersion("bot-1", "v1", it, "admin-cli", it.name, "corr-arena") }
+            .forEach { status ->
+                controlPlane.transitionVersion("bot-1", "v1", status, "admin-cli", status.name, "corr-arena")
+                controlPlane.transitionVersion("bot-2", "v1", status, "admin-cli", status.name, "corr-arena")
+            }
         val admissionStore = InMemoryArenaRunAdmissionStore()
         val window = ArenaAdmissionWindowPolicy("invite-v1").schedule(
             "window-1", Instant.parse("2026-08-10T00:00:00Z"), "UTC", now
@@ -93,13 +102,20 @@ class ArenaAdminApplicationServiceTest {
             emptyList(), "sha256:source", "sha256:artifact", "sha256:config", window.rosterLockAt,
             "corr-arena"
         )
+        val secondDecision = ArenaRunEligibilityDecision(
+            "evaluation-2", window.windowId, "bot-2", "v1", ArenaEligibilityOutcome.EligibleForRoster,
+            emptyList(), "sha256:source-2", "sha256:artifact-2", "sha256:config-2", window.rosterLockAt,
+            "corr-arena"
+        )
         admissionStore.recordDecision(decision)
+        admissionStore.recordDecision(secondDecision)
         val policy = ArenaRosterPolicySnapshot(
             "mode-1", "scenario-1", HASH_1, "actors-v1", HASH_2,
             "risk-v1", HASH_3, "score-v1", HASH_4, "economy-v1", HASH_5
         )
         val roster = ArenaRosterLocker().lock(
-            "roster-1", window, policy, listOf(ArenaRosterCandidate(decision, 10)), 1,
+            "roster-1", window, policy,
+            listOf(ArenaRosterCandidate(decision, 20), ArenaRosterCandidate(secondDecision, 10)), 2,
             window.rosterLockAt, "admin-cli", "corr-arena"
         ).snapshot
         admissionStore.lockRoster(roster)
@@ -110,7 +126,7 @@ class ArenaAdminApplicationServiceTest {
             window.windowId, roster.snapshotId, roster.snapshotHash, HASH_1,
             "actors-v1", HASH_2, HASH_3, HASH_6,
             "score-v1", HASH_4, "economy-v1", HASH_5,
-            listOf(ArenaRunBotVersionRef("bot-1", "v1"))
+            listOf(ArenaRunBotVersionRef("bot-2", "v1"), ArenaRunBotVersionRef("bot-1", "v1"))
         )
 
         assertFailsWith<IllegalArgumentException> {
@@ -125,6 +141,10 @@ class ArenaAdminApplicationServiceTest {
         }
         val registered = service.registerArenaRun(actor, command)
         assertEquals(roster.snapshotHash, registered.rosterSnapshotHash)
+        assertEquals(
+            listOf(ArenaRunBotVersionRef("bot-1", "v1"), ArenaRunBotVersionRef("bot-2", "v1")),
+            registered.botVersions
+        )
         assertFailsWith<IllegalArgumentException> {
             service.updateArenaRunStatus(actor, ArenaRunStatusCommand("run-1", ArenaRunStatus.Running))
         }

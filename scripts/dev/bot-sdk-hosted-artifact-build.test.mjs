@@ -24,6 +24,10 @@ console.log("bot SDK hosted artifact build checks passed");
 
 async function assertSimpleMarketMakerArtifact() {
   const artifact = buildArtifact("packages/bot-sdk/examples/simple-market-maker.ts", "simple-market-maker");
+  const repeatedArtifact = buildArtifact("packages/bot-sdk/examples/simple-market-maker.ts", "simple-market-maker-repeat");
+  assert.equal(repeatedArtifact.source, artifact.source);
+  assert.equal(repeatedArtifact.manifest.sourceHash, artifact.manifest.sourceHash);
+  assert.equal(repeatedArtifact.manifest.artifactHash, artifact.manifest.artifactHash);
   const report = await hostedRunner.runHostedBotScenarioV1({
     source: artifact.source,
     fileName: artifact.fileName,
@@ -56,6 +60,9 @@ async function assertMultiSymbolStrategyArtifact() {
 
 async function assertTechnicalIndicatorStrategyArtifact() {
   const artifact = buildArtifact("packages/bot-sdk/examples/technical-indicator-strategy-bot.ts", "technical-indicator-strategy-bot");
+  const repeatedArtifact = buildArtifact("packages/bot-sdk/examples/technical-indicator-strategy-bot.ts", "technical-indicator-strategy-bot-repeat");
+  assert.equal(repeatedArtifact.source, artifact.source);
+  assert.equal(repeatedArtifact.manifest.artifactHash, artifact.manifest.artifactHash);
   assert.deepEqual(artifact.manifest.approvedPackages, [
     {
       name: "trading-signals",

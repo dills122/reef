@@ -86,7 +86,11 @@ const executionLimits = {
   ...(lifecycleTimeoutMs === undefined ? {} : { lifecycleTimeoutMs }),
 };
 const liveClientOptions = readMode === "live"
-  ? { baseUrl: venueUrl, participantId: participantId ?? fixture.participantId }
+  ? {
+      baseUrl: venueUrl,
+      participantId: participantId ?? fixture.participantId,
+      clientId: fixture.clientId ?? `bot:${fixture.botId}`,
+    }
   : undefined;
 
 const report = await runHostedBotScenarioV1({

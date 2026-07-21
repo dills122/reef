@@ -463,9 +463,12 @@ reconciliation evidence and can be required as a run gate. Non-zero fees and
 rebates now reconcile against canonical maker/taker attribution, including
 venue fee receipts, maker rebate payments, and explicit house subsidy limits.
 Missing role coverage, role notional imbalance, and underfunded facilities fail
-closed. Remaining quote-quality fields in item 3, full actor-profile coverage
-in 6, and recorded fixed-seed proof for all three policies in 8 remain active;
-item 7 and roster-to-run binding are complete.
+closed. The 2026-07-21 live local rehearsal exercised that guard: real fills
+reached projection readback with `UNSPECIFIED` roles, so the economic run failed
+instead of silently applying non-zero terms. End-to-end role propagation,
+remaining quote-quality fields in item 3, full actor-profile coverage in 6, and
+recorded fixed-seed proof for all three policies in 8 remain active; item 7 and
+roster-to-run binding are complete.
 
 1. Add static policy fixtures under `packages/scenario-definitions/arena/`.
 2. Add `ActorProfile` fixtures with strict parameter validation and resolved

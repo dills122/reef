@@ -77,8 +77,8 @@ class ArenaAdminApplicationService(
     fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> = authorized(actor) { arenaRegistryStore.operatorDecisions(botId, versionId) }
 
     fun registerArenaRun(actor: AdminActor, command: ArenaRunRegistrationCommand): ArenaRunRecord = authorized(actor) {
-        verifyRosterBinding(command, requireScheduledStart = false)
-        controlPlane().registerRun(RegisterArenaRunCommand(command.runId, command.modeId, command.scenarioId, command.seed, command.policyVersion, command.admissionWindowId, command.rosterSnapshotId, command.rosterSnapshotHash, command.seedSetHash, command.actorProfileVersion, command.actorProfileHash, command.riskPolicyHash, command.policyEnvelopeHash, command.scoringPolicyVersion, command.scoringPolicyHash, command.economicPolicyVersion, command.economicPolicyHash, command.botVersions))
+        val canonicalBotVersions = verifyRosterBinding(command, requireScheduledStart = false)
+        controlPlane().registerRun(RegisterArenaRunCommand(command.runId, command.modeId, command.scenarioId, command.seed, command.policyVersion, command.admissionWindowId, command.rosterSnapshotId, command.rosterSnapshotHash, command.seedSetHash, command.actorProfileVersion, command.actorProfileHash, command.riskPolicyHash, command.policyEnvelopeHash, command.scoringPolicyVersion, command.scoringPolicyHash, command.economicPolicyVersion, command.economicPolicyHash, canonicalBotVersions))
     }
     fun updateArenaRunStatus(actor: AdminActor, command: ArenaRunStatusCommand): ArenaRunRecord = authorized(actor) {
         if (command.status == ArenaRunStatus.Running) {
@@ -103,7 +103,10 @@ class ArenaAdminApplicationService(
     fun arenaLeaderboardPublic(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry> = arenaRegistryStore.leaderboard(modeId, scoringPolicyVersion, limit)
 
     private fun controlPlane() = ArenaControlPlaneService(arenaRegistryStore, now)
-    private fun verifyRosterBinding(command: ArenaRunRegistrationCommand, requireScheduledStart: Boolean) {
+    private fun verifyRosterBinding(
+        command: ArenaRunRegistrationCommand,
+        requireScheduledStart: Boolean
+    ): List<ArenaRunBotVersionRef> =
         verifyRosterBinding(
             command.admissionWindowId, command.rosterSnapshotId, command.rosterSnapshotHash,
             command.modeId, command.scenarioId, command.seedSetHash,
@@ -114,7 +117,6 @@ class ArenaAdminApplicationService(
             command.botVersions,
             requireScheduledStart
         )
-    }
     private fun verifyRosterBinding(run: ArenaRunRecord, requireScheduledStart: Boolean) {
         verifyRosterBinding(
             run.admissionWindowId, run.rosterSnapshotId, run.rosterSnapshotHash,
@@ -144,7 +146,7 @@ class ArenaAdminApplicationService(
         economicPolicyHash: String,
         botVersions: List<ArenaRunBotVersionRef>,
         requireScheduledStart: Boolean
-    ) {
+    ): List<ArenaRunBotVersionRef> {
         val admissionStore = requireNotNull(arenaRunAdmissionStore) { "arena run admission store is required" }
         val window = requireNotNull(admissionStore.window(windowId)) { "unknown admission window: $windowId" }
         val verifiedAt = now()
@@ -179,7 +181,8 @@ class ArenaAdminApplicationService(
         }
         val removed = admissionStore.removals(windowId).map { it.botId to it.versionId }.toSet()
         val expectedEntries = roster.entries.filter { (it.botId to it.versionId) !in removed }
-        require(botVersions == expectedEntries.map { ArenaRunBotVersionRef(it.botId, it.versionId) }) {
+        val expectedBotVersions = expectedEntries.map { ArenaRunBotVersionRef(it.botId, it.versionId) }
+        require(botVersions.size == botVersions.toSet().size && botVersions.toSet() == expectedBotVersions.toSet()) {
             "run bot composition does not match the active locked roster"
         }
         expectedEntries.forEach { entry ->
@@ -190,6 +193,7 @@ class ArenaAdminApplicationService(
                 "registered bot artifact does not match the locked roster: ${entry.botId}/${entry.versionId}"
             }
         }
+        return expectedBotVersions
     }
     private inline fun <T> authorized(actor: AdminActor, block: () -> T): T { requirePermission(actor); return block() }
     private fun requirePermission(actor: AdminActor) {
