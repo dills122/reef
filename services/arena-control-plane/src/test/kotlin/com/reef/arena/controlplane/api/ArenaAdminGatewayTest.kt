@@ -813,10 +813,22 @@ class ArenaAdminGatewayTest {
             """{
               "snapshotId":"roster-route-1","windowId":"weekly-2026-07-25","maxBots":1,
               "policy":{"modeId":"continuous-book","scenarioId":"baseline","seedSetHash":"sha256:seeds",
-                "actorProfileVersion":"actors-v1","actorProfileHash":"sha256:actors",
+                "actorProfileVersion":"actors-v1","actorProfileHash":"sha256:e4cbc6bf525a82aa554b6404c4d9021e929f039c47a9f8e55428e60d80d5fbc4",
                 "riskPolicyVersion":"risk-v1","riskPolicyHash":"sha256:risk",
                 "scoringPolicyVersion":"score-v1","scoringPolicyHash":"sha256:score",
-                "economicPolicyVersion":"economics-v1","economicPolicyHash":"sha256:economics"},
+                "economicPolicyVersion":"economics-v1","economicPolicyHash":"sha256:f2c81084b40c3654dcf2b3c15fcbb0ce938a641421d1446f8c4ad96a332b298b"},
+              "resolvedPolicies":{
+                "actorProfileCatalog":{"artifactId":"arena-actor-profiles","version":"actors-v1","content":{
+                  "schemaVersion":"reef.arena.actorProfiles.v1","catalogId":"arena-actor-profiles","version":"actors-v1","profiles":[{
+                    "profileId":"competitor-standard","version":"v1","actorClass":"competitor","description":"Default competitor",
+                    "difficultyBucket":"ranked-standard","scoreEffect":"eligible-for-score","allowedParamKeys":["aggression"],"params":{"aggression":0.5}}]}},
+                "economicPolicy":{"artifactId":"preview-zero-fee","version":"economics-v1","content":{
+                  "schemaVersion":"reef.arena.economicPolicy.v1","policyId":"preview-zero-fee","version":"economics-v1","currency":"USD",
+                  "competitionLedger":{"startingCashPerCompetitor":"1000000.00","allowNegativeCash":false},
+                  "houseLedger":{"marketMakerStartingCash":"10000000.00","npcStartingCash":"10000000.00","subsidyBudget":"0.00"},
+                  "fees":{"makerBps":"0","takerBps":"0","cancelFee":"0.00","borrowBps":"0","liquidationPenaltyBps":"0"},
+                  "rebates":{"makerBps":"0","fundingSource":"none"},"sources":[],"sinks":[],
+                  "reconciliation":{"tolerance":"0.01","requireBalancedTransfers":true,"competitionLedger":true,"houseLedger":true}}}},
               "candidates":[{"evaluationId":"eval-route-1","priority":10}]
             }""".trimIndent(),
             principal

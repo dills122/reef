@@ -25,6 +25,12 @@ import {
   buildScoreContext,
   summarizeScoreCalibration,
 } from "./lib/arena-score-breakdown.mjs";
+import {
+  resolveActorProfile as resolvePolicyActorProfile,
+  resolveActorProfileCatalog,
+  resolveEconomicPolicy,
+  resolvePolicyComposition,
+} from "./lib/arena-policy-resolver.mjs";
 
 loadDotEnv();
 
@@ -117,8 +123,9 @@ if (config.scoringPolicyVersion.length > 0) {
 }
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
-const actorProfileCatalog = readJson(mode.actorProfileCatalogPath ?? "packages/scenario-definitions/arena/actor-profiles.v1.json");
-const actorProfileIndex = indexActorProfiles(actorProfileCatalog);
+const actorProfileCatalog = resolveActorProfileCatalog(readJson(mode.actorProfileCatalogPath));
+const economicPolicy = resolveEconomicPolicy(readJson(mode.economicPolicyPath));
+const policyComposition = resolvePolicyComposition(mode, actorProfileCatalog, economicPolicy);
 const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
@@ -128,7 +135,11 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  const actorProfile = resolveActorProfile(entry, actorProfileIndex);
+  const actorProfile = resolvePolicyActorProfile(
+    { ...entry, actorClass: actorClassForBot(entry) },
+    actorProfileCatalog,
+    mode.actorProfileDefaults?.[entry.role],
+  );
   return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile, actorProfile };
 });
 const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
@@ -1083,11 +1094,14 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
       economicPolicyVersion: mode.economicPolicyVersion,
+      economicPolicyHash: economicPolicy.contentHash,
       liquidityPolicyVersion: mode.liquidityPolicyVersion,
       backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
       creditPolicyVersion: mode.creditPolicyVersion,
       interventionPolicyVersion: mode.interventionPolicyVersion,
       actorProfileCatalogVersion: actorProfileCatalog.version,
+      actorProfileCatalogHash: actorProfileCatalog.contentHash,
+      policyCompositionHash: policyComposition.compositionHash,
       npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     },
     policyEnvelope: envelope,
@@ -1206,6 +1220,7 @@ function policyEnvelope() {
     riskPolicyVersion: mode.riskPolicyVersion,
     scoringPolicyVersion: mode.scoringPolicyVersion,
     economicPolicyVersion: mode.economicPolicyVersion,
+    economicPolicyHash: economicPolicy.contentHash,
     liquidityPolicyVersion: mode.liquidityPolicyVersion,
     backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
     creditPolicyVersion: mode.creditPolicyVersion,
@@ -1213,7 +1228,14 @@ function policyEnvelope() {
     actorProfileCatalog: {
       catalogId: actorProfileCatalog.catalogId,
       version: actorProfileCatalog.version,
+      contentHash: actorProfileCatalog.contentHash,
     },
+    economicPolicy: {
+      policyId: economicPolicy.policyId,
+      version: economicPolicy.version,
+      contentHash: economicPolicy.contentHash,
+    },
+    policyCompositionHash: policyComposition.compositionHash,
     actorProfiles: summarizeActorProfiles(selectedBots).profiles.map((profile) => ({
       botId: profile.botId,
       actorClass: profile.actorClass,
@@ -2931,79 +2953,6 @@ function buildRunPlan(modeConfig, runtimeConfig, fixture, botsOrCount) {
     healthInstruments: nonEmptyArray(modeConfig.healthTargets?.primaryInstruments, [modeConfig.instruments?.[0] ?? "AAPL"]),
     actorProfiles: summarizeActorProfiles(selectedBotsForPlan),
   };
-}
-
-function indexActorProfiles(catalog) {
-  if (catalog.schemaVersion !== "reef.arena.actorProfiles.v1") {
-    throw new Error(`unsupported actor profile catalog schema ${catalog.schemaVersion}`);
-  }
-  if (!Array.isArray(catalog.profiles)) {
-    throw new Error("actor profile catalog profiles must be an array");
-  }
-  const profiles = new Map();
-  for (const profile of catalog.profiles) {
-    const profileId = requiredProfileString(profile.profileId, "profileId");
-    if (profiles.has(profileId)) {
-      throw new Error(`duplicate actor profile ${profileId}`);
-    }
-    if (!Array.isArray(profile.allowedParamKeys)) {
-      throw new Error(`actor profile ${profileId} allowedParamKeys must be an array`);
-    }
-    assertKnownProfileParams(profileId, profile.params ?? {}, profile.allowedParamKeys);
-    profiles.set(profileId, profile);
-  }
-  return profiles;
-}
-
-function resolveActorProfile(bot, profiles) {
-  const profileId = bot.actorProfileRef ?? mode.actorProfileDefaults?.[bot.role];
-  if (typeof profileId !== "string" || profileId.length === 0) {
-    throw new Error(`bot ${bot.botId} missing actorProfileRef and no default for role ${bot.role}`);
-  }
-  const profile = profiles.get(profileId);
-  if (profile === undefined) {
-    throw new Error(`bot ${bot.botId} references unknown actor profile ${profileId}`);
-  }
-  const actorClass = actorClassForBot(bot);
-  if (profile.actorClass !== actorClass) {
-    throw new Error(`bot ${bot.botId} role ${bot.role} maps to ${actorClass} but actor profile ${profileId} is ${profile.actorClass}`);
-  }
-  const overrides = bot.actorProfileParams ?? {};
-  assertKnownProfileParams(profileId, overrides, profile.allowedParamKeys);
-  const resolved = {
-    profileId,
-    profileVersion: requiredProfileString(profile.version, `${profileId}.version`),
-    actorClass,
-    difficultyBucket: requiredProfileString(profile.difficultyBucket, `${profileId}.difficultyBucket`),
-    scoreEffect: requiredProfileString(profile.scoreEffect, `${profileId}.scoreEffect`),
-    params: {
-      ...(profile.params ?? {}),
-      ...overrides,
-    },
-  };
-  return {
-    ...resolved,
-    profileHash: `sha256:${stableHash(resolved)}`,
-  };
-}
-
-function assertKnownProfileParams(profileId, params, allowedParamKeys) {
-  if (params === null || typeof params !== "object" || Array.isArray(params)) {
-    throw new Error(`actor profile ${profileId} params must be an object`);
-  }
-  const allowed = new Set(allowedParamKeys);
-  for (const key of Object.keys(params)) {
-    if (!allowed.has(key)) {
-      throw new Error(`actor profile ${profileId} has unknown param ${key}`);
-    }
-  }
-}
-
-function requiredProfileString(value, name) {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`actor profile ${name} must be a non-empty string`);
-  }
-  return value;
 }
 
 function summarizeActorProfiles(bots) {

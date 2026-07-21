@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "reef.arena.economicPolicy.v1",
+  "policyId": "preview-zero-fee",
+  "version": "preview-zero-fee-v1",
+  "currency": "USD",
+  "competitionLedger": {
+    "startingCashPerCompetitor": "1000000.00",
+    "allowNegativeCash": false
+  },
+  "houseLedger": {
+    "marketMakerStartingCash": "10000000.00",
+    "npcStartingCash": "10000000.00",
+    "subsidyBudget": "0.00"
+  },
+  "fees": {
+    "makerBps": "0",
+    "takerBps": "0",
+    "cancelFee": "0.00",
+    "borrowBps": "0",
+    "liquidationPenaltyBps": "0"
+  },
+  "rebates": {
+    "makerBps": "0",
+    "fundingSource": "none"
+  },
+  "sources": [
+    { "code": "competitor_starting_cash", "ledger": "competition", "enabled": true, "funding": "run_initialization" },
+    { "code": "market_maker_starting_cash", "ledger": "house", "enabled": true, "funding": "run_initialization" },
+    { "code": "npc_starting_cash", "ledger": "house", "enabled": true, "funding": "run_initialization" }
+  ],
+  "sinks": [],
+  "reconciliation": {
+    "tolerance": "0.01",
+    "requireBalancedTransfers": true,
+    "competitionLedger": true,
+    "houseLedger": true
+  }
+}

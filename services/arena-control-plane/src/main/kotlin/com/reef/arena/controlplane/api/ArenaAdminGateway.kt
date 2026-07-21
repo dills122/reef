@@ -56,6 +56,9 @@ import com.reef.arena.controlplane.arena.ArenaAdmissionWindow
 import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
 import com.reef.arena.controlplane.arena.ArenaEligibilityCandidate
 import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaResolvedPolicyKind
+import com.reef.arena.controlplane.arena.ArenaRosterPolicyVerifier
+import com.reef.arena.controlplane.arena.ArenaRosterResolvedPolicies
 import com.reef.arena.controlplane.arena.ArenaRosterSnapshot
 import com.reef.arena.controlplane.arena.ArenaRosterRemoval
 import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
@@ -80,6 +83,7 @@ internal class ArenaAdminGateway(
     private val botConfigSecretService: BotConfigSecretService? = null
 ) : OptionalProductRouteExtension {
     private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
+    private val rosterPolicyVerifier = ArenaRosterPolicyVerifier()
     override val internalPaths = listOf(
         "/internal/admin/arena/bots", "/internal/admin/arena/my/bots", "/internal/admin/arena/bot-versions",
         "/internal/admin/arena/bot-versions/transition", "/internal/admin/arena/qualification-reports",
@@ -302,6 +306,9 @@ internal class ArenaAdminGateway(
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return arenaAdmissionWrite("roster lock failed") {
             val policy = json.obj("policy")
+            val resolvedPolicies = json.obj("resolvedPolicies")
+            val actorProfileCatalog = resolvedPolicies.obj("actorProfileCatalog")
+            val economicPolicy = resolvedPolicies.obj("economicPolicy")
             val result = service.lockRoster(
                 arenaAdminActor(json),
                 LockArenaRosterCommand(
@@ -319,6 +326,20 @@ internal class ArenaAdminGateway(
                         scoringPolicyHash = policy.string("scoringPolicyHash"),
                         economicPolicyVersion = policy.string("economicPolicyVersion"),
                         economicPolicyHash = policy.string("economicPolicyHash")
+                    ),
+                    resolvedPolicies = ArenaRosterResolvedPolicies(
+                        actorProfileCatalog = rosterPolicyVerifier.canonicalArtifact(
+                            ArenaResolvedPolicyKind.ActorProfileCatalog,
+                            actorProfileCatalog.string("artifactId"),
+                            actorProfileCatalog.string("version"),
+                            actorProfileCatalog.raw("content")
+                        ),
+                        economicPolicy = rosterPolicyVerifier.canonicalArtifact(
+                            ArenaResolvedPolicyKind.EconomicPolicy,
+                            economicPolicy.string("artifactId"),
+                            economicPolicy.string("version"),
+                            economicPolicy.raw("content")
+                        )
                     ),
                     candidates = json.objectDocuments("candidates").map { candidate ->
                         ArenaRosterCandidateCommand(

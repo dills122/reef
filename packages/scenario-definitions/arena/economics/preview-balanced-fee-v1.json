@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "reef.arena.economicPolicy.v1",
+  "policyId": "preview-balanced-fee",
+  "version": "preview-balanced-fee-v1",
+  "currency": "USD",
+  "competitionLedger": {
+    "startingCashPerCompetitor": "1000000.00",
+    "allowNegativeCash": false
+  },
+  "houseLedger": {
+    "marketMakerStartingCash": "10000000.00",
+    "npcStartingCash": "10000000.00",
+    "subsidyBudget": "0.00"
+  },
+  "fees": {
+    "makerBps": "0",
+    "takerBps": "2",
+    "cancelFee": "0.00",
+    "borrowBps": "0",
+    "liquidationPenaltyBps": "0"
+  },
+  "rebates": {
+    "makerBps": "0.5",
+    "fundingSource": "taker_fees"
+  },
+  "sources": [
+    { "code": "competitor_starting_cash", "ledger": "competition", "enabled": true, "funding": "run_initialization" },
+    { "code": "market_maker_starting_cash", "ledger": "house", "enabled": true, "funding": "run_initialization" },
+    { "code": "npc_starting_cash", "ledger": "house", "enabled": true, "funding": "run_initialization" }
+  ],
+  "sinks": [
+    { "code": "taker_fees", "ledger": "competition", "enabled": true, "funding": "matched_trade_notional" }
+  ],
+  "reconciliation": {
+    "tolerance": "0.01",
+    "requireBalancedTransfers": true,
+    "competitionLedger": true,
+    "houseLedger": true
+  }
+}

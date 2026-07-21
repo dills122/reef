@@ -450,6 +450,13 @@ Replay envelope additions:
 
 ## First Implementation Slice
 
+Current checkpoint (2026-07-20): items 1-2 are implemented with strict
+canonical actor/economic resolution and all three invite-preview economic
+fixtures. Runner reports now retain resolved catalog, profile, economic-policy,
+and composition hashes; roster lock verifies the resolved actor/economic
+content before persisting those references. Items 3, 6 beyond the roster
+snapshot, 7, and 8 remain active work.
+
 1. Add static policy fixtures under `packages/scenario-definitions/arena/`.
 2. Add `ActorProfile` fixtures with strict parameter validation and resolved
    profile hashes.

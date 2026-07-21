@@ -6,6 +6,9 @@ import com.reef.arena.controlplane.arena.ArenaEligibilityCandidate
 import com.reef.arena.controlplane.arena.ArenaEligibilityOutcome
 import com.reef.arena.controlplane.arena.ArenaEligibilityReason
 import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaResolvedPolicyKind
+import com.reef.arena.controlplane.arena.ArenaRosterPolicyVerifier
+import com.reef.arena.controlplane.arena.ArenaRosterResolvedPolicies
 import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
 import com.reef.arena.controlplane.arena.InMemoryArenaRunAdmissionStore
 import com.reef.platform.application.admin.AdminActor
@@ -16,6 +19,21 @@ import kotlin.test.assertFailsWith
 
 class ArenaRunAdmissionApplicationServiceTest {
     private val actor = AdminActor("arena-operator", "corr-admission", "2026-08-01T00:00:00Z")
+    private val verifier = ArenaRosterPolicyVerifier()
+    private val resolvedPolicies = ArenaRosterResolvedPolicies(
+        verifier.canonicalArtifact(
+            ArenaResolvedPolicyKind.ActorProfileCatalog,
+            "arena-actor-profiles",
+            "actors-v1",
+            """{"schemaVersion":"reef.arena.actorProfiles.v1","catalogId":"arena-actor-profiles","version":"actors-v1","profiles":[{"profileId":"competitor-standard","version":"v1","actorClass":"competitor","description":"Default competitor","difficultyBucket":"ranked-standard","scoreEffect":"eligible-for-score","allowedParamKeys":["aggression"],"params":{"aggression":0.5}}]}"""
+        ),
+        verifier.canonicalArtifact(
+            ArenaResolvedPolicyKind.EconomicPolicy,
+            "preview-zero-fee",
+            "economics-v1",
+            """{"schemaVersion":"reef.arena.economicPolicy.v1","policyId":"preview-zero-fee","version":"economics-v1","currency":"USD","competitionLedger":{"startingCashPerCompetitor":"1000000.00","allowNegativeCash":false},"houseLedger":{"marketMakerStartingCash":"10000000.00","npcStartingCash":"10000000.00","subsidyBudget":"0.00"},"fees":{"makerBps":"0","takerBps":"0","cancelFee":"0.00","borrowBps":"0","liquidationPenaltyBps":"0"},"rebates":{"makerBps":"0","fundingSource":"none"},"sources":[],"sinks":[],"reconciliation":{"tolerance":"0.01","requireBalancedTransfers":true,"competitionLedger":true,"houseLedger":true}}"""
+        )
+    )
 
     @Test
     fun schedulesEvaluatesAndLocksAnIdempotentCapacityBoundedRoster() {
@@ -55,6 +73,7 @@ class ArenaRunAdmissionApplicationServiceTest {
             snapshotId = "roster-2026-08-10",
             windowId = window.windowId,
             policy = policy(),
+            resolvedPolicies = resolvedPolicies,
             candidates = decisions.map {
                 ArenaRosterCandidateCommand(it.evaluationId, 10)
             },
@@ -65,6 +84,12 @@ class ArenaRunAdmissionApplicationServiceTest {
             actor,
             PreviewArenaRosterCommand(window.windowId, command.candidates, maxBots = 1)
         )
+        assertFailsWith<IllegalArgumentException> {
+            service.lockRoster(
+                actor,
+                command.copy(policy = command.policy.copy(economicPolicyHash = "sha256:caller-supplied"))
+            )
+        }
         assertFailsWith<IllegalArgumentException> {
             service.lockRoster(
                 actor,
@@ -142,7 +167,7 @@ class ArenaRunAdmissionApplicationServiceTest {
         )
 
     private fun policy() = ArenaRosterPolicySnapshot(
-        "continuous-book", "baseline", "sha256:seeds", "actors-v1", "sha256:actors",
-        "risk-v1", "sha256:risk", "score-v1", "sha256:score", "economics-v1", "sha256:economics"
+        "continuous-book", "baseline", "sha256:seeds", "actors-v1", resolvedPolicies.actorProfileCatalog.contentHash,
+        "risk-v1", "sha256:risk", "score-v1", "sha256:score", "economics-v1", resolvedPolicies.economicPolicy.contentHash
     )
 }

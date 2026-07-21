@@ -189,8 +189,14 @@ Reef must have no compile-time dependency on Arena implementations.
 Remaining work in this sprint is preview policy and evidence, not another
 packaging extraction. A future network-service split may be justified by
 deployment or scaling needs, but it is not required for the invite preview.
-Versioned economic-policy fixtures and resolution remain incomplete and are
-tracked below.
+The first policy-resolution slice is now implemented: actor catalogs and
+profiles reject unknown fields/parameters, the three named preview economic
+policies are versioned fixtures, and the runner resolves canonical catalog,
+economic-policy, profile, and composition hashes. Roster lock recomputes the
+catalog and economic-policy hashes from canonical resolved content and rejects
+caller-supplied version/hash pairs that do not match. Scoring-policy definition
+resolution, run-record policy persistence beyond the roster snapshot, active
+scoring lock, and economic reconciliation remain tracked below.
 
 ## Persona And Economic Policy Modules
 
@@ -288,8 +294,9 @@ excluded decisions with explicit priorities. Exact cutoffs are inclusive and
 late readiness rolls to the next window; bot/owner restrictions are hard
 exclusions. Emergency removal is an immutable audit overlay between roster lock
 and `T0`: it changes the effective roster without mutating the snapshot or
-adding a replacement. Remaining work here is strict actor/economic-policy
-resolution and recorded hosted/external-account evidence.
+adding a replacement. Roster lock now also verifies canonical actor-catalog and
+economic-policy content before accepting their version/hash references.
+Remaining work here is recorded hosted/external-account evidence.
 
 Deliverables:
 
@@ -339,6 +346,15 @@ Acceptance:
 - enabling Arena changes adapters/deployment only, not venue semantics
 
 ## Workstream D: Persona And Policy Definitions
+
+Implementation status (2026-07-20): strict reusable actor/economic resolvers,
+canonical SHA-256 hashing, version/reference consistency checks, the
+`preview-zero-fee-v1`, `preview-balanced-fee-v1`, and
+`preview-liquidity-subsidy-v1` fixtures, runner report/envelope hashes, and
+roster-lock hash verification are implemented. The next slice is strict
+scoring-policy definition/reference resolution, persisted resolved run-policy
+artifacts, active scoring lock through score publication, and competition/house
+ledger reconciliation.
 
 Deliverables:
 

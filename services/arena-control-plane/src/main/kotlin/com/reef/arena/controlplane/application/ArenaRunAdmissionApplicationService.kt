@@ -11,6 +11,8 @@ import com.reef.arena.controlplane.arena.ArenaRosterLockResult
 import com.reef.arena.controlplane.arena.ArenaRosterLocker
 import com.reef.arena.controlplane.arena.ArenaRosterPlanner
 import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaRosterPolicyVerifier
+import com.reef.arena.controlplane.arena.ArenaRosterResolvedPolicies
 import com.reef.arena.controlplane.arena.ArenaRosterRemoval
 import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
 import com.reef.arena.controlplane.arena.ArenaRosterSnapshot
@@ -44,6 +46,7 @@ data class LockArenaRosterCommand(
     val snapshotId: String,
     val windowId: String,
     val policy: ArenaRosterPolicySnapshot,
+    val resolvedPolicies: ArenaRosterResolvedPolicies,
     val candidates: List<ArenaRosterCandidateCommand>,
     val maxBots: Int
 )
@@ -79,7 +82,8 @@ class ArenaRunAdmissionApplicationService(
     private val now: () -> Instant = { Instant.now() },
     private val evaluator: ArenaEligibilityEvaluator = ArenaEligibilityEvaluator(),
     private val rosterLocker: ArenaRosterLocker = ArenaRosterLocker(),
-    private val rosterPlanner: ArenaRosterPlanner = ArenaRosterPlanner()
+    private val rosterPlanner: ArenaRosterPlanner = ArenaRosterPlanner(),
+    private val policyVerifier: ArenaRosterPolicyVerifier = ArenaRosterPolicyVerifier()
 ) {
     fun scheduleWindow(actor: AdminActor, command: ScheduleArenaAdmissionWindowCommand): ArenaAdmissionWindow =
         authorized(actor) {
@@ -141,6 +145,7 @@ class ArenaRunAdmissionApplicationService(
 
     fun lockRoster(actor: AdminActor, command: LockArenaRosterCommand): ArenaRosterLockResult =
         authorized(actor) {
+            policyVerifier.verify(command.policy, command.resolvedPolicies)
             val window = requireNotNull(store.window(command.windowId)) { "unknown admission window: ${command.windowId}" }
             val decisions = store.decisions(command.windowId)
             val candidates = resolveCandidates(command.windowId, decisions, command.candidates)
