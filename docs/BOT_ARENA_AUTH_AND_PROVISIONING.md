@@ -290,6 +290,11 @@ server-side service token. Scoped service token families are route-specific:
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
 /admin/v1/arena/bots/config             -> admin
 /admin/v1/arena/bot-versions            -> ci, admin
+/admin/v1/arena/admission-windows       -> ci, admin
+/admin/v1/arena/eligibility-decisions   -> ci, admin
+/admin/v1/arena/roster-previews         -> ci, admin
+/admin/v1/arena/rosters                 -> ci, admin
+/admin/v1/arena/roster-removals         -> ci, admin
 GET /admin/v1/access/users              -> admin
 GET /admin/v1/access/roles              -> admin
 POST /admin/v1/access/users/trust-state -> admin
@@ -467,7 +472,7 @@ BAO_BOT_CONFIG_SECRET_ID=...
 8. PR check confirms approval, SHA-bound checks, provisioning, and config readiness.
 9. Maintainer merges the PR before the run-window cutoff.
 10. Registry sync rebuilds from master, verifies source/artifact hashes, and records the accepted bot version.
-11. The eligibility evaluator may add that immutable version to a future locked roster.
+11. The eligibility evaluator may add that immutable version to a future locked roster. Operators schedule and inspect windows through `/admin/v1/arena/admission-windows`, persist reason-coded results through `/admin/v1/arena/eligibility-decisions`, preview deterministic capacity ordering through `/admin/v1/arena/roster-previews`, lock/read the immutable hashed snapshot through `/admin/v1/arena/rosters`, and record a no-replacement emergency-removal overlay through `/admin/v1/arena/roster-removals`. The corresponding session-gated UI is `/admin/admission`.
 ```
 
 OpenBao slice provisioning should happen before merge. Secret/config completeness

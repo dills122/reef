@@ -383,6 +383,7 @@ test("routes arena migrations only to arena database target", async () => {
       "arena/0005_arena_bot_entitlements.sql",
       "arena/0006_remove_arena_bot_limits.sql",
       "arena/0007_arena_submission_admissions.sql",
+      "arena/0008_arena_admission_windows_and_rosters.sql",
     ],
   );
 });

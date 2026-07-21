@@ -23,6 +23,15 @@ import com.reef.arena.controlplane.arena.ArenaRunStatus
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigProvider
 import com.reef.arena.controlplane.arena.PostgresArenaBotRegistryStore
+import com.reef.arena.controlplane.arena.PostgresArenaRunAdmissionStore
+import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
+import com.reef.arena.controlplane.arena.ArenaEligibilityCandidate
+import com.reef.arena.controlplane.arena.ArenaEligibilityEvaluator
+import com.reef.arena.controlplane.arena.ArenaRosterCandidate
+import com.reef.arena.controlplane.arena.ArenaRosterLocker
+import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaRosterRemoval
+import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
 import com.reef.arena.controlplane.arena.RegisterArenaBotCommand
 import com.reef.arena.controlplane.arena.RegisterArenaBotVersionCommand
 import com.reef.arena.controlplane.arena.RegisterArenaRunCommand
@@ -1361,6 +1370,67 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
         assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
         assertEquals(botId, store.leaderboard(modeId, scoringPolicyVersion).single().botId)
+    }
+
+    @Test
+    fun validateModeArenaRunAdmissionStorePersistsImmutableWindowDecisionAndRoster() {
+        val jdbcUrl = System.getenv("ARENA_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("ARENA_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("ARENA_POSTGRES_PASSWORD_TEST") ?: return
+        val store = PostgresArenaRunAdmissionStore(
+            RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword),
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val start = Instant.parse("2026-08-10T00:00:00Z")
+        val window = ArenaAdmissionWindowPolicy("admission-v1").schedule(
+            "window-$suffix", start, "UTC", Instant.parse("2026-08-01T00:00:00Z").plusNanos(123)
+        )
+        val decision = ArenaEligibilityEvaluator().evaluate(
+            "evaluation-$suffix",
+            window,
+            ArenaEligibilityCandidate(
+                "bot-$suffix", "v1", window.inviteDecisionCutoff, "abc", "abc",
+                window.mergeReadinessCutoff, window.mergeReadinessCutoff, window.mergeReadinessCutoff,
+                window.rosterLockAt, window.rosterLockAt,
+                "sha256:source", "sha256:artifact", "sha256:config", ArenaBotVersionStatus.Approved,
+                ownerTrusted = true, ownershipActive = true, botRestricted = false, ownerRestricted = false,
+                secretSliceExists = true, gameModeAllowed = true, runtimeSupported = true, riskPreflightPassed = true
+            ),
+            window.rosterLockAt.plusNanos(123),
+            "corr-$suffix"
+        )
+        val roster = ArenaRosterLocker().lock(
+            "roster-$suffix",
+            window,
+            ArenaRosterPolicySnapshot(
+                "continuous-book", "baseline", "sha256:seeds", "actors-v1", "sha256:actors",
+                "risk-v1", "sha256:risk", "score-v1", "sha256:score", "economics-v1", "sha256:economics"
+            ),
+            listOf(ArenaRosterCandidate(decision, 10)),
+            maxBots = 1,
+            lockedAt = window.rosterLockAt.plusNanos(999),
+            lockedBy = "admin-cli",
+            correlationId = "corr-$suffix"
+        ).snapshot
+
+        val persistedWindow = window.copy(createdAt = window.createdAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        val persistedDecision = decision.copy(evaluatedAt = decision.evaluatedAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        val persistedRoster = roster.copy(lockedAt = roster.lockedAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        val removal = ArenaRosterRemoval(
+            "removal-$suffix", window.windowId, roster.snapshotId, decision.botId, decision.versionId,
+            ArenaRosterRemovalReason.Availability, "runner unavailable",
+            window.rosterLockAt.plusSeconds(1).plusNanos(123), "admin-cli", "corr-$suffix"
+        )
+        val persistedRemoval = removal.copy(removedAt = removal.removedAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        assertEquals(persistedWindow, store.createWindow(window))
+        assertEquals(persistedDecision, store.recordDecision(decision))
+        assertEquals(persistedRoster, store.lockRoster(roster))
+        assertEquals(persistedWindow, store.window(window.windowId))
+        assertEquals(listOf(persistedDecision), store.decisions(window.windowId))
+        assertEquals(persistedRoster, store.roster(window.windowId))
+        assertEquals(persistedRemoval, store.recordRemoval(removal))
+        assertEquals(listOf(persistedRemoval), store.removals(window.windowId))
     }
 
     @Test

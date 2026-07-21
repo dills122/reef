@@ -23,6 +23,12 @@ class PostgresArenaSqlNamesTest {
         assertEquals("arena.runtime_config_descriptors", names.runtimeConfigDescriptors)
         assertEquals("arena.user_bot_ownerships", names.userBotOwnerships)
         assertEquals("arena.submission_admissions", names.submissionAdmissions)
+        assertEquals("arena.admission_windows", names.admissionWindows)
+        assertEquals("arena.eligibility_decisions", names.eligibilityDecisions)
+        assertEquals("arena.eligibility_decision_reasons", names.eligibilityDecisionReasons)
+        assertEquals("arena.roster_snapshots", names.rosterSnapshots)
+        assertEquals("arena.roster_snapshot_entries", names.rosterSnapshotEntries)
+        assertEquals("arena.roster_removals", names.rosterRemovals)
     }
 
     @Test
@@ -88,6 +94,35 @@ class PostgresArenaSqlNamesTest {
                 "arena.submission_admissions.github_user_id:bigint",
                 "arena.submission_admissions.head_sha:text",
                 "arena.submission_admissions.invited_at:timestamp with time zone"
+            )
+        ))
+    }
+
+    @Test
+    fun runAdmissionRequirementsCoverEligibilityAndRosterObjects() {
+        val requirements = ArenaPostgresSchemaRequirements.runAdmission(PostgresArenaSqlNames())
+
+        assertEquals(
+            setOf(
+                "arena.admission_windows",
+                "arena.eligibility_decisions",
+                "arena.eligibility_decision_reasons",
+                "arena.roster_snapshots",
+                "arena.roster_snapshot_entries",
+                "arena.roster_removals"
+            ),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.containsAll(
+            setOf(
+                "arena.admission_windows.scheduled_start:timestamp with time zone",
+                "arena.eligibility_decisions.outcome:text",
+                "arena.eligibility_decisions.artifact_hash:text",
+                "arena.eligibility_decision_reasons.reason_code:text",
+                "arena.roster_snapshots.snapshot_hash:text",
+                "arena.roster_snapshots.max_bots:integer",
+                "arena.roster_snapshot_entries.eligibility_evaluation_id:text",
+                "arena.roster_removals.reason_code:text"
             )
         ))
     }

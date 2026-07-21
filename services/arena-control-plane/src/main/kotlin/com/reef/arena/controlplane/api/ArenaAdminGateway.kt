@@ -15,6 +15,13 @@ import com.reef.arena.controlplane.application.ArenaRunBotResultIngestionCommand
 import com.reef.arena.controlplane.application.ArenaRunEnforcementEventIngestionCommand
 import com.reef.arena.controlplane.application.ArenaRunRegistrationCommand
 import com.reef.arena.controlplane.application.ArenaRunStatusCommand
+import com.reef.arena.controlplane.application.ArenaRunAdmissionApplicationService
+import com.reef.arena.controlplane.application.ArenaRosterCandidateCommand
+import com.reef.arena.controlplane.application.EvaluateArenaEligibilityCommand
+import com.reef.arena.controlplane.application.LockArenaRosterCommand
+import com.reef.arena.controlplane.application.PreviewArenaRosterCommand
+import com.reef.arena.controlplane.application.RemoveArenaRosterEntryCommand
+import com.reef.arena.controlplane.application.ScheduleArenaAdmissionWindowCommand
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.analytics.BotRunPerformanceSummaryRecord
 import com.reef.platform.application.analytics.SimulationRunExportCommand
@@ -45,6 +52,14 @@ import com.reef.arena.controlplane.arena.OpenBaoProvisioningConfig
 import com.reef.arena.controlplane.arena.OpenBaoProvisioningService
 import com.reef.arena.controlplane.arena.ApproveArenaSubmissionInviteCommand
 import com.reef.arena.controlplane.arena.RecordArenaSubmissionPendingCommand
+import com.reef.arena.controlplane.arena.ArenaAdmissionWindow
+import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
+import com.reef.arena.controlplane.arena.ArenaEligibilityCandidate
+import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaRosterSnapshot
+import com.reef.arena.controlplane.arena.ArenaRosterRemoval
+import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
+import com.reef.arena.controlplane.arena.ArenaRunEligibilityDecision
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
@@ -61,6 +76,7 @@ internal class ArenaAdminGateway(
     private val analyticsRunExportService: SimulationRunExportService?,
     private val arenaBotEntitlementStore: ArenaBotEntitlementStore? = null,
     private val arenaSubmissionAdmissionStore: ArenaSubmissionAdmissionStore? = null,
+    private val arenaRunAdmissionService: ArenaRunAdmissionApplicationService? = null,
     private val botConfigSecretService: BotConfigSecretService? = null
 ) : OptionalProductRouteExtension {
     private val requestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
@@ -72,6 +88,9 @@ internal class ArenaAdminGateway(
         "/internal/admin/arena/run-enforcement-events", "/internal/admin/arena/leaderboard",
         "/internal/admin/arena/bots/openbao-provision", "/internal/admin/arena/bots/ownership",
         "/internal/admin/arena/submission-admissions", "/internal/admin/arena/submission-admissions/approve",
+        "/internal/admin/arena/admission-windows", "/internal/admin/arena/eligibility-decisions",
+        "/internal/admin/arena/rosters", "/internal/admin/arena/roster-previews",
+        "/internal/admin/arena/roster-removals",
         "/internal/admin/arena/bots/config", "/internal/admin/analytics/run-exports",
         "/internal/admin/analytics/run-bot-summaries"
     )
@@ -83,6 +102,11 @@ internal class ArenaAdminGateway(
         adminRoute("/admin/v1/arena/bots/ownership", setOf("POST"), "/internal/admin/arena/bots/ownership", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/submission-admissions", setOf("POST"), "/internal/admin/arena/submission-admissions", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/submission-admissions/approve", setOf("POST"), "/internal/admin/arena/submission-admissions/approve", "admin", adminTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/admission-windows", setOf("GET", "POST"), "/internal/admin/arena/admission-windows", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/eligibility-decisions", setOf("GET", "POST"), "/internal/admin/arena/eligibility-decisions", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/rosters", setOf("GET", "POST"), "/internal/admin/arena/rosters", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/roster-previews", setOf("POST"), "/internal/admin/arena/roster-previews", "arena", arenaTokens, operatorRoles),
+        adminRoute("/admin/v1/arena/roster-removals", setOf("GET", "POST"), "/internal/admin/arena/roster-removals", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/bots/config", setOf("GET", "PUT", "DELETE"), "/internal/admin/arena/bots/config", "admin", adminTokens),
         adminRoute("/admin/v1/arena/bot-versions", setOf("GET", "POST"), "/internal/admin/arena/bot-versions", "arena", arenaTokens, operatorRoles),
         adminRoute("/admin/v1/arena/bot-versions/transition", setOf("POST"), "/internal/admin/arena/bot-versions/transition", "arena", arenaTokens, operatorRoles),
@@ -121,6 +145,11 @@ internal class ArenaAdminGateway(
         "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipResponse(body) }
         "/internal/admin/arena/submission-admissions" -> postOnly(method) { recordArenaSubmissionAdmissionResponse(body) }
         "/internal/admin/arena/submission-admissions/approve" -> postOnly(method) { approveArenaSubmissionAdmissionResponse(body) }
+        "/internal/admin/arena/admission-windows" -> getOrPost(method, { arenaAdmissionWindowResponse(query) }, { scheduleArenaAdmissionWindowResponse(body) })
+        "/internal/admin/arena/eligibility-decisions" -> getOrPost(method, { arenaEligibilityDecisionsResponse(query) }, { evaluateArenaEligibilityResponse(body) })
+        "/internal/admin/arena/rosters" -> getOrPost(method, { arenaRosterResponse(query) }, { lockArenaRosterResponse(body) })
+        "/internal/admin/arena/roster-previews" -> postOnly(method) { previewArenaRosterResponse(body) }
+        "/internal/admin/arena/roster-removals" -> getOrPost(method, { arenaRosterRemovalsResponse(query) }, { removeArenaRosterEntryResponse(body) })
         "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
         "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
         "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
@@ -183,6 +212,232 @@ internal class ArenaAdminGateway(
         "GET" -> getResponse()
         "POST" -> postResponse()
         else -> methodNotAllowedResponse()
+    }
+
+    fun scheduleArenaAdmissionWindowResponse(body: String): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return arenaAdmissionWrite("admission window scheduling failed") {
+            val window = service.scheduleWindow(
+                arenaAdminActor(json),
+                ScheduleArenaAdmissionWindowCommand(
+                    windowId = json.string("windowId"),
+                    policy = ArenaAdmissionWindowPolicy(json.string("policyVersion")),
+                    scheduledStart = java.time.Instant.parse(json.string("scheduledStart")),
+                    displayTimeZone = json.string("displayTimeZone")
+                )
+            )
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "window" to arenaAdmissionWindowJson(window)))
+        }
+    }
+
+    fun arenaAdmissionWindowResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val windowId = queryValue(query, "windowId")
+        if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
+        return try {
+            val window = service.window(arenaAdminActor(query), windowId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admission window not found"))
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "window" to arenaAdmissionWindowJson(window)))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "admission window lookup failed")))
+        }
+    }
+
+    fun evaluateArenaEligibilityResponse(body: String): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return arenaAdmissionWrite("eligibility evaluation failed") {
+            val versionStatus = normalizeArenaBotVersionStatus(json.string("versionStatus"))
+                ?: throw IllegalArgumentException("invalid arena bot version status")
+            val decision = service.evaluate(
+                arenaAdminActor(json),
+                EvaluateArenaEligibilityCommand(
+                    evaluationId = json.string("evaluationId"),
+                    windowId = json.string("windowId"),
+                    candidate = ArenaEligibilityCandidate(
+                        botId = json.string("botId"),
+                        versionId = json.string("versionId"),
+                        invitedAt = instantOrNull(json.string("invitedAt")),
+                        approvedHeadSha = json.string("approvedHeadSha"),
+                        currentHeadSha = json.string("currentHeadSha"),
+                        checksPassedAt = instantOrNull(json.string("checksPassedAt")),
+                        provisionedAt = instantOrNull(json.string("provisionedAt")),
+                        configValidatedAt = instantOrNull(json.string("configValidatedAt")),
+                        mergedAt = instantOrNull(json.string("mergedAt")),
+                        registryVerifiedAt = instantOrNull(json.string("registryVerifiedAt")),
+                        sourceHash = json.string("sourceHash"),
+                        artifactHash = json.string("artifactHash"),
+                        configHash = json.string("configHash"),
+                        versionStatus = versionStatus,
+                        ownerTrusted = requiredBoolean(json, "ownerTrusted"),
+                        ownershipActive = requiredBoolean(json, "ownershipActive"),
+                        botRestricted = requiredBoolean(json, "botRestricted"),
+                        ownerRestricted = requiredBoolean(json, "ownerRestricted"),
+                        secretSliceExists = requiredBoolean(json, "secretSliceExists"),
+                        gameModeAllowed = requiredBoolean(json, "gameModeAllowed"),
+                        runtimeSupported = requiredBoolean(json, "runtimeSupported"),
+                        riskPreflightPassed = requiredBoolean(json, "riskPreflightPassed")
+                    )
+                )
+            )
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "decision" to arenaEligibilityDecisionJson(decision)))
+        }
+    }
+
+    fun arenaEligibilityDecisionsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val windowId = queryValue(query, "windowId")
+        if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
+        return try {
+            val decisions = service.decisions(arenaAdminActor(query), windowId)
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map(::arenaEligibilityDecisionJson)))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "eligibility decision lookup failed")))
+        }
+    }
+
+    fun lockArenaRosterResponse(body: String): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return arenaAdmissionWrite("roster lock failed") {
+            val policy = json.obj("policy")
+            val result = service.lockRoster(
+                arenaAdminActor(json),
+                LockArenaRosterCommand(
+                    snapshotId = json.string("snapshotId"),
+                    windowId = json.string("windowId"),
+                    policy = ArenaRosterPolicySnapshot(
+                        modeId = policy.string("modeId"),
+                        scenarioId = policy.string("scenarioId"),
+                        seedSetHash = policy.string("seedSetHash"),
+                        actorProfileVersion = policy.string("actorProfileVersion"),
+                        actorProfileHash = policy.string("actorProfileHash"),
+                        riskPolicyVersion = policy.string("riskPolicyVersion"),
+                        riskPolicyHash = policy.string("riskPolicyHash"),
+                        scoringPolicyVersion = policy.string("scoringPolicyVersion"),
+                        scoringPolicyHash = policy.string("scoringPolicyHash"),
+                        economicPolicyVersion = policy.string("economicPolicyVersion"),
+                        economicPolicyHash = policy.string("economicPolicyHash")
+                    ),
+                    candidates = json.objectDocuments("candidates").map { candidate ->
+                        ArenaRosterCandidateCommand(
+                            candidate.string("evaluationId"), candidate.requiredInt("priority")
+                        )
+                    },
+                    maxBots = json.requiredInt("maxBots")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "roster" to arenaRosterJson(result.snapshot),
+                    "overflowEvaluationIds" to result.overflow.map { it.decision.evaluationId }
+                )
+            )
+        }
+    }
+
+    fun previewArenaRosterResponse(body: String): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return arenaAdmissionWrite("roster preview failed") {
+            val preview = service.previewRoster(
+                arenaAdminActor(json),
+                PreviewArenaRosterCommand(
+                    windowId = json.string("windowId"),
+                    candidates = json.objectDocuments("candidates").map { candidate ->
+                        ArenaRosterCandidateCommand(
+                            candidate.string("evaluationId"), candidate.requiredInt("priority")
+                        )
+                    },
+                    maxBots = json.requiredInt("maxBots")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "preview" to mapOf(
+                        "windowId" to preview.windowId,
+                        "maxBots" to preview.maxBots,
+                        "included" to preview.included.map {
+                            mapOf("priority" to it.priority, "decision" to arenaEligibilityDecisionJson(it.decision))
+                        },
+                        "capacityOverflow" to preview.capacityOverflow.map {
+                            mapOf("priority" to it.priority, "decision" to arenaEligibilityDecisionJson(it.decision))
+                        },
+                        "awaitingPriority" to preview.awaitingPriority.map(::arenaEligibilityDecisionJson),
+                        "rolled" to preview.rolled.map(::arenaEligibilityDecisionJson),
+                        "excluded" to preview.excluded.map(::arenaEligibilityDecisionJson)
+                    )
+                )
+            )
+        }
+    }
+
+    fun removeArenaRosterEntryResponse(body: String): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return arenaAdmissionWrite("roster removal failed") {
+            val removal = service.removeFromRoster(
+                arenaAdminActor(json),
+                RemoveArenaRosterEntryCommand(
+                    removalId = json.string("removalId"),
+                    windowId = json.string("windowId"),
+                    botId = json.string("botId"),
+                    versionId = json.string("versionId"),
+                    reason = ArenaRosterRemovalReason.fromCode(json.string("reasonCode")),
+                    detail = json.string("detail")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "removal" to arenaRosterRemovalJson(removal))
+            )
+        }
+    }
+
+    fun arenaRosterRemovalsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val windowId = queryValue(query, "windowId")
+        if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
+        return try {
+            val removals = service.removals(arenaAdminActor(query), windowId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "removals" to removals.map(::arenaRosterRemovalJson))
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "roster removal lookup failed")))
+        }
+    }
+
+    fun arenaRosterResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaRunAdmissionService ?: return arenaAdmissionUnavailable()
+        val windowId = queryValue(query, "windowId")
+        if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
+        return try {
+            val actor = arenaAdminActor(query)
+            val roster = service.roster(actor, windowId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "roster not found"))
+            val removals = service.removals(actor, windowId)
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "roster" to arenaRosterJson(roster, removals)))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "roster lookup failed")))
+        }
+    }
+
+    private fun arenaAdmissionUnavailable() =
+        PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena run admission service unavailable"))
+
+    private inline fun arenaAdmissionWrite(failure: String, block: () -> PlatformHotPathResponse): PlatformHotPathResponse = try {
+        block()
+    } catch (ex: IllegalArgumentException) {
+        PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: failure)))
+    } catch (ex: Exception) {
+        PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: failure)))
     }
 
     fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
@@ -1124,6 +1379,92 @@ internal class ArenaAdminGateway(
         )
     }
 
+    private fun arenaAdmissionWindowJson(window: ArenaAdmissionWindow): Map<String, Any?> = mapOf(
+        "windowId" to window.windowId,
+        "policyVersion" to window.policyVersion,
+        "scheduledStart" to window.scheduledStart.toString(),
+        "inviteDecisionCutoff" to window.inviteDecisionCutoff.toString(),
+        "mergeReadinessCutoff" to window.mergeReadinessCutoff.toString(),
+        "rosterLockAt" to window.rosterLockAt.toString(),
+        "operationalRecheckAt" to window.operationalRecheckAt.toString(),
+        "runInstantiationAt" to window.runInstantiationAt.toString(),
+        "displayTimeZone" to window.displayTimeZone,
+        "createdAt" to window.createdAt.toString()
+    )
+
+    private fun arenaEligibilityDecisionJson(decision: ArenaRunEligibilityDecision): Map<String, Any?> = mapOf(
+        "evaluationId" to decision.evaluationId,
+        "windowId" to decision.windowId,
+        "botId" to decision.botId,
+        "versionId" to decision.versionId,
+        "outcome" to decision.outcome.dbValue,
+        "reasonCodes" to decision.reasons.map { it.code },
+        "sourceHash" to decision.sourceHash,
+        "artifactHash" to decision.artifactHash,
+        "configHash" to decision.configHash,
+        "evaluatedAt" to decision.evaluatedAt.toString(),
+        "correlationId" to decision.correlationId
+    )
+
+    private fun arenaRosterJson(
+        roster: ArenaRosterSnapshot,
+        removals: List<ArenaRosterRemoval> = emptyList()
+    ): Map<String, Any?> {
+        val removedEntries = removals.map { it.botId to it.versionId }.toSet()
+        val entries = roster.entries.map(::arenaRosterEntryJson)
+        return mapOf(
+        "snapshotId" to roster.snapshotId,
+        "windowId" to roster.windowId,
+        "snapshotHash" to roster.snapshotHash,
+        "maxBots" to roster.maxBots,
+        "lockedAt" to roster.lockedAt.toString(),
+        "lockedBy" to roster.lockedBy,
+        "correlationId" to roster.correlationId,
+        "policy" to mapOf(
+            "modeId" to roster.policy.modeId,
+            "scenarioId" to roster.policy.scenarioId,
+            "seedSetHash" to roster.policy.seedSetHash,
+            "actorProfileVersion" to roster.policy.actorProfileVersion,
+            "actorProfileHash" to roster.policy.actorProfileHash,
+            "riskPolicyVersion" to roster.policy.riskPolicyVersion,
+            "riskPolicyHash" to roster.policy.riskPolicyHash,
+            "scoringPolicyVersion" to roster.policy.scoringPolicyVersion,
+            "scoringPolicyHash" to roster.policy.scoringPolicyHash,
+            "economicPolicyVersion" to roster.policy.economicPolicyVersion,
+            "economicPolicyHash" to roster.policy.economicPolicyHash
+        ),
+        "entries" to entries,
+        "effectiveEntries" to roster.entries
+            .filterNot { (it.botId to it.versionId) in removedEntries }
+            .map(::arenaRosterEntryJson),
+        "removals" to removals.map(::arenaRosterRemovalJson)
+    )
+    }
+
+    private fun arenaRosterEntryJson(entry: com.reef.arena.controlplane.arena.ArenaRosterEntry): Map<String, Any?> = mapOf(
+        "botOrder" to entry.botOrder,
+        "botId" to entry.botId,
+        "versionId" to entry.versionId,
+        "priority" to entry.priority,
+        "sourceHash" to entry.sourceHash,
+        "artifactHash" to entry.artifactHash,
+        "configHash" to entry.configHash,
+        "eligibilityEvaluationId" to entry.eligibilityEvaluationId
+    )
+
+    private fun arenaRosterRemovalJson(removal: ArenaRosterRemoval): Map<String, Any?> = mapOf(
+        "removalId" to removal.removalId,
+        "windowId" to removal.windowId,
+        "snapshotId" to removal.snapshotId,
+        "botId" to removal.botId,
+        "versionId" to removal.versionId,
+        "reasonCode" to removal.reason.code,
+        "detail" to removal.detail,
+        "removedAt" to removal.removedAt.toString(),
+        "removedBy" to removal.removedBy,
+        "correlationId" to removal.correlationId
+    )
+
     private fun longValue(root: JsonDocument, nested: JsonDocument, rootKey: String, nestedKey: String): Long {
         return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toLongOrNull() ?: 0L
     }
@@ -1135,6 +1476,12 @@ internal class ArenaAdminGateway(
     private fun instantOrNull(value: String): java.time.Instant? {
         if (value.isBlank()) return null
         return java.time.Instant.parse(value)
+    }
+
+    private fun requiredBoolean(json: JsonDocument, key: String): Boolean = when (json.string(key).lowercase()) {
+        "true" -> true
+        "false" -> false
+        else -> throw IllegalArgumentException("$key must be true or false")
     }
 
     private fun normalizedRawJson(raw: String, fallback: String): String {

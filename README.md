@@ -117,8 +117,8 @@ Pull requests and branch pushes run:
 - proto additive compatibility checks for contract safety
 - tidy-module enforcement plus Go formatting, tests, and coverage for `services/matching-engine`
 - tidy-module enforcement plus Go formatting, tests, and coverage for `services/simulator`
-- Kotlin runtime tests with Jacoco coverage for `services/platform-runtime`
-- Kotlin tests for `services/stock-data`
+- Kotlin tests with JaCoCo coverage for `services/platform-runtime`, the optional
+  `services/arena-control-plane`, and `services/stock-data`
 - Node 22 coverage for repository dev-tooling tests under `scripts/dev`
 - npm lockfile installation, typecheck, and production build for the Astro docs site
 - deterministic replay validation for the golden persona session on branch pushes and Dependabot pull requests
@@ -147,7 +147,7 @@ must not be advertised. See
 [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md)
 for the verified release matrix and blockers.
 
-Coverage reports are uploaded as GitHub Actions artifacts and summarized in the workflow run. CI enforces hard per-module coverage minimums rather than one repository-wide percentage: `services/matching-engine` must stay at or above 76% (via `scripts/ci/go-coverage.sh`), `services/simulator` must stay at or above 71% (same script), and `services/platform-runtime` enforces a 58% instruction-coverage minimum through Gradle's `jacocoTestCoverageVerification` (`violationRules` block in `build.gradle.kts`).
+Coverage reports are uploaded as GitHub Actions artifacts and summarized in the workflow run. CI enforces hard per-module coverage minimums rather than one repository-wide percentage: `services/matching-engine` must stay at or above 76% and `services/simulator` at or above 71% (via `scripts/ci/go-coverage.sh`); Gradle's `jacocoTestCoverageVerification` enforces instruction-coverage minimums of 61% for `services/platform-runtime`, 56% for `services/arena-control-plane`, and 75% for `services/stock-data`.
 
 ## Throughput Stress
 

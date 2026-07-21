@@ -277,6 +277,20 @@ Tests:
 
 ## Workstream B: Cutoff, Roster, And Run Admission
 
+Implementation status (2026-07-20): the first durable operator slice is in
+place. Arena owns the versioned `T-72h`/`T-48h`/`T-24h`/`T-2h`/`T-30m`
+window, stable eligibility outcomes and reason codes, deterministic
+capacity-priority ordering, immutable hashed roster snapshots, Postgres
+migration/store validation, and authenticated admin routes for scheduling,
+evaluation, deterministic preview, lock, removal, and readback. The operator
+surface at `/admin/admission` shows included, capacity-overflow, rolled, and
+excluded decisions with explicit priorities. Exact cutoffs are inclusive and
+late readiness rolls to the next window; bot/owner restrictions are hard
+exclusions. Emergency removal is an immutable audit overlay between roster lock
+and `T0`: it changes the effective roster without mutating the snapshot or
+adding a replacement. Remaining work here is strict actor/economic-policy
+resolution and recorded hosted/external-account evidence.
+
 Deliverables:
 
 - versioned `ArenaAdmissionWindowPolicy`
@@ -284,8 +298,9 @@ Deliverables:
 - eligibility evaluator with stable reason codes
 - immutable roster snapshot and hash
 - config snapshot/hash and artifact/source hashes in the run envelope
-- operator preview showing included, rolled, and excluded bots before lock
-- audited emergency removal without late replacement
+- operator preview showing included, capacity-overflow, rolled, and excluded
+  bots before lock (implemented)
+- audited emergency removal without late replacement (implemented)
 
 Tests:
 
@@ -439,7 +454,8 @@ the operator dataset can be richer, but access and retention must be explicit.
 
 ### Days 6-8: Roster And Separation Regression
 
-- implement window/eligibility/roster snapshot
+- verify and extend the implemented window/eligibility/roster snapshot through
+  hosted evidence and the operator preview
 - run Reef-only artifact, Compose, route, and smoke gates
 - prove new invite/roster code remains Arena-owned
 - run Arena overlay compatibility and canonical Reef-fact comparison

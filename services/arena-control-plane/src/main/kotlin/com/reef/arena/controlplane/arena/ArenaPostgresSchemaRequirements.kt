@@ -42,6 +42,38 @@ object ArenaPostgresSchemaRequirements {
         )
     }
 
+    fun runAdmission(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
+        val windowsTable = PostgresSchemaObject.parse(names.admissionWindows)
+        val decisionsTable = PostgresSchemaObject.parse(names.eligibilityDecisions)
+        val reasonsTable = PostgresSchemaObject.parse(names.eligibilityDecisionReasons)
+        val snapshotsTable = PostgresSchemaObject.parse(names.rosterSnapshots)
+        val entriesTable = PostgresSchemaObject.parse(names.rosterSnapshotEntries)
+        val removalsTable = PostgresSchemaObject.parse(names.rosterRemovals)
+        return PostgresSchemaRequirement(
+            tables = listOf(windowsTable, decisionsTable, reasonsTable, snapshotsTable, entriesTable, removalsTable),
+            columns = listOf(
+                PostgresSchemaColumn(windowsTable, "window_id", "text"),
+                PostgresSchemaColumn(windowsTable, "scheduled_start", "timestamp with time zone"),
+                PostgresSchemaColumn(windowsTable, "roster_lock_at", "timestamp with time zone"),
+                PostgresSchemaColumn(decisionsTable, "evaluation_id", "text"),
+                PostgresSchemaColumn(decisionsTable, "outcome", "text"),
+                PostgresSchemaColumn(decisionsTable, "source_hash", "text"),
+                PostgresSchemaColumn(decisionsTable, "artifact_hash", "text"),
+                PostgresSchemaColumn(decisionsTable, "config_hash", "text"),
+                PostgresSchemaColumn(reasonsTable, "reason_order", "integer"),
+                PostgresSchemaColumn(reasonsTable, "reason_code", "text"),
+                PostgresSchemaColumn(snapshotsTable, "snapshot_id", "text"),
+                PostgresSchemaColumn(snapshotsTable, "snapshot_hash", "text"),
+                PostgresSchemaColumn(snapshotsTable, "max_bots", "integer"),
+                PostgresSchemaColumn(entriesTable, "bot_order", "integer"),
+                PostgresSchemaColumn(entriesTable, "eligibility_evaluation_id", "text"),
+                PostgresSchemaColumn(removalsTable, "removal_id", "text"),
+                PostgresSchemaColumn(removalsTable, "reason_code", "text"),
+                PostgresSchemaColumn(removalsTable, "removed_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun registry(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
         val botsTable = PostgresSchemaObject.parse(names.bots)
         val versionsTable = PostgresSchemaObject.parse(names.botVersions)
