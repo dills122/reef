@@ -228,6 +228,7 @@ jobs:
             scripts/dev/lib/dev-stack.test.mjs \
             scripts/dev/lib/dev-profiles.test.mjs \
             scripts/dev/db/migrate.test.mjs \
+            scripts/dev/container-images-workflow.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
             scripts/dev/command-log-pin.test.mjs \
             scripts/dev/command-log-archive.test.mjs \
