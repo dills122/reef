@@ -16,16 +16,19 @@ export function attachScoreBreakdowns(botResults, context) {
   });
 }
 
-export function buildScoreContext({ scoringPolicyVersion, npcDifficultyBuckets = [] } = {}) {
+export function buildScoreContext({ scoringPolicyVersion, scoringPolicy, npcDifficultyBuckets = [] } = {}) {
   const multiplier = npcDifficultyBuckets.reduce((current, bucket) => Math.max(current, difficultyMultiplier(bucket)), 1);
   return {
-    baseline: 1_000_000,
+    baseline: scoringPolicy?.baseline ?? 1_000_000,
     scoringPolicyVersion,
+    scoringPolicyHash: scoringPolicy?.contentHash ?? "",
     npcDifficultyBuckets,
     difficultyMultiplier: Number(multiplier.toFixed(4)),
     formulaVersion: SHADOW_SCORE_FORMULA_VERSION,
-    publicScoringEnabled: scoringPolicyVersion === "score-v1",
-    publicFormulaVersion: PUBLIC_SCORE_FORMULA_VERSION,
+    publicScoringEnabled: scoringPolicy?.publicScoringEnabled ?? scoringPolicyVersion === "score-v1",
+    publicFormulaVersion: scoringPolicy?.formulaVersion ?? PUBLIC_SCORE_FORMULA_VERSION,
+    scoreCaps: scoringPolicy?.components ?? {},
+    penalties: scoringPolicy?.penalties ?? {},
   };
 }
 
@@ -193,22 +196,26 @@ function publicScoreV1(result, context, inputs, risk, conduct) {
   const totalPnl = nullableNumber(result.tradingMetrics?.pnl?.total);
   const fallbackFinalEquity = totalPnl === null ? nullableNumber(result.score) : context.baseline + totalPnl;
   const rawFinalEquity = finalEquity ?? fallbackFinalEquity ?? context.baseline;
-  const pnlComponent = Math.round(clamp(rawFinalEquity - context.baseline, -100_000, 100_000));
+  const equityCap = componentCap(context.scoreCaps?.equity, 100_000);
+  const riskCap = componentCap(context.scoreCaps?.risk, 100_000);
+  const conductCap = componentCap(context.scoreCaps?.conduct, 100_000);
+  const pnlComponent = Math.round(clamp(rawFinalEquity - context.baseline, -equityCap, equityCap));
   const inventoryRiskPenalty = Math.min(
-    100_000,
+    riskCap,
     numberValue(risk.details.inventorySizePenalty)
       + numberValue(risk.details.inventoryExposurePenalty)
       + numberValue(risk.details.concentrationPenalty),
   );
   const commandQualityPenalty = Math.min(
-    100_000,
+    conductCap,
     numberValue(conduct.details.timeoutPenalty)
       + numberValue(conduct.details.invalidPenalty)
       + numberValue(conduct.details.cancelPenalty),
   );
   const enforcementPenalty = Math.min(
     250_000,
-    numberValue(result.freezeCount) * 250_000 + numberValue(result.operationalPauseCount) * 5_000,
+    numberValue(result.freezeCount) * policyNumber(context.penalties?.freeze, 250_000)
+      + numberValue(result.operationalPauseCount) * policyNumber(context.penalties?.operationalPause, 5_000),
   );
   const score = Math.max(
     0,
@@ -456,6 +463,16 @@ function sortedRecord(record) {
 function numberValue(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function componentCap(component, fallback) {
+  if (component?.enabled === false) return 0;
+  return policyNumber(component?.cap, fallback);
+}
+
+function policyNumber(value, fallback) {
+  const numeric = Number(value);
+  return value !== null && value !== undefined && Number.isFinite(numeric) ? numeric : fallback;
 }
 
 function nullableNumber(value) {

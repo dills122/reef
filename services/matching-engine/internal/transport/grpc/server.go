@@ -213,7 +213,8 @@ func toProtoResult(result domain.SubmitOrderResult) *orderv1.SubmitOrderResult {
 				Nanos:    execution.ExecutionPrice,
 				Currency: execution.Currency,
 			},
-			OccurredAt: execution.OccurredAt,
+			OccurredAt:    execution.OccurredAt,
+			LiquidityRole: liquidityRoleToProto(execution.LiquidityRole),
 		})
 	}
 	for _, trade := range result.Trades {
@@ -235,6 +236,17 @@ func toProtoResult(result domain.SubmitOrderResult) *orderv1.SubmitOrderResult {
 		})
 	}
 	return out
+}
+
+func liquidityRoleToProto(role string) orderv1.LiquidityRole {
+	switch role {
+	case "MAKER":
+		return orderv1.LiquidityRole_LIQUIDITY_ROLE_MAKER
+	case "TAKER":
+		return orderv1.LiquidityRole_LIQUIDITY_ROLE_TAKER
+	default:
+		return orderv1.LiquidityRole_LIQUIDITY_ROLE_UNSPECIFIED
+	}
 }
 
 func orderExecutionServiceSubmitOrderHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {

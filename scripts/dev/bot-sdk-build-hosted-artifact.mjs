@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const sandboxPolicyUrl = new URL("../../packages/bot-sdk/src/sandbox-policy.ts", import.meta.url);
@@ -95,7 +95,16 @@ async function bundleHostedArtifactJavaScript(sourceText, entryPathValue) {
       throw new Error("Hosted artifact bundle produced no output.");
     }
 
-    return output.text();
+    const bundled = await output.text();
+    const temporaryEntryComment = new RegExp(
+      `^// .*reef-bot-sdk-build-[^/]+/${escapeRegex(basename(buildEntry))}\\n`,
+      "m",
+    );
+    const normalized = bundled.replace(temporaryEntryComment, `// ${relativeToRepo(entryPathValue)}\n`);
+    if (normalized === bundled) {
+      throw new Error("Hosted artifact bundle did not contain the expected temporary entry-path marker.");
+    }
+    return normalized;
   } finally {
     rmSync(buildDir, { recursive: true, force: true });
   }
@@ -169,6 +178,10 @@ function artifactHeader(entryPathValue) {
 
 function sha256(value) {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function relativeToRepo(pathValue) {

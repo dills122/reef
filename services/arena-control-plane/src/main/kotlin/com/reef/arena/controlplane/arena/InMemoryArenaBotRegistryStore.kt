@@ -50,6 +50,11 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     }
 
     override fun saveRunRecord(runRecord: ArenaRunRecord) {
+        runs[runRecord.runId]?.let { existing ->
+            require(existing.copy(status = runRecord.status, completedAt = runRecord.completedAt) == runRecord) {
+                "accepted arena run policy and composition are immutable"
+            }
+        }
         runs[runRecord.runId] = runRecord
     }
 
@@ -93,13 +98,19 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
         scoringPolicyVersion: String,
         limit: Int
     ): List<ArenaLeaderboardEntry> {
-        val eligibleRunIds = runs.values
+        val eligibleRuns = runs.values
             .filter { it.modeId == modeId && it.status == ArenaRunStatus.Completed }
-            .map { it.runId }
-            .toSet()
+            .associateBy { it.runId }
         return runBotResults.values
             .flatten()
-            .filter { it.runId in eligibleRunIds && it.scoringPolicyVersion == scoringPolicyVersion }
+            .filter { result ->
+                val run = eligibleRuns[result.runId]
+                run != null &&
+                    result.scoringPolicyVersion == scoringPolicyVersion &&
+                    result.scoringPolicyVersion == run.scoringPolicyVersion &&
+                    result.scoringPolicyHash == run.scoringPolicyHash &&
+                    result.policyEnvelopeHash == run.policyEnvelopeHash
+            }
             .filter { it.scoreEligible && it.publicLeaderboard && !it.disqualified }
             .sortedWith(
                 compareByDescending<ArenaRunBotResult> { it.finalEquity }

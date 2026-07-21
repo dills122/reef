@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	OrderExecutionService_SubmitOrder_FullMethodName = "/reef.contracts.orderexecution.v1.OrderExecutionService/SubmitOrder"
-	OrderExecutionService_CancelOrder_FullMethodName = "/reef.contracts.orderexecution.v1.OrderExecutionService/CancelOrder"
-	OrderExecutionService_ModifyOrder_FullMethodName = "/reef.contracts.orderexecution.v1.OrderExecutionService/ModifyOrder"
-	OrderExecutionService_HealthCheck_FullMethodName = "/reef.contracts.orderexecution.v1.OrderExecutionService/HealthCheck"
+	OrderExecutionService_SubmitOrder_FullMethodName  = "/reef.contracts.orderexecution.v1.OrderExecutionService/SubmitOrder"
+	OrderExecutionService_SubmitOrders_FullMethodName = "/reef.contracts.orderexecution.v1.OrderExecutionService/SubmitOrders"
+	OrderExecutionService_CancelOrder_FullMethodName  = "/reef.contracts.orderexecution.v1.OrderExecutionService/CancelOrder"
+	OrderExecutionService_ModifyOrder_FullMethodName  = "/reef.contracts.orderexecution.v1.OrderExecutionService/ModifyOrder"
+	OrderExecutionService_HealthCheck_FullMethodName  = "/reef.contracts.orderexecution.v1.OrderExecutionService/HealthCheck"
 )
 
 // OrderExecutionServiceClient is the client API for OrderExecutionService service.
@@ -30,6 +31,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type OrderExecutionServiceClient interface {
 	SubmitOrder(ctx context.Context, in *SubmitOrder, opts ...grpc.CallOption) (*SubmitOrderResult, error)
+	SubmitOrders(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SubmitOrder, SubmitOrderResult], error)
 	CancelOrder(ctx context.Context, in *CancelOrder, opts ...grpc.CallOption) (*SubmitOrderResult, error)
 	ModifyOrder(ctx context.Context, in *ModifyOrder, opts ...grpc.CallOption) (*SubmitOrderResult, error)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
@@ -52,6 +54,19 @@ func (c *orderExecutionServiceClient) SubmitOrder(ctx context.Context, in *Submi
 	}
 	return out, nil
 }
+
+func (c *orderExecutionServiceClient) SubmitOrders(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[SubmitOrder, SubmitOrderResult], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &OrderExecutionService_ServiceDesc.Streams[0], OrderExecutionService_SubmitOrders_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SubmitOrder, SubmitOrderResult]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type OrderExecutionService_SubmitOrdersClient = grpc.BidiStreamingClient[SubmitOrder, SubmitOrderResult]
 
 func (c *orderExecutionServiceClient) CancelOrder(ctx context.Context, in *CancelOrder, opts ...grpc.CallOption) (*SubmitOrderResult, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -88,6 +103,7 @@ func (c *orderExecutionServiceClient) HealthCheck(ctx context.Context, in *Healt
 // for forward compatibility.
 type OrderExecutionServiceServer interface {
 	SubmitOrder(context.Context, *SubmitOrder) (*SubmitOrderResult, error)
+	SubmitOrders(grpc.BidiStreamingServer[SubmitOrder, SubmitOrderResult]) error
 	CancelOrder(context.Context, *CancelOrder) (*SubmitOrderResult, error)
 	ModifyOrder(context.Context, *ModifyOrder) (*SubmitOrderResult, error)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
@@ -103,6 +119,9 @@ type UnimplementedOrderExecutionServiceServer struct{}
 
 func (UnimplementedOrderExecutionServiceServer) SubmitOrder(context.Context, *SubmitOrder) (*SubmitOrderResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitOrder not implemented")
+}
+func (UnimplementedOrderExecutionServiceServer) SubmitOrders(grpc.BidiStreamingServer[SubmitOrder, SubmitOrderResult]) error {
+	return status.Errorf(codes.Unimplemented, "method SubmitOrders not implemented")
 }
 func (UnimplementedOrderExecutionServiceServer) CancelOrder(context.Context, *CancelOrder) (*SubmitOrderResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelOrder not implemented")
@@ -151,6 +170,13 @@ func _OrderExecutionService_SubmitOrder_Handler(srv interface{}, ctx context.Con
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _OrderExecutionService_SubmitOrders_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(OrderExecutionServiceServer).SubmitOrders(&grpc.GenericServerStream[SubmitOrder, SubmitOrderResult]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type OrderExecutionService_SubmitOrdersServer = grpc.BidiStreamingServer[SubmitOrder, SubmitOrderResult]
 
 func _OrderExecutionService_CancelOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CancelOrder)
@@ -230,6 +256,13 @@ var OrderExecutionService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _OrderExecutionService_HealthCheck_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubmitOrders",
+			Handler:       _OrderExecutionService_SubmitOrders_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "contracts/proto/order_execution.proto",
 }

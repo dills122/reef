@@ -106,7 +106,7 @@ public enum TimeInForce
   }
   public static com.google.protobuf.Descriptors.EnumDescriptor
       getDescriptor() {
-    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(2);
+    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(3);
   }
 
   private static final TimeInForce[] VALUES = values();

@@ -13,6 +13,7 @@
 	let session = $state<SessionUser | null | 'loading'>('loading');
 	const adminNavLinks = [
 		{ href: '/admin', label: 'runs' },
+		{ href: '/admin/admission', label: 'admission' },
 		{ href: '/admin/access', label: 'access' }
 	];
 

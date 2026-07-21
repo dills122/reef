@@ -62,6 +62,8 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0045_drop_legacy_runtime_event_indexes.sql",
       "runtime/0046_order_modified_lifecycle_index.sql",
       "runtime/0047_venue_event_batch_integrity.sql",
+      "runtime/0048_execution_liquidity_role.sql",
+      "runtime/0049_execution_replay_conflicts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -183,6 +185,28 @@ test("typed execution and trade migration adds native market facts", async () =>
   assert.match(migration.sql, /CREATE TRIGGER executions_set_typed_facts/);
   assert.match(migration.sql, /CREATE TRIGGER trades_set_typed_facts/);
   assert.match(migration.sql, /idx_trades_instrument_occurred_typed/);
+});
+
+test("execution liquidity-role migration preserves canonical maker/taker attribution", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0048_execution_liquidity_role.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS liquidity_role TEXT NOT NULL DEFAULT 'UNSPECIFIED'/);
+  assert.match(migration.sql, /CHECK \(liquidity_role IN \('UNSPECIFIED', 'MAKER', 'TAKER'\)\)/);
+  assert.match(migration.sql, /execution->>'liquidityRole'/);
+});
+
+test("execution replay migration rejects conflicting immutable facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0049_execution_replay_conflicts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /runtime\.runtime_reject_execution_replay_conflict/);
+  assert.match(migration.sql, /execution replay conflict for existing event_id/);
+  assert.match(migration.sql, /ON CONFLICT \(event_id\) DO UPDATE SET/);
+  assert.match(migration.sql, /runtime\.executions\.liquidity_role/);
+  assert.match(migration.sql, /IS DISTINCT FROM ROW/);
 });
 
 test("typed order migration adds native order facts", async () => {
@@ -383,6 +407,9 @@ test("routes arena migrations only to arena database target", async () => {
       "arena/0005_arena_bot_entitlements.sql",
       "arena/0006_remove_arena_bot_limits.sql",
       "arena/0007_arena_submission_admissions.sql",
+      "arena/0008_arena_admission_windows_and_rosters.sql",
+      "arena/0009_arena_run_policy_locks.sql",
+      "arena/0010_arena_run_roster_binding.sql",
     ],
   );
 });

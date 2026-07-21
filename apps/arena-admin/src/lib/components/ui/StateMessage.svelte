@@ -27,7 +27,11 @@
 	};
 </script>
 
-<div class={cn('border-t py-6', classes[variant], center && 'text-center', className)}>
+<div
+	class={cn('border-t py-6', classes[variant], center && 'text-center', className)}
+	role={variant === 'error' ? 'alert' : 'status'}
+	aria-live={variant === 'error' ? 'assertive' : 'polite'}
+>
 	{#if title}
 		<p class={cn('font-bold', variant === 'error' ? 'text-destructive' : 'text-ink')}>{title}</p>
 	{/if}

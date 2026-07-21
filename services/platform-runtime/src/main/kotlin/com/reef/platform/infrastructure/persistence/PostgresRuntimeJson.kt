@@ -31,7 +31,8 @@ internal fun ExecutionCreated.toJsonObject(): String = jsonObject(
     "quantityUnits" to quantityUnits,
     "executionPrice" to executionPrice,
     "currency" to currency,
-    "occurredAt" to occurredAt
+    "occurredAt" to occurredAt,
+    "liquidityRole" to liquidityRole
 )
 
 internal fun TradeCreated.toJsonObject(): String = jsonObject(

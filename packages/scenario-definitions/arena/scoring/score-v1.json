@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "reef.arena.scoringPolicy.v1",
+  "policyId": "arena-score",
+  "version": "score-v1",
+  "status": "public-preview",
+  "formulaVersion": "score-v1-final-equity-risk-conduct",
+  "baseline": 1000000,
+  "publicScoringEnabled": true,
+  "eligibleActorClasses": ["competitor"],
+  "components": {
+    "equity": { "enabled": true, "cap": 100000 },
+    "risk": { "enabled": true, "cap": 100000 },
+    "conduct": { "enabled": true, "cap": 100000 },
+    "marketInteraction": { "enabled": false, "cap": 0 },
+    "npcDifficulty": { "enabled": false, "cap": 0 }
+  },
+  "penalties": {
+    "freeze": 250000,
+    "operationalPause": 5000,
+    "invalidIntentCap": 100000
+  },
+  "disqualification": {
+    "freezeCount": 1,
+    "excludeFromLeaderboard": true
+  },
+  "replayLock": {
+    "from": "run_acceptance",
+    "until": "score_publication",
+    "requirePolicyEnvelopeHash": true
+  }
+}

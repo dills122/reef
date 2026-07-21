@@ -23,11 +23,16 @@ import {
   safeModifyOrder,
 } from "./harness";
 
-export type LiveFetchV1 = (url: string) => Promise<{ readonly status: number; text(): Promise<string> }>;
+export type LiveFetchV1 = (
+  url: string,
+  init?: { readonly headers?: Readonly<Record<string, string>> },
+) => Promise<{ readonly status: number; text(): Promise<string> }>;
 
 export interface LiveVenueDataClientOptionsV1 {
   readonly baseUrl: string;
   readonly participantId: string;
+  readonly clientId?: string;
+  readonly authorization?: string;
   readonly fetch?: LiveFetchV1;
 }
 
@@ -39,10 +44,22 @@ function resolveFetch(fetchImpl: LiveFetchV1 | undefined): LiveFetchV1 {
   return impl;
 }
 
-async function getJson(fetchImpl: LiveFetchV1, url: string): Promise<{ readonly status: number; readonly json: Record<string, unknown> }> {
-  const response = await fetchImpl(url);
+async function getJson(
+  fetchImpl: LiveFetchV1,
+  url: string,
+  headers: Readonly<Record<string, string>>,
+): Promise<{ readonly status: number; readonly json: Record<string, unknown> }> {
+  const response = await fetchImpl(url, { headers });
   const text = await response.text();
   return { status: response.status, json: text.length === 0 ? {} : (JSON.parse(text) as Record<string, unknown>) };
+}
+
+function readHeaders(options: LiveVenueDataClientOptionsV1, participantScoped = false): Readonly<Record<string, string>> {
+  return {
+    "X-Client-Id": options.clientId ?? `bot:${options.participantId}`,
+    ...(participantScoped ? { "X-Participant-Id": options.participantId } : {}),
+    ...(options.authorization === undefined ? {} : { Authorization: options.authorization }),
+  };
 }
 
 function unavailableDenial(message: string): BotResultV1<never> {
@@ -137,9 +154,10 @@ const OrderStatusFromPlatformV1: Record<string, OwnOrderV1["status"]> = {
 export function createLiveMarketDataClientV1(options: LiveVenueDataClientOptionsV1): BotMarketDataClientV1 {
   const fetchImpl = resolveFetch(options.fetch);
   const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const headers = readHeaders(options);
 
   async function fetchSnapshot(instrumentId: string): Promise<BotResultV1<MarketSnapshotV1>> {
-    const snapshotResult = await getJson(fetchImpl, `${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`);
+    const snapshotResult = await getJson(fetchImpl, `${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`, headers);
     if (snapshotResult.status < 200 || snapshotResult.status >= 300 || snapshotResult.json.error !== undefined) {
       return notFoundDenial(`No market snapshot for ${instrumentId}.`) as BotResultV1<MarketSnapshotV1>;
     }
@@ -152,7 +170,7 @@ export function createLiveMarketDataClientV1(options: LiveVenueDataClientOptions
     const askPrice = priceFromNanos(snapshot.bestAskPrice);
 
     let lastPrice: number | undefined;
-    const tapeResult = await getJson(fetchImpl, `${baseUrl}/api/v1/market-data/trades/${encodeURIComponent(instrumentId)}?limit=1`);
+    const tapeResult = await getJson(fetchImpl, `${baseUrl}/api/v1/market-data/trades/${encodeURIComponent(instrumentId)}?limit=1`, headers);
     if (tapeResult.status >= 200 && tapeResult.status < 300) {
       const trades = tapeResult.json.trades as Array<Record<string, string>> | undefined;
       lastPrice = priceFromNanos(trades?.[0]?.price);
@@ -205,10 +223,11 @@ export function createLiveMarketDataClientV1(options: LiveVenueDataClientOptions
 export function createLiveHistoricalDataClientV1(options: LiveVenueDataClientOptionsV1): BotHistoricalDataClientV1 {
   const fetchImpl = resolveFetch(options.fetch);
   const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const headers = readHeaders(options);
 
   async function fetchBars(request: BotHistoricalBarsRequestV1): Promise<BotResultV1<readonly HistoricalBarV1[]>> {
     const url = `${baseUrl}/api/v1/market-data/bars/${encodeURIComponent(request.instrumentId)}?interval=${request.interval}&start=${encodeURIComponent(request.start)}&end=${encodeURIComponent(request.end)}`;
-    const result = await getJson(fetchImpl, url);
+    const result = await getJson(fetchImpl, url, headers);
     if (result.status < 200 || result.status >= 300 || result.json.error !== undefined) {
       return unavailableDenial(`Failed to load bars for ${request.instrumentId}.`) as BotResultV1<readonly HistoricalBarV1[]>;
     }
@@ -258,6 +277,7 @@ export function createLiveOwnOrdersReadClientV1(
   const fetchImpl = resolveFetch(options.fetch);
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const participantId = encodeURIComponent(options.participantId);
+  const headers = readHeaders(options, true);
 
   function ownOrdersUrl(path: "current" | "history", request?: { readonly instrumentId?: string; readonly limit?: number }): string {
     const params = [`participantId=${participantId}`];
@@ -286,7 +306,7 @@ export function createLiveOwnOrdersReadClientV1(
 
   return {
     async current() {
-      const result = await getJson(fetchImpl, ownOrdersUrl("current"));
+      const result = await getJson(fetchImpl, ownOrdersUrl("current"), headers);
       if (result.status < 200 || result.status >= 300) {
         return unavailableDenial("Failed to load current orders.") as BotResultV1<readonly OwnOrderV1[]>;
       }
@@ -294,7 +314,7 @@ export function createLiveOwnOrdersReadClientV1(
       return { ok: true, value: orders.map(toOwnOrder) };
     },
     async history(request) {
-      const result = await getJson(fetchImpl, ownOrdersUrl("history", request));
+      const result = await getJson(fetchImpl, ownOrdersUrl("history", request), headers);
       if (result.status < 200 || result.status >= 300) {
         return unavailableDenial("Failed to load order history.") as BotResultV1<readonly OwnOrderV1[]>;
       }
@@ -309,10 +329,11 @@ export function createLiveOwnOrdersReadClientV1(
 export function createLiveDataAvailabilityClientV1(options: LiveVenueDataClientOptionsV1): BotDataAvailabilityClientV1 {
   const fetchImpl = resolveFetch(options.fetch);
   const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const headers = readHeaders(options);
 
   return {
     async availability() {
-      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/data/availability`);
+      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/data/availability`, headers);
       if (result.status < 200 || result.status >= 300 || result.json.error !== undefined) {
         return unavailableDenial("Failed to load data availability.") as BotResultV1<DataAvailabilityV1>;
       }

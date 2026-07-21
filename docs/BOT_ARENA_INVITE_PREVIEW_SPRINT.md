@@ -189,8 +189,26 @@ Reef must have no compile-time dependency on Arena implementations.
 Remaining work in this sprint is preview policy and evidence, not another
 packaging extraction. A future network-service split may be justified by
 deployment or scaling needs, but it is not required for the invite preview.
-Versioned economic-policy fixtures and resolution remain incomplete and are
-tracked below.
+The first policy-resolution slice is now implemented: actor catalogs and
+profiles reject unknown fields/parameters, the three named preview economic
+policies are versioned fixtures, and the runner resolves canonical catalog,
+economic-policy, profile, and composition hashes. Roster lock recomputes the
+catalog and economic-policy hashes from canonical resolved content and rejects
+caller-supplied version/hash pairs that do not match. Strict `score-v0` and
+`score-v1` fixtures now drive runner scoring, resolved scoring content is
+carried in reports, roster lock verifies its canonical hash, and accepted run
+records lock the scoring/economic/envelope versions and hashes through terminal
+score publication. Accepted runs now bind to the active immutable roster,
+revalidate that binding at `T0`, and carry roster, seed-set, actor-profile, and
+risk-policy hashes into persistence and reports. Zero-fee competition/house
+ledger reconciliation is implemented and fail-closed; non-zero fee/rebate
+reconciliation now consumes canonical maker/taker roles and supports the two
+preview comparison policies. A 2026-07-21 local rehearsal verified immutable
+six-bot roster binding, deterministic artifact hashes, pre-T0 fail-closed start,
+live command completion, and real fills. It also found that live projected fills
+remain `UNSPECIFIED` rather than `MAKER`/`TAKER`; reconciliation correctly failed
+closed. Fix that end-to-end propagation, then record the fixed-seed matrix and
+hosted proof before either non-zero policy is promoted.
 
 ## Persona And Economic Policy Modules
 
@@ -277,6 +295,24 @@ Tests:
 
 ## Workstream B: Cutoff, Roster, And Run Admission
 
+Implementation status (2026-07-20): the first durable operator slice is in
+place. Arena owns the versioned `T-72h`/`T-48h`/`T-24h`/`T-2h`/`T-30m`
+window, stable eligibility outcomes and reason codes, deterministic
+capacity-priority ordering, immutable hashed roster snapshots, Postgres
+migration/store validation, and authenticated admin routes for scheduling,
+evaluation, deterministic preview, lock, removal, and readback. The operator
+surface at `/admin/admission` shows included, capacity-overflow, rolled, and
+excluded decisions with explicit priorities. Exact cutoffs are inclusive and
+late readiness rolls to the next window; bot/owner restrictions are hard
+exclusions. Emergency removal is an immutable audit overlay between roster lock
+and `T0`: it changes the effective roster without mutating the snapshot or
+adding a replacement. Roster lock now also verifies canonical actor-catalog and
+economic-policy content before accepting their version/hash references.
+Run registration is rejected before `T-30m`, start is rejected before `T0`,
+registration/start revalidate the active locked roster and audited removals,
+and legacy unbound records cannot publish to the PostgreSQL leaderboard.
+Remaining work here is recorded hosted/external-account evidence.
+
 Deliverables:
 
 - versioned `ArenaAdmissionWindowPolicy`
@@ -284,8 +320,9 @@ Deliverables:
 - eligibility evaluator with stable reason codes
 - immutable roster snapshot and hash
 - config snapshot/hash and artifact/source hashes in the run envelope
-- operator preview showing included, rolled, and excluded bots before lock
-- audited emergency removal without late replacement
+- operator preview showing included, capacity-overflow, rolled, and excluded
+  bots before lock (implemented)
+- audited emergency removal without late replacement (implemented)
 
 Tests:
 
@@ -324,6 +361,22 @@ Acceptance:
 - enabling Arena changes adapters/deployment only, not venue semantics
 
 ## Workstream D: Persona And Policy Definitions
+
+Implementation status (2026-07-20): strict reusable actor/economic resolvers,
+canonical SHA-256 hashing, version/reference consistency checks, the
+`preview-zero-fee-v1`, `preview-balanced-fee-v1`, and
+`preview-liquidity-subsidy-v1` fixtures, runner report/envelope hashes, and
+roster-lock hash verification are implemented. Strict scoring-policy
+definition/reference resolution, resolved report artifacts, persisted run
+policy locks, result-to-run hash verification, terminal result immutability,
+and leaderboard lock filtering are also implemented. Run admission now binds
+to the accepted roster snapshot. The zero-fee runner emits deterministic
+competition/house reconciliation evidence and the promoted persisted smoke
+requires it to pass. Venue execution facts now preserve canonical maker/taker
+attribution through both transports, runtime persistence, participant reads,
+and Arena diagnostics. Non-zero fee/rebate reconciliation fails closed when
+role coverage, role notional parity, or facility funding is invalid. Fresh
+fixed-seed and hosted proof remains required for the comparison policies.
 
 Deliverables:
 
@@ -439,7 +492,8 @@ the operator dataset can be richer, but access and retention must be explicit.
 
 ### Days 6-8: Roster And Separation Regression
 
-- implement window/eligibility/roster snapshot
+- verify and extend the implemented window/eligibility/roster snapshot through
+  hosted evidence and the operator preview
 - run Reef-only artifact, Compose, route, and smoke gates
 - prove new invite/roster code remains Arena-owned
 - run Arena overlay compatibility and canonical Reef-fact comparison
@@ -448,7 +502,8 @@ the operator dataset can be richer, but access and retention must be explicit.
 
 - implement strict resolvers and canonical hashes
 - persist resolved policy/profile/config references
-- implement scoring lock and economic reconciliation
+- bind accepted run policy locks to the immutable roster snapshot and implement
+  economic reconciliation
 - update reports/comparison tooling
 
 ### Days 11-12: Local Evidence

@@ -11,6 +11,18 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+func TestLiquidityRoleToProto(t *testing.T) {
+	if got := liquidityRoleToProto("MAKER"); got != orderv1.LiquidityRole_LIQUIDITY_ROLE_MAKER {
+		t.Fatalf("expected maker role, got %v", got)
+	}
+	if got := liquidityRoleToProto("TAKER"); got != orderv1.LiquidityRole_LIQUIDITY_ROLE_TAKER {
+		t.Fatalf("expected taker role, got %v", got)
+	}
+	if got := liquidityRoleToProto(""); got != orderv1.LiquidityRole_LIQUIDITY_ROLE_UNSPECIFIED {
+		t.Fatalf("expected unspecified role, got %v", got)
+	}
+}
+
 func TestHealthCheck(t *testing.T) {
 	server, err := NewServer("127.0.0.1:0", app.NewService())
 	if err != nil {

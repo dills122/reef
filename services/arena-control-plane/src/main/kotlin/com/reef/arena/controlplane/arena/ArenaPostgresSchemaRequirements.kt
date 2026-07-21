@@ -42,6 +42,38 @@ object ArenaPostgresSchemaRequirements {
         )
     }
 
+    fun runAdmission(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
+        val windowsTable = PostgresSchemaObject.parse(names.admissionWindows)
+        val decisionsTable = PostgresSchemaObject.parse(names.eligibilityDecisions)
+        val reasonsTable = PostgresSchemaObject.parse(names.eligibilityDecisionReasons)
+        val snapshotsTable = PostgresSchemaObject.parse(names.rosterSnapshots)
+        val entriesTable = PostgresSchemaObject.parse(names.rosterSnapshotEntries)
+        val removalsTable = PostgresSchemaObject.parse(names.rosterRemovals)
+        return PostgresSchemaRequirement(
+            tables = listOf(windowsTable, decisionsTable, reasonsTable, snapshotsTable, entriesTable, removalsTable),
+            columns = listOf(
+                PostgresSchemaColumn(windowsTable, "window_id", "text"),
+                PostgresSchemaColumn(windowsTable, "scheduled_start", "timestamp with time zone"),
+                PostgresSchemaColumn(windowsTable, "roster_lock_at", "timestamp with time zone"),
+                PostgresSchemaColumn(decisionsTable, "evaluation_id", "text"),
+                PostgresSchemaColumn(decisionsTable, "outcome", "text"),
+                PostgresSchemaColumn(decisionsTable, "source_hash", "text"),
+                PostgresSchemaColumn(decisionsTable, "artifact_hash", "text"),
+                PostgresSchemaColumn(decisionsTable, "config_hash", "text"),
+                PostgresSchemaColumn(reasonsTable, "reason_order", "integer"),
+                PostgresSchemaColumn(reasonsTable, "reason_code", "text"),
+                PostgresSchemaColumn(snapshotsTable, "snapshot_id", "text"),
+                PostgresSchemaColumn(snapshotsTable, "snapshot_hash", "text"),
+                PostgresSchemaColumn(snapshotsTable, "max_bots", "integer"),
+                PostgresSchemaColumn(entriesTable, "bot_order", "integer"),
+                PostgresSchemaColumn(entriesTable, "eligibility_evaluation_id", "text"),
+                PostgresSchemaColumn(removalsTable, "removal_id", "text"),
+                PostgresSchemaColumn(removalsTable, "reason_code", "text"),
+                PostgresSchemaColumn(removalsTable, "removed_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun registry(names: PostgresArenaSqlNames): PostgresSchemaRequirement {
         val botsTable = PostgresSchemaObject.parse(names.bots)
         val versionsTable = PostgresSchemaObject.parse(names.botVersions)
@@ -61,8 +93,13 @@ object ArenaPostgresSchemaRequirements {
                 PostgresSchemaColumn(reportsTable, "report_id", "text"), PostgresSchemaColumn(reportsTable, "policy_version", "text"), PostgresSchemaColumn(reportIssuesTable, "issue", "text"),
                 PostgresSchemaColumn(decisionsTable, "actor_id", "text"), PostgresSchemaColumn(decisionsTable, "to_status", "text"),
                 PostgresSchemaColumn(runsTable, "run_id", "text"), PostgresSchemaColumn(runsTable, "seed", "bigint"), PostgresSchemaColumn(runsTable, "policy_version", "text"),
+                PostgresSchemaColumn(runsTable, "admission_window_id", "text"), PostgresSchemaColumn(runsTable, "roster_snapshot_id", "text"), PostgresSchemaColumn(runsTable, "roster_snapshot_hash", "text"),
+                PostgresSchemaColumn(runsTable, "seed_set_hash", "text"), PostgresSchemaColumn(runsTable, "actor_profile_version", "text"), PostgresSchemaColumn(runsTable, "actor_profile_hash", "text"), PostgresSchemaColumn(runsTable, "risk_policy_hash", "text"),
+                PostgresSchemaColumn(runsTable, "policy_envelope_hash", "text"), PostgresSchemaColumn(runsTable, "scoring_policy_version", "text"), PostgresSchemaColumn(runsTable, "scoring_policy_hash", "text"),
+                PostgresSchemaColumn(runsTable, "economic_policy_version", "text"), PostgresSchemaColumn(runsTable, "economic_policy_hash", "text"),
                 PostgresSchemaColumn(runBotsTable, "bot_order", "integer"),
                 PostgresSchemaColumn(runResultsTable, "run_id", "text"), PostgresSchemaColumn(runResultsTable, "bot_id", "text"), PostgresSchemaColumn(runResultsTable, "version_id", "text"), PostgresSchemaColumn(runResultsTable, "scoring_policy_version", "text"),
+                PostgresSchemaColumn(runResultsTable, "scoring_policy_hash", "text"), PostgresSchemaColumn(runResultsTable, "policy_envelope_hash", "text"),
                 PostgresSchemaColumn(runResultsTable, "final_equity", "bigint"), PostgresSchemaColumn(runResultsTable, "realized_pnl", "bigint"), PostgresSchemaColumn(runResultsTable, "max_drawdown", "bigint"),
                 PostgresSchemaColumn(runResultsTable, "actions_proposed", "integer"), PostgresSchemaColumn(runResultsTable, "order_actions_proposed", "integer"), PostgresSchemaColumn(runResultsTable, "data_calls", "integer"), PostgresSchemaColumn(runResultsTable, "signals_generated", "integer"),
                 PostgresSchemaColumn(runResultsTable, "disqualified", "boolean"), PostgresSchemaColumn(runResultsTable, "score_eligible", "boolean"), PostgresSchemaColumn(runResultsTable, "public_leaderboard", "boolean"), PostgresSchemaColumn(runResultsTable, "created_at", "timestamp with time zone"),

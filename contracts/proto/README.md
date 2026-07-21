@@ -42,6 +42,8 @@ Contract rules:
 
 - include stable identifiers
 - include actor, trace, causation, and correlation metadata
+- preserve canonical maker/taker attribution on every execution through the
+  `ExecutionCreated.liquidity_role` field
 - include stream routing metadata on commands that may enter `stream-ack` (`runId`, `venueSessionId`, order/client-order identifiers, and bot attribution when present)
 - avoid floating-point price and quantity fields
 - version messages deliberately

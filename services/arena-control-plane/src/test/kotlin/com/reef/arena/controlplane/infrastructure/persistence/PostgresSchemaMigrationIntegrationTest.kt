@@ -23,6 +23,15 @@ import com.reef.arena.controlplane.arena.ArenaRunStatus
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigProvider
 import com.reef.arena.controlplane.arena.PostgresArenaBotRegistryStore
+import com.reef.arena.controlplane.arena.PostgresArenaRunAdmissionStore
+import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
+import com.reef.arena.controlplane.arena.ArenaEligibilityCandidate
+import com.reef.arena.controlplane.arena.ArenaEligibilityEvaluator
+import com.reef.arena.controlplane.arena.ArenaRosterCandidate
+import com.reef.arena.controlplane.arena.ArenaRosterLocker
+import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaRosterRemoval
+import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
 import com.reef.arena.controlplane.arena.RegisterArenaBotCommand
 import com.reef.arena.controlplane.arena.RegisterArenaBotVersionCommand
 import com.reef.arena.controlplane.arena.RegisterArenaRunCommand
@@ -1271,6 +1280,9 @@ class PostgresSchemaMigrationIntegrationTest {
         val runId = "run-$suffix"
         val modeId = "hosted-sim-$suffix"
         val scoringPolicyVersion = "score-$suffix"
+        val policyEnvelopeHash = "sha256:${"1".repeat(64)}"
+        val scoringPolicyHash = "sha256:${"2".repeat(64)}"
+        val economicPolicyHash = "sha256:${"3".repeat(64)}"
         val controlPlane = ArenaControlPlaneService(store) { Instant.parse("2026-07-05T12:00:00Z") }
 
         controlPlane.registerBot(
@@ -1330,17 +1342,30 @@ class PostgresSchemaMigrationIntegrationTest {
                 scenarioId = "scenario-schema",
                 seed = 42,
                 policyVersion = "policy-v1",
+                admissionWindowId = "window-$suffix",
+                rosterSnapshotId = "roster-$suffix",
+                rosterSnapshotHash = "sha256:${"4".repeat(64)}",
+                seedSetHash = "sha256:${"5".repeat(64)}",
+                actorProfileVersion = "actors-v1",
+                actorProfileHash = "sha256:${"6".repeat(64)}",
+                riskPolicyHash = "sha256:${"7".repeat(64)}",
+                policyEnvelopeHash = policyEnvelopeHash,
+                scoringPolicyVersion = scoringPolicyVersion,
+                scoringPolicyHash = scoringPolicyHash,
+                economicPolicyVersion = "preview-zero-fee-v1",
+                economicPolicyHash = economicPolicyHash,
                 botVersions = listOf(ArenaRunBotVersionRef(botId, versionId))
             )
         )
         controlPlane.updateRunStatus(runId, ArenaRunStatus.Running)
-        controlPlane.updateRunStatus(runId, ArenaRunStatus.Completed)
         controlPlane.recordRunBotResult(
             ArenaRunBotResult(
                 runId = runId,
                 botId = botId,
                 versionId = versionId,
                 scoringPolicyVersion = scoringPolicyVersion,
+                scoringPolicyHash = scoringPolicyHash,
+                policyEnvelopeHash = policyEnvelopeHash,
                 finalEquity = 1_025_000,
                 realizedPnl = 25_000,
                 maxDrawdown = 1_000,
@@ -1352,6 +1377,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 createdAt = Instant.parse("2026-07-05T12:00:00Z")
             )
         )
+        controlPlane.updateRunStatus(runId, ArenaRunStatus.Completed)
 
         assertEquals(botId, store.bot(botId)?.botId)
         assertEquals(ArenaBotVersionStatus.Approved, store.version(botId, versionId)?.status)
@@ -1359,8 +1385,79 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals("admin-cli", store.operatorDecisions(botId, versionId).last().actorId)
         assertEquals("maxInventory", store.runtimeConfigDescriptors(botId, versionId).single().key)
         assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
+        assertEquals(scoringPolicyVersion, store.runRecord(runId)?.scoringPolicyVersion)
         assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
         assertEquals(botId, store.leaderboard(modeId, scoringPolicyVersion).single().botId)
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE arena.run_records SET admission_window_id = 'legacy-unbound' WHERE run_id = ?"
+            ).use { ps ->
+                ps.setString(1, runId)
+                assertEquals(1, ps.executeUpdate())
+            }
+        }
+        assertEquals(emptyList(), store.leaderboard(modeId, scoringPolicyVersion))
+    }
+
+    @Test
+    fun validateModeArenaRunAdmissionStorePersistsImmutableWindowDecisionAndRoster() {
+        val jdbcUrl = System.getenv("ARENA_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("ARENA_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("ARENA_POSTGRES_PASSWORD_TEST") ?: return
+        val store = PostgresArenaRunAdmissionStore(
+            RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword),
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val start = Instant.parse("2026-08-10T00:00:00Z")
+        val window = ArenaAdmissionWindowPolicy("admission-v1").schedule(
+            "window-$suffix", start, "UTC", Instant.parse("2026-08-01T00:00:00Z").plusNanos(123)
+        )
+        val decision = ArenaEligibilityEvaluator().evaluate(
+            "evaluation-$suffix",
+            window,
+            ArenaEligibilityCandidate(
+                "bot-$suffix", "v1", window.inviteDecisionCutoff, "abc", "abc",
+                window.mergeReadinessCutoff, window.mergeReadinessCutoff, window.mergeReadinessCutoff,
+                window.rosterLockAt, window.rosterLockAt,
+                "sha256:source", "sha256:artifact", "sha256:config", ArenaBotVersionStatus.Approved,
+                ownerTrusted = true, ownershipActive = true, botRestricted = false, ownerRestricted = false,
+                secretSliceExists = true, gameModeAllowed = true, runtimeSupported = true, riskPreflightPassed = true
+            ),
+            window.rosterLockAt.plusNanos(123),
+            "corr-$suffix"
+        )
+        val roster = ArenaRosterLocker().lock(
+            "roster-$suffix",
+            window,
+            ArenaRosterPolicySnapshot(
+                "continuous-book", "baseline", "sha256:seeds", "actors-v1", "sha256:actors",
+                "risk-v1", "sha256:risk", "score-v1", "sha256:score", "economics-v1", "sha256:economics"
+            ),
+            listOf(ArenaRosterCandidate(decision, 10)),
+            maxBots = 1,
+            lockedAt = window.rosterLockAt.plusNanos(999),
+            lockedBy = "admin-cli",
+            correlationId = "corr-$suffix"
+        ).snapshot
+
+        val persistedWindow = window.copy(createdAt = window.createdAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        val persistedDecision = decision.copy(evaluatedAt = decision.evaluatedAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        val persistedRoster = roster.copy(lockedAt = roster.lockedAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        val removal = ArenaRosterRemoval(
+            "removal-$suffix", window.windowId, roster.snapshotId, decision.botId, decision.versionId,
+            ArenaRosterRemovalReason.Availability, "runner unavailable",
+            window.rosterLockAt.plusSeconds(1).plusNanos(123), "admin-cli", "corr-$suffix"
+        )
+        val persistedRemoval = removal.copy(removedAt = removal.removedAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+        assertEquals(persistedWindow, store.createWindow(window))
+        assertEquals(persistedDecision, store.recordDecision(decision))
+        assertEquals(persistedRoster, store.lockRoster(roster))
+        assertEquals(persistedWindow, store.window(window.windowId))
+        assertEquals(listOf(persistedDecision), store.decisions(window.windowId))
+        assertEquals(persistedRoster, store.roster(window.windowId))
+        assertEquals(persistedRemoval, store.recordRemoval(removal))
+        assertEquals(listOf(persistedRemoval), store.removals(window.windowId))
     }
 
     @Test

@@ -187,6 +187,86 @@ export type ArenaRunEnforcementEvent = {
 	occurredAt: string;
 };
 
+export type ArenaAdmissionWindow = {
+	windowId: string;
+	policyVersion: string;
+	scheduledStart: string;
+	inviteDecisionCutoff: string;
+	mergeReadinessCutoff: string;
+	rosterLockAt: string;
+	operationalRecheckAt: string;
+	runInstantiationAt: string;
+	displayTimeZone: string;
+	createdAt: string;
+};
+
+export type ArenaEligibilityDecision = {
+	evaluationId: string;
+	windowId: string;
+	botId: string;
+	versionId: string;
+	outcome: 'eligible_for_roster' | 'rolled_to_next_window' | 'excluded';
+	reasonCodes: string[];
+	sourceHash: string;
+	artifactHash: string;
+	configHash: string;
+	evaluatedAt: string;
+	correlationId: string;
+};
+
+export type ArenaRosterPreviewEntry = {
+	priority: number;
+	decision: ArenaEligibilityDecision;
+};
+
+export type ArenaRosterPreview = {
+	windowId: string;
+	maxBots: number;
+	included: ArenaRosterPreviewEntry[];
+	capacityOverflow: ArenaRosterPreviewEntry[];
+	awaitingPriority: ArenaEligibilityDecision[];
+	rolled: ArenaEligibilityDecision[];
+	excluded: ArenaEligibilityDecision[];
+};
+
+export type ArenaRosterEntry = {
+	botOrder: number;
+	botId: string;
+	versionId: string;
+	priority: number;
+	sourceHash: string;
+	artifactHash: string;
+	configHash: string;
+	eligibilityEvaluationId: string;
+};
+
+export type ArenaRosterRemoval = {
+	removalId: string;
+	windowId: string;
+	snapshotId: string;
+	botId: string;
+	versionId: string;
+	reasonCode: 'security' | 'trust' | 'config' | 'availability';
+	detail: string;
+	removedAt: string;
+	removedBy: string;
+	correlationId: string;
+};
+
+export type ArenaRoster = {
+	snapshotId: string;
+	windowId: string;
+	snapshotHash: string;
+	maxBots: number;
+	lockedAt: string;
+	lockedBy: string;
+	correlationId: string;
+	policy: Record<string, string>;
+	entries: ArenaRosterEntry[];
+	effectiveEntries: ArenaRosterEntry[];
+	removals: ArenaRosterRemoval[];
+};
+
 export type AccountRiskControl = {
 	scopeType: string;
 	scopeId: string;
@@ -297,6 +377,90 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 				completedAt: '2026-07-11T21:13:22Z'
 			}
 		];
+		const admissionWindow: ArenaAdmissionWindow = {
+			windowId: 'weekly-2026-07-25',
+			policyVersion: 'admission-v1',
+			scheduledStart: '2026-07-25T00:00:00Z',
+			inviteDecisionCutoff: '2026-07-22T00:00:00Z',
+			mergeReadinessCutoff: '2026-07-23T00:00:00Z',
+			rosterLockAt: '2026-07-24T00:00:00Z',
+			operationalRecheckAt: '2026-07-24T22:00:00Z',
+			runInstantiationAt: '2026-07-24T23:30:00Z',
+			displayTimeZone: 'America/Toronto',
+			createdAt: '2026-07-20T00:00:00Z'
+		};
+		const eligibilityDecisions: ArenaEligibilityDecision[] = [
+			{
+				evaluationId: 'eval-maker-v1',
+				windowId: admissionWindow.windowId,
+				botId: 'dsteele-spread-maker',
+				versionId: 'v1',
+				outcome: 'eligible_for_roster',
+				reasonCodes: [],
+				sourceHash: 'sha256:maker-source',
+				artifactHash: 'sha256:maker-artifact',
+				configHash: 'sha256:maker-config',
+				evaluatedAt: '2026-07-23T20:00:00Z',
+				correlationId: 'fixture-admission'
+			},
+			{
+				evaluationId: 'eval-latency-v2',
+				windowId: admissionWindow.windowId,
+				botId: 'latency-arb-fixture',
+				versionId: 'v2',
+				outcome: 'rolled_to_next_window',
+				reasonCodes: ['config_not_ready'],
+				sourceHash: 'sha256:latency-source',
+				artifactHash: 'sha256:latency-artifact',
+				configHash: '',
+				evaluatedAt: '2026-07-23T20:00:00Z',
+				correlationId: 'fixture-admission'
+			}
+		];
+		const roster: ArenaRoster = {
+			snapshotId: 'roster-weekly-2026-07-25',
+			windowId: admissionWindow.windowId,
+			snapshotHash: 'sha256:fixture-roster',
+			maxBots: 8,
+			lockedAt: admissionWindow.rosterLockAt,
+			lockedBy: 'local-dev-admin',
+			correlationId: 'fixture-admission',
+			policy: {
+				modeId: 'hosted-sim',
+				scenarioId: 'opening-auction-smoke',
+				actorProfileVersion: 'actors-v1',
+				riskPolicyVersion: 'risk-v1',
+				scoringPolicyVersion: 'score-v2',
+				economicPolicyVersion: 'preview-zero-fee-v1'
+			},
+			entries: [
+				{
+					botOrder: 0,
+					botId: 'dsteele-spread-maker',
+					versionId: 'v1',
+					priority: 100,
+					sourceHash: 'sha256:maker-source',
+					artifactHash: 'sha256:maker-artifact',
+					configHash: 'sha256:maker-config',
+					eligibilityEvaluationId: 'eval-maker-v1'
+				}
+			],
+			effectiveEntries: [],
+			removals: [
+				{
+					removalId: 'removal-fixture-1',
+					windowId: admissionWindow.windowId,
+					snapshotId: 'roster-weekly-2026-07-25',
+					botId: 'dsteele-spread-maker',
+					versionId: 'v1',
+					reasonCode: 'availability',
+					detail: 'fixture runner unavailable',
+					removedAt: '2026-07-24T01:00:00Z',
+					removedBy: 'local-dev-admin',
+					correlationId: 'fixture-admission'
+				}
+			]
+		};
 		const accessRoles: AdminAccessRole[] = [
 			{
 				roleId: 'participant',
@@ -478,6 +642,53 @@ async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<
 						occurredAt: '2026-07-11T21:12:45Z'
 					}
 				]
+			} as T;
+		}
+		if (method === 'GET' && url.pathname === '/admin/v1/arena/admission-windows') {
+			return { status: 'ok', window: admissionWindow } as T;
+		}
+		if (method === 'GET' && url.pathname === '/admin/v1/arena/eligibility-decisions') {
+			return { status: 'ok', decisions: eligibilityDecisions } as T;
+		}
+		if (method === 'POST' && url.pathname === '/admin/v1/arena/roster-previews') {
+			const payload = JSON.parse(String(init.body ?? '{}')) as {
+				maxBots?: number;
+				candidates?: { evaluationId: string; priority: number }[];
+			};
+			const priorities = new Map((payload.candidates ?? []).map((item) => [item.evaluationId, item.priority]));
+			const ranked = eligibilityDecisions
+				.filter((decision) => decision.outcome === 'eligible_for_roster' && priorities.has(decision.evaluationId))
+				.map((decision) => ({ decision, priority: priorities.get(decision.evaluationId) ?? 0 }))
+				.sort((a, b) => b.priority - a.priority || a.decision.botId.localeCompare(b.decision.botId));
+			const maxBots = payload.maxBots ?? 8;
+			return {
+				status: 'ok',
+				preview: {
+					windowId: admissionWindow.windowId,
+					maxBots,
+					included: ranked.slice(0, maxBots),
+					capacityOverflow: ranked.slice(maxBots),
+					awaitingPriority: eligibilityDecisions.filter(
+						(decision) => decision.outcome === 'eligible_for_roster' && !priorities.has(decision.evaluationId)
+					),
+					rolled: eligibilityDecisions.filter((decision) => decision.outcome === 'rolled_to_next_window'),
+					excluded: eligibilityDecisions.filter((decision) => decision.outcome === 'excluded')
+				}
+			} as T;
+		}
+		if (method === 'GET' && url.pathname === '/admin/v1/arena/rosters') {
+			return { status: 'ok', roster } as T;
+		}
+		if (method === 'POST' && url.pathname === '/admin/v1/arena/roster-removals') {
+			const payload = JSON.parse(String(init.body ?? '{}')) as Partial<ArenaRosterRemoval>;
+			return {
+				status: 'ok',
+				removal: {
+					...roster.removals[0],
+					...payload,
+					removedAt: now,
+					removedBy: 'local-dev-admin'
+				}
 			} as T;
 		}
 		if (method === 'GET' && url.pathname === '/admin/v1/risk/account-controls') {
@@ -712,6 +923,55 @@ export async function fetchAdminRunEnforcementEvents(runId: string): Promise<Are
 		`/admin/v1/arena/run-enforcement-events?${params}`
 	);
 	return body.events ?? [];
+}
+
+export async function fetchArenaAdmissionWindow(windowId: string): Promise<ArenaAdmissionWindow> {
+	const params = new URLSearchParams({ windowId });
+	const body = await fetchAdminJson<{ window: ArenaAdmissionWindow }>(
+		`/admin/v1/arena/admission-windows?${params}`
+	);
+	return body.window;
+}
+
+export async function fetchArenaEligibilityDecisions(windowId: string): Promise<ArenaEligibilityDecision[]> {
+	const params = new URLSearchParams({ windowId });
+	const body = await fetchAdminJson<{ decisions: ArenaEligibilityDecision[] }>(
+		`/admin/v1/arena/eligibility-decisions?${params}`
+	);
+	return body.decisions ?? [];
+}
+
+export async function previewArenaRoster(
+	windowId: string,
+	maxBots: number,
+	candidates: { evaluationId: string; priority: number }[]
+): Promise<ArenaRosterPreview> {
+	const body = await fetchAdminJson<{ preview: ArenaRosterPreview }>('/admin/v1/arena/roster-previews', {
+		method: 'POST',
+		body: JSON.stringify({ windowId, maxBots, candidates })
+	});
+	return body.preview;
+}
+
+export async function fetchArenaRoster(windowId: string): Promise<ArenaRoster> {
+	const params = new URLSearchParams({ windowId });
+	const body = await fetchAdminJson<{ roster: ArenaRoster }>(`/admin/v1/arena/rosters?${params}`);
+	return body.roster;
+}
+
+export async function removeArenaRosterEntry(input: {
+	removalId: string;
+	windowId: string;
+	botId: string;
+	versionId: string;
+	reasonCode: ArenaRosterRemoval['reasonCode'];
+	detail: string;
+}): Promise<ArenaRosterRemoval> {
+	const body = await fetchAdminJson<{ removal: ArenaRosterRemoval }>('/admin/v1/arena/roster-removals', {
+		method: 'POST',
+		body: JSON.stringify(input)
+	});
+	return body.removal;
 }
 
 export async function fetchAdminRiskControls(): Promise<AccountRiskControl[]> {

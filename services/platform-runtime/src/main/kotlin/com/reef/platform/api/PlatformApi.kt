@@ -675,7 +675,7 @@ class PlatformApi(
         )
     }
 
-    fun ownExecutions(participantId: String, instrumentId: String = "", limit: Int = 0): String {
+    fun ownExecutions(participantId: String, instrumentId: String = "", runId: String = "", limit: Int = 0): String {
         val boundedLimit = limit.coerceIn(0, 500)
         return JsonCodec.writeObject(
             "participantId" to participantId,
@@ -684,9 +684,10 @@ class PlatformApi(
                 "freshness" to "durable execution rows scoped by participant order ownership",
                 "scope" to "participant",
                 "instrumentId" to instrumentId,
+                "runId" to runId,
                 "limit" to boundedLimit
             ),
-            "fills" to orderService.executionsForParticipant(participantId, instrumentId, boundedLimit).map { it.toMap() }
+            "fills" to orderService.executionsForParticipant(participantId, instrumentId, runId, boundedLimit).map { it.toMap() }
         )
     }
 
@@ -727,7 +728,8 @@ class PlatformApi(
         "quantityUnits" to quantityUnits,
         "executionPrice" to executionPrice,
         "currency" to currency,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "liquidityRole" to liquidityRole
     )
 
     private fun TradeCreated.toMap(): Map<String, Any> = mapOf(
@@ -782,7 +784,8 @@ class PlatformApi(
         "quantityUnits" to quantityUnits,
         "executionPrice" to executionPrice,
         "currency" to currency,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "liquidityRole" to liquidityRole
     )
 
     private fun MarketDataSnapshot.toMap(): Map<String, Any> = mapOf(

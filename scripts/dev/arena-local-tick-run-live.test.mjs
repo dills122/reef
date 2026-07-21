@@ -6,10 +6,13 @@ import http from "node:http";
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const commands = new Map();
 const openOrdersByParticipant = new Map();
+const submittedOrderIdsByParticipant = new Map();
 const receivedCommands = [];
 const commandStatusReads = [];
+const fillReads = [];
 const referenceWrites = [];
 let syncResultMode = false;
+let rejectArenaRunStart = false;
 const arena = {
   bots: new Map(),
   versions: new Map(),
@@ -49,6 +52,9 @@ const server = http.createServer(async (req, res) => {
         status: "OPEN",
       });
       openOrdersByParticipant.set(participantId, orders);
+      const orderIds = submittedOrderIdsByParticipant.get(participantId) ?? [];
+      orderIds.push(body.orderId);
+      submittedOrderIdsByParticipant.set(participantId, orderIds);
     }
     if (url.pathname === "/api/v1/orders/cancel") {
       const orders = openOrdersByParticipant.get(participantId) ?? [];
@@ -105,15 +111,27 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/api/v1/orders/fills") {
     const participantId = url.searchParams.get("participantId") ?? "";
+    fillReads.push({ participantId, runId: url.searchParams.get("runId") ?? "" });
+    const currentOrderId = submittedOrderIdsByParticipant.get(participantId)?.[0];
     const fills = participantId.endsWith("builtin-mm-simple")
       ? [{
         executionId: "exec-mm-simple-1",
-        orderId: "order-mm-simple-1",
+        orderId: currentOrderId,
         instrumentId: "AAPL",
         side: "BUY",
+        liquidityRole: "MAKER",
         quantityUnits: "1",
         executionPrice: "100000000000",
         occurredAt: "2026-07-04T14:30:00.000Z",
+      }, {
+        executionId: "exec-stale-1",
+        orderId: "order-from-an-earlier-attempt",
+        instrumentId: "AAPL",
+        side: "BUY",
+        liquidityRole: "UNSPECIFIED",
+        quantityUnits: "99",
+        executionPrice: "100000000000",
+        occurredAt: "2026-07-04T14:29:00.000Z",
       }]
       : [];
     return json(res, 200, {
@@ -150,6 +168,32 @@ try {
   );
   assert.equal(receivedCommands.length, commandCountBeforePreflight);
 
+  rejectArenaRunStart = true;
+  const commandCountBeforeRunStart = receivedCommands.length;
+  await assert.rejects(
+    run("bun", [
+      "scripts/dev/arena-local-tick-run.mjs",
+      "--run-id=arena-before-t0-test",
+      "--compartment=vm",
+      "--submit-mode=live",
+      `--venue-url=${baseUrl}`,
+      `--arena-admin-url=${baseUrl}`,
+      "--persist-results",
+      "--admission-window-id=window-before-t0-test",
+      "--roster-snapshot-id=roster-before-t0-test",
+      "--roster-snapshot-hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "--skip-projector-preflight",
+      "--out=/tmp/reef-arena-local-tick-run-before-t0-test.json",
+    ]),
+    /arena run cannot start before scheduledStart/,
+  );
+  assert.equal(receivedCommands.length, commandCountBeforeRunStart);
+  arena.runs.delete("arena-before-t0-test");
+  for (const key of arena.versions.keys()) {
+    if (key.endsWith("-arena-before-t0-test")) arena.versions.delete(key);
+  }
+  rejectArenaRunStart = false;
+
   await run("bun", [
     "scripts/dev/arena-local-tick-run.mjs",
     "--compartment=vm",
@@ -158,8 +202,12 @@ try {
     `--arena-admin-url=${baseUrl}`,
     "--seed-reference",
     "--persist-results",
+    "--admission-window-id=window-live-test",
+    "--roster-snapshot-id=roster-live-test",
+    "--roster-snapshot-hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "--command-wait-mode=accepted",
     "--require-projection-drain",
+    "--skip-projector-preflight",
     "--out=/tmp/reef-arena-local-tick-run-live-test.json",
   ]);
 
@@ -176,8 +224,23 @@ try {
   assert.equal(arena.bots.get("builtin-mm-simple").name, "Blue Saber Trading");
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
+  const persistedRun = arena.runs.values().next().value;
+  assert.equal(persistedRun.admissionWindowId, "window-live-test");
+  assert.equal(persistedRun.rosterSnapshotId, "roster-live-test");
+  assert.equal(persistedRun.rosterSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(arena.results.length, 5);
   const report = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-live-test.json", "utf8"));
+  const simpleMarketMakerVersion = arena.versions.get(
+    `builtin-mm-simple/${report.sessionReports.find((session) => session.bot.botId === "builtin-mm-simple").bot.versionId}`,
+  );
+  const simpleMarketMakerManifest = report.sessionReports.find(
+    (session) => session.bot.botId === "builtin-mm-simple",
+  ).bot.artifact.manifest;
+  assert.equal(simpleMarketMakerVersion.sourceHash, simpleMarketMakerManifest.sourceHash);
+  assert.equal(simpleMarketMakerVersion.artifactHash, simpleMarketMakerManifest.artifactHash);
+  assert.equal(persistedRun.seedSetHash, report.mode.seedSetHash);
+  assert.equal(persistedRun.actorProfileHash, report.mode.actorProfileCatalogHash);
+  assert.equal(persistedRun.riskPolicyHash, report.mode.riskPolicyHash);
   assert.equal(report.runPlan.tickCount, 3);
   assert.equal(report.runPlan.durationSeconds, 1.5);
   assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
@@ -193,12 +256,22 @@ try {
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
   assert.equal(report.executionSummary.fillCount, 1);
+  assert.ok(fillReads.length >= 5);
+  assert.ok(fillReads.every((read) => read.runId === report.runId));
+  assert.equal(report.venueReadback.ownOrders.find((entry) => entry.botId === "builtin-mm-simple")?.fills.body.meta.excludedFillCount, 1);
   const simpleMarketMaker = report.botResults.find((result) => result.botId === "builtin-mm-simple");
   assert.equal(simpleMarketMaker?.tradingMetrics.executions.fillCount, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.executions.makerFillCount, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.executions.liquidityRoleComplete, true);
   assert.equal(simpleMarketMaker?.tradingMetrics.inventory.netQuantityByInstrument.AAPL, 1);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.cash, -100);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.inventoryValue, 100.5);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.total, 0.5);
+  const persistedSimpleMarketMaker = arena.results.find((result) => result.botId === "builtin-mm-simple");
+  assert.equal(persistedSimpleMarketMaker?.finalEquity, Math.round(simpleMarketMaker.finalEquityDiagnostic));
+  assert.equal(persistedSimpleMarketMaker?.realizedPnl, Math.round(simpleMarketMaker.scoreBreakdown.diagnostics.realizedPnl));
+  assert.equal(persistedSimpleMarketMaker?.scoringPolicyHash, report.mode.scoringPolicyHash);
+  assert.equal(persistedSimpleMarketMaker?.policyEnvelopeHash, report.policyEnvelopeHash);
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.source, "participant-scoped-readback-and-trading-metrics");
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.fillContribution.fillCount, 1);
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.fillContribution.fillSharePct, 100);
@@ -297,6 +370,9 @@ async function handleArenaAdmin(req, res, url) {
   }
   if (req.method === "POST" && url.pathname === "/admin/v1/arena/runs/status") {
     const body = await readJson(req);
+    if (rejectArenaRunStart && body.status === "running") {
+      return json(res, 400, { error: "arena run cannot start before scheduledStart" });
+    }
     const run = arena.runs.get(body.runId);
     if (run !== undefined) run.status = body.status;
     return json(res, 200, { run });

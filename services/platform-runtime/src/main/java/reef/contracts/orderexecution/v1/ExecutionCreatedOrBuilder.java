@@ -99,4 +99,15 @@ public interface ExecutionCreatedOrBuilder extends
    */
   com.google.protobuf.ByteString
       getOccurredAtBytes();
+
+  /**
+   * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+   * @return The enum numeric value on the wire for liquidityRole.
+   */
+  int getLiquidityRoleValue();
+  /**
+   * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+   * @return The liquidityRole.
+   */
+  reef.contracts.orderexecution.v1.LiquidityRole getLiquidityRole();
 }

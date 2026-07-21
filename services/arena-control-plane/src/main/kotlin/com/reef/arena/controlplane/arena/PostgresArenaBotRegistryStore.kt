@@ -103,6 +103,18 @@ class PostgresArenaBotRegistryStore(
                       scenario_id TEXT NOT NULL,
                       seed BIGINT NOT NULL,
                       policy_version TEXT NOT NULL,
+                      admission_window_id TEXT NOT NULL,
+                      roster_snapshot_id TEXT NOT NULL,
+                      roster_snapshot_hash TEXT NOT NULL CHECK (roster_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+                      seed_set_hash TEXT NOT NULL CHECK (seed_set_hash ~ '^sha256:[a-f0-9]{64}$'),
+                      actor_profile_version TEXT NOT NULL,
+                      actor_profile_hash TEXT NOT NULL CHECK (actor_profile_hash ~ '^sha256:[a-f0-9]{64}$'),
+                      risk_policy_hash TEXT NOT NULL CHECK (risk_policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+                      policy_envelope_hash TEXT NOT NULL,
+                      scoring_policy_version TEXT NOT NULL,
+                      scoring_policy_hash TEXT NOT NULL,
+                      economic_policy_version TEXT NOT NULL,
+                      economic_policy_hash TEXT NOT NULL,
                       status TEXT NOT NULL,
                       created_at TIMESTAMPTZ NOT NULL,
                       completed_at TIMESTAMPTZ
@@ -129,6 +141,8 @@ class PostgresArenaBotRegistryStore(
                       bot_id TEXT NOT NULL,
                       version_id TEXT NOT NULL,
                       scoring_policy_version TEXT NOT NULL,
+                      scoring_policy_hash TEXT NOT NULL,
+                      policy_envelope_hash TEXT NOT NULL,
                       final_equity BIGINT NOT NULL,
                       realized_pnl BIGINT NOT NULL,
                       max_drawdown BIGINT NOT NULL,
@@ -180,7 +194,22 @@ class PostgresArenaBotRegistryStore(
                     """.trimIndent()
                 )
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_bot_versions_status ON ${names.botVersions}(status)")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS admission_window_id TEXT NOT NULL DEFAULT 'legacy-unbound'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS roster_snapshot_id TEXT NOT NULL DEFAULT 'legacy-unbound'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS roster_snapshot_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS seed_set_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS actor_profile_version TEXT NOT NULL DEFAULT 'legacy-unbound'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS actor_profile_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS risk_policy_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS policy_envelope_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS scoring_policy_version TEXT NOT NULL DEFAULT 'legacy-unresolved'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS scoring_policy_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS economic_policy_version TEXT NOT NULL DEFAULT 'legacy-unresolved'")
+                stmt.execute("ALTER TABLE ${names.runRecords} ADD COLUMN IF NOT EXISTS economic_policy_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runBotResults} ADD COLUMN IF NOT EXISTS scoring_policy_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
+                stmt.execute("ALTER TABLE ${names.runBotResults} ADD COLUMN IF NOT EXISTS policy_envelope_hash TEXT NOT NULL DEFAULT 'sha256:0000000000000000000000000000000000000000000000000000000000000000'")
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_status_created ON ${names.runRecords}(status, created_at DESC)")
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_run_records_roster_binding ON ${names.runRecords}(admission_window_id, roster_snapshot_id, roster_snapshot_hash)")
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_arena_run_bot_results_leaderboard
@@ -253,7 +282,11 @@ class PostgresArenaBotRegistryStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT run_id, mode_id, scenario_id, seed, policy_version, status, created_at, completed_at
+                SELECT run_id, mode_id, scenario_id, seed, policy_version, admission_window_id,
+                       roster_snapshot_id, roster_snapshot_hash, seed_set_hash, actor_profile_version,
+                       actor_profile_hash, risk_policy_hash, policy_envelope_hash,
+                       scoring_policy_version, scoring_policy_hash, economic_policy_version, economic_policy_hash,
+                       status, created_at, completed_at
                 FROM ${names.runRecords}
                 ORDER BY created_at DESC
                 LIMIT ?
@@ -472,19 +505,44 @@ class PostgresArenaBotRegistryStore(
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
+                conn.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))").use { ps ->
+                    ps.setString(1, runRecord.runId)
+                    ps.executeQuery().use { rs -> require(rs.next()) }
+                }
+                val existing = conn.prepareStatement(
+                    """
+                    SELECT run_id, mode_id, scenario_id, seed, policy_version, admission_window_id,
+                           roster_snapshot_id, roster_snapshot_hash, seed_set_hash, actor_profile_version,
+                           actor_profile_hash, risk_policy_hash, policy_envelope_hash,
+                           scoring_policy_version, scoring_policy_hash, economic_policy_version, economic_policy_hash,
+                           status, created_at, completed_at
+                    FROM ${names.runRecords}
+                    WHERE run_id = ?
+                    FOR UPDATE
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, runRecord.runId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) rs.toRunRecord(loadRunBotVersions(conn, runRecord.runId)) else null
+                    }
+                }
+                existing?.let { accepted ->
+                    require(accepted.copy(status = runRecord.status, completedAt = runRecord.completedAt) == runRecord) {
+                        "accepted arena run policy and composition are immutable"
+                    }
+                }
                 conn.prepareStatement(
                     """
                     INSERT INTO ${names.runRecords}(
-                      run_id, mode_id, scenario_id, seed, policy_version, status, created_at, completed_at
+                      run_id, mode_id, scenario_id, seed, policy_version, admission_window_id,
+                      roster_snapshot_id, roster_snapshot_hash, seed_set_hash, actor_profile_version,
+                      actor_profile_hash, risk_policy_hash, policy_envelope_hash,
+                      scoring_policy_version, scoring_policy_hash, economic_policy_version, economic_policy_hash,
+                      status, created_at, completed_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (run_id) DO UPDATE SET
-                      mode_id = EXCLUDED.mode_id,
-                      scenario_id = EXCLUDED.scenario_id,
-                      seed = EXCLUDED.seed,
-                      policy_version = EXCLUDED.policy_version,
                       status = EXCLUDED.status,
-                      created_at = EXCLUDED.created_at,
                       completed_at = EXCLUDED.completed_at
                     """.trimIndent()
                 ).use { ps ->
@@ -493,9 +551,21 @@ class PostgresArenaBotRegistryStore(
                     ps.setString(3, runRecord.scenarioId)
                     ps.setLong(4, runRecord.seed)
                     ps.setString(5, runRecord.policyVersion)
-                    ps.setString(6, runRecord.status.name)
-                    ps.setTimestamp(7, Timestamp.from(runRecord.createdAt))
-                    ps.setTimestamp(8, runRecord.completedAt?.let { Timestamp.from(it) })
+                    ps.setString(6, runRecord.admissionWindowId)
+                    ps.setString(7, runRecord.rosterSnapshotId)
+                    ps.setString(8, runRecord.rosterSnapshotHash)
+                    ps.setString(9, runRecord.seedSetHash)
+                    ps.setString(10, runRecord.actorProfileVersion)
+                    ps.setString(11, runRecord.actorProfileHash)
+                    ps.setString(12, runRecord.riskPolicyHash)
+                    ps.setString(13, runRecord.policyEnvelopeHash)
+                    ps.setString(14, runRecord.scoringPolicyVersion)
+                    ps.setString(15, runRecord.scoringPolicyHash)
+                    ps.setString(16, runRecord.economicPolicyVersion)
+                    ps.setString(17, runRecord.economicPolicyHash)
+                    ps.setString(18, runRecord.status.name)
+                    ps.setTimestamp(19, Timestamp.from(runRecord.createdAt))
+                    ps.setTimestamp(20, runRecord.completedAt?.let { Timestamp.from(it) })
                     ps.executeUpdate()
                 }
                 conn.prepareStatement("DELETE FROM ${names.runBotVersions} WHERE run_id = ?").use { ps ->
@@ -531,7 +601,11 @@ class PostgresArenaBotRegistryStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT run_id, mode_id, scenario_id, seed, policy_version, status, created_at, completed_at
+                SELECT run_id, mode_id, scenario_id, seed, policy_version, admission_window_id,
+                       roster_snapshot_id, roster_snapshot_hash, seed_set_hash, actor_profile_version,
+                       actor_profile_hash, risk_policy_hash, policy_envelope_hash,
+                       scoring_policy_version, scoring_policy_hash, economic_policy_version, economic_policy_hash,
+                       status, created_at, completed_at
                 FROM ${names.runRecords}
                 WHERE run_id = ?
                 """.trimIndent()
@@ -549,11 +623,12 @@ class PostgresArenaBotRegistryStore(
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.runBotResults}(
-                  run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
+                  run_id, bot_id, version_id, scoring_policy_version, scoring_policy_hash, policy_envelope_hash,
+                  final_equity, realized_pnl,
                   max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
                   disqualified, score_eligible, public_leaderboard, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (run_id, bot_id, version_id, scoring_policy_version) DO UPDATE SET
                   final_equity = EXCLUDED.final_equity,
                   realized_pnl = EXCLUDED.realized_pnl,
@@ -572,17 +647,19 @@ class PostgresArenaBotRegistryStore(
                 ps.setString(2, result.botId)
                 ps.setString(3, result.versionId)
                 ps.setString(4, result.scoringPolicyVersion)
-                ps.setLong(5, result.finalEquity)
-                ps.setLong(6, result.realizedPnl)
-                ps.setLong(7, result.maxDrawdown)
-                ps.setInt(8, result.actionsProposed)
-                ps.setInt(9, result.orderActionsProposed)
-                ps.setInt(10, result.dataCalls)
-                ps.setInt(11, result.signalsGenerated)
-                ps.setBoolean(12, result.disqualified)
-                ps.setBoolean(13, result.scoreEligible)
-                ps.setBoolean(14, result.publicLeaderboard)
-                ps.setTimestamp(15, Timestamp.from(result.createdAt))
+                ps.setString(5, result.scoringPolicyHash)
+                ps.setString(6, result.policyEnvelopeHash)
+                ps.setLong(7, result.finalEquity)
+                ps.setLong(8, result.realizedPnl)
+                ps.setLong(9, result.maxDrawdown)
+                ps.setInt(10, result.actionsProposed)
+                ps.setInt(11, result.orderActionsProposed)
+                ps.setInt(12, result.dataCalls)
+                ps.setInt(13, result.signalsGenerated)
+                ps.setBoolean(14, result.disqualified)
+                ps.setBoolean(15, result.scoreEligible)
+                ps.setBoolean(16, result.publicLeaderboard)
+                ps.setTimestamp(17, Timestamp.from(result.createdAt))
                 ps.executeUpdate()
             }
         }
@@ -592,7 +669,8 @@ class PostgresArenaBotRegistryStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
+                SELECT run_id, bot_id, version_id, scoring_policy_version, scoring_policy_hash, policy_envelope_hash,
+                       final_equity, realized_pnl,
                        max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
                        disqualified, score_eligible, public_leaderboard, created_at
                 FROM ${names.runBotResults}
@@ -677,7 +755,11 @@ class PostgresArenaBotRegistryStore(
                 JOIN ${names.bots} b ON b.bot_id = rb.bot_id
                 WHERE r.mode_id = ?
                   AND r.status = ?
+                  AND r.admission_window_id <> 'legacy-unbound'
                   AND rb.scoring_policy_version = ?
+                  AND rb.scoring_policy_version = r.scoring_policy_version
+                  AND rb.scoring_policy_hash = r.scoring_policy_hash
+                  AND rb.policy_envelope_hash = r.policy_envelope_hash
                   AND rb.score_eligible = true
                   AND rb.public_leaderboard = true
                   AND rb.disqualified = false
@@ -882,6 +964,18 @@ class PostgresArenaBotRegistryStore(
             scenarioId = getString("scenario_id"),
             seed = getLong("seed"),
             policyVersion = getString("policy_version"),
+            admissionWindowId = getString("admission_window_id"),
+            rosterSnapshotId = getString("roster_snapshot_id"),
+            rosterSnapshotHash = getString("roster_snapshot_hash"),
+            seedSetHash = getString("seed_set_hash"),
+            actorProfileVersion = getString("actor_profile_version"),
+            actorProfileHash = getString("actor_profile_hash"),
+            riskPolicyHash = getString("risk_policy_hash"),
+            policyEnvelopeHash = getString("policy_envelope_hash"),
+            scoringPolicyVersion = getString("scoring_policy_version"),
+            scoringPolicyHash = getString("scoring_policy_hash"),
+            economicPolicyVersion = getString("economic_policy_version"),
+            economicPolicyHash = getString("economic_policy_hash"),
             botVersions = botVersions,
             status = ArenaRunStatus.valueOf(getString("status")),
             createdAt = instant("created_at"),
@@ -895,6 +989,8 @@ class PostgresArenaBotRegistryStore(
             botId = getString("bot_id"),
             versionId = getString("version_id"),
             scoringPolicyVersion = getString("scoring_policy_version"),
+            scoringPolicyHash = getString("scoring_policy_hash"),
+            policyEnvelopeHash = getString("policy_envelope_hash"),
             finalEquity = getLong("final_equity"),
             realizedPnl = getLong("realized_pnl"),
             maxDrawdown = getLong("max_drawdown"),

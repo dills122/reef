@@ -71,6 +71,12 @@ message OrderRejected {
   string occurred_at = 5;
 }
 
+enum LiquidityRole {
+  LIQUIDITY_ROLE_UNSPECIFIED = 0;
+  LIQUIDITY_ROLE_MAKER = 1;
+  LIQUIDITY_ROLE_TAKER = 2;
+}
+
 message ExecutionCreated {
   string event_id = 1;
   string execution_id = 2;
@@ -79,6 +85,7 @@ message ExecutionCreated {
   OrderQuantity quantity = 5;
   Price execution_price = 6;
   string occurred_at = 7;
+  LiquidityRole liquidity_role = 8;
 }
 
 message TradeCreated {

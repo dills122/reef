@@ -6,7 +6,7 @@ This is the current release gate for accepting external Bot Arena submissions.
 It separates implemented capability from repository or hosted configuration and
 from evidence that has actually been observed.
 
-Last verified: 2026-07-19.
+Last verified: 2026-07-21.
 
 ## Release Call
 
@@ -18,7 +18,7 @@ named external-fork proof is complete.
 
 The venue, SDK, isolation gate, registry, hosted admin surface, public
 leaderboard read, and same-repository submission proof are substantial. The
-remaining blocker is the public intake trust model and its enforcement:
+remaining blockers are external intake proof and live economic attribution:
 
 - fork submissions need a named external-account proof through approval,
   provisioning, merge, and registry sync
@@ -34,6 +34,11 @@ remaining blocker is the public intake trust model and its enforcement:
 - the separation promotion did not include a hosted deployment rehearsal; the
   Hetzner Compose default remains the Reef-core image and must explicitly select
   the Arena-enabled image before the next Arena cutover
+- a local six-bot, roster-bound rehearsal produced real fills but read stale
+  `UNSPECIFIED` execution rows. The persistence and evidence paths now retain
+  maker/taker roles, reject conflicting execution replays, and scope Arena fill
+  readback to the current run and submitted order set. The three-policy matrix
+  still needs a fresh recorded pass before this becomes release evidence.
 
 Do not solve the fork problem by giving PR-controlled workflows hosted secrets,
 OIDC minting permission, or a privileged checkout. Keep untrusted validation
@@ -56,7 +61,7 @@ separate from trusted provisioning.
 | Participant config surface | Implemented, needs named external-user proof | Arena admin exposes owner-scoped bot config through the Admin API/OpenBao boundary | Keep as a preview claim until a non-operator participant completes it. |
 | Bot-version venue risk gate | Implemented and tested | `ArenaBotVersionRiskCheck` and boundary tests reject disabled/non-active versions before acceptance | Strong release foundation. |
 | Public leaderboard | Deployed, empty | Hosted `/leaderboard` loaded without console errors and used `/api/v1/arena/leaderboard`; no public scored runs were present | Do not imply an active competition yet. Seed or promote one clearly labelled preview run before launch. |
-| Run correctness and capacity | Strong controlled evidence | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green | Enough for a bounded preview; not proof of arbitrary public-code scale. |
+| Run correctness and capacity | Controlled evidence; fresh economic proof pending | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green. The 2026-07-21 stale-role path is corrected with role-preserving persistence, conflict rejection, and run-scoped fill evidence; a fresh matrix has not yet been recorded. | Do not promote non-zero economics until the three-policy matrix passes on the corrected path. |
 | Projection capacity | Adequate for preview, not final target | Venue core has a `10k` materializer baseline; full projection passed `5k/60s`, with write amplification still high | Optimize before longer/high-rate public seasons, but this is not the first external-submission blocker. |
 | Public onboarding | Blocked | No contribution guide, PR template, submission checklist, or copyable bot scaffold is exposed as the authoritative external flow | Even after trust-flow resolution, users do not yet have a safe, complete submission path. |
 | Product messaging | Needs alignment | Hosted landing invites users to submit; public docs say submissions are closed | Use “limited preview” language until the gates in this document are green. |
@@ -124,7 +129,8 @@ codes, emergency-removal rules, and evidence envelope.
 - fork-safe pending, approval, trusted provisioning, and denial paths are drilled
 - fork-based add, update, and remove lifecycle is drilled with an external test account
 - owner config write and run eligibility are verified with a participant role
-- the `T-72h`/`T-48h`/`T-24h` admission and roster-lock policy is persisted and tested
+- the implemented and locally tested `T-72h`/`T-48h`/`T-24h` admission,
+  roster-lock, and `T-30m`/`T0` run-binding policy has fresh hosted evidence
 - one labelled preview run appears on the public leaderboard
 - hosted backup/restore and operator quarantine/recovery runbooks are current
 - public copy says limited preview and simulated, not real-money trading

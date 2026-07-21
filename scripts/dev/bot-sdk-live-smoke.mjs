@@ -52,7 +52,11 @@ if (preflight.status !== "ready") {
 }
 
 await waitForHttp(`${venueUrl}/health`, waitTimeoutSeconds);
-const liveClientOptions = { baseUrl: venueUrl, participantId: fixture.participantId };
+const liveClientOptions = {
+  baseUrl: venueUrl,
+  participantId: fixture.participantId,
+  clientId: fixture.clientId ?? `bot:${fixture.botId}`,
+};
 const availabilityClient = createLiveDataAvailabilityClientV1(liveClientOptions);
 const availability = await availabilityClient.availability();
 console.log("Bot SDK venue data availability:");

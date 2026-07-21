@@ -33,6 +33,7 @@ private static final long serialVersionUID = 0L;
     orderId_ = "";
     instrumentId_ = "";
     occurredAt_ = "";
+    liquidityRole_ = 0;
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -62,7 +63,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       eventId_ = s;
@@ -78,7 +79,7 @@ private static final long serialVersionUID = 0L;
       getEventIdBytes() {
     java.lang.Object ref = eventId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       eventId_ = b;
@@ -101,7 +102,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       executionId_ = s;
@@ -117,7 +118,7 @@ private static final long serialVersionUID = 0L;
       getExecutionIdBytes() {
     java.lang.Object ref = executionId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       executionId_ = b;
@@ -140,7 +141,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       orderId_ = s;
@@ -156,7 +157,7 @@ private static final long serialVersionUID = 0L;
       getOrderIdBytes() {
     java.lang.Object ref = orderId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       orderId_ = b;
@@ -179,7 +180,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       instrumentId_ = s;
@@ -195,7 +196,7 @@ private static final long serialVersionUID = 0L;
       getInstrumentIdBytes() {
     java.lang.Object ref = instrumentId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       instrumentId_ = b;
@@ -270,7 +271,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       occurredAt_ = s;
@@ -286,7 +287,7 @@ private static final long serialVersionUID = 0L;
       getOccurredAtBytes() {
     java.lang.Object ref = occurredAt_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       occurredAt_ = b;
@@ -294,6 +295,24 @@ private static final long serialVersionUID = 0L;
     } else {
       return (com.google.protobuf.ByteString) ref;
     }
+  }
+
+  public static final int LIQUIDITY_ROLE_FIELD_NUMBER = 8;
+  private int liquidityRole_ = 0;
+  /**
+   * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+   * @return The enum numeric value on the wire for liquidityRole.
+   */
+  @java.lang.Override public int getLiquidityRoleValue() {
+    return liquidityRole_;
+  }
+  /**
+   * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+   * @return The liquidityRole.
+   */
+  @java.lang.Override public reef.contracts.orderexecution.v1.LiquidityRole getLiquidityRole() {
+    reef.contracts.orderexecution.v1.LiquidityRole result = reef.contracts.orderexecution.v1.LiquidityRole.forNumber(liquidityRole_);
+    return result == null ? reef.contracts.orderexecution.v1.LiquidityRole.UNRECOGNIZED : result;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -331,6 +350,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(occurredAt_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 7, occurredAt_);
     }
+    if (liquidityRole_ != reef.contracts.orderexecution.v1.LiquidityRole.LIQUIDITY_ROLE_UNSPECIFIED.getNumber()) {
+      output.writeEnum(8, liquidityRole_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -362,6 +384,10 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(occurredAt_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(7, occurredAt_);
+    }
+    if (liquidityRole_ != reef.contracts.orderexecution.v1.LiquidityRole.LIQUIDITY_ROLE_UNSPECIFIED.getNumber()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeEnumSize(8, liquidityRole_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -398,6 +424,7 @@ private static final long serialVersionUID = 0L;
     }
     if (!getOccurredAt()
         .equals(other.getOccurredAt())) return false;
+    if (liquidityRole_ != other.liquidityRole_) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -427,6 +454,8 @@ private static final long serialVersionUID = 0L;
     }
     hash = (37 * hash) + OCCURRED_AT_FIELD_NUMBER;
     hash = (53 * hash) + getOccurredAt().hashCode();
+    hash = (37 * hash) + LIQUIDITY_ROLE_FIELD_NUMBER;
+    hash = (53 * hash) + liquidityRole_;
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -580,6 +609,7 @@ private static final long serialVersionUID = 0L;
         executionPriceBuilder_ = null;
       }
       occurredAt_ = "";
+      liquidityRole_ = 0;
       return this;
     }
 
@@ -641,6 +671,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.occurredAt_ = occurredAt_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.liquidityRole_ = liquidityRole_;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -686,6 +719,9 @@ private static final long serialVersionUID = 0L;
         occurredAt_ = other.occurredAt_;
         bitField0_ |= 0x00000040;
         onChanged();
+      }
+      if (other.liquidityRole_ != 0) {
+        setLiquidityRoleValue(other.getLiquidityRoleValue());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -752,6 +788,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 58
+            case 64: {
+              liquidityRole_ = input.readEnum();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -794,7 +835,7 @@ private static final long serialVersionUID = 0L;
         getEventIdBytes() {
       java.lang.Object ref = eventId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         eventId_ = b;
@@ -866,7 +907,7 @@ private static final long serialVersionUID = 0L;
         getExecutionIdBytes() {
       java.lang.Object ref = executionId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         executionId_ = b;
@@ -938,7 +979,7 @@ private static final long serialVersionUID = 0L;
         getOrderIdBytes() {
       java.lang.Object ref = orderId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         orderId_ = b;
@@ -1010,7 +1051,7 @@ private static final long serialVersionUID = 0L;
         getInstrumentIdBytes() {
       java.lang.Object ref = instrumentId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         instrumentId_ = b;
@@ -1165,7 +1206,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.OrderQuantity quantity = 5;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder> 
+        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder>
         internalGetQuantityFieldBuilder() {
       if (quantityBuilder_ == null) {
         quantityBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1286,7 +1327,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.Price execution_price = 6;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder> 
+        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder>
         internalGetExecutionPriceFieldBuilder() {
       if (executionPriceBuilder_ == null) {
         executionPriceBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1324,7 +1365,7 @@ private static final long serialVersionUID = 0L;
         getOccurredAtBytes() {
       java.lang.Object ref = occurredAt_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         occurredAt_ = b;
@@ -1367,6 +1408,57 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       occurredAt_ = value;
       bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+
+    private int liquidityRole_ = 0;
+    /**
+     * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+     * @return The enum numeric value on the wire for liquidityRole.
+     */
+    @java.lang.Override public int getLiquidityRoleValue() {
+      return liquidityRole_;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+     * @param value The enum numeric value on the wire for liquidityRole to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLiquidityRoleValue(int value) {
+      liquidityRole_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+     * @return The liquidityRole.
+     */
+    @java.lang.Override
+    public reef.contracts.orderexecution.v1.LiquidityRole getLiquidityRole() {
+      reef.contracts.orderexecution.v1.LiquidityRole result = reef.contracts.orderexecution.v1.LiquidityRole.forNumber(liquidityRole_);
+      return result == null ? reef.contracts.orderexecution.v1.LiquidityRole.UNRECOGNIZED : result;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+     * @param value The liquidityRole to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLiquidityRole(reef.contracts.orderexecution.v1.LiquidityRole value) {
+      if (value == null) { throw new NullPointerException(); }
+      bitField0_ |= 0x00000080;
+      liquidityRole_ = value.getNumber();
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.LiquidityRole liquidity_role = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLiquidityRole() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      liquidityRole_ = 0;
       onChanged();
       return this;
     }

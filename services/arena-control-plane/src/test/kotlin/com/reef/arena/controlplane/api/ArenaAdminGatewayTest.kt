@@ -1,16 +1,24 @@
 package com.reef.arena.controlplane.api
 
 import com.reef.arena.controlplane.application.ArenaAdminApplicationService
+import com.reef.arena.controlplane.application.ArenaRunAdmissionApplicationService
 import com.reef.arena.controlplane.arena.ArenaBot
 import com.reef.arena.controlplane.arena.ArenaBotMetadata
 import com.reef.arena.controlplane.arena.ArenaBotVersionStatus
 import com.reef.arena.controlplane.arena.ArenaControlPlaneService
+import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
+import com.reef.arena.controlplane.arena.ArenaEligibilityOutcome
 import com.reef.arena.controlplane.arena.ArenaQualificationStatus
+import com.reef.arena.controlplane.arena.ArenaRosterCandidate
+import com.reef.arena.controlplane.arena.ArenaRosterLocker
+import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
+import com.reef.arena.controlplane.arena.ArenaRunEligibilityDecision
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigProvider
 import com.reef.arena.controlplane.arena.InMemoryArenaBotEntitlementStore
 import com.reef.arena.controlplane.arena.InMemoryArenaBotRegistryStore
 import com.reef.arena.controlplane.arena.InMemoryArenaSubmissionAdmissionStore
+import com.reef.arena.controlplane.arena.InMemoryArenaRunAdmissionStore
 import com.reef.arena.controlplane.arena.LocalDevBotConfigService
 import com.reef.arena.controlplane.arena.RegisterArenaBotCommand
 import com.reef.arena.controlplane.arena.RegisterArenaBotVersionCommand
@@ -34,6 +42,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private const val ZERO_HASH = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 class ArenaAdminGatewayTest {
     @Test
@@ -331,7 +341,7 @@ class ArenaAdminGatewayTest {
     @Test
     fun recordsRunLifecycleAndServesAdminAndPublicLeaderboards() {
         val registry = InMemoryArenaBotRegistryStore()
-        val now = Instant.parse("2026-07-18T00:00:00Z")
+        val now = Instant.parse("2026-08-10T00:00:00Z")
         val controlPlane = ArenaControlPlaneService(registry) { now }
         controlPlane.registerBot(
             RegisterArenaBotCommand(
@@ -358,8 +368,28 @@ class ArenaAdminGatewayTest {
         ).forEach { status ->
             controlPlane.transitionVersion("bot-1", "v1", status, "admin-cli", status.name, "gateway-test")
         }
+        val admissionStore = InMemoryArenaRunAdmissionStore()
+        val window = ArenaAdmissionWindowPolicy("invite-v1").schedule(
+            "window-1", now, "UTC", Instant.parse("2026-07-18T00:00:00Z")
+        )
+        admissionStore.createWindow(window)
+        val decision = ArenaRunEligibilityDecision(
+            "evaluation-1", window.windowId, "bot-1", "v1", ArenaEligibilityOutcome.EligibleForRoster,
+            emptyList(), "sha256:source", "sha256:artifact", "sha256:config", window.rosterLockAt,
+            "gateway-test"
+        )
+        admissionStore.recordDecision(decision)
+        val policy = ArenaRosterPolicySnapshot(
+            "hosted-sim", "scenario-1", ZERO_HASH, "actors-v1", ZERO_HASH,
+            "policy-v1", ZERO_HASH, "score-v2", ZERO_HASH, "preview-zero-fee-v1", ZERO_HASH
+        )
+        val roster = ArenaRosterLocker().lock(
+            "roster-1", window, policy, listOf(ArenaRosterCandidate(decision, 10)), 1,
+            window.rosterLockAt, "admin-cli", "gateway-test"
+        ).snapshot
+        admissionStore.lockRoster(roster)
         val gateway = ArenaAdminGateway(
-            arenaAdminService = ArenaAdminApplicationService(registry, now = { now }),
+            arenaAdminService = ArenaAdminApplicationService(registry, admissionStore, now = { now }),
             adminIdentityService = null,
             analyticsRunExportService = null
         )
@@ -369,7 +399,7 @@ class ArenaAdminGatewayTest {
             "POST",
             "/internal/admin/arena/runs",
             null,
-            """{"runId":"run-1","modeId":"hosted-sim","scenarioId":"scenario-1","seed":42,"policyVersion":"policy-v1","botVersions":[{"botId":"bot-1","versionId":"v1"}]}""",
+            """{"runId":"run-1","modeId":"hosted-sim","scenarioId":"scenario-1","seed":42,"policyVersion":"policy-v1","admissionWindowId":"window-1","rosterSnapshotId":"roster-1","rosterSnapshotHash":"${roster.snapshotHash}","seedSetHash":"$ZERO_HASH","actorProfileVersion":"actors-v1","actorProfileHash":"$ZERO_HASH","riskPolicyHash":"$ZERO_HASH","policyEnvelopeHash":"$ZERO_HASH","scoringPolicyVersion":"score-v2","scoringPolicyHash":"$ZERO_HASH","economicPolicyVersion":"preview-zero-fee-v1","economicPolicyHash":"$ZERO_HASH","botVersions":[{"botId":"bot-1","versionId":"v1"}]}""",
             principal
         )
         val running = gateway.handleInternal(
@@ -379,18 +409,18 @@ class ArenaAdminGatewayTest {
             """{"runId":"run-1","status":"running"}""",
             principal
         )
+        val result = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/run-bot-results",
+            null,
+            """{"runId":"run-1","botId":"bot-1","versionId":"v1","scoringPolicyVersion":"score-v2","scoringPolicyHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","policyEnvelopeHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","finalEquity":1030000,"realizedPnl":30000,"maxDrawdown":900,"actionsProposed":13,"orderActionsProposed":9,"dataCalls":21,"signalsGenerated":5,"disqualified":false}""",
+            principal
+        )
         val completed = gateway.handleInternal(
             "POST",
             "/internal/admin/arena/runs/status",
             null,
             """{"runId":"run-1","status":"completed"}""",
-            principal
-        )
-        val result = gateway.handleInternal(
-            "POST",
-            "/internal/admin/arena/run-bot-results",
-            null,
-            """{"runId":"run-1","botId":"bot-1","versionId":"v1","scoringPolicyVersion":"score-v2","finalEquity":1030000,"realizedPnl":30000,"maxDrawdown":900,"actionsProposed":13,"orderActionsProposed":9,"dataCalls":21,"signalsGenerated":5,"disqualified":false}""",
             principal
         )
         val enforcement = gateway.handleInternal(
@@ -761,6 +791,108 @@ class ArenaAdminGatewayTest {
         assertEquals("sample-bot", entitlements.botOwnershipsForUser("user-gh-123").single().botId)
         assertEquals(200, myBots?.status)
         assertTrue(myBots!!.body.contains("sample-bot"))
+    }
+
+    @Test
+    fun exposesAdmissionEvaluationAndImmutableRosterLockRoutes() {
+        var clock = Instant.parse("2026-07-20T00:00:00Z")
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = null,
+            adminIdentityService = null,
+            analyticsRunExportService = null,
+            arenaRunAdmissionService = ArenaRunAdmissionApplicationService(
+                InMemoryArenaRunAdmissionStore(),
+                now = { clock }
+            )
+        )
+        val principal = AdminRequestPrincipal("admin-cli", "admission-route", clock.toString())
+        val scheduled = gateway.handleInternal(
+            "POST", "/internal/admin/arena/admission-windows", null,
+            """{"windowId":"weekly-2026-07-25","policyVersion":"admission-v1","scheduledStart":"2026-07-25T00:00:00Z","displayTimeZone":"America/Toronto"}""",
+            principal
+        )
+        clock = Instant.parse("2026-07-24T00:00:00Z")
+        val evaluated = gateway.handleInternal(
+            "POST", "/internal/admin/arena/eligibility-decisions", null,
+            """{
+              "evaluationId":"eval-route-1","windowId":"weekly-2026-07-25","botId":"bot-route","versionId":"v1",
+              "invitedAt":"2026-07-22T00:00:00Z","approvedHeadSha":"abc123","currentHeadSha":"abc123",
+              "checksPassedAt":"2026-07-23T00:00:00Z","provisionedAt":"2026-07-23T00:00:00Z",
+              "configValidatedAt":"2026-07-23T00:00:00Z","mergedAt":"2026-07-24T00:00:00Z",
+              "registryVerifiedAt":"2026-07-24T00:00:00Z","sourceHash":"sha256:source",
+              "artifactHash":"sha256:artifact","configHash":"sha256:config","versionStatus":"approved",
+              "ownerTrusted":true,"ownershipActive":true,"botRestricted":false,"ownerRestricted":false,
+              "secretSliceExists":true,"gameModeAllowed":true,"runtimeSupported":true,"riskPreflightPassed":true
+            }""".trimIndent(),
+            principal
+        )
+        val incompleteFlags = gateway.handleInternal(
+            "POST", "/internal/admin/arena/eligibility-decisions", null,
+            """{"evaluationId":"eval-invalid","windowId":"weekly-2026-07-25","botId":"bot-invalid","versionId":"v1","versionStatus":"approved"}""",
+            principal
+        )
+        val previewed = gateway.handleInternal(
+            "POST", "/internal/admin/arena/roster-previews", null,
+            """{"windowId":"weekly-2026-07-25","maxBots":1,"candidates":[{"evaluationId":"eval-route-1","priority":10}]}""",
+            principal
+        )
+        val locked = gateway.handleInternal(
+            "POST", "/internal/admin/arena/rosters", null,
+            """{
+              "snapshotId":"roster-route-1","windowId":"weekly-2026-07-25","maxBots":1,
+              "policy":{"modeId":"continuous-book","scenarioId":"baseline","seedSetHash":"sha256:seeds",
+                "actorProfileVersion":"actors-v1","actorProfileHash":"sha256:e4cbc6bf525a82aa554b6404c4d9021e929f039c47a9f8e55428e60d80d5fbc4",
+                "riskPolicyVersion":"risk-v1","riskPolicyHash":"sha256:risk",
+                "scoringPolicyVersion":"score-v1","scoringPolicyHash":"sha256:d87133eca6c0a4994fd0aa30af3108b72ac679955128f14e64335417358dd15a",
+                "economicPolicyVersion":"economics-v1","economicPolicyHash":"sha256:f2c81084b40c3654dcf2b3c15fcbb0ce938a641421d1446f8c4ad96a332b298b"},
+              "resolvedPolicies":{
+                "actorProfileCatalog":{"artifactId":"arena-actor-profiles","version":"actors-v1","content":{
+                  "schemaVersion":"reef.arena.actorProfiles.v1","catalogId":"arena-actor-profiles","version":"actors-v1","profiles":[{
+                    "profileId":"competitor-standard","version":"v1","actorClass":"competitor","description":"Default competitor",
+                    "difficultyBucket":"ranked-standard","scoreEffect":"eligible-for-score","allowedParamKeys":["aggression"],"params":{"aggression":0.5}}]}},
+                "economicPolicy":{"artifactId":"preview-zero-fee","version":"economics-v1","content":{
+                  "schemaVersion":"reef.arena.economicPolicy.v1","policyId":"preview-zero-fee","version":"economics-v1","currency":"USD",
+                  "competitionLedger":{"startingCashPerCompetitor":"1000000.00","allowNegativeCash":false},
+                  "houseLedger":{"marketMakerStartingCash":"10000000.00","npcStartingCash":"10000000.00","subsidyBudget":"0.00"},
+                  "fees":{"makerBps":"0","takerBps":"0","cancelFee":"0.00","borrowBps":"0","liquidationPenaltyBps":"0"},
+                  "rebates":{"makerBps":"0","fundingSource":"none"},"sources":[],"sinks":[],
+                  "reconciliation":{"tolerance":"0.01","requireBalancedTransfers":true,"competitionLedger":true,"houseLedger":true}}},
+                "scoringPolicy":{"artifactId":"arena-score","version":"score-v1","content":{
+                  "schemaVersion":"reef.arena.scoringPolicy.v1","policyId":"arena-score","version":"score-v1","status":"public-preview",
+                  "formulaVersion":"score-v1-final-equity-risk-conduct","baseline":1000000,"publicScoringEnabled":true,
+                  "eligibleActorClasses":["competitor"],"components":{"equity":{"enabled":true,"cap":100000},"risk":{"enabled":true,"cap":100000},
+                  "conduct":{"enabled":true,"cap":100000},"marketInteraction":{"enabled":false,"cap":0},"npcDifficulty":{"enabled":false,"cap":0}},
+                  "penalties":{"freeze":250000,"operationalPause":5000,"invalidIntentCap":100000},
+                  "disqualification":{"freezeCount":1,"excludeFromLeaderboard":true},
+                  "replayLock":{"from":"run_acceptance","until":"score_publication","requirePolicyEnvelopeHash":true}}}},
+              "candidates":[{"evaluationId":"eval-route-1","priority":10}]
+            }""".trimIndent(),
+            principal
+        )
+        val removed = gateway.handleInternal(
+            "POST", "/internal/admin/arena/roster-removals", null,
+            """{"removalId":"removal-route-1","windowId":"weekly-2026-07-25","botId":"bot-route","versionId":"v1","reasonCode":"availability","detail":"runner unavailable"}""",
+            principal
+        )
+        val fetched = gateway.handleInternal(
+            "GET", "/internal/admin/arena/rosters", "windowId=weekly-2026-07-25", "", principal
+        )
+
+        assertEquals(200, scheduled?.status)
+        assertEquals(200, evaluated?.status)
+        assertContains(evaluated!!.body, "eligible_for_roster")
+        assertEquals(400, incompleteFlags?.status)
+        assertContains(incompleteFlags!!.body, "must be true or false")
+        assertEquals(200, previewed?.status)
+        assertContains(previewed!!.body, "included")
+        assertEquals(200, locked?.status)
+        assertContains(locked!!.body, "sha256:")
+        assertEquals(200, removed?.status)
+        assertContains(removed!!.body, "availability")
+        assertEquals(200, fetched?.status)
+        assertContains(fetched!!.body, "eval-route-1")
+        assertContains(fetched.body, "effectiveEntries")
+        assertContains(fetched.body, "removal-route-1")
     }
 
     private fun trustedAdmissionIdentities(

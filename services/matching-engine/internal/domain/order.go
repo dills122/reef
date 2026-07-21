@@ -116,6 +116,7 @@ type ExecutionCreated struct {
 	ExecutionPrice string `json:"executionPrice"`
 	Currency       string `json:"currency"`
 	OccurredAt     string `json:"occurredAt"`
+	LiquidityRole  string `json:"liquidityRole"`
 }
 
 type TradeCreated struct {

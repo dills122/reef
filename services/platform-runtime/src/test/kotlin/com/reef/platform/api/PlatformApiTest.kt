@@ -731,7 +731,8 @@ class PlatformApiTest {
                 limitPrice = "150",
                 currency = "USD",
                 timeInForce = "DAY",
-                acceptedAt = "2026-03-14T18:00:00Z"
+                acceptedAt = "2026-03-14T18:00:00Z",
+                runId = "run-current"
             )
         )
         persistence.saveAcceptedOrder(
@@ -747,7 +748,25 @@ class PlatformApiTest {
                 limitPrice = "300",
                 currency = "USD",
                 timeInForce = "DAY",
-                acceptedAt = "2026-03-14T18:00:01Z"
+                acceptedAt = "2026-03-14T18:00:01Z",
+                runId = "run-current"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "mine-previous-run",
+                engineOrderId = "eng-mine-previous-run",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "25",
+                limitPrice = "149",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T17:00:00Z",
+                runId = "run-previous"
             )
         )
         persistence.saveAcceptedOrder(
@@ -776,7 +795,8 @@ class PlatformApiTest {
                     quantityUnits = "40",
                     executionPrice = "150",
                     currency = "USD",
-                    occurredAt = "2026-03-14T18:00:03Z"
+                    occurredAt = "2026-03-14T18:00:03Z",
+                    liquidityRole = "MAKER"
                 ),
                 ExecutionCreated(
                     eventId = "evt-exec-msft",
@@ -787,6 +807,16 @@ class PlatformApiTest {
                     executionPrice = "300",
                     currency = "USD",
                     occurredAt = "2026-03-14T18:00:04Z"
+                ),
+                ExecutionCreated(
+                    eventId = "evt-exec-previous-run",
+                    executionId = "exec-previous-run",
+                    orderId = "mine-previous-run",
+                    instrumentId = "AAPL",
+                    quantityUnits = "25",
+                    executionPrice = "149",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T17:00:01Z"
                 ),
                 ExecutionCreated(
                     eventId = "evt-exec-other",
@@ -801,7 +831,7 @@ class PlatformApiTest {
             )
         )
 
-        val response = api.ownExecutions("participant-1", instrumentId = "AAPL", limit = 1)
+        val response = api.ownExecutions("participant-1", instrumentId = "AAPL", runId = "run-current", limit = 1)
 
         assertContains(response, "\"participantId\":\"participant-1\"")
         assertContains(response, "\"source\":\"runtime.orders + runtime.executions\"")
@@ -809,9 +839,12 @@ class PlatformApiTest {
         assertContains(response, "\"fills\":[{\"executionId\":\"exec-mine\"")
         assertContains(response, "\"side\":\"BUY\"")
         assertContains(response, "\"quantityUnits\":\"40\"")
+        assertContains(response, "\"liquidityRole\":\"MAKER\"")
+        assertContains(response, "\"runId\":\"run-current\"")
         assertContains(response, "\"limit\":1")
         assert(!response.contains("exec-msft")) { "instrument filter not applied" }
         assert(!response.contains("exec-other")) { "other participant's fill leaked" }
+        assert(!response.contains("exec-previous-run")) { "previous run fill leaked" }
         assert(!response.contains("eventId")) { "internal event id leaked into own fills" }
     }
 

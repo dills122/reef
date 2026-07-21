@@ -159,7 +159,8 @@ class EngineClient : EngineGateway {
                 quantityUnits = execution.string("quantityUnits"),
                 executionPrice = execution.string("executionPrice"),
                 currency = execution.string("currency"),
-                occurredAt = execution.string("occurredAt")
+                occurredAt = execution.string("occurredAt"),
+                liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" }
             )
         }
     }

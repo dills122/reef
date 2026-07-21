@@ -106,7 +106,7 @@ public enum OrderSide
   }
   public static com.google.protobuf.Descriptors.EnumDescriptor
       getDescriptor() {
-    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(0);
+    return reef.contracts.orderexecution.v1.OrderExecution.getDescriptor().getEnumTypes().get(1);
   }
 
   private static final OrderSide[] VALUES = values();

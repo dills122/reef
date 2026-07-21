@@ -450,6 +450,27 @@ Replay envelope additions:
 
 ## First Implementation Slice
 
+Current checkpoint (2026-07-20): items 1-2 are implemented with strict
+canonical actor/economic resolution and all three invite-preview economic
+fixtures. Runner reports retain resolved catalog, profile, economic, scoring,
+and composition artifacts and hashes; roster lock verifies resolved
+actor/economic/scoring content before persisting those references. Run records
+now persist the accepted envelope, scoring, economic, roster, seed-set,
+actor-profile, and risk-policy locks; result ingestion must match the scoring
+lock, and terminal score publication is immutable. The zero-fee baseline now
+emits deterministic competition/house cash, inventory, source/sink, and PnL
+reconciliation evidence and can be required as a run gate. Non-zero fees and
+rebates now reconcile against canonical maker/taker attribution, including
+venue fee receipts, maker rebate payments, and explicit house subsidy limits.
+Missing role coverage, role notional imbalance, and underfunded facilities fail
+closed. The 2026-07-21 live local rehearsal exercised that guard: stale
+`UNSPECIFIED` fills caused the economic run to fail instead of silently applying
+non-zero terms. Projection persistence now retains maker/taker roles, rejects
+conflicting execution replays, and supplies run-scoped fill readback. Remaining
+quote-quality fields in item 3, full actor-profile coverage in 6, and recorded
+fixed-seed proof for all three policies in 8 remain active; item 7 and
+roster-to-run binding are complete.
+
 1. Add static policy fixtures under `packages/scenario-definitions/arena/`.
 2. Add `ActorProfile` fixtures with strict parameter validation and resolved
    profile hashes.

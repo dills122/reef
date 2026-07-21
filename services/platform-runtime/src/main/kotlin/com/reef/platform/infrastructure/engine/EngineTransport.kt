@@ -519,7 +519,12 @@ private fun ProtoSubmitOrderResult.toDomainResult(): SubmitOrderResult =
                 quantityUnits = execution.quantity.units,
                 executionPrice = execution.executionPrice.nanos,
                 currency = execution.executionPrice.currency,
-                occurredAt = execution.occurredAt
+                occurredAt = execution.occurredAt,
+                liquidityRole = when (execution.liquidityRole) {
+                    reef.contracts.orderexecution.v1.LiquidityRole.LIQUIDITY_ROLE_MAKER -> "MAKER"
+                    reef.contracts.orderexecution.v1.LiquidityRole.LIQUIDITY_ROLE_TAKER -> "TAKER"
+                    else -> "UNSPECIFIED"
+                }
             )
         },
         trades = tradesList.map { trade ->

@@ -25,6 +25,15 @@ import {
   buildScoreContext,
   summarizeScoreCalibration,
 } from "./lib/arena-score-breakdown.mjs";
+import { reconcileArenaEconomics } from "./lib/arena-economic-reconciliation.mjs";
+import {
+  resolveActorProfile as resolvePolicyActorProfile,
+  resolveActorProfileCatalog,
+  canonicalHash,
+  resolveEconomicPolicy,
+  resolvePolicyComposition,
+  resolveScoringPolicy,
+} from "./lib/arena-policy-resolver.mjs";
 
 loadDotEnv();
 
@@ -52,6 +61,8 @@ const config = {
   openBaoToken: stringOption("--openbao-token", env("OPENBAO_TOKEN", env("VAULT_TOKEN", ""))),
   seedReference: args.includes("--seed-reference"),
   persistResults: args.includes("--persist-results"),
+  requireRosterBinding: args.includes("--require-roster-binding"),
+  requireEconomicReconciliation: args.includes("--require-economic-reconciliation"),
   actorId: stringOption("--actor-id", env("ADMIN_ACTOR_ID", "admin-cli")),
   commandTimeoutMs: numberOption("--command-timeout-ms", 15000),
   commandPollMs: numberOption("--command-poll-ms", 250),
@@ -65,6 +76,10 @@ const config = {
   warmupSeconds: numberOption("--warmup-seconds", 0),
   healthSampleIntervalMs: numberOption("--health-sample-interval-ms", 0),
   scoringPolicyVersion: stringOption("--scoring-policy-version", ""),
+  economicPolicyVersion: stringOption("--economic-policy-version", ""),
+  admissionWindowId: stringOption("--admission-window-id", env("ARENA_ADMISSION_WINDOW_ID", "")),
+  rosterSnapshotId: stringOption("--roster-snapshot-id", env("ARENA_ROSTER_SNAPSHOT_ID", "")),
+  rosterSnapshotHash: stringOption("--roster-snapshot-hash", env("ARENA_ROSTER_SNAPSHOT_HASH", "")),
   requireProjectionDrain: args.includes("--require-projection-drain"),
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
@@ -110,15 +125,45 @@ if (config.submitMode === "live" && config.venueUrl.length === 0) {
 if (config.persistResults && config.arenaAdminUrl.length === 0) {
   throw new Error("--arena-admin-url, ARENA_ADMIN_API_URL, --venue-url, or BOT_SDK_VENUE_URL is required when --persist-results is set");
 }
+if ((config.persistResults || config.requireRosterBinding) && [config.admissionWindowId, config.rosterSnapshotId, config.rosterSnapshotHash].some((value) => value.length === 0)) {
+  throw new Error("--admission-window-id, --roster-snapshot-id, and --roster-snapshot-hash are required for persisted or roster-bound runs");
+}
+if ((config.persistResults || config.requireRosterBinding) && !/^sha256:[a-f0-9]{64}$/.test(config.rosterSnapshotHash)) {
+  throw new Error("--roster-snapshot-hash must be a canonical sha256 digest");
+}
 
 const mode = readJson(config.mode);
 if (config.scoringPolicyVersion.length > 0) {
+  if (!/^score-v\d+$/.test(config.scoringPolicyVersion)) {
+    throw new Error(`unsupported --scoring-policy-version=${config.scoringPolicyVersion}`);
+  }
   mode.scoringPolicyVersion = config.scoringPolicyVersion;
+  mode.scoringPolicyPath = `packages/scenario-definitions/arena/scoring/${config.scoringPolicyVersion}.json`;
+}
+if (config.economicPolicyVersion.length > 0) {
+  const supportedEconomicPolicies = new Set([
+    "preview-zero-fee-v1",
+    "preview-balanced-fee-v1",
+    "preview-liquidity-subsidy-v1",
+  ]);
+  if (!supportedEconomicPolicies.has(config.economicPolicyVersion)) {
+    throw new Error(`unsupported --economic-policy-version=${config.economicPolicyVersion}`);
+  }
+  mode.economicPolicyVersion = config.economicPolicyVersion;
+  mode.economicPolicyPath = `packages/scenario-definitions/arena/economics/${config.economicPolicyVersion}.json`;
 }
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
-const actorProfileCatalog = readJson(mode.actorProfileCatalogPath ?? "packages/scenario-definitions/arena/actor-profiles.v1.json");
-const actorProfileIndex = indexActorProfiles(actorProfileCatalog);
+const seedSetHash = canonicalHash([Number(mode.seed)]);
+const riskPolicyHash = canonicalHash({
+  schemaVersion: "reef.arena.riskPolicySet.v1",
+  version: mode.riskPolicyVersion,
+  profiles: riskProfiles,
+});
+const actorProfileCatalog = resolveActorProfileCatalog(readJson(mode.actorProfileCatalogPath));
+const economicPolicy = resolveEconomicPolicy(readJson(mode.economicPolicyPath));
+const scoringPolicy = resolveScoringPolicy(readJson(mode.scoringPolicyPath));
+const policyComposition = resolvePolicyComposition(mode, actorProfileCatalog, economicPolicy, scoringPolicy);
 const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
@@ -128,7 +173,11 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  const actorProfile = resolveActorProfile(entry, actorProfileIndex);
+  const actorProfile = resolvePolicyActorProfile(
+    { ...entry, actorClass: actorClassForBot(entry) },
+    actorProfileCatalog,
+    mode.actorProfileDefaults?.[entry.role],
+  );
   return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile, actorProfile };
 });
 const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
@@ -137,6 +186,7 @@ const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots);
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
 const workers = [];
 let sharedWorker;
+let arenaRunPreflight;
 
 async function main() {
   const startedAt = performance.now();
@@ -186,6 +236,9 @@ async function main() {
         bot.loadResult = await loadBotInWorker(bot);
       }
     });
+    if (config.persistResults) {
+      arenaRunPreflight = await runPhase("preflight-roster-bound-run", () => preflightArenaRun(bots));
+    }
 
     const healthSamples = [];
     const arenaRun = await runPhase("run-scheduled-ticks", () => runArenaSessions(bots, healthSamples));
@@ -212,6 +265,9 @@ async function main() {
     }));
     report.persistence = await runPhase("persist-arena-results", () => persistArenaResults(report));
     await runPhase("write-report", () => writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 }));
+    if (config.requireEconomicReconciliation && report.economicReconciliation.status !== "pass") {
+      throw new Error(`arena economic reconciliation failed: ${report.economicReconciliation.reconciliationHash}`);
+    }
     assertExpectedFreezeBots(report);
     console.log(`arena local tick run complete: ${resolve(config.out)}`);
     console.log(
@@ -426,6 +482,7 @@ async function startBotSession(bot) {
               liveClientOptions: {
                 baseUrl: workerVenueUrl(),
                 participantId: participantIdForBot(bot),
+                clientId: fixture.clientId ?? `bot:${bot.botId}`,
               },
             }
           : {}),
@@ -876,7 +933,7 @@ function displayNameForBot(bot) {
 }
 
 function scoringAssumptions() {
-  const scoreV1Enabled = mode.scoringPolicyVersion === "score-v1";
+  const scoreV1Enabled = scoringPolicy.publicScoringEnabled;
   return {
     schemaVersion: "reef.arena.scoringAssumptions.v0",
     scoringPolicyVersion: mode.scoringPolicyVersion,
@@ -909,6 +966,7 @@ function scoringAssumptions() {
 function scoreContext() {
   return buildScoreContext({
     scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicy,
     npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
   });
 }
@@ -922,6 +980,7 @@ function summarizeTradingMetrics(session, counters) {
   let sellQuantity = 0;
   let grossSubmittedQuantity = 0;
   let grossSubmittedNotional = 0;
+  const submittedOrderIds = new Set();
 
   for (const tick of session.ticks) {
     for (const command of tick.venueCommands ?? []) {
@@ -936,6 +995,9 @@ function summarizeTradingMetrics(session, counters) {
       }
 
       if (command.route === "/api/v1/orders/submit") {
+        if (typeof body.orderId === "string" && body.orderId.length > 0) {
+          submittedOrderIds.add(body.orderId);
+        }
         const quantity = numberValue(body.quantityUnits);
         const price = priceFromNanos(body.limitPrice);
         grossSubmittedQuantity += quantity;
@@ -974,6 +1036,7 @@ function summarizeTradingMetrics(session, counters) {
       sellQuantity,
       grossSubmittedQuantity,
       grossSubmittedNotional: Number(grossSubmittedNotional.toFixed(6)),
+      submittedOrderIds: [...submittedOrderIds].sort(),
     },
     pnl: {
       realized: null,
@@ -1041,7 +1104,7 @@ function summarizeConductMetrics(session, counters, enforcement) {
     maxVenueCommandsPerTick,
     freezeCount: enforcement.freezeCount,
     operationalPauseCount: enforcement.operationalPauseCount,
-    notes: "report-only conduct inputs; scoring penalties are a later policy slice",
+    notes: "conduct inputs are scored only when enabled by the resolved scoring policy",
   };
 }
 
@@ -1067,8 +1130,12 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
   const healthSummary = summarizeHealth(healthSamples, totals);
   const marketQualitySummary = summarizeMarketQuality(healthSamples);
   const botResultsWithLiquidity = attachLiquidityDiagnostics(botResults, marketQualitySummary, venueReadback);
+  const economicReconciliation = reconcileArenaEconomics(botResultsWithLiquidity, economicPolicy);
   const liquiditySummary = summarizeLiquidityProviders(botResultsWithLiquidity, marketQualitySummary);
-  const status = reportStatus(enforcementEvents, healthSummary);
+  const baseStatus = reportStatus(enforcementEvents, healthSummary);
+  const status = config.requireEconomicReconciliation && economicReconciliation.status !== "pass"
+    ? "failed_economic_reconciliation"
+    : baseStatus;
   const envelope = policyEnvelope();
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
@@ -1081,17 +1148,35 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       version: mode.version,
       seed: mode.seed,
       scoringPolicyVersion: mode.scoringPolicyVersion,
+      scoringPolicyHash: scoringPolicy.contentHash,
       riskPolicyVersion: mode.riskPolicyVersion,
+      riskPolicyHash,
+      seedSetHash,
       economicPolicyVersion: mode.economicPolicyVersion,
+      economicPolicyHash: economicPolicy.contentHash,
       liquidityPolicyVersion: mode.liquidityPolicyVersion,
       backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
       creditPolicyVersion: mode.creditPolicyVersion,
       interventionPolicyVersion: mode.interventionPolicyVersion,
       actorProfileCatalogVersion: actorProfileCatalog.version,
+      actorProfileCatalogHash: actorProfileCatalog.contentHash,
+      policyCompositionHash: policyComposition.compositionHash,
       npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     },
     policyEnvelope: envelope,
     policyEnvelopeHash: `sha256:${stableHash(envelope)}`,
+    rosterBinding: {
+      admissionWindowId: config.admissionWindowId,
+      rosterSnapshotId: config.rosterSnapshotId,
+      rosterSnapshotHash: config.rosterSnapshotHash,
+      ...(arenaRunPreflight === undefined
+        ? {}
+        : { preflight: { status: arenaRunPreflight.status, validatedAt: arenaRunPreflight.validatedAt } }),
+    },
+    resolvedPolicyArtifacts: {
+      scoringPolicy: policyArtifact(scoringPolicy),
+      economicPolicy: policyArtifact(economicPolicy),
+    },
     runPlan,
     expectations: {
       freezeBots: config.expectFreezeBots,
@@ -1129,6 +1214,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     liquiditySummary,
     executionSummary: venueReadback?.executionSummary,
     scoringCalibration: summarizeScoreCalibration(botResultsWithLiquidity),
+    economicReconciliation,
     healthSamples,
     venueReadback,
     enforcementEvents,
@@ -1159,6 +1245,8 @@ function compactArenaReport(report) {
     mode: report.mode,
     policyEnvelope: report.policyEnvelope,
     policyEnvelopeHash: report.policyEnvelopeHash,
+    rosterBinding: report.rosterBinding,
+    resolvedPolicyArtifacts: report.resolvedPolicyArtifacts,
     runPlan: report.runPlan,
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
@@ -1179,6 +1267,7 @@ function compactArenaReport(report) {
     liquiditySummary: report.liquiditySummary,
     executionSummary: report.executionSummary,
     scoringCalibration: report.scoringCalibration,
+    economicReconciliation: report.economicReconciliation,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,
@@ -1204,8 +1293,12 @@ function policyEnvelope() {
     visibleDataPolicyVersion: mode.visibleDataPolicyVersion,
     actionPolicyVersion: mode.actionPolicyVersion,
     riskPolicyVersion: mode.riskPolicyVersion,
+    riskPolicyHash,
+    seedSetHash,
     scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicyHash: scoringPolicy.contentHash,
     economicPolicyVersion: mode.economicPolicyVersion,
+    economicPolicyHash: economicPolicy.contentHash,
     liquidityPolicyVersion: mode.liquidityPolicyVersion,
     backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
     creditPolicyVersion: mode.creditPolicyVersion,
@@ -1213,7 +1306,19 @@ function policyEnvelope() {
     actorProfileCatalog: {
       catalogId: actorProfileCatalog.catalogId,
       version: actorProfileCatalog.version,
+      contentHash: actorProfileCatalog.contentHash,
     },
+    economicPolicy: {
+      policyId: economicPolicy.policyId,
+      version: economicPolicy.version,
+      contentHash: economicPolicy.contentHash,
+    },
+    scoringPolicy: {
+      policyId: scoringPolicy.policyId,
+      version: scoringPolicy.version,
+      contentHash: scoringPolicy.contentHash,
+    },
+    policyCompositionHash: policyComposition.compositionHash,
     actorProfiles: summarizeActorProfiles(selectedBots).profiles.map((profile) => ({
       botId: profile.botId,
       actorClass: profile.actorClass,
@@ -2019,11 +2124,27 @@ async function collectVenueReadback(botResults) {
     })));
   const ownOrders = await mapWithConcurrency(botResults, 6, async (result) => {
     const participantId = participantIdForBot(result);
-    const [current, history, fills] = await Promise.all([
+    const [current, history, unscopedFills] = await Promise.all([
       getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
       getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
-      getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
+      getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&runId=${encodeURIComponent(config.runId)}&limit=200`, readbackHeaders(participantId)),
     ]);
+    const expectedOrderIds = new Set(result.tradingMetrics?.orderFlow?.submittedOrderIds ?? []);
+    const returnedFills = Array.isArray(unscopedFills.body?.fills) ? unscopedFills.body.fills : [];
+    const currentRunFills = returnedFills.filter((fill) => expectedOrderIds.has(fill.orderId));
+    const fills = {
+      ...unscopedFills,
+      body: {
+        ...unscopedFills.body,
+        meta: {
+          ...unscopedFills.body?.meta,
+          runId: config.runId,
+          expectedOrderCount: expectedOrderIds.size,
+          excludedFillCount: returnedFills.length - currentRunFills.length,
+        },
+        fills: currentRunFills,
+      },
+    };
     return {
       botId: result.botId,
       participantId,
@@ -2287,49 +2408,95 @@ function readbackHeaders(participantId = "") {
   };
 }
 
+async function preflightArenaRun(bots) {
+  const baseUrl = config.arenaAdminUrl.replace(/\/$/, "");
+  const correlationId = `${config.runId}-preflight`;
+  const operations = [];
+  for (const bot of bots) {
+    operations.push(await ensureArenaBot(baseUrl, bot, correlationId));
+    operations.push(await ensureArenaBotVersion(baseUrl, bot, correlationId));
+  }
+  const botVersions = bots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
+  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs", arenaRunRegistrationPayload(
+    botVersions,
+    `sha256:${stableHash(policyEnvelope())}`,
+    correlationId,
+  ), { allowAlreadyExists: true }));
+  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
+    runId: config.runId,
+    status: "running",
+    actorId: config.actorId,
+    correlationId,
+  }));
+  return { status: "pass", validatedAt: new Date().toISOString(), operations };
+}
+
+function arenaRunRegistrationPayload(botVersions, policyEnvelopeHash, correlationId) {
+  return {
+    runId: config.runId,
+    modeId: mode.modeId,
+    scenarioId: mode.scenarioId,
+    seed: Number(mode.seed ?? 0),
+    policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
+    admissionWindowId: config.admissionWindowId,
+    rosterSnapshotId: config.rosterSnapshotId,
+    rosterSnapshotHash: config.rosterSnapshotHash,
+    seedSetHash,
+    actorProfileVersion: actorProfileCatalog.version,
+    actorProfileHash: actorProfileCatalog.contentHash,
+    riskPolicyHash,
+    policyEnvelopeHash,
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicyHash: scoringPolicy.contentHash,
+    economicPolicyVersion: mode.economicPolicyVersion,
+    economicPolicyHash: economicPolicy.contentHash,
+    botVersions,
+    actorId: config.actorId,
+    correlationId,
+  };
+}
+
 async function persistArenaResults(report) {
   if (!config.persistResults) {
     return { enabled: false, skipped: true };
   }
   const baseUrl = config.arenaAdminUrl.replace(/\/$/, "");
   const correlationId = `${config.runId}-persist`;
-  const botVersions = selectedBots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
-  const operations = [];
-  for (const bot of selectedBots) {
-    operations.push(await ensureArenaBot(baseUrl, bot, correlationId));
-    operations.push(await ensureArenaBotVersion(baseUrl, bot, correlationId));
+  const persistedBots = report.sessionReports.map((session) => session.bot);
+  const botVersions = persistedBots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
+  const operations = [...(arenaRunPreflight?.operations ?? [])];
+  if (arenaRunPreflight === undefined) {
+    for (const bot of persistedBots) {
+      operations.push(await ensureArenaBot(baseUrl, bot, correlationId));
+      operations.push(await ensureArenaBotVersion(baseUrl, bot, correlationId));
+    }
+    operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs", arenaRunRegistrationPayload(
+      botVersions,
+      report.policyEnvelopeHash,
+      correlationId,
+    ), { allowAlreadyExists: true }));
+    operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
+      runId: config.runId,
+      status: "running",
+      actorId: config.actorId,
+      correlationId,
+    }, { allowInvalidTransition: true }));
   }
-  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs", {
-    runId: config.runId,
-    modeId: mode.modeId,
-    scenarioId: mode.scenarioId,
-    seed: Number(mode.seed ?? 0),
-    policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
-    botVersions,
-    actorId: config.actorId,
-    correlationId,
-  }, { allowAlreadyExists: true }));
-  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
-    runId: config.runId,
-    status: "running",
-    actorId: config.actorId,
-    correlationId,
-  }, { allowInvalidTransition: true }));
-  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
-    runId: config.runId,
-    status: report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings" ? "completed" : "failed",
-    actorId: config.actorId,
-    correlationId,
-  }, { allowInvalidTransition: true }));
-
   for (const result of report.botResults) {
+    const finalEquity = integerMetric(result.finalEquityDiagnostic, result.score);
+    const realizedPnl = integerMetric(
+      result.scoreBreakdown?.diagnostics?.realizedPnl,
+      0,
+    );
     operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/run-bot-results", {
       runId: config.runId,
       botId: result.botId,
       versionId: result.versionId,
       scoringPolicyVersion: mode.scoringPolicyVersion,
-      finalEquity: result.score,
-      realizedPnl: result.score - 1_000_000,
+      scoringPolicyHash: scoringPolicy.contentHash,
+      policyEnvelopeHash: report.policyEnvelopeHash,
+      finalEquity,
+      realizedPnl,
       maxDrawdown: result.disqualified ? 250_000 : 0,
       actionsProposed: result.actionsProposed,
       orderActionsProposed: result.venueCommands,
@@ -2368,6 +2535,14 @@ async function persistArenaResults(report) {
     }
   }
 
+  const runCompleted = report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings";
+  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
+    runId: config.runId,
+    status: runCompleted ? "completed" : "failed",
+    actorId: config.actorId,
+    correlationId,
+  }, { allowInvalidTransition: true }));
+
   const rawResults = await getArenaJson(baseUrl, `/admin/v1/arena/run-bot-results?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
   const rawEnforcementEvents = await getArenaJson(baseUrl, `/admin/v1/arena/run-enforcement-events?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
   const leaderboard = await getArenaJson(
@@ -2384,7 +2559,7 @@ async function persistArenaResults(report) {
   if (leaderboard.statusCode < 200 || leaderboard.statusCode >= 300) {
     throw new Error(`arena leaderboard readback failed (${leaderboard.statusCode}): ${JSON.stringify(leaderboard.body)}`);
   }
-  const expectsLeaderboardEntry = report.botResults.some((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified);
+  const expectsLeaderboardEntry = runCompleted && report.botResults.some((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified);
   if (leaderboardEntry === undefined && expectsLeaderboardEntry) {
     throw new Error(`arena leaderboard missing run ${config.runId}: ${JSON.stringify(leaderboard.body)}`);
   }
@@ -2397,6 +2572,11 @@ async function persistArenaResults(report) {
     leaderboard,
     leaderboardEntry,
   };
+}
+
+function integerMetric(value, fallback) {
+  const numeric = Number(value);
+  return Math.round(value !== null && value !== undefined && Number.isFinite(numeric) ? numeric : Number(fallback));
 }
 
 async function ensureArenaBot(baseUrl, bot, correlationId) {
@@ -2417,8 +2597,8 @@ async function ensureArenaBotVersion(baseUrl, bot, correlationId) {
   const version = await postArenaOk(baseUrl, "/admin/v1/arena/bot-versions", {
     botId: bot.botId,
     versionId: bot.versionId,
-    sourceHash: `sha256:${bot.runnerKey}-source`,
-    artifactHash: `sha256:${bot.runnerKey}-artifact`,
+    sourceHash: bot.artifact.manifest.sourceHash,
+    artifactHash: bot.artifact.manifest.artifactHash,
     sdkVersion: "1.5.0",
     apiVersion: "v1",
     dependencyManifestHash: `sha256:${bot.runnerKey}-deps`,
@@ -2933,79 +3113,6 @@ function buildRunPlan(modeConfig, runtimeConfig, fixture, botsOrCount) {
   };
 }
 
-function indexActorProfiles(catalog) {
-  if (catalog.schemaVersion !== "reef.arena.actorProfiles.v1") {
-    throw new Error(`unsupported actor profile catalog schema ${catalog.schemaVersion}`);
-  }
-  if (!Array.isArray(catalog.profiles)) {
-    throw new Error("actor profile catalog profiles must be an array");
-  }
-  const profiles = new Map();
-  for (const profile of catalog.profiles) {
-    const profileId = requiredProfileString(profile.profileId, "profileId");
-    if (profiles.has(profileId)) {
-      throw new Error(`duplicate actor profile ${profileId}`);
-    }
-    if (!Array.isArray(profile.allowedParamKeys)) {
-      throw new Error(`actor profile ${profileId} allowedParamKeys must be an array`);
-    }
-    assertKnownProfileParams(profileId, profile.params ?? {}, profile.allowedParamKeys);
-    profiles.set(profileId, profile);
-  }
-  return profiles;
-}
-
-function resolveActorProfile(bot, profiles) {
-  const profileId = bot.actorProfileRef ?? mode.actorProfileDefaults?.[bot.role];
-  if (typeof profileId !== "string" || profileId.length === 0) {
-    throw new Error(`bot ${bot.botId} missing actorProfileRef and no default for role ${bot.role}`);
-  }
-  const profile = profiles.get(profileId);
-  if (profile === undefined) {
-    throw new Error(`bot ${bot.botId} references unknown actor profile ${profileId}`);
-  }
-  const actorClass = actorClassForBot(bot);
-  if (profile.actorClass !== actorClass) {
-    throw new Error(`bot ${bot.botId} role ${bot.role} maps to ${actorClass} but actor profile ${profileId} is ${profile.actorClass}`);
-  }
-  const overrides = bot.actorProfileParams ?? {};
-  assertKnownProfileParams(profileId, overrides, profile.allowedParamKeys);
-  const resolved = {
-    profileId,
-    profileVersion: requiredProfileString(profile.version, `${profileId}.version`),
-    actorClass,
-    difficultyBucket: requiredProfileString(profile.difficultyBucket, `${profileId}.difficultyBucket`),
-    scoreEffect: requiredProfileString(profile.scoreEffect, `${profileId}.scoreEffect`),
-    params: {
-      ...(profile.params ?? {}),
-      ...overrides,
-    },
-  };
-  return {
-    ...resolved,
-    profileHash: `sha256:${stableHash(resolved)}`,
-  };
-}
-
-function assertKnownProfileParams(profileId, params, allowedParamKeys) {
-  if (params === null || typeof params !== "object" || Array.isArray(params)) {
-    throw new Error(`actor profile ${profileId} params must be an object`);
-  }
-  const allowed = new Set(allowedParamKeys);
-  for (const key of Object.keys(params)) {
-    if (!allowed.has(key)) {
-      throw new Error(`actor profile ${profileId} has unknown param ${key}`);
-    }
-  }
-}
-
-function requiredProfileString(value, name) {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`actor profile ${name} must be a non-empty string`);
-  }
-  return value;
-}
-
 function summarizeActorProfiles(bots) {
   const byActorClass = {};
   const byDifficultyBucket = {};
@@ -3396,6 +3503,18 @@ function safeJson(raw) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
+}
+
+function policyArtifact(policy) {
+  const content = Object.fromEntries(
+    Object.entries(policy).filter(([key]) => key !== "contentHash" && key !== "profilesById"),
+  );
+  return {
+    artifactId: policy.policyId ?? policy.catalogId,
+    version: policy.version,
+    contentHash: policy.contentHash,
+    content,
+  };
 }
 
 function stableHash(value) {

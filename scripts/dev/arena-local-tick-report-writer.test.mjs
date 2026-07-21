@@ -10,6 +10,16 @@ const reportPath = join(dir, "arena-local-tick-run.json");
 const compactReportPath = join(dir, "arena-local-tick-run-compact.json");
 const pacedReportPath = join(dir, "arena-local-tick-run-paced.json");
 const scoreV1ReportPath = join(dir, "arena-local-tick-run-score-v1.json");
+const requiredReconciliationReportPath = join(dir, "arena-local-tick-run-reconciliation-required.json");
+const balancedFeeReportPath = join(dir, "arena-local-tick-run-balanced-fee.json");
+
+const missingRosterBinding = spawnSync(
+  "bun",
+  ["scripts/dev/arena-local-tick-run.mjs", "--require-roster-binding"],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+assert.notEqual(missingRosterBinding.status, 0);
+assert.match(missingRosterBinding.stderr, /required for persisted or roster-bound runs/);
 
 const result = spawnSync(
   "bun",
@@ -40,11 +50,22 @@ assert.equal(report.projectionDrainCadence, "per-submission");
 assert.equal(report.sessionReports.length, 5);
 assert.equal(report.sessionReports.flatMap((session) => session.ticks).length, report.totals.ticks);
 assert.equal(report.healthSamples.length, 2);
-assert.equal(report.mode.economicPolicyVersion, "economic-v0");
+assert.equal(report.mode.economicPolicyVersion, "preview-zero-fee-v1");
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.mode.economicPolicyHash));
 assert.equal(report.mode.actorProfileCatalogVersion, "2026-07-12");
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.mode.scoringPolicyHash));
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.mode.actorProfileCatalogHash));
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.mode.policyCompositionHash));
 assert.deepEqual(report.mode.npcDifficultyBuckets, ["benign-noise"]);
 assert.equal(report.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
-assert.equal(report.policyEnvelope.economicPolicyVersion, "economic-v0");
+assert.equal(report.policyEnvelope.economicPolicyVersion, "preview-zero-fee-v1");
+assert.equal(report.policyEnvelope.scoringPolicy.contentHash, report.mode.scoringPolicyHash);
+assert.equal(report.policyEnvelope.economicPolicy.contentHash, report.mode.economicPolicyHash);
+assert.equal(report.policyEnvelope.actorProfileCatalog.contentHash, report.mode.actorProfileCatalogHash);
+assert.equal(report.policyEnvelope.policyCompositionHash, report.mode.policyCompositionHash);
+assert.equal(report.resolvedPolicyArtifacts.scoringPolicy.contentHash, report.mode.scoringPolicyHash);
+assert.equal(report.resolvedPolicyArtifacts.scoringPolicy.content.version, "score-v0");
+assert.equal(report.resolvedPolicyArtifacts.economicPolicy.contentHash, report.mode.economicPolicyHash);
 assert.equal(report.policyEnvelope.actorProfiles.length, 5);
 assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.policyEnvelopeHash));
 assert.equal(report.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
@@ -77,6 +98,11 @@ assert.equal(report.liquiditySummary.totals.activeProviderCount, 3);
 assert.equal(report.liquiditySummary.totals.submittedLimitOrders > 0, true);
 assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "AAPL").providerCount, 3);
 assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "MSFT").providerCount, 0);
+assert.equal(report.economicReconciliation.schemaVersion, "reef.arena.economicReconciliation.v1");
+assert.equal(report.economicReconciliation.economicPolicyHash, report.mode.economicPolicyHash);
+assert.equal(report.economicReconciliation.status, "fail");
+assert.equal(report.economicReconciliation.complete, false);
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.economicReconciliation.reconciliationHash));
 const marketMaker = report.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(marketMaker.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
 assert.equal(marketMaker.scoreBreakdown.formulaVersion, "shadow-score-v1");
@@ -133,6 +159,7 @@ assert.equal(compactReport.pacingSummary.schemaVersion, "reef.arena.pacingSummar
 assert.equal(compactReport.pacingSummary.enabled, false);
 assert.equal(compactReport.pacingSummary.scheduledEventCount, 4);
 assert.equal(compactReport.policyEnvelopeHash, report.policyEnvelopeHash);
+assert.equal(compactReport.resolvedPolicyArtifacts.scoringPolicy.contentHash, compactReport.mode.scoringPolicyHash);
 assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
 assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
 assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
@@ -141,6 +168,7 @@ assert.equal(compactReport.liquiditySummary.schemaVersion, "reef.arena.liquidity
 assert.equal(compactReport.liquiditySummary.totals.providerCount, 3);
 assert.equal(compactReport.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
 assert.equal(compactReport.scoringCalibration.scoreDistribution.shadowScore.count, 1);
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(compactReport.economicReconciliation.reconciliationHash));
 const compactMarketMaker = compactReport.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(compactMarketMaker.liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
 assert.equal(compactMarketMaker.liquidityDiagnostics.pointsEffect, 0);
@@ -158,6 +186,43 @@ assert.deepEqual(compactReport.commandStatusSummary.rejectedByCode, {});
 assert.deepEqual(compactReport.commandStatusSummary.rejectedByBotId, {});
 assert.equal(compactReport.marketQualitySummary.schemaVersion, "reef.arena.marketQualitySummary.v0");
 assert.ok(compactReport.marketQualitySummary.instruments.some((instrument) => instrument.instrumentId === "AAPL"));
+
+const requiredReconciliationResult = spawnSync(
+  "bun",
+  [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=1",
+    "--tick-interval-ms=500",
+    "--require-economic-reconciliation",
+    `--out=${requiredReconciliationReportPath}`,
+  ],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+assert.notEqual(requiredReconciliationResult.status, 0);
+assert.match(requiredReconciliationResult.stderr, /arena economic reconciliation failed/);
+const requiredReconciliationReport = JSON.parse(readFileSync(requiredReconciliationReportPath, "utf8"));
+assert.equal(requiredReconciliationReport.status, "failed_economic_reconciliation");
+assert.equal(requiredReconciliationReport.economicReconciliation.status, "fail");
+
+const balancedFeeResult = spawnSync(
+  "bun",
+  [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=1",
+    "--tick-interval-ms=500",
+    "--economic-policy-version=preview-balanced-fee-v1",
+    `--out=${balancedFeeReportPath}`,
+  ],
+  { cwd: repoRoot, encoding: "utf8" },
+);
+assert.equal(balancedFeeResult.status, 0, `${balancedFeeResult.stdout}\n${balancedFeeResult.stderr}`);
+const balancedFeeReport = JSON.parse(readFileSync(balancedFeeReportPath, "utf8"));
+assert.equal(balancedFeeReport.mode.economicPolicyVersion, "preview-balanced-fee-v1");
+assert.equal(balancedFeeReport.economicReconciliation.requiresLiquidityRoles, true);
 
 const pacedStartedAt = Date.now();
 const pacedResult = spawnSync(
@@ -207,6 +272,7 @@ const scoreV1Result = spawnSync(
 assert.equal(scoreV1Result.status, 0, `${scoreV1Result.stdout}\n${scoreV1Result.stderr}`);
 const scoreV1Report = JSON.parse(readFileSync(scoreV1ReportPath, "utf8"));
 assert.equal(scoreV1Report.mode.scoringPolicyVersion, "score-v1");
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(scoreV1Report.mode.scoringPolicyHash));
 assert.equal(scoreV1Report.policyEnvelope.scoringPolicyVersion, "score-v1");
 assert.equal(scoreV1Report.scoringAssumptions.pnl.status, "ranked-input");
 assert.equal(scoreV1Report.scoringCalibration.mode, "public-score-v1-with-shadow-calibration");

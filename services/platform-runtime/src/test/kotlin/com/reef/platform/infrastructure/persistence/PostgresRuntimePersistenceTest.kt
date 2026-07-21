@@ -2,6 +2,7 @@ package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PersistedOrder
@@ -14,6 +15,7 @@ import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -88,6 +90,7 @@ class PostgresRuntimePersistenceTest {
         val participantId = "participant-$suffix"
         val accountId = "account-$suffix"
         val orderId = "ord-$suffix"
+        val runId = "run-$suffix"
         val traceId = "trace-$suffix"
 
         persistence.saveSubmitResult(commandId, SubmitOrderResult())
@@ -108,23 +111,57 @@ class PostgresRuntimePersistenceTest {
                 limitPrice = "150250000000",
                 currency = "USD",
                 timeInForce = "DAY",
-                acceptedAt = "2026-07-07T00:00:00Z"
+                acceptedAt = "2026-07-07T00:00:00Z",
+                runId = runId
             )
         )
-        persistence.saveExecutions(
-            listOf(
-                ExecutionCreated(
-                    eventId = "evt-exec-$suffix",
-                    executionId = "exec-$suffix",
+        val execution = ExecutionCreated(
+            eventId = "evt-exec-$suffix",
+            executionId = "exec-$suffix",
+            orderId = orderId,
+            instrumentId = instrumentId,
+            quantityUnits = "100",
+            executionPrice = "150250000000",
+            currency = "USD",
+            occurredAt = "2026-07-07T00:00:00Z",
+            liquidityRole = "TAKER"
+        )
+        persistence.saveExecutions(listOf(execution))
+        persistence.saveExecutions(listOf(execution))
+        assertFails {
+            persistence.saveExecutions(listOf(execution.copy(liquidityRole = "MAKER")))
+        }
+        val projectedExecution = execution.copy(
+            eventId = "evt-projected-exec-$suffix",
+            executionId = "projected-exec-$suffix"
+        )
+        val projectedOutcome = PersistableSubmitOutcome(
+            commandId = "projected-command-$suffix",
+            result = SubmitOrderResult(
+                accepted = EngineOrderAccepted(
+                    eventId = "evt-projected-accepted-$suffix",
                     orderId = orderId,
-                    instrumentId = instrumentId,
-                    quantityUnits = "100",
-                    executionPrice = "150250000000",
-                    currency = "USD",
+                    engineOrderId = "eng-$orderId",
                     occurredAt = "2026-07-07T00:00:00Z"
+                ),
+                executions = listOf(projectedExecution)
+            ),
+            acceptedOrder = persistence.acceptedOrder(orderId),
+            lifecycleEvents = emptyList()
+        )
+        persistence.persistSubmitOutcomes(listOf(projectedOutcome))
+        persistence.persistSubmitOutcomes(listOf(projectedOutcome))
+        assertFails {
+            persistence.persistSubmitOutcomes(
+                listOf(
+                    projectedOutcome.copy(
+                        result = projectedOutcome.result.copy(
+                            executions = listOf(projectedExecution.copy(liquidityRole = "MAKER"))
+                        )
+                    )
                 )
             )
-        )
+        }
         persistence.saveTrades(
             listOf(
                 TradeCreated(
@@ -170,7 +207,11 @@ class PostgresRuntimePersistenceTest {
         assertEquals(true, validation.accountBelongsToParticipant)
 
         assertNotNull(persistence.acceptedOrder(orderId))
-        assertEquals(1, persistence.executionsForOrder(orderId).size)
+        val executions = persistence.executionsForOrder(orderId)
+        assertEquals(2, executions.size)
+        assertTrue(executions.all { it.liquidityRole == "TAKER" })
+        assertEquals(2, persistence.executionsForParticipant(participantId, runId = runId).size)
+        assertEquals(0, persistence.executionsForParticipant(participantId, runId = "other-$runId").size)
         assertEquals(1, persistence.tradesForOrder(orderId).size)
         assertEquals(1, persistence.eventsForOrder(orderId).size)
         assertEquals(1, persistence.eventsForTrace(traceId).size)
