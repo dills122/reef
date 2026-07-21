@@ -125,6 +125,7 @@ test-bot-sdk:
 	bun scripts/dev/arena-render-report.test.mjs
 	bun scripts/dev/arena-execution-diagnostics.test.mjs
 	bun scripts/dev/arena-policy-resolver.test.mjs
+	bun scripts/dev/arena-score-breakdown.test.mjs
 	bun scripts/dev/arena-actor-profile-behavior.test.mjs
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
 	bun scripts/dev/arena-runner-isolation-failure.test.mjs

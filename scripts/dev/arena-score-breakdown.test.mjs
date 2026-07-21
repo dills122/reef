@@ -143,4 +143,27 @@ assert.deepEqual(scoreV1Calibration.dataQuality.flags, ["low-eligible-competitor
 assert.equal(scoreV1Calibration.dataQuality.publicScoreMismatchCount, 0);
 assert.equal(scoreV1Calibration.dataQuality.publicScoreUnchanged, false);
 
+const zeroCapPolicyContext = buildScoreContext({
+  scoringPolicyVersion: "score-v-next",
+  scoringPolicy: {
+    baseline: 1_000_000,
+    contentHash: `sha256:${"a".repeat(64)}`,
+    formulaVersion: "zero-cap-test",
+    publicScoringEnabled: true,
+    components: {
+      equity: { enabled: false, cap: 0 },
+      risk: { enabled: false, cap: 0 },
+      conduct: { enabled: false, cap: 0 },
+    },
+    penalties: { freeze: 0, operationalPause: 0 },
+  },
+});
+const zeroCapBreakdown = buildScoreBreakdown({ ...eligible, freezeCount: 1 }, zeroCapPolicyContext);
+assert.equal(zeroCapPolicyContext.scoringPolicyHash, `sha256:${"a".repeat(64)}`);
+assert.equal(zeroCapBreakdown.publicScore, 1_000_000);
+assert.equal(zeroCapBreakdown.componentDetails.publicScoreV1.formulaVersion, "zero-cap-test");
+assert.equal(zeroCapBreakdown.componentDetails.publicScoreV1.pnlComponent, 0);
+assert.equal(zeroCapBreakdown.componentDetails.publicScoreV1.inventoryRiskPenalty, 0);
+assert.equal(zeroCapBreakdown.componentDetails.publicScoreV1.enforcementPenalty, 0);
+
 console.log("arena score breakdown checks passed");

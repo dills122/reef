@@ -1280,6 +1280,9 @@ class PostgresSchemaMigrationIntegrationTest {
         val runId = "run-$suffix"
         val modeId = "hosted-sim-$suffix"
         val scoringPolicyVersion = "score-$suffix"
+        val policyEnvelopeHash = "sha256:${"1".repeat(64)}"
+        val scoringPolicyHash = "sha256:${"2".repeat(64)}"
+        val economicPolicyHash = "sha256:${"3".repeat(64)}"
         val controlPlane = ArenaControlPlaneService(store) { Instant.parse("2026-07-05T12:00:00Z") }
 
         controlPlane.registerBot(
@@ -1339,17 +1342,23 @@ class PostgresSchemaMigrationIntegrationTest {
                 scenarioId = "scenario-schema",
                 seed = 42,
                 policyVersion = "policy-v1",
+                policyEnvelopeHash = policyEnvelopeHash,
+                scoringPolicyVersion = scoringPolicyVersion,
+                scoringPolicyHash = scoringPolicyHash,
+                economicPolicyVersion = "preview-zero-fee-v1",
+                economicPolicyHash = economicPolicyHash,
                 botVersions = listOf(ArenaRunBotVersionRef(botId, versionId))
             )
         )
         controlPlane.updateRunStatus(runId, ArenaRunStatus.Running)
-        controlPlane.updateRunStatus(runId, ArenaRunStatus.Completed)
         controlPlane.recordRunBotResult(
             ArenaRunBotResult(
                 runId = runId,
                 botId = botId,
                 versionId = versionId,
                 scoringPolicyVersion = scoringPolicyVersion,
+                scoringPolicyHash = scoringPolicyHash,
+                policyEnvelopeHash = policyEnvelopeHash,
                 finalEquity = 1_025_000,
                 realizedPnl = 25_000,
                 maxDrawdown = 1_000,
@@ -1361,6 +1370,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 createdAt = Instant.parse("2026-07-05T12:00:00Z")
             )
         )
+        controlPlane.updateRunStatus(runId, ArenaRunStatus.Completed)
 
         assertEquals(botId, store.bot(botId)?.botId)
         assertEquals(ArenaBotVersionStatus.Approved, store.version(botId, versionId)?.status)
@@ -1368,6 +1378,7 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals("admin-cli", store.operatorDecisions(botId, versionId).last().actorId)
         assertEquals("maxInventory", store.runtimeConfigDescriptors(botId, versionId).single().key)
         assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
+        assertEquals(scoringPolicyVersion, store.runRecord(runId)?.scoringPolicyVersion)
         assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
         assertEquals(botId, store.leaderboard(modeId, scoringPolicyVersion).single().botId)
     }

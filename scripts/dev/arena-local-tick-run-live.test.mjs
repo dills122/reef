@@ -160,6 +160,7 @@ try {
     "--persist-results",
     "--command-wait-mode=accepted",
     "--require-projection-drain",
+    "--skip-projector-preflight",
     "--out=/tmp/reef-arena-local-tick-run-live-test.json",
   ]);
 
@@ -199,6 +200,11 @@ try {
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.cash, -100);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.inventoryValue, 100.5);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.total, 0.5);
+  const persistedSimpleMarketMaker = arena.results.find((result) => result.botId === "builtin-mm-simple");
+  assert.equal(persistedSimpleMarketMaker?.finalEquity, Math.round(simpleMarketMaker.finalEquityDiagnostic));
+  assert.equal(persistedSimpleMarketMaker?.realizedPnl, Math.round(simpleMarketMaker.scoreBreakdown.diagnostics.realizedPnl));
+  assert.equal(persistedSimpleMarketMaker?.scoringPolicyHash, report.mode.scoringPolicyHash);
+  assert.equal(persistedSimpleMarketMaker?.policyEnvelopeHash, report.policyEnvelopeHash);
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.source, "participant-scoped-readback-and-trading-metrics");
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.fillContribution.fillCount, 1);
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.fillContribution.fillSharePct, 100);

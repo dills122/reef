@@ -720,9 +720,12 @@ bun run arena:local-tick-run --submit-mode=live \
 ```
 
 The persist path registers catalog bot metadata and versions when needed,
-registers the arena run, posts all `botResults` to
-`/admin/v1/arena/run-bot-results`, then reads back raw run results and
-`/admin/v1/arena/leaderboard` into the report.
+registers the arena run with its canonical envelope/scoring/economic policy
+lock, transitions it to `running`, posts all `botResults` with matching hashes,
+then publishes terminal status and reads back raw run results and
+`/admin/v1/arena/leaderboard` into the report. Result persistence uses the
+reported final-equity and realized-PnL diagnostics rather than conflating the
+penalized public score with account equity.
 
 Observed persisted smoke:
 

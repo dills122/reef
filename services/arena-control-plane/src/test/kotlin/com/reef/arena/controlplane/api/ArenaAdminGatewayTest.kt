@@ -371,7 +371,7 @@ class ArenaAdminGatewayTest {
             "POST",
             "/internal/admin/arena/runs",
             null,
-            """{"runId":"run-1","modeId":"hosted-sim","scenarioId":"scenario-1","seed":42,"policyVersion":"policy-v1","botVersions":[{"botId":"bot-1","versionId":"v1"}]}""",
+            """{"runId":"run-1","modeId":"hosted-sim","scenarioId":"scenario-1","seed":42,"policyVersion":"policy-v1","policyEnvelopeHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","scoringPolicyVersion":"score-v2","scoringPolicyHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","economicPolicyVersion":"preview-zero-fee-v1","economicPolicyHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","botVersions":[{"botId":"bot-1","versionId":"v1"}]}""",
             principal
         )
         val running = gateway.handleInternal(
@@ -381,18 +381,18 @@ class ArenaAdminGatewayTest {
             """{"runId":"run-1","status":"running"}""",
             principal
         )
+        val result = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/run-bot-results",
+            null,
+            """{"runId":"run-1","botId":"bot-1","versionId":"v1","scoringPolicyVersion":"score-v2","scoringPolicyHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","policyEnvelopeHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","finalEquity":1030000,"realizedPnl":30000,"maxDrawdown":900,"actionsProposed":13,"orderActionsProposed":9,"dataCalls":21,"signalsGenerated":5,"disqualified":false}""",
+            principal
+        )
         val completed = gateway.handleInternal(
             "POST",
             "/internal/admin/arena/runs/status",
             null,
             """{"runId":"run-1","status":"completed"}""",
-            principal
-        )
-        val result = gateway.handleInternal(
-            "POST",
-            "/internal/admin/arena/run-bot-results",
-            null,
-            """{"runId":"run-1","botId":"bot-1","versionId":"v1","scoringPolicyVersion":"score-v2","finalEquity":1030000,"realizedPnl":30000,"maxDrawdown":900,"actionsProposed":13,"orderActionsProposed":9,"dataCalls":21,"signalsGenerated":5,"disqualified":false}""",
             principal
         )
         val enforcement = gateway.handleInternal(
@@ -815,7 +815,7 @@ class ArenaAdminGatewayTest {
               "policy":{"modeId":"continuous-book","scenarioId":"baseline","seedSetHash":"sha256:seeds",
                 "actorProfileVersion":"actors-v1","actorProfileHash":"sha256:e4cbc6bf525a82aa554b6404c4d9021e929f039c47a9f8e55428e60d80d5fbc4",
                 "riskPolicyVersion":"risk-v1","riskPolicyHash":"sha256:risk",
-                "scoringPolicyVersion":"score-v1","scoringPolicyHash":"sha256:score",
+                "scoringPolicyVersion":"score-v1","scoringPolicyHash":"sha256:d87133eca6c0a4994fd0aa30af3108b72ac679955128f14e64335417358dd15a",
                 "economicPolicyVersion":"economics-v1","economicPolicyHash":"sha256:f2c81084b40c3654dcf2b3c15fcbb0ce938a641421d1446f8c4ad96a332b298b"},
               "resolvedPolicies":{
                 "actorProfileCatalog":{"artifactId":"arena-actor-profiles","version":"actors-v1","content":{
@@ -828,7 +828,15 @@ class ArenaAdminGatewayTest {
                   "houseLedger":{"marketMakerStartingCash":"10000000.00","npcStartingCash":"10000000.00","subsidyBudget":"0.00"},
                   "fees":{"makerBps":"0","takerBps":"0","cancelFee":"0.00","borrowBps":"0","liquidationPenaltyBps":"0"},
                   "rebates":{"makerBps":"0","fundingSource":"none"},"sources":[],"sinks":[],
-                  "reconciliation":{"tolerance":"0.01","requireBalancedTransfers":true,"competitionLedger":true,"houseLedger":true}}}},
+                  "reconciliation":{"tolerance":"0.01","requireBalancedTransfers":true,"competitionLedger":true,"houseLedger":true}}},
+                "scoringPolicy":{"artifactId":"arena-score","version":"score-v1","content":{
+                  "schemaVersion":"reef.arena.scoringPolicy.v1","policyId":"arena-score","version":"score-v1","status":"public-preview",
+                  "formulaVersion":"score-v1-final-equity-risk-conduct","baseline":1000000,"publicScoringEnabled":true,
+                  "eligibleActorClasses":["competitor"],"components":{"equity":{"enabled":true,"cap":100000},"risk":{"enabled":true,"cap":100000},
+                  "conduct":{"enabled":true,"cap":100000},"marketInteraction":{"enabled":false,"cap":0},"npcDifficulty":{"enabled":false,"cap":0}},
+                  "penalties":{"freeze":250000,"operationalPause":5000,"invalidIntentCap":100000},
+                  "disqualification":{"freezeCount":1,"excludeFromLeaderboard":true},
+                  "replayLock":{"from":"run_acceptance","until":"score_publication","requirePolicyEnvelopeHash":true}}}},
               "candidates":[{"evaluationId":"eval-route-1","priority":10}]
             }""".trimIndent(),
             principal

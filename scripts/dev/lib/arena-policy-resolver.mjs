@@ -147,7 +147,63 @@ export function resolveEconomicPolicy(policy) {
   return { ...resolved, contentHash: canonicalHash(resolved) };
 }
 
-export function resolvePolicyComposition(mode, actorCatalog, economicPolicy) {
+export function resolveScoringPolicy(policy) {
+  object(policy, "scoring policy");
+  exactKeys(policy, [
+    "schemaVersion",
+    "policyId",
+    "version",
+    "status",
+    "formulaVersion",
+    "baseline",
+    "publicScoringEnabled",
+    "eligibleActorClasses",
+    "components",
+    "penalties",
+    "disqualification",
+    "replayLock",
+  ], "scoring policy");
+  equal(policy.schemaVersion, "reef.arena.scoringPolicy.v1", "scoring policy schemaVersion");
+  token(policy.policyId, "scoring policy policyId");
+  token(policy.version, "scoring policy version");
+  member(policy.status, new Set(["calibration", "public-preview"]), "scoring policy status");
+  token(policy.formulaVersion, "scoring policy formulaVersion");
+  nonnegativeInteger(policy.baseline, "scoring policy baseline");
+  boolean(policy.publicScoringEnabled, "scoring policy publicScoringEnabled");
+  array(policy.eligibleActorClasses, "scoring policy eligibleActorClasses");
+  nonEmpty(policy.eligibleActorClasses, "scoring policy eligibleActorClasses");
+  const eligibleActorClasses = [...uniqueTokens(policy.eligibleActorClasses, "scoring policy eligibleActorClasses")];
+  eligibleActorClasses.forEach((actorClass) => member(actorClass, ACTOR_CLASSES, "scoring policy eligibleActorClasses"));
+
+  const componentNames = ["equity", "risk", "conduct", "marketInteraction", "npcDifficulty"];
+  object(policy.components, "scoring policy components");
+  exactKeys(policy.components, componentNames, "scoring policy components");
+  for (const name of componentNames) {
+    const component = policy.components[name];
+    object(component, `scoring policy components.${name}`);
+    exactKeys(component, ["enabled", "cap"], `scoring policy components.${name}`);
+    boolean(component.enabled, `scoring policy components.${name}.enabled`);
+    nonnegativeInteger(component.cap, `scoring policy components.${name}.cap`);
+  }
+
+  object(policy.penalties, "scoring policy penalties");
+  exactKeys(policy.penalties, ["freeze", "operationalPause", "invalidIntentCap"], "scoring policy penalties");
+  Object.entries(policy.penalties).forEach(([key, value]) => nonnegativeInteger(value, `scoring policy penalties.${key}`));
+  object(policy.disqualification, "scoring policy disqualification");
+  exactKeys(policy.disqualification, ["freezeCount", "excludeFromLeaderboard"], "scoring policy disqualification");
+  nonnegativeInteger(policy.disqualification.freezeCount, "scoring policy disqualification.freezeCount");
+  boolean(policy.disqualification.excludeFromLeaderboard, "scoring policy disqualification.excludeFromLeaderboard");
+  object(policy.replayLock, "scoring policy replayLock");
+  exactKeys(policy.replayLock, ["from", "until", "requirePolicyEnvelopeHash"], "scoring policy replayLock");
+  equal(policy.replayLock.from, "run_acceptance", "scoring policy replayLock.from");
+  equal(policy.replayLock.until, "score_publication", "scoring policy replayLock.until");
+  equal(policy.replayLock.requirePolicyEnvelopeHash, true, "scoring policy replayLock.requirePolicyEnvelopeHash");
+
+  const resolved = structuredClone(policy);
+  return { ...resolved, contentHash: canonicalHash(resolved) };
+}
+
+export function resolvePolicyComposition(mode, actorCatalog, economicPolicy, scoringPolicy) {
   object(mode, "Arena mode");
   equal(mode.schemaVersion, "reef.arena.mode.v1", "Arena mode schemaVersion");
   for (const field of ["modeId", "version", "scenarioId", "scoringPolicyVersion", "riskPolicyVersion"]) {
@@ -156,8 +212,10 @@ export function resolvePolicyComposition(mode, actorCatalog, economicPolicy) {
   integer(mode.seed, "Arena mode seed");
   token(mode.actorProfileCatalogPath, "Arena mode actorProfileCatalogPath");
   token(mode.economicPolicyPath, "Arena mode economicPolicyPath");
+  token(mode.scoringPolicyPath, "Arena mode scoringPolicyPath");
   equal(mode.actorProfileCatalogVersion, actorCatalog.version, "Arena mode actorProfileCatalogVersion");
   equal(mode.economicPolicyVersion, economicPolicy.version, "Arena mode economicPolicyVersion");
+  equal(mode.scoringPolicyVersion, scoringPolicy.version, "Arena mode scoringPolicyVersion");
 
   const resolved = {
     schemaVersion: "reef.arena.runComposition.v1",
@@ -171,7 +229,11 @@ export function resolvePolicyComposition(mode, actorCatalog, economicPolicy) {
       contentHash: actorCatalog.contentHash,
     },
     riskPolicy: { version: mode.riskPolicyVersion },
-    scoringPolicy: { version: mode.scoringPolicyVersion },
+    scoringPolicy: {
+      policyId: scoringPolicy.policyId,
+      version: scoringPolicy.version,
+      contentHash: scoringPolicy.contentHash,
+    },
     economicPolicy: {
       policyId: economicPolicy.policyId,
       version: economicPolicy.version,
@@ -295,6 +357,11 @@ function boolean(value, path) {
 
 function integer(value, path) {
   if (!Number.isSafeInteger(value)) throw new Error(`${path} must be a safe integer`);
+}
+
+function nonnegativeInteger(value, path) {
+  integer(value, path);
+  if (value < 0) throw new Error(`${path} must be nonnegative`);
 }
 
 function equal(actual, expected, path) {

@@ -156,7 +156,7 @@ class ArenaControlPlaneServiceTest {
         val service = approvedService(store)
 
         val run = service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -178,7 +178,7 @@ class ArenaControlPlaneServiceTest {
 
         assertFailsWith<IllegalArgumentException> {
             service.registerRun(
-                RegisterArenaRunCommand(
+            runCommand(
                     runId = "run-1",
                     modeId = "momentum",
                     scenarioId = "scenario-a",
@@ -194,7 +194,7 @@ class ArenaControlPlaneServiceTest {
     fun tracksRunLifecycleWithTerminalCompletionTimestamp() {
         val service = approvedService(InMemoryArenaBotRegistryStore())
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -205,6 +205,7 @@ class ArenaControlPlaneServiceTest {
         )
 
         val running = service.updateRunStatus("run-1", ArenaRunStatus.Running)
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
         val completed = service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         assertEquals(ArenaRunStatus.Running, running.status)
@@ -220,7 +221,7 @@ class ArenaControlPlaneServiceTest {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -230,7 +231,6 @@ class ArenaControlPlaneServiceTest {
             )
         )
         service.updateRunStatus("run-1", ArenaRunStatus.Running)
-        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         service.recordRunBotResult(
             ArenaRunBotResult(
@@ -238,6 +238,8 @@ class ArenaControlPlaneServiceTest {
                 botId = "sample-bot",
                 versionId = "v1",
                 scoringPolicyVersion = "score-v1",
+                scoringPolicyHash = TEST_SCORING_POLICY_HASH,
+                policyEnvelopeHash = TEST_POLICY_ENVELOPE_HASH,
                 finalEquity = 1_025_000,
                 realizedPnl = 25_000,
                 maxDrawdown = 1_000,
@@ -249,6 +251,7 @@ class ArenaControlPlaneServiceTest {
                 createdAt = fixedNow
             )
         )
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         val results = store.runBotResults("run-1")
         val leaderboard = service.leaderboard("momentum", "score-v1")
@@ -274,7 +277,7 @@ class ArenaControlPlaneServiceTest {
         service.transitionVersion("house-bot", "v1", ArenaBotVersionStatus.ChecksPassed, "operator-1", "checks passed", "corr-8")
         service.transitionVersion("house-bot", "v1", ArenaBotVersionStatus.Approved, "operator-2", "approved", "corr-9")
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -288,7 +291,6 @@ class ArenaControlPlaneServiceTest {
             )
         )
         service.updateRunStatus("run-1", ArenaRunStatus.Running)
-        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
         service.recordRunBotResult(
@@ -304,6 +306,7 @@ class ArenaControlPlaneServiceTest {
                 publicLeaderboard = false
             )
         )
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         val results = store.runBotResults("run-1")
         val leaderboard = service.leaderboard("momentum", "score-v1")
@@ -315,11 +318,11 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
-    fun keepsRunBotResultsSeparateByScoringPolicyVersion() {
+    fun rejectsRunBotResultsThatChangeTheAcceptedScoringPolicy() {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -328,18 +331,19 @@ class ArenaControlPlaneServiceTest {
                 botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
             )
         )
+        service.updateRunStatus("run-1", ArenaRunStatus.Running)
 
         service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
-        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v2", finalEquity = 1_030_000))
+        assertFailsWith<IllegalArgumentException> {
+            service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v2", finalEquity = 1_030_000))
+        }
         service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_026_000))
 
-        val results = store.runBotResults("run-1").sortedBy { it.scoringPolicyVersion }
+        val results = store.runBotResults("run-1")
 
-        assertEquals(2, results.size)
-        assertEquals("score-v1", results[0].scoringPolicyVersion)
-        assertEquals(1_026_000, results[0].finalEquity)
-        assertEquals("score-v2", results[1].scoringPolicyVersion)
-        assertEquals(1_030_000, results[1].finalEquity)
+        assertEquals(1, results.size)
+        assertEquals("score-v1", results.single().scoringPolicyVersion)
+        assertEquals(1_026_000, results.single().finalEquity)
     }
 
     @Test
@@ -347,7 +351,7 @@ class ArenaControlPlaneServiceTest {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -356,8 +360,10 @@ class ArenaControlPlaneServiceTest {
                 botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
             )
         )
+        service.updateRunStatus("run-1", ArenaRunStatus.Running)
 
-        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+        val original = runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000)
+        service.recordRunBotResult(original)
         service.recordRunBotResult(
             runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_026_500).copy(
                 realizedPnl = 26_500,
@@ -379,6 +385,11 @@ class ArenaControlPlaneServiceTest {
         assertEquals(9, result.orderActionsProposed)
         assertEquals(22, result.dataCalls)
         assertEquals(5, result.signalsGenerated)
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
+        assertEquals(result, service.recordRunBotResult(result))
+        assertFailsWith<IllegalArgumentException> {
+            service.recordRunBotResult(result.copy(finalEquity = result.finalEquity + 1))
+        }
     }
 
     @Test
@@ -389,7 +400,7 @@ class ArenaControlPlaneServiceTest {
         registerApprovedBotVersion(service, "drawdown-bot", "drawdown-bot.ts")
         registerApprovedBotVersion(service, "disqualified-bot", "disqualified-bot.ts")
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -404,7 +415,6 @@ class ArenaControlPlaneServiceTest {
             )
         )
         service.updateRunStatus("run-1", ArenaRunStatus.Running)
-        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
         service.recordRunBotResult(
@@ -428,6 +438,7 @@ class ArenaControlPlaneServiceTest {
                 disqualified = true
             )
         )
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
 
         val leaderboard = service.leaderboard("momentum", "score-v1")
 
@@ -440,7 +451,7 @@ class ArenaControlPlaneServiceTest {
     fun rejectsInvalidRunBotResultCounters() {
         val service = approvedService(InMemoryArenaBotRegistryStore())
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -468,7 +479,7 @@ class ArenaControlPlaneServiceTest {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -477,6 +488,7 @@ class ArenaControlPlaneServiceTest {
                 botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
             )
         )
+        service.updateRunStatus("run-1", ArenaRunStatus.Running)
         service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
 
         val results = service.runBotResults("run-1")
@@ -491,7 +503,7 @@ class ArenaControlPlaneServiceTest {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -691,7 +703,7 @@ class ArenaControlPlaneServiceTest {
             val store = InMemoryArenaBotRegistryStore()
             val service = approvedService(store)
             service.registerRun(
-                RegisterArenaRunCommand(
+            runCommand(
                     runId = "run-1",
                     modeId = "momentum",
                     scenarioId = "scenario-a",
@@ -701,6 +713,9 @@ class ArenaControlPlaneServiceTest {
                 )
             )
             store.saveRunRecord(store.runRecord("run-1")!!.copy(status = from))
+            if (to == ArenaRunStatus.Completed) {
+                store.saveRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+            }
             return try {
                 service.updateRunStatus("run-1", to)
                 true
@@ -731,7 +746,7 @@ class ArenaControlPlaneServiceTest {
     @Test
     fun rejectsRegisterRunWithBlankFieldsEmptyBotVersionsOrDuplicateId() {
         val service = approvedService(InMemoryArenaBotRegistryStore())
-        val validCommand = RegisterArenaRunCommand(
+        val validCommand = runCommand(
             runId = "run-1",
             modeId = "momentum",
             scenarioId = "scenario-a",
@@ -743,6 +758,11 @@ class ArenaControlPlaneServiceTest {
         assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(modeId = "")) }
         assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(scenarioId = "")) }
         assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(policyVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(policyEnvelopeHash = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(scoringPolicyVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(scoringPolicyHash = "sha256:not-canonical")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(economicPolicyVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(economicPolicyHash = "")) }
         assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(botVersions = emptyList())) }
 
         service.registerRun(validCommand)
@@ -753,7 +773,7 @@ class ArenaControlPlaneServiceTest {
     fun rejectsRecordRunBotResultWithBlankFieldsOrUnregisteredBotVersion() {
         val service = approvedService(InMemoryArenaBotRegistryStore())
         service.registerRun(
-            RegisterArenaRunCommand(
+            runCommand(
                 runId = "run-1",
                 modeId = "momentum",
                 scenarioId = "scenario-a",
@@ -768,6 +788,8 @@ class ArenaControlPlaneServiceTest {
         assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(botId = "")) }
         assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(versionId = "")) }
         assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(scoringPolicyVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(scoringPolicyHash = "")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(policyEnvelopeHash = "sha256:not-canonical")) }
         assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(actionsProposed = -1)) }
         assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(orderActionsProposed = -1)) }
         assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(dataCalls = -1)) }
@@ -935,6 +957,29 @@ class ArenaControlPlaneServiceTest {
         )
     }
 
+    private fun runCommand(
+        runId: String,
+        modeId: String,
+        scenarioId: String,
+        seed: Long,
+        policyVersion: String,
+        botVersions: List<ArenaRunBotVersionRef>
+    ): RegisterArenaRunCommand {
+        return RegisterArenaRunCommand(
+            runId = runId,
+            modeId = modeId,
+            scenarioId = scenarioId,
+            seed = seed,
+            policyVersion = policyVersion,
+            policyEnvelopeHash = TEST_POLICY_ENVELOPE_HASH,
+            scoringPolicyVersion = "score-v1",
+            scoringPolicyHash = TEST_SCORING_POLICY_HASH,
+            economicPolicyVersion = "preview-zero-fee-v1",
+            economicPolicyHash = TEST_ECONOMIC_POLICY_HASH,
+            botVersions = botVersions
+        )
+    }
+
     private fun runBotResult(
         scoringPolicyVersion: String,
         finalEquity: Long
@@ -944,6 +989,8 @@ class ArenaControlPlaneServiceTest {
             botId = "sample-bot",
             versionId = "v1",
             scoringPolicyVersion = scoringPolicyVersion,
+            scoringPolicyHash = TEST_SCORING_POLICY_HASH,
+            policyEnvelopeHash = TEST_POLICY_ENVELOPE_HASH,
             finalEquity = finalEquity,
             realizedPnl = finalEquity - 1_000_000,
             maxDrawdown = 1_000,
@@ -954,5 +1001,11 @@ class ArenaControlPlaneServiceTest {
             disqualified = false,
             createdAt = fixedNow
         )
+    }
+
+    companion object {
+        private const val TEST_POLICY_ENVELOPE_HASH = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        private const val TEST_SCORING_POLICY_HASH = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        private const val TEST_ECONOMIC_POLICY_HASH = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
     }
 }

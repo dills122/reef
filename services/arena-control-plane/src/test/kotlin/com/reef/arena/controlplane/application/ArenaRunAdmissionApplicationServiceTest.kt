@@ -32,6 +32,12 @@ class ArenaRunAdmissionApplicationServiceTest {
             "preview-zero-fee",
             "economics-v1",
             """{"schemaVersion":"reef.arena.economicPolicy.v1","policyId":"preview-zero-fee","version":"economics-v1","currency":"USD","competitionLedger":{"startingCashPerCompetitor":"1000000.00","allowNegativeCash":false},"houseLedger":{"marketMakerStartingCash":"10000000.00","npcStartingCash":"10000000.00","subsidyBudget":"0.00"},"fees":{"makerBps":"0","takerBps":"0","cancelFee":"0.00","borrowBps":"0","liquidationPenaltyBps":"0"},"rebates":{"makerBps":"0","fundingSource":"none"},"sources":[],"sinks":[],"reconciliation":{"tolerance":"0.01","requireBalancedTransfers":true,"competitionLedger":true,"houseLedger":true}}"""
+        ),
+        verifier.canonicalArtifact(
+            ArenaResolvedPolicyKind.ScoringPolicy,
+            "arena-score",
+            "score-v1",
+            """{"schemaVersion":"reef.arena.scoringPolicy.v1","policyId":"arena-score","version":"score-v1","status":"public-preview","formulaVersion":"score-v1-final-equity-risk-conduct","baseline":1000000,"publicScoringEnabled":true,"eligibleActorClasses":["competitor"],"components":{"equity":{"enabled":true,"cap":100000},"risk":{"enabled":true,"cap":100000},"conduct":{"enabled":true,"cap":100000},"marketInteraction":{"enabled":false,"cap":0},"npcDifficulty":{"enabled":false,"cap":0}},"penalties":{"freeze":250000,"operationalPause":5000,"invalidIntentCap":100000},"disqualification":{"freezeCount":1,"excludeFromLeaderboard":true},"replayLock":{"from":"run_acceptance","until":"score_publication","requirePolicyEnvelopeHash":true}}"""
         )
     )
 
@@ -168,6 +174,6 @@ class ArenaRunAdmissionApplicationServiceTest {
 
     private fun policy() = ArenaRosterPolicySnapshot(
         "continuous-book", "baseline", "sha256:seeds", "actors-v1", resolvedPolicies.actorProfileCatalog.contentHash,
-        "risk-v1", "sha256:risk", "score-v1", "sha256:score", "economics-v1", resolvedPolicies.economicPolicy.contentHash
+        "risk-v1", "sha256:risk", "score-v1", resolvedPolicies.scoringPolicy.contentHash, "economics-v1", resolvedPolicies.economicPolicy.contentHash
     )
 }

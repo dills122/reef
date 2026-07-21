@@ -309,6 +309,7 @@ internal class ArenaAdminGateway(
             val resolvedPolicies = json.obj("resolvedPolicies")
             val actorProfileCatalog = resolvedPolicies.obj("actorProfileCatalog")
             val economicPolicy = resolvedPolicies.obj("economicPolicy")
+            val scoringPolicy = resolvedPolicies.obj("scoringPolicy")
             val result = service.lockRoster(
                 arenaAdminActor(json),
                 LockArenaRosterCommand(
@@ -339,6 +340,12 @@ internal class ArenaAdminGateway(
                             economicPolicy.string("artifactId"),
                             economicPolicy.string("version"),
                             economicPolicy.raw("content")
+                        ),
+                        scoringPolicy = rosterPolicyVerifier.canonicalArtifact(
+                            ArenaResolvedPolicyKind.ScoringPolicy,
+                            scoringPolicy.string("artifactId"),
+                            scoringPolicy.string("version"),
+                            scoringPolicy.raw("content")
                         )
                     ),
                     candidates = json.objectDocuments("candidates").map { candidate ->
@@ -1075,6 +1082,11 @@ internal class ArenaAdminGateway(
                     scenarioId = json.string("scenarioId"),
                     seed = json.requiredLong("seed"),
                     policyVersion = json.string("policyVersion"),
+                    policyEnvelopeHash = json.string("policyEnvelopeHash"),
+                    scoringPolicyVersion = json.string("scoringPolicyVersion"),
+                    scoringPolicyHash = json.string("scoringPolicyHash"),
+                    economicPolicyVersion = json.string("economicPolicyVersion"),
+                    economicPolicyHash = json.string("economicPolicyHash"),
                     botVersions = json.objectDocuments("botVersions").map { ref ->
                         ArenaRunBotVersionRef(ref.string("botId"), ref.string("versionId"))
                     }
@@ -1138,6 +1150,8 @@ internal class ArenaAdminGateway(
                 botId = json.string("botId"),
                 versionId = json.string("versionId"),
                 scoringPolicyVersion = json.string("scoringPolicyVersion"),
+                scoringPolicyHash = json.string("scoringPolicyHash"),
+                policyEnvelopeHash = json.string("policyEnvelopeHash"),
                 finalEquity = json.requiredLong("finalEquity"),
                 realizedPnl = json.requiredLong("realizedPnl"),
                 maxDrawdown = json.requiredLong("maxDrawdown"),
@@ -1740,6 +1754,11 @@ internal class ArenaAdminGateway(
             "scenarioId" to run.scenarioId,
             "seed" to run.seed,
             "policyVersion" to run.policyVersion,
+            "policyEnvelopeHash" to run.policyEnvelopeHash,
+            "scoringPolicyVersion" to run.scoringPolicyVersion,
+            "scoringPolicyHash" to run.scoringPolicyHash,
+            "economicPolicyVersion" to run.economicPolicyVersion,
+            "economicPolicyHash" to run.economicPolicyHash,
             "botVersions" to run.botVersions.map {
                 mapOf("botId" to it.botId, "versionId" to it.versionId)
             },
@@ -1755,6 +1774,8 @@ internal class ArenaAdminGateway(
             "botId" to result.botId,
             "versionId" to result.versionId,
             "scoringPolicyVersion" to result.scoringPolicyVersion,
+            "scoringPolicyHash" to result.scoringPolicyHash,
+            "policyEnvelopeHash" to result.policyEnvelopeHash,
             "finalEquity" to result.finalEquity,
             "realizedPnl" to result.realizedPnl,
             "maxDrawdown" to result.maxDrawdown,

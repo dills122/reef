@@ -6,7 +6,7 @@ const args = parseArgs(process.argv.slice(2));
 
 if (!args.summary || !args.botId || !args.versionId || !args.scoringPolicyVersion || args.finalEquity === undefined) {
   console.error(
-    "usage: node scripts/dev/arena-ingest-bot-run-result.mjs --summary=<summary.json> --bot-id=<botId> --version-id=<versionId> --scoring-policy-version=<version> --final-equity=<integer> [--realized-pnl=<integer>] [--max-drawdown=<integer>] [--runtime-url=http://127.0.0.1:8080] [--admin-api-token=<token>] [--dry-run]",
+    "usage: node scripts/dev/arena-ingest-bot-run-result.mjs --summary=<summary.json> --bot-id=<botId> --version-id=<versionId> --scoring-policy-version=<version> --scoring-policy-hash=<sha256> --policy-envelope-hash=<sha256> --final-equity=<integer> [--realized-pnl=<integer>] [--max-drawdown=<integer>] [--runtime-url=http://127.0.0.1:8080] [--admin-api-token=<token>] [--dry-run]",
   );
   process.exit(2);
 }
@@ -19,6 +19,8 @@ const payload = {
   botId: args.botId,
   versionId: args.versionId,
   scoringPolicyVersion: args.scoringPolicyVersion,
+  scoringPolicyHash: requiredHash(args.scoringPolicyHash ?? summary.scoringPolicyHash ?? summary.mode?.scoringPolicyHash, "scoring-policy-hash"),
+  policyEnvelopeHash: requiredHash(args.policyEnvelopeHash ?? summary.policyEnvelopeHash, "policy-envelope-hash"),
   finalEquity: integerArg(args.finalEquity, "final-equity"),
   realizedPnl: integerArg(args.realizedPnl ?? 0, "realized-pnl"),
   maxDrawdown: integerArg(args.maxDrawdown ?? 0, "max-drawdown"),
@@ -73,6 +75,13 @@ function requiredString(source, key) {
 
 function integerArg(value, name) {
   return integerValue(Number(value), name);
+}
+
+function requiredHash(value, name) {
+  if (typeof value !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+    throw new Error(`${name} must be a canonical sha256 digest`);
+  }
+  return value;
 }
 
 function integerValue(value, name) {

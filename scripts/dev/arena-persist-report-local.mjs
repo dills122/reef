@@ -67,19 +67,22 @@ operations.push(request("POST", "/admin/v1/arena/runs", {
   scenarioId: mode.scenarioId ?? `${mode.modeId}-scenario`,
   seed: Number(mode.seed ?? 0),
   policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
+  policyEnvelopeHash: report.policyEnvelopeHash,
+  scoringPolicyVersion: mode.scoringPolicyVersion,
+  scoringPolicyHash: mode.scoringPolicyHash ?? report.policyEnvelope?.scoringPolicyHash,
+  economicPolicyVersion: mode.economicPolicyVersion,
+  economicPolicyHash: mode.economicPolicyHash ?? report.policyEnvelope?.economicPolicyHash,
   botVersions,
   actorId,
   correlationId,
 }, { allowAlreadyExists: true }));
 
-for (const [status, allowInvalidTransition] of [["running", true], ["completed", true]]) {
-  operations.push(request("POST", "/admin/v1/arena/runs/status", {
-    runId: report.runId,
-    status,
-    actorId,
-    correlationId,
-  }, { allowInvalidTransition }));
-}
+operations.push(request("POST", "/admin/v1/arena/runs/status", {
+  runId: report.runId,
+  status: "running",
+  actorId,
+  correlationId,
+}, { allowInvalidTransition: true }));
 
 for (const result of report.botResults ?? []) {
   operations.push(request("POST", "/admin/v1/arena/run-bot-results", {
@@ -87,6 +90,8 @@ for (const result of report.botResults ?? []) {
     botId: result.botId,
     versionId: result.versionId,
     scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicyHash: mode.scoringPolicyHash ?? report.policyEnvelope?.scoringPolicyHash,
+    policyEnvelopeHash: report.policyEnvelopeHash,
     finalEquity: result.score,
     realizedPnl: result.score - 1_000_000,
     maxDrawdown: result.disqualified ? 250_000 : 0,
@@ -116,6 +121,13 @@ for (const event of report.enforcementEvents ?? []) {
     correlationId,
   }, { allowAlreadyExists: true }));
 }
+
+operations.push(request("POST", "/admin/v1/arena/runs/status", {
+  runId: report.runId,
+  status: "completed",
+  actorId,
+  correlationId,
+}, { allowInvalidTransition: true }));
 
 const rawResults = request("GET", `/admin/v1/arena/run-bot-results?runId=${encodeURIComponent(report.runId)}&actorId=${encodeURIComponent(actorId)}`);
 const rawEnforcementEvents = request("GET", `/admin/v1/arena/run-enforcement-events?runId=${encodeURIComponent(report.runId)}&actorId=${encodeURIComponent(actorId)}`);
@@ -154,6 +166,7 @@ function request(method, path, payload, options = {}) {
       statusCode: 200,
       ok: true,
       dryRun: true,
+      requestPayload: payload,
       body: dryRunBody(path, payload),
     };
   }

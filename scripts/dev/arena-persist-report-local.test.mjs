@@ -15,12 +15,20 @@ writeFileSync(
     schemaVersion: "reef.arena.localTickRun.v0",
     runId: "arena-persist-test",
     status: "completed",
+    policyEnvelopeHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    policyEnvelope: {
+      scoringPolicyHash: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      economicPolicyHash: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    },
     mode: {
       modeId: "equity-sprint",
       scenarioId: "arena-equity-sprint-v1",
       seed: 170707,
       scoringPolicyVersion: "score-v0",
+      scoringPolicyHash: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       riskPolicyVersion: "arena-risk-v0",
+      economicPolicyVersion: "preview-zero-fee-v1",
+      economicPolicyHash: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
     },
     botResults: [
       {
@@ -82,6 +90,10 @@ const persisted = JSON.parse(readFileSync(outPath, "utf8"));
 assert.equal(persisted.persistence.enabled, true);
 assert.equal(persisted.persistence.mode, "dry-run");
 assert.ok(persisted.persistence.operations.length >= 7);
+const runRegistration = persisted.persistence.operations.find((operation) => operation.path === "/admin/v1/arena/runs");
+assert.equal(runRegistration.requestPayload.policyEnvelopeHash, persisted.policyEnvelopeHash);
+const resultWrite = persisted.persistence.operations.find((operation) => operation.path === "/admin/v1/arena/run-bot-results");
+assert.equal(resultWrite.requestPayload.scoringPolicyHash, persisted.mode.scoringPolicyHash);
 assert.equal(persisted.persistence.leaderboardEntry.botId, "custom-technical-indicator");
 
 console.log("arena local report persistence dry-run checks passed");

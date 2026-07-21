@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import { deriveDevUrls, env, loadDotEnv, waitForHttp } from "./lib/dev-utils.mjs";
@@ -18,6 +19,21 @@ const versionId = env("DEV_ARENA_RUN_RESULT_SMOKE_VERSION_ID", "v1");
 const runId = env("DEV_ARENA_RUN_RESULT_SMOKE_RUN_ID", `arena-result-run-${suffix}`);
 const modeId = env("DEV_ARENA_RUN_RESULT_SMOKE_MODE_ID", "hosted-sim-smoke");
 const scoringPolicyVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_SCORING_POLICY_VERSION", "score-v1");
+const scoringPolicyHash = env(
+  "DEV_ARENA_RUN_RESULT_SMOKE_SCORING_POLICY_HASH",
+  "sha256:d87133eca6c0a4994fd0aa30af3108b72ac679955128f14e64335417358dd15a",
+);
+const economicPolicyVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_ECONOMIC_POLICY_VERSION", "preview-zero-fee-v1");
+const economicPolicyHash = env(
+  "DEV_ARENA_RUN_RESULT_SMOKE_ECONOMIC_POLICY_HASH",
+  "sha256:27dd4a5b641465079a3137ee9c97ae3c370d8ea6027f6b1663b502e7b86dff29",
+);
+const policyEnvelopeHash = env(
+  "DEV_ARENA_RUN_RESULT_SMOKE_POLICY_ENVELOPE_HASH",
+  `sha256:${createHash("sha256")
+    .update(`${modeId}:${scoringPolicyVersion}:${scoringPolicyHash}:${economicPolicyVersion}:${economicPolicyHash}`)
+    .digest("hex")}`,
+);
 const finalEquity = Number(env("DEV_ARENA_RUN_RESULT_SMOKE_FINAL_EQUITY", "1025000"));
 const replacementFinalEquity = finalEquity + 1500;
 const arenaAdminApiToken = env("ARENA_ADMIN_API_TOKEN", "");
@@ -93,6 +109,11 @@ await expectOk("POST", "/admin/v1/arena/runs", {
   scenarioId: "hosted-summary-smoke",
   seed: 42,
   policyVersion: "policy-v1",
+  policyEnvelopeHash,
+  scoringPolicyVersion,
+  scoringPolicyHash,
+  economicPolicyVersion,
+  economicPolicyHash,
   botVersions: [{ botId, versionId }],
   actorId,
   correlationId: `arena-result-smoke-${suffix}`,
@@ -103,18 +124,13 @@ await expectOk("POST", "/admin/v1/arena/runs/status", {
   actorId,
   correlationId: `arena-result-smoke-${suffix}`,
 });
-await expectOk("POST", "/admin/v1/arena/runs/status", {
-  runId,
-  status: "completed",
-  actorId,
-  correlationId: `arena-result-smoke-${suffix}`,
-});
-
 const summaryDir = mkdtempSync(join(tmpdir(), "reef-arena-result-smoke-"));
 const summaryPath = join(summaryDir, "summary.json");
 writeFileSync(summaryPath, JSON.stringify({
   approvalStatus: "approved_for_merge",
   runId,
+  policyEnvelopeHash,
+  scoringPolicyHash,
   actionsProposed: 12,
   orderActionsProposed: 8,
   dataCalls: 20,
@@ -172,6 +188,16 @@ if (rawResult.finalEquity !== replacementFinalEquity) {
 if (rawResult.realizedPnl !== 26500 || rawResult.maxDrawdown !== 750) {
   throw new Error(`expected retry result metrics to replace first ingest, got ${rawResults.text}`);
 }
+if (rawResult.scoringPolicyHash !== scoringPolicyHash || rawResult.policyEnvelopeHash !== policyEnvelopeHash) {
+  throw new Error(`expected result policy locks to match the accepted run, got ${rawResults.text}`);
+}
+
+await expectOk("POST", "/admin/v1/arena/runs/status", {
+  runId,
+  status: "completed",
+  actorId,
+  correlationId: `arena-result-smoke-${suffix}`,
+});
 
 const leaderboard = await expectOk(
   "GET",

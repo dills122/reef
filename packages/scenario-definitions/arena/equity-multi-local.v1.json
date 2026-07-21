@@ -37,6 +37,7 @@
   "actorProfileCatalogPath": "packages/scenario-definitions/arena/actor-profiles.v1.json",
   "actorProfileCatalogVersion": "2026-07-12",
   "economicPolicyPath": "packages/scenario-definitions/arena/economics/preview-zero-fee-v1.json",
+  "scoringPolicyPath": "packages/scenario-definitions/arena/scoring/score-v1.json",
   "actorProfileDefaults": {
     "market-maker": "mm-tight-bluechip",
     "npc": "npc-noise-small-random",

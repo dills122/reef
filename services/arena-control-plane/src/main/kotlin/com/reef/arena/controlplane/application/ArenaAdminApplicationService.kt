@@ -40,9 +40,9 @@ private object ArenaPermission {
 data class ArenaBotVersionDecisionCommand(val botId: String, val versionId: String, val status: ArenaBotVersionStatus, val reason: String)
 data class ArenaBotRegistrationCommand(val botId: String, val fileName: String, val name: String, val publisher: String, val email: String, val description: String = "", val version: String = "")
 data class ArenaBotVersionRegistrationCommand(val botId: String, val versionId: String, val sourceHash: String, val artifactHash: String, val sdkVersion: String, val apiVersion: String, val dependencyManifestHash: String)
-data class ArenaRunRegistrationCommand(val runId: String, val modeId: String, val scenarioId: String, val seed: Long, val policyVersion: String, val botVersions: List<ArenaRunBotVersionRef>)
+data class ArenaRunRegistrationCommand(val runId: String, val modeId: String, val scenarioId: String, val seed: Long, val policyVersion: String, val policyEnvelopeHash: String, val scoringPolicyVersion: String, val scoringPolicyHash: String, val economicPolicyVersion: String, val economicPolicyHash: String, val botVersions: List<ArenaRunBotVersionRef>)
 data class ArenaRunStatusCommand(val runId: String, val status: ArenaRunStatus)
-data class ArenaRunBotResultIngestionCommand(val runId: String, val botId: String, val versionId: String, val scoringPolicyVersion: String, val finalEquity: Long, val realizedPnl: Long, val maxDrawdown: Long, val actionsProposed: Int, val orderActionsProposed: Int, val dataCalls: Int, val signalsGenerated: Int, val disqualified: Boolean, val scoreEligible: Boolean = true, val publicLeaderboard: Boolean = true)
+data class ArenaRunBotResultIngestionCommand(val runId: String, val botId: String, val versionId: String, val scoringPolicyVersion: String, val scoringPolicyHash: String, val policyEnvelopeHash: String, val finalEquity: Long, val realizedPnl: Long, val maxDrawdown: Long, val actionsProposed: Int, val orderActionsProposed: Int, val dataCalls: Int, val signalsGenerated: Int, val disqualified: Boolean, val scoreEligible: Boolean = true, val publicLeaderboard: Boolean = true)
 data class ArenaRunEnforcementEventIngestionCommand(val runId: String, val botId: String, val versionId: String, val decision: String, val reasonCode: String, val reason: String, val policyVersion: String, val countersJson: String)
 
 class ArenaAdminApplicationService(
@@ -75,7 +75,7 @@ class ArenaAdminApplicationService(
     fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> = authorized(actor) { arenaRegistryStore.operatorDecisions(botId, versionId) }
 
     fun registerArenaRun(actor: AdminActor, command: ArenaRunRegistrationCommand): ArenaRunRecord = authorized(actor) {
-        controlPlane().registerRun(RegisterArenaRunCommand(command.runId, command.modeId, command.scenarioId, command.seed, command.policyVersion, command.botVersions))
+        controlPlane().registerRun(RegisterArenaRunCommand(command.runId, command.modeId, command.scenarioId, command.seed, command.policyVersion, command.policyEnvelopeHash, command.scoringPolicyVersion, command.scoringPolicyHash, command.economicPolicyVersion, command.economicPolicyHash, command.botVersions))
     }
     fun updateArenaRunStatus(actor: AdminActor, command: ArenaRunStatusCommand): ArenaRunRecord = authorized(actor) { controlPlane().updateRunStatus(command.runId, command.status) }
     fun arenaRun(actor: AdminActor, runId: String): ArenaRunRecord? = authorized(actor) { arenaRegistryStore.runRecord(runId) }
@@ -84,7 +84,7 @@ class ArenaAdminApplicationService(
     fun arenaRunEnforcementEvents(actor: AdminActor, runId: String): List<ArenaRunEnforcementEvent> = authorized(actor) { controlPlane().runEnforcementEvents(runId) }
 
     fun recordArenaRunBotResult(actor: AdminActor, command: ArenaRunBotResultIngestionCommand): ArenaRunBotResult = authorized(actor) {
-        controlPlane().recordRunBotResult(ArenaRunBotResult(command.runId, command.botId, command.versionId, command.scoringPolicyVersion, command.finalEquity, command.realizedPnl, command.maxDrawdown, command.actionsProposed, command.orderActionsProposed, command.dataCalls, command.signalsGenerated, command.disqualified, command.scoreEligible, command.publicLeaderboard, now()))
+        controlPlane().recordRunBotResult(ArenaRunBotResult(command.runId, command.botId, command.versionId, command.scoringPolicyVersion, command.scoringPolicyHash, command.policyEnvelopeHash, command.finalEquity, command.realizedPnl, command.maxDrawdown, command.actionsProposed, command.orderActionsProposed, command.dataCalls, command.signalsGenerated, command.disqualified, command.scoreEligible, command.publicLeaderboard, now()))
     }
     fun recordArenaRunEnforcementEvent(actor: AdminActor, command: ArenaRunEnforcementEventIngestionCommand): ArenaRunEnforcementEvent = authorized(actor) {
         controlPlane().recordRunEnforcementEvent(ArenaRunEnforcementEvent(command.runId, command.botId, command.versionId, command.decision, command.reasonCode, command.reason, command.policyVersion, command.countersJson, now()))

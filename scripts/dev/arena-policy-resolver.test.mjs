@@ -8,6 +8,7 @@ import {
   resolveActorProfileCatalog,
   resolveEconomicPolicy,
   resolvePolicyComposition,
+  resolveScoringPolicy,
 } from "./lib/arena-policy-resolver.mjs";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
@@ -18,6 +19,10 @@ const economicPaths = [
   "packages/scenario-definitions/arena/economics/preview-zero-fee-v1.json",
   "packages/scenario-definitions/arena/economics/preview-balanced-fee-v1.json",
   "packages/scenario-definitions/arena/economics/preview-liquidity-subsidy-v1.json",
+];
+const scoringPaths = [
+  "packages/scenario-definitions/arena/scoring/score-v0.json",
+  "packages/scenario-definitions/arena/scoring/score-v1.json",
 ];
 
 assert.equal(canonicalJson({ z: [2, { b: true, a: "x" }], a: 1 }), '{"a":1,"z":[2,{"a":"x","b":true}]}');
@@ -67,12 +72,21 @@ assert.throws(
   /unknown field hiddenFeeBps/,
 );
 
-const composition = resolvePolicyComposition(modeFixture, actorCatalog, economicPolicies[0]);
+const scoringPolicies = scoringPaths.map((path) => resolveScoringPolicy(readJson(path)));
+assert.deepEqual(scoringPolicies.map((policy) => policy.version), ["score-v0", "score-v1"]);
+assert.equal(new Set(scoringPolicies.map((policy) => policy.contentHash)).size, 2);
+assert.throws(
+  () => resolveScoringPolicy({ ...readJson(scoringPaths[0]), replayLock: { ...readJson(scoringPaths[0]).replayLock, until: "operator_override" } }),
+  /replayLock.until must be score_publication/,
+);
+
+const composition = resolvePolicyComposition(modeFixture, actorCatalog, economicPolicies[0], scoringPolicies[0]);
 assert.equal(composition.economicPolicy.version, "preview-zero-fee-v1");
+assert.equal(composition.scoringPolicy.version, "score-v0");
 assert.equal(composition.actorProfileCatalog.contentHash, actorCatalog.contentHash);
 assert.equal(isCanonicalSha256(composition.compositionHash), true);
 assert.throws(
-  () => resolvePolicyComposition({ ...modeFixture, economicPolicyVersion: "caller-selected-v9" }, actorCatalog, economicPolicies[0]),
+  () => resolvePolicyComposition({ ...modeFixture, economicPolicyVersion: "caller-selected-v9" }, actorCatalog, economicPolicies[0], scoringPolicies[0]),
   /economicPolicyVersion must be preview-zero-fee-v1/,
 );
 

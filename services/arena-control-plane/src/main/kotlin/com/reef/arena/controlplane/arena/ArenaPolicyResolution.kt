@@ -6,7 +6,8 @@ import java.security.MessageDigest
 
 enum class ArenaResolvedPolicyKind(val wireValue: String, val schemaVersion: String, val idField: String) {
     ActorProfileCatalog("actor_profile_catalog", "reef.arena.actorProfiles.v1", "catalogId"),
-    EconomicPolicy("economic_policy", "reef.arena.economicPolicy.v1", "policyId")
+    EconomicPolicy("economic_policy", "reef.arena.economicPolicy.v1", "policyId"),
+    ScoringPolicy("scoring_policy", "reef.arena.scoringPolicy.v1", "policyId")
 }
 
 data class ArenaResolvedPolicyArtifact(
@@ -30,7 +31,8 @@ data class ArenaResolvedPolicyArtifact(
 
 data class ArenaRosterResolvedPolicies(
     val actorProfileCatalog: ArenaResolvedPolicyArtifact,
-    val economicPolicy: ArenaResolvedPolicyArtifact
+    val economicPolicy: ArenaResolvedPolicyArtifact,
+    val scoringPolicy: ArenaResolvedPolicyArtifact
 ) {
     init {
         require(actorProfileCatalog.kind == ArenaResolvedPolicyKind.ActorProfileCatalog) {
@@ -38,6 +40,9 @@ data class ArenaRosterResolvedPolicies(
         }
         require(economicPolicy.kind == ArenaResolvedPolicyKind.EconomicPolicy) {
             "economicPolicy artifact kind is invalid"
+        }
+        require(scoringPolicy.kind == ArenaResolvedPolicyKind.ScoringPolicy) {
+            "scoringPolicy artifact kind is invalid"
         }
     }
 }
@@ -48,6 +53,7 @@ class ArenaRosterPolicyVerifier(
     fun verify(snapshot: ArenaRosterPolicySnapshot, resolved: ArenaRosterResolvedPolicies) {
         verifyArtifact(resolved.actorProfileCatalog)
         verifyArtifact(resolved.economicPolicy)
+        verifyArtifact(resolved.scoringPolicy)
         require(snapshot.actorProfileVersion == resolved.actorProfileCatalog.version) {
             "actor profile version does not match resolved catalog"
         }
@@ -59,6 +65,12 @@ class ArenaRosterPolicyVerifier(
         }
         require(snapshot.economicPolicyHash == resolved.economicPolicy.contentHash) {
             "economic policy hash does not match resolved policy"
+        }
+        require(snapshot.scoringPolicyVersion == resolved.scoringPolicy.version) {
+            "scoring policy version does not match resolved policy"
+        }
+        require(snapshot.scoringPolicyHash == resolved.scoringPolicy.contentHash) {
+            "scoring policy hash does not match resolved policy"
         }
     }
 
@@ -107,7 +119,65 @@ class ArenaRosterPolicyVerifier(
                 validateActorProfiles(node.path("profiles"))
             }
             ArenaResolvedPolicyKind.EconomicPolicy -> validateEconomicPolicy(node, kind)
+            ArenaResolvedPolicyKind.ScoringPolicy -> validateScoringPolicy(node, kind)
         }
+    }
+
+    private fun validateScoringPolicy(node: JsonNode, kind: ArenaResolvedPolicyKind) {
+        requireExactFields(
+            node,
+            setOf(
+                "schemaVersion", "policyId", "version", "status", "formulaVersion", "baseline",
+                "publicScoringEnabled", "eligibleActorClasses", "components", "penalties", "disqualification",
+                "replayLock"
+            ),
+            kind
+        )
+        require(requiredText(node, "status", "scoring policy") in setOf("calibration", "public-preview")) {
+            "scoring policy status is unsupported"
+        }
+        requiredText(node, "formulaVersion", "scoring policy")
+        require(node.path("baseline").canConvertToInt() && node.path("baseline").intValue() >= 0) {
+            "scoring policy baseline must be a nonnegative integer"
+        }
+        require(node.path("publicScoringEnabled").isBoolean) { "scoring policy publicScoringEnabled must be true or false" }
+        val eligibleActorClasses = node.path("eligibleActorClasses")
+        require(eligibleActorClasses.isArray && !eligibleActorClasses.isEmpty) {
+            "scoring policy eligibleActorClasses must be a non-empty array"
+        }
+        val actors = eligibleActorClasses.map { it.asText() }
+        require(actors.distinct().size == actors.size && actors.all { it in ACTOR_CLASSES }) {
+            "scoring policy eligibleActorClasses must be unique supported actor classes"
+        }
+        val componentNames = setOf("equity", "risk", "conduct", "marketInteraction", "npcDifficulty")
+        val components = node.path("components")
+        requireExactFields(components, componentNames, "scoring policy components")
+        componentNames.forEach { name ->
+            val component = components.path(name)
+            requireExactFields(component, setOf("enabled", "cap"), "scoring policy components.$name")
+            require(component.path("enabled").isBoolean) { "scoring policy components.$name.enabled must be true or false" }
+            requireNonnegativeInt(component.path("cap"), "scoring policy components.$name.cap")
+        }
+        val penalties = node.path("penalties")
+        requireExactFields(penalties, setOf("freeze", "operationalPause", "invalidIntentCap"), "scoring policy penalties")
+        penalties.properties().forEach { (name, value) -> requireNonnegativeInt(value, "scoring policy penalties.$name") }
+        val disqualification = node.path("disqualification")
+        requireExactFields(disqualification, setOf("freezeCount", "excludeFromLeaderboard"), "scoring policy disqualification")
+        requireNonnegativeInt(disqualification.path("freezeCount"), "scoring policy disqualification.freezeCount")
+        require(disqualification.path("excludeFromLeaderboard").isBoolean) {
+            "scoring policy disqualification.excludeFromLeaderboard must be true or false"
+        }
+        val replayLock = node.path("replayLock")
+        requireExactFields(replayLock, setOf("from", "until", "requirePolicyEnvelopeHash"), "scoring policy replayLock")
+        require(replayLock.path("from").asText() == "run_acceptance") { "scoring policy replayLock.from must be run_acceptance" }
+        require(replayLock.path("until").asText() == "score_publication") { "scoring policy replayLock.until must be score_publication" }
+        require(replayLock.path("requirePolicyEnvelopeHash").isBoolean && replayLock.path("requirePolicyEnvelopeHash").booleanValue()) {
+            "scoring policy replayLock.requirePolicyEnvelopeHash must be true"
+        }
+    }
+
+    private fun requireNonnegativeInt(node: JsonNode, path: String) {
+        require(node.isIntegralNumber && node.canConvertToInt() && node.intValue() >= 0) { "$path must be a nonnegative integer" }
     }
 
     private fun validateActorProfiles(profiles: JsonNode) {

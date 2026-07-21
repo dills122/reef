@@ -194,9 +194,12 @@ profiles reject unknown fields/parameters, the three named preview economic
 policies are versioned fixtures, and the runner resolves canonical catalog,
 economic-policy, profile, and composition hashes. Roster lock recomputes the
 catalog and economic-policy hashes from canonical resolved content and rejects
-caller-supplied version/hash pairs that do not match. Scoring-policy definition
-resolution, run-record policy persistence beyond the roster snapshot, active
-scoring lock, and economic reconciliation remain tracked below.
+caller-supplied version/hash pairs that do not match. Strict `score-v0` and
+`score-v1` fixtures now drive runner scoring, resolved scoring content is
+carried in reports, roster lock verifies its canonical hash, and accepted run
+records lock the scoring/economic/envelope versions and hashes through terminal
+score publication. Roster-to-run admission binding and economic reconciliation
+remain tracked below.
 
 ## Persona And Economic Policy Modules
 
@@ -351,10 +354,12 @@ Implementation status (2026-07-20): strict reusable actor/economic resolvers,
 canonical SHA-256 hashing, version/reference consistency checks, the
 `preview-zero-fee-v1`, `preview-balanced-fee-v1`, and
 `preview-liquidity-subsidy-v1` fixtures, runner report/envelope hashes, and
-roster-lock hash verification are implemented. The next slice is strict
-scoring-policy definition/reference resolution, persisted resolved run-policy
-artifacts, active scoring lock through score publication, and competition/house
-ledger reconciliation.
+roster-lock hash verification are implemented. Strict scoring-policy
+definition/reference resolution, resolved report artifacts, persisted run
+policy locks, result-to-run hash verification, terminal result immutability,
+and leaderboard lock filtering are also implemented. The next slice is binding
+run admission to the accepted roster snapshot and competition/house ledger
+reconciliation.
 
 Deliverables:
 
@@ -480,7 +485,8 @@ the operator dataset can be richer, but access and retention must be explicit.
 
 - implement strict resolvers and canonical hashes
 - persist resolved policy/profile/config references
-- implement scoring lock and economic reconciliation
+- bind accepted run policy locks to the immutable roster snapshot and implement
+  economic reconciliation
 - update reports/comparison tooling
 
 ### Days 11-12: Local Evidence

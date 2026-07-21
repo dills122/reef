@@ -30,6 +30,7 @@ import {
   resolveActorProfileCatalog,
   resolveEconomicPolicy,
   resolvePolicyComposition,
+  resolveScoringPolicy,
 } from "./lib/arena-policy-resolver.mjs";
 
 loadDotEnv();
@@ -119,13 +120,18 @@ if (config.persistResults && config.arenaAdminUrl.length === 0) {
 
 const mode = readJson(config.mode);
 if (config.scoringPolicyVersion.length > 0) {
+  if (!/^score-v\d+$/.test(config.scoringPolicyVersion)) {
+    throw new Error(`unsupported --scoring-policy-version=${config.scoringPolicyVersion}`);
+  }
   mode.scoringPolicyVersion = config.scoringPolicyVersion;
+  mode.scoringPolicyPath = `packages/scenario-definitions/arena/scoring/${config.scoringPolicyVersion}.json`;
 }
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
 const actorProfileCatalog = resolveActorProfileCatalog(readJson(mode.actorProfileCatalogPath));
 const economicPolicy = resolveEconomicPolicy(readJson(mode.economicPolicyPath));
-const policyComposition = resolvePolicyComposition(mode, actorProfileCatalog, economicPolicy);
+const scoringPolicy = resolveScoringPolicy(readJson(mode.scoringPolicyPath));
+const policyComposition = resolvePolicyComposition(mode, actorProfileCatalog, economicPolicy, scoringPolicy);
 const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
@@ -887,7 +893,7 @@ function displayNameForBot(bot) {
 }
 
 function scoringAssumptions() {
-  const scoreV1Enabled = mode.scoringPolicyVersion === "score-v1";
+  const scoreV1Enabled = scoringPolicy.publicScoringEnabled;
   return {
     schemaVersion: "reef.arena.scoringAssumptions.v0",
     scoringPolicyVersion: mode.scoringPolicyVersion,
@@ -920,6 +926,7 @@ function scoringAssumptions() {
 function scoreContext() {
   return buildScoreContext({
     scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicy,
     npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
   });
 }
@@ -1052,7 +1059,7 @@ function summarizeConductMetrics(session, counters, enforcement) {
     maxVenueCommandsPerTick,
     freezeCount: enforcement.freezeCount,
     operationalPauseCount: enforcement.operationalPauseCount,
-    notes: "report-only conduct inputs; scoring penalties are a later policy slice",
+    notes: "conduct inputs are scored only when enabled by the resolved scoring policy",
   };
 }
 
@@ -1092,6 +1099,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       version: mode.version,
       seed: mode.seed,
       scoringPolicyVersion: mode.scoringPolicyVersion,
+      scoringPolicyHash: scoringPolicy.contentHash,
       riskPolicyVersion: mode.riskPolicyVersion,
       economicPolicyVersion: mode.economicPolicyVersion,
       economicPolicyHash: economicPolicy.contentHash,
@@ -1106,6 +1114,10 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     },
     policyEnvelope: envelope,
     policyEnvelopeHash: `sha256:${stableHash(envelope)}`,
+    resolvedPolicyArtifacts: {
+      scoringPolicy: policyArtifact(scoringPolicy),
+      economicPolicy: policyArtifact(economicPolicy),
+    },
     runPlan,
     expectations: {
       freezeBots: config.expectFreezeBots,
@@ -1173,6 +1185,7 @@ function compactArenaReport(report) {
     mode: report.mode,
     policyEnvelope: report.policyEnvelope,
     policyEnvelopeHash: report.policyEnvelopeHash,
+    resolvedPolicyArtifacts: report.resolvedPolicyArtifacts,
     runPlan: report.runPlan,
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
@@ -1219,6 +1232,7 @@ function policyEnvelope() {
     actionPolicyVersion: mode.actionPolicyVersion,
     riskPolicyVersion: mode.riskPolicyVersion,
     scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicyHash: scoringPolicy.contentHash,
     economicPolicyVersion: mode.economicPolicyVersion,
     economicPolicyHash: economicPolicy.contentHash,
     liquidityPolicyVersion: mode.liquidityPolicyVersion,
@@ -1234,6 +1248,11 @@ function policyEnvelope() {
       policyId: economicPolicy.policyId,
       version: economicPolicy.version,
       contentHash: economicPolicy.contentHash,
+    },
+    scoringPolicy: {
+      policyId: scoringPolicy.policyId,
+      version: scoringPolicy.version,
+      contentHash: scoringPolicy.contentHash,
     },
     policyCompositionHash: policyComposition.compositionHash,
     actorProfiles: summarizeActorProfiles(selectedBots).profiles.map((profile) => ({
@@ -2327,6 +2346,11 @@ async function persistArenaResults(report) {
     scenarioId: mode.scenarioId,
     seed: Number(mode.seed ?? 0),
     policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
+    policyEnvelopeHash: report.policyEnvelopeHash,
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoringPolicyHash: scoringPolicy.contentHash,
+    economicPolicyVersion: mode.economicPolicyVersion,
+    economicPolicyHash: economicPolicy.contentHash,
     botVersions,
     actorId: config.actorId,
     correlationId,
@@ -2337,21 +2361,21 @@ async function persistArenaResults(report) {
     actorId: config.actorId,
     correlationId,
   }, { allowInvalidTransition: true }));
-  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
-    runId: config.runId,
-    status: report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings" ? "completed" : "failed",
-    actorId: config.actorId,
-    correlationId,
-  }, { allowInvalidTransition: true }));
-
   for (const result of report.botResults) {
+    const finalEquity = integerMetric(result.finalEquityDiagnostic, result.score);
+    const realizedPnl = integerMetric(
+      result.scoreBreakdown?.diagnostics?.realizedPnl,
+      0,
+    );
     operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/run-bot-results", {
       runId: config.runId,
       botId: result.botId,
       versionId: result.versionId,
       scoringPolicyVersion: mode.scoringPolicyVersion,
-      finalEquity: result.score,
-      realizedPnl: result.score - 1_000_000,
+      scoringPolicyHash: scoringPolicy.contentHash,
+      policyEnvelopeHash: report.policyEnvelopeHash,
+      finalEquity,
+      realizedPnl,
       maxDrawdown: result.disqualified ? 250_000 : 0,
       actionsProposed: result.actionsProposed,
       orderActionsProposed: result.venueCommands,
@@ -2390,6 +2414,13 @@ async function persistArenaResults(report) {
     }
   }
 
+  operations.push(await postArenaOk(baseUrl, "/admin/v1/arena/runs/status", {
+    runId: config.runId,
+    status: report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings" ? "completed" : "failed",
+    actorId: config.actorId,
+    correlationId,
+  }, { allowInvalidTransition: true }));
+
   const rawResults = await getArenaJson(baseUrl, `/admin/v1/arena/run-bot-results?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
   const rawEnforcementEvents = await getArenaJson(baseUrl, `/admin/v1/arena/run-enforcement-events?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
   const leaderboard = await getArenaJson(
@@ -2419,6 +2450,11 @@ async function persistArenaResults(report) {
     leaderboard,
     leaderboardEntry,
   };
+}
+
+function integerMetric(value, fallback) {
+  const numeric = Number(value);
+  return Math.round(value !== null && value !== undefined && Number.isFinite(numeric) ? numeric : Number(fallback));
 }
 
 async function ensureArenaBot(baseUrl, bot, correlationId) {
@@ -3345,6 +3381,18 @@ function safeJson(raw) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
+}
+
+function policyArtifact(policy) {
+  const content = Object.fromEntries(
+    Object.entries(policy).filter(([key]) => key !== "contentHash" && key !== "profilesById"),
+  );
+  return {
+    artifactId: policy.policyId ?? policy.catalogId,
+    version: policy.version,
+    contentHash: policy.contentHash,
+    content,
+  };
 }
 
 function stableHash(value) {

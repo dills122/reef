@@ -78,6 +78,11 @@ data class ArenaRunRecord(
     val scenarioId: String,
     val seed: Long,
     val policyVersion: String,
+    val policyEnvelopeHash: String,
+    val scoringPolicyVersion: String,
+    val scoringPolicyHash: String,
+    val economicPolicyVersion: String,
+    val economicPolicyHash: String,
     val botVersions: List<ArenaRunBotVersionRef>,
     val status: ArenaRunStatus,
     val createdAt: Instant,
@@ -89,6 +94,8 @@ data class ArenaRunBotResult(
     val botId: String,
     val versionId: String,
     val scoringPolicyVersion: String,
+    val scoringPolicyHash: String,
+    val policyEnvelopeHash: String,
     val finalEquity: Long,
     val realizedPnl: Long,
     val maxDrawdown: Long,
@@ -172,6 +179,11 @@ data class RegisterArenaRunCommand(
     val scenarioId: String,
     val seed: Long,
     val policyVersion: String,
+    val policyEnvelopeHash: String,
+    val scoringPolicyVersion: String,
+    val scoringPolicyHash: String,
+    val economicPolicyVersion: String,
+    val economicPolicyHash: String,
     val botVersions: List<ArenaRunBotVersionRef>
 )
 
@@ -337,6 +349,11 @@ class ArenaControlPlaneService(
         require(command.modeId.isNotBlank()) { "modeId is required" }
         require(command.scenarioId.isNotBlank()) { "scenarioId is required" }
         require(command.policyVersion.isNotBlank()) { "policyVersion is required" }
+        requirePolicyHash(command.policyEnvelopeHash, "policyEnvelopeHash")
+        require(command.scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
+        requirePolicyHash(command.scoringPolicyHash, "scoringPolicyHash")
+        require(command.economicPolicyVersion.isNotBlank()) { "economicPolicyVersion is required" }
+        requirePolicyHash(command.economicPolicyHash, "economicPolicyHash")
         require(command.botVersions.isNotEmpty()) { "botVersions is required" }
         require(store.runRecord(command.runId) == null) { "runId already exists: ${command.runId}" }
         command.botVersions.forEach { ref ->
@@ -351,6 +368,11 @@ class ArenaControlPlaneService(
             scenarioId = command.scenarioId,
             seed = command.seed,
             policyVersion = command.policyVersion,
+            policyEnvelopeHash = command.policyEnvelopeHash,
+            scoringPolicyVersion = command.scoringPolicyVersion,
+            scoringPolicyHash = command.scoringPolicyHash,
+            economicPolicyVersion = command.economicPolicyVersion,
+            economicPolicyHash = command.economicPolicyHash,
             botVersions = command.botVersions,
             status = ArenaRunStatus.Planned,
             createdAt = now()
@@ -363,6 +385,9 @@ class ArenaControlPlaneService(
         val run = store.runRecord(runId) ?: error("unknown arena run: $runId")
         require(canTransitionRun(run.status, status)) {
             "invalid arena run transition: ${run.status} -> $status"
+        }
+        if (status == ArenaRunStatus.Completed) {
+            require(store.runBotResults(runId).isNotEmpty()) { "arena run cannot publish scores without run bot results" }
         }
         val updated = run.copy(
             status = status,
@@ -377,6 +402,8 @@ class ArenaControlPlaneService(
         require(result.botId.isNotBlank()) { "botId is required" }
         require(result.versionId.isNotBlank()) { "versionId is required" }
         require(result.scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
+        requirePolicyHash(result.scoringPolicyHash, "scoringPolicyHash")
+        requirePolicyHash(result.policyEnvelopeHash, "policyEnvelopeHash")
         require(result.maxDrawdown >= 0) { "maxDrawdown must be nonnegative" }
         require(result.actionsProposed >= 0) { "actionsProposed must be nonnegative" }
         require(result.orderActionsProposed >= 0) { "orderActionsProposed must be nonnegative" }
@@ -386,8 +413,29 @@ class ArenaControlPlaneService(
             "orderActionsProposed must be less than or equal to actionsProposed"
         }
         val run = store.runRecord(result.runId) ?: error("unknown arena run: ${result.runId}")
+        require(result.scoringPolicyVersion == run.scoringPolicyVersion) {
+            "result scoring policy version does not match the accepted run policy lock"
+        }
+        require(result.scoringPolicyHash == run.scoringPolicyHash) {
+            "result scoring policy hash does not match the accepted run policy lock"
+        }
+        require(result.policyEnvelopeHash == run.policyEnvelopeHash) {
+            "result policy envelope hash does not match the accepted run policy lock"
+        }
         require(run.botVersions.any { it.botId == result.botId && it.versionId == result.versionId }) {
             "bot version is not registered for arena run: ${result.botId}/${result.versionId}"
+        }
+        if (run.status == ArenaRunStatus.Completed) {
+            val existing = store.runBotResults(result.runId).firstOrNull {
+                it.botId == result.botId && it.versionId == result.versionId
+            } ?: throw IllegalArgumentException("completed arena run results are immutable")
+            require(existing.copy(createdAt = result.createdAt) == result) {
+                "completed arena run results are immutable"
+            }
+            return existing
+        }
+        require(run.status == ArenaRunStatus.Running) {
+            "run bot results may only be recorded while the arena run is running"
         }
         store.saveRunBotResult(result)
         return result
@@ -484,8 +532,13 @@ class ArenaControlPlaneService(
         return this == ArenaRunStatus.Completed || this == ArenaRunStatus.Failed || this == ArenaRunStatus.Cancelled
     }
 
+    private fun requirePolicyHash(value: String, field: String) {
+        require(CANONICAL_POLICY_HASH.matches(value)) { "$field must be a canonical sha256 digest" }
+    }
+
     companion object {
         private val BASIC_EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
         private val RuntimeConfigKeyPattern = Regex("[A-Za-z_][A-Za-z0-9_]*")
+        private val CANONICAL_POLICY_HASH = Regex("^sha256:[a-f0-9]{64}$")
     }
 }

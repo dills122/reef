@@ -13,6 +13,8 @@ writeFileSync(
   JSON.stringify({
     approvalStatus: "approved_for_merge",
     runId: "run-1",
+    scoringPolicyHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    policyEnvelopeHash: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
     actionsProposed: 12,
     orderActionsProposed: 8,
     dataCalls: 20,
@@ -42,6 +44,8 @@ assert.equal(payload.runId, "run-1");
 assert.equal(payload.botId, "bot-1");
 assert.equal(payload.versionId, "v1");
 assert.equal(payload.scoringPolicyVersion, "score-v1");
+assert.equal(payload.scoringPolicyHash, "sha256:1111111111111111111111111111111111111111111111111111111111111111");
+assert.equal(payload.policyEnvelopeHash, "sha256:2222222222222222222222222222222222222222222222222222222222222222");
 assert.equal(payload.finalEquity, 1025000);
 assert.equal(payload.realizedPnl, 25000);
 assert.equal(payload.maxDrawdown, 1000);
