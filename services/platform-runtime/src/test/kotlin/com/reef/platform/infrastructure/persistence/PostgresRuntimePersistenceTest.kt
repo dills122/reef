@@ -22,6 +22,63 @@ import kotlin.test.assertTrue
 
 class PostgresRuntimePersistenceTest {
     @Test
+    fun singleSubmitOutcomePersistsOrderScopeMetadata() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "runtime-submit-scope-test")
+        val persistence = PostgresRuntimePersistence(dataSource)
+        val suffix = UUID.randomUUID().toString()
+        val order = PersistedOrder(
+            orderId = "ord-$suffix",
+            engineOrderId = "eng-$suffix",
+            instrumentId = "INSTR-$suffix",
+            participantId = "participant-$suffix",
+            accountId = "account-$suffix",
+            side = "BUY",
+            orderType = "LIMIT",
+            quantityUnits = "100",
+            limitPrice = "150250000000",
+            currency = "USD",
+            timeInForce = "DAY",
+            acceptedAt = "2026-07-21T00:00:00Z",
+            clientOrderId = "client-$suffix",
+            runId = "run-$suffix",
+            venueSessionId = "session-$suffix"
+        )
+
+        val execution = ExecutionCreated(
+            eventId = "evt-execution-$suffix",
+            executionId = "execution-$suffix",
+            orderId = order.orderId,
+            instrumentId = order.instrumentId,
+            quantityUnits = order.quantityUnits,
+            executionPrice = order.limitPrice,
+            currency = order.currency,
+            occurredAt = order.acceptedAt,
+            liquidityRole = "TAKER"
+        )
+        persistence.persistSubmitOutcome(
+            commandId = "cmd-$suffix",
+            result = SubmitOrderResult(
+                accepted = EngineOrderAccepted(
+                    eventId = "evt-$suffix",
+                    orderId = order.orderId,
+                    engineOrderId = order.engineOrderId,
+                    occurredAt = order.acceptedAt
+                ),
+                executions = listOf(execution)
+            ),
+            acceptedOrder = order,
+            lifecycleEvents = emptyList()
+        )
+
+        assertEquals(order, persistence.acceptedOrder(order.orderId))
+        assertEquals(listOf(execution), persistence.executionsForOrder(order.orderId))
+    }
+
+    @Test
     fun storesPostTradeProfilesAndActiveDefault() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return

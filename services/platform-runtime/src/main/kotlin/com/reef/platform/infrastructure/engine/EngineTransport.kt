@@ -463,6 +463,9 @@ private fun SubmitOrderCommand.toMetadata(): CommandMetadata =
         .setCorrelationId(correlationId)
         .setActorId(actorId)
         .setOccurredAt(occurredAt)
+        .setRunId(runId)
+        .setVenueSessionId(venueSessionId)
+        .setClientOrderId(clientOrderId)
         .build()
 
 private fun CancelOrderCommand.toMetadata(): CommandMetadata =

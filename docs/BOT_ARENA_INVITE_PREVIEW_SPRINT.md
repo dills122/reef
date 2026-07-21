@@ -203,12 +203,14 @@ revalidate that binding at `T0`, and carry roster, seed-set, actor-profile, and
 risk-policy hashes into persistence and reports. Zero-fee competition/house
 ledger reconciliation is implemented and fail-closed; non-zero fee/rebate
 reconciliation now consumes canonical maker/taker roles and supports the two
-preview comparison policies. A 2026-07-21 local rehearsal verified immutable
-six-bot roster binding, deterministic artifact hashes, pre-T0 fail-closed start,
-live command completion, and real fills. It also found that live projected fills
-remain `UNSPECIFIED` rather than `MAKER`/`TAKER`; reconciliation correctly failed
-closed. Fix that end-to-end propagation, then record the fixed-seed matrix and
-hosted proof before either non-zero policy is promoted.
+preview comparison policies. A 2026-07-21 local rehearsal exposed stale role
+and unscoped fill evidence; the corrected sync-result transport and persistence
+path now preserves run/session identity and maker/taker attribution. The fresh
+six-bot matrix at
+`reports/arena-economic-policy-matrix/20260721-role-corrected-v4/` passes all
+three policies with identical economic inputs, 30 fills per policy, complete
+reconciliation, and zero command-accounting gap. Repeat the matrix on the
+promoted hosted profile before either non-zero policy is promoted.
 
 ## Persona And Economic Policy Modules
 
@@ -376,7 +378,8 @@ requires it to pass. Venue execution facts now preserve canonical maker/taker
 attribution through both transports, runtime persistence, participant reads,
 and Arena diagnostics. Non-zero fee/rebate reconciliation fails closed when
 role coverage, role notional parity, or facility funding is invalid. Fresh
-fixed-seed and hosted proof remains required for the comparison policies.
+single-seed local proof now passes for all three policies; the remaining
+comparison evidence is the full seed set and promoted hosted profile.
 
 Deliverables:
 
@@ -434,6 +437,8 @@ Use fixed named run suites so evidence is comparable.
 - public `score-v1` plus shadow component breakdown
 - compare wealth concentration, turnover, fees/rebates, house losses, competitor
   drawdown, source/sink reconciliation, and rank reversals
+- status: corrected local single-seed slice passed 2026-07-21 for all three
+  policies; complete the remaining seeds and hosted repetition
 
 ### Gate 5: Hosted Confidence
 

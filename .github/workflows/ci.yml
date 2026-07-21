@@ -242,6 +242,7 @@ jobs:
             scripts/dev/compare-arena-score-v1-proof.test.mjs \
             scripts/dev/compare-arena-scoring-calibration.test.mjs \
             scripts/dev/run-arena-actor-calibration-matrix.test.mjs \
+            scripts/dev/run-arena-economic-policy-matrix.test.mjs \
             scripts/dev/run-arena-scoring-calibration-matrix.test.mjs \
             scripts/dev/projection-replay-proof.test.mjs \
             scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt

@@ -84,7 +84,10 @@ class EngineClient : EngineGateway {
             "quantityUnits" to command.quantityUnits,
             "limitPrice" to command.limitPrice,
             "currency" to command.currency,
-            "timeInForce" to command.timeInForce
+            "timeInForce" to command.timeInForce,
+            "clientOrderId" to command.clientOrderId,
+            "runId" to command.runId,
+            "venueSessionId" to command.venueSessionId
         )
     }
 

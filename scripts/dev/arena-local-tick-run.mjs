@@ -42,7 +42,9 @@ const resolveBotRuntimeConfig = await loadRuntimeConfigResolver();
 const args = process.argv.slice(2);
 const config = {
   runId: stringOption("--run-id", `arena-local-tick-${Date.now()}`),
+  botVersionSuffix: stringOption("--bot-version-suffix", ""),
   mode: stringOption("--mode", "packages/scenario-definitions/arena/equity-sprint.v1.json"),
+  venueSessionId: stringOption("--venue-session-id", ""),
   extraBots: csvOption("--extra-bots", ""),
   expectFreezeBots: csvOption("--expect-freeze-bots", ""),
   compartment: stringOption("--compartment", "ses"),
@@ -133,6 +135,12 @@ if ((config.persistResults || config.requireRosterBinding) && !/^sha256:[a-f0-9]
 }
 
 const mode = readJson(config.mode);
+if (config.venueSessionId.length > 0) {
+  if (!/^[A-Za-z0-9_.:-]+$/.test(config.venueSessionId)) {
+    throw new Error("--venue-session-id must contain only letters, numbers, dots, underscores, colons, or hyphens");
+  }
+  mode.venueSessionId = config.venueSessionId;
+}
 if (config.scoringPolicyVersion.length > 0) {
   if (!/^score-v\d+$/.test(config.scoringPolicyVersion)) {
     throw new Error(`unsupported --scoring-policy-version=${config.scoringPolicyVersion}`);
@@ -1147,6 +1155,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       modeId: mode.modeId,
       version: mode.version,
       seed: mode.seed,
+      venueSessionId: mode.venueSessionId,
       scoringPolicyVersion: mode.scoringPolicyVersion,
       scoringPolicyHash: scoringPolicy.contentHash,
       riskPolicyVersion: mode.riskPolicyVersion,
@@ -3551,7 +3560,8 @@ function csvOption(name, fallback) {
 }
 
 function localVersionId(entry) {
-  return `${entry.versionId}-${config.runId}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+  const suffix = config.botVersionSuffix || config.runId;
+  return `${entry.versionId}-${suffix}`.replace(/[^A-Za-z0-9_.-]/g, "-");
 }
 
 function optionValue(name) {

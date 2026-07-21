@@ -127,6 +127,7 @@ test-bot-sdk:
 	bun scripts/dev/arena-policy-resolver.test.mjs
 	bun scripts/dev/arena-score-breakdown.test.mjs
 	bun scripts/dev/arena-economic-reconciliation.test.mjs
+	bun scripts/dev/run-arena-economic-policy-matrix.test.mjs
 	bun scripts/dev/arena-actor-profile-behavior.test.mjs
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
 	bun scripts/dev/arena-runner-isolation-failure.test.mjs

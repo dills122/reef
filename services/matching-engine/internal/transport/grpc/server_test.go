@@ -254,12 +254,15 @@ func TestSubmitOrdersStream(t *testing.T) {
 func TestCommandMetadataMapsTraceAndCausation(t *testing.T) {
 	submit := submitOrderFromProto(&orderv1.SubmitOrder{
 		Metadata: &orderv1.CommandMetadata{
-			CommandId:     "cmd-submit",
-			TraceId:       "trace-submit",
-			CausationId:   "cause-submit",
-			CorrelationId: "corr-submit",
-			ActorId:       "trader-1",
-			OccurredAt:    "2026-03-14T18:00:00Z",
+			CommandId:      "cmd-submit",
+			TraceId:        "trace-submit",
+			CausationId:    "cause-submit",
+			CorrelationId:  "corr-submit",
+			ActorId:        "trader-1",
+			OccurredAt:     "2026-03-14T18:00:00Z",
+			RunId:          "run-submit",
+			VenueSessionId: "session-submit",
+			ClientOrderId:  "client-order-submit",
 		},
 		OrderId:       "ord-submit",
 		InstrumentId:  "AAPL",
@@ -273,6 +276,9 @@ func TestCommandMetadataMapsTraceAndCausation(t *testing.T) {
 	})
 	if submit.TraceID != "trace-submit" || submit.CausationID != "cause-submit" {
 		t.Fatalf("submit metadata not mapped: %#v", submit)
+	}
+	if submit.RunID != "run-submit" || submit.VenueSessionID != "session-submit" || submit.ClientOrderID != "client-order-submit" {
+		t.Fatalf("submit scope metadata not mapped: %#v", submit)
 	}
 
 	cancel := cancelOrderFromProto(&orderv1.CancelOrder{
