@@ -1,4 +1,5 @@
 import { deriveDevUrls, env, loadDotEnv, waitForHttp } from "./lib/dev-utils.mjs";
+import { createSmokeIdentity, newSmokeExecutionId } from "./lib/smoke-identity.mjs";
 import http from "node:http";
 import https from "node:https";
 
@@ -6,8 +7,9 @@ loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
 const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
-const smokeRunId = env("DEV_SMOKE_RUN_ID", "smoke-run-1");
-const smokeVenueSessionId = env("DEV_SMOKE_VENUE_SESSION_ID", "smoke-session-1");
+const smokeIdentity = createSmokeIdentity(env("DEV_SMOKE_EXECUTION_ID", newSmokeExecutionId()));
+const smokeRunId = env("DEV_SMOKE_RUN_ID", smokeIdentity.runId);
+const smokeVenueSessionId = env("DEV_SMOKE_VENUE_SESSION_ID", smokeIdentity.venueSessionId);
 
 async function postJson(url, payload, headers = {}) {
   const response = await requestJson("POST", url, payload, headers, 5000);
@@ -101,15 +103,15 @@ console.log("submitting via /api/v1 boundary...");
 const submitResponse = await postJson(
   `${runtimeUrl}/api/v1/orders/submit`,
   {
-    commandId: "smoke-cmd-submit-1",
-    traceId: "smoke-trace-1",
-    causationId: "smoke-causation-1",
-    correlationId: "smoke-correlation-1",
+    commandId: smokeIdentity.submitCommandId,
+    traceId: smokeIdentity.submitTraceId,
+    causationId: smokeIdentity.submitCausationId,
+    correlationId: smokeIdentity.submitCorrelationId,
     actorId: "smoke-user",
     runId: smokeRunId,
     venueSessionId: smokeVenueSessionId,
     occurredAt: "2026-05-01T13:00:00Z",
-    orderId: "smoke-ord-1",
+    orderId: smokeIdentity.orderId,
     instrumentId: "AAPL",
     participantId: "participant-1",
     accountId: "account-1",
@@ -120,7 +122,7 @@ const submitResponse = await postJson(
     currency: "USD",
     timeInForce: "DAY",
   },
-  { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-submit-1" },
+  { "X-Client-Id": "local-smoke-client", "Idempotency-Key": smokeIdentity.submitIdempotencyKey },
 );
 if (!isAcceptedResponse(submitResponse)) {
   throw new Error(`smoke failure: submit did not return accepted payload: ${submitResponse}`);
@@ -130,19 +132,19 @@ console.log("canceling via /api/v1 boundary...");
 const cancelResponse = await postJson(
   `${runtimeUrl}/api/v1/orders/cancel`,
   {
-    commandId: "smoke-cmd-cancel-1",
-    traceId: "smoke-trace-2",
-    causationId: "smoke-causation-2",
-    correlationId: "smoke-correlation-2",
+    commandId: smokeIdentity.cancelCommandId,
+    traceId: smokeIdentity.cancelTraceId,
+    causationId: smokeIdentity.cancelCausationId,
+    correlationId: smokeIdentity.cancelCorrelationId,
     actorId: "smoke-user",
     runId: smokeRunId,
     venueSessionId: smokeVenueSessionId,
     occurredAt: "2026-05-01T13:00:10Z",
-    orderId: "smoke-ord-1",
+    orderId: smokeIdentity.orderId,
     instrumentId: "AAPL",
     reason: "smoke cancel",
   },
-  { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-cancel-1" },
+  { "X-Client-Id": "local-smoke-client", "Idempotency-Key": smokeIdentity.cancelIdempotencyKey },
 );
 if (!isAcceptedResponse(cancelResponse)) {
   throw new Error(`smoke failure: cancel did not return accepted payload: ${cancelResponse}`);

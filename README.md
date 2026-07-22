@@ -63,12 +63,27 @@ The main runtime path is API-first: manual users and simulation actors go throug
 
 ```bash
 cp .env.example .env
+make dev-doctor
 make dev-up
 make dev-smoke
 ```
 
-This starts and verifies the Reef-only profile. For Arena-owned work, use the
-explicit overlay:
+This checks, starts, and verifies the Docker-first Reef-only profile. A new
+developer who will work across the Go, Kotlin, Bot SDK, Arena, and docs-site
+surfaces should also install the repository dependency sets and verify the full
+toolchain:
+
+```bash
+make dev-bootstrap
+make dev-doctor ARGS=--full
+```
+
+The canonical clean-machine guide is [`docs/ONBOARDING.md`](./docs/ONBOARDING.md),
+with a short GitHub-facing entry point in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+Normal local development does not require hosted credentials, Tailscale, or
+direct access to the production box.
+
+For Arena-owned work, use the explicit overlay:
 
 ```bash
 make dev-up-arena
@@ -101,13 +116,15 @@ bun scripts/dev/reef-dev.mjs list
 
 `make` targets remain the stable daily interface. `scripts/dev/reef-dev.mjs` groups lower-level stack, stress, and local link setup profiles behind one CLI so new automation does not need a new one-off wrapper file.
 
-Use `JS_RUNTIME=node` when Bun is not installed:
+Use `JS_RUNTIME=node` only as a temporary fallback for plain Node-compatible
+stack scripts when Bun is not installed:
 
 ```bash
 JS_RUNTIME=node make dev-up
 ```
 
-For setup and troubleshooting details, start with [`docs/ONBOARDING.md`](./docs/ONBOARDING.md) and [`docs/DEV_ENV.md`](./docs/DEV_ENV.md).
+For advanced local runtime profiles and diagnostics after onboarding, continue
+with [`docs/DEV_ENV.md`](./docs/DEV_ENV.md).
 
 ## CI And Quality Gates
 
