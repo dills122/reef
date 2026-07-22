@@ -1,0 +1,174 @@
+{
+  "schemaVersion": "reef.arena.economicPolicyMatrix.v1",
+  "generatedAt": "2026-07-21T23:36:43.090Z",
+  "runner": "scripts/dev/run-arena-economic-policy-matrix.mjs",
+  "status": "pass",
+  "outDir": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4",
+  "mode": "packages/scenario-definitions/arena/equity-sprint.v1.json",
+  "entries": [
+    {
+      "id": "zero-fee",
+      "economicPolicyVersion": "preview-zero-fee-v1",
+      "binding": {
+        "runId": "arena-economic-matrix-20260721-zero-v9",
+        "botVersionSuffix": "arena-economic-matrix-20260721-zero-v5",
+        "admissionWindowId": "arena-matrix-live-20260721-zero-v5",
+        "rosterSnapshotId": "arena-matrix-live-roster-20260721-zero-v5",
+        "rosterSnapshotHash": "sha256:54f78b16f71a1ef28f50a2f67347fe2cd785483598e23232ed0dfb2b0fa7088c",
+        "venueSessionId": "arena-economic-matrix-20260721-zero-v9"
+      },
+      "reportPath": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/zero-fee.report.json",
+      "logPath": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/zero-fee.runner.log",
+      "exitCode": 0,
+      "error": "",
+      "summary": {
+        "runId": "arena-economic-matrix-20260721-zero-v9",
+        "status": "completed_with_warnings",
+        "venueSessionId": "arena-economic-matrix-20260721-zero-v9",
+        "economicPolicyVersion": "preview-zero-fee-v1",
+        "economicPolicyHash": "sha256:27dd4a5b641465079a3137ee9c97ae3c370d8ea6027f6b1663b502e7b86dff29",
+        "policyEnvelopeHash": "sha256:7b87003880bb119676177a4fa160303f143c45c9124d58a3ada48a68a0ab2fe9",
+        "rosterSnapshotHash": "sha256:54f78b16f71a1ef28f50a2f67347fe2cd785483598e23232ed0dfb2b0fa7088c",
+        "fillCount": 30,
+        "executionRoles": {
+          "market-maker": {
+            "fillCount": 15,
+            "filledQuantity": 15,
+            "filledNotional": 1499.9,
+            "avgFillPrice": 99.993333
+          },
+          "npc": {
+            "fillCount": 15,
+            "filledQuantity": 15,
+            "filledNotional": 1499.9,
+            "avgFillPrice": 99.993333
+          }
+        },
+        "reconciliationStatus": "pass",
+        "reconciliationHash": "sha256:e2ae38e5a30de1a8a06a8ce969619d5941c3ca1357c0ba2c5a8e74413ad1de81",
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "facilityCashDelta": 0,
+        "commandAccountingGap": 0,
+        "healthStatus": "warn",
+        "healthWarnings": [
+          "crossedBookCount 20 > 0"
+        ]
+      }
+    },
+    {
+      "id": "balanced-fee",
+      "economicPolicyVersion": "preview-balanced-fee-v1",
+      "binding": {
+        "runId": "arena-economic-matrix-20260721-balanced-v8",
+        "botVersionSuffix": "arena-economic-matrix-20260721-balanced-v5",
+        "admissionWindowId": "arena-matrix-live-20260721-balanced-v5",
+        "rosterSnapshotId": "arena-matrix-live-roster-20260721-balanced-v5",
+        "rosterSnapshotHash": "sha256:1b8073c1e81cbc6b172fa86f53d62c8fa485eaecaa5b59f45646e19b2a74b1de",
+        "venueSessionId": "arena-economic-matrix-20260721-balanced-v8"
+      },
+      "reportPath": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/balanced-fee.report.json",
+      "logPath": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/balanced-fee.runner.log",
+      "exitCode": 0,
+      "error": "",
+      "summary": {
+        "runId": "arena-economic-matrix-20260721-balanced-v8",
+        "status": "completed_with_warnings",
+        "venueSessionId": "arena-economic-matrix-20260721-balanced-v8",
+        "economicPolicyVersion": "preview-balanced-fee-v1",
+        "economicPolicyHash": "sha256:232d532134ea5f7114610a93bb08dd65db3c62a92e3882207b3ffec32d664d29",
+        "policyEnvelopeHash": "sha256:375da6f7a0ac5903b00ea7bef80f929698233c2fecf1fc165c30ab08aca46e81",
+        "rosterSnapshotHash": "sha256:1b8073c1e81cbc6b172fa86f53d62c8fa485eaecaa5b59f45646e19b2a74b1de",
+        "fillCount": 30,
+        "executionRoles": {
+          "market-maker": {
+            "fillCount": 15,
+            "filledQuantity": 15,
+            "filledNotional": 1499.9,
+            "avgFillPrice": 99.993333
+          },
+          "npc": {
+            "fillCount": 15,
+            "filledQuantity": 15,
+            "filledNotional": 1499.9,
+            "avgFillPrice": 99.993333
+          }
+        },
+        "reconciliationStatus": "pass",
+        "reconciliationHash": "sha256:ae932ef36059a3be75d0ea2d4fda6d5146f8a8ea3f69bcfb573d52e6cd0dd7df",
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "facilityCashDelta": 0.224985,
+        "commandAccountingGap": 0,
+        "healthStatus": "warn",
+        "healthWarnings": [
+          "crossedBookCount 20 > 0"
+        ]
+      }
+    },
+    {
+      "id": "liquidity-subsidy",
+      "economicPolicyVersion": "preview-liquidity-subsidy-v1",
+      "binding": {
+        "runId": "arena-economic-matrix-20260721-subsidy-v8",
+        "botVersionSuffix": "arena-economic-matrix-20260721-subsidy-v5",
+        "admissionWindowId": "arena-matrix-live-20260721-subsidy-v5",
+        "rosterSnapshotId": "arena-matrix-live-roster-20260721-subsidy-v5",
+        "rosterSnapshotHash": "sha256:2084c263e31f6dd492b6fbeb35ca47ad5bcfc43d0e2acfe1746ae01d0d0697d5",
+        "venueSessionId": "arena-economic-matrix-20260721-subsidy-v8"
+      },
+      "reportPath": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/liquidity-subsidy.report.json",
+      "logPath": "/Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/liquidity-subsidy.runner.log",
+      "exitCode": 0,
+      "error": "",
+      "summary": {
+        "runId": "arena-economic-matrix-20260721-subsidy-v8",
+        "status": "completed_with_warnings",
+        "venueSessionId": "arena-economic-matrix-20260721-subsidy-v8",
+        "economicPolicyVersion": "preview-liquidity-subsidy-v1",
+        "economicPolicyHash": "sha256:4a2b7c2dd1f6c798314ddf84065df9a6fac5557911f507f3f3ead6be7bbde8d5",
+        "policyEnvelopeHash": "sha256:13e41105ef8d59c8aa4253f1e8a512c9175ab63cdfd3b9a95ecd28056d7dcd39",
+        "rosterSnapshotHash": "sha256:2084c263e31f6dd492b6fbeb35ca47ad5bcfc43d0e2acfe1746ae01d0d0697d5",
+        "fillCount": 30,
+        "executionRoles": {
+          "market-maker": {
+            "fillCount": 15,
+            "filledQuantity": 15,
+            "filledNotional": 1499.9,
+            "avgFillPrice": 99.993333
+          },
+          "npc": {
+            "fillCount": 15,
+            "filledQuantity": 15,
+            "filledNotional": 1499.9,
+            "avgFillPrice": 99.993333
+          }
+        },
+        "reconciliationStatus": "pass",
+        "reconciliationHash": "sha256:1c35f6c5c173e03db611741974dafc74d3ae62fac2ae4cda53c119fc37541b65",
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "facilityCashDelta": 0,
+        "commandAccountingGap": 0,
+        "healthStatus": "warn",
+        "healthWarnings": [
+          "crossedBookCount 20 > 0"
+        ]
+      }
+    }
+  ],
+  "validation": {
+    "status": "pass",
+    "errors": [],
+    "requiredPolicies": [
+      "preview-zero-fee-v1",
+      "preview-balanced-fee-v1",
+      "preview-liquidity-subsidy-v1"
+    ],
+    "completedPolicies": [
+      "preview-zero-fee-v1",
+      "preview-balanced-fee-v1",
+      "preview-liquidity-subsidy-v1"
+    ]
+  }
+}

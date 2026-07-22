@@ -1,0 +1,62 @@
+arena phase start: start-shared-worker
+arena phase complete: start-shared-worker elapsedMs=47
+arena phase start: prepare-live-venue
+arena phase complete: prepare-live-venue elapsedMs=299
+arena phase start: prepare-bots
+arena phase complete: prepare-bots elapsedMs=177
+arena phase start: preflight-roster-bound-run
+arena phase complete: preflight-roster-bound-run elapsedMs=108
+arena phase start: run-scheduled-ticks
+arena bot start 1/6: builtin-mm-simple class=house_responsive ticks=40
+arena bot start 2/6: builtin-mm-lifecycle-safe class=house_responsive ticks=40
+arena bot start 3/6: builtin-mm-refreshing class=house_responsive ticks=40
+arena bot start 4/6: builtin-npc-momentum class=npc_tick ticks=20
+arena bot start 5/6: custom-technical-indicator class=contestant_tick ticks=20
+arena bot start 6/6: builtin-npc-taker-aapl class=npc_tick ticks=20
+arena bot progress builtin-npc-taker-aapl: tick=1/20 commands=0 timedOut=0
+arena bot progress custom-technical-indicator: tick=1/20 commands=0 timedOut=0
+arena bot progress builtin-npc-momentum: tick=1/20 commands=0 timedOut=0
+arena bot progress builtin-mm-refreshing: tick=1/40 commands=2 timedOut=0
+arena bot progress builtin-mm-lifecycle-safe: tick=1/40 commands=2 timedOut=0
+arena bot progress builtin-mm-simple: tick=1/40 commands=2 timedOut=0
+arena bot progress builtin-mm-refreshing: tick=10/40 commands=0 timedOut=0
+arena bot progress builtin-mm-lifecycle-safe: tick=10/40 commands=0 timedOut=0
+arena bot progress builtin-mm-simple: tick=10/40 commands=2 timedOut=0
+arena bot progress custom-technical-indicator: tick=10/20 commands=0 timedOut=0
+arena bot progress builtin-npc-momentum: tick=10/20 commands=0 timedOut=0
+arena bot progress builtin-npc-taker-aapl: tick=10/20 commands=1 timedOut=0
+arena bot progress builtin-mm-lifecycle-safe: tick=20/40 commands=0 timedOut=0
+arena bot progress builtin-mm-refreshing: tick=20/40 commands=0 timedOut=0
+arena bot progress builtin-mm-simple: tick=20/40 commands=2 timedOut=0
+arena bot progress builtin-mm-lifecycle-safe: tick=30/40 commands=0 timedOut=0
+arena bot progress builtin-mm-refreshing: tick=30/40 commands=0 timedOut=0
+arena bot progress builtin-mm-simple: tick=30/40 commands=2 timedOut=0
+arena bot progress custom-technical-indicator: tick=20/20 commands=0 timedOut=0
+arena bot progress builtin-npc-momentum: tick=20/20 commands=0 timedOut=0
+arena bot progress builtin-npc-taker-aapl: tick=20/20 commands=1 timedOut=0
+arena bot progress builtin-mm-lifecycle-safe: tick=40/40 commands=0 timedOut=0
+arena bot progress builtin-mm-simple: tick=40/40 commands=2 timedOut=0
+arena bot progress builtin-mm-refreshing: tick=40/40 commands=1 timedOut=0
+arena bot complete 1/6: builtin-mm-simple ticks=40
+arena bot complete 2/6: builtin-mm-lifecycle-safe ticks=40
+arena bot complete 3/6: builtin-mm-refreshing ticks=40
+arena bot complete 4/6: builtin-npc-momentum ticks=20
+arena bot complete 5/6: custom-technical-indicator ticks=20
+arena bot complete 6/6: builtin-npc-taker-aapl ticks=20
+arena phase complete: run-scheduled-ticks elapsedMs=803
+arena phase start: collect-venue-readback
+arena phase complete: collect-venue-readback elapsedMs=14
+arena phase start: score-results
+arena phase complete: score-results elapsedMs=1
+arena phase start: build-report
+arena phase complete: build-report elapsedMs=3
+arena phase start: persist-arena-results
+arena phase complete: persist-arena-results elapsedMs=28
+arena phase start: write-report
+arena phase complete: write-report elapsedMs=8
+arena local tick run complete: /Users/dsteele/repos/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/zero-fee.report.json
+status=completed_with_warnings bots=6 ticks=180 venueCommands=118 submitted=118 freezes=0
+rank=1 bot=custom-technical-indicator score=1000000 disqualified=false
+
+[arena-tick-worker-0] SES Removing unpermitted intrinsics
+[arena-tick-worker-0]   Removing intrinsics.%WrapForValidIteratorPrototype%.@@toStringTag

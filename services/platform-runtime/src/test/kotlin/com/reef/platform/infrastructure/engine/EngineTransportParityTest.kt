@@ -133,8 +133,14 @@ class EngineTransportParityTest {
             assertEquals(httpResult, grpcResult)
             assertContains(httpSubmitBody, "\"traceId\":\"trace-1\"")
             assertContains(httpSubmitBody, "\"causationId\":\"cause-1\"")
+            assertContains(httpSubmitBody, "\"runId\":\"run-1\"")
+            assertContains(httpSubmitBody, "\"venueSessionId\":\"session-1\"")
+            assertContains(httpSubmitBody, "\"clientOrderId\":\"client-order-1\"")
             assertEquals("trace-1", grpcSubmitMetadata?.traceId)
             assertEquals("cause-1", grpcSubmitMetadata?.causationId)
+            assertEquals("run-1", grpcSubmitMetadata?.runId)
+            assertEquals("session-1", grpcSubmitMetadata?.venueSessionId)
+            assertEquals("client-order-1", grpcSubmitMetadata?.clientOrderId)
         } finally {
             httpServer.stop(0)
             grpcServer.shutdownNow()
@@ -249,7 +255,10 @@ class EngineTransportParityTest {
             quantityUnits = "100",
             limitPrice = "150250000000",
             currency = "USD",
-            timeInForce = "DAY"
+            timeInForce = "DAY",
+            clientOrderId = "client-order-1",
+            runId = "run-1",
+            venueSessionId = "session-1"
         )
     }
 

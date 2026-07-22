@@ -1,0 +1,4509 @@
+{
+  "schemaVersion": "reef.arena.localTickRun.v0",
+  "reportShape": "compact",
+  "generatedAt": "2026-07-21T23:34:08.732Z",
+  "startedAt": "2026-07-21T23:34:07.592Z",
+  "completedAt": "2026-07-21T23:34:08.730Z",
+  "runId": "arena-economic-matrix-20260721-balanced-v8",
+  "mode": {
+    "modeId": "equity-sprint",
+    "version": "v1",
+    "seed": 170707,
+    "venueSessionId": "arena-economic-matrix-20260721-balanced-v8",
+    "scoringPolicyVersion": "score-v0",
+    "scoringPolicyHash": "sha256:b1da8cabafad47014192c4e5f9fe1f3a721d89a6d9c8675a0a55c5c56f8d20ea",
+    "riskPolicyVersion": "arena-risk-v0",
+    "riskPolicyHash": "sha256:48531816390f2c3b67c8631456487119be5567f73d141a9452de0fcf95bf17c5",
+    "seedSetHash": "sha256:2f1d22ebc0c5e90887c8821fae240470c926f97f8af52d27764db4c8338a392e",
+    "economicPolicyVersion": "preview-balanced-fee-v1",
+    "economicPolicyHash": "sha256:232d532134ea5f7114610a93bb08dd65db3c62a92e3882207b3ffec32d664d29",
+    "liquidityPolicyVersion": "liquidity-v0",
+    "backgroundFlowPolicyVersion": "background-flow-v0",
+    "creditPolicyVersion": "credit-v0",
+    "interventionPolicyVersion": "intervention-v0",
+    "actorProfileCatalogVersion": "2026-07-12",
+    "actorProfileCatalogHash": "sha256:c93a362363831bdfd69b851f3f6759c98cb0da925cfb27d247d02d5658878506",
+    "policyCompositionHash": "sha256:8e6519f78c00a7a265f4a2e7ef062c1fa2598412195604b3579156cd637579e8",
+    "npcDifficultyBuckets": [
+      "benign-noise",
+      "toxic-momentum"
+    ]
+  },
+  "policyEnvelope": {
+    "schemaVersion": "reef.arena.policyEnvelope.v1",
+    "modeId": "equity-sprint",
+    "modeVersion": "v1",
+    "scenarioId": "arena-equity-sprint-v1",
+    "venueSessionId": "arena-economic-matrix-20260721-balanced-v8",
+    "seed": 170707,
+    "visibleDataPolicyVersion": "visible-data-v0",
+    "actionPolicyVersion": "arena-action-v0",
+    "riskPolicyVersion": "arena-risk-v0",
+    "riskPolicyHash": "sha256:48531816390f2c3b67c8631456487119be5567f73d141a9452de0fcf95bf17c5",
+    "seedSetHash": "sha256:2f1d22ebc0c5e90887c8821fae240470c926f97f8af52d27764db4c8338a392e",
+    "scoringPolicyVersion": "score-v0",
+    "scoringPolicyHash": "sha256:b1da8cabafad47014192c4e5f9fe1f3a721d89a6d9c8675a0a55c5c56f8d20ea",
+    "economicPolicyVersion": "preview-balanced-fee-v1",
+    "economicPolicyHash": "sha256:232d532134ea5f7114610a93bb08dd65db3c62a92e3882207b3ffec32d664d29",
+    "liquidityPolicyVersion": "liquidity-v0",
+    "backgroundFlowPolicyVersion": "background-flow-v0",
+    "creditPolicyVersion": "credit-v0",
+    "interventionPolicyVersion": "intervention-v0",
+    "actorProfileCatalog": {
+      "catalogId": "arena-actor-profiles",
+      "version": "2026-07-12",
+      "contentHash": "sha256:c93a362363831bdfd69b851f3f6759c98cb0da925cfb27d247d02d5658878506"
+    },
+    "economicPolicy": {
+      "policyId": "preview-balanced-fee",
+      "version": "preview-balanced-fee-v1",
+      "contentHash": "sha256:232d532134ea5f7114610a93bb08dd65db3c62a92e3882207b3ffec32d664d29"
+    },
+    "scoringPolicy": {
+      "policyId": "arena-score",
+      "version": "score-v0",
+      "contentHash": "sha256:b1da8cabafad47014192c4e5f9fe1f3a721d89a6d9c8675a0a55c5c56f8d20ea"
+    },
+    "policyCompositionHash": "sha256:8e6519f78c00a7a265f4a2e7ef062c1fa2598412195604b3579156cd637579e8",
+    "actorProfiles": [
+      {
+        "botId": "builtin-mm-simple",
+        "actorClass": "house_market_maker",
+        "profileId": "mm-tight-bluechip",
+        "profileVersion": "v1",
+        "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7",
+        "difficultyBucket": "neutral-liquidity",
+        "scoreEffect": "diagnostic-only"
+      },
+      {
+        "botId": "builtin-mm-lifecycle-safe",
+        "actorClass": "house_market_maker",
+        "profileId": "mm-tight-bluechip",
+        "profileVersion": "v1",
+        "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7",
+        "difficultyBucket": "neutral-liquidity",
+        "scoreEffect": "diagnostic-only"
+      },
+      {
+        "botId": "builtin-mm-refreshing",
+        "actorClass": "house_market_maker",
+        "profileId": "mm-tight-bluechip",
+        "profileVersion": "v1",
+        "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7",
+        "difficultyBucket": "neutral-liquidity",
+        "scoreEffect": "diagnostic-only"
+      },
+      {
+        "botId": "builtin-npc-momentum",
+        "actorClass": "npc_flow",
+        "profileId": "npc-noise-small-random",
+        "profileVersion": "v1",
+        "profileHash": "sha256:1bd1e01dfa3a7bddb2024d6d72728e5e2ec748db04a9ebf62a3bc2f4a0d7d41f",
+        "difficultyBucket": "benign-noise",
+        "scoreEffect": "difficulty-bucket"
+      },
+      {
+        "botId": "custom-technical-indicator",
+        "actorClass": "competitor",
+        "profileId": "competitor-standard",
+        "profileVersion": "v1",
+        "profileHash": "sha256:ebc5bffbdb8f1e15f84a2d5f968fd9ca857671d25396b4d3ccf99391911e7d77",
+        "difficultyBucket": "ranked-standard",
+        "scoreEffect": "eligible-for-score"
+      },
+      {
+        "botId": "builtin-npc-taker-aapl",
+        "actorClass": "npc_flow",
+        "profileId": "npc-bad-aggressive-retail",
+        "profileVersion": "v1",
+        "profileHash": "sha256:994d81565f07784e733228edef6c30e90ba4109161cab1b0da62f718f4ba8f4a",
+        "difficultyBucket": "toxic-momentum",
+        "scoreEffect": "difficulty-bucket"
+      }
+    ],
+    "npcDifficultyBuckets": [
+      "benign-noise",
+      "toxic-momentum"
+    ]
+  },
+  "policyEnvelopeHash": "sha256:375da6f7a0ac5903b00ea7bef80f929698233c2fecf1fc165c30ab08aca46e81",
+  "rosterBinding": {
+    "admissionWindowId": "arena-matrix-live-20260721-balanced-v5",
+    "rosterSnapshotId": "arena-matrix-live-roster-20260721-balanced-v5",
+    "rosterSnapshotHash": "sha256:1b8073c1e81cbc6b172fa86f53d62c8fa485eaecaa5b59f45646e19b2a74b1de",
+    "preflight": {
+      "status": "pass",
+      "validatedAt": "2026-07-21T23:34:08.135Z"
+    }
+  },
+  "resolvedPolicyArtifacts": {
+    "scoringPolicy": {
+      "artifactId": "arena-score",
+      "version": "score-v0",
+      "contentHash": "sha256:b1da8cabafad47014192c4e5f9fe1f3a721d89a6d9c8675a0a55c5c56f8d20ea",
+      "content": {
+        "schemaVersion": "reef.arena.scoringPolicy.v1",
+        "policyId": "arena-score",
+        "version": "score-v0",
+        "status": "calibration",
+        "formulaVersion": "legacy-participation-v0",
+        "baseline": 1000000,
+        "publicScoringEnabled": false,
+        "eligibleActorClasses": [
+          "competitor"
+        ],
+        "components": {
+          "equity": {
+            "enabled": false,
+            "cap": 0
+          },
+          "risk": {
+            "enabled": false,
+            "cap": 0
+          },
+          "conduct": {
+            "enabled": true,
+            "cap": 250000
+          },
+          "marketInteraction": {
+            "enabled": true,
+            "cap": 100000
+          },
+          "npcDifficulty": {
+            "enabled": false,
+            "cap": 0
+          }
+        },
+        "penalties": {
+          "freeze": 250000,
+          "operationalPause": 5000,
+          "invalidIntentCap": 100000
+        },
+        "disqualification": {
+          "freezeCount": 1,
+          "excludeFromLeaderboard": true
+        },
+        "replayLock": {
+          "from": "run_acceptance",
+          "until": "score_publication",
+          "requirePolicyEnvelopeHash": true
+        }
+      }
+    },
+    "economicPolicy": {
+      "artifactId": "preview-balanced-fee",
+      "version": "preview-balanced-fee-v1",
+      "contentHash": "sha256:232d532134ea5f7114610a93bb08dd65db3c62a92e3882207b3ffec32d664d29",
+      "content": {
+        "schemaVersion": "reef.arena.economicPolicy.v1",
+        "policyId": "preview-balanced-fee",
+        "version": "preview-balanced-fee-v1",
+        "currency": "USD",
+        "competitionLedger": {
+          "startingCashPerCompetitor": "1000000.00",
+          "allowNegativeCash": false
+        },
+        "houseLedger": {
+          "marketMakerStartingCash": "10000000.00",
+          "npcStartingCash": "10000000.00",
+          "subsidyBudget": "0.00"
+        },
+        "fees": {
+          "makerBps": "0",
+          "takerBps": "2",
+          "cancelFee": "0.00",
+          "borrowBps": "0",
+          "liquidationPenaltyBps": "0"
+        },
+        "rebates": {
+          "makerBps": "0.5",
+          "fundingSource": "taker_fees"
+        },
+        "sources": [
+          {
+            "code": "competitor_starting_cash",
+            "ledger": "competition",
+            "enabled": true,
+            "funding": "run_initialization"
+          },
+          {
+            "code": "market_maker_starting_cash",
+            "ledger": "house",
+            "enabled": true,
+            "funding": "run_initialization"
+          },
+          {
+            "code": "npc_starting_cash",
+            "ledger": "house",
+            "enabled": true,
+            "funding": "run_initialization"
+          }
+        ],
+        "sinks": [
+          {
+            "code": "taker_fees",
+            "ledger": "competition",
+            "enabled": true,
+            "funding": "matched_trade_notional"
+          }
+        ],
+        "reconciliation": {
+          "tolerance": "0.01",
+          "requireBalancedTransfers": true,
+          "competitionLedger": true,
+          "houseLedger": true
+        }
+      }
+    }
+  },
+  "runPlan": {
+    "durationSeconds": 10,
+    "durationMs": 10000,
+    "configuredDurationSeconds": 10,
+    "tickIntervalMs": 500,
+    "houseWakeIntervalMs": 250,
+    "tickCount": 20,
+    "perBotTickCount": 20,
+    "selectedBotCount": 6,
+    "totalTickCount": 180,
+    "schedulingMode": "shared-arena-time",
+    "perBotDurationSeconds": 10,
+    "warmupSeconds": 0,
+    "warmupTicks": 0,
+    "healthSampleIntervalMs": 500,
+    "healthSampleEveryTicks": 1,
+    "healthInstruments": [
+      "AAPL"
+    ],
+    "actorProfiles": {
+      "schemaVersion": "reef.arena.actorProfileSummary.v1",
+      "catalogId": "arena-actor-profiles",
+      "catalogVersion": "2026-07-12",
+      "byActorClass": {
+        "competitor": 1,
+        "house_market_maker": 3,
+        "npc_flow": 2
+      },
+      "byDifficultyBucket": {
+        "benign-noise": 1,
+        "neutral-liquidity": 3,
+        "ranked-standard": 1,
+        "toxic-momentum": 1
+      },
+      "profiles": [
+        {
+          "botId": "builtin-mm-simple",
+          "role": "market-maker",
+          "actorClass": "house_market_maker",
+          "profileId": "mm-tight-bluechip",
+          "profileVersion": "v1",
+          "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7",
+          "difficultyBucket": "neutral-liquidity",
+          "scoreEffect": "diagnostic-only"
+        },
+        {
+          "botId": "builtin-mm-lifecycle-safe",
+          "role": "market-maker",
+          "actorClass": "house_market_maker",
+          "profileId": "mm-tight-bluechip",
+          "profileVersion": "v1",
+          "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7",
+          "difficultyBucket": "neutral-liquidity",
+          "scoreEffect": "diagnostic-only"
+        },
+        {
+          "botId": "builtin-mm-refreshing",
+          "role": "market-maker",
+          "actorClass": "house_market_maker",
+          "profileId": "mm-tight-bluechip",
+          "profileVersion": "v1",
+          "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7",
+          "difficultyBucket": "neutral-liquidity",
+          "scoreEffect": "diagnostic-only"
+        },
+        {
+          "botId": "builtin-npc-momentum",
+          "role": "npc",
+          "actorClass": "npc_flow",
+          "profileId": "npc-noise-small-random",
+          "profileVersion": "v1",
+          "profileHash": "sha256:1bd1e01dfa3a7bddb2024d6d72728e5e2ec748db04a9ebf62a3bc2f4a0d7d41f",
+          "difficultyBucket": "benign-noise",
+          "scoreEffect": "difficulty-bucket"
+        },
+        {
+          "botId": "custom-technical-indicator",
+          "role": "competitor",
+          "actorClass": "competitor",
+          "profileId": "competitor-standard",
+          "profileVersion": "v1",
+          "profileHash": "sha256:ebc5bffbdb8f1e15f84a2d5f968fd9ca857671d25396b4d3ccf99391911e7d77",
+          "difficultyBucket": "ranked-standard",
+          "scoreEffect": "eligible-for-score"
+        },
+        {
+          "botId": "builtin-npc-taker-aapl",
+          "role": "npc",
+          "actorClass": "npc_flow",
+          "profileId": "npc-bad-aggressive-retail",
+          "profileVersion": "v1",
+          "profileHash": "sha256:994d81565f07784e733228edef6c30e90ba4109161cab1b0da62f718f4ba8f4a",
+          "difficultyBucket": "toxic-momentum",
+          "scoreEffect": "difficulty-bucket"
+        }
+      ],
+      "npcDifficultyBuckets": [
+        "benign-noise",
+        "toxic-momentum"
+      ]
+    }
+  },
+  "expectations": {
+    "freezeBots": []
+  },
+  "runnerProfile": {
+    "compartment": "ses",
+    "isolation": "process",
+    "workerScope": "shared",
+    "workerCount": 1,
+    "submitMode": "live"
+  },
+  "commandWaitMode": "terminal",
+  "projectionDrainCadence": "per-submission",
+  "scoringAssumptions": {
+    "schemaVersion": "reef.arena.scoringAssumptions.v0",
+    "scoringPolicyVersion": "score-v0",
+    "npcDifficultyMode": "leaderboard-partition-plus-shadow-multiplier",
+    "npcDifficultyBuckets": [
+      "benign-noise",
+      "toxic-momentum"
+    ],
+    "economicPolicyLock": "run-scoped; final scoring must use the report policyEnvelopeHash",
+    "scoreBasis": "public score remains participation-and-policy-compliance; scoreBreakdown.shadowScore reports score-v0 tuning inputs",
+    "leaderboardScope": "score-eligible public competitor bots only",
+    "houseBots": "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
+    "pnl": {
+      "status": "diagnostic-not-ranked",
+      "basis": "zero-fee cash/inventory diagnostics from participant-scoped fill readback; public score remains participation/policy-compliance",
+      "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+      "fees": "zero placeholder until maker/taker fee policy is configured"
+    },
+    "tradingMetrics": {
+      "status": "command-mix plus execution diagnostics v0",
+      "source": "runner pre-submit venue commands, command status summaries, and participant-scoped order-fill readback",
+      "fillsAndExecutions": "scoreBreakdown.shadowScore uses fill ratio, completion rate, and execution notional as report-only tuning inputs"
+    }
+  },
+  "status": "completed_with_warnings",
+  "elapsedMs": 1138.4548750000001,
+  "phaseTimings": [
+    {
+      "name": "start-shared-worker",
+      "elapsedMs": 45
+    },
+    {
+      "name": "prepare-live-venue",
+      "elapsedMs": 262
+    },
+    {
+      "name": "prepare-bots",
+      "elapsedMs": 179
+    },
+    {
+      "name": "preflight-roster-bound-run",
+      "elapsedMs": 57
+    },
+    {
+      "name": "run-scheduled-ticks",
+      "elapsedMs": 581
+    },
+    {
+      "name": "collect-venue-readback",
+      "elapsedMs": 11
+    },
+    {
+      "name": "score-results",
+      "elapsedMs": 1
+    },
+    {
+      "name": "build-report",
+      "elapsedMs": 3
+    },
+    {
+      "name": "persist-arena-results",
+      "elapsedMs": 21
+    }
+  ],
+  "totals": {
+    "ticks": 180,
+    "failedTicks": 0,
+    "actions": 188,
+    "venueCommands": 119,
+    "submittedCommands": 119,
+    "completedCommands": 119,
+    "failedCommands": 0,
+    "rejectedCommands": 0,
+    "timedOutCommands": 0,
+    "dataCalls": 158
+  },
+  "commandAccounting": {
+    "draftCommands": 119,
+    "submittedCommands": 119,
+    "terminalCommands": 119,
+    "accountingGap": 0
+  },
+  "commandStatusSummary": {
+    "commandCount": 119,
+    "timedOut": 0,
+    "byRoute": {
+      "/api/v1/orders/submit": 111,
+      "/api/v1/orders/cancel": 8
+    },
+    "byFinalStatus": {
+      "COMPLETED": 119
+    },
+    "byFirstStatus": {
+      "COMPLETED": 119
+    },
+    "rejectedByCode": {},
+    "rejectedByBotId": {},
+    "avgIntakeElapsedMs": 7.480256285714285,
+    "avgStatusElapsedMs": 0
+  },
+  "latencySummary": {
+    "tickElapsedMs": {
+      "count": 180,
+      "p50": 0.11058300000001964,
+      "p95": 0.35112500000002456,
+      "p99": 1.0181249999999409,
+      "max": 1.665208000000007
+    }
+  },
+  "pacingSummary": {
+    "schemaVersion": "reef.arena.pacingSummary.v0",
+    "enabled": false,
+    "scheduler": "unpaced",
+    "scheduledDurationMs": 10000,
+    "scheduledEventCount": 40,
+    "finalOffsetMs": 9750,
+    "elapsedMs": 1138.4548750000001,
+    "eventSpanWallMs": 574.455458,
+    "finalCompletionLagMs": -9175.544542,
+    "maxStartLagMs": 0.21583299999997507,
+    "maxCompletionLagMs": 21.32725000000005,
+    "eventsBehindSchedule": 1,
+    "eventsCompletedBehindSchedule": 1,
+    "totalSleepMs": 0,
+    "startLagMs": {
+      "count": 40,
+      "p50": -4697.301083,
+      "p95": -465.91883299999995,
+      "p99": 0.21583299999997507,
+      "max": 0.21583299999997507
+    },
+    "completionLagMs": {
+      "count": 40,
+      "p50": -4683.151792,
+      "p95": -453.38708299999996,
+      "p99": 21.32725000000005,
+      "max": 21.32725000000005
+    },
+    "workElapsedMs": {
+      "count": 40,
+      "p50": 13.329875000000015,
+      "p95": 21.111417000000074,
+      "p99": 26.972374999999943,
+      "max": 26.972374999999943
+    },
+    "sleepMs": {
+      "count": 40,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    }
+  },
+  "activityBySchedulingClass": {
+    "house_responsive": {
+      "botCount": 3,
+      "ticks": 120,
+      "actions": 168,
+      "venueCommands": 104,
+      "submittedCommands": 104,
+      "completedCommands": 104,
+      "failedCommands": 0,
+      "rejectedCommands": 0,
+      "timedOutCommands": 0,
+      "operationalPauses": 0,
+      "dataCalls": 128
+    },
+    "npc_tick": {
+      "botCount": 2,
+      "ticks": 40,
+      "actions": 20,
+      "venueCommands": 15,
+      "submittedCommands": 15,
+      "completedCommands": 15,
+      "failedCommands": 0,
+      "rejectedCommands": 0,
+      "timedOutCommands": 0,
+      "operationalPauses": 0,
+      "dataCalls": 30
+    },
+    "contestant_tick": {
+      "botCount": 1,
+      "ticks": 20,
+      "actions": 0,
+      "venueCommands": 0,
+      "submittedCommands": 0,
+      "completedCommands": 0,
+      "failedCommands": 0,
+      "rejectedCommands": 0,
+      "timedOutCommands": 0,
+      "operationalPauses": 0,
+      "dataCalls": 0
+    }
+  },
+  "healthSummary": {
+    "status": "warn",
+    "failures": [
+      "crossedBookCount 20 > 0"
+    ],
+    "sampleCount": 20,
+    "postWarmupSampleCount": 20,
+    "instrumentSampleCount": 20,
+    "topOfBookPct": 100,
+    "depthPct": 100,
+    "medianQuotedSpreadBps": -6168.877966228317,
+    "p95QuotedSpreadBps": -6168.877966228317,
+    "crossedBookCount": 20,
+    "lockedBookCount": 0,
+    "emptyBookCount": 0,
+    "ticksWithVenueCommandsPct": 100,
+    "thresholds": {
+      "minTopOfBookPct": 90,
+      "minDepthPct": 90,
+      "maxMedianQuotedSpreadBps": 25,
+      "maxP95QuotedSpreadBps": 50
+    }
+  },
+  "marketQualitySummary": {
+    "schemaVersion": "reef.arena.marketQualitySummary.v0",
+    "status": "warn",
+    "failures": [
+      "AAPL: crossedBookCount 20 > 0"
+    ],
+    "sampleCount": 20,
+    "postWarmupSampleCount": 20,
+    "thresholds": {
+      "minTopOfBookPct": 90,
+      "minDepthPct": 90,
+      "maxMedianQuotedSpreadBps": 25,
+      "maxP95QuotedSpreadBps": 50
+    },
+    "instruments": [
+      {
+        "instrumentId": "AAPL",
+        "status": "warn",
+        "failures": [
+          "crossedBookCount 20 > 0"
+        ],
+        "sampleCount": 20,
+        "topOfBookPct": 100,
+        "depthPct": 100,
+        "medianQuotedSpreadBps": -6168.877966228317,
+        "p95QuotedSpreadBps": -6168.877966228317,
+        "crossedBookCount": 20,
+        "lockedBookCount": 0,
+        "emptyBookCount": 0,
+        "firstCrossedAt": "2026-07-04T14:30:00.000Z",
+        "firstEmptyAt": null
+      }
+    ]
+  },
+  "liquiditySummary": {
+    "schemaVersion": "reef.arena.liquiditySummary.v1",
+    "mode": "score-neutral-liquidity-context",
+    "scoreNeutral": true,
+    "pointsEffect": 0,
+    "status": "warn",
+    "flags": [
+      "AAPL:crossed-book",
+      "MSFT:missing-liquidity-provider",
+      "MSFT:low-quote-uptime",
+      "MSFT:thin-depth",
+      "NVDA:missing-liquidity-provider",
+      "NVDA:low-quote-uptime",
+      "NVDA:thin-depth",
+      "TSLA:missing-liquidity-provider",
+      "TSLA:low-quote-uptime",
+      "TSLA:thin-depth"
+    ],
+    "totals": {
+      "providerCount": 3,
+      "activeProviderCount": 3,
+      "submittedLimitOrders": 96,
+      "modifyCommands": 0,
+      "cancelCommands": 8,
+      "fillCount": 15,
+      "filledQuantity": 15,
+      "grossExecutedNotional": 1499.9,
+      "inventoryGrossNotional": 144.74603
+    },
+    "instruments": [
+      {
+        "instrumentId": "AAPL",
+        "providerCount": 3,
+        "providerIds": [
+          "builtin-mm-lifecycle-safe",
+          "builtin-mm-refreshing",
+          "builtin-mm-simple"
+        ],
+        "marketQuality": {
+          "instrumentId": "AAPL",
+          "status": "warn",
+          "sampleCount": 20,
+          "topOfBookPct": 100,
+          "depthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966228317,
+          "p95QuotedSpreadBps": -6168.877966228317,
+          "crossedBookCount": 20,
+          "lockedBookCount": 0,
+          "emptyBookCount": 0,
+          "failures": [
+            "crossedBookCount 20 > 0"
+          ]
+        },
+        "status": "warn",
+        "flags": [
+          "crossed-book"
+        ]
+      },
+      {
+        "instrumentId": "MSFT",
+        "providerCount": 0,
+        "providerIds": [],
+        "marketQuality": {
+          "instrumentId": "MSFT",
+          "status": "unknown",
+          "sampleCount": 0,
+          "topOfBookPct": 0,
+          "depthPct": 0,
+          "medianQuotedSpreadBps": null,
+          "p95QuotedSpreadBps": null,
+          "crossedBookCount": 0,
+          "lockedBookCount": 0,
+          "emptyBookCount": 0,
+          "failures": []
+        },
+        "status": "warn",
+        "flags": [
+          "missing-liquidity-provider",
+          "low-quote-uptime",
+          "thin-depth"
+        ]
+      },
+      {
+        "instrumentId": "NVDA",
+        "providerCount": 0,
+        "providerIds": [],
+        "marketQuality": {
+          "instrumentId": "NVDA",
+          "status": "unknown",
+          "sampleCount": 0,
+          "topOfBookPct": 0,
+          "depthPct": 0,
+          "medianQuotedSpreadBps": null,
+          "p95QuotedSpreadBps": null,
+          "crossedBookCount": 0,
+          "lockedBookCount": 0,
+          "emptyBookCount": 0,
+          "failures": []
+        },
+        "status": "warn",
+        "flags": [
+          "missing-liquidity-provider",
+          "low-quote-uptime",
+          "thin-depth"
+        ]
+      },
+      {
+        "instrumentId": "TSLA",
+        "providerCount": 0,
+        "providerIds": [],
+        "marketQuality": {
+          "instrumentId": "TSLA",
+          "status": "unknown",
+          "sampleCount": 0,
+          "topOfBookPct": 0,
+          "depthPct": 0,
+          "medianQuotedSpreadBps": null,
+          "p95QuotedSpreadBps": null,
+          "crossedBookCount": 0,
+          "lockedBookCount": 0,
+          "emptyBookCount": 0,
+          "failures": []
+        },
+        "status": "warn",
+        "flags": [
+          "missing-liquidity-provider",
+          "low-quote-uptime",
+          "thin-depth"
+        ]
+      }
+    ],
+    "providerDiagnostics": [
+      {
+        "botId": "builtin-mm-simple",
+        "status": "warn",
+        "flags": [
+          "no-liquidity-fills"
+        ],
+        "instruments": [
+          "AAPL"
+        ],
+        "quoteQuality": {
+          "attribution": "market-wide-proxy",
+          "avgTopOfBookPct": 100,
+          "avgDepthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966,
+          "p95QuotedSpreadBps": -6168.877966
+        },
+        "providerQuoteQuality": {
+          "schemaVersion": "reef.arena.providerQuoteQuality.v1",
+          "source": "participant-current-orders",
+          "attribution": "provider-owned-current-orders",
+          "currentOrderCount": 50,
+          "instrumentCount": 1,
+          "medianQuotedSpreadBps": 19.999999999998863,
+          "p95QuotedSpreadBps": 19.999999999998863,
+          "instruments": [
+            {
+              "instrumentId": "AAPL",
+              "status": "pass",
+              "flags": [],
+              "bidPrice": 99.9,
+              "askPrice": 100.1,
+              "quotedSpread": 0.19999999999998863,
+              "quotedSpreadBps": 19.999999999998863
+            }
+          ],
+          "limitations": [
+            "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+            "adverse selection requires post-fill price path attribution"
+          ]
+        },
+        "fillParticipation": {
+          "fillCount": 0,
+          "filledQuantity": 0,
+          "grossExecutedNotional": 0,
+          "avgFillPrice": null
+        },
+        "attribution": {
+          "schemaVersion": "reef.arena.liquidityProviderAttribution.v1",
+          "source": "participant-scoped-readback-and-trading-metrics",
+          "orderContribution": {
+            "submittedLimitOrders": 80,
+            "submittedLimitOrderSharePct": 83.333333,
+            "grossSubmittedQuantity": 800,
+            "grossSubmittedQuantitySharePct": 83.333333,
+            "grossSubmittedNotional": 80000,
+            "grossSubmittedNotionalSharePct": 83.333333
+          },
+          "fillContribution": {
+            "fillCount": 0,
+            "fillSharePct": 0,
+            "filledQuantity": 0,
+            "filledQuantitySharePct": 0,
+            "grossExecutedNotional": 0,
+            "grossExecutedNotionalSharePct": 0
+          },
+          "pointsEffect": 0
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "pointsEffect": 0
+      },
+      {
+        "botId": "builtin-mm-lifecycle-safe",
+        "status": "warn",
+        "flags": [
+          "adverse-selection-observed"
+        ],
+        "instruments": [
+          "AAPL"
+        ],
+        "quoteQuality": {
+          "attribution": "market-wide-proxy",
+          "avgTopOfBookPct": 100,
+          "avgDepthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966,
+          "p95QuotedSpreadBps": -6168.877966
+        },
+        "providerQuoteQuality": {
+          "schemaVersion": "reef.arena.providerQuoteQuality.v1",
+          "source": "participant-current-orders",
+          "attribution": "provider-owned-current-orders",
+          "currentOrderCount": 2,
+          "instrumentCount": 1,
+          "medianQuotedSpreadBps": 19.999999999998863,
+          "p95QuotedSpreadBps": 19.999999999998863,
+          "instruments": [
+            {
+              "instrumentId": "AAPL",
+              "status": "pass",
+              "flags": [],
+              "bidPrice": 99.9,
+              "askPrice": 100.1,
+              "quotedSpread": 0.19999999999998863,
+              "quotedSpreadBps": 19.999999999998863
+            }
+          ],
+          "limitations": [
+            "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+            "adverse selection requires post-fill price path attribution"
+          ]
+        },
+        "fillParticipation": {
+          "fillCount": 15,
+          "filledQuantity": 15,
+          "grossExecutedNotional": 1499.9,
+          "avgFillPrice": 99.993333
+        },
+        "attribution": {
+          "schemaVersion": "reef.arena.liquidityProviderAttribution.v1",
+          "source": "participant-scoped-readback-and-trading-metrics",
+          "orderContribution": {
+            "submittedLimitOrders": 2,
+            "submittedLimitOrderSharePct": 2.083333,
+            "grossSubmittedQuantity": 20,
+            "grossSubmittedQuantitySharePct": 2.083333,
+            "grossSubmittedNotional": 2000,
+            "grossSubmittedNotionalSharePct": 2.083333
+          },
+          "fillContribution": {
+            "fillCount": 15,
+            "fillSharePct": 100,
+            "filledQuantity": 15,
+            "filledQuantitySharePct": 100,
+            "grossExecutedNotional": 1499.9,
+            "grossExecutedNotionalSharePct": 100
+          },
+          "pointsEffect": 0
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": true,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 15,
+          "comparableFillCount": 15,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 7,
+          "favorableFillCount": 8,
+          "neutralFillCount": 0,
+          "adverseFillPct": 46.666667,
+          "avgMarkoutBps": 312.782447,
+          "markoutNotional": 46.24603,
+          "byInstrument": {
+            "AAPL": {
+              "fillCount": 15,
+              "comparableFillCount": 15,
+              "missingPostFillMarkCount": 0,
+              "adverseFillCount": 7,
+              "favorableFillCount": 8,
+              "neutralFillCount": 0,
+              "adverseFillPct": 46.666667,
+              "avgMarkoutBps": 312.782447,
+              "markoutNotional": 46.24603
+            }
+          },
+          "reason": "",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {
+            "AAPL": 1
+          },
+          "grossNotional": 144.74603,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "pointsEffect": 0
+      },
+      {
+        "botId": "builtin-mm-refreshing",
+        "status": "warn",
+        "flags": [
+          "no-liquidity-fills"
+        ],
+        "instruments": [
+          "AAPL"
+        ],
+        "quoteQuality": {
+          "attribution": "market-wide-proxy",
+          "avgTopOfBookPct": 100,
+          "avgDepthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966,
+          "p95QuotedSpreadBps": -6168.877966
+        },
+        "providerQuoteQuality": {
+          "schemaVersion": "reef.arena.providerQuoteQuality.v1",
+          "source": "participant-current-orders",
+          "attribution": "provider-owned-current-orders",
+          "currentOrderCount": 4,
+          "instrumentCount": 1,
+          "medianQuotedSpreadBps": 19.999999999998863,
+          "p95QuotedSpreadBps": 19.999999999998863,
+          "instruments": [
+            {
+              "instrumentId": "AAPL",
+              "status": "pass",
+              "flags": [],
+              "bidPrice": 99.9,
+              "askPrice": 100.1,
+              "quotedSpread": 0.19999999999998863,
+              "quotedSpreadBps": 19.999999999998863
+            }
+          ],
+          "limitations": [
+            "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+            "adverse selection requires post-fill price path attribution"
+          ]
+        },
+        "fillParticipation": {
+          "fillCount": 0,
+          "filledQuantity": 0,
+          "grossExecutedNotional": 0,
+          "avgFillPrice": null
+        },
+        "attribution": {
+          "schemaVersion": "reef.arena.liquidityProviderAttribution.v1",
+          "source": "participant-scoped-readback-and-trading-metrics",
+          "orderContribution": {
+            "submittedLimitOrders": 14,
+            "submittedLimitOrderSharePct": 14.583333,
+            "grossSubmittedQuantity": 140,
+            "grossSubmittedQuantitySharePct": 14.583333,
+            "grossSubmittedNotional": 14000,
+            "grossSubmittedNotionalSharePct": 14.583333
+          },
+          "fillContribution": {
+            "fillCount": 0,
+            "fillSharePct": 0,
+            "filledQuantity": 0,
+            "filledQuantitySharePct": 0,
+            "grossExecutedNotional": 0,
+            "grossExecutedNotionalSharePct": 0
+          },
+          "pointsEffect": 0
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "pointsEffect": 0
+      }
+    ],
+    "notes": "Liquidity diagnostics are report-only and do not create point gains or losses for house actors."
+  },
+  "executionSummary": {
+    "schemaVersion": "reef.arena.executionSummary.v0",
+    "source": "venue-readback-order-fills",
+    "fillCount": 30,
+    "filledQuantity": 30,
+    "filledNotional": 2999.8,
+    "avgFillPrice": 99.993333,
+    "byInstrument": {
+      "AAPL": {
+        "fillCount": 30,
+        "filledQuantity": 30,
+        "filledNotional": 2999.8,
+        "avgFillPrice": 99.993333
+      }
+    },
+    "byBotId": {
+      "builtin-mm-lifecycle-safe": {
+        "fillCount": 15,
+        "filledQuantity": 15,
+        "filledNotional": 1499.9,
+        "avgFillPrice": 99.993333
+      },
+      "builtin-npc-taker-aapl": {
+        "fillCount": 15,
+        "filledQuantity": 15,
+        "filledNotional": 1499.9,
+        "avgFillPrice": 99.993333
+      }
+    },
+    "byRole": {
+      "market-maker": {
+        "fillCount": 15,
+        "filledQuantity": 15,
+        "filledNotional": 1499.9,
+        "avgFillPrice": 99.993333
+      },
+      "npc": {
+        "fillCount": 15,
+        "filledQuantity": 15,
+        "filledNotional": 1499.9,
+        "avgFillPrice": 99.993333
+      }
+    }
+  },
+  "scoringCalibration": {
+    "schemaVersion": "reef.arena.scoringCalibration.v1",
+    "formulaVersion": "shadow-score-v1",
+    "scoringPolicyVersion": "score-v0",
+    "mode": "report-only-shadow-score-calibration",
+    "eligibility": {
+      "totalBots": 6,
+      "eligibleCompetitors": 1,
+      "nonScoringActors": 5,
+      "byActorClass": {
+        "competitor": 1,
+        "house_market_maker": 3,
+        "npc_flow": 2
+      },
+      "byScoreEffect": {
+        "diagnostic-only": 3,
+        "difficulty-bucket": 2,
+        "eligible-for-score": 1
+      }
+    },
+    "difficultyContext": {
+      "npcDifficultyBuckets": [
+        "benign-noise",
+        "toxic-momentum"
+      ],
+      "difficultyMultiplier": 1.1
+    },
+    "scoreDistribution": {
+      "publicScore": {
+        "count": 1,
+        "min": 1000000,
+        "max": 1000000,
+        "avg": 1000000
+      },
+      "shadowScore": {
+        "count": 1,
+        "min": 1000000,
+        "max": 1000000,
+        "avg": 1000000
+      },
+      "components": {
+        "equity": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "risk": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "conduct": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "marketInteraction": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "difficulty": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        }
+      },
+      "diagnostics": {
+        "fillRatio": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "completionRate": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "pnlPerExecutedNotionalBps": {
+          "count": 0,
+          "min": null,
+          "max": null,
+          "avg": null
+        },
+        "inventoryExposureRatio": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        },
+        "inventoryConcentration": {
+          "count": 1,
+          "min": 0,
+          "max": 0,
+          "avg": 0
+        }
+      }
+    },
+    "dataQuality": {
+      "flags": [
+        "low-eligible-competitor-count",
+        "no-eligible-fills"
+      ],
+      "fillCount": 0,
+      "pnlAvailableCount": 1,
+      "publicScoreMismatchCount": 0,
+      "publicScoreUnchanged": true
+    }
+  },
+  "economicReconciliation": {
+    "schemaVersion": "reef.arena.economicReconciliation.v1",
+    "economicPolicyVersion": "preview-balanced-fee-v1",
+    "economicPolicyHash": "sha256:232d532134ea5f7114610a93bb08dd65db3c62a92e3882207b3ffec32d664d29",
+    "currency": "USD",
+    "tolerance": 0.01,
+    "complete": true,
+    "supported": true,
+    "status": "pass",
+    "unsupportedPolicyTerms": [],
+    "policyViolations": [],
+    "requiresLiquidityRoles": true,
+    "actors": [
+      {
+        "botId": "builtin-mm-lifecycle-safe",
+        "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+        "actorClass": "house_market_maker",
+        "ledger": "house",
+        "startingCash": 10000000,
+        "tradingCashDelta": -98.5,
+        "makerNotional": 1499.9,
+        "takerNotional": 0,
+        "makerFeesPaid": 0,
+        "takerFeesPaid": 0,
+        "feesPaid": 0,
+        "rebatesReceived": 0.074995,
+        "economicCashDelta": -98.425005,
+        "finalCash": 9999901.574995,
+        "inventoryValue": 144.74603,
+        "finalEquity": 10000046.321025,
+        "tradingPnl": 46.24603,
+        "economicPnl": 46.321025,
+        "pnlConsistencyGap": 0,
+        "pnlAvailable": true,
+        "liquidityRoleComplete": true,
+        "netQuantityByInstrument": {
+          "AAPL": 1
+        }
+      },
+      {
+        "botId": "builtin-mm-refreshing",
+        "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+        "actorClass": "house_market_maker",
+        "ledger": "house",
+        "startingCash": 10000000,
+        "tradingCashDelta": 0,
+        "makerNotional": 0,
+        "takerNotional": 0,
+        "makerFeesPaid": 0,
+        "takerFeesPaid": 0,
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "economicCashDelta": 0,
+        "finalCash": 10000000,
+        "inventoryValue": 0,
+        "finalEquity": 10000000,
+        "tradingPnl": 0,
+        "economicPnl": 0,
+        "pnlConsistencyGap": 0,
+        "pnlAvailable": true,
+        "liquidityRoleComplete": true,
+        "netQuantityByInstrument": {}
+      },
+      {
+        "botId": "builtin-mm-simple",
+        "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+        "actorClass": "house_market_maker",
+        "ledger": "house",
+        "startingCash": 10000000,
+        "tradingCashDelta": 0,
+        "makerNotional": 0,
+        "takerNotional": 0,
+        "makerFeesPaid": 0,
+        "takerFeesPaid": 0,
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "economicCashDelta": 0,
+        "finalCash": 10000000,
+        "inventoryValue": 0,
+        "finalEquity": 10000000,
+        "tradingPnl": 0,
+        "economicPnl": 0,
+        "pnlConsistencyGap": 0,
+        "pnlAvailable": true,
+        "liquidityRoleComplete": true,
+        "netQuantityByInstrument": {}
+      },
+      {
+        "botId": "builtin-npc-momentum",
+        "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+        "actorClass": "npc_flow",
+        "ledger": "house",
+        "startingCash": 10000000,
+        "tradingCashDelta": 0,
+        "makerNotional": 0,
+        "takerNotional": 0,
+        "makerFeesPaid": 0,
+        "takerFeesPaid": 0,
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "economicCashDelta": 0,
+        "finalCash": 10000000,
+        "inventoryValue": 0,
+        "finalEquity": 10000000,
+        "tradingPnl": 0,
+        "economicPnl": 0,
+        "pnlConsistencyGap": 0,
+        "pnlAvailable": true,
+        "liquidityRoleComplete": true,
+        "netQuantityByInstrument": {}
+      },
+      {
+        "botId": "builtin-npc-taker-aapl",
+        "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+        "actorClass": "npc_flow",
+        "ledger": "house",
+        "startingCash": 10000000,
+        "tradingCashDelta": 98.5,
+        "makerNotional": 0,
+        "takerNotional": 1499.9,
+        "makerFeesPaid": 0,
+        "takerFeesPaid": 0.29998,
+        "feesPaid": 0.29998,
+        "rebatesReceived": 0,
+        "economicCashDelta": 98.20002,
+        "finalCash": 10000098.20002,
+        "inventoryValue": -144.74603,
+        "finalEquity": 9999953.45399,
+        "tradingPnl": -46.24603,
+        "economicPnl": -46.54601,
+        "pnlConsistencyGap": 0,
+        "pnlAvailable": true,
+        "liquidityRoleComplete": true,
+        "netQuantityByInstrument": {
+          "AAPL": -1
+        }
+      },
+      {
+        "botId": "custom-technical-indicator",
+        "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+        "actorClass": "competitor",
+        "ledger": "competition",
+        "startingCash": 1000000,
+        "tradingCashDelta": 0,
+        "makerNotional": 0,
+        "takerNotional": 0,
+        "makerFeesPaid": 0,
+        "takerFeesPaid": 0,
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "economicCashDelta": 0,
+        "finalCash": 1000000,
+        "inventoryValue": 0,
+        "finalEquity": 1000000,
+        "tradingPnl": 0,
+        "economicPnl": 0,
+        "pnlConsistencyGap": 0,
+        "pnlAvailable": true,
+        "liquidityRoleComplete": true,
+        "netQuantityByInstrument": {}
+      }
+    ],
+    "ledgers": {
+      "competition": {
+        "actorCount": 1,
+        "startingCash": 1000000,
+        "tradingCashDelta": 0,
+        "economicCashDelta": 0,
+        "feesPaid": 0,
+        "rebatesReceived": 0,
+        "finalCash": 1000000,
+        "inventoryValue": 0,
+        "finalEquity": 1000000
+      },
+      "house": {
+        "actorCount": 5,
+        "startingCash": 50000000,
+        "tradingCashDelta": 0,
+        "economicCashDelta": -0.224985,
+        "feesPaid": 0.29998,
+        "rebatesReceived": 0.074995,
+        "finalCash": 49999999.775015,
+        "inventoryValue": 0,
+        "finalEquity": 49999999.775015
+      }
+    },
+    "declaredSources": [
+      {
+        "code": "competitor_starting_cash",
+        "ledger": "competition",
+        "enabled": true,
+        "funding": "run_initialization",
+        "amount": 1000000
+      },
+      {
+        "code": "market_maker_starting_cash",
+        "ledger": "house",
+        "enabled": true,
+        "funding": "run_initialization",
+        "amount": 30000000
+      },
+      {
+        "code": "npc_starting_cash",
+        "ledger": "house",
+        "enabled": true,
+        "funding": "run_initialization",
+        "amount": 20000000
+      }
+    ],
+    "declaredSinks": [
+      {
+        "code": "taker_fees",
+        "ledger": "competition",
+        "enabled": true,
+        "funding": "matched_trade_notional",
+        "amount": 0.29998
+      }
+    ],
+    "economicFacility": {
+      "feeReceipts": 0.29998,
+      "rebatePayments": 0.074995,
+      "cashDelta": 0.224985,
+      "subsidyBudget": 0,
+      "subsidyBudgetRemaining": 0
+    },
+    "cashTransferGap": 0,
+    "reconciledCashGap": 0,
+    "makerNotional": 1499.9,
+    "takerNotional": 1499.9,
+    "liquidityRoleNotionalGap": 0,
+    "inventoryGapByInstrument": {},
+    "reconciliationHash": "sha256:ae932ef36059a3be75d0ea2d4fda6d5146f8a8ea3f69bcfb573d52e6cd0dd7df"
+  },
+  "venueReadback": {
+    "mode": "live",
+    "skipped": false,
+    "projectionDrained": true,
+    "projectionDrainRequired": true,
+    "availability": {
+      "statusCode": 200,
+      "body": {
+        "generatedAt": "2026-07-21T23:34:08.718272885Z",
+        "source": "venue-event-batch",
+        "projections": [
+          {
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "role": "canonical venue outcome projection",
+            "projectedCount": 6341,
+            "lag": 0,
+            "watermarks": []
+          },
+          {
+            "projectionName": "market-data-top-of-book",
+            "role": "top-of-book market data projection",
+            "projectedCount": 6341,
+            "lag": 0,
+            "watermarks": []
+          }
+        ],
+        "surfaces": [
+          {
+            "name": "marketDataSnapshots",
+            "endpoint": "/api/v1/market-data/snapshots/{instrumentId}",
+            "source": "runtime.market_data_snapshots",
+            "freshness": "projection-watermark",
+            "scope": "public-market-data",
+            "requiredQuery": [],
+            "optionalQuery": [
+              "projectionName"
+            ],
+            "projectionName": "market-data-top-of-book",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "marketDataDepth",
+            "endpoint": "/api/v1/market-data/depth/{instrumentId}",
+            "source": "runtime.order_lifecycle_state",
+            "freshness": "read-time bounded aggregation",
+            "scope": "public-market-data",
+            "requiredQuery": [],
+            "optionalQuery": [
+              "levels",
+              "projectionName",
+              "sourceProjectionName"
+            ],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": "venueSessionId filtering is not exposed until runtime.orders or order_lifecycle_state persist venue_session_id"
+          },
+          {
+            "name": "tradeTape",
+            "endpoint": "/api/v1/market-data/trades/{instrumentId}",
+            "source": "runtime.trades",
+            "freshness": "durable fact rows",
+            "scope": "public-market-data",
+            "requiredQuery": [],
+            "optionalQuery": [
+              "limit",
+              "before"
+            ],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "intradayBars",
+            "endpoint": "/api/v1/market-data/bars/{instrumentId}",
+            "source": "runtime.trades",
+            "freshness": "durable fact row aggregation",
+            "scope": "public-market-data",
+            "requiredQuery": [
+              "interval",
+              "start",
+              "end"
+            ],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "currentOrders",
+            "endpoint": "/api/v1/orders/current",
+            "source": "runtime.order_lifecycle_state",
+            "freshness": "dirty-tracked lifecycle projection",
+            "scope": "participant-own-orders",
+            "requiredQuery": [
+              "participantId"
+            ],
+            "optionalQuery": [
+              "instrumentId",
+              "limit"
+            ],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "orderHistory",
+            "endpoint": "/api/v1/orders/history",
+            "source": "runtime.order_lifecycle_state",
+            "freshness": "dirty-tracked lifecycle projection",
+            "scope": "participant-own-orders",
+            "requiredQuery": [
+              "participantId"
+            ],
+            "optionalQuery": [
+              "instrumentId",
+              "limit"
+            ],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "orderFills",
+            "endpoint": "/api/v1/orders/fills",
+            "source": "runtime.orders + runtime.executions",
+            "freshness": "durable execution rows scoped by participant order ownership",
+            "scope": "participant-own-orders",
+            "requiredQuery": [
+              "participantId"
+            ],
+            "optionalQuery": [
+              "instrumentId",
+              "limit"
+            ],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "settlementFacts",
+            "endpoint": "/api/v1/settlement/facts/{scenarioRunId}",
+            "source": "settlement append-only fact store",
+            "freshness": "durable fact rows",
+            "scope": "scenario-settlement-evidence",
+            "requiredQuery": [],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "settlementObligations",
+            "endpoint": "/api/v1/settlement/obligations/{scenarioRunId}",
+            "source": "settlement obligation projection over append-only facts",
+            "freshness": "derived from durable settlement facts",
+            "scope": "scenario-settlement-evidence",
+            "requiredQuery": [],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "settlementLedger",
+            "endpoint": "/api/v1/settlement/ledger/{scenarioRunId}",
+            "source": "append-only settlement ledger entry facts",
+            "freshness": "replayable participant/account/asset balances derived from ledger facts",
+            "scope": "scenario-settlement-evidence",
+            "requiredQuery": [],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "settlementExceptions",
+            "endpoint": "/api/v1/settlement/exceptions/{scenarioRunId}",
+            "source": "settlement append-only fact store exception projection",
+            "freshness": "rebuildable exception queue over clearing rejections and settlement breaks",
+            "scope": "scenario-settlement-evidence",
+            "requiredQuery": [],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "settlementProof",
+            "endpoint": "/api/v1/settlement/proof/{scenarioRunId}",
+            "source": "settlement append-only fact store + replayable ledger projection",
+            "freshness": "rebuildable proof projection",
+            "scope": "scenario-settlement-evidence",
+            "requiredQuery": [],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          },
+          {
+            "name": "settlementScore",
+            "endpoint": "/api/v1/settlement/score/{scenarioRunId}",
+            "source": "settlement append-only fact store + ledger/obligation projections",
+            "freshness": "rebuildable scoring projection",
+            "scope": "scenario-settlement-score",
+            "requiredQuery": [],
+            "optionalQuery": [],
+            "projectionName": "runtime-normalized-venue-outcomes",
+            "lag": 0,
+            "lastPartitionSequence": 0,
+            "lastUpdatedAt": "",
+            "notes": ""
+          }
+        ]
+      }
+    },
+    "snapshots": [
+      {
+        "instrumentId": "AAPL",
+        "statusCode": 200,
+        "body": {
+          "snapshot": {
+            "projectionName": "market-data-top-of-book",
+            "sourceProjectionName": "runtime-normalized-venue-outcomes",
+            "instrumentId": "AAPL",
+            "bestBidPrice": "189392059301",
+            "bestBidQuantity": "100",
+            "bestAskPrice": "100100000000",
+            "bestAskQuantity": "3860",
+            "currency": "USD",
+            "lastPartitionSequence": 0,
+            "lag": 0,
+            "updatedAt": "2026-07-21 23:34:08.489953+00"
+          }
+        }
+      },
+      {
+        "instrumentId": "MSFT",
+        "statusCode": 200,
+        "body": {
+          "snapshot": {
+            "projectionName": "market-data-top-of-book",
+            "sourceProjectionName": "runtime-normalized-venue-outcomes",
+            "instrumentId": "MSFT",
+            "bestBidPrice": "420159036847",
+            "bestBidQuantity": "781",
+            "bestAskPrice": "200200000000",
+            "bestAskQuantity": "8",
+            "currency": "USD",
+            "lastPartitionSequence": 0,
+            "lag": 0,
+            "updatedAt": "2026-07-21 13:28:40.629955+00"
+          }
+        }
+      },
+      {
+        "instrumentId": "NVDA",
+        "statusCode": 200,
+        "body": {
+          "snapshot": {
+            "projectionName": "market-data-top-of-book",
+            "sourceProjectionName": "runtime-normalized-venue-outcomes",
+            "instrumentId": "NVDA",
+            "bestBidPrice": "1025991264431",
+            "bestBidQuantity": "528",
+            "bestAskPrice": "500500000000",
+            "bestAskQuantity": "8",
+            "currency": "USD",
+            "lastPartitionSequence": 0,
+            "lag": 0,
+            "updatedAt": "2026-07-21 13:28:40.629955+00"
+          }
+        }
+      },
+      {
+        "instrumentId": "TSLA",
+        "statusCode": 200,
+        "body": {
+          "snapshot": {
+            "projectionName": "market-data-top-of-book",
+            "sourceProjectionName": "runtime-normalized-venue-outcomes",
+            "instrumentId": "TSLA",
+            "bestBidPrice": "249750000000",
+            "bestBidQuantity": "6",
+            "bestAskPrice": "250250000000",
+            "bestAskQuantity": "8",
+            "currency": "USD",
+            "lastPartitionSequence": 0,
+            "lag": 0,
+            "updatedAt": "2026-07-19 20:27:48.040088+00"
+          }
+        }
+      }
+    ],
+    "executionSummary": {
+      "schemaVersion": "reef.arena.executionSummary.v0",
+      "source": "venue-readback-order-fills",
+      "fillCount": 30,
+      "filledQuantity": 30,
+      "filledNotional": 2999.8,
+      "avgFillPrice": 99.993333,
+      "byInstrument": {
+        "AAPL": {
+          "fillCount": 30,
+          "filledQuantity": 30,
+          "filledNotional": 2999.8,
+          "avgFillPrice": 99.993333
+        }
+      },
+      "byBotId": {
+        "builtin-mm-lifecycle-safe": {
+          "fillCount": 15,
+          "filledQuantity": 15,
+          "filledNotional": 1499.9,
+          "avgFillPrice": 99.993333
+        },
+        "builtin-npc-taker-aapl": {
+          "fillCount": 15,
+          "filledQuantity": 15,
+          "filledNotional": 1499.9,
+          "avgFillPrice": 99.993333
+        }
+      },
+      "byRole": {
+        "market-maker": {
+          "fillCount": 15,
+          "filledQuantity": 15,
+          "filledNotional": 1499.9,
+          "avgFillPrice": 99.993333
+        },
+        "npc": {
+          "fillCount": 15,
+          "filledQuantity": 15,
+          "filledNotional": 1499.9,
+          "avgFillPrice": 99.993333
+        }
+      }
+    },
+    "ownOrders": [
+      {
+        "botId": "builtin-mm-simple",
+        "participantId": "participant-arena-economic-matrix-20260721-balanced-v8-builtin-mm-simple",
+        "currentStatusCode": 200,
+        "currentOrderCount": 50,
+        "historyStatusCode": 200,
+        "historyOrderCount": 50,
+        "fillsStatusCode": 200,
+        "fillCount": 0
+      },
+      {
+        "botId": "builtin-mm-lifecycle-safe",
+        "participantId": "participant-arena-economic-matrix-20260721-balanced-v8-builtin-mm-lifecycle-safe",
+        "currentStatusCode": 200,
+        "currentOrderCount": 2,
+        "historyStatusCode": 200,
+        "historyOrderCount": 2,
+        "fillsStatusCode": 200,
+        "fillCount": 15
+      },
+      {
+        "botId": "builtin-mm-refreshing",
+        "participantId": "participant-arena-economic-matrix-20260721-balanced-v8-builtin-mm-refreshing",
+        "currentStatusCode": 200,
+        "currentOrderCount": 4,
+        "historyStatusCode": 200,
+        "historyOrderCount": 12,
+        "fillsStatusCode": 200,
+        "fillCount": 0
+      },
+      {
+        "botId": "builtin-npc-momentum",
+        "participantId": "participant-arena-economic-matrix-20260721-balanced-v8-builtin-npc-momentum",
+        "currentStatusCode": 200,
+        "currentOrderCount": 0,
+        "historyStatusCode": 200,
+        "historyOrderCount": 0,
+        "fillsStatusCode": 200,
+        "fillCount": 0
+      },
+      {
+        "botId": "custom-technical-indicator",
+        "participantId": "participant-arena-economic-matrix-20260721-balanced-v8-custom-technical-indicator",
+        "currentStatusCode": 200,
+        "currentOrderCount": 0,
+        "historyStatusCode": 200,
+        "historyOrderCount": 0,
+        "fillsStatusCode": 200,
+        "fillCount": 0
+      },
+      {
+        "botId": "builtin-npc-taker-aapl",
+        "participantId": "participant-arena-economic-matrix-20260721-balanced-v8-builtin-npc-taker-aapl",
+        "currentStatusCode": 200,
+        "currentOrderCount": 15,
+        "historyStatusCode": 200,
+        "historyOrderCount": 14,
+        "fillsStatusCode": 200,
+        "fillCount": 15
+      }
+    ]
+  },
+  "enforcementEvents": [],
+  "botResults": [
+    {
+      "botId": "builtin-mm-simple",
+      "displayName": "Blue Saber Trading",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "simple",
+      "role": "market-maker",
+      "actorClass": "house_market_maker",
+      "actorProfile": {
+        "profileId": "mm-tight-bluechip",
+        "profileVersion": "v1",
+        "actorClass": "house_market_maker",
+        "difficultyBucket": "neutral-liquidity",
+        "scoreEffect": "diagnostic-only",
+        "params": {
+          "aggression": 0.35,
+          "inventorySkew": 0.35,
+          "maxSpreadCrossBps": 0,
+          "orderRate": "responsive",
+          "quoteSize": 10,
+          "quoteSpreadBps": 20,
+          "riskDiscipline": "high"
+        },
+        "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7"
+      },
+      "schedulingClass": "house_responsive",
+      "riskProfile": {
+        "assetLedgerMode": "bypass",
+        "maxActionsPerTick": 10,
+        "maxOpenOrdersPerInstrument": 50,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 3,
+        "resolvedKeys": [
+          "instrumentId",
+          "orderSize",
+          "spread"
+        ]
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false,
+      "ticksRun": 40,
+      "actionsProposed": 80,
+      "venueCommands": 80,
+      "dataCalls": 40,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.29679200000009587,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1022000,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 80,
+          "submitted": 80,
+          "completed": 80,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {
+            "/api/v1/orders/submit": 80
+          },
+          "submittedByRoute": {
+            "/api/v1/orders/submit": 80
+          }
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 80,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {
+            "AAPL": 80
+          },
+          "bySide": {
+            "BUY": 40,
+            "SELL": 40
+          },
+          "buyQuantity": 400,
+          "sellQuantity": 400,
+          "grossSubmittedQuantity": 800,
+          "grossSubmittedNotional": 80000,
+          "submittedOrderIds": [
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-1",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-10",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-11",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-12",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-13",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-14",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-15",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-16",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-17",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-18",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-19",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-2",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-20",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-21",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-22",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-23",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-24",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-25",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-26",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-27",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-28",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-29",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-3",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-30",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-31",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-32",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-33",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-34",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-35",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-36",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-37",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-38",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-39",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-4",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-40",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-41",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-42",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-43",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-44",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-45",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-46",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-47",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-48",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-49",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-5",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-50",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-51",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-52",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-53",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-54",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-55",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-56",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-57",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-58",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-59",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-6",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-60",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-61",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-62",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-63",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-64",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-65",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-66",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-67",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-68",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-69",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-7",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-70",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-71",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-72",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-73",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-74",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-75",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-76",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-77",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-78",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-79",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-8",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-80",
+            "equity-sprint-builtin-mm-simple-1784676848136-cmd-order-9"
+          ]
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 0,
+          "inventoryValue": 0,
+          "total": 0,
+          "finalEquityDiagnostic": 1000000,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "markPriceByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 0,
+          "buyFillCount": 0,
+          "sellFillCount": 0,
+          "filledQuantity": 0,
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossNotional": 0,
+          "avgFillPrice": null,
+          "makerFillCount": 0,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {}
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 80,
+        "submitCommands": 80,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 0,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 2,
+        "maxVenueCommandsPerTick": 2,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000000,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": false,
+        "actorClass": "house_market_maker",
+        "scoreEffect": "diagnostic-only",
+        "publicScore": null,
+        "shadowScore": null,
+        "scoringMode": "diagnostic-only",
+        "components": {
+          "baseline": 0,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "score": 0
+          },
+          "risk": {
+            "score": 0
+          },
+          "conduct": {
+            "score": 0
+          },
+          "marketInteraction": {
+            "score": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000000,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 0,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 800,
+          "grossSubmittedNotional": 80000,
+          "grossExecutedNotional": 0,
+          "filledQuantity": 0,
+          "fillRatio": 0,
+          "completionRate": 1,
+          "pnlPerExecutedNotionalBps": null,
+          "inventoryGrossNotional": 0,
+          "inventoryExposureRatio": 0,
+          "inventoryConcentration": 0,
+          "submittedTurnoverRatio": 0.08,
+          "fillCount": 0,
+          "submittedCommands": 80,
+          "completedCommands": 80,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 2,
+          "maxVenueCommandsPerTick": 2,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "liquidity/house actor diagnostics do not create point gains or losses"
+      },
+      "liquidityDiagnostics": {
+        "schemaVersion": "reef.arena.liquidityProviderDiagnostics.v1",
+        "mode": "score-neutral-liquidity-context",
+        "scoreEffect": "diagnostic-only",
+        "scoreNeutral": true,
+        "pointsEffect": 0,
+        "publicScore": null,
+        "shadowScore": null,
+        "status": "warn",
+        "flags": [
+          "no-liquidity-fills"
+        ],
+        "instruments": [
+          "AAPL"
+        ],
+        "quoteCoverage": [
+          {
+            "instrumentId": "AAPL",
+            "status": "warn",
+            "sampleCount": 20,
+            "topOfBookPct": 100,
+            "depthPct": 100,
+            "medianQuotedSpreadBps": -6168.877966228317,
+            "p95QuotedSpreadBps": -6168.877966228317,
+            "crossedBookCount": 20,
+            "lockedBookCount": 0,
+            "emptyBookCount": 0,
+            "failures": [
+              "crossedBookCount 20 > 0"
+            ]
+          }
+        ],
+        "quoteQuality": {
+          "attribution": "market-wide-proxy",
+          "avgTopOfBookPct": 100,
+          "avgDepthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966,
+          "p95QuotedSpreadBps": -6168.877966
+        },
+        "providerQuoteQuality": {
+          "schemaVersion": "reef.arena.providerQuoteQuality.v1",
+          "source": "participant-current-orders",
+          "attribution": "provider-owned-current-orders",
+          "currentOrderCount": 50,
+          "instrumentCount": 1,
+          "medianQuotedSpreadBps": 19.999999999998863,
+          "p95QuotedSpreadBps": 19.999999999998863,
+          "instruments": [
+            {
+              "instrumentId": "AAPL",
+              "status": "pass",
+              "flags": [],
+              "bidPrice": 99.9,
+              "askPrice": 100.1,
+              "quotedSpread": 0.19999999999998863,
+              "quotedSpreadBps": 19.999999999998863
+            }
+          ],
+          "limitations": [
+            "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+            "adverse selection requires post-fill price path attribution"
+          ]
+        },
+        "orderActivity": {
+          "submittedLimitOrders": 80,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "cancelReplaceRatio": 0,
+          "maxVenueCommandsPerTick": 2
+        },
+        "fillParticipation": {
+          "fillCount": 0,
+          "filledQuantity": 0,
+          "grossExecutedNotional": 0,
+          "avgFillPrice": null
+        },
+        "attribution": {
+          "schemaVersion": "reef.arena.liquidityProviderAttribution.v1",
+          "source": "participant-scoped-readback-and-trading-metrics",
+          "orderContribution": {
+            "submittedLimitOrders": 80,
+            "submittedLimitOrderSharePct": 83.333333,
+            "grossSubmittedQuantity": 800,
+            "grossSubmittedQuantitySharePct": 83.333333,
+            "grossSubmittedNotional": 80000,
+            "grossSubmittedNotionalSharePct": 83.333333
+          },
+          "fillContribution": {
+            "fillCount": 0,
+            "fillSharePct": 0,
+            "filledQuantity": 0,
+            "filledQuantitySharePct": 0,
+            "grossExecutedNotional": 0,
+            "grossExecutedNotionalSharePct": 0
+          },
+          "pointsEffect": 0
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      }
+    },
+    {
+      "botId": "builtin-mm-lifecycle-safe",
+      "displayName": "Twin Sun Liquidity",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "lifecycle",
+      "role": "market-maker",
+      "actorClass": "house_market_maker",
+      "actorProfile": {
+        "profileId": "mm-tight-bluechip",
+        "profileVersion": "v1",
+        "actorClass": "house_market_maker",
+        "difficultyBucket": "neutral-liquidity",
+        "scoreEffect": "diagnostic-only",
+        "params": {
+          "aggression": 0.35,
+          "inventorySkew": 0.35,
+          "maxSpreadCrossBps": 0,
+          "orderRate": "responsive",
+          "quoteSize": 10,
+          "quoteSpreadBps": 20,
+          "riskDiscipline": "high"
+        },
+        "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7"
+      },
+      "schedulingClass": "house_responsive",
+      "riskProfile": {
+        "assetLedgerMode": "bypass",
+        "maxActionsPerTick": 10,
+        "maxOpenOrdersPerInstrument": 50,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 3,
+        "resolvedKeys": [
+          "instrumentId",
+          "orderSize",
+          "spread"
+        ]
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false,
+      "ticksRun": 40,
+      "actionsProposed": 41,
+      "venueCommands": 2,
+      "dataCalls": 41,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.21887499999991178,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1001525,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 2,
+          "submitted": 2,
+          "completed": 2,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {
+            "/api/v1/orders/submit": 2
+          },
+          "submittedByRoute": {
+            "/api/v1/orders/submit": 2
+          }
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 2,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {
+            "AAPL": 2
+          },
+          "bySide": {
+            "BUY": 1,
+            "SELL": 1
+          },
+          "buyQuantity": 10,
+          "sellQuantity": 10,
+          "grossSubmittedQuantity": 20,
+          "grossSubmittedNotional": 2000,
+          "submittedOrderIds": [
+            "equity-sprint-builtin-mm-lifecycle-safe-1784676848137-cmd-order-1",
+            "equity-sprint-builtin-mm-lifecycle-safe-1784676848137-cmd-order-2"
+          ]
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": -98.5,
+          "inventoryValue": 144.74603,
+          "total": 46.24603,
+          "finalEquityDiagnostic": 1000046.24603,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {
+            "AAPL": 1
+          },
+          "markPriceByInstrument": {
+            "AAPL": 144.7460296505
+          },
+          "grossNotional": 144.74603,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 15,
+          "buyFillCount": 8,
+          "sellFillCount": 7,
+          "filledQuantity": 15,
+          "buyQuantity": 8,
+          "sellQuantity": 7,
+          "grossNotional": 1499.9,
+          "avgFillPrice": 99.993333,
+          "makerFillCount": 15,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 1499.9,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {
+            "AAPL": {
+              "fillCount": 15,
+              "filledQuantity": 15,
+              "buyQuantity": 8,
+              "sellQuantity": 7,
+              "netQuantity": 1,
+              "grossNotional": 1499.9,
+              "avgFillPrice": 99.993333,
+              "cash": -98.5,
+              "markPrice": 144.7460296505,
+              "markedValue": 144.74603
+            }
+          }
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": true,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 15,
+          "comparableFillCount": 15,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 7,
+          "favorableFillCount": 8,
+          "neutralFillCount": 0,
+          "adverseFillPct": 46.666667,
+          "avgMarkoutBps": 312.782447,
+          "markoutNotional": 46.24603,
+          "byInstrument": {
+            "AAPL": {
+              "fillCount": 15,
+              "comparableFillCount": 15,
+              "missingPostFillMarkCount": 0,
+              "adverseFillCount": 7,
+              "favorableFillCount": 8,
+              "neutralFillCount": 0,
+              "adverseFillPct": 46.666667,
+              "avgMarkoutBps": 312.782447,
+              "markoutNotional": 46.24603
+            }
+          },
+          "reason": "",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 2,
+        "submitCommands": 2,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 39,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 2,
+        "maxVenueCommandsPerTick": 2,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000046.24603,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": false,
+        "actorClass": "house_market_maker",
+        "scoreEffect": "diagnostic-only",
+        "publicScore": null,
+        "shadowScore": null,
+        "scoringMode": "diagnostic-only",
+        "components": {
+          "baseline": 0,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "score": 0
+          },
+          "risk": {
+            "score": 0
+          },
+          "conduct": {
+            "score": 0
+          },
+          "marketInteraction": {
+            "score": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000046.24603,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 46.24603,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 20,
+          "grossSubmittedNotional": 2000,
+          "grossExecutedNotional": 1499.9,
+          "filledQuantity": 15,
+          "fillRatio": 0.75,
+          "completionRate": 1,
+          "pnlPerExecutedNotionalBps": 308.327422,
+          "inventoryGrossNotional": 144.74603,
+          "inventoryExposureRatio": 0.072373,
+          "inventoryConcentration": 1,
+          "submittedTurnoverRatio": 0.002,
+          "fillCount": 15,
+          "submittedCommands": 2,
+          "completedCommands": 2,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 2,
+          "maxVenueCommandsPerTick": 2,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "liquidity/house actor diagnostics do not create point gains or losses"
+      },
+      "liquidityDiagnostics": {
+        "schemaVersion": "reef.arena.liquidityProviderDiagnostics.v1",
+        "mode": "score-neutral-liquidity-context",
+        "scoreEffect": "diagnostic-only",
+        "scoreNeutral": true,
+        "pointsEffect": 0,
+        "publicScore": null,
+        "shadowScore": null,
+        "status": "warn",
+        "flags": [
+          "adverse-selection-observed"
+        ],
+        "instruments": [
+          "AAPL"
+        ],
+        "quoteCoverage": [
+          {
+            "instrumentId": "AAPL",
+            "status": "warn",
+            "sampleCount": 20,
+            "topOfBookPct": 100,
+            "depthPct": 100,
+            "medianQuotedSpreadBps": -6168.877966228317,
+            "p95QuotedSpreadBps": -6168.877966228317,
+            "crossedBookCount": 20,
+            "lockedBookCount": 0,
+            "emptyBookCount": 0,
+            "failures": [
+              "crossedBookCount 20 > 0"
+            ]
+          }
+        ],
+        "quoteQuality": {
+          "attribution": "market-wide-proxy",
+          "avgTopOfBookPct": 100,
+          "avgDepthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966,
+          "p95QuotedSpreadBps": -6168.877966
+        },
+        "providerQuoteQuality": {
+          "schemaVersion": "reef.arena.providerQuoteQuality.v1",
+          "source": "participant-current-orders",
+          "attribution": "provider-owned-current-orders",
+          "currentOrderCount": 2,
+          "instrumentCount": 1,
+          "medianQuotedSpreadBps": 19.999999999998863,
+          "p95QuotedSpreadBps": 19.999999999998863,
+          "instruments": [
+            {
+              "instrumentId": "AAPL",
+              "status": "pass",
+              "flags": [],
+              "bidPrice": 99.9,
+              "askPrice": 100.1,
+              "quotedSpread": 0.19999999999998863,
+              "quotedSpreadBps": 19.999999999998863
+            }
+          ],
+          "limitations": [
+            "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+            "adverse selection requires post-fill price path attribution"
+          ]
+        },
+        "orderActivity": {
+          "submittedLimitOrders": 2,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "cancelReplaceRatio": 0,
+          "maxVenueCommandsPerTick": 2
+        },
+        "fillParticipation": {
+          "fillCount": 15,
+          "filledQuantity": 15,
+          "grossExecutedNotional": 1499.9,
+          "avgFillPrice": 99.993333
+        },
+        "attribution": {
+          "schemaVersion": "reef.arena.liquidityProviderAttribution.v1",
+          "source": "participant-scoped-readback-and-trading-metrics",
+          "orderContribution": {
+            "submittedLimitOrders": 2,
+            "submittedLimitOrderSharePct": 2.083333,
+            "grossSubmittedQuantity": 20,
+            "grossSubmittedQuantitySharePct": 2.083333,
+            "grossSubmittedNotional": 2000,
+            "grossSubmittedNotionalSharePct": 2.083333
+          },
+          "fillContribution": {
+            "fillCount": 15,
+            "fillSharePct": 100,
+            "filledQuantity": 15,
+            "filledQuantitySharePct": 100,
+            "grossExecutedNotional": 1499.9,
+            "grossExecutedNotionalSharePct": 100
+          },
+          "pointsEffect": 0
+        },
+        "inventory": {
+          "netQuantityByInstrument": {
+            "AAPL": 1
+          },
+          "grossNotional": 144.74603,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": true,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 15,
+          "comparableFillCount": 15,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 7,
+          "favorableFillCount": 8,
+          "neutralFillCount": 0,
+          "adverseFillPct": 46.666667,
+          "avgMarkoutBps": 312.782447,
+          "markoutNotional": 46.24603,
+          "byInstrument": {
+            "AAPL": {
+              "fillCount": 15,
+              "comparableFillCount": 15,
+              "missingPostFillMarkCount": 0,
+              "adverseFillCount": 7,
+              "favorableFillCount": 8,
+              "neutralFillCount": 0,
+              "adverseFillPct": 46.666667,
+              "avgMarkoutBps": 312.782447,
+              "markoutNotional": 46.24603
+            }
+          },
+          "reason": "",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      }
+    },
+    {
+      "botId": "builtin-mm-refreshing",
+      "displayName": "Red Five Markets",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "refreshing",
+      "role": "market-maker",
+      "actorClass": "house_market_maker",
+      "actorProfile": {
+        "profileId": "mm-tight-bluechip",
+        "profileVersion": "v1",
+        "actorClass": "house_market_maker",
+        "difficultyBucket": "neutral-liquidity",
+        "scoreEffect": "diagnostic-only",
+        "params": {
+          "aggression": 0.35,
+          "inventorySkew": 0.35,
+          "maxSpreadCrossBps": 0,
+          "orderRate": "responsive",
+          "quoteSize": 10,
+          "quoteSpreadBps": 20,
+          "riskDiscipline": "high"
+        },
+        "profileHash": "sha256:d23b777fc37d5d816e7b472138b9b7a0a3b0319978c963d4b57995830e59b3e7"
+      },
+      "schedulingClass": "house_responsive",
+      "riskProfile": {
+        "assetLedgerMode": "bypass",
+        "maxActionsPerTick": 10,
+        "maxOpenOrdersPerInstrument": 50,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 7,
+        "resolvedKeys": [
+          "cancelSuppressMs",
+          "instrumentId",
+          "maxCancelsPerTick",
+          "orderSize",
+          "quoteTtlMs",
+          "replacementCooldownMs",
+          "spread"
+        ]
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false,
+      "ticksRun": 40,
+      "actionsProposed": 47,
+      "venueCommands": 22,
+      "dataCalls": 47,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.44004199999994853,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1006675,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 22,
+          "submitted": 22,
+          "completed": 22,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {
+            "/api/v1/orders/cancel": 8,
+            "/api/v1/orders/submit": 14
+          },
+          "submittedByRoute": {
+            "/api/v1/orders/cancel": 8,
+            "/api/v1/orders/submit": 14
+          }
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 14,
+          "modifyCommands": 0,
+          "cancelCommands": 8,
+          "byInstrument": {
+            "AAPL": 14
+          },
+          "bySide": {
+            "BUY": 7,
+            "SELL": 7
+          },
+          "buyQuantity": 70,
+          "sellQuantity": 70,
+          "grossSubmittedQuantity": 140,
+          "grossSubmittedNotional": 14000,
+          "submittedOrderIds": [
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-1",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-10",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-17",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-18",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-19",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-2",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-20",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-21",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-22",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-5",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-6",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-7",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-8",
+            "equity-sprint-builtin-mm-refreshing-1784676848138-cmd-order-9"
+          ]
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 0,
+          "inventoryValue": 0,
+          "total": 0,
+          "finalEquityDiagnostic": 1000000,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "markPriceByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 0,
+          "buyFillCount": 0,
+          "sellFillCount": 0,
+          "filledQuantity": 0,
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossNotional": 0,
+          "avgFillPrice": null,
+          "makerFillCount": 0,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {}
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 22,
+        "submitCommands": 14,
+        "modifyCommands": 0,
+        "cancelCommands": 8,
+        "noopActions": 25,
+        "cancelReplaceRatio": 0.571429,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 2,
+        "maxVenueCommandsPerTick": 2,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000000,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": false,
+        "actorClass": "house_market_maker",
+        "scoreEffect": "diagnostic-only",
+        "publicScore": null,
+        "shadowScore": null,
+        "scoringMode": "diagnostic-only",
+        "components": {
+          "baseline": 0,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "score": 0
+          },
+          "risk": {
+            "score": 0
+          },
+          "conduct": {
+            "score": 0
+          },
+          "marketInteraction": {
+            "score": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000000,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 0,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 140,
+          "grossSubmittedNotional": 14000,
+          "grossExecutedNotional": 0,
+          "filledQuantity": 0,
+          "fillRatio": 0,
+          "completionRate": 1,
+          "pnlPerExecutedNotionalBps": null,
+          "inventoryGrossNotional": 0,
+          "inventoryExposureRatio": 0,
+          "inventoryConcentration": 0,
+          "submittedTurnoverRatio": 0.014,
+          "fillCount": 0,
+          "submittedCommands": 22,
+          "completedCommands": 22,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0.571429,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 2,
+          "maxVenueCommandsPerTick": 2,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "liquidity/house actor diagnostics do not create point gains or losses"
+      },
+      "liquidityDiagnostics": {
+        "schemaVersion": "reef.arena.liquidityProviderDiagnostics.v1",
+        "mode": "score-neutral-liquidity-context",
+        "scoreEffect": "diagnostic-only",
+        "scoreNeutral": true,
+        "pointsEffect": 0,
+        "publicScore": null,
+        "shadowScore": null,
+        "status": "warn",
+        "flags": [
+          "no-liquidity-fills"
+        ],
+        "instruments": [
+          "AAPL"
+        ],
+        "quoteCoverage": [
+          {
+            "instrumentId": "AAPL",
+            "status": "warn",
+            "sampleCount": 20,
+            "topOfBookPct": 100,
+            "depthPct": 100,
+            "medianQuotedSpreadBps": -6168.877966228317,
+            "p95QuotedSpreadBps": -6168.877966228317,
+            "crossedBookCount": 20,
+            "lockedBookCount": 0,
+            "emptyBookCount": 0,
+            "failures": [
+              "crossedBookCount 20 > 0"
+            ]
+          }
+        ],
+        "quoteQuality": {
+          "attribution": "market-wide-proxy",
+          "avgTopOfBookPct": 100,
+          "avgDepthPct": 100,
+          "medianQuotedSpreadBps": -6168.877966,
+          "p95QuotedSpreadBps": -6168.877966
+        },
+        "providerQuoteQuality": {
+          "schemaVersion": "reef.arena.providerQuoteQuality.v1",
+          "source": "participant-current-orders",
+          "attribution": "provider-owned-current-orders",
+          "currentOrderCount": 4,
+          "instrumentCount": 1,
+          "medianQuotedSpreadBps": 19.999999999998863,
+          "p95QuotedSpreadBps": 19.999999999998863,
+          "instruments": [
+            {
+              "instrumentId": "AAPL",
+              "status": "pass",
+              "flags": [],
+              "bidPrice": 99.9,
+              "askPrice": 100.1,
+              "quotedSpread": 0.19999999999998863,
+              "quotedSpreadBps": 19.999999999998863
+            }
+          ],
+          "limitations": [
+            "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+            "adverse selection requires post-fill price path attribution"
+          ]
+        },
+        "orderActivity": {
+          "submittedLimitOrders": 14,
+          "modifyCommands": 0,
+          "cancelCommands": 8,
+          "cancelReplaceRatio": 0.571429,
+          "maxVenueCommandsPerTick": 2
+        },
+        "fillParticipation": {
+          "fillCount": 0,
+          "filledQuantity": 0,
+          "grossExecutedNotional": 0,
+          "avgFillPrice": null
+        },
+        "attribution": {
+          "schemaVersion": "reef.arena.liquidityProviderAttribution.v1",
+          "source": "participant-scoped-readback-and-trading-metrics",
+          "orderContribution": {
+            "submittedLimitOrders": 14,
+            "submittedLimitOrderSharePct": 14.583333,
+            "grossSubmittedQuantity": 140,
+            "grossSubmittedQuantitySharePct": 14.583333,
+            "grossSubmittedNotional": 14000,
+            "grossSubmittedNotionalSharePct": 14.583333
+          },
+          "fillContribution": {
+            "fillCount": 0,
+            "fillSharePct": 0,
+            "filledQuantity": 0,
+            "filledQuantitySharePct": 0,
+            "grossExecutedNotional": 0,
+            "grossExecutedNotionalSharePct": 0
+          },
+          "pointsEffect": 0
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      }
+    },
+    {
+      "botId": "builtin-npc-momentum",
+      "displayName": "Kessel Momentum",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "multi-symbol",
+      "role": "npc",
+      "actorClass": "npc_flow",
+      "actorProfile": {
+        "profileId": "npc-noise-small-random",
+        "profileVersion": "v1",
+        "actorClass": "npc_flow",
+        "difficultyBucket": "benign-noise",
+        "scoreEffect": "difficulty-bucket",
+        "params": {
+          "aggression": 0.2,
+          "cancelDiscipline": "high",
+          "maxSpreadCrossBps": 25,
+          "orderRate": "low",
+          "panicThreshold": 0,
+          "riskDiscipline": "medium"
+        },
+        "profileHash": "sha256:1bd1e01dfa3a7bddb2024d6d72728e5e2ec748db04a9ebf62a3bc2f4a0d7d41f"
+      },
+      "schedulingClass": "npc_tick",
+      "riskProfile": {
+        "assetLedgerMode": "tracked",
+        "maxActionsPerTick": 5,
+        "maxOpenOrdersPerInstrument": 10,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 1,
+        "resolvedKeys": [
+          "orderSize"
+        ]
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false,
+      "ticksRun": 20,
+      "actionsProposed": 0,
+      "venueCommands": 0,
+      "dataCalls": 0,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.15420799999992596,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1000000,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 0,
+          "submitted": 0,
+          "completed": 0,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {},
+          "submittedByRoute": {}
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 0,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {},
+          "bySide": {},
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "submittedOrderIds": []
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 0,
+          "inventoryValue": 0,
+          "total": 0,
+          "finalEquityDiagnostic": 1000000,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "markPriceByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 0,
+          "buyFillCount": 0,
+          "sellFillCount": 0,
+          "filledQuantity": 0,
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossNotional": 0,
+          "avgFillPrice": null,
+          "makerFillCount": 0,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {}
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 0,
+        "submitCommands": 0,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 0,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 0,
+        "maxVenueCommandsPerTick": 0,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000000,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": false,
+        "actorClass": "npc_flow",
+        "scoreEffect": "difficulty-bucket",
+        "publicScore": null,
+        "shadowScore": null,
+        "scoringMode": "difficulty-context-only",
+        "components": {
+          "baseline": 0,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "score": 0
+          },
+          "risk": {
+            "score": 0
+          },
+          "conduct": {
+            "score": 0
+          },
+          "marketInteraction": {
+            "score": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000000,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 0,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "grossExecutedNotional": 0,
+          "filledQuantity": 0,
+          "fillRatio": 0,
+          "completionRate": 0,
+          "pnlPerExecutedNotionalBps": null,
+          "inventoryGrossNotional": 0,
+          "inventoryExposureRatio": 0,
+          "inventoryConcentration": 0,
+          "submittedTurnoverRatio": 0,
+          "fillCount": 0,
+          "submittedCommands": 0,
+          "completedCommands": 0,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 0,
+          "maxVenueCommandsPerTick": 0,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "NPC profile contributes difficulty context but is not ranked"
+      }
+    },
+    {
+      "botId": "custom-technical-indicator",
+      "displayName": "Twin Ion Quant",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "technical",
+      "role": "competitor",
+      "actorClass": "competitor",
+      "actorProfile": {
+        "profileId": "competitor-standard",
+        "profileVersion": "v1",
+        "actorClass": "competitor",
+        "difficultyBucket": "ranked-standard",
+        "scoreEffect": "eligible-for-score",
+        "params": {
+          "aggression": 0.5,
+          "cancelDiscipline": "standard",
+          "latencyJitter": "standard",
+          "maxSpreadCrossBps": 100,
+          "orderRate": "standard",
+          "riskDiscipline": "standard"
+        },
+        "profileHash": "sha256:ebc5bffbdb8f1e15f84a2d5f968fd9ca857671d25396b4d3ccf99391911e7d77"
+      },
+      "schedulingClass": "contestant_tick",
+      "riskProfile": {
+        "assetLedgerMode": "tracked",
+        "maxActionsPerTick": 5,
+        "maxOpenOrdersPerInstrument": 10,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 0,
+        "resolvedKeys": []
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true,
+      "ticksRun": 20,
+      "actionsProposed": 0,
+      "venueCommands": 0,
+      "dataCalls": 0,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.17600000000004457,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1000000,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 0,
+          "submitted": 0,
+          "completed": 0,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {},
+          "submittedByRoute": {}
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 0,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {},
+          "bySide": {},
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "submittedOrderIds": []
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 0,
+          "inventoryValue": 0,
+          "total": 0,
+          "finalEquityDiagnostic": 1000000,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "markPriceByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 0,
+          "buyFillCount": 0,
+          "sellFillCount": 0,
+          "filledQuantity": 0,
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossNotional": 0,
+          "avgFillPrice": null,
+          "makerFillCount": 0,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {}
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 0,
+        "submitCommands": 0,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 0,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 0,
+        "maxVenueCommandsPerTick": 0,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000000,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": true,
+        "actorClass": "competitor",
+        "scoreEffect": "eligible-for-score",
+        "publicScore": 1000000,
+        "shadowScore": 1000000,
+        "scoringMode": "shadow-report-only",
+        "components": {
+          "baseline": 1000000,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "pnlAvailable": true,
+            "rawPnl": 0,
+            "cappedPnl": 0,
+            "capMin": -100000,
+            "capMax": 100000,
+            "pnlPerExecutedNotionalBps": null
+          },
+          "risk": {
+            "inventorySizePenalty": 0,
+            "inventoryExposurePenalty": 0,
+            "concentrationPenalty": 0,
+            "turnoverPenalty": 0,
+            "operationalPenalty": 0,
+            "inventoryExposureRatio": 0,
+            "inventoryConcentration": 0,
+            "submittedTurnoverRatio": 0,
+            "capMaxPenalty": 100000
+          },
+          "conduct": {
+            "timeoutPenalty": 0,
+            "invalidPenalty": 0,
+            "cancelPenalty": 0,
+            "freezePenalty": 0,
+            "capMaxPenalty": 100000
+          },
+          "marketInteraction": {
+            "commandScore": 0,
+            "fillScore": 0,
+            "fillEfficiencyScore": 0,
+            "completionScore": 0,
+            "fillRatio": 0,
+            "completionRate": 0,
+            "submittedCommands": 0,
+            "completedCommands": 0,
+            "fillCount": 0,
+            "filledQuantity": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          },
+          "publicScoreV1": {
+            "formulaVersion": "legacy-participation-v0",
+            "baseline": 1000000,
+            "finalEquitySource": "tradingMetrics.pnl.finalEquityDiagnostic",
+            "rawFinalEquity": 1000000,
+            "pnlComponent": 0,
+            "inventoryRiskPenalty": 0,
+            "commandQualityPenalty": 0,
+            "enforcementPenalty": 0,
+            "inventoryExposureRatio": 0,
+            "cancelReplaceRatio": 0,
+            "timeoutRate": 0,
+            "invalidIntentRate": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000000,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 0,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "grossExecutedNotional": 0,
+          "filledQuantity": 0,
+          "fillRatio": 0,
+          "completionRate": 0,
+          "pnlPerExecutedNotionalBps": null,
+          "inventoryGrossNotional": 0,
+          "inventoryExposureRatio": 0,
+          "inventoryConcentration": 0,
+          "submittedTurnoverRatio": 0,
+          "fillCount": 0,
+          "submittedCommands": 0,
+          "completedCommands": 0,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 0,
+          "maxVenueCommandsPerTick": 0,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "shadowScore is report-only; public leaderboard still uses top-level score"
+      }
+    },
+    {
+      "botId": "builtin-npc-taker-aapl",
+      "displayName": "AAPL Rogue Taker",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "actorClass": "npc_flow",
+      "actorProfile": {
+        "profileId": "npc-bad-aggressive-retail",
+        "profileVersion": "v1",
+        "actorClass": "npc_flow",
+        "difficultyBucket": "toxic-momentum",
+        "scoreEffect": "difficulty-bucket",
+        "params": {
+          "aggression": 0.95,
+          "cancelDiscipline": "low",
+          "maxSpreadCrossBps": 250,
+          "orderRate": "high",
+          "panicThreshold": 0.1,
+          "riskDiscipline": "low"
+        },
+        "profileHash": "sha256:994d81565f07784e733228edef6c30e90ba4109161cab1b0da62f718f4ba8f4a"
+      },
+      "schedulingClass": "npc_tick",
+      "riskProfile": {
+        "assetLedgerMode": "tracked",
+        "maxActionsPerTick": 5,
+        "maxOpenOrdersPerInstrument": 10,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 5,
+        "resolvedKeys": [
+          "crossOffset",
+          "instrumentId",
+          "orderSize",
+          "side",
+          "startAfterTicks"
+        ]
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false,
+      "ticksRun": 20,
+      "actionsProposed": 20,
+      "venueCommands": 15,
+      "dataCalls": 30,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.3042080000000169,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1004250,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 15,
+          "submitted": 15,
+          "completed": 15,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {
+            "/api/v1/orders/submit": 15
+          },
+          "submittedByRoute": {
+            "/api/v1/orders/submit": 15
+          }
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 15,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {
+            "AAPL": 15
+          },
+          "bySide": {
+            "BUY": 7,
+            "SELL": 8
+          },
+          "buyQuantity": 7,
+          "sellQuantity": 8,
+          "grossSubmittedQuantity": 15,
+          "grossSubmittedNotional": 1497.7,
+          "submittedOrderIds": [
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-1",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-10",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-11",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-12",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-13",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-14",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-15",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-2",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-3",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-4",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-5",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-6",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-7",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-8",
+            "equity-sprint-builtin-npc-taker-aapl-1784676848139-cmd-order-9"
+          ]
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 98.5,
+          "inventoryValue": -144.74603,
+          "total": -46.24603,
+          "finalEquityDiagnostic": 999953.75397,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {
+            "AAPL": -1
+          },
+          "markPriceByInstrument": {
+            "AAPL": 144.7460296505
+          },
+          "grossNotional": 144.74603,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 15,
+          "buyFillCount": 7,
+          "sellFillCount": 8,
+          "filledQuantity": 15,
+          "buyQuantity": 7,
+          "sellQuantity": 8,
+          "grossNotional": 1499.9,
+          "avgFillPrice": 99.993333,
+          "makerFillCount": 0,
+          "takerFillCount": 15,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 1499.9,
+          "liquidityRoleComplete": true,
+          "byInstrument": {
+            "AAPL": {
+              "fillCount": 15,
+              "filledQuantity": 15,
+              "buyQuantity": 7,
+              "sellQuantity": 8,
+              "netQuantity": -1,
+              "grossNotional": 1499.9,
+              "avgFillPrice": 99.993333,
+              "cash": 98.5,
+              "markPrice": 144.7460296505,
+              "markedValue": -144.74603
+            }
+          }
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": true,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 15,
+          "comparableFillCount": 15,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 8,
+          "favorableFillCount": 7,
+          "neutralFillCount": 0,
+          "adverseFillPct": 53.333333,
+          "avgMarkoutBps": -312.782447,
+          "markoutNotional": -46.24603,
+          "byInstrument": {
+            "AAPL": {
+              "fillCount": 15,
+              "comparableFillCount": 15,
+              "missingPostFillMarkCount": 0,
+              "adverseFillCount": 8,
+              "favorableFillCount": 7,
+              "neutralFillCount": 0,
+              "adverseFillPct": 53.333333,
+              "avgMarkoutBps": -312.782447,
+              "markoutNotional": -46.24603
+            }
+          },
+          "reason": "",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 15,
+        "submitCommands": 15,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 5,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 1,
+        "maxVenueCommandsPerTick": 1,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 999953.75397,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": false,
+        "actorClass": "npc_flow",
+        "scoreEffect": "difficulty-bucket",
+        "publicScore": null,
+        "shadowScore": null,
+        "scoringMode": "difficulty-context-only",
+        "components": {
+          "baseline": 0,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "score": 0
+          },
+          "risk": {
+            "score": 0
+          },
+          "conduct": {
+            "score": 0
+          },
+          "marketInteraction": {
+            "score": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 999953.75397,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": -46.24603,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 15,
+          "grossSubmittedNotional": 1497.7,
+          "grossExecutedNotional": 1499.9,
+          "filledQuantity": 15,
+          "fillRatio": 1,
+          "completionRate": 1,
+          "pnlPerExecutedNotionalBps": -308.327422,
+          "inventoryGrossNotional": 144.74603,
+          "inventoryExposureRatio": 0.096504,
+          "inventoryConcentration": 1,
+          "submittedTurnoverRatio": 0.001498,
+          "fillCount": 15,
+          "submittedCommands": 15,
+          "completedCommands": 15,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 1,
+          "maxVenueCommandsPerTick": 1,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "NPC profile contributes difficulty context but is not ranked"
+      }
+    }
+  ],
+  "leaderboard": [
+    {
+      "rank": 1,
+      "botId": "custom-technical-indicator",
+      "displayName": "Twin Ion Quant",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "technical",
+      "role": "competitor",
+      "actorClass": "competitor",
+      "actorProfile": {
+        "profileId": "competitor-standard",
+        "profileVersion": "v1",
+        "actorClass": "competitor",
+        "difficultyBucket": "ranked-standard",
+        "scoreEffect": "eligible-for-score",
+        "params": {
+          "aggression": 0.5,
+          "cancelDiscipline": "standard",
+          "latencyJitter": "standard",
+          "maxSpreadCrossBps": 100,
+          "orderRate": "standard",
+          "riskDiscipline": "standard"
+        },
+        "profileHash": "sha256:ebc5bffbdb8f1e15f84a2d5f968fd9ca857671d25396b4d3ccf99391911e7d77"
+      },
+      "schedulingClass": "contestant_tick",
+      "riskProfile": {
+        "assetLedgerMode": "tracked",
+        "maxActionsPerTick": 5,
+        "maxOpenOrdersPerInstrument": 10,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 0,
+        "resolvedKeys": []
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true,
+      "ticksRun": 20,
+      "actionsProposed": 0,
+      "venueCommands": 0,
+      "dataCalls": 0,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.17600000000004457,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1000000,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 0,
+          "submitted": 0,
+          "completed": 0,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {},
+          "submittedByRoute": {}
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 0,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {},
+          "bySide": {},
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "submittedOrderIds": []
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 0,
+          "inventoryValue": 0,
+          "total": 0,
+          "finalEquityDiagnostic": 1000000,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "markPriceByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 0,
+          "buyFillCount": 0,
+          "sellFillCount": 0,
+          "filledQuantity": 0,
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossNotional": 0,
+          "avgFillPrice": null,
+          "makerFillCount": 0,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {}
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 0,
+        "submitCommands": 0,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 0,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 0,
+        "maxVenueCommandsPerTick": 0,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000000,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": true,
+        "actorClass": "competitor",
+        "scoreEffect": "eligible-for-score",
+        "publicScore": 1000000,
+        "shadowScore": 1000000,
+        "scoringMode": "shadow-report-only",
+        "components": {
+          "baseline": 1000000,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "pnlAvailable": true,
+            "rawPnl": 0,
+            "cappedPnl": 0,
+            "capMin": -100000,
+            "capMax": 100000,
+            "pnlPerExecutedNotionalBps": null
+          },
+          "risk": {
+            "inventorySizePenalty": 0,
+            "inventoryExposurePenalty": 0,
+            "concentrationPenalty": 0,
+            "turnoverPenalty": 0,
+            "operationalPenalty": 0,
+            "inventoryExposureRatio": 0,
+            "inventoryConcentration": 0,
+            "submittedTurnoverRatio": 0,
+            "capMaxPenalty": 100000
+          },
+          "conduct": {
+            "timeoutPenalty": 0,
+            "invalidPenalty": 0,
+            "cancelPenalty": 0,
+            "freezePenalty": 0,
+            "capMaxPenalty": 100000
+          },
+          "marketInteraction": {
+            "commandScore": 0,
+            "fillScore": 0,
+            "fillEfficiencyScore": 0,
+            "completionScore": 0,
+            "fillRatio": 0,
+            "completionRate": 0,
+            "submittedCommands": 0,
+            "completedCommands": 0,
+            "fillCount": 0,
+            "filledQuantity": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          },
+          "publicScoreV1": {
+            "formulaVersion": "legacy-participation-v0",
+            "baseline": 1000000,
+            "finalEquitySource": "tradingMetrics.pnl.finalEquityDiagnostic",
+            "rawFinalEquity": 1000000,
+            "pnlComponent": 0,
+            "inventoryRiskPenalty": 0,
+            "commandQualityPenalty": 0,
+            "enforcementPenalty": 0,
+            "inventoryExposureRatio": 0,
+            "cancelReplaceRatio": 0,
+            "timeoutRate": 0,
+            "invalidIntentRate": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000000,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 0,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "grossExecutedNotional": 0,
+          "filledQuantity": 0,
+          "fillRatio": 0,
+          "completionRate": 0,
+          "pnlPerExecutedNotionalBps": null,
+          "inventoryGrossNotional": 0,
+          "inventoryExposureRatio": 0,
+          "inventoryConcentration": 0,
+          "submittedTurnoverRatio": 0,
+          "fillCount": 0,
+          "submittedCommands": 0,
+          "completedCommands": 0,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 0,
+          "maxVenueCommandsPerTick": 0,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "shadowScore is report-only; public leaderboard still uses top-level score"
+      }
+    }
+  ],
+  "diagnosticLeaderboard": [
+    {
+      "rank": 1,
+      "botId": "custom-technical-indicator",
+      "displayName": "Twin Ion Quant",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "runnerKey": "technical",
+      "role": "competitor",
+      "actorClass": "competitor",
+      "actorProfile": {
+        "profileId": "competitor-standard",
+        "profileVersion": "v1",
+        "actorClass": "competitor",
+        "difficultyBucket": "ranked-standard",
+        "scoreEffect": "eligible-for-score",
+        "params": {
+          "aggression": 0.5,
+          "cancelDiscipline": "standard",
+          "latencyJitter": "standard",
+          "maxSpreadCrossBps": 100,
+          "orderRate": "standard",
+          "riskDiscipline": "standard"
+        },
+        "profileHash": "sha256:ebc5bffbdb8f1e15f84a2d5f968fd9ca857671d25396b4d3ccf99391911e7d77"
+      },
+      "schedulingClass": "contestant_tick",
+      "riskProfile": {
+        "assetLedgerMode": "tracked",
+        "maxActionsPerTick": 5,
+        "maxOpenOrdersPerInstrument": 10,
+        "maxTickLatencyMs": 50
+      },
+      "runtimeConfigPreflight": {
+        "provider": "OpenBao",
+        "descriptorCount": 0,
+        "resolvedKeys": []
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true,
+      "ticksRun": 20,
+      "actionsProposed": 0,
+      "venueCommands": 0,
+      "dataCalls": 0,
+      "failedTicks": 0,
+      "latencyP95Ms": 0.17600000000004457,
+      "freezeCount": 0,
+      "operationalPauseCount": 0,
+      "disqualified": false,
+      "score": 1000000,
+      "tradingMetrics": {
+        "schemaVersion": "reef.arena.tradingMetrics.v0",
+        "basis": "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        "commands": {
+          "proposed": 0,
+          "submitted": 0,
+          "completed": 0,
+          "failed": 0,
+          "rejected": 0,
+          "timedOut": 0,
+          "byRoute": {},
+          "submittedByRoute": {}
+        },
+        "orderFlow": {
+          "submittedLimitOrders": 0,
+          "modifyCommands": 0,
+          "cancelCommands": 0,
+          "byInstrument": {},
+          "bySide": {},
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "submittedOrderIds": []
+        },
+        "pnl": {
+          "available": true,
+          "realized": null,
+          "unrealized": null,
+          "cash": 0,
+          "inventoryValue": 0,
+          "total": 0,
+          "finalEquityDiagnostic": 1000000,
+          "currency": "USD",
+          "basis": "zero-fee cash plus marked inventory from participant-scoped fills",
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "fees": {
+          "total": 0,
+          "maker": 0,
+          "taker": 0,
+          "currency": "USD",
+          "policy": "fees-v0-zero-placeholder"
+        },
+        "inventory": {
+          "netQuantityByInstrument": {},
+          "markPriceByInstrument": {},
+          "grossNotional": 0,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid"
+        },
+        "marketQuality": {
+          "available": false,
+          "reason": "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices"
+        },
+        "executions": {
+          "fillCount": 0,
+          "buyFillCount": 0,
+          "sellFillCount": 0,
+          "filledQuantity": 0,
+          "buyQuantity": 0,
+          "sellQuantity": 0,
+          "grossNotional": 0,
+          "avgFillPrice": null,
+          "makerFillCount": 0,
+          "takerFillCount": 0,
+          "unspecifiedLiquidityRoleFillCount": 0,
+          "makerNotional": 0,
+          "takerNotional": 0,
+          "liquidityRoleComplete": true,
+          "byInstrument": {}
+        },
+        "adverseSelection": {
+          "schemaVersion": "reef.arena.adverseSelectionDiagnostics.v1",
+          "available": false,
+          "source": "participant-scoped fills plus post-fill health sample mids",
+          "markWindowMs": 5000,
+          "fillCount": 0,
+          "comparableFillCount": 0,
+          "missingPostFillMarkCount": 0,
+          "adverseFillCount": 0,
+          "favorableFillCount": 0,
+          "neutralFillCount": 0,
+          "adverseFillPct": 0,
+          "avgMarkoutBps": null,
+          "markoutNotional": 0,
+          "byInstrument": {},
+          "reason": "requires fill timestamps plus post-fill health sample mids within markWindowMs",
+          "interpretation": "negative markout means the provider was adversely selected after the fill; positive markout means favorable post-fill movement"
+        }
+      },
+      "conductMetrics": {
+        "schemaVersion": "reef.arena.conductMetrics.v0",
+        "policyVersion": "score-v0",
+        "status": "reported",
+        "orderCommands": 0,
+        "submitCommands": 0,
+        "modifyCommands": 0,
+        "cancelCommands": 0,
+        "noopActions": 0,
+        "cancelReplaceRatio": 0,
+        "invalidIntentRate": 0,
+        "timeoutRate": 0,
+        "maxActionsPerTick": 0,
+        "maxVenueCommandsPerTick": 0,
+        "freezeCount": 0,
+        "operationalPauseCount": 0,
+        "notes": "conduct inputs are scored only when enabled by the resolved scoring policy"
+      },
+      "finalEquityDiagnostic": 1000000,
+      "scoreBreakdown": {
+        "schemaVersion": "reef.arena.scoreBreakdown.v1",
+        "formulaVersion": "shadow-score-v1",
+        "scoringPolicyVersion": "score-v0",
+        "scoreEligible": true,
+        "actorClass": "competitor",
+        "scoreEffect": "eligible-for-score",
+        "publicScore": 1000000,
+        "shadowScore": 1000000,
+        "scoringMode": "shadow-report-only",
+        "components": {
+          "baseline": 1000000,
+          "equity": 0,
+          "risk": 0,
+          "conduct": 0,
+          "marketInteraction": 0,
+          "difficulty": 0
+        },
+        "componentDetails": {
+          "equity": {
+            "pnlAvailable": true,
+            "rawPnl": 0,
+            "cappedPnl": 0,
+            "capMin": -100000,
+            "capMax": 100000,
+            "pnlPerExecutedNotionalBps": null
+          },
+          "risk": {
+            "inventorySizePenalty": 0,
+            "inventoryExposurePenalty": 0,
+            "concentrationPenalty": 0,
+            "turnoverPenalty": 0,
+            "operationalPenalty": 0,
+            "inventoryExposureRatio": 0,
+            "inventoryConcentration": 0,
+            "submittedTurnoverRatio": 0,
+            "capMaxPenalty": 100000
+          },
+          "conduct": {
+            "timeoutPenalty": 0,
+            "invalidPenalty": 0,
+            "cancelPenalty": 0,
+            "freezePenalty": 0,
+            "capMaxPenalty": 100000
+          },
+          "marketInteraction": {
+            "commandScore": 0,
+            "fillScore": 0,
+            "fillEfficiencyScore": 0,
+            "completionScore": 0,
+            "fillRatio": 0,
+            "completionRate": 0,
+            "submittedCommands": 0,
+            "completedCommands": 0,
+            "fillCount": 0,
+            "filledQuantity": 0
+          },
+          "difficulty": {
+            "multiplier": 1.1,
+            "variableScoreBeforeDifficulty": 0,
+            "appliedScore": 0
+          },
+          "publicScoreV1": {
+            "formulaVersion": "legacy-participation-v0",
+            "baseline": 1000000,
+            "finalEquitySource": "tradingMetrics.pnl.finalEquityDiagnostic",
+            "rawFinalEquity": 1000000,
+            "pnlComponent": 0,
+            "inventoryRiskPenalty": 0,
+            "commandQualityPenalty": 0,
+            "enforcementPenalty": 0,
+            "inventoryExposureRatio": 0,
+            "cancelReplaceRatio": 0,
+            "timeoutRate": 0,
+            "invalidIntentRate": 0
+          }
+        },
+        "diagnostics": {
+          "finalEquity": 1000000,
+          "realizedPnl": null,
+          "unrealizedPnl": null,
+          "totalPnl": 0,
+          "pnlAvailable": true,
+          "markPriceSource": "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+          "grossSubmittedQuantity": 0,
+          "grossSubmittedNotional": 0,
+          "grossExecutedNotional": 0,
+          "filledQuantity": 0,
+          "fillRatio": 0,
+          "completionRate": 0,
+          "pnlPerExecutedNotionalBps": null,
+          "inventoryGrossNotional": 0,
+          "inventoryExposureRatio": 0,
+          "inventoryConcentration": 0,
+          "submittedTurnoverRatio": 0,
+          "fillCount": 0,
+          "submittedCommands": 0,
+          "completedCommands": 0,
+          "failedCommands": 0,
+          "rejectedCommands": 0,
+          "timedOutCommands": 0,
+          "cancelReplaceRatio": 0,
+          "invalidIntentRate": 0,
+          "timeoutRate": 0,
+          "maxActionsPerTick": 0,
+          "maxVenueCommandsPerTick": 0,
+          "freezeCount": 0,
+          "operationalPauseCount": 0,
+          "variableScoreBeforeDifficulty": 0,
+          "npcDifficultyBuckets": [
+            "benign-noise",
+            "toxic-momentum"
+          ],
+          "difficultyMultiplier": 1.1
+        },
+        "notes": "shadowScore is report-only; public leaderboard still uses top-level score"
+      }
+    }
+  ],
+  "persistence": {
+    "enabled": true,
+    "skipped": false,
+    "operationCount": 21,
+    "rawResultsStatusCode": 200,
+    "rawEnforcementEventsStatusCode": 200,
+    "leaderboardStatusCode": 200,
+    "leaderboardEntry": {
+      "rank": 4,
+      "runId": "arena-economic-matrix-20260721-balanced-v8",
+      "botId": "custom-technical-indicator",
+      "botName": "Twin Ion Quant",
+      "ownerHandle": "Reef Built-In",
+      "versionId": "local-1-arena-economic-matrix-20260721-balanced-v5",
+      "scoringPolicyVersion": "score-v0",
+      "finalEquity": 1000000,
+      "realizedPnl": 0,
+      "maxDrawdown": 0,
+      "disqualified": false
+    }
+  },
+  "omitted": {
+    "healthSamples": 20,
+    "sessionReports": 6,
+    "reason": "compact report shape omits high-volume per-tick detail"
+  }
+}

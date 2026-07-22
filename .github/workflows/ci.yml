@@ -228,6 +228,7 @@ jobs:
             scripts/dev/lib/dev-stack.test.mjs \
             scripts/dev/lib/dev-profiles.test.mjs \
             scripts/dev/db/migrate.test.mjs \
+            scripts/dev/container-images-workflow.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
             scripts/dev/command-log-pin.test.mjs \
             scripts/dev/command-log-archive.test.mjs \
@@ -241,6 +242,7 @@ jobs:
             scripts/dev/compare-arena-score-v1-proof.test.mjs \
             scripts/dev/compare-arena-scoring-calibration.test.mjs \
             scripts/dev/run-arena-actor-calibration-matrix.test.mjs \
+            scripts/dev/run-arena-economic-policy-matrix.test.mjs \
             scripts/dev/run-arena-scoring-calibration-matrix.test.mjs \
             scripts/dev/projection-replay-proof.test.mjs \
             scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt

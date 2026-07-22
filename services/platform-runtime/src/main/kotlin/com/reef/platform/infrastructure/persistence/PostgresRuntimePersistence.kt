@@ -2635,22 +2635,17 @@ class PostgresRuntimePersistence(
         acceptedOrder: PersistedOrder?,
         lifecycleEvents: List<RuntimeEvent>
     ) {
-        val accepted = result.accepted
-        val rejected = result.rejected
-        val resultType = if (accepted != null) "accepted" else "rejected"
-
-        projectionConnection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT ${names.persistSubmitOutcomeFunction}(
-                  ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb
+        // Keep sync-result writes on the same scope- and role-preserving path as projector batches.
+        persistSubmitOutcomes(
+            listOf(
+                PersistableSubmitOutcome(
+                    commandId = commandId,
+                    result = result,
+                    acceptedOrder = acceptedOrder,
+                    lifecycleEvents = lifecycleEvents
                 )
-                """.trimIndent()
-            ).use { ps ->
-                ps.bindSubmitOutcome(commandId, resultType, accepted, rejected, acceptedOrder, result, lifecycleEvents)
-                ps.execute()
-            }
-        }
+            )
+        )
     }
 
     override fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
@@ -4190,29 +4185,6 @@ class PostgresRuntimePersistence(
                 }
             }
         }
-    }
-
-    private fun PreparedStatement.bindSubmitOutcome(
-        commandId: String,
-        resultType: String,
-        accepted: EngineOrderAccepted?,
-        rejected: EngineOrderRejected?,
-        acceptedOrder: PersistedOrder?,
-        result: SubmitOrderResult,
-        lifecycleEvents: List<RuntimeEvent>
-    ) {
-        setString(1, commandId)
-        setString(2, resultType)
-        setString(3, accepted?.eventId ?: rejected?.eventId.orEmpty())
-        setString(4, accepted?.orderId ?: rejected?.orderId.orEmpty())
-        setString(5, accepted?.engineOrderId.orEmpty())
-        setString(6, rejected?.code.orEmpty())
-        setString(7, rejected?.reason.orEmpty())
-        setString(8, accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
-        setString(9, acceptedOrder?.toJsonObject())
-        setString(10, result.executions.toJsonArray { it.toJsonObject() })
-        setString(11, result.trades.toJsonArray { it.toJsonObject() })
-        setString(12, lifecycleEvents.toJsonArray { it.toJsonObject() })
     }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
