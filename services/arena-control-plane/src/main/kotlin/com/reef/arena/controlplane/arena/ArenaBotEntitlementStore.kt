@@ -27,6 +27,15 @@ interface ArenaBotEntitlementStore {
     fun saveBotOwnership(ownership: ArenaBotOwnership): ArenaBotOwnership
     fun botOwnershipsForUser(reefUserId: String): List<ArenaBotOwnership>
     fun botOwnerships(botId: String): List<ArenaBotOwnership>
+    /**
+     * Batch lookup of ownerships for a page of bot ids in a single round trip.
+     *
+     * Stores backed by a single query surface (e.g. Postgres) should override this
+     * with one `WHERE bot_id = ANY(?)`-style query; the default keeps small
+     * in-memory/test stores source-compatible.
+     */
+    fun ownershipsForBots(botIds: List<String>): Map<String, List<ArenaBotOwnership>> =
+        botIds.distinct().associateWith { botOwnerships(it) }
 }
 
 class InMemoryArenaBotEntitlementStore : ArenaBotEntitlementStore {
@@ -48,6 +57,13 @@ class InMemoryArenaBotEntitlementStore : ArenaBotEntitlementStore {
     override fun botOwnerships(botId: String): List<ArenaBotOwnership> {
         val id = ArenaBotEntitlementValidation.botId(botId)
         return ownerships.values.filter { it.botId == id }
+    }
+
+    override fun ownershipsForBots(botIds: List<String>): Map<String, List<ArenaBotOwnership>> {
+        val ids = botIds.distinct().map { ArenaBotEntitlementValidation.botId(it) }.toSet()
+        return ownerships.values
+            .filter { it.botId in ids }
+            .groupBy { it.botId }
     }
 }
 

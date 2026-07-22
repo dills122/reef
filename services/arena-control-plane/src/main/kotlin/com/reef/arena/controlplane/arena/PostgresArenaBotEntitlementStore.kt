@@ -76,6 +76,31 @@ class PostgresArenaBotEntitlementStore(
     override fun botOwnerships(botId: String): List<ArenaBotOwnership> =
         queryOwnerships("bot_id = ?", ArenaBotEntitlementValidation.botId(botId), "reef_user_id")
 
+    override fun ownershipsForBots(botIds: List<String>): Map<String, List<ArenaBotOwnership>> {
+        val ids = botIds.distinct().map(ArenaBotEntitlementValidation::botId)
+        if (ids.isEmpty()) return emptyMap()
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT reef_user_id, bot_id, ownership_state, assigned_by, assigned_at
+                FROM ${names.userBotOwnerships}
+                WHERE bot_id = ANY(?)
+                ORDER BY bot_id, reef_user_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.setArray(1, conn.createArrayOf("text", ids.toTypedArray()))
+                ps.executeQuery().use { rs ->
+                    val ownershipsByBot = linkedMapOf<String, MutableList<ArenaBotOwnership>>()
+                    while (rs.next()) {
+                        val ownership = rs.toArenaBotOwnership()
+                        ownershipsByBot.getOrPut(ownership.botId) { mutableListOf() }.add(ownership)
+                    }
+                    return ownershipsByBot
+                }
+            }
+        }
+    }
+
     private fun queryOwnerships(where: String, value: String, orderBy: String): List<ArenaBotOwnership> {
         connection().use { conn ->
             conn.prepareStatement(

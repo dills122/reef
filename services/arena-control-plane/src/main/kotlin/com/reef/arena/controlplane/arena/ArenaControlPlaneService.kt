@@ -205,6 +205,14 @@ interface ArenaBotRegistryStore {
     fun saveBot(bot: ArenaBot)
     fun bot(botId: String): ArenaBot?
     fun bots(limit: Int = 50): List<ArenaBot>
+    /**
+     * Batch lookup for a set of bot ids in a single round trip.
+     *
+     * Stores backed by a single query surface (e.g. Postgres) should override this
+     * with one `WHERE bot_id = ANY(?)`-style query; the default keeps small
+     * in-memory/test stores source-compatible.
+     */
+    fun botsByIds(botIds: List<String>): List<ArenaBot> = botIds.mapNotNull(::bot)
     fun botByFileName(fileName: String): ArenaBot?
     fun saveVersion(version: ArenaBotVersion)
     fun version(botId: String, versionId: String): ArenaBotVersion?
