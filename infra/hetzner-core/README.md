@@ -71,9 +71,10 @@ secrets.
 
 ## Deploy Server Files
 
-The Compose file defaults to Docker Hub image names published by
-`.github/workflows/container-images.yml`. Override them in `/opt/reef/.env` if
-you publish from a fork or want to pin a specific tag:
+The Compose file defaults to the Docker Hub mirrors published by
+`.github/workflows/container-images.yml`; the same tags are also published to
+GHCR. Override them in `/opt/reef/.env` if you prefer GHCR, publish from a fork,
+or want to pin a specific tag:
 
 ```bash
 cp /opt/reef/.env.example /opt/reef/.env
