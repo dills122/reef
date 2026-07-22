@@ -181,11 +181,29 @@ func NewKafkaTransactionalEventBatchPublisher(config KafkaConfig, source *KafkaC
 	}, nil
 }
 
-func (s *KafkaCommandSource) Fetch(ctx context.Context, batchSize int, timeout time.Duration) ([]CommandDelivery, error) {
+// assertOwned checks the source's ownership lease (if any) for its
+// partition, returning an error if ownership no longer holds.
+func (s *KafkaCommandSource) assertOwned() error {
 	if s.ownership != nil {
 		if err := s.ownership.AssertOwned(s.partition); err != nil {
-			return nil, err
+			return err
 		}
+	}
+	return nil
+}
+
+// errIfClosedLocked returns an error if the source has been closed. Callers
+// must hold s.mu.
+func (s *KafkaCommandSource) errIfClosedLocked() error {
+	if s.closed {
+		return fmt.Errorf("kafka command source %s is closed", s.durableName)
+	}
+	return nil
+}
+
+func (s *KafkaCommandSource) Fetch(ctx context.Context, batchSize int, timeout time.Duration) ([]CommandDelivery, error) {
+	if err := s.assertOwned(); err != nil {
+		return nil, err
 	}
 	if batchSize <= 0 {
 		batchSize = 1
@@ -231,18 +249,16 @@ func (s *KafkaCommandSource) Fetch(ctx context.Context, batchSize int, timeout t
 }
 
 func (s *KafkaCommandSource) ReplayCommitted(ctx context.Context, batchSize int, apply func([]CommandDelivery) error) (int, error) {
-	if s.ownership != nil {
-		if err := s.ownership.AssertOwned(s.partition); err != nil {
-			return 0, err
-		}
+	if err := s.assertOwned(); err != nil {
+		return 0, err
 	}
 	if batchSize <= 0 {
 		batchSize = 1
 	}
 	s.mu.Lock()
-	if s.closed {
+	if err := s.errIfClosedLocked(); err != nil {
 		s.mu.Unlock()
-		return 0, fmt.Errorf("kafka command source %s is closed", s.durableName)
+		return 0, err
 	}
 	if s.partitionConsumer != nil {
 		s.mu.Unlock()
@@ -281,10 +297,8 @@ func (s *KafkaCommandSource) ReplayCommitted(ctx context.Context, batchSize int,
 		if len(batch) == 0 {
 			return nil
 		}
-		if s.ownership != nil {
-			if err := s.ownership.AssertOwned(s.partition); err != nil {
-				return err
-			}
+		if err := s.assertOwned(); err != nil {
+			return err
 		}
 		if err := apply(batch); err != nil {
 			return err
@@ -358,8 +372,8 @@ func (s *KafkaCommandSource) AckBatch(deliveries []CommandDelivery) (int, error)
 	nextOffset := offsets[len(offsets)-1] + 1
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return 0, fmt.Errorf("kafka command source %s is closed", s.durableName)
+	if err := s.errIfClosedLocked(); err != nil {
+		return 0, err
 	}
 	s.partitionManager.MarkOffset(nextOffset, "")
 	s.offsetManager.Commit()
@@ -393,8 +407,8 @@ func (s *KafkaCommandSource) Close() error {
 func (s *KafkaCommandSource) ack(offset int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return fmt.Errorf("kafka command source %s is closed", s.durableName)
+	if err := s.errIfClosedLocked(); err != nil {
+		return err
 	}
 	s.partitionManager.MarkOffset(offset+1, "")
 	s.offsetManager.Commit()
@@ -406,8 +420,8 @@ func (s *KafkaCommandSource) ack(offset int64) error {
 func (s *KafkaCommandSource) nak(offset int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return fmt.Errorf("kafka command source %s is closed", s.durableName)
+	if err := s.errIfClosedLocked(); err != nil {
+		return err
 	}
 	if s.rewindOffset == nil || offset < *s.rewindOffset {
 		rewind := offset
@@ -417,8 +431,8 @@ func (s *KafkaCommandSource) nak(offset int64) error {
 }
 
 func (s *KafkaCommandSource) partitionConsumerLocked() (sarama.PartitionConsumer, error) {
-	if s.closed {
-		return nil, fmt.Errorf("kafka command source %s is closed", s.durableName)
+	if err := s.errIfClosedLocked(); err != nil {
+		return nil, err
 	}
 	if s.partitionConsumer != nil && s.rewindOffset == nil {
 		return s.partitionConsumer, nil
@@ -475,10 +489,8 @@ func (p *KafkaEventBatchPublisher) PublishEventBatchAndAck(ctx context.Context, 
 		return 0, ctx.Err()
 	default:
 	}
-	if p.source.ownership != nil {
-		if err := p.source.ownership.AssertOwned(p.source.partition); err != nil {
-			return 0, err
-		}
+	if err := p.source.assertOwned(); err != nil {
+		return 0, err
 	}
 
 	nextOffset, err := p.source.transactionNextOffset(deliveries)
@@ -520,10 +532,8 @@ func (p *KafkaEventBatchPublisher) PublishEventBatchAndAck(ctx context.Context, 
 	if err := p.producer.AddOffsetsToTxn(offsets, p.source.durableName); err != nil {
 		return 0, abort(fmt.Errorf("add command offsets to Kafka transaction: %w", err))
 	}
-	if p.source.ownership != nil {
-		if err := p.source.ownership.AssertOwned(p.source.partition); err != nil {
-			return 0, abort(err)
-		}
+	if err := p.source.assertOwned(); err != nil {
+		return 0, abort(err)
 	}
 	if err := p.producer.CommitTxn(); err != nil {
 		return 0, &fatalProcessorError{
@@ -599,8 +609,8 @@ func (d *kafkaDelivery) Term() error {
 func (s *KafkaCommandSource) transactionNextOffset(deliveries []CommandDelivery) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return 0, fmt.Errorf("kafka command source %s is closed", s.durableName)
+	if err := s.errIfClosedLocked(); err != nil {
+		return 0, err
 	}
 	if len(deliveries) == 0 {
 		return 0, fmt.Errorf("Kafka transaction requires at least one command delivery")
