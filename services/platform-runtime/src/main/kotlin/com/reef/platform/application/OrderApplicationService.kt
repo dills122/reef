@@ -49,12 +49,40 @@ class OrderApplicationService(
     private val roleCache = ConcurrentHashMap<String, HotPathCacheEntry<List<RoleDefinition>>>()
     private val actorRoleCache = ConcurrentHashMap<String, HotPathCacheEntry<List<ActorRoleBinding>>>()
     private val referenceDataCache = ConcurrentHashMap<String, HotPathCacheEntry<ReferenceDataValidation>>()
+    private val inFlightCommands = ConcurrentHashMap<String, CompletableFuture<PersistableSubmitOutcome>>()
+
+    // Coalesces concurrent calls sharing a commandId so a client retry racing the original
+    // request can't reach the engine twice before the first call's outcome is persisted -
+    // runtimePersistence.submitResult() alone only catches already-completed duplicates.
+    private fun coalesceByCommandId(
+        commandId: String,
+        compute: () -> PersistableSubmitOutcome
+    ): PersistableSubmitOutcome {
+        val future = CompletableFuture<PersistableSubmitOutcome>()
+        val existing = inFlightCommands.putIfAbsent(commandId, future)
+        if (existing != null) {
+            return existing.join()
+        }
+        try {
+            val outcome = compute()
+            future.complete(outcome)
+            return outcome
+        } catch (ex: Throwable) {
+            future.completeExceptionally(ex)
+            throw ex
+        } finally {
+            inFlightCommands.remove(commandId, future)
+        }
+    }
 
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         return HotPathMetrics.time("runtime.submitOrder.total") {
-            val outcome = prepareSubmitOrder(command)
-            HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
-                runtimePersistence.persistSubmitOutcome(outcome)
+            val outcome = coalesceByCommandId(command.commandId) {
+                val prepared = prepareSubmitOrder(command)
+                HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+                    runtimePersistence.persistSubmitOutcome(prepared)
+                }
+                prepared
             }
             outcome.result
         }
@@ -356,9 +384,12 @@ class OrderApplicationService(
             return existingResult
         }
 
-        val outcome = prepareCancelOrder(command)
-        HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
-            runtimePersistence.persistSubmitOutcome(outcome)
+        val outcome = coalesceByCommandId(command.commandId) {
+            val prepared = prepareCancelOrder(command)
+            HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+                runtimePersistence.persistSubmitOutcome(prepared)
+            }
+            prepared
         }
         return outcome.result
     }
@@ -416,9 +447,12 @@ class OrderApplicationService(
             return existingResult
         }
 
-        val outcome = prepareModifyOrder(command)
-        HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
-            runtimePersistence.persistSubmitOutcome(outcome)
+        val outcome = coalesceByCommandId(command.commandId) {
+            val prepared = prepareModifyOrder(command)
+            HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+                runtimePersistence.persistSubmitOutcome(prepared)
+            }
+            prepared
         }
         return outcome.result
     }

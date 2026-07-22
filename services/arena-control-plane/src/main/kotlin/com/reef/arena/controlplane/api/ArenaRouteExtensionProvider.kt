@@ -10,6 +10,7 @@ import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
 import com.reef.platform.api.OptionalProductRouteExtension
 import com.reef.platform.api.OptionalProductRouteExtensionProvider
+import com.reef.platform.api.PostgresAccountRiskCheck
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 
@@ -69,11 +70,20 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
             runAdmissionStore,
             adminIdentityService = adminIdentityService
         )
+        val accountRiskControlStore = PostgresAccountRiskCheck(
+            dataSource = RuntimeDataSources.dataSource(
+                adminJdbcUrl,
+                RuntimeEnv.string("ADMIN_POSTGRES_USER", RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef")),
+                RuntimeEnv.string("ADMIN_POSTGRES_PASSWORD", RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef")),
+                "arena-account-risk-control"
+            )
+        )
         return listOf(
             ArenaAdminGateway(
                 arenaAdminService = ArenaAdminApplicationService(
                     arenaRegistryStore = store,
                     arenaRunAdmissionStore = runAdmissionStore,
+                    accountRiskControlStore = accountRiskControlStore,
                     adminIdentityService = adminIdentityService
                 ),
                 adminIdentityService = adminIdentityService,
