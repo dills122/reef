@@ -1,0 +1,14 @@
+{
+  "botId": "noodle-invite-smoke",
+  "fileName": "index.ts",
+  "metadata": {
+    "name": "noodle-invite-smoke",
+    "publisher": "Noodle Ventures",
+    "email": "dss255@live.com",
+    "version": "1.0.0",
+    "sdkVersion": "1.5.0",
+    "botApiVersion": "v1",
+    "description": "Conservative external-account smoke bot for the invite-only fork preview.",
+    "tags": ["smoke", "invite-preview", "market-maker"]
+  }
+}
