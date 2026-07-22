@@ -51,8 +51,8 @@ object SettlementObligationProjection {
         val legOutcomesByObligation = facts.legOutcomes.groupBy { it.settlementObligationId }
         val ledgerEntriesByObligation = facts.ledgerEntries.groupBy { it.settlementObligationId }
         val settlementsByObligation = facts.settlements.groupBy { it.settlementObligationId }
-        val repairsByObligation = facts.repairs.groupBy { it.settlementObligationId }
-        val resolutionsByObligation = facts.resolutions.groupBy { it.settlementObligationId }
+        val repairsByBreak = facts.repairs.groupBy { it.settlementBreakId }
+        val resolutionsByBreak = facts.resolutions.groupBy { it.settlementBreakId }
         return facts.obligations
             .sortedWith(compareBy<SettlementObligationCreatedFact> { it.occurredAt }.thenBy { it.settlementObligationId })
             .map { obligation ->
@@ -99,12 +99,16 @@ object SettlementObligationProjection {
                 val settlement = settlementsByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementSettledFact> { it.occurredAt }.thenBy { it.settlementId })
-                val repair = repairsByObligation[obligation.settlementObligationId]
-                    .orEmpty()
-                    .maxWithOrNull(compareBy<SettlementRepairPostedFact> { it.occurredAt }.thenBy { it.settlementRepairId })
-                val resolution = resolutionsByObligation[obligation.settlementObligationId]
-                    .orEmpty()
-                    .maxWithOrNull(compareBy<SettlementResolvedFact> { it.occurredAt }.thenBy { it.settlementResolutionId })
+                val repair = breakFact?.let { bf ->
+                    repairsByBreak[bf.settlementBreakId]
+                        .orEmpty()
+                        .maxWithOrNull(compareBy<SettlementRepairPostedFact> { it.occurredAt }.thenBy { it.settlementRepairId })
+                }
+                val resolution = breakFact?.let { bf ->
+                    resolutionsByBreak[bf.settlementBreakId]
+                        .orEmpty()
+                        .maxWithOrNull(compareBy<SettlementResolvedFact> { it.occurredAt }.thenBy { it.settlementResolutionId })
+                }
                 val updatedAt = listOfNotNull(
                     obligation.occurredAt,
                     clearingSubmission?.occurredAt,

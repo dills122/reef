@@ -26,13 +26,15 @@ class CircuitBreaker(
         when (state.get()) {
             CircuitState.OPEN -> {
                 val opened = openedAt.get()
-                if (opened != null && Duration.between(opened, clock()).compareTo(cooldown) >= 0) {
-                    state.set(CircuitState.HALF_OPEN)
-                } else {
+                val cooldownElapsed = opened != null && Duration.between(opened, clock()).compareTo(cooldown) >= 0
+                if (!cooldownElapsed || !state.compareAndSet(CircuitState.OPEN, CircuitState.HALF_OPEN)) {
                     throw CircuitOpenException("circuit open, cooldown until ${opened?.plus(cooldown)}")
                 }
             }
-            else -> {}
+            CircuitState.HALF_OPEN -> {
+                throw CircuitOpenException("circuit half-open, trial call in progress")
+            }
+            CircuitState.CLOSED -> {}
         }
 
         return try {
