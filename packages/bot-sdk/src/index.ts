@@ -144,8 +144,8 @@ export interface SubmitMarketOrderV1 {
 export interface ModifyOrderV1 {
   readonly orderId: string;
   readonly instrumentId: string;
-  readonly quantity?: number;
-  readonly limitPrice?: number;
+  readonly quantity: number;
+  readonly limitPrice: number;
 }
 
 export interface CancelOrderV1 {

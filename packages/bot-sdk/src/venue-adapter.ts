@@ -36,6 +36,7 @@ export function toVenueCommandRequestsV1(
 ): BotResultV1<readonly VenueCommandRequestV1[]> {
   const requests: VenueCommandRequestV1[] = [];
   const startingSequence = context.startingSequence ?? 1;
+  let emittedCount = 0;
 
   for (let index = 0; index < actions.length; index += 1) {
     const action = actions[index];
@@ -43,7 +44,8 @@ export function toVenueCommandRequestsV1(
       continue;
     }
 
-    const sequence = startingSequence + index;
+    const sequence = startingSequence + emittedCount;
+    emittedCount += 1;
     const common = commonCommandFields(context, sequence);
 
     switch (action.type) {
@@ -52,6 +54,10 @@ export function toVenueCommandRequestsV1(
         const limitPrice = priceToNanos(action.order.limitPrice);
         if (limitPrice === undefined) {
           return unsupportedAction("Venue API v1 limitPrice must be a finite non-negative number.");
+        }
+        const quantityUnits = quantityToUnits(action.order.quantity);
+        if (quantityUnits === undefined) {
+          return unsupportedAction("Venue API v1 quantity must be a finite positive number.");
         }
         requests.push({
           method: "POST",
@@ -65,7 +71,7 @@ export function toVenueCommandRequestsV1(
             accountId: context.accountId,
             side: action.order.side,
             orderType: "LIMIT",
-            quantityUnits: String(action.order.quantity),
+            quantityUnits,
             limitPrice,
             currency: context.currency ?? "USD",
             timeInForce: action.order.timeInForce ?? "DAY",
@@ -92,6 +98,10 @@ export function toVenueCommandRequestsV1(
         if (limitPrice === undefined) {
           return unsupportedAction("Venue API v1 limitPrice must be a finite non-negative number.");
         }
+        const quantityUnits = quantityToUnits(action.order.quantity);
+        if (quantityUnits === undefined) {
+          return unsupportedAction("Venue API v1 quantity must be a finite positive number.");
+        }
         requests.push({
           method: "POST",
           route: "/api/v1/orders/modify",
@@ -100,7 +110,7 @@ export function toVenueCommandRequestsV1(
             ...common,
             orderId: action.order.orderId,
             instrumentId: action.order.instrumentId,
-            quantityUnits: String(action.order.quantity),
+            quantityUnits,
             limitPrice,
             botId: context.botId,
             botVersion: context.botVersion,
@@ -209,6 +219,13 @@ function priceToNanos(price: number): string | undefined {
     return undefined;
   }
   return String(Math.round(price * PRICE_SCALE_NANOS));
+}
+
+function quantityToUnits(quantity: number): string | undefined {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return undefined;
+  }
+  return String(quantity);
 }
 
 function omitUndefinedStringValues(values: Record<string, string | undefined>): Readonly<Record<string, string>> {

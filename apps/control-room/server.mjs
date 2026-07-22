@@ -549,7 +549,9 @@ async function serveStatic(response, rawPath) {
     const stats = statSync(path);
     if (!stats.isFile()) throw new Error("not a file");
     response.writeHead(200, { "Content-Type": contentType(path) });
-    createReadStream(path).pipe(response);
+    const stream = createReadStream(path);
+    stream.on("error", () => response.destroy());
+    stream.pipe(response);
   } catch {
     response.writeHead(404);
     response.end("not found");
