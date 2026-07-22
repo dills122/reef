@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  DOCKERHUB_NAMESPACE: dills122
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || github.repository_owner }}
 
 jobs:
   detect-image-impact:
@@ -76,7 +76,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
-          username: ${{ env.DOCKERHUB_NAMESPACE }}
+          username: ${{ secrets.DOCKERHUB_USERNAME || env.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to GHCR

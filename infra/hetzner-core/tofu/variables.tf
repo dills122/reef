@@ -10,6 +10,18 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "resource_name_override" {
+  description = "Optional base name for cloud resources. Empty derives <project>-<environment>. Prefer setting this only at creation time."
+  type        = string
+  default     = ""
+}
+
+variable "server_name" {
+  description = "Optional core server name. Empty derives <resource-name>-core-1. Prefer setting this only at creation time."
+  type        = string
+  default     = ""
+}
+
 variable "location" {
   description = "Hetzner Cloud location."
   type        = string
@@ -28,10 +40,55 @@ variable "image" {
   default     = "ubuntu-24.04"
 }
 
+variable "network_cidr" {
+  description = "Private Hetzner network CIDR. Treat as a creation-time setting."
+  type        = string
+  default     = "10.70.0.0/16"
+
+  validation {
+    condition     = can(cidrhost(var.network_cidr, 0))
+    error_message = "network_cidr must be a valid CIDR block."
+  }
+}
+
+variable "network_zone" {
+  description = "Hetzner network zone containing the private subnet."
+  type        = string
+  default     = "eu-central"
+}
+
+variable "subnet_cidr" {
+  description = "Private Hetzner subnet CIDR. Treat as a creation-time setting."
+  type        = string
+  default     = "10.70.1.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.subnet_cidr, 0))
+    error_message = "subnet_cidr must be a valid CIDR block."
+  }
+}
+
+variable "server_private_ip" {
+  description = "Static address assigned to the core server inside subnet_cidr. Treat as a creation-time setting."
+  type        = string
+  default     = "10.70.1.10"
+
+  validation {
+    condition     = can(cidrnetmask("${var.server_private_ip}/32"))
+    error_message = "server_private_ip must be a valid IPv4 address."
+  }
+}
+
 variable "ops_user" {
   description = "Non-root SSH user created by cloud-init."
   type        = string
   default     = "ops"
+}
+
+variable "operator_ssh_host" {
+  description = "Routine private SSH hostname or IP, normally the server's Tailscale MagicDNS name. Empty falls back to public IPv4 for initial bootstrap."
+  type        = string
+  default     = ""
 }
 
 variable "ssh_public_key_path" {
@@ -41,13 +98,19 @@ variable "ssh_public_key_path" {
 }
 
 variable "admin_cidrs" {
-  description = "CIDR blocks allowed to SSH to the core server."
+  description = "CIDR blocks allowed to SSH to the core server when public SSH bootstrap/break-glass access is enabled."
   type        = list(string)
 
   validation {
     condition     = length(var.admin_cidrs) > 0
     error_message = "Set at least one admin CIDR so SSH is not open to the world."
   }
+}
+
+variable "enable_public_ssh" {
+  description = "Open public SSH from admin_cidrs for initial bootstrap or break-glass recovery. Disable after private Tailscale SSH is verified."
+  type        = bool
+  default     = true
 }
 
 variable "api_domain" {

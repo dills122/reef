@@ -8,7 +8,10 @@ to these Docker Hub mirrors:
 - `dills122/reef-matching-engine:latest`
 - `dills122/reef-simulator:latest`
 
-Equivalent GHCR mirrors use the `ghcr.io/dills122/` namespace. Keep image names
+`.github/workflows/container-images.yml` publishes to the GitHub repository
+owner's matching Docker Hub namespace by convention and to the repository
+owner's `ghcr.io/<owner>/` namespace. Set the GitHub Actions variable
+`DOCKERHUB_NAMESPACE` when the Docker Hub namespace differs. Keep image names
 overridable with `REEF_PLATFORM_RUNTIME_IMAGE`, `REEF_MATCHING_ENGINE_IMAGE`,
 and `REEF_SIMULATOR_IMAGE` so either registry can be selected without changing
 Compose files.
@@ -17,7 +20,8 @@ Compose files.
 
 In Docker Hub:
 
-- Create or confirm the `dills122` namespace.
+- Create or confirm the configured `DOCKERHUB_NAMESPACE` (`dills122` for the
+  current canonical deployment).
 - Create public repositories for each Reef image, or let the first push create
   them if the account permits it.
 - Keep the repositories public so ephemeral workers can pull without registry

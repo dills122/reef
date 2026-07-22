@@ -3,8 +3,26 @@ environment = "prod"
 location    = "nbg1"
 server_type = "cx33"
 
+# Optional creation-time naming/network overrides. The defaults shown here are
+# conventional, not required identities. Changing network values later may
+# replace infrastructure.
+# resource_name_override = "reef-prod"
+# server_name             = "reef-prod-core-1"
+network_cidr      = "10.70.0.0/16"
+network_zone      = "eu-central"
+subnet_cidr       = "10.70.1.0/24"
+server_private_ip = "10.70.1.10"
+
+# Set after Tailscale enrollment so generated SSH/tunnel commands use the
+# private route. Leave empty only during initial public-SSH bootstrap.
+operator_ssh_host = "YOUR-SERVER.YOUR-TAILNET.ts.net"
+
 enable_public_web = false
-api_domain        = "reef-arena-admin.shrimpworks.dev"
+api_domain        = "api.example.com"
+
+# Keep true only for initial bootstrap or break-glass recovery. After Tailscale
+# SSH access is verified, set false and apply again to remove public port 22.
+enable_public_ssh = true
 
 # Set this when DNS should be managed by OpenTofu. Requires CLOUDFLARE_API_TOKEN.
 # cloudflare_zone_id     = "YOUR.CLOUDFLARE.ZONE.ID"

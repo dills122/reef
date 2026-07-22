@@ -24,6 +24,10 @@ if (command !== "run" && command !== "check" && command !== "push-artifacts") {
 }
 
 const runId = option("run-id", env("REEF_SIM_RUN_ID", `sim-do-${timestamp()}`));
+const workerName = option(
+  "worker-name",
+  env("REEF_SIM_WORKER_NAME", env("REEF_DO_DROPLET_NAME", `reef-sim-${nameToken(runId)}`)),
+);
 const reportRoot = resolve(repoRoot, option("report-root", env("REEF_SIM_REPORT_ROOT", "reports/simulations/ephemeral-do")));
 const reportDir = resolve(reportRoot, runId);
 const profile = option("profile", env("REEF_SIM_PROFILE", "stream-ack"));
@@ -53,6 +57,7 @@ const commonEnv = {
   ...process.env,
   REEF_DO_BENCHMARK_PROFILE: profile,
   REEF_DO_RUN_ID: runId,
+  REEF_DO_DROPLET_NAME: workerName,
   REEF_DO_LOCAL_REPORT_ROOT: reportRoot,
 };
 if (exportToR2) commonEnv.REEF_DO_EXPORT_TO_R2 = "1";
@@ -73,6 +78,7 @@ commonEnv.REEF_DO_IMAGE_MODE = imageMode;
 mkdirSync(reportDir, { recursive: true });
 writeMetadata("started", {
   profile,
+  workerName,
   imageMode,
   goal,
   targetRps,
@@ -91,6 +97,7 @@ if (command === "check") {
   const status = run(doHarness, ["check"], { env: commonEnv });
   writeMetadata(status === 0 ? "check_passed" : "check_failed", {
     profile,
+    workerName,
     imageMode,
     goal,
     targetRps,
@@ -110,6 +117,7 @@ if (command === "push-artifacts") {
   const status = pushArtifacts();
   writeMetadata(status === 0 ? "artifacts_pushed" : "artifact_push_failed", {
     profile,
+    workerName,
     imageMode,
     goal,
     targetRps,
@@ -145,6 +153,7 @@ if (shouldDestroy) {
 const finalStatus = firstNonZero(runStatus, pushStatus, destroyStatus);
 writeMetadata(finalStatus === 0 ? "completed" : "failed", {
   profile,
+  workerName,
   imageMode,
   goal,
   targetRps,
@@ -171,6 +180,7 @@ OpenTofu harness for compute and keeps run artifacts under reports/simulations.
 
 Options:
   --run-id <id>                 stable run id; default sim-do-<UTC timestamp>
+  --worker-name <name>          provider worker name; default reef-sim-<run-id>
   --rate <rps[,rps]>            stress rates; maps to REEF_DO_STRESS_RATES
   --duration <duration>         stress duration; maps to REEF_DO_STRESS_DURATION
   --workers <count>             stress workers; maps to REEF_DO_STRESS_WORKERS
@@ -250,6 +260,15 @@ function defaultMinRps(rateList) {
     .filter((value) => Number.isFinite(value) && value > 0);
   if (rates.length === 0) return "";
   return String(Math.floor(Math.min(...rates) * 0.9));
+}
+
+function nameToken(value) {
+  const normalized = String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return normalized || "run";
 }
 
 function run(commandPath, commandArgs, { env: childEnv, allowFailure = false } = {}) {

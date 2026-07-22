@@ -97,6 +97,8 @@ If behavior changes, update the relevant contract and docs in the same change.
 
 ## Useful Commands
 
+- First-time dependency setup: `make dev-bootstrap`
+- Developer prerequisite check: `make dev-doctor` (or `make dev-doctor ARGS=--full`)
 - Local setup: `cp .env.example .env`
 - Start local stack: `make dev-up`
 - Stop local stack: `make dev-down`

@@ -107,7 +107,7 @@ The backbone is the low-cost always-on host. Current target:
 | Region | `nbg1` |
 | Provisioning | OpenTofu under `infra/hetzner-core/tofu` |
 | OS | Ubuntu 24.04 |
-| Access | SSH restricted by Hetzner firewall `admin_cidrs` |
+| Access | Standard OpenSSH over Tailscale; public `/32` SSH only for bootstrap/break-glass |
 | Public web | Off by default; Caddy only starts with the `public` profile |
 | Runtime access | `platform-runtime` and OpenBao bind to host loopback for SSH tunnels |
 | Data ownership | Docker volumes on one host, backed up to Cloudflare R2 |

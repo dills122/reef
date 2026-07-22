@@ -10,7 +10,7 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test lint check-scripts check-dependency-alignment check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
+.PHONY: test test-dev-tooling lint check-scripts check-dependency-alignment check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
@@ -24,7 +24,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-admin-owned-bot-local-seed dev-smoke-admin-auth-local dev-control-room
-.PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
+.PHONY: dev-bootstrap dev-doctor dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-compare-reef-arena-separation dev-replay
 .PHONY: dev-throughput-campaign dev-throughput-compare
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
@@ -32,7 +32,12 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
 .PHONY: do-benchmark do-materializer-10k-gate do-materializer-scaling-gate do-projection-freshness-gate do-arena-pacing-lag-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
-test: test-go test-simulator test-platform-runtime test-bot-sdk
+test: test-go test-simulator test-platform-runtime test-bot-sdk test-dev-tooling
+
+test-dev-tooling:
+	node scripts/dev/doctor.test.mjs
+	node scripts/dev/onboarding-links.test.mjs
+	node scripts/dev/smoke-identity.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...
@@ -176,6 +181,14 @@ check-bun-runtime:
 
 check-bot-sdk-js-deps:
 	@test -d node_modules/typescript -a -d node_modules/trading-signals -a -d node_modules/ses || (echo "missing JS dependencies for bot SDK and arena tests. Run: bun install --frozen-lockfile" && exit 1)
+
+dev-bootstrap:
+	@$(MAKE) check-bun-runtime
+	bun scripts/dev/bootstrap.mjs $(ARGS)
+
+dev-doctor:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/doctor.mjs $(ARGS)
 
 dev-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -519,10 +532,14 @@ dev-scenario-golden-check:
 	$(JS_RUNTIME) scripts/dev/scenario-golden-check.mjs $(ARGS)
 
 docs-site-dev:
-	cd apps/docs-site && npm install && npm run dev
+	@$(MAKE) check-bun-runtime
+	bun scripts/dev/docs-site-tool.mjs install
+	bun scripts/dev/docs-site-tool.mjs dev
 
 docs-site-build:
-	cd apps/docs-site && npm ci && npm run build
+	@$(MAKE) check-bun-runtime
+	bun scripts/dev/docs-site-tool.mjs install
+	bun scripts/dev/docs-site-tool.mjs build
 
 dev-scenario-drift-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

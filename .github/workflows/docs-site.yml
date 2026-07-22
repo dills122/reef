@@ -44,8 +44,8 @@ jobs:
       - name: Build docs site
         working-directory: apps/docs-site
         env:
-          DOCS_SITE_URL: https://dills122.github.io
-          DOCS_SITE_BASE: /reef
+          DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL || format('https://{0}.github.io', github.repository_owner) }}
+          DOCS_SITE_BASE: ${{ vars.DOCS_SITE_BASE || format('/{0}', github.event.repository.name) }}
         run: npm run build
 
       - name: Configure GitHub Pages

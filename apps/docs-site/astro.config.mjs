@@ -3,6 +3,9 @@ import starlight from "@astrojs/starlight";
 
 const site = process.env.DOCS_SITE_URL;
 const base = process.env.DOCS_SITE_BASE;
+const repository = process.env.DOCS_SITE_REPOSITORY ?? process.env.GITHUB_REPOSITORY ?? "dills122/reef";
+const editBranch = process.env.DOCS_SITE_EDIT_BRANCH ?? process.env.GITHUB_REF_NAME ?? "master";
+const repositoryUrl = `https://github.com/${repository}`;
 
 export default defineConfig({
   ...(site ? { site } : {}),
@@ -15,10 +18,10 @@ export default defineConfig({
         "Reef project overview, bot arena/game docs, trading API surface, and data schema reference. Pre-release, under heavy development.",
       customCss: ["./src/styles/reef.css"],
       social: [
-        { icon: "github", label: "GitHub", href: "https://github.com/dills122/reef" },
+        { icon: "github", label: "GitHub", href: repositoryUrl },
       ],
       editLink: {
-        baseUrl: "https://github.com/dills122/reef/edit/master/apps/docs-site/",
+        baseUrl: `${repositoryUrl}/edit/${editBranch}/apps/docs-site/`,
       },
       sidebar: [
         {
@@ -27,6 +30,7 @@ export default defineConfig({
             { label: "What Is Reef", slug: "overview/what-is-reef" },
             { label: "Architecture", slug: "overview/architecture" },
             { label: "Current Status", slug: "overview/status" },
+            { label: "Developer Setup", slug: "overview/developer-setup" },
           ],
         },
         {

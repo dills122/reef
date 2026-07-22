@@ -114,6 +114,16 @@ KUBE_MATERIALIZER_REPLICAS=4 make kube-materializer-scale
 REEF_PLATFORM_API_HOST_PORT=18080 REEF_MATCHING_ENGINE_HOST_PORT=18081 make kube-smoke
 ```
 
+Cluster identity is configurable. `KUBE_LOCAL_CLUSTER` derives the default
+context, while `KUBE_CONTEXT` can point at an existing cluster. The kube helper
+renders every manifest into `KUBE_NAMESPACE`; the literal `reef-local` in the
+checked-in YAML is only the inspectable default:
+
+```sh
+KUBE_LOCAL_CLUSTER=reef-alice KUBE_NAMESPACE=reef-alice make kube-up
+KUBE_NAMESPACE=reef-alice bun scripts/dev/kube.mjs render-manifest 10-postgres.yaml
+```
+
 Use `KUBE_BUILD_IMAGES=0` to reuse existing local Docker images while still
 importing them into a fresh k3d cluster. Use `KUBE_IMPORT_IMAGES=0` only when
 the cluster already has the desired local image tags.

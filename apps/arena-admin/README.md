@@ -13,9 +13,13 @@ authenticated `/admin/v1/...` routes from `platform-runtime` through Caddy.
 From the repository root:
 
 ```bash
-bun install --frozen-lockfile
+make dev-bootstrap
 bun run arena-admin:dev
 ```
+
+For an Arena-only dependency install, run
+`bun install --frozen-lockfile` from `apps/arena-admin`; this app owns a
+separate Bun lockfile from the repository root.
 
 Copy `.env.example` to `.env` in this directory when a non-default API base or
 explicit local fixture mode is required. Local fixture flags are development

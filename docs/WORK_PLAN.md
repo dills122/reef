@@ -8,7 +8,7 @@ documents that own detailed contracts, evidence, and sprint tasking.
 Read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) first for the implementation
 snapshot and verified performance claims.
 
-Last aligned: 2026-07-19.
+Last aligned: 2026-07-21.
 
 ## Source Of Truth
 
@@ -85,8 +85,10 @@ and readiness remain independent.
 
 2. Finish the API/control-plane hardening backlog.
    - Close remaining account/client/object authorization gaps.
-   - Move hosted, CI, and operator callers off raw `/internal/*` HTTP using
-     [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md).
+   - Keep hosted, CI, and operator callers off raw `/internal/*` HTTP. The
+     current [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
+     has no hosted migration candidate; retain local diagnostic callers as
+     loopback-only tooling and treat new remote callers as regressions.
    - Add service identity for non-local internal gRPC and deepen enabled-role
      readiness checks.
    - Keep `/api/v1` and `/admin/v1` as the only externally reachable HTTP
@@ -114,8 +116,12 @@ and readiness remain independent.
    - Preserve the allocation, confirmation, affirmation, clearing, novation,
      obligation, instruction, attempt, leg, ledger, break, repair, resolution,
      exception-queue, proof, and score fact chain.
-   - Add remaining scenario and operator workflow evidence without broadening
-     into a clearinghouse build or mutating matching history.
+   - Record the remaining live security-fail/repair and `ops-realistic-v1`
+     pending evidence, then define the next bounded operator workflow slice
+     from those results.
+   - Keep deterministic netting as a separately scoped contract/preview; do
+     not broaden this checkpoint into a clearinghouse build or mutate matching
+     history.
 
 6. Keep documentation synchronized as behavior lands.
    - Update contracts, internal docs, public docs/API pages, and README in the
