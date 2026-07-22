@@ -86,9 +86,11 @@ This preserves the normal fork contribution model without exposing hosted
 secrets or allowing an unreviewed submission to mutate hosted state. Full task
 ordering and acceptance criteria live in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
-Implementation begins only after the product/artifact boundary in
+Implementation proceeded after the product/artifact boundary in
 [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
-is promoted.
+was promoted. Admission, immutable roster/run binding, and policy-lock code is
+now implemented; the remaining release work is hosted and external-account
+proof.
 
 The design must prove:
 
@@ -153,12 +155,14 @@ codes, emergency-removal rules, and evidence envelope.
 
 ## Next Engineering Priority
 
-If external bot submission is the release objective, the Reef/Arena separation
-prerequisite is now promoted; prioritize intake implementation and repository
-enforcement above further projection throughput tuning. Current projection
-evidence is sufficient for a bounded preview. Write amplification remains
-important for longer and higher-rate seasons, but it does not explain why an
-external user cannot submit today.
+If external bot submission is the release objective, prioritize the named
+external-account lifecycle and promoted hosted rehearsal above further feature
+work or projection throughput tuning. Admission, repository enforcement,
+roster/run binding, and policy locks are implemented; the blocker is now
+release evidence and operations proof. Current projection evidence is
+sufficient for a bounded preview. Write amplification remains important for
+longer and higher-rate seasons, but it is not the blocker to advertising the
+invite-only external path.
 
 ## Talking Points
 

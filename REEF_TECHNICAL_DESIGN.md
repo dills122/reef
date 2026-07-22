@@ -877,16 +877,20 @@ The project can become huge quickly. Favor a thin but coherent vertical slice fi
 
 ## 24. Immediate Next Steps
 
-1. Preserve the verified `10k commands/sec` durable venue-core baseline while
+1. Complete the invite-only fork preview's named external-account proof,
+   promoted hosted rehearsal, multi-seed policy evidence, and recorded run
+   campaign; cutoff/roster enforcement is implemented.
+2. Finish remaining API/control-plane hardening: object authorization,
+   non-local internal gRPC identity/readiness, and loopback-only containment of
+   raw diagnostic HTTP.
+3. Preserve the verified `10k commands/sec` durable venue-core baseline while
    completing bounded-working-set and compact-canonical-storage gates before a
    higher claim.
-2. Reduce projection write amplification without weakening the separate
+4. Reduce projection write amplification without weakening the separate
    `5k/60s` full-projection freshness evidence.
-3. Continue post-trade lifecycle and exception-operations hardening from the
+5. Continue post-trade lifecycle and exception-operations hardening from the
    implemented allocation-through-novation and settlement fact chain.
-4. Complete the invite-only fork preview's named external-account proof,
-   cutoff/roster policy, and recorded run campaign.
-5. Keep Reef-only and Arena-enabled artifact, route, migration, Compose, and
+6. Keep Reef-only and Arena-enabled artifact, route, migration, Compose, and
    failure-isolation gates enforced in CI.
 
 ## 25. One-Sentence Architecture Statement
