@@ -39,29 +39,25 @@ internal class DiagnosticsGateway(
     private val streamCommandWorkerPollMs: Long,
     private val streamCommandWorkerFetchTimeoutMs: Long,
     private val streamCommandWorkerDedicatedRuntimePoolEnabled: Boolean,
-    private val venueEventMaterializerShouldStart: () -> Boolean,
     private val venueEventMaterializerBatchSize: Int,
     private val venueEventMaterializerPollMs: Long,
     private val venueEventMaterializerFetchTimeoutMs: Long,
-    private val marketDataProjectorShouldStart: () -> Boolean,
     private val marketDataProjectorProjectionName: String,
     private val marketDataProjectorSourceProjectionName: String,
     private val marketDataProjectorPollMs: Long,
     private val marketDataProjectorBatchSize: Int,
-    private val orderLifecycleProjectorShouldStart: () -> Boolean,
     private val orderLifecycleProjectorPollMs: Long,
     private val orderLifecycleProjectorBatchSize: Int,
-    private val streamWorkerPartitions: () -> List<Int>,
     private val api: PlatformApi,
     private val streamAckProjectorEnabled: Boolean,
     private val streamAckProjectionName: String,
     private val streamAckProjectionSource: CanonicalProjectionSource,
     private val streamAckProjectionEventStream: String,
     private val streamAckProjectionStage: ProjectionStage,
-    private val projectorPartitions: () -> List<Int>
+    private val runtimeLoopStarter: RuntimeLoopStarter
 ) {
     fun projectorStatusJson(): String {
-        val partitions = projectorPartitions()
+        val partitions = runtimeLoopStarter.projectorPartitions()
         val status = api.projectionStatus(streamAckProjectionName, partitions, streamAckProjectionSource.configValue)
         val metrics = CanonicalProjectionMetrics.snapshot()
         val retryMetrics = ProjectionPersistenceRetryMetrics.snapshot()
@@ -309,7 +305,7 @@ internal class DiagnosticsGateway(
         return JsonCodec.writeObject(
             "enabled" to streamCommandWorkerEnabled,
             "processingMode" to commandProcessingMode.configValue,
-            "partitions" to streamWorkerPartitions(),
+            "partitions" to runtimeLoopStarter.streamWorkerPartitions(),
             "batchSize" to streamCommandWorkerBatchSize,
             "pollIntervalMs" to streamCommandWorkerPollMs,
             "fetchTimeoutMs" to streamCommandWorkerFetchTimeoutMs,
@@ -374,7 +370,7 @@ internal class DiagnosticsGateway(
     fun venueEventMaterializerStatsJson(): String {
         val stats = VenueEventBatchMaterializerMetrics.snapshot()
         return JsonCodec.writeObject(
-            "enabled" to venueEventMaterializerShouldStart(),
+            "enabled" to runtimeLoopStarter.venueEventMaterializerShouldStart(),
             "role" to runtimeRole.configValue,
             "processingMode" to commandProcessingMode.configValue,
             "batchSize" to venueEventMaterializerBatchSize,
@@ -406,7 +402,7 @@ internal class DiagnosticsGateway(
     fun marketDataProjectorStatusJson(): String {
         val stats = MarketDataProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
-            "enabled" to marketDataProjectorShouldStart(),
+            "enabled" to runtimeLoopStarter.marketDataProjectorShouldStart(),
             "role" to runtimeRole.configValue,
             "projectionName" to marketDataProjectorProjectionName,
             "sourceProjectionName" to marketDataProjectorSourceProjectionName,
@@ -426,7 +422,7 @@ internal class DiagnosticsGateway(
     fun orderLifecycleProjectorStatusJson(): String {
         val stats = OrderLifecycleProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
-            "enabled" to orderLifecycleProjectorShouldStart(),
+            "enabled" to runtimeLoopStarter.orderLifecycleProjectorShouldStart(),
             "role" to runtimeRole.configValue,
             "pollIntervalMs" to orderLifecycleProjectorPollMs,
             "batchSize" to orderLifecycleProjectorBatchSize,

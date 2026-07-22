@@ -4,6 +4,7 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.sun.net.httpserver.HttpExchange
 
 /**
  * Routes for the "admin/data" surface (see docs/steering/architecture.md):
@@ -18,25 +19,11 @@ internal class PlatformAdminDataRoutes(
     private val optionalProductRouteExtensions: List<OptionalProductRouteExtension>,
     private val currentAdminPrincipal: () -> AdminRequestPrincipal,
     private val settlementAdminGateway: SettlementAdminGateway,
+    private val riskGuardrailGateway: RiskGuardrailGateway,
+    private val diagnosticsGateway: DiagnosticsGateway,
     private val healthJson: () -> String,
     private val readinessJson: () -> String,
-    private val abuseStatsJson: () -> String,
-    private val accountRiskControlsJson: () -> String,
-    private val accountRiskDecisionsJson: (Int) -> String,
-    private val commandCircuitBreakersJson: () -> String,
-    private val instrumentPriceCollarsJson: () -> String,
-    private val setAccountRiskControlJson: (String) -> PlatformHotPathResponse,
-    private val setCommandCircuitBreakerJson: (String) -> PlatformHotPathResponse,
-    private val setInstrumentPriceCollarJson: (String) -> PlatformHotPathResponse,
-    private val dbPoolStatsJson: () -> String,
-    private val asyncCommandStatsJson: () -> String,
-    private val commandAccountingJson: (String) -> String,
-    private val streamCommandHealthJson: () -> String,
-    private val streamCommandWorkerStatsJson: () -> String,
-    private val venueEventMaterializerStatsJson: () -> String,
-    private val projectorStatusJson: () -> String,
-    private val marketDataProjectorStatsJson: () -> String,
-    private val orderLifecycleProjectorStatsJson: () -> String
+    private val abuseStatsJson: () -> String
 ) {
     val paths: List<String> = buildList {
         addAll(listOf(
@@ -73,30 +60,30 @@ internal class PlatformAdminDataRoutes(
             "/healthz" -> getOnly(method) { healthJson() }
             "/readyz" -> getOnly(method) { readinessJson() }
             "/internal/boundary/abuse/stats" -> getOnly(method) { abuseStatsJson() }
-            "/internal/boundary/account-risk/controls" -> getOnly(method) { accountRiskControlsJson() }
+            "/internal/boundary/account-risk/controls" -> getOnly(method) { riskGuardrailGateway.accountRiskControlsJson() }
             "/internal/boundary/account-risk/decisions/recent" -> getOnly(method) {
-                accountRiskDecisionsJson(queryValue(query, "limit").toIntOrNull() ?: 50)
+                riskGuardrailGateway.accountRiskDecisionsJson(queryValue(query, "limit").toIntOrNull() ?: 50)
             }
-            "/internal/boundary/circuit-breakers" -> getOnly(method) { commandCircuitBreakersJson() }
-            "/internal/boundary/price-collars" -> getOnly(method) { instrumentPriceCollarsJson() }
-            "/internal/admin/account-risk/controls" -> postOnly(method) { setAccountRiskControlJson(body) }
-            "/internal/admin/circuit-breakers" -> postOnly(method) { setCommandCircuitBreakerJson(body) }
-            "/internal/admin/price-collars" -> postOnly(method) { setInstrumentPriceCollarJson(body) }
+            "/internal/boundary/circuit-breakers" -> getOnly(method) { riskGuardrailGateway.commandCircuitBreakersJson() }
+            "/internal/boundary/price-collars" -> getOnly(method) { riskGuardrailGateway.instrumentPriceCollarsJson() }
+            "/internal/admin/account-risk/controls" -> postOnly(method) { riskGuardrailGateway.setAccountRiskControlResponse(body) }
+            "/internal/admin/circuit-breakers" -> postOnly(method) { riskGuardrailGateway.setCommandCircuitBreakerResponse(body) }
+            "/internal/admin/price-collars" -> postOnly(method) { riskGuardrailGateway.setInstrumentPriceCollarResponse(body) }
             "/internal/admin/settlement/facts" -> postOnly(method) {
                 settlementAdminGateway.appendSettlementFactsResponse(body)
             }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
-            "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
-            "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }
+            "/internal/perf/db-pools" -> getOnly(method) { diagnosticsGateway.dbPoolStatsJson() }
+            "/internal/commands/async/stats" -> getOnly(method) { diagnosticsGateway.asyncCommandStatsJson() }
             "/internal/commands/accounting" -> getOnly(method) {
-                commandAccountingJson(queryValue(query, "runId"))
+                diagnosticsGateway.commandAccountingJson(queryValue(query, "runId"))
             }
-            "/internal/stream-ack/health" -> getOnly(method) { streamCommandHealthJson() }
-            "/internal/stream-ack/worker/stats" -> getOnly(method) { streamCommandWorkerStatsJson() }
-            "/internal/venue-event-materializer/stats" -> getOnly(method) { venueEventMaterializerStatsJson() }
-            "/internal/projector/status" -> getOnly(method) { projectorStatusJson() }
-            "/internal/market-data/projector/status" -> getOnly(method) { marketDataProjectorStatsJson() }
-            "/internal/order-lifecycle/projector/status" -> getOnly(method) { orderLifecycleProjectorStatsJson() }
+            "/internal/stream-ack/health" -> getOnly(method) { diagnosticsGateway.streamCommandHealthJson() }
+            "/internal/stream-ack/worker/stats" -> getOnly(method) { diagnosticsGateway.streamCommandWorkerStatsJson() }
+            "/internal/venue-event-materializer/stats" -> getOnly(method) { diagnosticsGateway.venueEventMaterializerStatsJson() }
+            "/internal/projector/status" -> getOnly(method) { diagnosticsGateway.projectorStatusJson() }
+            "/internal/market-data/projector/status" -> getOnly(method) { diagnosticsGateway.marketDataProjectorStatusJson() }
+            "/internal/order-lifecycle/projector/status" -> getOnly(method) { diagnosticsGateway.orderLifecycleProjectorStatusJson() }
             else -> optionalProductRouteExtensions.firstNotNullOfOrNull {
                 it.handleInternal(method, path, query, body, currentAdminPrincipal())
             }
@@ -165,6 +152,11 @@ fun queryValue(query: String?, key: String): String {
         }
     }
     return ""
+}
+
+fun HttpExchange.queryValue(key: String): String {
+    val query = requestURI.query ?: return ""
+    return queryValue(query, key)
 }
 
 private fun urlDecode(value: String): String {

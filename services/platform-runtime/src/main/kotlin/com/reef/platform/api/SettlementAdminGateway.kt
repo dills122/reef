@@ -574,8 +574,8 @@ internal class SettlementAdminGateway(
     fun settlementScoreResponse(exchange: HttpExchange, scenarioRunId: String): PlatformHotPathResponse =
         settlementScoreResponse(
             scenarioRunId = scenarioRunId,
-            asOfRaw = queryValue(exchange, "asOf"),
-            agedFailAfterSecondsRaw = queryValue(exchange, "agedFailAfterSeconds")
+            asOfRaw = exchange.queryValue("asOf"),
+            agedFailAfterSecondsRaw = exchange.queryValue("agedFailAfterSeconds")
         )
 
     fun settlementScoreResponse(scenarioRunId: String, query: String?): PlatformHotPathResponse =
@@ -616,12 +616,6 @@ internal class SettlementAdminGateway(
         } catch (ex: Exception) {
             PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement score query failed")))
         }
-    }
-
-    // Reuses the shared top-level queryValue(query, key) from PlatformDiagnosticRoutes.kt.
-    private fun queryValue(exchange: HttpExchange, key: String): String {
-        val query = exchange.requestURI.query ?: return ""
-        return queryValue(query, key)
     }
 
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {

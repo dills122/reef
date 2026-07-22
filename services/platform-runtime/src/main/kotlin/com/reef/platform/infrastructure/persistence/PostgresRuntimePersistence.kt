@@ -111,6 +111,9 @@ class PostgresRuntimePersistence(
     private val projectorDbRetryBackoffMs: Long =
         RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L)
 
+    @Volatile
+    private var commandPayloadSideTableAvailableCache: Boolean? = null
+
     private data class ProjectionCandidate(
         val partitionId: Int,
         val partitionSequence: Long,
@@ -130,6 +133,9 @@ class PostgresRuntimePersistence(
         const val CanonicalCommandOutcomeProjectionMaxBatchSize = 5000
         const val StreamSequencePartitionShift = 48
         val projectorRowsBeforeWatermarkFailureInjected = AtomicBoolean(false)
+        const val OrderSelectColumns =
+            "order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, " +
+                "quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id"
     }
 
     init {
@@ -3146,13 +3152,19 @@ class PostgresRuntimePersistence(
     }
 
     private fun commandPayloadSideTableAvailable(): Boolean {
-        canonicalConnection().use { conn ->
-            conn.prepareStatement("SELECT to_regclass('command_log.command_payloads') IS NOT NULL").use { ps ->
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    return rs.getBoolean(1)
+        commandPayloadSideTableAvailableCache?.let { return it }
+        synchronized(this) {
+            commandPayloadSideTableAvailableCache?.let { return it }
+            val available = canonicalConnection().use { conn ->
+                conn.prepareStatement("SELECT to_regclass('command_log.command_payloads') IS NOT NULL").use { ps ->
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
+                    }
                 }
             }
+            commandPayloadSideTableAvailableCache = available
+            return available
         }
     }
 
@@ -4423,7 +4435,7 @@ class PostgresRuntimePersistence(
         projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
+                SELECT $OrderSelectColumns
                 FROM ${names.orders} WHERE order_id = ?
                 """.trimIndent()
             ).use { ps ->
@@ -4441,7 +4453,7 @@ class PostgresRuntimePersistence(
         val placeholders = orderIds.joinToString(",") { "?" }
         return projectionQueryList(
             """
-            SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
+            SELECT $OrderSelectColumns
             FROM ${names.orders}
             WHERE order_id IN ($placeholders)
             """.trimIndent(),
@@ -4455,7 +4467,7 @@ class PostgresRuntimePersistence(
         projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
+                SELECT $OrderSelectColumns
                 FROM ${names.orders} WHERE participant_id = ? AND client_order_id = ?
                 ORDER BY accepted_at_ts DESC NULLS LAST, accepted_at DESC, order_id DESC
                 LIMIT 1
@@ -4473,7 +4485,7 @@ class PostgresRuntimePersistence(
 
     override fun acceptedOrders(): List<PersistedOrder> = projectionQueryList(
         """
-        SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
+        SELECT $OrderSelectColumns
         FROM ${names.orders} ORDER BY accepted_at_ts NULLS LAST, accepted_at, order_id
         """.trimIndent()
     ) {
@@ -4909,8 +4921,13 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun <T> queryList(sql: String, vararg params: String, map: java.sql.ResultSet.() -> T): List<T> {
-        canonicalConnection().use { conn ->
+    private fun <T> queryList(
+        sql: String,
+        vararg params: String,
+        connectionSupplier: () -> Connection = ::canonicalConnection,
+        map: java.sql.ResultSet.() -> T
+    ): List<T> {
+        connectionSupplier().use { conn ->
             conn.prepareStatement(sql).use { ps ->
                 params.forEachIndexed { idx, value -> ps.setString(idx + 1, value) }
                 ps.executeQuery().use { rs ->
@@ -4922,18 +4939,8 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun <T> projectionQueryList(sql: String, vararg params: String, map: java.sql.ResultSet.() -> T): List<T> {
-        projectionConnection().use { conn ->
-            conn.prepareStatement(sql).use { ps ->
-                params.forEachIndexed { idx, value -> ps.setString(idx + 1, value) }
-                ps.executeQuery().use { rs ->
-                    val rows = mutableListOf<T>()
-                    while (rs.next()) rows.add(rs.map())
-                    return rows
-                }
-            }
-        }
-    }
+    private fun <T> projectionQueryList(sql: String, vararg params: String, map: java.sql.ResultSet.() -> T): List<T> =
+        queryList(sql, *params, connectionSupplier = ::projectionConnection, map = map)
 
     private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
         commandPayloadJson: String = "{}",

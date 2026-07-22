@@ -3,7 +3,6 @@ package com.reef.platform.api
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
-import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
 import java.math.BigDecimal
 import java.time.Instant
@@ -1875,12 +1874,9 @@ fun defaultBoundaryHooks(
             disabledBots = parseCsvSet(lookup("EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS"))
         )
         "postgres", "cached-postgres" -> {
-            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             val cacheTtlMillis = lookup("EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
             PostgresAccountRiskCheck(
-                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "account-risk"),
+                dataSource = runtimeDbDataSourceFromEnv("account-risk", lookup),
                 cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
             )
         }
@@ -1898,12 +1894,9 @@ fun defaultBoundaryHooks(
     val circuitBreakerMode = (lookup("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()
     val commandCircuitBreakerCheck = when (circuitBreakerMode) {
         "postgres", "cached-postgres" -> {
-            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             val cacheTtlMillis = lookup("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
             PostgresCommandCircuitBreakerStore(
-                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-circuit-breaker"),
+                dataSource = runtimeDbDataSourceFromEnv("command-circuit-breaker", lookup),
                 cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
             )
         }
@@ -1913,12 +1906,9 @@ fun defaultBoundaryHooks(
     val instrumentPriceCollarMode = (lookup("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE") ?: "allow-all").lowercase()
     val instrumentPriceCollarCheck = when (instrumentPriceCollarMode) {
         "postgres", "cached-postgres" -> {
-            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             val cacheTtlMillis = lookup("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
             PostgresInstrumentPriceCollarStore(
-                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "instrument-price-collar"),
+                dataSource = runtimeDbDataSourceFromEnv("instrument-price-collar", lookup),
                 cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
             )
         }
@@ -1928,11 +1918,8 @@ fun defaultBoundaryHooks(
     val idempotencyMode = (lookup("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
     val retentionPolicy = DefaultIdempotencyRetentionPolicy()
     val idempotencyStore = if (idempotencyMode == "postgres") {
-        val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-        val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-        val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
         PostgresIdempotencyStore(
-            RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "idempotency"),
+            runtimeDbDataSourceFromEnv("idempotency", lookup),
             retentionPolicy
         )
     } else {
@@ -1945,11 +1932,8 @@ fun defaultBoundaryHooks(
             rejectionLogMode == "auto" &&
                 listOf(accountRiskMode, circuitBreakerMode, instrumentPriceCollarMode).any { it == "postgres" || it == "cached-postgres" }
             ) -> {
-            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             PostgresBoundaryRejectionLog(
-                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "boundary-rejection-log")
+                dataSource = runtimeDbDataSourceFromEnv("boundary-rejection-log", lookup)
             )
         }
         else -> NoopBoundaryRejectionLog()
@@ -1971,31 +1955,22 @@ fun defaultBoundaryHooks(
 }
 
 fun defaultAccountRiskControlStore(): AccountRiskControlStore {
-    val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-    val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-    val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
     return PostgresAccountRiskCheck(
-        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "account-risk-admin"),
+        dataSource = runtimeDbDataSourceFromEnv("account-risk-admin"),
         cacheTtlMillis = 0L
     )
 }
 
 fun defaultCommandCircuitBreakerStore(): CommandCircuitBreakerStore {
-    val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-    val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-    val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
     return PostgresCommandCircuitBreakerStore(
-        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-circuit-breaker-admin"),
+        dataSource = runtimeDbDataSourceFromEnv("command-circuit-breaker-admin"),
         cacheTtlMillis = 0L
     )
 }
 
 fun defaultInstrumentPriceCollarStore(): InstrumentPriceCollarStore {
-    val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-    val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-    val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
     return PostgresInstrumentPriceCollarStore(
-        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "instrument-price-collar-admin"),
+        dataSource = runtimeDbDataSourceFromEnv("instrument-price-collar-admin"),
         cacheTtlMillis = 0L
     )
 }
@@ -2111,22 +2086,22 @@ internal fun parseTrackedRoutes(raw: String?): Set<String> {
 
 internal fun parseRoutePolicies(raw: String?): Map<String, RejectRatePolicy> {
     if (raw.isNullOrBlank()) return emptyMap()
-    val parsed = mutableMapOf<String, RejectRatePolicy>()
-    for (entry in raw.split(",")) {
-        val item = entry.trim()
-        if (item.isBlank()) continue
-        val parts = item.split(":", limit = 2)
-        if (parts.size != 2) continue
-        val route = parts[0].trim()
-        val policyParts = parts[1].split("/", limit = 3)
-        if (route.isBlank() || policyParts.size != 3) continue
-        val maxRejects = policyParts[0].trim().toIntOrNull() ?: continue
-        val windowSeconds = policyParts[1].trim().toLongOrNull() ?: continue
-        val blockSeconds = policyParts[2].trim().toLongOrNull() ?: continue
-        if (maxRejects <= 0 || windowSeconds <= 0 || blockSeconds <= 0) continue
-        parsed[route] = RejectRatePolicy(maxRejects, windowSeconds, blockSeconds)
-    }
-    return parsed
+    return raw.split(",")
+        .mapNotNull { entry ->
+            val item = entry.trim()
+            if (item.isBlank()) return@mapNotNull null
+            val parts = item.split(":", limit = 2)
+            if (parts.size != 2) return@mapNotNull null
+            val route = parts[0].trim()
+            val policyParts = parts[1].split("/", limit = 3)
+            if (route.isBlank() || policyParts.size != 3) return@mapNotNull null
+            val maxRejects = policyParts[0].trim().toIntOrNull() ?: return@mapNotNull null
+            val windowSeconds = policyParts[1].trim().toLongOrNull() ?: return@mapNotNull null
+            val blockSeconds = policyParts[2].trim().toLongOrNull() ?: return@mapNotNull null
+            if (maxRejects <= 0 || windowSeconds <= 0 || blockSeconds <= 0) return@mapNotNull null
+            route to RejectRatePolicy(maxRejects, windowSeconds, blockSeconds)
+        }
+        .toMap()
 }
 
 internal fun envBool(raw: String?, defaultValue: Boolean): Boolean {

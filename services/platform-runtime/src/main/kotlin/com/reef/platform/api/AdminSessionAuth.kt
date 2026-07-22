@@ -590,7 +590,7 @@ internal class AdminSessionAuth(
         exchange.close()
     }
 
-    private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
+    fun writeJson(exchange: HttpExchange, status: Int, json: String) {
         val bytes = json.toByteArray()
         applyLocalDevAdminUiCors(exchange)
         exchange.responseHeaders.add("Content-Type", "application/json")
@@ -615,7 +615,7 @@ internal class AdminSessionAuth(
         }
     }
 
-    private fun methodNotAllowed(exchange: HttpExchange) {
+    fun methodNotAllowed(exchange: HttpExchange) {
         applyLocalDevAdminUiCors(exchange)
         exchange.sendResponseHeaders(405, -1)
         exchange.close()
