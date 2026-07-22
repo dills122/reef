@@ -1,15 +1,17 @@
-# Docker Hub Image Publishing
+# Dual-Registry Image Publishing
 
-The deployment stack expects these images by default:
+The automatic container workflow publishes every deployment image to both
+Docker Hub and GitHub Container Registry (GHCR). The deployment stack defaults
+to these Docker Hub mirrors:
 
 - `dills122/reef-platform-runtime:latest`
 - `dills122/reef-matching-engine:latest`
 - `dills122/reef-simulator:latest`
 
-`.github/workflows/container-images.yml` should publish those images to Docker
-Hub. Use Docker Hub for public deployment images; keep image names overridable
-with `REEF_PLATFORM_RUNTIME_IMAGE`, `REEF_MATCHING_ENGINE_IMAGE`, and
-`REEF_SIMULATOR_IMAGE`.
+Equivalent GHCR mirrors use the `ghcr.io/dills122/` namespace. Keep image names
+overridable with `REEF_PLATFORM_RUNTIME_IMAGE`, `REEF_MATCHING_ENGINE_IMAGE`,
+and `REEF_SIMULATOR_IMAGE` so either registry can be selected without changing
+Compose files.
 
 ## Docker Hub Setup
 
@@ -36,10 +38,17 @@ The workflow can authenticate with:
 echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
 ```
 
+GHCR publishing uses the workflow-provided `GITHUB_TOKEN`; no additional GHCR
+secret is required. The workflow requires `packages: write` permission. Confirm
+that newly created GHCR packages are public if unauthenticated deployment pulls
+are expected.
+
 The workflow publishes on image-impacting pushes to `master`, version tags
 matching `v*`, and manual `workflow_dispatch`. Push-triggered image sets also
 create or update a GitHub pre-release marker, because the published deployment
 images are intentionally unstable while platform contracts are still moving.
+Publishing is one required operation: a failure to push either registry mirror
+fails the image job instead of silently leaving the registries inconsistent.
 
 ## Private Image Fallbacks
 
@@ -61,11 +70,14 @@ echo "$REGISTRY_READ_TOKEN" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" 
 
 ## Verification
 
-From a machine that is not logged in to Docker Hub, public packages should pull
-with:
+From a machine that is not logged in to either registry, public packages should
+pull from both mirrors:
 
 ```bash
 docker pull dills122/reef-platform-runtime:latest
 docker pull dills122/reef-matching-engine:latest
 docker pull dills122/reef-simulator:latest
+docker pull ghcr.io/dills122/reef-platform-runtime:latest
+docker pull ghcr.io/dills122/reef-matching-engine:latest
+docker pull ghcr.io/dills122/reef-simulator:latest
 ```
