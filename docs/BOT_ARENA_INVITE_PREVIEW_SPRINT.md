@@ -14,7 +14,9 @@ This sprint combines three previously separate concerns:
 [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 was a hard prerequisite. Its evidence was promoted on 2026-07-19; see
 [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
-Invite-preview code may now begin, subject to the release gates below.
+The main invite-preview code slices are now implemented. Remaining work is the
+multi-seed/local and promoted-host evidence campaign plus the named external
+account rehearsal, subject to the release gates below.
 
 The current release gate remains
 [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md). This file
@@ -170,8 +172,6 @@ The separation prerequisite is complete and remains a release invariant:
   [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
 - The Go matching engine remains unaware of Arena game and scoring behavior;
   bots continue to use Reef's public venue boundary.
-
-The dependency direction is:
 
 The required dependency direction is:
 
@@ -478,7 +478,11 @@ Training/calibration exports must exclude secrets, raw private config, tokens,
 and other bots' private observations. A bot may receive its own private state;
 the operator dataset can be richer, but access and retention must be explicit.
 
-## Day Plan
+## Original 15-Day Execution Sequence
+
+Days 1-12 describe the implementation sequence and are substantially complete.
+Current execution is concentrated in the evidence and rehearsal work from days
+13-15; keep the earlier steps as the regression checklist for that campaign.
 
 ### Days 1-2: Contracts And Boundary Lock
 

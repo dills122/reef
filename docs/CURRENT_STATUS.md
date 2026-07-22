@@ -4,7 +4,7 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-20.
+Last aligned: 2026-07-21.
 
 ## Current Project State
 
@@ -20,7 +20,11 @@ Reef has moved beyond a repository skeleton. The current implementation includes
 - Go simulator/load tester with persona/session support, deterministic replay checks, stress reports, and intake benchmarks
 - Docker-first local setup, reset, smoke, stress, replay, and DigitalOcean benchmark automation
 
-The platform UI and post-trade lifecycle are still early. The current strongest verification surface is the local/remote simulator and benchmark harness, not the UI.
+The general Reef operator UI is still early; Arena has its own bounded admin
+surface. Post-trade has a credible first fact chain and exception projection,
+but remains more evidence/report oriented than operator-workflow oriented. The
+current strongest verification surface is the local/remote simulator and
+benchmark harness, not the UI.
 
 Current product split:
 
@@ -85,7 +89,7 @@ Current decision anchors:
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 - D-047 defines the current command intake process: public `202` responses expose stable command references, provider details stay diagnostic, idempotency scopes by `clientId + route + idempotencyKey`, and canonical materialization closes accepted-command accounting after drain.
 - D-048 defines the internal interface and external surface hardline: internal service/control capabilities default to gRPC/protobuf or durable messaging, while externally reachable admin/data capabilities must be gateway-backed, authenticated, authorized, audited, and versioned.
-- D-049 tracks the active API/control-plane hardening backlog: finish remaining account/object authorization, migrate remaining hosted/CI/operator callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) off raw `/internal/*`, add internal gRPC service identity, expand readiness, and make stream lane identity deterministic by run/session/instrument when command models support it.
+- D-049 tracks the active API/control-plane hardening backlog: finish remaining account/object authorization, keep hosted/CI/operator callers off raw `/internal/*` (the current [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) has no hosted migration candidate), add internal gRPC service identity, expand readiness, and make stream lane identity deterministic by run/session/instrument when command models support it.
 - D-050 keeps one post-trade domain model with policy/timing profiles (`ops-realistic-v1` industry-baseline default, `instant-post-trade-v1` for simulator/game runs) rather than separate settlement models; see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md).
 - D-051 makes GitHub the first human identity provider for Bot Arena, keyed by GitHub's immutable numeric user id; see [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md).
 - D-052 defines the Bot Arena admin UI (`apps/arena-admin`, SvelteKit static, deployed behind Caddy on the backbone host): public landing/leaderboard pages plus a GitHub-OAuth-gated admin area. Public leaderboard reads land under the venue-intake `/api/v1/...` family, not `/admin/v1/...`; game types move from a free-form `mode_id` string to a seeded `arena.game_modes` reference table with a `mandatory` flag, with per-bot opt-out deferred past v1.
@@ -115,25 +119,27 @@ Current decision anchors:
 
 ## Current Forward Path
 
-This is a short summary of the single active execution ladder in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder), not a second planning source. Work should follow that ladder unless a new decision supersedes it. Venue-core scaling is paused at the verified `10k` baseline pending bounded-working-set and compact-storage gates; invite-preview proof, API/control-plane hardening, projection write-amplification reduction, and post-trade operator evidence are active.
+This is orientation for the single active execution ladder in
+[`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder), not a second plan.
+The current order is:
 
-1. Keep the current durable-acceptance contracts stable while using the D-041 Redpanda/Kafka-compatible hot-ingress plus D-043 venue-event materializer path as the canonical `10k` venue-core baseline.
-2. Keep projection/read-model freshness evidence separate from canonical materialization: the short `2.5k` full gate is green, `5k` command-status/lifecycle freshness is green, full event/timeline freshness at `5k/60s` is now green after deterministic timeline sequencing, and projection scaling work should follow [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md) without redefining `venue-core` command acceptance as UI/control-room freshness.
-3. Complete the API/control-plane hardening backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): remaining account/object authorization, `/internal/*` caller migration from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, richer readiness, deterministic stream lane keys, and fail-closed non-local profiles. This remains the active venue-core backlog; invite-preview implementation is the bounded product work at item 11.
-4. Implement the command intake contract in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit/cancel first, hot cancel metadata enforcement, stable `202` response, provider-neutral status, duplicate idempotency tests, and accepted/materialized drain accounting.
-5. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
-6. Harden canonical persistence through venue event batch materialization with the remaining crash/restart tests, deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
-7. Prove compact persistence projection end to end under the same gate: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
-8. Order-lifecycle-state and market-data top-of-book snapshot maintenance are both now incremental (dirty-tracked, not full-table rebuild). Public trade tape and intraday bars are now live (`/api/v1/market-data/trades/{instrumentId}`, `/api/v1/market-data/bars/{instrumentId}`), and the Bot SDK live-read clients can be injected into `runner.ts`/`strategy-runner.ts`/`hosted-runner.ts` through `readClients`, plus participant-scoped own-order reads (`/api/v1/orders/current`, `/api/v1/orders/history`). Depth reads (`/api/v1/market-data/depth/{instrumentId}`) still aggregate remaining open lifecycle quantity at request time rather than from a maintained projection; venue-session-specific depth needs a projected session key on order lifecycle facts before it can be truthfully exposed.
-9. Lock the first deterministic lifecycle scenarios against [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md) and [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md): `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
-   - 2026-07-14 local P1 live assertion passed on a `sync-result` stack with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and `MARKET_DATA_PROJECTOR_ENABLED=true`; report: `reports/scenario-assertions/p1-golden-hidden-cross-live-20260714.json`. The run proved command completion through `GET /api/v1/commands/{commandId}`, participant-scoped own-order lifecycle and fill reads, scenario-scoped public trade tape assertions from the instrument-level `XYZ` tape, public depth non-leakage, read-surface inventory, and zero projection lag in `/api/v1/data/availability`.
-   - 2026-07-15 local P1 direct-stream same-run replay report passed with 44 assertions; report: `reports/scenario-assertions/p1-golden-hidden-cross-replay-live-20260714.json`, replay artifact: `reports/scenario-assertions/p1-golden-hidden-cross-replay-check-20260714.json`. It combines run-scoped command ids, canonical command status from `platform-projector-0`, exact replay counters for the same three P1 commands, and native `visibilityTimeline` proof that public depth did not expose the hidden resting sell before first execution. P1 is locked locally by combining the 2026-07-14 zero-lag `sync-result` report for projection freshness with this direct-stream replay report for same-run durable evidence. The retained direct-stream report's `/api/v1/data/availability` lag rows of `4` are global retained-stack lag evidence, not the P1 zero-lag projection claim; use `--require-zero-projection-lag` only on a stack expected to be globally drained.
-   - 2026-07-14 local P2 command smoke passed; report: `reports/scenario-assertions/p2-settlement-break-repair-live-20260714-command-smoke.json`. The P2 live assertion passed after seeding settlement facts with `make dev-seed-p2-settlement-facts SCENARIO_RUN_ID=p2-settlement-break-repair-live-20260714`; report: `reports/scenario-assertions/p2-settlement-break-repair-live-20260714.json`. The assertion run proved command completion plus the settlement exception chain from `/api/v1/settlement/facts/{scenarioRunId}`: one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping.
-   - 2026-07-15 local P2 direct-stream settled-chain report passed with public settlement facts readback; report: `reports/scenario-assertions/p2-settlement-break-repair-settled-live-public-20260715c.json`, public facts readback artifact: `reports/scenario-assertions/p2-settlement-break-repair-settled-facts-public-20260715c.json`, replay artifact: `reports/scenario-assertions/p2-settlement-break-repair-replay-check-20260715c.json`. It combines run-scoped command ids, canonical command status from `platform-projector-0`, exact replay counters for the same two P2 commands, and a minimal `instant-post-trade-v1` settled chain read from `/api/v1/settlement/facts/{scenarioRunId}`: obligation, allocation, confirmation, affirmation, instruction, attempt, cash/security leg outcomes, ledger entries, and `SETTLED` finality.
-10. Reef/Arena separation is promoted. Its artifact, route, Compose, migration, matching-image, failure-isolation, and clean P1 equivalence evidence is recorded in [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
-11. Execute the remaining invite-only fork preview work in [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md): admission, immutable roster locks/removals, strict policy resolution, run-to-roster binding, `T-30m`/`T0` enforcement, persisted policy/profile hashes, terminal score immutability, lock-filtered publication, maker/taker models, and fail-closed zero/non-zero fee and rebate reconciliation are implemented. The corrected local three-policy matrix at `reports/arena-economic-policy-matrix/20260721-role-corrected-v4/` passes with 30 scoped fills per policy, complete reconciliation, zero accounting gap, and preserved maker/taker roles. Repeat the matrix on the promoted hosted profile, complete the remaining seed coverage, and run the named external-account E2E rehearsal before closing the release gate. Track go/no-go in [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
-12. Harden the implemented post-trade lifecycle described in [`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md). Allocation/confirmation/affirmation, clearing/novation, exception queue v1, obligation/instruction/attempt/leg/ledger/finality, and break/repair facts exist; remaining work is scenario and operator workflow evidence rather than initial model creation.
-13. Run documentation cleanup as a separate bounded stream using [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md): keep active docs short, move superseded planning docs into `docs/archive/`, and preserve benchmark/security/decision evidence.
+1. Complete the invite-only preview proof: named external-account lifecycle,
+   promoted hosted Arena rehearsal, multi-seed policy evidence, and a labelled
+   leaderboard run.
+2. Continue API/control-plane hardening: object authorization, internal gRPC
+   identity/readiness, and containment of raw `/internal/*` diagnostics.
+3. Resume venue-core scaling only from the recorded pause handoff, beginning
+   with bounded working-set/state-shape and compact canonical storage gates.
+4. Reduce projection write amplification before longer `5k` soaks or higher
+   full-projection claims.
+5. Record the remaining post-trade scenario/operator evidence now that the
+   clearing/novation and exception-queue slices are implemented.
+6. Keep docs synchronized and archive superseded planning without deleting
+   decision, benchmark, security, or replay evidence.
+
+Detailed evidence and acceptance criteria live in the linked source documents
+above and in [`WORK_PLAN.md`](./WORK_PLAN.md); they should not be copied back
+into this summary.
 
 ## Documentation Map
 

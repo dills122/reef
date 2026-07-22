@@ -19,7 +19,12 @@ assert.match(
 );
 assert.match(
   workflow,
-  /name: Log in to Docker Hub[\s\S]*username: \$\{\{ env\.DOCKERHUB_NAMESPACE \}\}[\s\S]*password: \$\{\{ secrets\.DOCKERHUB_TOKEN \}\}/,
+  /name: Log in to Docker Hub[\s\S]*username: \$\{\{ secrets\.DOCKERHUB_USERNAME \|\| env\.DOCKERHUB_NAMESPACE \}\}[\s\S]*password: \$\{\{ secrets\.DOCKERHUB_TOKEN \}\}/,
+);
+assert.match(
+  workflow,
+  /DOCKERHUB_NAMESPACE: \$\{\{ vars\.DOCKERHUB_NAMESPACE \|\| github\.repository_owner \}\}/,
+  "the Docker Hub namespace should be configurable without editing the workflow",
 );
 assert.match(
   workflow,

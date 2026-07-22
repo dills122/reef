@@ -40,6 +40,9 @@ Reef is built to make market plumbing visible. Orders go through a real command 
 	<Card title="Project Overview" icon="open-book">
 		The short version: what Reef is, who it is for, and why simulation drives the same command path as real users. Start at [What Is Reef](overview/what-is-reef/).
 	</Card>
+	<Card title="Developer Setup" icon="setting">
+		Bring up a clean local stack, verify it end to end, and see which extra toolchains each repository area needs. Start at [Developer Setup](overview/developer-setup/).
+	</Card>
 	<Card title="Bot Arena & Bot SDK" icon="rocket">
 		The trading-bot game taking shape on top of the venue. Author a bot, run seeded matches, and keep every result replayable. Start at [Arena Overview](arena/overview/).
 	</Card>
@@ -103,10 +106,15 @@ export default class ExampleBot extends ReefBotV1 {
 ## Run It Locally
 
 ```bash
+cp .env.example .env
+make dev-doctor  # verify Docker, Bun, and local prerequisites
 make dev-up      # start Postgres, runtime, matching engine
-make dev-smoke    # verify the local stack end to end
-make dev-sim      # drive a seeded scenario
+make dev-smoke   # verify the local stack end to end
+make dev-sim     # drive a seeded scenario
 ```
+
+See [Developer Setup](overview/developer-setup/) for the clean-machine and full
+contributor paths.
 
 <Aside type="caution" title="Pre-release">
 	Reef is under heavy development. These docs describe the current build plus near-term shape, not a stable product release. See [Current Status](overview/status/) for what is built today.

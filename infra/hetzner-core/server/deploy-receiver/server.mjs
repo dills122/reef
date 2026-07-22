@@ -15,7 +15,7 @@ const defaultConfig = {
     process.env.DEPLOY_RECEIVER_JWKS_URL ||
     "https://token.actions.githubusercontent.com/.well-known/jwks",
   expectedAudience: process.env.DEPLOY_RECEIVER_EXPECTED_AUDIENCE || "reef-backbone-admin-deploy",
-  expectedRepository: process.env.DEPLOY_RECEIVER_EXPECTED_REPOSITORY || "dills122/reef",
+  expectedRepository: process.env.DEPLOY_RECEIVER_EXPECTED_REPOSITORY || "",
   expectedRef: process.env.DEPLOY_RECEIVER_EXPECTED_REF || "refs/heads/master",
   expectedEnvironment: process.env.DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT || "backbone-admin",
   expectedWorkflow: process.env.DEPLOY_RECEIVER_EXPECTED_WORKFLOW || "Admin UI Deploy",
@@ -36,6 +36,13 @@ function intEnv(name, fallback) {
   if (!raw) return fallback;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function validateStartupConfig(config = defaultConfig) {
+  if (!config.expectedRepository || !/^[^/\s]+\/[^/\s]+$/.test(config.expectedRepository)) {
+    throw new Error("DEPLOY_RECEIVER_EXPECTED_REPOSITORY must be configured as owner/repository");
+  }
+  return config;
 }
 
 function sendJson(res, status, payload) {
@@ -462,7 +469,8 @@ function createDeployReceiver(config = defaultConfig) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const server = createDeployReceiver();
+  const config = validateStartupConfig();
+  const server = createDeployReceiver(config);
   server.listen(defaultConfig.port, "0.0.0.0", () => {
     console.log(`reef deploy receiver listening on :${defaultConfig.port}${defaultConfig.path}`);
   });
@@ -479,5 +487,6 @@ export {
   validateArchiveEntryNames,
   validateArchiveEntryMetadata,
   validateClaims,
+  validateStartupConfig,
   verifyJwt,
 };

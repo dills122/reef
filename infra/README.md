@@ -1,7 +1,27 @@
 # Reef Infrastructure
 
+Infrastructure naming and value-resolution rules are defined in
+[`CONFIGURATION.md`](./CONFIGURATION.md). New stacks should expose
+creation-time identity, discover provider-allocated values through outputs, and
+reserve hardcoded constants for genuine within-stack or protocol contracts.
+
 This directory owns hosted and remote-run infrastructure. The root Compose files
 own local development only.
+
+Ordinary application development starts with
+[`docs/ONBOARDING.md`](../docs/ONBOARDING.md) and does not require cloud
+credentials, Tailscale, or direct hosted-box access. Infrastructure contributors
+and designated operators add only the tools and access needed for their area:
+
+| Area | Additional prerequisites | Access boundary |
+|---|---|---|
+| Local Kubernetes | Docker, `k3d`, `kubectl`, Bun or Node | Local machine only |
+| Local backbone | Docker, Bun, `jq` | Local machine only; generated secrets stay ignored |
+| Hetzner backbone | OpenTofu, SSH, rsync, `jq`, Bun | Authorized operator credentials and Tailscale membership |
+| DigitalOcean workers | OpenTofu/Terraform, SSH, rsync | Cloud token, SSH key, and explicit destroyable-resource confirmation |
+
+The area README remains authoritative for exact commands. Do not distribute
+shared production login credentials as developer onboarding material.
 
 ## Ownership Map
 

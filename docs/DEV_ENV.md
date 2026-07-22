@@ -1,6 +1,9 @@
 # Reef Local Dev Environment
 
-This runbook defines the Docker-first local workflow introduced by the dev-env sprint.
+This is the detailed runtime, profile, and performance runbook for an already
+onboarded developer. For clean-machine prerequisites, dependency installation,
+the first successful smoke, and hosted-access boundaries, use the canonical
+[`ONBOARDING.md`](./ONBOARDING.md) first.
 
 Use [`LOCAL_RUN_PROFILES.md`](./LOCAL_RUN_PROFILES.md) before starting throughput
 or demo runs. It names the proper stream-ack, direct no-DB, and materializer
@@ -8,12 +11,15 @@ flows, their expected containers, Control Room settings, and success criteria.
 
 ## Prerequisites
 
-Full prerequisite list (Docker, Bun, Go, Java) lives in [`ONBOARDING.md`](./ONBOARDING.md#1-prerequisites). For the Docker-first workflow on this page specifically, you need at minimum:
+The current prerequisite and version matrix lives in
+[`ONBOARDING.md`](./ONBOARDING.md#supported-development-environment). For the
+Docker-first workflow on this page specifically, you need at minimum:
 
 - Docker with Compose plugin
 - `curl`
 - Bun runtime
-- Go toolchain (only needed for `make dev-stress`, which runs the Go load tester)
+- Go 1.25+ (only needed for native Go tests and commands such as
+  `make dev-stress`, which runs the Go load tester)
 
 ## Base workflow
 
@@ -71,8 +77,9 @@ package imports, install the pinned JS dependencies first:
 bun install --frozen-lockfile
 ```
 
-`apps/arena-admin` has its own Bun lockfile and SvelteKit toolchain. Install it
-from the app directory before running its check or build scripts:
+The repository, `apps/arena-admin`, and `apps/docs-site` have separate lockfiles
+and dependency roots. Install all three with `make dev-bootstrap`. To install
+only Arena from its app directory:
 
 ```bash
 cd apps/arena-admin

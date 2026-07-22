@@ -108,7 +108,10 @@ This backlog is active work, not optional cleanup.
    - market-data surfaces must stay classified as public, delayed, participant-scoped, or operator-scoped before broader external exposure
    - every object-id endpoint should have a positive and negative authorization test
 
-2. Move remaining internal HTTP callers off raw `/internal/*`.
+2. Keep hosted, CI, and operator callers off raw `/internal/*`.
+   - the current caller inventory has no hosted migration candidate; this item
+     remains active as a containment and regression rule, not an unbounded
+     rewrite of loopback diagnostics
    - local smoke scripts may keep loopback adapters while migration is active
    - CI, hosted run-plane, bot-submission, and operator workflows should use `/admin/v1/...`, gRPC, or CLI adapters
    - local admin CLI risk-control list/set commands now use `/admin/v1/risk/...`; raw boundary reads for those controls are diagnostics only

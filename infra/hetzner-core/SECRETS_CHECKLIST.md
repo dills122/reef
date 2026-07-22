@@ -35,7 +35,7 @@ host-generated runtime secrets under `/opt/reef/secrets` on the Hetzner host.
 | Cloudflare zone ID | `96ffdfe35a4fee86fa0b4067eb0408d5` | `infra/hetzner-core/tofu/terraform.tfvars` | Non-secret zone id for `shrimpworks.dev`. |
 | Cloudflare account ID | `21f7217c1f4e4a4da99f20b12c85a463` | `infra/hetzner-core/tofu/terraform.tfvars` | Non-secret account id used for R2 bucket management. |
 | R2 backup bucket | `reef-backups` | OpenTofu state | Bucket creation is complete and OpenTofu plan is clean. |
-| Admin CIDR | `71.173.194.78/32` | `infra/hetzner-core/tofu/terraform.tfvars` | Controls SSH/ICMP access through the Hetzner firewall. |
+| Admin CIDR | Current operator public `/32` | `infra/hetzner-core/tofu/terraform.tfvars` | Used only while `enable_public_ssh=true` for bootstrap/break-glass access; it may become stale on a residential network. |
 
 ## Cloudflare Token Permission Matrix
 
@@ -121,7 +121,7 @@ token, or long-lived deploy bearer token. It uses GitHub OIDC and the
 host-side `deploy-receiver` service.
 
 After
-`REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN="..." ./scripts/configure-openbao.sh`,
+`REEF_GITHUB_REPOSITORY=<owner>/<repository> BAO_TOKEN="..." ./scripts/configure-openbao.sh`,
 generate the Admin API bot-config AppRole with:
 
 ```bash

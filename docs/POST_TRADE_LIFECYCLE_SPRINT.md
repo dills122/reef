@@ -1,5 +1,8 @@
 # Post-Trade Lifecycle Sprint
 
+Status: core lifecycle V1 implementation landed in PR #223; remaining work is
+live evidence and a separately scoped operator-workflow follow-up.
+
 ## Purpose
 
 This sprint brings Reef's post-trade surface closer to the maturity of the venue
@@ -24,22 +27,25 @@ Implemented foundation:
 - trade-to-settlement obligation materialization from canonical runtime trades
 - `instant-post-trade-v1` profile resolution and evidence fields
 - minimal auto allocation, confirmation, and affirmation facts
+- clearing submission/acceptance/rejection and novation facts
 - settlement instruction and attempt facts
 - cash/security leg outcomes
 - append-only ledger proof for settled instant obligations
 - cash-leg and security-leg failure paths when resources are constrained
 - repair commands, force-settle, reverse-ledger, and required operator reasons
 - public settlement facts, obligations, ledger, proof, and score reads
+- operator-readable exception queue projection over settlement breaks and
+  clearing rejections
 - P2 settlement assertion evidence for break/repair and settled-chain reads
 
 Main gaps:
 
-- no clearing or novation facts in the current instant chain
-- no operator exception queue read model
-- no affirmation timeout or clearing reject scenario proof
+- no promoted live security-fail/repair or `ops-realistic-v1` pending report;
+  focused implementation tests exist, but the active evidence bundle is still
+  incomplete
+- no affirmation-timeout live proof or clearing-reject repair workflow proof
 - no netting batch model beyond gross-per-trade settlement
 - post-trade current state is still more proof/report oriented than operator workflow oriented
-- docs still carry stale P2-only language in some active planning paths
 
 ## Sprint Scope
 
@@ -167,7 +173,11 @@ Acceptance:
 - broad admin UI buildout unless a separate UI slice consumes the new reads
 - projection `10k` freshness scaling
 
-## Suggested PR Slices
+## Implementation Record And Next Slice
+
+The original PR sequence below produced the lifecycle V1 implementation in PR
+#223. Treat PRs 1-3 as delivered and PR 4 as partially delivered; do not reopen
+their initial-model work as the current backlog.
 
 ### PR 1: Documentation And Contracts
 
@@ -183,52 +193,12 @@ Acceptance:
 - extend materializer chain
 - add happy-path and ops-realistic tests
 
-Immediate implementation target after this documentation branch merges:
-
-- add settlement fact types:
-  - `SettlementClearingSubmitted`
-  - `SettlementClearingAccepted`
-  - `SettlementClearingRejected`
-  - `SettlementNovationRecorded`
-- extend the `instant-post-trade-v1` materializer so the happy path emits:
-
-```text
-allocation
-  -> confirmation
-  -> affirmation
-  -> clearing submitted
-  -> clearing accepted
-  -> novation recorded
-  -> settlement instruction
-  -> settlement attempt
-  -> leg outcomes
-  -> ledger proof
-  -> SETTLED
-```
-
-- preserve `ops-realistic-v1` as pending workflow behavior; it must not
-  accidentally same-tick settle just because the instant profile does.
-- add a clearing-reject branch as a fact shape and test fixture, but keep full
-  clearing-reject repair workflow for the exception-queue PR unless it stays
-  small.
-- update settlement proof/facts reads so clearing and novation identifiers are
-  visible in the same evidence chain as allocation, confirmation, affirmation,
-  instruction, attempt, ledger entries, and finality.
-- add focused tests:
-  - instant happy path includes clearing and novation before instruction.
-  - ops-realistic profile produces pending post-trade state and no fake
-    `SETTLED` fact.
-  - repeat materialization remains idempotent.
-  - P2 settled-chain assertions either still pass or have a documented
-    successor assertion that includes clearing/novation.
-
-PR 2 non-goals:
-
-- no exception queue projection yet
-- no admin UI
-- no netting implementation
-- no full CCP/CNS model
-- no production external message schema
+Implementation result: the instant profile now emits clearing and novation
+before settlement instruction; `ops-realistic-v1` remains pending; clearing
+reject facts and the exception projection exist; facts/proof reads expose the
+chain; and focused idempotency, pending-state, queue, and causation tests pass.
+Netting, a broad admin UI, full CCP/CNS behavior, and production external
+message schemas remain out of scope.
 
 ### PR 3: Exception Queue Projection
 
@@ -242,7 +212,16 @@ PR 2 non-goals:
 - generate reports for happy path and failure/repair paths
 - update `CURRENT_STATUS.md` with evidence
 
-## Effort Estimate
+Current next slice:
+
+- record live security-fail/repair and `ops-realistic-v1` pending assertion
+  reports with replay/checksum evidence where available
+- use those reports to scope one operator workflow improvement, rather than
+  starting a broad post-trade UI
+- treat affirmation timeout, clearing-reject repair, and deterministic netting
+  as separate follow-ups unless one is explicitly selected
+
+## Historical Effort Estimate
 
 - backend facts/API/tests only: one strong week
 - with admin UI read surfaces: two weeks

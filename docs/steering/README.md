@@ -4,7 +4,9 @@ These documents define how Reef should be built as the repository grows into the
 
 ## Documents
 
-- [Onboarding](../ONBOARDING.md): contributor ramp-up path, prerequisites, first-run, and troubleshooting
+- [Onboarding](../ONBOARDING.md): canonical clean-machine prerequisites,
+  dependency bootstrap, first successful local smoke, work-area setup, hosted
+  access boundaries, and troubleshooting
 - [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
 - [Bot Arena Release Readiness](../BOT_ARENA_RELEASE_READINESS.md): verified preview/public-submission matrix, blockers, launch gates, and current release call
 - [Bot Arena Invite Preview Sprint](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md): fork-safe admission, cutoff policy, policy calibration, and recorded E2E run plan after separation promotion

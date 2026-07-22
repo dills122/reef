@@ -9,11 +9,11 @@ if [[ -z "${BAO_TOKEN:-}" ]]; then
   exit 1
 fi
 
-# owner/repo, e.g. "dills122/reef" - required for the GitHub OIDC -> auth/jwt
+# owner/repo, e.g. "owner/reef" - required for the GitHub OIDC -> auth/jwt
 # backend below, kept separate from the AppRole backend used by runtime reads.
 GITHUB_REPOSITORY="${REEF_GITHUB_REPOSITORY:-}"
 if [[ -z "$GITHUB_REPOSITORY" ]]; then
-  echo "REEF_GITHUB_REPOSITORY must be set (e.g. dills122/reef) for the bot-submission CI auth/jwt backend." >&2
+  echo "REEF_GITHUB_REPOSITORY must be set (e.g. owner/reef) for the bot-submission CI auth/jwt backend." >&2
   exit 1
 fi
 
