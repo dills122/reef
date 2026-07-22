@@ -5,7 +5,6 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
-import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import javax.sql.DataSource
@@ -454,11 +453,10 @@ object StreamCommandIntakeFactory {
         return when (RuntimeEnv.string("STREAM_ACK_INTAKE_STORE", "postgres").trim().lowercase()) {
             "inmemory" -> InMemoryStreamCommandIntakeStore()
             "postgres" -> {
-                val jdbcUrl = RuntimeEnv.string("RUNTIME_DB_URL", "jdbc:postgresql://localhost:5432/reef")
-                val dbUser = RuntimeEnv.string("RUNTIME_DB_USER", "reef")
-                val dbPassword = RuntimeEnv.string("RUNTIME_DB_PASSWORD", "reef")
                 PostgresStreamCommandIntakeStore(
-                    RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "stream-intake")
+                    runtimeDbDataSourceFromEnv("stream-intake") { key ->
+                        System.getenv(key)?.takeIf { it.isNotBlank() }
+                    }
                 )
             }
             else -> throw IllegalArgumentException("Unsupported STREAM_ACK_INTAKE_STORE")

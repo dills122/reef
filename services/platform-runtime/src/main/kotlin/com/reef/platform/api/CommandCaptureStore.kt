@@ -3,7 +3,6 @@ package com.reef.platform.api
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
-import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -696,10 +695,7 @@ internal fun defaultCommandCaptureStore(
         "disabled", "off", "none" -> NoopCommandCaptureStore()
         "inmemory" -> InMemoryCommandCaptureStore()
         else -> {
-            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
-            PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-capture"))
+            PostgresCommandCaptureStore(runtimeDbDataSourceFromEnv("command-capture", lookup))
         }
     }
     return when (val commandLogMode = (lookup("EXTERNAL_API_COMMAND_LOG_MODE") ?: "disabled").trim().lowercase()) {
@@ -710,13 +706,10 @@ internal fun defaultCommandCaptureStore(
             commandProcessingMode = commandProcessingMode
         )
         "postgres" -> {
-            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             CommandLogCommandCaptureStore(
                 delegate = captureStore,
                 commandLogStore = PostgresCommandLogStore(
-                    RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-log")
+                    runtimeDbDataSourceFromEnv("command-log", lookup)
                 ),
                 commandProcessingMode = commandProcessingMode
             )

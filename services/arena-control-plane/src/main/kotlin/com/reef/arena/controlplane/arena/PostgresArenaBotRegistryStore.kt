@@ -278,6 +278,26 @@ class PostgresArenaBotRegistryStore(
         return queryBot("file_name = ?", fileName)
     }
 
+    override fun botsByIds(botIds: List<String>): List<ArenaBot> {
+        if (botIds.isEmpty()) return emptyList()
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT bot_id, file_name, name, publisher, email, description, version, created_at
+                FROM ${names.bots}
+                WHERE bot_id = ANY(?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setArray(1, conn.createArrayOf("text", botIds.toTypedArray()))
+                ps.executeQuery().use { rs ->
+                    val result = mutableListOf<ArenaBot>()
+                    while (rs.next()) result.add(rs.toArenaBot())
+                    return result
+                }
+            }
+        }
+    }
+
     override fun runs(limit: Int): List<ArenaRunRecord> {
         connection().use { conn ->
             conn.prepareStatement(
@@ -295,8 +315,9 @@ class PostgresArenaBotRegistryStore(
                 ps.setInt(1, limit.coerceIn(1, 500))
                 ps.executeQuery().use { rs ->
                     val result = mutableListOf<ArenaRunRecord>()
-                    while (rs.next()) result.add(rs.toRunRecord(loadRunBotVersions(conn, rs.getString("run_id"))))
-                    return result
+                    while (rs.next()) result.add(rs.toRunRecord(emptyList()))
+                    val botVersionsByRun = loadRunBotVersionsBatch(conn, result.map { it.runId })
+                    return result.map { it.copy(botVersions = botVersionsByRun[it.runId].orEmpty()) }
                 }
             }
         }
@@ -445,10 +466,11 @@ class PostgresArenaBotRegistryStore(
                 ps.setString(1, botId)
                 ps.setString(2, versionId)
                 ps.executeQuery().use { rs ->
-                    while (rs.next()) reports.add(rs.toQualificationReport(loadIssues(conn, rs.getString("report_id"))))
+                    while (rs.next()) reports.add(rs.toQualificationReport(emptyList()))
                 }
             }
-            return reports
+            val issuesByReport = loadIssuesBatch(conn, reports.map { it.reportId })
+            return reports.map { it.copy(issues = issuesByReport[it.reportId].orEmpty()) }
         }
     }
 
@@ -865,20 +887,23 @@ class PostgresArenaBotRegistryStore(
         }
     }
 
-    private fun loadIssues(conn: Connection, reportId: String): List<String> {
+    private fun loadIssuesBatch(conn: Connection, reportIds: List<String>): Map<String, List<String>> {
+        if (reportIds.isEmpty()) return emptyMap()
         conn.prepareStatement(
             """
-            SELECT issue
+            SELECT report_id, issue
             FROM ${names.qualificationReportIssues}
-            WHERE report_id = ?
-            ORDER BY issue_order
+            WHERE report_id = ANY(?)
+            ORDER BY report_id, issue_order
             """.trimIndent()
         ).use { ps ->
-            ps.setString(1, reportId)
+            ps.setArray(1, conn.createArrayOf("text", reportIds.toTypedArray()))
             ps.executeQuery().use { rs ->
-                val issues = mutableListOf<String>()
-                while (rs.next()) issues.add(rs.getString("issue"))
-                return issues
+                val issuesByReport = linkedMapOf<String, MutableList<String>>()
+                while (rs.next()) {
+                    issuesByReport.getOrPut(rs.getString("report_id")) { mutableListOf() }.add(rs.getString("issue"))
+                }
+                return issuesByReport
             }
         }
     }
@@ -897,6 +922,28 @@ class PostgresArenaBotRegistryStore(
                 val refs = mutableListOf<ArenaRunBotVersionRef>()
                 while (rs.next()) refs.add(ArenaRunBotVersionRef(rs.getString("bot_id"), rs.getString("version_id")))
                 return refs
+            }
+        }
+    }
+
+    private fun loadRunBotVersionsBatch(conn: Connection, runIds: List<String>): Map<String, List<ArenaRunBotVersionRef>> {
+        if (runIds.isEmpty()) return emptyMap()
+        conn.prepareStatement(
+            """
+            SELECT run_id, bot_id, version_id
+            FROM ${names.runBotVersions}
+            WHERE run_id = ANY(?)
+            ORDER BY run_id, bot_order
+            """.trimIndent()
+        ).use { ps ->
+            ps.setArray(1, conn.createArrayOf("text", runIds.toTypedArray()))
+            ps.executeQuery().use { rs ->
+                val refsByRun = linkedMapOf<String, MutableList<ArenaRunBotVersionRef>>()
+                while (rs.next()) {
+                    refsByRun.getOrPut(rs.getString("run_id")) { mutableListOf() }
+                        .add(ArenaRunBotVersionRef(rs.getString("bot_id"), rs.getString("version_id")))
+                }
+                return refsByRun
             }
         }
     }

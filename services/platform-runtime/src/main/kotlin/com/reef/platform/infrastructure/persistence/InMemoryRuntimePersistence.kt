@@ -25,6 +25,7 @@ import java.time.Duration
 import java.time.Instant
 
 class InMemoryRuntimePersistence : RuntimePersistence {
+    private val lock = Any()
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
     private val venueEventBatches = linkedMapOf<String, VenueEventBatchFact>()
     private val commandOutcomes = linkedMapOf<String, CanonicalCommandOutcome>()
@@ -57,161 +58,227 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val intradayBarOrigin: Instant = Instant.parse("2000-01-01T00:00:00Z")
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
+        synchronized(lock) {
         submitResults[commandId] = result
+        }
     }
 
     override fun submitResult(commandId: String): SubmitOrderResult? {
+        synchronized(lock) {
         return submitResults[commandId] ?: canonicalSubmitOutcomes[commandId]?.outcome?.result
+        }
     }
 
     override fun saveInstrument(instrument: Instrument) {
+        synchronized(lock) {
         instruments[instrument.instrumentId] = instrument
+        }
     }
 
     override fun saveParticipant(participant: Participant) {
+        synchronized(lock) {
         participants[participant.participantId] = participant
+        }
     }
 
     override fun saveAccount(account: Account) {
+        synchronized(lock) {
         accounts[account.accountId] = account
+        }
     }
 
     override fun saveRole(role: RoleDefinition) {
+        synchronized(lock) {
         roles[role.roleId] = role
+        }
     }
 
     override fun saveActorRoleBinding(binding: ActorRoleBinding) {
+        synchronized(lock) {
         actorRoleBindings.removeIf { it.actorId == binding.actorId && it.roleId == binding.roleId }
         actorRoleBindings.add(binding)
+        }
     }
 
     override fun savePostTradeProfile(profile: PostTradeProfile) {
+        synchronized(lock) {
         postTradeProfiles[profile.profileId] = profile
         if (profile.active) {
             activePostTradeProfileId = profile.profileId
         } else if (activePostTradeProfileId.isBlank()) {
             activePostTradeProfileId = profile.profileId
         }
+        }
     }
 
     override fun postTradeProfiles(): List<PostTradeProfile> {
+        synchronized(lock) {
         return postTradeProfiles.values.map { it.copy(active = it.profileId == activePostTradeProfileId) }
+        }
     }
 
     override fun activePostTradeProfile(): PostTradeProfile {
+        synchronized(lock) {
         val profile = postTradeProfiles[activePostTradeProfileId]
             ?: throw IllegalArgumentException("no active post-trade profile")
         return profile.copy(active = true)
+        }
     }
 
     override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
+        synchronized(lock) {
         val profile = postTradeProfiles[profileId]
             ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
         activePostTradeProfileId = profileId
         return profile.copy(active = true)
+        }
     }
 
     override fun saveScenarioRunPostTradeProfile(config: ScenarioRunPostTradeProfile) {
+        synchronized(lock) {
         scenarioRunPostTradeProfiles[config.scenarioRunId] = config
+        }
     }
 
     override fun scenarioRunPostTradeProfileId(scenarioRunId: String): String? {
+        synchronized(lock) {
         return scenarioRunPostTradeProfiles[scenarioRunId]?.postTradeProfileId
+        }
     }
 
     override fun scenarioRunPostTradeProfiles(): List<ScenarioRunPostTradeProfile> {
+        synchronized(lock) {
         return scenarioRunPostTradeProfiles.values.toList()
+        }
     }
 
     override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        synchronized(lock) {
         venueSessionPostTradeProfiles[config.venueSessionId] = config
+        }
     }
 
     override fun venueSessionPostTradeProfileId(venueSessionId: String): String? {
+        synchronized(lock) {
         return venueSessionPostTradeProfiles[venueSessionId]?.postTradeProfileId
+        }
     }
 
     override fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        synchronized(lock) {
         return venueSessionPostTradeProfiles.values.toList()
+        }
     }
 
     override fun instruments(): List<Instrument> {
+        synchronized(lock) {
         return instruments.values.toList()
+        }
     }
 
     override fun participants(): List<Participant> {
+        synchronized(lock) {
         return participants.values.toList()
+        }
     }
 
     override fun accounts(): List<Account> {
+        synchronized(lock) {
         return accounts.values.toList()
+        }
     }
 
     override fun roles(): List<RoleDefinition> {
+        synchronized(lock) {
         return roles.values.toList()
+        }
     }
 
     override fun actorRoleBindings(actorId: String): List<ActorRoleBinding> {
+        synchronized(lock) {
         return actorRoleBindings.filter { it.actorId == actorId }
+        }
     }
 
     override fun hasInstrument(instrumentId: String): Boolean {
+        synchronized(lock) {
         return instruments.containsKey(instrumentId)
+        }
     }
 
     override fun hasParticipant(participantId: String): Boolean {
+        synchronized(lock) {
         return participants.containsKey(participantId)
+        }
     }
 
     override fun hasAccount(accountId: String): Boolean {
+        synchronized(lock) {
         return accounts.containsKey(accountId)
+        }
     }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
+        synchronized(lock) {
         orders[order.orderId] = order
         orderLifecycleDirty.add(order.orderId)
+        }
     }
 
     override fun saveExecutions(executions: List<ExecutionCreated>) {
+        synchronized(lock) {
         this.executions.addAll(executions)
         executions.forEach { orderLifecycleDirty.add(it.orderId) }
+        }
     }
 
     override fun saveTrades(trades: List<TradeCreated>) {
+        synchronized(lock) {
         this.trades.addAll(trades)
         trades.forEach {
             orderLifecycleDirty.add(it.buyOrderId)
             orderLifecycleDirty.add(it.sellOrderId)
         }
+        }
     }
 
     override fun saveEvent(event: RuntimeEvent) {
+        synchronized(lock) {
         val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
         traceSequences[event.traceId] = nextSequence
         events.add(event.copy(sequenceNumber = nextSequence))
         if (event.orderId.isNotBlank()) {
             orderLifecycleDirty.add(event.orderId)
         }
+        }
     }
 
     override fun acceptedOrder(orderId: String): PersistedOrder? {
+        synchronized(lock) {
         return orders[orderId]
+        }
     }
 
     override fun acceptedOrders(orderIds: Set<String>): Map<String, PersistedOrder> {
+        synchronized(lock) {
         return orderIds.mapNotNull { orderId ->
             orders[orderId]?.let { orderId to it }
         }.toMap()
+        }
     }
 
     override fun acceptedOrders(): List<PersistedOrder> {
+        synchronized(lock) {
         return orders.values.toList()
+        }
     }
 
     override fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
+        synchronized(lock) {
         return orders.values
             .filter { it.participantId == participantId && it.clientOrderId == clientOrderId }
             .maxByOrNull { it.acceptedAt }
+        }
     }
 
     override fun ordersForParticipant(
@@ -220,6 +287,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         instrumentId: String,
         limit: Int
     ): List<OwnOrderView> {
+        synchronized(lock) {
         val boundedLimit = limit.coerceIn(0, 500)
         val views = orders.values
             .filter { it.participantId == participantId }
@@ -238,6 +306,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
         return if (boundedLimit > 0) views.take(boundedLimit) else views
+        }
     }
 
     override fun executionsForParticipant(
@@ -246,6 +315,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         runId: String,
         limit: Int
     ): List<OwnExecutionView> {
+        synchronized(lock) {
         val boundedLimit = limit.coerceIn(0, 500)
         val participantOrders = orders.values
             .filter { it.participantId == participantId }
@@ -270,17 +340,23 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
         return if (boundedLimit > 0) views.take(boundedLimit) else views
+        }
     }
 
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> {
+        synchronized(lock) {
         return executions.filter { it.orderId == orderId }
+        }
     }
 
     override fun tradesForOrder(orderId: String): List<TradeCreated> {
+        synchronized(lock) {
         return trades.filter { it.buyOrderId == orderId || it.sellOrderId == orderId }
+        }
     }
 
     override fun tradesForSettlementMaterialization(scenarioRunId: String, venueSessionId: String): List<TradeCreated> {
+        synchronized(lock) {
         return trades.filter { trade ->
             val buyOrder = orders[trade.buyOrderId] ?: return@filter false
             val sellOrder = orders[trade.sellOrderId] ?: return@filter false
@@ -291,17 +367,22 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 ?: return@filter false
             venueSessionId.isBlank() || orderVenueSessionId.isBlank() || orderVenueSessionId == venueSessionId
         }
+        }
     }
 
     override fun trades(): List<TradeCreated> {
+        synchronized(lock) {
         return trades.toList()
+        }
     }
 
     override fun recentTrades(limit: Int): List<TradeCreated> {
+        synchronized(lock) {
         if (limit <= 0) return emptyList()
         val boundedLimit = limit.coerceAtMost(500)
         val from = (trades.size - boundedLimit).coerceAtLeast(0)
         return trades.subList(from, trades.size).toList()
+        }
     }
 
     private fun sharedSettlementMetadata(first: String, second: String): String? {
@@ -314,6 +395,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long?): List<PublicTradeTapeEntry> {
+        synchronized(lock) {
         val effectiveLimit = limit.coerceIn(1, 500)
         return trades
             .mapIndexed { index, trade -> (index + 1).toLong() to trade }
@@ -333,9 +415,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     occurredAt = trade.occurredAt
                 )
             }
+        }
     }
 
     override fun intradayBars(instrumentId: String, interval: String, start: String, end: String): List<IntradayBar> {
+        synchronized(lock) {
         val duration = intradayBarIntervalDurations[interval] ?: return emptyList()
         val startInstant = runCatching { Instant.parse(start) }.getOrNull() ?: return emptyList()
         val endInstant = runCatching { Instant.parse(end) }.getOrNull() ?: return emptyList()
@@ -377,38 +461,52 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     volume = decimalString(ordered.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.quantity })
                 )
             }
+        }
     }
 
     override fun eventsForOrder(orderId: String): List<RuntimeEvent> {
+        synchronized(lock) {
         return events.filter { it.orderId == orderId }
+        }
     }
 
     override fun eventsForTrace(traceId: String): List<RuntimeEvent> {
+        synchronized(lock) {
         return events.filter { it.traceId == traceId }
+        }
     }
 
     override fun events(): List<RuntimeEvent> {
+        synchronized(lock) {
         return events.toList()
+        }
     }
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> {
+        synchronized(lock) {
         if (limit <= 0) return emptyList()
         val boundedLimit = limit.coerceAtMost(500)
         val from = (events.size - boundedLimit).coerceAtLeast(0)
         return events.subList(from, events.size).toList()
+        }
     }
 
     override fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
+        synchronized(lock) {
         outcomes.forEach { outcome ->
             canonicalSubmitOutcomes.putIfAbsent(outcome.commandId, outcome)
+        }
         }
     }
 
     fun canonicalSubmitOutcomes(): List<CanonicalSubmitOutcome> {
+        synchronized(lock) {
         return canonicalSubmitOutcomes.values.toList()
+        }
     }
 
     override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
+        synchronized(lock) {
         if (batchSize <= 0) return 0
         val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }
@@ -432,6 +530,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
         return outcomes.size.toLong()
+        }
     }
 
     fun projectCanonicalCommandOutcomes(
@@ -441,7 +540,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         includeFills: Boolean,
         eventStream: String
     ): Long {
+        synchronized(lock) {
         return projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, ProjectionStage.Full)
+        }
     }
 
     override fun projectCanonicalCommandOutcomes(
@@ -452,6 +553,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         eventStream: String,
         projectionStage: ProjectionStage
     ): Long {
+        synchronized(lock) {
         if (batchSize <= 0) return 0
         val partitionSet = partitions.toSet()
         val scopedEventStream = eventStream.trim()
@@ -485,9 +587,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
         return outcomes.size.toLong()
+        }
     }
 
     override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus {
+        synchronized(lock) {
         val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks[projectionName].orEmpty()
         val sourceRows = if (source.isVenueEventBatchProjectionSource()) {
@@ -523,9 +627,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             lag = watermarkRows.sumOf { it.lag },
             watermarks = watermarkRows
         )
+        }
     }
 
     override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        synchronized(lock) {
         val canonicalOutcomes = canonicalOutcomes(batch)
         canonicalOutcomes.forEach { candidate ->
             val existing = commandOutcomes[candidate.commandId] ?: return@forEach
@@ -543,9 +649,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             }
         }
         return inserted
+        }
     }
 
     override fun materializeVenueEventBatches(batches: List<VenueEventBatchFact>): Long {
+        synchronized(lock) {
         val validatedBatches = venueEventBatches.toMutableMap()
         val validatedOutcomes = commandOutcomes.toMutableMap()
         batches.forEach { batch ->
@@ -566,6 +674,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             }
         }
         return batches.sumOf { materializeVenueEventBatch(it) }
+        }
     }
 
     private fun canonicalOutcomes(batch: VenueEventBatchFact): List<CanonicalCommandOutcome> {
@@ -591,10 +700,13 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        synchronized(lock) {
         return commandOutcomes[commandId]
+        }
     }
 
     override fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        synchronized(lock) {
         val outcome = canonicalSubmitOutcomes[commandId] ?: return null
         return CanonicalCommandResult(
             commandId = outcome.commandId,
@@ -609,9 +721,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             engineShardId = outcome.engineShardId,
             resultPayloadJson = outcome.outcome.toJsonObject()
         )
+        }
     }
 
     override fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
+        synchronized(lock) {
         return venueEventBatches.values.asSequence()
             .mapNotNull { batch ->
                 val outcome = batch.outcomes.firstOrNull { it.commandId == commandId } ?: return@mapNotNull null
@@ -634,9 +748,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
             .firstOrNull()
+        }
     }
 
     internal fun recordVenueEventBatch(batch: VenueEventBatchFact): Boolean {
+        synchronized(lock) {
         val existing = venueEventBatches[batch.batchId]
         if (existing != null) {
             check(existing.payloadChecksum == batch.payloadChecksum) {
@@ -646,18 +762,22 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         }
         venueEventBatches[batch.batchId] = batch
         return true
+        }
     }
 
     override fun rebuildOrderLifecycleState(): Long {
+        synchronized(lock) {
         orderLifecycleStates.clear()
         orders.values.forEach { order ->
             orderLifecycleStates[order.orderId] = computeLifecycleState(order)
         }
         orderLifecycleDirty.clear()
         return orderLifecycleStates.size.toLong()
+        }
     }
 
     override fun projectOrderLifecycleState(batchSize: Int): Long {
+        synchronized(lock) {
         if (batchSize <= 0) return 0
         val batch = orderLifecycleDirty.take(batchSize)
         batch.forEach { orderId ->
@@ -668,6 +788,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             orderLifecycleDirty.remove(orderId)
         }
         return batch.size.toLong()
+        }
     }
 
     private fun computeLifecycleState(order: PersistedOrder): OrderLifecycleState {
@@ -716,10 +837,13 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
+        synchronized(lock) {
         return orderLifecycleStates[orderId]
+        }
     }
 
     override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
+        synchronized(lock) {
         rebuildOrderLifecycleState()
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }
@@ -759,6 +883,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
         return marketDataSnapshots.keys.count { it.startsWith("$projectionName:") }.toLong()
+        }
     }
 
     override fun projectMarketDataSnapshots(
@@ -766,6 +891,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         sourceProjectionName: String,
         batchSize: Int
     ): Long {
+        synchronized(lock) {
         if (batchSize <= 0) return 0
         projectOrderLifecycleState(batchSize)
         val batch = marketDataSnapshotDirty.take(batchSize)
@@ -807,10 +933,13 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             marketDataSnapshotDirty.remove(instrumentId)
         }
         return batch.size.toLong()
+        }
     }
 
     override fun marketDataSnapshot(instrumentId: String, projectionName: String): MarketDataSnapshot? {
+        synchronized(lock) {
         return marketDataSnapshots["$projectionName:$instrumentId"]
+        }
     }
 
     override fun marketDataDepthSnapshot(
@@ -819,6 +948,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         projectionName: String,
         sourceProjectionName: String
     ): MarketDataDepthSnapshot? {
+        synchronized(lock) {
         val boundedLevels = levels.coerceIn(1, 50)
         rebuildOrderLifecycleState()
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
@@ -848,6 +978,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             lag = sourceStatus.lag,
             updatedAt = updatedAt
         )
+        }
     }
 
     private fun CanonicalCommandOutcome.toSubmitOrderResult(): SubmitOrderResult {

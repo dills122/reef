@@ -8,6 +8,7 @@ import com.reef.arena.controlplane.arena.ArenaBotEntitlementStore
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
 import com.reef.platform.application.admin.AdminTrustState
+import com.reef.platform.application.admin.AdminUser
 import com.reef.arena.controlplane.application.ArenaBotRegistrationCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionDecisionCommand
 import com.reef.arena.controlplane.application.ArenaBotVersionRegistrationCommand
@@ -223,7 +224,7 @@ internal class ArenaAdminGateway(
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return arenaAdmissionWrite("admission window scheduling failed") {
             val window = service.scheduleWindow(
-                arenaAdminActor(json),
+                arenaAdminActor(),
                 ScheduleArenaAdmissionWindowCommand(
                     windowId = json.string("windowId"),
                     policy = ArenaAdmissionWindowPolicy(json.string("policyVersion")),
@@ -240,7 +241,7 @@ internal class ArenaAdminGateway(
         val windowId = queryValue(query, "windowId")
         if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
         return try {
-            val window = service.window(arenaAdminActor(query), windowId)
+            val window = service.window(arenaAdminActor(), windowId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admission window not found"))
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "window" to arenaAdmissionWindowJson(window)))
         } catch (ex: Exception) {
@@ -255,7 +256,7 @@ internal class ArenaAdminGateway(
             val versionStatus = normalizeArenaBotVersionStatus(json.string("versionStatus"))
                 ?: throw IllegalArgumentException("invalid arena bot version status")
             val decision = service.evaluate(
-                arenaAdminActor(json),
+                arenaAdminActor(),
                 EvaluateArenaEligibilityCommand(
                     evaluationId = json.string("evaluationId"),
                     windowId = json.string("windowId"),
@@ -294,7 +295,7 @@ internal class ArenaAdminGateway(
         val windowId = queryValue(query, "windowId")
         if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
         return try {
-            val decisions = service.decisions(arenaAdminActor(query), windowId)
+            val decisions = service.decisions(arenaAdminActor(), windowId)
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map(::arenaEligibilityDecisionJson)))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "eligibility decision lookup failed")))
@@ -311,7 +312,7 @@ internal class ArenaAdminGateway(
             val economicPolicy = resolvedPolicies.obj("economicPolicy")
             val scoringPolicy = resolvedPolicies.obj("scoringPolicy")
             val result = service.lockRoster(
-                arenaAdminActor(json),
+                arenaAdminActor(),
                 LockArenaRosterCommand(
                     snapshotId = json.string("snapshotId"),
                     windowId = json.string("windowId"),
@@ -372,7 +373,7 @@ internal class ArenaAdminGateway(
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return arenaAdmissionWrite("roster preview failed") {
             val preview = service.previewRoster(
-                arenaAdminActor(json),
+                arenaAdminActor(),
                 PreviewArenaRosterCommand(
                     windowId = json.string("windowId"),
                     candidates = json.objectDocuments("candidates").map { candidate ->
@@ -410,7 +411,7 @@ internal class ArenaAdminGateway(
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return arenaAdmissionWrite("roster removal failed") {
             val removal = service.removeFromRoster(
-                arenaAdminActor(json),
+                arenaAdminActor(),
                 RemoveArenaRosterEntryCommand(
                     removalId = json.string("removalId"),
                     windowId = json.string("windowId"),
@@ -432,7 +433,7 @@ internal class ArenaAdminGateway(
         val windowId = queryValue(query, "windowId")
         if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
         return try {
-            val removals = service.removals(arenaAdminActor(query), windowId)
+            val removals = service.removals(arenaAdminActor(), windowId)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "removals" to removals.map(::arenaRosterRemovalJson))
@@ -447,7 +448,7 @@ internal class ArenaAdminGateway(
         val windowId = queryValue(query, "windowId")
         if (windowId.isBlank()) return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "windowId is required"))
         return try {
-            val actor = arenaAdminActor(query)
+            val actor = arenaAdminActor()
             val roster = service.roster(actor, windowId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "roster not found"))
             val removals = service.removals(actor, windowId)
@@ -511,7 +512,7 @@ internal class ArenaAdminGateway(
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
-        val actor = arenaAdminActor(json)
+        val actor = arenaAdminActor()
         return try {
             val bot = service.registerArenaBot(
                 actor,
@@ -544,7 +545,7 @@ internal class ArenaAdminGateway(
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
-        val actor = arenaAdminActor(json)
+        val actor = arenaAdminActor()
         return try {
             val version = service.registerArenaBotVersion(
                 actor,
@@ -907,9 +908,9 @@ internal class ArenaAdminGateway(
             return arenaBotsListResponse(service, query)
         }
         return try {
-            val bot = service.arenaBot(arenaAdminActor(query), botId)
+            val bot = service.arenaBot(arenaAdminActor(), botId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot, botOwnerMetadata(bot.botId))))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot lookup failed")))
         }
@@ -938,12 +939,13 @@ internal class ArenaAdminGateway(
                 .sortedByDescending { it.assignedAt }
                 .take(limit.coerceIn(1, 500))
             val bots = service.arenaBotsById(ownerships.map { it.botId }, limit)
+            val ownersByBotId = botOwnerMetadataForBots(bots.map { it.botId })
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject(
                     "status" to "ok",
                     "reefUserId" to actorId,
-                    "bots" to bots.map { arenaBotJson(it) }
+                    "bots" to bots.map { arenaBotJson(it, ownersByBotId[it.botId].orEmpty()) }
                 )
             )
         } catch (ex: Exception) {
@@ -955,10 +957,11 @@ internal class ArenaAdminGateway(
     private fun arenaBotsListResponse(service: ArenaAdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
-            val bots = service.arenaBots(arenaAdminActor(query), limit)
+            val bots = service.arenaBots(arenaAdminActor(), limit)
+            val ownersByBotId = botOwnerMetadataForBots(bots.map { it.botId })
             PlatformHotPathResponse(
                 200,
-                JsonCodec.writeObject("status" to "ok", "bots" to bots.map { arenaBotJson(it) })
+                JsonCodec.writeObject("status" to "ok", "bots" to bots.map { arenaBotJson(it, ownersByBotId[it.botId].orEmpty()) })
             )
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bots query failed")))
@@ -974,7 +977,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
         return try {
-            val version = service.arenaBotVersion(arenaAdminActor(query), botId, versionId)
+            val version = service.arenaBotVersion(arenaAdminActor(), botId, versionId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot version not found"))
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "version" to arenaBotVersionJson(version)))
         } catch (ex: Exception) {
@@ -991,7 +994,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
         return try {
-            val reports = service.arenaQualificationReports(arenaAdminActor(query), botId, versionId)
+            val reports = service.arenaQualificationReports(arenaAdminActor(), botId, versionId)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "reports" to reports.map { arenaQualificationReportJson(it) })
@@ -1010,7 +1013,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
         return try {
-            val decisions = service.arenaOperatorDecisions(arenaAdminActor(query), botId, versionId)
+            val decisions = service.arenaOperatorDecisions(arenaAdminActor(), botId, versionId)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map { arenaOperatorDecisionJson(it) })
@@ -1029,7 +1032,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
         return try {
-            val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(query), botId, versionId)
+            val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(), botId, versionId)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "descriptors" to descriptors.map { arenaRuntimeConfigDescriptorJson(it) })
@@ -1047,7 +1050,7 @@ internal class ArenaAdminGateway(
             return arenaRunsListResponse(service, query)
         }
         return try {
-            val run = service.arenaRun(arenaAdminActor(query), runId)
+            val run = service.arenaRun(arenaAdminActor(), runId)
                 ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena run not found"))
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
         } catch (ex: Exception) {
@@ -1059,7 +1062,7 @@ internal class ArenaAdminGateway(
     private fun arenaRunsListResponse(service: ArenaAdminApplicationService, query: String?): PlatformHotPathResponse {
         val limit = queryValue(query, "limit").toIntOrNull() ?: 50
         return try {
-            val runs = service.arenaRuns(arenaAdminActor(query), limit)
+            val runs = service.arenaRuns(arenaAdminActor(), limit)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "runs" to runs.map { arenaRunJson(it) })
@@ -1075,7 +1078,7 @@ internal class ArenaAdminGateway(
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
             val run = service.registerArenaRun(
-                arenaAdminActor(json),
+                arenaAdminActor(),
                 ArenaRunRegistrationCommand(
                     runId = json.string("runId"),
                     modeId = json.string("modeId"),
@@ -1118,7 +1121,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
         }
         return try {
-            val run = service.updateArenaRunStatus(arenaAdminActor(json), ArenaRunStatusCommand(runId, status))
+            val run = service.updateArenaRunStatus(arenaAdminActor(), ArenaRunStatusCommand(runId, status))
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
         } catch (ex: IllegalArgumentException) {
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run transition")))
@@ -1135,7 +1138,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
         }
         return try {
-            val results = service.arenaRunBotResults(arenaAdminActor(query), runId)
+            val results = service.arenaRunBotResults(arenaAdminActor(), runId)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "results" to results.map { arenaRunBotResultJson(it) })
@@ -1170,7 +1173,7 @@ internal class ArenaAdminGateway(
                 scoreEligible = json.booleanOrDefault("scoreEligible", true),
                 publicLeaderboard = json.booleanOrDefault("publicLeaderboard", true)
             )
-            val result = service.recordArenaRunBotResult(arenaAdminActor(json), command)
+            val result = service.recordArenaRunBotResult(arenaAdminActor(), command)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "result" to arenaRunBotResultJson(result))
@@ -1190,7 +1193,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
         }
         return try {
-            val events = service.arenaRunEnforcementEvents(arenaAdminActor(query), runId)
+            val events = service.arenaRunEnforcementEvents(arenaAdminActor(), runId)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "events" to events.map { arenaRunEnforcementEventJson(it) })
@@ -1217,7 +1220,7 @@ internal class ArenaAdminGateway(
                 policyVersion = json.string("policyVersion"),
                 countersJson = json.string("countersJson")
             )
-            val event = service.recordArenaRunEnforcementEvent(arenaAdminActor(json), command)
+            val event = service.recordArenaRunEnforcementEvent(arenaAdminActor(), command)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "event" to arenaRunEnforcementEventJson(event))
@@ -1239,7 +1242,7 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
         }
         return try {
-            val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
+            val entries = service.arenaLeaderboard(arenaAdminActor(), modeId, scoringPolicyVersion, limit)
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
@@ -1530,10 +1533,6 @@ internal class ArenaAdminGateway(
         return if (raw.isBlank()) fallback else JsonCodec.writeNode(JsonCodec.rawJsonOrText(raw))
     }
 
-    private fun arenaAdminActor(json: JsonDocument): AdminActor {
-        return arenaAdminActor()
-    }
-
     private fun arenaAdminActor(): AdminActor {
         val principal = currentPrincipal()
         return AdminActor(
@@ -1541,10 +1540,6 @@ internal class ArenaAdminGateway(
             correlationId = principal.correlationId,
             occurredAt = principal.occurredAt
         )
-    }
-
-    private fun arenaAdminActor(query: String?): AdminActor {
-        return arenaAdminActor()
     }
 
     private fun openBaoBotConfigService(): BotConfigSecretService {
@@ -1643,7 +1638,7 @@ internal class ArenaAdminGateway(
         }
     }
 
-    private fun arenaBotJson(bot: ArenaBot): Map<String, Any?> {
+    private fun arenaBotJson(bot: ArenaBot, owners: List<ArenaBotOwnerMetadata>): Map<String, Any?> {
         return mapOf(
             "botId" to bot.botId,
             "fileName" to bot.fileName,
@@ -1654,7 +1649,7 @@ internal class ArenaAdminGateway(
                 "description" to bot.metadata.description,
                 "version" to bot.metadata.version
             ),
-            "owners" to botOwnerMetadata(bot.botId).map { owner ->
+            "owners" to owners.map { owner ->
                 mapOf(
                     "reefUserId" to owner.reefUserId,
                     "githubLogin" to owner.githubLogin,
@@ -1692,6 +1687,37 @@ internal class ArenaAdminGateway(
                 }
             }
             .toList()
+    }
+
+    /**
+     * Batch variant of [botOwnerMetadata] for a page of bots: fetches all ownerships for
+     * the page in one entitlement-store round trip, then resolves each distinct identity
+     * at most once instead of once per ownership row.
+     */
+    private fun botOwnerMetadataForBots(botIds: List<String>): Map<String, List<ArenaBotOwnerMetadata>> {
+        val identityService = adminIdentityService ?: return emptyMap()
+        val entitlementStore = arenaBotEntitlementStore ?: return emptyMap()
+        val ownershipsByBot = entitlementStore.ownershipsForBots(botIds)
+        val identityCache = mutableMapOf<String, AdminUser?>()
+        fun resolvedUser(reefUserId: String) = identityCache.getOrPut(reefUserId) { identityService.user(reefUserId) }
+        return ownershipsByBot.mapValues { (_, ownerships) ->
+            ownerships
+                .asSequence()
+                .filter { it.ownershipState != ArenaBotOwnershipState.Revoked }
+                .mapNotNull { ownership ->
+                    resolvedUser(ownership.reefUserId)?.let { user ->
+                        ArenaBotOwnerMetadata(
+                            reefUserId = user.reefUserId,
+                            githubLogin = user.githubLogin,
+                            displayName = user.displayName,
+                            trustState = user.trustState,
+                            ownershipState = ownership.ownershipState,
+                            assignedAt = ownership.assignedAt
+                        )
+                    }
+                }
+                .toList()
+        }
     }
 
     private data class ArenaBotOwnerMetadata(

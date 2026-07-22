@@ -478,14 +478,26 @@ type processedOutcome struct {
 	DecodeError    string
 }
 
+// decodeCommand unmarshals data into a T, returning the zero value and a
+// formatted decode-error string (using label to describe the command kind)
+// when unmarshaling fails. On success the error string is empty.
+func decodeCommand[T any](data []byte, label string) (T, string) {
+	var command T
+	if err := json.Unmarshal(data, &command); err != nil {
+		var zero T
+		return zero, fmt.Sprintf("decode %s command: %v", label, err)
+	}
+	return command, ""
+}
+
 func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery CommandDelivery, commandType string, venueSessionID string, instrumentID string) (processedOutcome, bool) {
 	switch commandType {
 	case "SubmitOrder":
-		var command domain.SubmitOrder
-		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+		command, decodeErr := decodeCommand[domain.SubmitOrder](delivery.Data(), "submit")
+		if decodeErr != "" {
 			return processedOutcome{
 				CommandID:   bestEffortCommandID(delivery.Data()),
-				DecodeError: fmt.Sprintf("decode submit command: %v", err),
+				DecodeError: decodeErr,
 			}, true
 		}
 		if command.VenueSessionID == "" {
@@ -501,11 +513,11 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 			Result:         result,
 		}, true
 	case "ModifyOrder":
-		var command domain.ModifyOrder
-		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+		command, decodeErr := decodeCommand[domain.ModifyOrder](delivery.Data(), "modify")
+		if decodeErr != "" {
 			return processedOutcome{
 				CommandID:   bestEffortCommandID(delivery.Data()),
-				DecodeError: fmt.Sprintf("decode modify command: %v", err),
+				DecodeError: decodeErr,
 			}, true
 		}
 		return processedOutcome{
@@ -516,11 +528,11 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 			Result:         p.service.ModifyOrderInBatch(rollback, command),
 		}, true
 	case "CancelOrder":
-		var command domain.CancelOrder
-		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+		command, decodeErr := decodeCommand[domain.CancelOrder](delivery.Data(), "cancel")
+		if decodeErr != "" {
 			return processedOutcome{
 				CommandID:   bestEffortCommandID(delivery.Data()),
-				DecodeError: fmt.Sprintf("decode cancel command: %v", err),
+				DecodeError: decodeErr,
 			}, true
 		}
 		return processedOutcome{

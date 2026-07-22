@@ -71,7 +71,11 @@ class ArenaAdminApplicationService(
     fun arenaBot(actor: AdminActor, botId: String): ArenaBot? = authorized(actor) { arenaRegistryStore.bot(botId) }
     fun arenaBotForOwnerScopedConfig(botId: String): ArenaBot? = arenaRegistryStore.bot(botId)
     fun arenaBots(actor: AdminActor, limit: Int = 50): List<ArenaBot> = authorized(actor) { arenaRegistryStore.bots(limit) }
-    fun arenaBotsById(botIds: List<String>, limit: Int = 50): List<ArenaBot> = botIds.distinct().take(limit.coerceIn(1, 500)).mapNotNull(arenaRegistryStore::bot)
+    fun arenaBotsById(botIds: List<String>, limit: Int = 50): List<ArenaBot> {
+        val requestedIds = botIds.distinct().take(limit.coerceIn(1, 500))
+        val botsById = arenaRegistryStore.botsByIds(requestedIds).associateBy { it.botId }
+        return requestedIds.mapNotNull(botsById::get)
+    }
     fun arenaBotVersion(actor: AdminActor, botId: String, versionId: String): ArenaBotVersion? = authorized(actor) { arenaRegistryStore.version(botId, versionId) }
     fun arenaQualificationReports(actor: AdminActor, botId: String, versionId: String): List<ArenaQualificationReport> = authorized(actor) { arenaRegistryStore.qualificationReports(botId, versionId) }
     fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> = authorized(actor) { arenaRegistryStore.operatorDecisions(botId, versionId) }

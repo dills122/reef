@@ -546,26 +546,22 @@ class PlatformHttpServer(
         streamCommandWorkerPollMs = streamCommandWorkerPollMs,
         streamCommandWorkerFetchTimeoutMs = streamCommandWorkerFetchTimeoutMs,
         streamCommandWorkerDedicatedRuntimePoolEnabled = streamCommandWorkerDedicatedRuntimePoolEnabled,
-        venueEventMaterializerShouldStart = { runtimeLoopStarter.venueEventMaterializerShouldStart() },
         venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
         venueEventMaterializerPollMs = venueEventMaterializerPollMs,
         venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs,
-        marketDataProjectorShouldStart = { runtimeLoopStarter.marketDataProjectorShouldStart() },
         marketDataProjectorProjectionName = marketDataProjectorProjectionName,
         marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
         marketDataProjectorPollMs = marketDataProjectorPollMs,
         marketDataProjectorBatchSize = marketDataProjectorBatchSize,
-        orderLifecycleProjectorShouldStart = { runtimeLoopStarter.orderLifecycleProjectorShouldStart() },
         orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
         orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
-        streamWorkerPartitions = { runtimeLoopStarter.streamWorkerPartitions() },
         api = api,
         streamAckProjectorEnabled = streamAckProjectorEnabled,
         streamAckProjectionName = streamAckProjectionName,
         streamAckProjectionSource = streamAckProjectionSource,
         streamAckProjectionEventStream = streamAckProjectionEventStream,
         streamAckProjectionStage = streamAckProjectionStage,
-        projectorPartitions = { runtimeLoopStarter.projectorPartitions() }
+        runtimeLoopStarter = runtimeLoopStarter
     )
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
         buildStreamCommandDrainBackpressureSampler()
@@ -601,25 +597,11 @@ class PlatformHttpServer(
             optionalProductRouteExtensions = optionalProductRouteExtensions,
             currentAdminPrincipal = { currentAdminPrincipal() },
             settlementAdminGateway = settlementAdminGateway,
+            riskGuardrailGateway = riskGuardrailGateway,
+            diagnosticsGateway = diagnosticsGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
-            abuseStatsJson = { riskGuardrailGateway.abuseStatsJson(abuseProtectionHook.stats()) },
-            accountRiskControlsJson = { riskGuardrailGateway.accountRiskControlsJson() },
-            accountRiskDecisionsJson = { limit -> riskGuardrailGateway.accountRiskDecisionsJson(limit) },
-            commandCircuitBreakersJson = { riskGuardrailGateway.commandCircuitBreakersJson() },
-            instrumentPriceCollarsJson = { riskGuardrailGateway.instrumentPriceCollarsJson() },
-            setAccountRiskControlJson = { body -> riskGuardrailGateway.setAccountRiskControlResponse(body) },
-            setCommandCircuitBreakerJson = { body -> riskGuardrailGateway.setCommandCircuitBreakerResponse(body) },
-            setInstrumentPriceCollarJson = { body -> riskGuardrailGateway.setInstrumentPriceCollarResponse(body) },
-            dbPoolStatsJson = { diagnosticsGateway.dbPoolStatsJson() },
-            asyncCommandStatsJson = { diagnosticsGateway.asyncCommandStatsJson() },
-            commandAccountingJson = { runId -> diagnosticsGateway.commandAccountingJson(runId) },
-            streamCommandHealthJson = { diagnosticsGateway.streamCommandHealthJson() },
-            streamCommandWorkerStatsJson = { diagnosticsGateway.streamCommandWorkerStatsJson() },
-            venueEventMaterializerStatsJson = { diagnosticsGateway.venueEventMaterializerStatsJson() },
-            projectorStatusJson = { diagnosticsGateway.projectorStatusJson() },
-            marketDataProjectorStatsJson = { diagnosticsGateway.marketDataProjectorStatusJson() },
-            orderLifecycleProjectorStatsJson = { diagnosticsGateway.orderLifecycleProjectorStatusJson() }
+            abuseStatsJson = { riskGuardrailGateway.abuseStatsJson(abuseProtectionHook.stats()) }
         )
     }
 
@@ -680,7 +662,7 @@ class PlatformHttpServer(
         server.createContext("/internal/admin/settlement/facts") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
@@ -692,7 +674,7 @@ class PlatformHttpServer(
         server.createContext("/internal/admin/settlement/repairs/cash") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
@@ -704,7 +686,7 @@ class PlatformHttpServer(
         server.createContext("/internal/admin/settlement/repairs/security") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
@@ -716,7 +698,7 @@ class PlatformHttpServer(
         server.createContext("/internal/admin/settlement/force-settle") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
@@ -728,7 +710,7 @@ class PlatformHttpServer(
         server.createContext("/internal/admin/settlement/reverse-ledger-entry") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
@@ -740,7 +722,7 @@ class PlatformHttpServer(
         server.createContext("/internal/admin/settlement/obligations/materialize") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
@@ -784,15 +766,15 @@ class PlatformHttpServer(
 
         server.createContext("/orders/submit") { exchange ->
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowLegacyMutationRoute(exchange)) return@createContext
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
-                writeJson(exchange, 200, api.submitOrder(body))
+                adminSessionAuth.writeJson(exchange, 200, api.submitOrder(body))
             } catch (ex: Exception) {
-                writeJson(exchange, 503, runtimeUnavailableJson(ex))
+                adminSessionAuth.writeJson(exchange, 503, runtimeUnavailableJson(ex))
             }
         }
 
@@ -807,10 +789,10 @@ class PlatformHttpServer(
                 "POST" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
-                    writeJson(exchange, 200, api.createInstrument(body))
+                    adminSessionAuth.writeJson(exchange, 200, api.createInstrument(body))
                 }
-                "GET" -> writeJson(exchange, 200, api.instruments())
-                else -> methodNotAllowed(exchange)
+                "GET" -> adminSessionAuth.writeJson(exchange, 200, api.instruments())
+                else -> adminSessionAuth.methodNotAllowed(exchange)
             }
         }
 
@@ -819,10 +801,10 @@ class PlatformHttpServer(
                 "POST" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
-                    writeJson(exchange, 200, api.createParticipant(body))
+                    adminSessionAuth.writeJson(exchange, 200, api.createParticipant(body))
                 }
-                "GET" -> writeJson(exchange, 200, api.participants())
-                else -> methodNotAllowed(exchange)
+                "GET" -> adminSessionAuth.writeJson(exchange, 200, api.participants())
+                else -> adminSessionAuth.methodNotAllowed(exchange)
             }
         }
 
@@ -831,10 +813,10 @@ class PlatformHttpServer(
                 "POST" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
-                    writeJson(exchange, 200, api.createAccount(body))
+                    adminSessionAuth.writeJson(exchange, 200, api.createAccount(body))
                 }
-                "GET" -> writeJson(exchange, 200, api.accounts())
-                else -> methodNotAllowed(exchange)
+                "GET" -> adminSessionAuth.writeJson(exchange, 200, api.accounts())
+                else -> adminSessionAuth.methodNotAllowed(exchange)
             }
         }
 
@@ -843,13 +825,13 @@ class PlatformHttpServer(
                 "POST" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
-                    writeJson(exchange, 200, api.createRole(body))
+                    adminSessionAuth.writeJson(exchange, 200, api.createRole(body))
                 }
                 "GET" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
-                    writeJson(exchange, 200, api.roles())
+                    adminSessionAuth.writeJson(exchange, 200, api.roles())
                 }
-                else -> methodNotAllowed(exchange)
+                else -> adminSessionAuth.methodNotAllowed(exchange)
             }
         }
 
@@ -858,28 +840,28 @@ class PlatformHttpServer(
                 "POST" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
-                    writeJson(exchange, 200, api.assignRole(body))
+                    adminSessionAuth.writeJson(exchange, 200, api.assignRole(body))
                 }
                 "GET" -> {
                     if (!allowLegacyMutationRoute(exchange)) return@createContext
-                    val actorId = queryValue(exchange, "actorId")
-                    writeJson(exchange, 200, api.actorRoles(actorId))
+                    val actorId = exchange.queryValue("actorId")
+                    adminSessionAuth.writeJson(exchange, 200, api.actorRoles(actorId))
                 }
-                else -> methodNotAllowed(exchange)
+                else -> adminSessionAuth.methodNotAllowed(exchange)
             }
         }
 
         server.createContext("/orders/cancel") { exchange ->
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowLegacyMutationRoute(exchange)) return@createContext
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
-                writeJson(exchange, 200, api.cancelOrder(body))
+                adminSessionAuth.writeJson(exchange, 200, api.cancelOrder(body))
             } catch (ex: Exception) {
-                writeJson(exchange, 503, runtimeUnavailableJson(ex))
+                adminSessionAuth.writeJson(exchange, 503, runtimeUnavailableJson(ex))
             }
         }
 
@@ -895,15 +877,15 @@ class PlatformHttpServer(
 
         server.createContext("/orders/modify") { exchange ->
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowLegacyMutationRoute(exchange)) return@createContext
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
-                writeJson(exchange, 200, api.modifyOrder(body))
+                adminSessionAuth.writeJson(exchange, 200, api.modifyOrder(body))
             } catch (ex: Exception) {
-                writeJson(exchange, 503, runtimeUnavailableJson(ex))
+                adminSessionAuth.writeJson(exchange, 503, runtimeUnavailableJson(ex))
             }
         }
 
@@ -915,7 +897,7 @@ class PlatformHttpServer(
 
         server.createContext("/orders/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/orders/{orderId}")) {
@@ -925,81 +907,81 @@ class PlatformHttpServer(
             val path = exchange.requestURI.path.removePrefix("/orders/")
             if (path.endsWith("/events")) {
                 val orderId = path.removeSuffix("/events").trimEnd('/')
-                writeJson(exchange, 200, api.orderEvents(orderId))
+                adminSessionAuth.writeJson(exchange, 200, api.orderEvents(orderId))
                 return@createContext
             }
 
             val orderId = path.trimEnd('/')
             val result = api.orderWithStatus(orderId)
-            writeJson(exchange, if (result.found) 200 else 404, result.body)
+            adminSessionAuth.writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
         server.createContext("/orders") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/orders")) {
                 return@createContext
             }
-            writeJson(exchange, 200, api.orders())
+            adminSessionAuth.writeJson(exchange, 200, api.orders())
         }
 
         server.createContext("/api/v1/orders/lifecycle-state") { exchange ->
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Write(exchange, "/api/v1/orders/lifecycle-state")) {
                 return@createContext
             }
-            writeJson(exchange, 200, api.rebuildOrderLifecycleState())
+            adminSessionAuth.writeJson(exchange, 200, api.rebuildOrderLifecycleState())
         }
 
         server.createContext("/api/v1/market-data/snapshots/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/market-data/snapshots/{instrumentId}")) {
                 return@createContext
             }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
-            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
+            val projectionName = exchange.queryValue("projectionName").ifBlank { "market-data-top-of-book" }
             val result = api.marketDataSnapshotWithStatus(instrumentId, projectionName)
-            writeJson(exchange, if (result.found) 200 else 404, result.body)
+            adminSessionAuth.writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
         server.createContext("/api/v1/market-data/snapshots") { exchange ->
             if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Write(exchange, "/api/v1/market-data/snapshots")) {
                 return@createContext
             }
-            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
-            val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
-            writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
+            val projectionName = exchange.queryValue("projectionName").ifBlank { "market-data-top-of-book" }
+            val sourceProjectionName = exchange.queryValue("sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            adminSessionAuth.writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
         }
 
         server.createContext("/api/v1/data/availability") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/data/availability")) {
                 return@createContext
             }
-            val venueProjectionName = queryValue(exchange, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
-            val marketDataProjectionName = queryValue(exchange, "marketDataProjectionName").ifBlank { "market-data-top-of-book" }
-            val source = queryValue(exchange, "source").ifBlank { "venue-event-batch" }
-            writeJson(exchange, 200, api.dataAvailability(venueProjectionName, marketDataProjectionName, source))
+            val venueProjectionName = exchange.queryValue("venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            val marketDataProjectionName = exchange.queryValue("marketDataProjectionName").ifBlank { "market-data-top-of-book" }
+            val source = exchange.queryValue("source").ifBlank { "venue-event-batch" }
+            adminSessionAuth.writeJson(exchange, 200, api.dataAvailability(venueProjectionName, marketDataProjectionName, source))
         }
 
         server.createContext("/api/v1/settlement/facts/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/settlement/facts/{scenarioRunId}")) {
@@ -1011,7 +993,7 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/settlement/obligations/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/settlement/obligations/{scenarioRunId}")) {
@@ -1023,7 +1005,7 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/settlement/ledger/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/settlement/ledger/{scenarioRunId}")) {
@@ -1035,7 +1017,7 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/settlement/exceptions/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/settlement/exceptions/{scenarioRunId}")) {
@@ -1047,7 +1029,7 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/settlement/proof/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/settlement/proof/{scenarioRunId}")) {
@@ -1059,7 +1041,7 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/settlement/score/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/settlement/score/{scenarioRunId}")) {
@@ -1071,32 +1053,32 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/market-data/depth/{instrumentId}")) {
                 return@createContext
             }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
-            val levels = queryValue(exchange, "levels").toIntOrNull() ?: 5
-            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-depth" }
-            val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            val levels = exchange.queryValue("levels").toIntOrNull() ?: 5
+            val projectionName = exchange.queryValue("projectionName").ifBlank { "market-data-depth" }
+            val sourceProjectionName = exchange.queryValue("sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
             val result = api.marketDataDepthSnapshotWithStatus(instrumentId, levels, projectionName, sourceProjectionName)
-            writeJson(exchange, if (result.found) 200 else 404, result.body)
+            adminSessionAuth.writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
         server.createContext("/api/v1/market-data/trades/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/market-data/trades/{instrumentId}")) {
                 return@createContext
             }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/trades/").trimEnd('/')
-            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 50
-            val beforeSequence = queryValue(exchange, "before").toLongOrNull()
-            writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
+            val limit = exchange.queryValue("limit").toIntOrNull() ?: 50
+            val beforeSequence = exchange.queryValue("before").toLongOrNull()
+            adminSessionAuth.writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
         }
 
         optionalProductRouteExtensions.forEach { extension ->
@@ -1104,7 +1086,7 @@ class PlatformHttpServer(
                 server.createContext(path) { exchange ->
                 if (adminSessionAuth.handleLocalDevAdminUiCorsPreflight(exchange)) return@createContext
                 if (exchange.requestMethod != "GET") {
-                    methodNotAllowed(exchange)
+                    adminSessionAuth.methodNotAllowed(exchange)
                     return@createContext
                 }
                 if (!allowApiV1Read(exchange, path)) {
@@ -1119,72 +1101,72 @@ class PlatformHttpServer(
 
         server.createContext("/api/v1/market-data/bars/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/api/v1/market-data/bars/{instrumentId}")) {
                 return@createContext
             }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/bars/").trimEnd('/')
-            val interval = queryValue(exchange, "interval")
-            val start = queryValue(exchange, "start")
-            val end = queryValue(exchange, "end")
+            val interval = exchange.queryValue("interval")
+            val start = exchange.queryValue("start")
+            val end = exchange.queryValue("end")
             val result = api.intradayBarsWithStatus(instrumentId, interval, start, end)
-            writeJson(exchange, if (result.found) 200 else 400, result.body)
+            adminSessionAuth.writeJson(exchange, if (result.found) 200 else 400, result.body)
         }
 
         server.createContext("/api/v1/orders/current") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
-            val participantId = queryValue(exchange, "participantId")
+            val participantId = exchange.queryValue("participantId")
             val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/current", participantId)
             if (boundaryError != null) {
-                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                adminSessionAuth.writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
                 return@createContext
             }
-            val instrumentId = queryValue(exchange, "instrumentId")
-            val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
-            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
+            val instrumentId = exchange.queryValue("instrumentId")
+            val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
+            adminSessionAuth.writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/api/v1/orders/history") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
-            val participantId = queryValue(exchange, "participantId")
+            val participantId = exchange.queryValue("participantId")
             val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/history", participantId)
             if (boundaryError != null) {
-                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                adminSessionAuth.writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
                 return@createContext
             }
-            val instrumentId = queryValue(exchange, "instrumentId")
-            val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
-            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
+            val instrumentId = exchange.queryValue("instrumentId")
+            val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
+            adminSessionAuth.writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/api/v1/orders/fills") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
-            val participantId = queryValue(exchange, "participantId")
+            val participantId = exchange.queryValue("participantId")
             val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/fills", participantId)
             if (boundaryError != null) {
-                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                adminSessionAuth.writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
                 return@createContext
             }
-            val instrumentId = queryValue(exchange, "instrumentId")
-            val runId = queryValue(exchange, "runId")
-            val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
-            writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, runId = runId, limit = limit))
+            val instrumentId = exchange.queryValue("instrumentId")
+            val runId = exchange.queryValue("runId")
+            val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
+            adminSessionAuth.writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, runId = runId, limit = limit))
         }
 
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/trades")) {
@@ -1192,15 +1174,15 @@ class PlatformHttpServer(
             }
             val limit = queryLimit(exchange, 0)
             if (limit > 0) {
-                writeJson(exchange, 200, api.recentTrades(limit))
+                adminSessionAuth.writeJson(exchange, 200, api.recentTrades(limit))
                 return@createContext
             }
-            writeJson(exchange, 200, api.trades())
+            adminSessionAuth.writeJson(exchange, 200, api.trades())
         }
 
         server.createContext("/events") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
             if (!allowApiV1Read(exchange, "/events")) {
@@ -1208,15 +1190,15 @@ class PlatformHttpServer(
             }
             val limit = queryLimit(exchange, 0)
             if (limit > 0) {
-                writeJson(exchange, 200, api.recentEvents(limit))
+                adminSessionAuth.writeJson(exchange, 200, api.recentEvents(limit))
                 return@createContext
             }
-            writeJson(exchange, 200, api.events())
+            adminSessionAuth.writeJson(exchange, 200, api.events())
         }
 
         server.createContext("/traces/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
+                adminSessionAuth.methodNotAllowed(exchange)
                 return@createContext
             }
 
@@ -1228,7 +1210,7 @@ class PlatformHttpServer(
             }
 
             val traceId = path.removeSuffix("/events").trimEnd('/')
-            writeJson(exchange, 200, api.traceEvents(traceId))
+            adminSessionAuth.writeJson(exchange, 200, api.traceEvents(traceId))
         }
         }
 
@@ -1288,16 +1270,6 @@ class PlatformHttpServer(
         )
     }
 
-
-    private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
-        val bytes = json.toByteArray()
-        adminSessionAuth.applyLocalDevAdminUiCors(exchange)
-        exchange.responseHeaders.add("Content-Type", "application/json")
-        exchange.sendResponseHeaders(status, bytes.size.toLong())
-        exchange.responseBody.use { output ->
-            output.write(bytes)
-        }
-    }
 
     private fun writeHotPathResponse(exchange: HttpExchange, response: PlatformHotPathResponse) {
         adminSessionAuth.applyLocalDevAdminUiCors(exchange)
@@ -1427,12 +1399,6 @@ class PlatformHttpServer(
                 "streamCommandHealthCheck" to (streamCommandHealthCheck != null)
             )
         )
-    }
-
-    private fun methodNotAllowed(exchange: HttpExchange) {
-        adminSessionAuth.applyLocalDevAdminUiCors(exchange)
-        exchange.sendResponseHeaders(405, -1)
-        exchange.close()
     }
 
     private fun registerDiagnosticRoutes(server: HttpServer) {
@@ -1891,7 +1857,7 @@ class PlatformHttpServer(
             }
             total += read
             if (total > maxRequestBodyBytes) {
-                writeJson(exchange, 413, JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes))
+                adminSessionAuth.writeJson(exchange, 413, JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes))
                 return null
             }
             out.write(buffer, 0, read)
@@ -1899,12 +1865,7 @@ class PlatformHttpServer(
     }
 
     private fun queryLimit(exchange: HttpExchange, defaultValue: Int): Int {
-        return queryValue(exchange, "limit").toIntOrNull() ?: defaultValue
-    }
-
-    private fun queryValue(exchange: HttpExchange, key: String): String {
-        val query = exchange.requestURI.query ?: return ""
-        return queryValue(query, key)
+        return exchange.queryValue("limit").toIntOrNull() ?: defaultValue
     }
 
     private fun correlationId(exchange: HttpExchange): String {
@@ -1922,7 +1883,7 @@ class PlatformHttpServer(
     private fun allowApiV1Read(exchange: HttpExchange, route: String): Boolean {
         val boundaryError = boundary.checkRead(exchange.requestHeaders, route)
         if (boundaryError != null) {
-            writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+            adminSessionAuth.writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
             return false
         }
         return true
@@ -1931,7 +1892,7 @@ class PlatformHttpServer(
     private fun allowApiV1Write(exchange: HttpExchange, route: String): Boolean {
         val boundaryError = boundary.checkWrite(exchange.requestHeaders, route)
         if (boundaryError != null) {
-            writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+            adminSessionAuth.writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
             return false
         }
         return true
@@ -1969,7 +1930,7 @@ class PlatformHttpServer(
 
     private fun allowLegacyMutationRoute(exchange: HttpExchange): Boolean {
         if (!legacyMutationRoutesEnabled) {
-            writeJson(exchange, 403, simpleErrorJson("legacy mutation route disabled"))
+            adminSessionAuth.writeJson(exchange, 403, simpleErrorJson("legacy mutation route disabled"))
             return false
         }
         when (internalHttpExposureMode) {
@@ -1980,7 +1941,7 @@ class PlatformHttpServer(
             }
             InternalHttpExposureMode.LocalOnly -> {
                 if (!isLoopback(exchange.remoteAddress.address?.hostAddress)) {
-                    writeJson(
+                    adminSessionAuth.writeJson(
                         exchange,
                         403,
                         JsonCodec.writeObject(
@@ -1995,7 +1956,7 @@ class PlatformHttpServer(
         }
         val internalMarker = exchange.requestHeaders[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
         if (internalMarker != "true") {
-            writeJson(
+            adminSessionAuth.writeJson(
                 exchange,
                 403,
                 JsonCodec.writeObject(
@@ -2031,7 +1992,7 @@ class PlatformHttpServer(
         operation: (String) -> String
     ) {
         if (exchange.requestMethod != "POST") {
-            methodNotAllowed(exchange)
+            adminSessionAuth.methodNotAllowed(exchange)
             return
         }
 
@@ -2043,7 +2004,7 @@ class PlatformHttpServer(
             }
         }
         if (violation != null) {
-            writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+            adminSessionAuth.writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
             return
         }
 
@@ -2058,7 +2019,7 @@ class PlatformHttpServer(
         }
         val parsedBody = when (validation) {
             is ApiV1CommandValidation.Invalid -> {
-                writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validation.error), correlationId))
+                adminSessionAuth.writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validation.error), correlationId))
                 return
             }
             is ApiV1CommandValidation.Valid -> validation.json
@@ -2067,7 +2028,7 @@ class PlatformHttpServer(
             boundary.checkOrderMutationIdentity(exchange.requestHeaders, route, parsedBody)
         }
         if (identityViolation != null) {
-            writeJson(exchange, identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
             return
         }
 
@@ -2089,7 +2050,7 @@ class PlatformHttpServer(
             }
             val backpressure = commandIntakeBackpressure()
             if (backpressure != null) {
-                writeJson(exchange, backpressure.status, boundary.toErrorJson(backpressure, correlationId))
+                adminSessionAuth.writeJson(exchange, backpressure.status, boundary.toErrorJson(backpressure, correlationId))
                 return
             }
         }
@@ -2100,7 +2061,7 @@ class PlatformHttpServer(
         }
         if (breakerViolation != null) {
             recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
-            writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
             return
         }
 
@@ -2109,7 +2070,7 @@ class PlatformHttpServer(
         }
         if (collarViolation != null) {
             recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
-            writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
@@ -2117,7 +2078,7 @@ class PlatformHttpServer(
             accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
-            writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
             return
         }
 
@@ -2131,7 +2092,7 @@ class PlatformHttpServer(
             System.err.println(
                 "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
             )
-            writeJson(
+            adminSessionAuth.writeJson(
                 exchange,
                 503,
                 simpleErrorJson("command capture unavailable", errorMessage)
@@ -2157,7 +2118,7 @@ class PlatformHttpServer(
                     "command status lookup is required for ${commandProcessingMode.configValue}"
                 )
             }
-            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
+            adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
             return
         }
 
@@ -2168,7 +2129,7 @@ class PlatformHttpServer(
             HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
             }
-            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
             return
         }
 
@@ -2185,11 +2146,11 @@ class PlatformHttpServer(
                         "captured command status not found"
                     )
                 }
-                writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
+                adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
                 return
             }
             val payload = CommandStatusResponse.acceptedJson(status)
-            writeJson(exchange, 202, payload)
+            adminSessionAuth.writeJson(exchange, 202, payload)
             return
         }
 
@@ -2201,7 +2162,7 @@ class PlatformHttpServer(
                 commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
             }
             HotPathMetrics.time("api.writeResponse") {
-                writeJson(exchange, cached.status, cached.payload)
+                adminSessionAuth.writeJson(exchange, cached.status, cached.payload)
             }
             return
         }
@@ -2224,7 +2185,7 @@ class PlatformHttpServer(
                 commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
             }
             HotPathMetrics.time("api.writeResponse") {
-                writeJson(exchange, 200, payload)
+                adminSessionAuth.writeJson(exchange, 200, payload)
             }
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
@@ -2235,7 +2196,7 @@ class PlatformHttpServer(
             HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
             }
-            writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
+            adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
         }
     }
 
@@ -2528,10 +2489,10 @@ class PlatformHttpServer(
         try {
             val response = handleStreamAckMutationResponse(route, clientId, participantId, idempotencyKey, correlationId, body).get()
             HotPathMetrics.time("api.streamAck.writeResponse") {
-                writeJson(exchange, response.status, response.body)
+                adminSessionAuth.writeJson(exchange, response.status, response.body)
             }
         } catch (ex: Exception) {
-            writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", rootMessage(ex)))
+            adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", rootMessage(ex)))
         }
     }
 
@@ -2893,7 +2854,7 @@ class PlatformHttpServer(
     ) {
         val intake = acceptedAsyncCommandIntake
         if (intake == null) {
-            writeJson(exchange, 503, simpleErrorJson("accepted async intake unavailable"))
+            adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("accepted async intake unavailable"))
             return
         }
 
@@ -2909,7 +2870,7 @@ class PlatformHttpServer(
         }
         if (breakerViolation != null) {
             recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
-            writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
             return
         }
 
@@ -2918,7 +2879,7 @@ class PlatformHttpServer(
         }
         if (collarViolation != null) {
             recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
-            writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
@@ -2926,7 +2887,7 @@ class PlatformHttpServer(
             accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
-            writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
             return
         }
 
@@ -2934,7 +2895,7 @@ class PlatformHttpServer(
             abuseProtectionHook.allow(clientId, route)
         }
         if (abuseViolation != null) {
-            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            adminSessionAuth.writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
             return
         }
 
@@ -2948,7 +2909,7 @@ class PlatformHttpServer(
             System.err.println(
                 "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
             )
-            writeJson(exchange, 503, simpleErrorJson("accepted async unavailable", errorMessage))
+            adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("accepted async unavailable", errorMessage))
             return
         }
 
@@ -2957,7 +2918,7 @@ class PlatformHttpServer(
             return
         }
         if (receipt.backpressure) {
-            writeJson(
+            adminSessionAuth.writeJson(
                 exchange,
                 429,
                 boundary.toErrorJson(
@@ -2970,11 +2931,11 @@ class PlatformHttpServer(
 
         val status = receipt.status
         if (!receipt.accepted || status == null) {
-            writeJson(exchange, 503, simpleErrorJson("accepted async command not accepted"))
+            adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("accepted async command not accepted"))
             return
         }
 
-        writeJson(exchange, 202, CommandStatusResponse.acceptedJson(status))
+        adminSessionAuth.writeJson(exchange, 202, CommandStatusResponse.acceptedJson(status))
     }
 
     private fun handleAcceptedAsyncMutationResponse(
@@ -3086,20 +3047,20 @@ class PlatformHttpServer(
                 IdempotencyResult(status.responseStatus, status.responsePayloadJson),
                 idempotencyRetentionPolicy.ttlFor(route)
             )
-            writeJson(exchange, status.responseStatus, status.responsePayloadJson)
+            adminSessionAuth.writeJson(exchange, status.responseStatus, status.responsePayloadJson)
             return
         }
         if (status != null && commandProcessingMode in setOf(CommandProcessingMode.CapturedAck, CommandProcessingMode.AcceptedAsync)) {
             val payload = CommandStatusResponse.acceptedJson(status)
-            writeJson(exchange, 202, payload)
+            adminSessionAuth.writeJson(exchange, 202, payload)
             return
         }
         val cached = idempotencyStore.find(clientId, route, idempotencyKey)
         if (cached != null) {
-            writeJson(exchange, cached.status, cached.payload)
+            adminSessionAuth.writeJson(exchange, cached.status, cached.payload)
             return
         }
-        writeJson(
+        adminSessionAuth.writeJson(
             exchange,
             409,
             boundary.toErrorJson(
@@ -3152,21 +3113,21 @@ class PlatformHttpServer(
 
     private fun handleCancelByClientOrder(exchange: HttpExchange) {
         if (exchange.requestMethod != "POST") {
-            methodNotAllowed(exchange)
+            adminSessionAuth.methodNotAllowed(exchange)
             return
         }
         val boundaryViolation = HotPathMetrics.time("api.boundary.checkWrite") {
             boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/cancel")
         }
         if (boundaryViolation != null) {
-            writeJson(exchange, boundaryViolation.status, boundary.toErrorJson(boundaryViolation, correlationId(exchange)))
+            adminSessionAuth.writeJson(exchange, boundaryViolation.status, boundary.toErrorJson(boundaryViolation, correlationId(exchange)))
             return
         }
         val requestBody = readRequestBody(exchange) ?: return
         val request = try {
             JsonCodec.parseObject(requestBody)
         } catch (_: IllegalArgumentException) {
-            writeJson(
+            adminSessionAuth.writeJson(
                 exchange,
                 400,
                 boundary.toErrorJson(
@@ -3181,7 +3142,7 @@ class PlatformHttpServer(
         val clientOrderId = request.string("clientOrderId")
         if (participantId.isBlank() || clientOrderId.isBlank()) {
             val missing = if (participantId.isBlank()) "participantId" else "clientOrderId"
-            writeJson(
+            adminSessionAuth.writeJson(
                 exchange,
                 400,
                 boundary.toErrorJson(
@@ -3193,7 +3154,7 @@ class PlatformHttpServer(
         }
         val resolved = api.findOrderByClientOrderId(participantId, clientOrderId)
         if (resolved == null || resolved.runId.isBlank() || resolved.venueSessionId.isBlank()) {
-            writeJson(exchange, 404, simpleErrorJson("client order not found"))
+            adminSessionAuth.writeJson(exchange, 404, simpleErrorJson("client order not found"))
             return
         }
         val synthesizedCancelBody = JsonCodec.writeObject(
@@ -3217,7 +3178,7 @@ class PlatformHttpServer(
 
     private fun handleCommandStatusLookup(exchange: HttpExchange) {
         if (exchange.requestMethod != "GET") {
-            methodNotAllowed(exchange)
+            adminSessionAuth.methodNotAllowed(exchange)
             return
         }
         if (!allowApiV1Read(exchange, "/api/v1/commands/{commandId}")) {
@@ -3225,20 +3186,20 @@ class PlatformHttpServer(
         }
         val commandId = exchange.requestURI.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
-            writeJson(exchange, 404, simpleErrorJson("command not found"))
+            adminSessionAuth.writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
         }
         val status = commandStatus(commandId)
         if (status == null) {
-            writeJson(exchange, 404, simpleErrorJson("command not found"))
+            adminSessionAuth.writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
         }
         val scopeError = commandStatusReadScopeError(exchange.requestHeaders, status)
         if (scopeError != null) {
-            writeJson(exchange, scopeError.status, boundary.toErrorJson(scopeError, correlationId(exchange.requestHeaders)))
+            adminSessionAuth.writeJson(exchange, scopeError.status, boundary.toErrorJson(scopeError, correlationId(exchange.requestHeaders)))
             return
         }
-        writeJson(exchange, 200, CommandStatusResponse.statusJson(status))
+        adminSessionAuth.writeJson(exchange, 200, CommandStatusResponse.statusJson(status))
     }
 
     private fun commandStatusLookupResponse(request: PlatformHotPathRequest): PlatformHotPathResponse {

@@ -523,32 +523,9 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 }
 
 func (s *Service) Snapshot() Snapshot {
-	snapshot := Snapshot{
-		Books: make(map[string]hotbook.Snapshot),
-	}
-
 	bookIDs, books, unlock := s.lockSnapshotBooks(nil)
 	defer unlock()
-	for _, instrumentID := range bookIDs {
-		snapshot.Books[instrumentID] = books[instrumentID].book.Snapshot()
-	}
-
-	snapshot.Orders = make([]SnapshotOrderRecord, 0, s.orderIndex.len())
-	s.orderIndex.forEach(func(record *orderRecord) {
-		snapshot.Orders = append(snapshot.Orders, snapshotOrderRecord(record))
-	})
-	sort.Slice(snapshot.Orders, func(i, j int) bool {
-		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
-	})
-	snapshot.Metadata = SnapshotMetadata{
-		SnapshotVersion: "matching-service-snapshot-v1",
-		EngineVersion:   "matching-engine-app-v1",
-		BookCount:       len(snapshot.Books),
-		OrderCount:      len(snapshot.Orders),
-		BookKeys:        bookIDs,
-	}
-	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
-	return snapshot
+	return s.buildSnapshot(bookIDs, books, nil)
 }
 
 func (s *Service) BookStats(instrumentID string) BookStats {
@@ -573,6 +550,7 @@ func (s *Service) BookStats(instrumentID string) BookStats {
 	}
 
 	checksumInput := strings.Builder{}
+	var singleBookChecksum string
 	for _, key := range bookKeys {
 		book := books[key]
 		book.mu.Lock()
@@ -582,14 +560,14 @@ func (s *Service) BookStats(instrumentID string) BookStats {
 		stats.BuyPriceLevels += book.book.LevelCount(domain.SideBuy)
 		stats.SellPriceLevels += book.book.LevelCount(domain.SideSell)
 		book.mu.Unlock()
+		singleBookChecksum = snapshot.Checksum
 		checksumInput.WriteString(key)
 		checksumInput.WriteByte(':')
 		checksumInput.WriteString(snapshot.Checksum)
 		checksumInput.WriteByte(';')
 	}
 	if len(bookKeys) == 1 {
-		parts := strings.SplitN(checksumInput.String(), ":", 2)
-		stats.Checksum = strings.TrimSuffix(parts[1], ";")
+		stats.Checksum = singleBookChecksum
 		return stats
 	}
 	sum := sha256.Sum256([]byte(checksumInput.String()))
@@ -606,15 +584,24 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 		return Snapshot{}, false
 	}
 
+	return s.buildSnapshot(bookKeys, books, func(record *orderRecord) bool {
+		return record.InstrumentID == instrumentID
+	}), true
+}
+
+// buildSnapshot assembles a Snapshot from the given (already locked) book set
+// and order filter. bookIDs must already be sorted and locked by the caller;
+// unlocking is the caller's responsibility.
+func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, includeOrder func(*orderRecord) bool) Snapshot {
 	snapshot := Snapshot{
 		Books: make(map[string]hotbook.Snapshot),
 	}
-	for _, key := range bookKeys {
-		snapshot.Books[key] = books[key].book.Snapshot()
+	for _, instrumentID := range bookIDs {
+		snapshot.Books[instrumentID] = books[instrumentID].book.Snapshot()
 	}
 
 	s.orderIndex.forEach(func(record *orderRecord) {
-		if record.InstrumentID != instrumentID {
+		if includeOrder != nil && !includeOrder(record) {
 			return
 		}
 		snapshot.Orders = append(snapshot.Orders, snapshotOrderRecord(record))
@@ -625,12 +612,12 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 	snapshot.Metadata = SnapshotMetadata{
 		SnapshotVersion: "matching-service-snapshot-v1",
 		EngineVersion:   "matching-engine-app-v1",
-		BookCount:       len(bookKeys),
+		BookCount:       len(snapshot.Books),
 		OrderCount:      len(snapshot.Orders),
-		BookKeys:        bookKeys,
+		BookKeys:        bookIDs,
 	}
 	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
-	return snapshot, true
+	return snapshot
 }
 
 func (s *Service) lockSnapshotBooks(include func(string) bool) ([]string, map[string]*orderBook, func()) {
