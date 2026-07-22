@@ -379,7 +379,6 @@ func main() {
 	defer cancel()
 
 	results := make(chan requestResult, cfg.Workers*8)
-	var counter int64
 	traceSeen := newTraceSampler(cfg.TraceCheckLimit)
 	var wg sync.WaitGroup
 	rateCh := make(chan struct{}, rateChannelDepth(cfg))
@@ -396,7 +395,7 @@ func main() {
 		profile := profileForWorker(workerID, cfg.Workers, cfg)
 		go func(id int, workerProfile string) {
 			defer wg.Done()
-			runWorker(ctx, client, cfg, sessionID, id, workerProfile, &counter, rateCh, results, traceSeen)
+			runWorker(ctx, client, cfg, sessionID, id, workerProfile, rateCh, results, traceSeen)
 		}(workerID, profile)
 	}
 
@@ -825,7 +824,6 @@ func runWorker(
 	sessionID string,
 	workerID int,
 	profile string,
-	counter *int64,
 	rateCh <-chan struct{},
 	results chan<- requestResult,
 	traceSeen *traceSampler,
@@ -843,6 +841,7 @@ func runWorker(
 		defer stream.close()
 	}
 	state := workerState{orders: make([]trackedOrder, 0, 128)}
+	var localSeq int64
 	for {
 		select {
 		case <-ctx.Done():
@@ -869,7 +868,8 @@ func runWorker(
 		} else if action != ActionSubmit && !shouldAllowLifecycleAction(rng, cfg, state) {
 			action = ActionSubmit
 		}
-		reqID := atomic.AddInt64(counter, 1)
+		localSeq++
+		reqID := (localSeq-1)*int64(cfg.Workers) + int64(workerID) + 1
 		traceID := fmt.Sprintf("%s-trace-%d-%d", sessionID, workerID, reqID)
 		commandID := fmt.Sprintf("%s-cmd-%d-%d", sessionID, workerID, reqID)
 		start := time.Now()
