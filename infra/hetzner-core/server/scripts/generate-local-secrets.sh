@@ -27,12 +27,26 @@ env_value_or_default() {
   local default="$3"
   local value
 
+  value="${!key-}"
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+    return
+  fi
+
   value="$(existing_env_value "$file" "$key")"
   if [[ -n "$value" ]]; then
     printf '%s\n' "$value"
     return
   fi
   printf '%s\n' "$default"
+}
+
+github_repository_from_origin() {
+  local remote
+  remote="$(git -C "$BASE" remote get-url origin 2>/dev/null || true)"
+  if [[ "$remote" =~ github\.com[:/]([^[:space:]]+/[^[:space:]]+)$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]%.git}"
+  fi
 }
 
 append_env_if_set() {
@@ -164,7 +178,14 @@ fi
 DEPLOY_RECEIVER_PORT="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_PORT 8090)"
 DEPLOY_RECEIVER_PATH="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_PATH /admin/deploy/arena-admin)"
 DEPLOY_RECEIVER_EXPECTED_AUDIENCE="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_AUDIENCE reef-backbone-admin-deploy)"
-DEPLOY_RECEIVER_EXPECTED_REPOSITORY="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_REPOSITORY dills122/reef)"
+DEPLOY_RECEIVER_EXPECTED_REPOSITORY="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_REPOSITORY "")"
+if [[ -z "$DEPLOY_RECEIVER_EXPECTED_REPOSITORY" ]]; then
+  DEPLOY_RECEIVER_EXPECTED_REPOSITORY="$(github_repository_from_origin)"
+fi
+if [[ -z "$DEPLOY_RECEIVER_EXPECTED_REPOSITORY" ]]; then
+  echo "DEPLOY_RECEIVER_EXPECTED_REPOSITORY is required when the GitHub repository cannot be derived from origin." >&2
+  exit 1
+fi
 DEPLOY_RECEIVER_EXPECTED_REF="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_REF refs/heads/master)"
 DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT backbone-admin)"
 DEPLOY_RECEIVER_EXPECTED_WORKFLOW="$(env_value_or_default "$SECRETS/deploy-receiver.env" DEPLOY_RECEIVER_EXPECTED_WORKFLOW "Admin UI Deploy")"

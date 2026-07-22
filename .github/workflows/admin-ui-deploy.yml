@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: backbone-admin
-      url: https://reef-arena-admin.shrimpworks.dev/
+      url: ${{ vars.REEF_ADMIN_PUBLIC_URL || 'https://reef-arena-admin.shrimpworks.dev/' }}
     env:
       REEF_ADMIN_DEPLOY_URL: ${{ vars.REEF_ADMIN_DEPLOY_URL || 'https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin' }}
       REEF_ADMIN_DEPLOY_AUDIENCE: ${{ vars.REEF_ADMIN_DEPLOY_AUDIENCE || 'reef-backbone-admin-deploy' }}

@@ -12,6 +12,7 @@ import {
   validateArchiveEntryNames,
   validateArchiveEntryMetadata,
   validateClaims,
+  validateStartupConfig,
 } from "../../infra/hetzner-core/server/deploy-receiver/server.mjs";
 
 const now = 1_800_000_000;
@@ -24,6 +25,10 @@ const config = {
   expectedWorkflow: "Admin UI Deploy",
   clockSkewSeconds: 60,
 };
+
+assert.equal(validateStartupConfig(config), config);
+assert.throws(() => validateStartupConfig({ ...config, expectedRepository: "" }), /must be configured/);
+assert.throws(() => validateStartupConfig({ ...config, expectedRepository: "missing-slash" }), /must be configured/);
 
 validateClaims(
   {

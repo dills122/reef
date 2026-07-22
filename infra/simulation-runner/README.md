@@ -115,6 +115,13 @@ Run a short smoke:
 make simulation-run ARGS="--rate 1000 --duration 60s --workers 128"
 ```
 
+The provider worker name defaults to `reef-sim-<run-id>` so run evidence and
+the temporary cloud resource share an identity. Override it when required:
+
+```bash
+make simulation-run ARGS="--run-id invite-smoke-01 --worker-name reef-invite-smoke --rate 1000 --duration 60s"
+```
+
 Run a larger profile:
 
 ```bash

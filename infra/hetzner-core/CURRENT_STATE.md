@@ -1,6 +1,6 @@
 # Hetzner Core Current State
 
-Snapshot date: 2026-07-10
+Snapshot date: 2026-07-21
 
 This file records the live backbone state after the first permanent Hetzner
 bring-up, hardening pass, backup bootstrap, smoke gate, and Cloudflare DNS
@@ -10,24 +10,30 @@ apply. It intentionally avoids secret values.
 
 | Item | State |
 | --- | --- |
-| Branch used for work | `codex/hetzner-backbone-hardening` |
+| Branch used for latest access hardening | `codex/docs-direction-checkpoint` |
 | Hetzner server | `reef-prod-core-1` |
 | Public IPv4 | `167.233.82.255` |
 | Private IPv4 | `10.70.1.10` |
+| Tailscale IPv4 | `100.82.251.32` |
+| Tailscale MagicDNS | `reef-prod-core-1.taild20cb3.ts.net` |
 | SSH user | `ops` |
-| SSH command | `ssh ops@167.233.82.255` |
-| Runtime tunnel | `ssh -L 8080:127.0.0.1:8080 ops@167.233.82.255` |
-| OpenBao tunnel | `ssh -L 8200:127.0.0.1:8200 ops@167.233.82.255` |
-| Admin CIDR | `71.173.194.78/32` |
+| Routine SSH command | `ssh ops@reef-prod-core-1.taild20cb3.ts.net` |
+| Runtime tunnel | `ssh -L 8080:127.0.0.1:8080 ops@reef-prod-core-1.taild20cb3.ts.net` |
+| OpenBao tunnel | `ssh -L 8200:127.0.0.1:8200 ops@reef-prod-core-1.taild20cb3.ts.net` |
+| Public SSH | Disabled in the Hetzner firewall |
+| Break-glass CIDR | Current operator `/32`, activated only with `enable_public_ssh=true` |
 
 OpenTofu currently owns the Hetzner server, Hetzner network, Hetzner firewall,
 SSH key reference, and Cloudflare DNS record. A normal `make hetzner-core-tofu
 ARGS="plan -no-color"` reported no changes after the DNS and public-firewall
 apply.
 
-`make hetzner-core ARGS=ops-check` passed on 2026-07-10. It verified DNS,
-public TCP exposure, Compose service state, platform health, OpenBao seal state,
-backup timer state, and encrypted backup archive presence.
+`REEF_HETZNER_HOST=reef-prod-core-1.taild20cb3.ts.net
+PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check` passed on
+2026-07-21. It verified DNS, public TCP exposure, private SSH, Compose service
+state, platform health, OpenBao seal state, backup timer state, and encrypted
+backup archive presence. Public TCP 22 was closed; public 80/443 remained open;
+8080/8200 remained closed.
 
 ## DNS And Public Exposure
 
@@ -89,7 +95,10 @@ Optional/profiled services:
 
 Host/container hardening applied during bring-up:
 
-- Hetzner firewall restricts SSH/ICMP to configured admin CIDRs.
+- Routine SSH uses standard OpenSSH over Tailscale; Tailscale SSH is not enabled.
+- Hetzner has no public SSH/ICMP rule during normal operation.
+- Host UFW permits SSH on `tailscale0` only; stale residential `/32` rules were
+  removed after private access was verified.
 - Platform runtime and OpenBao publish only on host loopback.
 - Public HTTP/HTTPS are open only through Caddy; raw runtime/OpenBao host ports
   remain closed publicly.

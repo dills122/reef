@@ -175,7 +175,20 @@ function githubRepositoryFullName() {
   const match = origin.match(/github\.com[:/](.+?)(?:\.git)?$/);
   if (match?.[1]) return match[1];
 
-  return "dills122/reef";
+  console.error("Could not derive the GitHub owner/repository from REEF_GITHUB_REPOSITORY or the origin remote.");
+  console.error("Set REEF_GITHUB_REPOSITORY explicitly (for example: owner/reef).");
+  process.exit(1);
+}
+
+function configuredApiDomain() {
+  const configured = env("API_DOMAIN").trim();
+  if (configured !== "") return configured;
+
+  const output = captureOptional("tofu", ["output", "-raw", "api_domain"], { cwd: tofuDir });
+  if (output.status === 0 && output.stdout.trim() !== "") return output.stdout.trim();
+
+  console.error("Missing public API domain. Set API_DOMAIN or configure the OpenTofu api_domain output.");
+  process.exit(1);
 }
 
 function resolveUserPath(path) {
@@ -224,6 +237,11 @@ if (command === "help" || command === "--help" || command === "-h") {
 
 Commands:
   sync       rsync server files to the Hetzner host
+  tailscale-bootstrap
+             install Tailscale, permit SSH on tailscale0, and authenticate the
+             host interactively without storing an auth key in Reef
+  tailscale-status
+             show host Tailscale service, peer, IP, and UFW status
   migrations rsync database migrations to the Hetzner host
   arena-admin
              build the arena-admin static site locally and rsync it to the
@@ -274,9 +292,10 @@ Commands:
   deploy     sync, generate missing local secrets, migrate, pull, and restart
 
 Environment:
-  REEF_HETZNER_HOST       server IPv4 or DNS name; defaults to tofu output core_ipv4
+  REEF_HETZNER_HOST       Tailscale name/IP, public IPv4, or DNS name; defaults to tofu operator_ssh_host, then core_ipv4
   REEF_HETZNER_OPS_USER   SSH user; default ops
   REEF_HETZNER_DEPLOY_DIR server deploy directory; default /opt/reef
+  REEF_TAILSCALE_HOSTNAME optional host name override; default remote OS hostname
   REEF_OPENBAO_INIT_JSON  optional local OpenBao init JSON used by bot-config-upgrade when BAO_TOKEN is not set
   REEF_BACKUP_AGE_IDENTITY_PATH local age identity path; default ~/Documents/reef-backups-age-identity.txt
   REEF_BACKUP_ARCHIVE_DIR local encrypted archive copy dir; default ~/Documents
@@ -286,7 +305,14 @@ Environment:
 }
 
 const opsUser = env("REEF_HETZNER_OPS_USER", "ops");
-const host = env("REEF_HETZNER_HOST") || (existsSync(tofuDir) ? capture("tofu", ["output", "-raw", "core_ipv4"], { cwd: tofuDir }) : "");
+const discoveredOperatorHost = existsSync(tofuDir)
+  ? captureOptional("tofu", ["output", "-raw", "operator_ssh_host"], { cwd: tofuDir }).stdout
+  : "";
+const discoveredPublicHost =
+  existsSync(tofuDir) && discoveredOperatorHost === ""
+    ? captureOptional("tofu", ["output", "-raw", "core_ipv4"], { cwd: tofuDir }).stdout
+    : "";
+const host = env("REEF_HETZNER_HOST") || discoveredOperatorHost || discoveredPublicHost;
 const deployDir = env("REEF_HETZNER_DEPLOY_DIR", "/opt/reef");
 
 if (!host) {
@@ -302,8 +328,30 @@ function remoteDeployPath(relativePath = "") {
   return shellQuote(relativePath ? `${deployDir}/${relativePath}` : deployDir);
 }
 
+function remoteGenerateLocalSecretsCommand() {
+  return `DEPLOY_RECEIVER_EXPECTED_REPOSITORY=${shellQuote(githubRepositoryFullName())} ./scripts/generate-local-secrets.sh`;
+}
+
 function syncServerBundle() {
   run("rsync", ["-av", "--exclude", "secrets/", "--exclude", "openbao/logs/", `${serverDir}/`, `${target}:${deployDir}/`]);
+}
+
+function tailscaleBootstrap() {
+  syncServerBundle();
+  const tailscaleHostname = env("REEF_TAILSCALE_HOSTNAME").trim();
+  const bootstrapCommand =
+    tailscaleHostname === ""
+      ? `sudo ${remoteDeployPath("scripts/configure-tailscale.sh")} bootstrap`
+      : `sudo env TAILSCALE_HOSTNAME=${shellQuote(tailscaleHostname)} ${remoteDeployPath("scripts/configure-tailscale.sh")} bootstrap`;
+  run("ssh", [
+    "-tt",
+    target,
+    `chmod +x ${remoteDeployPath("scripts/configure-tailscale.sh")} && ${bootstrapCommand}`,
+  ]);
+}
+
+function tailscaleStatus() {
+  run("ssh", [target, `sudo ${remoteDeployPath("scripts/configure-tailscale.sh")} status`]);
 }
 
 function syncMigrations() {
@@ -326,10 +374,7 @@ function buildAndSyncArenaAdmin() {
 function publicUp() {
   syncServerBundle();
   buildAndSyncArenaAdmin();
-  const apiDomain =
-    env("API_DOMAIN") ||
-    captureOptional("tofu", ["output", "-raw", "api_domain"], { cwd: tofuDir }).stdout ||
-    "reef-arena-admin.shrimpworks.dev";
+  const apiDomain = configuredApiDomain();
   run("ssh", [
     target,
     [
@@ -370,7 +415,7 @@ function deployReceiverUp() {
     [
       "set -euo pipefail",
       `cd ${remoteDeployDir}`,
-      "./scripts/generate-local-secrets.sh",
+      remoteGenerateLocalSecretsCommand(),
       "docker compose --profile public up -d --build --force-recreate deploy-receiver caddy",
     ].join(" && "),
   ]);
@@ -414,7 +459,7 @@ function configureAdminAuth(enabled, options = {}) {
         `chmod 600 ${remoteDeployPath("secrets/admin-auth.env")}`,
         `cd ${remoteDeployDir}`,
         "chmod +x ./scripts/*.sh",
-        "./scripts/generate-local-secrets.sh",
+        remoteGenerateLocalSecretsCommand(),
         "docker compose up -d --force-recreate platform-runtime",
         "docker compose up -d --force-recreate caddy",
         "docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile",
@@ -439,7 +484,7 @@ function setLegacyMutationRoutes(enabled) {
       `rm -f "$tmp"`,
       `cd ${remoteDeployDir}`,
       "chmod +x ./scripts/*.sh",
-      "./scripts/generate-local-secrets.sh",
+      remoteGenerateLocalSecretsCommand(),
       "docker compose up -d --force-recreate platform-runtime",
       "for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health >/dev/null && exit 0; sleep 1; done; curl -fsS http://127.0.0.1:8080/health >/dev/null",
     ].join(" && "),
@@ -534,7 +579,7 @@ function botConfigUpgrade() {
       "set -euo pipefail",
       `cd ${shellQuote(deployDir)}`,
       "chmod +x ./scripts/*.sh",
-      "./scripts/generate-local-secrets.sh",
+      remoteGenerateLocalSecretsCommand(),
       "docker compose pull --ignore-pull-failures platform-runtime || true",
     ].join(" && "),
   ]);
@@ -629,7 +674,7 @@ function printBotConfigManualSteps() {
   console.log("Or run these on the host manually:");
   console.log("");
   console.log("  cd /opt/reef");
-  console.log("  REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN=\"...\" ./scripts/configure-openbao.sh");
+  console.log("  REEF_GITHUB_REPOSITORY=<owner>/<repository> BAO_TOKEN=\"...\" ./scripts/configure-openbao.sh");
   console.log("  BAO_TOKEN=\"...\" ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config");
   console.log("");
   console.log("Then append the printed values as BAO_BOT_CONFIG_ROLE_ID and");
@@ -804,6 +849,8 @@ async function opsCheck() {
   const coreIp = capture("tofu", ["output", "-raw", "core_ipv4"], { cwd: tofuDir });
   const apiDomainResult = captureOptional("tofu", ["output", "-raw", "api_domain"], { cwd: tofuDir });
   const apiDomain = apiDomainResult.status === 0 ? apiDomainResult.stdout : "";
+  const publicSshResult = captureOptional("tofu", ["output", "-raw", "public_ssh_enabled"], { cwd: tofuDir });
+  const publicSshExpected = publicSshResult.status === 0 ? publicSshResult.stdout.trim() === "true" : true;
   const publicIngressExpected = ["1", "true", "yes"].includes(env("PUBLIC_INGRESS_EXPECTED").toLowerCase());
 
   console.log(`core_ipv4=${coreIp}`);
@@ -819,7 +866,7 @@ async function opsCheck() {
   }
 
   const expectedPorts = [
-    [22, true],
+    [22, publicSshExpected],
     [80, publicIngressExpected],
     [443, publicIngressExpected],
     [8080, false],
@@ -855,10 +902,7 @@ async function opsCheck() {
 }
 
 function adminAuthSmoke() {
-  const apiDomain =
-    env("API_DOMAIN") ||
-    captureOptional("tofu", ["output", "-raw", "api_domain"], { cwd: tofuDir }).stdout ||
-    "reef-arena-admin.shrimpworks.dev";
+  const apiDomain = configuredApiDomain();
   const baseUrl = `https://${apiDomain}`;
   const failures = [];
 
@@ -968,6 +1012,12 @@ switch (command) {
   case "sync":
     syncServerBundle();
     break;
+  case "tailscale-bootstrap":
+    tailscaleBootstrap();
+    break;
+  case "tailscale-status":
+    tailscaleStatus();
+    break;
   case "migrations":
     syncMigrations();
     break;
@@ -1062,7 +1112,7 @@ switch (command) {
       [
         `chmod +x ${remoteDeployPath("scripts")}/*.sh ${remoteDeployPath("postgres/init")}/*.sh ${remoteDeployPath("postgres-admin/init")}/*.sh ${remoteDeployPath("postgres-analytics/init")}/*.sh`,
         `cd ${remoteDeployDir}`,
-        "./scripts/generate-local-secrets.sh",
+        remoteGenerateLocalSecretsCommand(),
         "docker compose pull --ignore-pull-failures",
         "docker compose up -d postgres postgres-admin postgres-analytics openbao matching-engine",
         "./scripts/apply-migrations.sh",

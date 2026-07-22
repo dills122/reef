@@ -22,7 +22,8 @@ Operator references:
 
 - Hetzner CX33 by default
 - Ubuntu 24.04
-- Hetzner firewall with SSH restricted to `admin_cidrs`
+- standard OpenSSH over Tailscale for routine operator access
+- optional public SSH restricted to `admin_cidrs` for bootstrap/break-glass only
 - no public HTTP/HTTPS by default
 - private Hetzner network reserved for future simulation workers
 - Docker Compose on the host for Postgres, OpenBao, lightweight platform
@@ -69,6 +70,19 @@ make hetzner-core-tofu ARGS="apply tfplan"
 Do not commit `terraform.tfvars`, state, plans, `.terraform/`, or generated
 secrets.
 
+## Private Operator Access
+
+Routine host administration uses standard OpenSSH over Tailscale. Public SSH
+is enabled only long enough to bootstrap or recover the private path, then
+removed from the Hetzner firewall with `enable_public_ssh=false`. No Tailscale
+auth key is stored in Git or OpenTofu state.
+
+Follow [`TAILSCALE_ACCESS.md`](./TAILSCALE_ACCESS.md) for the migration,
+verification, normal access, and break-glass procedure. Once configured, set
+`operator_ssh_host` to the private MagicDNS name or Tailscale IP. Deployment
+helpers discover the resulting OpenTofu output; `REEF_HETZNER_HOST` remains an
+explicit override.
+
 ## Deploy Server Files
 
 The Compose file defaults to the Docker Hub mirrors published by
@@ -84,14 +98,14 @@ cp /opt/reef/.env.example /opt/reef/.env
 Before deploying the application containers, publish the images and confirm
 their visibility. See [`DOCKERHUB.md`](./DOCKERHUB.md).
 
-After the server exists:
+After the server exists and private operator access is configured:
 
 ```bash
-IP="$(cd infra/hetzner-core/tofu && tofu output -raw core_ipv4)"
+export REEF_HETZNER_HOST="$(cd infra/hetzner-core/tofu && tofu output -raw operator_ssh_host)"
 
-rsync -av infra/hetzner-core/server/ "ops@$IP:/opt/reef/"
+rsync -av infra/hetzner-core/server/ "ops@$REEF_HETZNER_HOST:/opt/reef/"
 
-ssh "ops@$IP" '
+ssh "ops@$REEF_HETZNER_HOST" '
   chmod +x /opt/reef/scripts/*.sh
   cd /opt/reef
   ./scripts/generate-local-secrets.sh
@@ -211,11 +225,12 @@ OpenTofu manages the Cloudflare `A` record for the server IPv4 address. Keep
 `enable_public_web = false` only for internal-only deployments or before the
 host is ready to expose Caddy; DNS can be provisioned ahead of public ingress.
 
-Current development domain target:
+Configure the deployment domain explicitly; the current live value is recorded
+in [`CURRENT_STATE.md`](./CURRENT_STATE.md):
 
 ```text
-api_domain = "reef-arena-admin.shrimpworks.dev"
-ARENA_ADMIN_API_URL=https://reef-arena-admin.shrimpworks.dev
+api_domain = "api.example.com"
+ARENA_ADMIN_API_URL=https://api.example.com
 ```
 
 Cloudflare DNS management requires `CLOUDFLARE_API_TOKEN` in the repository
@@ -226,9 +241,9 @@ Cloudflare token permissions:
 
 | Use | Scope | Required permissions |
 | --- | --- | --- |
-| DNS record only | Zone `shrimpworks.dev` | `Zone:Zone:Read`, `Zone:DNS:Write` |
-| DNS plus OpenTofu-managed R2 bucket | Zone `shrimpworks.dev` and account `21f7217c1f4e4a4da99f20b12c85a463` | DNS permissions plus account-level `Workers R2 Storage Write` |
-| Host backup object upload | Bucket `reef-backups` | Separate R2 S3 access key with `Object Read & Write`; store as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` |
+| DNS record only | Zone containing `api_domain` | `Zone:Zone:Read`, `Zone:DNS:Write` |
+| DNS plus OpenTofu-managed R2 bucket | Configured zone and `cloudflare_account_id` | DNS permissions plus account-level `Workers R2 Storage Write` |
+| Host backup object upload | Configured `r2_backup_bucket` | Separate R2 S3 access key with `Object Read & Write`; store as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` |
 
 Keep the OpenTofu Cloudflare token separate from the R2 object upload key. The
 Tofu token manages Cloudflare infrastructure; the backup key only writes
@@ -280,12 +295,18 @@ row to `arena-admin-releases/deploy-log.jsonl`.
 This deploy path does not require inbound SSH from GitHub runners, a GitHub
 SSH private key, or a Hetzner API token in GitHub.
 
+`DEPLOY_RECEIVER_EXPECTED_REPOSITORY` is a required trust binding. Deployment
+helpers derive it from `REEF_GITHUB_REPOSITORY` or the local Git `origin` and
+persist it in the host receiver environment. The receiver fails closed instead
+of assuming the canonical Reef repository when that value is unavailable.
+
 Required GitHub repository secrets: none for the admin UI deploy path.
 
 Optional GitHub repository/environment variables:
 
 | Name | Default | Purpose |
 | --- | --- | --- |
+| `REEF_ADMIN_PUBLIC_URL` | Current canonical Admin URL | GitHub environment link; override for another deployment domain. |
 | `REEF_ADMIN_DEPLOY_URL` | `https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin` | OIDC deploy receiver URL. |
 | `REEF_ADMIN_DEPLOY_AUDIENCE` | `reef-backbone-admin-deploy` | OIDC audience that must match `DEPLOY_RECEIVER_EXPECTED_AUDIENCE`. |
 

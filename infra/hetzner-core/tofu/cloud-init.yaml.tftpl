@@ -66,7 +66,7 @@ runcmd:
   - chmod 770 /opt/reef/openbao/logs
   - ufw default deny incoming
   - ufw default allow outgoing
-%{ for cidr in admin_cidrs ~}
+%{ for cidr in public_ssh_cidrs ~}
   - ufw allow from ${cidr} to any port 22 proto tcp
 %{ endfor ~}
   - ufw --force enable

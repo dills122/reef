@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { env, loadDotEnv, sleep } from "./lib/dev-utils.mjs";
@@ -24,6 +24,10 @@ const config = {
   runtimeHostPort: env("REEF_PLATFORM_API_HOST_PORT", "8080"),
   engineHostPort: env("REEF_MATCHING_ENGINE_HOST_PORT", "8081"),
 };
+
+if (!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(config.namespace)) {
+  throw new Error(`KUBE_NAMESPACE must be a valid Kubernetes namespace, got ${config.namespace}`);
+}
 
 const command = process.argv[2] ?? "help";
 
@@ -74,6 +78,9 @@ switch (command) {
   case "status":
     await status();
     break;
+  case "render-manifest":
+    process.stdout.write(renderManifest(process.argv[3] ?? "00-namespace.yaml"));
+    break;
   case "down":
     await down();
     break;
@@ -101,13 +108,13 @@ async function up() {
 
 async function apply() {
   assertManifests();
-  await kubectl(["apply", "-f", manifest("00-namespace.yaml")], { contextOptional: true });
-  await kubectl(["apply", "-f", manifest("10-postgres.yaml")]);
-  await kubectl(["apply", "-f", manifest("20-nats.yaml")]);
+  await applyManifest("00-namespace.yaml", { contextOptional: true });
+  await applyManifest("10-postgres.yaml");
+  await applyManifest("20-nats.yaml");
   await waitStatefulSets(["postgres", "projection-postgres", "boundary-postgres", "arena-postgres", "nats"]);
   await migrate();
-  await kubectl(["apply", "-f", manifest("30-matching-engine.yaml")]);
-  await kubectl(["apply", "-f", manifest("40-platform-api.yaml")]);
+  await applyManifest("30-matching-engine.yaml");
+  await applyManifest("40-platform-api.yaml");
   await kubectl(["set", "image", "deployment/matching-engine", `matching-engine=${config.engineImage}`]);
   await kubectl(["set", "image", "deployment/platform-api", `platform-api=${config.runtimeImage}`]);
   await waitDeployments(["matching-engine", "platform-api"]);
@@ -115,10 +122,10 @@ async function apply() {
 
 async function materializerUp() {
   await up();
-  await kubectl(["apply", "-f", manifest("50-redpanda.yaml")]);
+  await applyManifest("50-redpanda.yaml");
   await waitStatefulSets(["redpanda"]);
   await configureMaterializerProfile();
-  await kubectl(["apply", "-f", manifest("60-materializer-profile.yaml")]);
+  await applyManifest("60-materializer-profile.yaml");
   await kubectl(["set", "image", "deployment/matching-engine", `matching-engine=${config.engineImage}`]);
   await kubectl(["set", "image", "deployment/platform-api", `platform-api=${config.runtimeImage}`]);
   await kubectl(["set", "image", "deployment/platform-materializer", `platform-materializer=${config.runtimeImage}`]);
@@ -139,10 +146,10 @@ async function materializerScale() {
 
 async function streamAckUp() {
   await up();
-  await kubectl(["apply", "-f", manifest("50-redpanda.yaml")]);
+  await applyManifest("50-redpanda.yaml");
   await waitStatefulSets(["redpanda"]);
   await configureStreamAckProfile();
-  await kubectl(["apply", "-f", manifest("70-stream-ack-profile.yaml")]);
+  await applyManifest("70-stream-ack-profile.yaml");
   for (const deployment of [
     "platform-worker-0",
     "platform-worker-1",
@@ -279,7 +286,7 @@ async function configureStreamAckProfile() {
 }
 
 async function autoscaleApply() {
-  await kubectl(["apply", "-f", manifest("80-autoscaling.yaml")]);
+  await applyManifest("80-autoscaling.yaml");
   await kubectl(["get", "hpa", "-o", "wide"]);
 }
 
@@ -457,6 +464,20 @@ function kubectl(args, options = {}) {
   return run("kubectl", kubectlArgs(args, options));
 }
 
+function applyManifest(name, options = {}) {
+  return run("kubectl", kubectlArgs(["apply", "-f", "-"], options), { input: renderManifest(name) });
+}
+
+function renderManifest(name) {
+  const file = manifest(path.basename(name));
+  if (!existsSync(file)) {
+    throw new Error(`missing local kube manifest: ${file}`);
+  }
+  return readFileSync(file, "utf8")
+    .replace(/^(\s*namespace:\s*)reef-local\s*$/gm, `$1${config.namespace}`)
+    .replace(/^(\s*name:\s*)reef-local\s*$/gm, `$1${config.namespace}`);
+}
+
 function kubectlArgs(args, options = {}) {
   const out = [];
   if (config.context && !options.contextOptional) {
@@ -511,11 +532,15 @@ function partitionToken(partition) {
 
 function run(cmd, args = [], options = {}) {
   return new Promise((resolve, reject) => {
+    const hasInput = options.input !== undefined;
     const child = spawn(cmd, args, {
       cwd: repoRoot,
-      stdio: "inherit",
+      stdio: hasInput ? ["pipe", "inherit", "inherit"] : "inherit",
       env: { ...process.env, ...(options.env ?? {}) },
     });
+    if (hasInput) {
+      child.stdin.end(options.input);
+    }
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
@@ -595,6 +620,8 @@ commands:
   port-forward   expose platform-api and matching-engine on localhost
   smoke          port-forward, then run scripts/dev/smoke.mjs
   status         show pods, services, and PVCs
+  render-manifest [file]
+                 render one manifest with KUBE_NAMESPACE applied; default 00-namespace.yaml
   down           delete the k3d cluster
 
 environment:

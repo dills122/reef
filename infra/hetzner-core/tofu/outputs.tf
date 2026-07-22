@@ -3,19 +3,49 @@ output "core_ipv4" {
   value       = hcloud_server.core.ipv4_address
 }
 
+output "server_name" {
+  description = "Resolved core server name."
+  value       = local.server_name
+}
+
 output "core_private_ipv4" {
   description = "Private IPv4 address of the core server on the Hetzner network."
   value       = hcloud_server_network.core.ip
 }
 
+output "network_cidr" {
+  description = "Configured private Hetzner network CIDR."
+  value       = var.network_cidr
+}
+
+output "subnet_cidr" {
+  description = "Configured private Hetzner subnet CIDR."
+  value       = var.subnet_cidr
+}
+
 output "ssh_command" {
-  description = "SSH command for the ops user."
+  description = "Routine SSH command; uses operator_ssh_host when configured and public IPv4 only during bootstrap."
+  value       = "ssh ${var.ops_user}@${local.operator_ssh_host}"
+}
+
+output "operator_ssh_host" {
+  description = "Resolved routine operator SSH hostname or IP."
+  value       = local.operator_ssh_host
+}
+
+output "public_ssh_command" {
+  description = "Public IPv4 SSH command for initial bootstrap or break-glass access."
   value       = "ssh ${var.ops_user}@${hcloud_server.core.ipv4_address}"
+}
+
+output "public_ssh_enabled" {
+  description = "Whether the Hetzner firewall currently permits public SSH from admin_cidrs."
+  value       = var.enable_public_ssh
 }
 
 output "platform_runtime_tunnel_command" {
   description = "SSH tunnel command for private access to the platform runtime API."
-  value       = "ssh -L 8080:127.0.0.1:8080 ${var.ops_user}@${hcloud_server.core.ipv4_address}"
+  value       = "ssh -L 8080:127.0.0.1:8080 ${var.ops_user}@${local.operator_ssh_host}"
 }
 
 output "api_domain" {

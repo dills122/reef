@@ -27,6 +27,7 @@ The Hetzner host owns runtime state:
 
 Operator-held recovery material stays off-host:
 
+- Tailscale account identity and workstation client state
 - OpenBao unseal keys
 - OpenBao root/admin token
 - local age private identity
@@ -59,6 +60,17 @@ Host paths:
 - smoke/soak reports: `/opt/reef/reports/soak`
 - backup timer unit: `reef-backup.timer`
 
+Routine commands should use the private MagicDNS name (or the host's Tailscale
+IP when MagicDNS is disabled):
+
+```bash
+export REEF_HETZNER_HOST="$(cd infra/hetzner-core/tofu && tofu output -raw operator_ssh_host)"
+export REEF_API_DOMAIN="$(cd infra/hetzner-core/tofu && tofu output -raw api_domain)"
+```
+
+See [`TAILSCALE_ACCESS.md`](./TAILSCALE_ACCESS.md) for initial setup and
+break-glass recovery.
+
 ## Command Catalog
 
 Infrastructure:
@@ -67,6 +79,13 @@ Infrastructure:
 make hetzner-core-tofu ARGS=init
 make hetzner-core-tofu ARGS="plan -no-color"
 make hetzner-core-tofu ARGS="apply -auto-approve -no-color"
+```
+
+Private operator access:
+
+```bash
+make hetzner-core ARGS=tailscale-bootstrap
+make hetzner-core ARGS=tailscale-status
 ```
 
 Deployment and status:
@@ -84,7 +103,7 @@ Post-merge Admin bot-config/OpenBao setup:
 ```bash
 BAO_TOKEN="..." make hetzner-core ARGS=bot-config-upgrade
 # or, without exporting the token:
-REEF_OPENBAO_INIT_JSON=~/Documents/reef-openbao-init-167.233.82.255.json make hetzner-core ARGS=bot-config-upgrade
+REEF_OPENBAO_INIT_JSON=/path/to/reef-openbao-init.json make hetzner-core ARGS=bot-config-upgrade
 ```
 
 This one-time helper syncs server files, rebuilds/syncs the Admin UI, updates
@@ -169,7 +188,8 @@ Use this order for a clean rebuild or new permanent host.
    ```text
    ssh_public_key_path = "~/.ssh/id_ed25519.pub"
    admin_cidrs         = ["<operator-public-ip>/32"]
-   api_domain          = "reef-arena-admin.shrimpworks.dev"
+   enable_public_ssh   = true
+   api_domain          = "<api-domain>"
    cloudflare_zone_id  = "<zone-id>"
    enable_public_web   = true
    ```
@@ -189,18 +209,30 @@ Use this order for a clean rebuild or new permanent host.
    make hetzner-core-tofu ARGS="apply tfplan"
    ```
 
-4. Deploy runtime files and containers:
+4. Establish and verify private operator access, then close public SSH:
+
+   ```bash
+   make hetzner-core ARGS=tailscale-bootstrap
+   export REEF_HETZNER_HOST="<tailscale-magicdns-name-or-ip>"
+   make hetzner-core ARGS=tailscale-status
+   ssh "ops@$REEF_HETZNER_HOST"
+   ```
+
+   After the private SSH command succeeds, set `enable_public_ssh=false`,
+   review the OpenTofu plan, and apply it. Follow the complete no-lockout
+   sequence in [`TAILSCALE_ACCESS.md`](./TAILSCALE_ACCESS.md).
+
+5. Deploy runtime files and containers:
 
    ```bash
    make hetzner-core ARGS=deploy
    make hetzner-core ARGS=verify
    ```
 
-5. Initialize OpenBao through an SSH tunnel:
+6. Initialize OpenBao through an SSH tunnel:
 
    ```bash
-   IP="$(cd infra/hetzner-core/tofu && tofu output -raw core_ipv4)"
-   ssh -L 8200:127.0.0.1:8200 "ops@$IP"
+   ssh -L 8200:127.0.0.1:8200 "ops@$REEF_HETZNER_HOST"
    export BAO_ADDR=http://127.0.0.1:8200
    bao operator init -key-shares=5 -key-threshold=3
    ```
@@ -208,12 +240,12 @@ Use this order for a clean rebuild or new permanent host.
    Store the unseal keys and root/admin token in the offline vault. Do not leave
    them on the host.
 
-6. Configure OpenBao with a root/admin token:
+7. Configure OpenBao with a root/admin token:
 
    ```bash
-   ssh "ops@$IP"
+   ssh "ops@$REEF_HETZNER_HOST"
    cd /opt/reef
-   REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN="..." ./scripts/configure-openbao.sh
+   REEF_GITHUB_REPOSITORY=<owner>/<repository> BAO_TOKEN="..." ./scripts/configure-openbao.sh
    BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-runtime
    BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config
    ```
@@ -232,31 +264,31 @@ Use this order for a clean rebuild or new permanent host.
 
    ```bash
    BAO_TOKEN="..." make hetzner-core ARGS=bot-config-upgrade
-   REEF_OPENBAO_INIT_JSON=~/Documents/reef-openbao-init-167.233.82.255.json make hetzner-core ARGS=bot-config-upgrade
+   REEF_OPENBAO_INIT_JSON=/path/to/reef-openbao-init.json make hetzner-core ARGS=bot-config-upgrade
    ```
 
-7. Enable public Caddy after DNS and firewall are intentional:
+8. Enable public Caddy after DNS and firewall are intentional:
 
    ```bash
    make hetzner-core ARGS=public-up
    PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check
    ```
 
-8. Bootstrap backups:
+9. Bootstrap backups:
 
    ```bash
    make hetzner-core ARGS=backup-bootstrap
    make hetzner-core ARGS=backup-restore-check
    ```
 
-9. Enable hosted GitHub OAuth after the OAuth app exists:
+10. Enable hosted GitHub OAuth after the OAuth app exists:
 
    ```bash
    make hetzner-core ARGS=admin-auth-up
    make hetzner-core ARGS=admin-role-grant
    ```
 
-10. Prove the runtime path:
+11. Prove the runtime path:
 
     ```bash
     make hetzner-core ARGS=hosted-smoke
@@ -271,21 +303,22 @@ as the minimum monitor set to run manually or wire into an external checker.
 | Check | Command or Probe | Expected |
 | --- | --- | --- |
 | Infrastructure drift | `make hetzner-core-tofu ARGS="plan -no-color"` | No changes |
-| Operator summary | `PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check` | Exit `0`; DNS matches server IP; 22/80/443 open; 8080/8200 closed; Bao unsealed; backup timer active |
+| Operator summary | `PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check` | Exit `0`; DNS matches server IP; public 22 matches `enable_public_ssh` (normally closed); 80/443 open; 8080/8200 closed; Bao unsealed; backup timer active |
+| Private operator route | `make hetzner-core ARGS=tailscale-status` | `tailscaled` enabled/active, host has a `100.x` IP, and UFW permits TCP 22 on `tailscale0` |
 | Runtime verify | `make hetzner-core ARGS=verify` | Exit `0`; DB schemas visible; platform health OK |
 | Hosted smoke | `make hetzner-core ARGS=hosted-smoke` | `systemFailureCount=0`, valid-intent success `100`, trace checks pass |
 | Hosted admin auth smoke | `make hetzner-core ARGS=admin-auth-smoke` | Exit `0`; `/admin` shell, unauth session `401`, OAuth GitHub `302`, Caddy fallback, and legacy route cleanup all pass |
-| HTTPS app | `curl -fsS -o /dev/null -w "%{http_code}\n" https://reef-arena-admin.shrimpworks.dev/` | `200` |
-| Admin shell | `curl -fsS https://reef-arena-admin.shrimpworks.dev/admin` | HTML contains the admin route shell, not the landing page content |
-| Admin session gate | `curl -fsS -o /dev/null -w "%{http_code}\n" https://reef-arena-admin.shrimpworks.dev/admin/auth/session` | `401` without a session cookie |
-| HTTP redirect | `curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" http://reef-arena-admin.shrimpworks.dev/` | `308 https://reef-arena-admin.shrimpworks.dev/` |
-| OAuth start | `curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" "https://reef-arena-admin.shrimpworks.dev/admin/auth/github/start?redirectPath=/admin"` | `302` to `github.com/login/oauth/authorize` |
-| Public admin gate | `curl -fsS -o /dev/null -w "%{http_code}\n" https://reef-arena-admin.shrimpworks.dev/admin/v1/arena/bots` | `401` without bearer token |
-| Admin deploy receiver gate | `curl -fsS -o /dev/null -w "%{http_code}\n" -X POST https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin` | `401` without GitHub OIDC bearer token |
-| Runtime private port | public TCP probe to `167.233.82.255:8080` | Closed |
-| OpenBao private port | public TCP probe to `167.233.82.255:8200` | Closed |
+| HTTPS app | `curl -fsS -o /dev/null -w "%{http_code}\n" "https://$REEF_API_DOMAIN/"` | `200` |
+| Admin shell | `curl -fsS "https://$REEF_API_DOMAIN/admin"` | HTML contains the admin route shell, not the landing page content |
+| Admin session gate | `curl -fsS -o /dev/null -w "%{http_code}\n" "https://$REEF_API_DOMAIN/admin/auth/session"` | `401` without a session cookie |
+| HTTP redirect | `curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" "http://$REEF_API_DOMAIN/"` | `308` to the configured HTTPS domain |
+| OAuth start | `curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" "https://$REEF_API_DOMAIN/admin/auth/github/start?redirectPath=/admin"` | `302` to `github.com/login/oauth/authorize` |
+| Public admin gate | `curl -fsS -o /dev/null -w "%{http_code}\n" "https://$REEF_API_DOMAIN/admin/v1/arena/bots"` | `401` without bearer token |
+| Admin deploy receiver gate | `curl -fsS -o /dev/null -w "%{http_code}\n" -X POST "https://$REEF_API_DOMAIN/admin/deploy/arena-admin"` | `401` without GitHub OIDC bearer token |
+| Runtime private port | public TCP probe to `$(tofu output -raw core_ipv4):8080` | Closed |
+| OpenBao private port | public TCP probe to `$(tofu output -raw core_ipv4):8200` | Closed |
 | Legacy mutation route | host-local POST to `/auth/roles` with internal marker | `403` outside scripted temporary windows |
-| Backup timer | `ssh ops@167.233.82.255 'systemctl is-enabled reef-backup.timer && systemctl is-active reef-backup.timer'` | `enabled`, `active` |
+| Backup timer | `ssh ops@$REEF_HETZNER_HOST 'systemctl is-enabled reef-backup.timer && systemctl is-active reef-backup.timer'` | `enabled`, `active` |
 | Backup restore-list | `make hetzner-core ARGS=backup-restore-check` | `restore-list ok` for `openbao`, `reef`, `admin`, `analytics` |
 
 Recommended cadence:
@@ -301,7 +334,7 @@ Recommended cadence:
 SSH to the host:
 
 ```bash
-ssh ops@167.233.82.255
+ssh ops@$REEF_HETZNER_HOST
 cd /opt/reef
 ```
 
@@ -336,7 +369,7 @@ OpenBao is initialized with Shamir `5` shares and threshold `3`.
 After host reboot or OpenBao container recreation:
 
 ```bash
-ssh ops@167.233.82.255
+ssh ops@$REEF_HETZNER_HOST
 cd /opt/reef
 curl -fsS http://127.0.0.1:8200/v1/sys/seal-status | jq '{initialized,sealed}'
 ```
@@ -388,7 +421,7 @@ replace the host inode while the running container still sees the old one. If
 `make hetzner-core ARGS=public-up` and confirm the container-visible file:
 
 ```bash
-ssh ops@167.233.82.255 \
+ssh ops@$REEF_HETZNER_HOST \
   "cd /opt/reef && docker compose exec -T caddy sed -n '60,68p' /etc/caddy/Caddyfile"
 ```
 
@@ -397,8 +430,8 @@ ssh ops@167.233.82.255 \
 GitHub OAuth app settings:
 
 ```text
-Homepage URL: https://reef-arena-admin.shrimpworks.dev
-Authorization callback URL: https://reef-arena-admin.shrimpworks.dev/admin/auth/github/callback
+Homepage URL: https://<api-domain>
+Authorization callback URL: https://<api-domain>/admin/auth/github/callback
 ```
 
 Local operator env:
@@ -407,7 +440,7 @@ Local operator env:
 PLATFORM_ADMIN_AUTH_ENABLED=true
 GITHUB_OAUTH_CLIENT_ID=...
 GITHUB_OAUTH_CLIENT_SECRET=...
-GITHUB_OAUTH_REDIRECT_URI=https://reef-arena-admin.shrimpworks.dev/admin/auth/github/callback
+GITHUB_OAUTH_REDIRECT_URI=https://<api-domain>/admin/auth/github/callback
 ```
 
 Apply hosted OAuth config:
@@ -447,12 +480,12 @@ Verify:
 make hetzner-core ARGS=admin-auth-smoke
 
 curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
-  "https://reef-arena-admin.shrimpworks.dev/admin/auth/github/start?redirectPath=/admin"
+  "https://$REEF_API_DOMAIN/admin/auth/github/start?redirectPath=/admin"
 
 curl -fsS -o /dev/null -w "%{http_code}\n" \
-  https://reef-arena-admin.shrimpworks.dev/admin/auth/session
+  "https://$REEF_API_DOMAIN/admin/auth/session"
 
-ssh ops@167.233.82.255 \
+ssh ops@$REEF_HETZNER_HOST \
   "cd /opt/reef && docker compose exec -T platform-runtime env | grep '^PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED='"
 ```
 
@@ -479,15 +512,15 @@ upload:
 
 | Credential | Used by | Scope | Permissions |
 | --- | --- | --- | --- |
-| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_TOKEN` | OpenTofu DNS | Zone `shrimpworks.dev` | `Zone:Zone:Read`, `Zone:DNS:Write` |
-| same OpenTofu token, if Tofu should create R2 bucket | OpenTofu R2 bucket resource | Cloudflare account `21f7217c1f4e4a4da99f20b12c85a463` | `Workers R2 Storage Write` |
-| R2 S3 access key pair | Host backup upload job | Bucket `reef-backups` | `Object Read & Write` |
+| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_TOKEN` | OpenTofu DNS | Zone containing `api_domain` | `Zone:Zone:Read`, `Zone:DNS:Write` |
+| same OpenTofu token, if Tofu should create R2 bucket | OpenTofu R2 bucket resource | Configured `cloudflare_account_id` | `Workers R2 Storage Write` |
+| R2 S3 access key pair | Host backup upload job | Configured `r2_backup_bucket` | `Object Read & Write` |
 
 The DNS-only token is enough for `cloudflare_dns_record.api`. It is not enough
 for `cloudflare_r2_bucket.backups`.
 
-Cloudflare R2 must also be enabled once in the dashboard for account
-`21f7217c1f4e4a4da99f20b12c85a463`. If OpenTofu can plan
+Cloudflare R2 must also be enabled once in the dashboard for the configured
+`cloudflare_account_id`. If OpenTofu can plan
 `cloudflare_r2_bucket.backups` but apply fails with Cloudflare error `10042`
 and `Please enable R2 through the Cloudflare Dashboard`, enable R2 for the
 account in Cloudflare, then rerun the apply.
@@ -577,13 +610,13 @@ PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check
 Reboot:
 
 ```bash
-ssh ops@167.233.82.255 'sudo systemctl reboot'
+ssh ops@$REEF_HETZNER_HOST 'sudo systemctl reboot'
 ```
 
 After SSH returns:
 
 ```bash
-ssh ops@167.233.82.255 'cd /opt/reef && docker compose ps'
+ssh ops@$REEF_HETZNER_HOST 'cd /opt/reef && docker compose ps'
 ```
 
 Then:
@@ -614,7 +647,7 @@ HTTPS fails:
   current Caddyfile
 - confirm `try_files {path} {path}/index.html {path}.html /index.html` is
   visible from inside the Caddy container
-- recheck `curl -fsS https://reef-arena-admin.shrimpworks.dev/admin`
+- recheck `curl -fsS "https://$REEF_API_DOMAIN/admin"`
 
 Runtime health fails:
 
@@ -633,7 +666,7 @@ Hosted smoke seed fails with `legacy mutation route disabled`:
 - verify cleanup after the run:
 
   ```bash
-  ssh ops@167.233.82.255 \
+  ssh ops@$REEF_HETZNER_HOST \
     "cd /opt/reef && docker compose exec -T platform-runtime env | grep '^PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED='"
   ```
 
@@ -648,7 +681,7 @@ R2 upload skipped:
 Cloudflare R2 bucket apply returns `403`:
 
 - if the error includes code `10042`, enable R2 in the Cloudflare dashboard for
-  account `21f7217c1f4e4a4da99f20b12c85a463`
+  the configured `cloudflare_account_id`
 - otherwise, the token can manage DNS but not R2
 - add account-level `Workers R2 Storage Write` to the OpenTofu token, then
   rerun the Tofu apply
