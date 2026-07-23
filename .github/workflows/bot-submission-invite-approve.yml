@@ -63,9 +63,9 @@ jobs:
       - name: Approve matching admission
         env:
           ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
-          ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
+          ADMIN_API_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
         run: |
-          test -n "$ARENA_ADMIN_API_URL" && test -n "$ARENA_ADMIN_API_TOKEN"
+          test -n "$ARENA_ADMIN_API_URL" && test -n "$ADMIN_API_TOKEN"
           actor_id=$(gh api "users/${GITHUB_ACTOR}" --jq .id)
           case "$actor_id" in ''|*[!0-9]*) echo "invalid maintainer identity" >&2; exit 1 ;; esac
           APPROVER_ACTOR_ID="user-gh-${actor_id}" node -e '
@@ -75,7 +75,7 @@ jobs:
             fs.writeFileSync("/tmp/reef-admission-approval.json", JSON.stringify(payload));
           '
           curl --fail-with-body --request POST "${ARENA_ADMIN_API_URL%/}/admin/v1/arena/submission-admissions/approve" \
-            --header "authorization: Bearer ${ARENA_ADMIN_API_TOKEN}" \
+            --header "authorization: Bearer ${ADMIN_API_TOKEN}" \
             --header "content-type: application/json" \
             --data-binary @/tmp/reef-admission-approval.json
       - name: Dispatch trusted provisioning
