@@ -944,7 +944,7 @@ class ArenaAdminGatewayTest {
             "POST",
             "/internal/admin/arena/bots/ownership",
             null,
-            """{"botId":"sample-bot","source":"approved-submission-admission","repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha"}""",
+            """{"botId":"sample-bot","source":"approved-submission-admission","repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","githubUserId":123,"githubLogin":"octo"}""",
             AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-23T00:02:00Z")
         )
 

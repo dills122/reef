@@ -49,6 +49,7 @@ const server = await fakeAdminApi(async (req, body, res) => {
     json(res, 200, [
       {
         number: 42,
+        user: { id: 123, login: "noodle-ventures" },
         base: { repo: { full_name: "dills122/reef" } },
         head: {
           repo: { full_name: "noodle-ventures/reef" },
@@ -103,6 +104,8 @@ const server = await fakeAdminApi(async (req, body, res) => {
         repository: "dills122/reef",
         pullRequestNumber: 42,
         headSha: "6edd41cf3a7e5384e15fef20d2823746b909ef8f",
+        githubUserId: 123,
+        githubLogin: "noodle-ventures",
       });
       json(res, 200, { status: "ok", githubLogin: "noodle-ventures" });
     }
