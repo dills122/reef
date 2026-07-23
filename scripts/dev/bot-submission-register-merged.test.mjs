@@ -181,7 +181,13 @@ function runRegister(args, env) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ["scripts/dev/bot-submission-register-merged.mjs", ...args], {
       cwd: repoRoot,
-      env: { ...process.env, ...env },
+      env: {
+        ...process.env,
+        GITHUB_REPOSITORY: "",
+        GITHUB_SHA: "",
+        GITHUB_TOKEN: "",
+        ...env,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
