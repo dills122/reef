@@ -43,7 +43,7 @@ const server = await fakeAdminApi(async (req, body, res) => {
   }
   if (
     req.method === "GET" &&
-    req.url === "/repos/dills122/reef/commits/fd96c0c4a008a501270b1371465e3f3296851765/pulls"
+    /^\/repos\/dills122\/reef\/commits\/[a-f0-9]{40,64}\/pulls$/.test(req.url)
   ) {
     assert.equal(req.headers.authorization, "Bearer github-token");
     json(res, 200, [
