@@ -137,6 +137,10 @@ assert.doesNotMatch(nonBotStatus, /secrets\./);
 assert.doesNotMatch(approval, /pull_request_target/);
 assert.match(approval, /workflow_dispatch:/);
 assert.match(approval, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+assert.match(
+  approval,
+  /jobs:\n  approve:\n    runs-on: ubuntu-latest\n    permissions:\n      actions: write\n      contents: read\n      pull-requests: read/,
+);
 assert.match(approval, /permission.*maintain\|admin/);
 assert.match(approval, /requested SHA is not the current PR head/);
 assert.match(approval, /approverActorId/);
