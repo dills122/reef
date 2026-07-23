@@ -106,7 +106,7 @@ server.
 | Secret | Purpose | Source |
 | --- | --- | --- |
 | `ARENA_ADMIN_API_URL` | Bot-submission workflow target | `https://reef-arena-admin.shrimpworks.dev` once public ingress is enabled. |
-| `ADMIN_API_TOKEN` | Reference/auth admin gateway bearer token for hosted setup and smoke/soak seeding | Generated in `/opt/reef/secrets/caddy.env`; consumed by platform runtime through `/opt/reef/secrets/platform-runtime.env`. |
+| `ADMIN_API_TOKEN` | Reference/auth admin gateway bearer token for hosted setup, smoke/soak seeding, and trusted bot invite approval | Generated in `/opt/reef/secrets/caddy.env`; consumed by platform runtime through `/opt/reef/secrets/platform-runtime.env`; copy to the GitHub Actions secret for the default-branch invite-approval workflow. |
 | `ARENA_ADMIN_API_TOKEN` | Bot-submission CI admin gateway bearer token | Generated in `/opt/reef/secrets/caddy.env`; copy to GitHub Actions secret when CI path is enabled. |
 | `PUBLIC_API_TOKEN` | Edge-injected static token for browser-safe public reads such as `/api/v1/arena/leaderboard` | Generated in `/opt/reef/secrets/caddy.env`; never copy into frontend JavaScript. |
 | `BOT_SUBMISSION_OPENBAO_MODE` | Enables real OpenBao provisioning in CI | Set to `real` only for the hosted provisioning workflow. |

@@ -352,6 +352,13 @@ ACTIONS_ID_TOKEN_REQUEST_URL
 ACTIONS_ID_TOKEN_REQUEST_TOKEN
 ```
 
+The separate `Bot Submission Invite Approval` workflow uses
+`ADMIN_API_TOKEN` for
+`/admin/v1/arena/submission-admissions/approve`. Approval is an admin-family
+operation because it authorizes an exact fork head SHA; the admission-recording
+and provisioning routes continue to use the narrower `ARENA_ADMIN_API_TOKEN`.
+Both credentials remain confined to trusted default-branch workflows.
+
 Current hosted value:
 
 ```text
