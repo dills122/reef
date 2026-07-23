@@ -35,6 +35,8 @@ assert.match(provision, /steps\.admission\.outputs\.state != 'invite_approved'/)
 assert.match(provision, /Comment invite review pending/);
 assert.match(provision, /PROVISION_RESULT: pending/);
 assert.match(provision, /SUBMISSION_HEAD_SHA: \$\{\{ steps\.metadata\.outputs\.head-sha \}\}/);
+assert.match(provision, /SUBMISSION_REPOSITORY: \$\{\{ github\.repository \}\}/);
+assert.match(provision, /SUBMISSION_PR_NUMBER: \$\{\{ steps\.resolve-pr\.outputs\.pr-number \}\}/);
 assert.match(
   provision,
   /if: steps\.openbao-provision\.outputs\['exit-code'\] != '' && steps\.openbao-provision\.outputs\['exit-code'\] == '0'/,

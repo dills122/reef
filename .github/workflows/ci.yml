@@ -8,7 +8,58 @@ on:
   pull_request:
 
 jobs:
+  change-scope:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      bot-only: ${{ steps.scope.outputs.bot-only }}
+      run-full-ci: ${{ steps.scope.outputs.run-full-ci }}
+      reason: ${{ steps.scope.outputs.reason }}
+    steps:
+      - name: Check out trusted base classifier
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Classify pull request change scope
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          HEAD_REF: ${{ github.head_ref || '' }}
+          EXPECTED_CHANGED_FILES: ${{ github.event.pull_request.changed_files || 0 }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            {
+              echo "bot-only=false"
+              echo "run-full-ci=true"
+              echo "reason=non_pull_request_event"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Fail closed while this classifier is first being introduced or if
+          # the trusted base copy is ever unavailable.
+          if [ ! -f scripts/dev/ci-pr-change-scope.mjs ]; then
+            {
+              echo "bot-only=false"
+              echo "run-full-ci=true"
+              echo "reason=trusted_classifier_unavailable"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            > /tmp/reef-pr-files.json
+          node scripts/dev/ci-pr-change-scope.mjs /tmp/reef-pr-files.json \
+            >> "$GITHUB_OUTPUT"
+
   dependency-alignment:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -19,6 +70,8 @@ jobs:
         run: make check-dependency-alignment
 
   proto-governance:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -28,6 +81,8 @@ jobs:
         run: ./scripts/check-proto-additive.sh
 
   go-matching-engine:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -57,6 +112,8 @@ jobs:
         run: ./scripts/ci/check-matching-bench.sh
 
   go-simulator:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -83,6 +140,8 @@ jobs:
           path: coverage/simulator
 
   kotlin-platform-runtime:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -125,6 +184,8 @@ jobs:
         run: ./scripts/ci/check-runtime-bench.sh
 
   kotlin-stock-data:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -164,6 +225,8 @@ jobs:
             services/stock-data/build/test-results/test
 
   reef-arena-separation:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -210,6 +273,8 @@ jobs:
         run: DEV_COMPOSE_FILES='compose.base.yml,compose.local.yml,compose.arena.yml' make dev-compose-config ARGS='--services'
 
   node-dev-tooling:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -227,6 +292,7 @@ jobs:
           node --test --experimental-test-coverage \
             scripts/dev/lib/dev-stack.test.mjs \
             scripts/dev/lib/dev-profiles.test.mjs \
+            scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/dev/db/migrate.test.mjs \
             scripts/dev/container-images-workflow.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
@@ -262,6 +328,8 @@ jobs:
           path: coverage/node-dev-tooling
 
   docs-site:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -281,6 +349,8 @@ jobs:
         run: npm run build
 
   bot-sdk:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -304,6 +374,8 @@ jobs:
             --wall-timeout-ms=15000
 
   arena-admin:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -323,8 +395,9 @@ jobs:
         run: bun --bun run build
 
   scenario-replay:
+    needs: change-scope
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.pull_request.user.login == 'dependabot[bot]'
+    if: needs.change-scope.outputs.run-full-ci == 'true' && (github.event_name == 'push' || github.event.pull_request.user.login == 'dependabot[bot]')
     timeout-minutes: 25
     env:
       JS_RUNTIME: node
@@ -377,6 +450,8 @@ jobs:
         run: docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans
 
   container-builds:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -406,6 +481,8 @@ jobs:
         run: docker build -f "${{ matrix.dockerfile }}" -t "reef/${{ matrix.name }}:ci" "${{ matrix.context }}"
 
   infrastructure-config:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -430,6 +507,8 @@ jobs:
         run: docker compose -f infra/hetzner-core/server/docker-compose.yml -f infra/hetzner-core/server/docker-compose.stream-ack.yml config --quiet
 
   go-vulnerability-scan:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -452,6 +531,8 @@ jobs:
           work-dir: ${{ matrix.workdir }}
 
   postgres-schema-placement:
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   detect-flow:
@@ -66,6 +67,33 @@ jobs:
           fi
           echo "flow=$flow" >> "$GITHUB_OUTPUT"
           echo "bot-name=$bot_name" >> "$GITHUB_OUTPUT"
+      - name: Check out trusted scope classifier
+        if: steps.parse.outputs.flow != 'skip'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Validate exact bot-only change scope
+        id: scope
+        if: steps.parse.outputs.flow != 'skip'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          EXPECTED_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -euo pipefail
+          test -f scripts/dev/ci-pr-change-scope.mjs
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            > /tmp/reef-pr-files.json
+          node scripts/dev/ci-pr-change-scope.mjs /tmp/reef-pr-files.json \
+            >> "$GITHUB_OUTPUT"
+      - name: Reject mixed or cross-bot changes
+        if: steps.parse.outputs.flow != 'skip' && steps.scope.outputs.bot-only != 'true'
+        env:
+          SCOPE_REASON: ${{ steps.scope.outputs.reason }}
+        run: |
+          echo "::error::Bot submission branches may change only files under the exact submitted bot directory (reason=${SCOPE_REASON})."
+          exit 1
 
   # Stage 1: bot validity check (schema, manifest, required metadata incl. email).
   validate-manifest:

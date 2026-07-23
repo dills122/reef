@@ -925,6 +925,7 @@ Summary:
 - GitHub App support is deferred. MVP uses GitHub OAuth for the admin app, GitHub Actions for CI gates and comments/status, and the existing scoped Admin API token until GitHub Actions OIDC replaces it.
 - Participants normally configure bot secrets through the web admin app. Direct OpenBao login is an operator escape hatch, not the normal participant path.
 - OpenBao remains the secret authority. Services continue to read OpenBao through AppRole; CI provisioning continues through the narrow GitHub Actions JWT/OpenBao path where applicable; Admin API mediates participant-facing secret writes.
+- Direct CI provisioning binds the OpenBao namespace to the GitHub OIDC actor. Approved-fork provisioning may delegate from the maintainer OIDC actor to the fork owner only when the Admin API finds an exact `invite_approved` admission matching repository, PR number, reviewed head SHA, bot id, and submitter identity.
 - New bot submissions require human review, passing CI gates, ownership/limit checks, non-banned user state, and OpenBao slice provisioning before merge.
 - OpenBao slice existence is a pre-merge gate; config completeness is a pre-run gate because config blobs are user-managed opaque secret data.
 - Accepted users may get a lower-friction follow-up review path, but every merge keeps a human gate unless a later decision changes the policy.

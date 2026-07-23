@@ -380,11 +380,16 @@ matching the OpenBao `auth/jwt/role/reef-bot-submission-ci` bound audience seede
 by `infra/hetzner-core/server/scripts/configure-openbao.sh`.
 
 The hosted Admin API does not trust the request body alone for the OpenBao path.
-For `/admin/v1/arena/bots/openbao-provision`, `submitterIdentity` must exactly
-match the GitHub Actions OIDC `actor` claim before any OpenBao write/delete is
-attempted. If the target bot already has ownership metadata, that actor must be
-an active owner or maintainer; add flows for new bots may create only a slice
-under the OIDC actor's own submitter namespace.
+For direct `/admin/v1/arena/bots/openbao-provision` calls,
+`submitterIdentity` must exactly match the GitHub Actions OIDC `actor` claim
+before any OpenBao write/delete is attempted. An approved fork is the only
+delegated case: the OIDC actor may be the maintainer who dispatched the trusted
+base-branch workflow, but the API requires a persisted `invite_approved`
+admission matching the OIDC repository, PR number, exact reviewed head SHA,
+bot id, fork owner, and submitter login before writing the fork owner's secret
+slice. A changed SHA or identity mismatch fails closed. If the target bot
+already has ownership metadata, the approved submitter must also be an active
+owner or maintainer.
 
 When the Admin DB auth layer is configured, authenticated session and service
 tokens bind the internal admin actor id from the trusted token record instead of
@@ -592,6 +597,17 @@ job name directly. Non-bot branches get a successful
 `registry-diff-and-provision` status with no hosted Admin API call. Forked bot
 submission branches remain pending until the SHA-bound invite approval triggers
 trusted provisioning; a changed head SHA invalidates the approval.
+
+Repository-wide CI still starts for every pull request so job-level check names
+remain visible to branch protection. A trusted-base change-scope classifier may
+skip the expensive general matrix only when the head branch matches
+`bots/add|update|remove/<bot-id>` and every current and rename-source path is
+under the exact `bots/<bot-id>/` directory. Empty, malformed, cross-bot, or
+mixed-path changes fail closed to full CI. The untrusted Bot Submission workflow
+enforces the same exact-directory rule and continues to run manifest validation,
+approved-import scanning, and the container-isolated sandbox test. General
+service, documentation, infrastructure, replay, schema, benchmark, and image
+build jobs are not substitutes for those bot-specific security gates.
 
 Live configuration (verified 2026-07-19): `master` requires
 `registry-diff-and-provision` in addition to the untrusted submission checks.

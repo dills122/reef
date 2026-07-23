@@ -61,6 +61,7 @@ async function provisionViaAdminApi(request) {
     throw platformFailure("ARENA_ADMIN_API_TOKEN is required for scoped Admin API auth");
   }
   const githubOidcToken = await githubOidcTokenForProvisioning();
+  const submissionContext = trustedSubmissionContext();
   const actorId = env("ADMIN_ACTOR_ID", "bot-submission-ci");
   const response = await fetch(`${adminApiUrl}/admin/v1/arena/bots/openbao-provision`, {
     method: "POST",
@@ -74,6 +75,7 @@ async function provisionViaAdminApi(request) {
       submitterIdentity: request.submitterIdentity,
       botId: request.botId,
       flow: request.flow,
+      ...submissionContext,
     }),
   });
   const payload = await responsePayload(response);
@@ -81,6 +83,25 @@ async function provisionViaAdminApi(request) {
     return payload ?? {};
   }
   throw httpFailure(response.status, payload);
+}
+
+function trustedSubmissionContext() {
+  const repository = env("SUBMISSION_REPOSITORY", "");
+  const pullRequestNumberText = env("SUBMISSION_PR_NUMBER", "");
+  const headSha = env("SUBMISSION_HEAD_SHA", "").toLowerCase();
+  if (!repository && !pullRequestNumberText && !headSha) {
+    return {};
+  }
+  const pullRequestNumber = Number(pullRequestNumberText);
+  if (
+    !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ||
+    !Number.isSafeInteger(pullRequestNumber) ||
+    pullRequestNumber <= 0 ||
+    !/^[0-9a-f]{40,64}$/.test(headSha)
+  ) {
+    throw platformFailure("complete trusted submission repository, PR number, and head SHA are required");
+  }
+  return { repository, pullRequestNumber, headSha };
 }
 
 async function githubOidcTokenForProvisioning() {
