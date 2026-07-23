@@ -6,6 +6,10 @@ const provision = await readFile(new URL("../../.github/workflows/bot-submission
 const approval = await readFile(new URL("../../.github/workflows/bot-submission-invite-approve.yml", import.meta.url), "utf8");
 const nonBotStatus = await readFile(new URL("../../.github/workflows/bot-submission-non-bot-status.yml", import.meta.url), "utf8");
 const submission = await readFile(new URL("../../.github/workflows/bot-submission.yml", import.meta.url), "utf8");
+const arenaGateway = await readFile(
+  new URL("../../services/arena-control-plane/src/main/kotlin/com/reef/arena/controlplane/api/ArenaAdminGateway.kt", import.meta.url),
+  "utf8",
+);
 
 assert.match(submission, /if: github\.event\.pull_request\.user\.login != 'dependabot\[bot\]'/);
 
@@ -137,7 +141,14 @@ assert.match(approval, /permission.*maintain\|admin/);
 assert.match(approval, /requested SHA is not the current PR head/);
 assert.match(approval, /approverActorId/);
 assert.match(approval, /APPROVER_ACTOR_ID="user-gh-\$\{actor_id\}"/);
+assert.match(approval, /ADMIN_API_TOKEN: \$\{\{ secrets\.ADMIN_API_TOKEN \}\}/);
+assert.match(approval, /authorization: Bearer \$\{ADMIN_API_TOKEN\}/);
+assert.doesNotMatch(approval, /ARENA_ADMIN_API_TOKEN/);
 assert.match(approval, /Dispatch trusted provisioning/);
 assert.match(approval, /gh workflow run bot-submission-provision\.yml/);
+assert.match(
+  arenaGateway,
+  /adminRoute\("\/admin\/v1\/arena\/submission-admissions\/approve"[^\n]+"admin", adminTokens, operatorRoles\)/,
+);
 
 console.log("bot submission invite workflow guard checks passed");
