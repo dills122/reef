@@ -38,6 +38,7 @@ test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
 	node scripts/dev/onboarding-links.test.mjs
 	node scripts/dev/smoke-identity.test.mjs
+	node scripts/dev/ci-pr-change-scope.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...

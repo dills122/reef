@@ -2,9 +2,11 @@ package com.reef.arena.controlplane.arena
 
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.time.Instant
 import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
@@ -86,6 +88,59 @@ class OpenBaoProvisioningServiceTest {
     }
 
     @Test
+    fun allowsOnlyExactApprovedForkAdmissionDelegation() {
+        val sha = "a".repeat(40)
+        val context = approvedForkContext(sha)
+
+        val claims = OpenBaoProvisioningService.requireSubmitterIdentity(
+            githubOidcToken(actor = "reviewer", repository = "dills122/reef"),
+            "octo",
+            context
+        )
+
+        assertEquals("reviewer", claims.actor)
+        assertFailsWith<IllegalArgumentException> {
+            OpenBaoProvisioningService.requireSubmitterIdentity(
+                githubOidcToken(actor = "reviewer", repository = "dills122/reef"),
+                "octo",
+                context.copy(headSha = "b".repeat(40))
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            OpenBaoProvisioningService.requireSubmitterIdentity(
+                githubOidcToken(actor = "reviewer", repository = "other/reef"),
+                "octo",
+                context
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            OpenBaoProvisioningService.requireSubmitterIdentity(
+                githubOidcToken(actor = "reviewer", repository = "dills122/reef"),
+                "attacker",
+                context
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            OpenBaoProvisioningService.requireSubmitterIdentity(
+                githubOidcToken(actor = "reviewer", repository = "dills122/reef"),
+                "octo",
+                context.copy(botId = "other-bot")
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            OpenBaoProvisioningService.requireSubmitterIdentity(
+                githubOidcToken(actor = "reviewer", repository = "dills122/reef"),
+                "octo",
+                context.copy(
+                    admission = context.admission.copy(
+                        state = ArenaSubmissionAdmissionState.PendingInviteReview
+                    )
+                )
+            )
+        }
+    }
+
+    @Test
     fun rejectsSubmitterIdentityWithPathTraversal() {
         val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig("http://127.0.0.1:1"))
 
@@ -133,5 +188,31 @@ class OpenBaoProvisioningServiceTest {
             """.trimIndent()
         )
         return "$header.$payload.signature"
+    }
+
+    private fun approvedForkContext(sha: String): ApprovedForkOpenBaoProvisioningContext {
+        val now = Instant.parse("2026-07-23T00:00:00Z")
+        return ApprovedForkOpenBaoProvisioningContext(
+            repository = "dills122/reef",
+            pullRequestNumber = 42,
+            headSha = sha,
+            botId = "bot-1",
+            admission = ArenaSubmissionAdmission(
+                repository = "dills122/reef",
+                pullRequestNumber = 42,
+                botId = "bot-1",
+                headRepository = "octo/reef",
+                headOwnerLogin = "octo",
+                githubUserId = 123,
+                githubLogin = "octo",
+                headSha = sha,
+                state = ArenaSubmissionAdmissionState.InviteApproved,
+                invitationActor = "user-gh-999",
+                invitationReason = "invite verified",
+                invitedAt = now,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
     }
 }
