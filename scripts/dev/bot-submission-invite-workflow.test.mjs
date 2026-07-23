@@ -6,6 +6,7 @@ const provision = await readFile(new URL("../../.github/workflows/bot-submission
 const approval = await readFile(new URL("../../.github/workflows/bot-submission-invite-approve.yml", import.meta.url), "utf8");
 const nonBotStatus = await readFile(new URL("../../.github/workflows/bot-submission-non-bot-status.yml", import.meta.url), "utf8");
 const submission = await readFile(new URL("../../.github/workflows/bot-submission.yml", import.meta.url), "utf8");
+const registrySync = await readFile(new URL("../../.github/workflows/bot-registry-sync.yml", import.meta.url), "utf8");
 const arenaGateway = await readFile(
   new URL("../../services/arena-control-plane/src/main/kotlin/com/reef/arena/controlplane/api/ArenaAdminGateway.kt", import.meta.url),
   "utf8",
@@ -139,6 +140,12 @@ assert.doesNotMatch(nonBotStatus, /secrets\./);
 assert.doesNotMatch(approval, /pull_request_target/);
 assert.match(approval, /workflow_dispatch:/);
 assert.match(approval, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+assert.match(registrySync, /pull-requests: read/);
+assert.match(registrySync, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
+assert.match(
+  registrySync,
+  /grep -Fxq 'scripts\/dev\/bot-submission-register-merged\.mjs'[\s\S]+git ls-files 'bots\/\*\/bot\.json'/,
+);
 assert.match(
   approval,
   /jobs:\n  approve:\n    runs-on: ubuntu-latest\n    permissions:\n      actions: write\n      contents: read\n      pull-requests: read/,

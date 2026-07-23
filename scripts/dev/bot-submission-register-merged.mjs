@@ -61,7 +61,7 @@ async function syncManifest(manifestPathArg) {
   } else {
     console.log(`bot-submission-register-merged: bot ${manifest.botId} already registered`);
   }
-  await syncBotOwnership(manifest);
+  await syncBotOwnership(manifest, existingBot, manifestPath);
 
   const existingVersion = await getOptional(
     `/admin/v1/arena/bot-versions?botId=${encodeURIComponent(manifest.botId)}&versionId=${encodeURIComponent(versionId)}`,
@@ -84,7 +84,32 @@ async function syncManifest(manifestPathArg) {
   console.log(`bot-submission-register-merged: registered version ${manifest.botId}/${versionId}`);
 }
 
-async function syncBotOwnership(manifest) {
+async function syncBotOwnership(manifest, existingBot, manifestPath) {
+  const existingOwners = existingBot?.bot?.owners ?? existingBot?.owners;
+  if (Array.isArray(existingOwners) && existingOwners.length > 0) {
+    console.log(`bot-submission-register-merged: bot ${manifest.botId} already has an owner`);
+    return;
+  }
+
+  const approvedSubmission = await resolveApprovedSubmission(manifestPath);
+  if (approvedSubmission !== null) {
+    const assigned = await postJson("/admin/v1/arena/bots/ownership", {
+      botId: manifest.botId,
+      source: "approved-submission-admission",
+      repository: approvedSubmission.repository,
+      pullRequestNumber: approvedSubmission.pullRequestNumber,
+      headSha: approvedSubmission.headSha,
+    });
+    const assignedLogin = String(assigned.githubLogin || "").trim();
+    if (!assignedLogin) {
+      throw new Error(`approved submission ownership assignment returned no GitHub login for ${manifest.botId}`);
+    }
+    console.log(
+      `bot-submission-register-merged: assigned owner ${assignedLogin} to ${manifest.botId} from approved submission`,
+    );
+    return;
+  }
+
   const owner = await resolveGitHubIdentity(manifest.metadata.publisher);
   await postJson("/admin/v1/arena/bots/ownership", {
     botId: manifest.botId,
@@ -93,6 +118,53 @@ async function syncBotOwnership(manifest) {
     displayName: owner.name || owner.login,
   });
   console.log(`bot-submission-register-merged: assigned owner ${owner.login} to ${manifest.botId}`);
+}
+
+async function resolveApprovedSubmission(manifestPath) {
+  const repository = env("GITHUB_REPOSITORY", "").trim();
+  if (!repository) return null;
+
+  const commitSha = manifestCommitSha(manifestPath) || env("GITHUB_SHA", "").trim();
+  if (!/^[0-9a-f]{40,64}$/i.test(commitSha)) return null;
+
+  const response = await fetch(
+    `${githubApiUrl}/repos/${encodeRepository(repository)}/commits/${encodeURIComponent(commitSha)}/pulls`,
+    { headers: githubHeaders() },
+  );
+  const parsed = await responsePayload(response);
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(
+      `GitHub merged pull request lookup failed for ${repository}@${commitSha} (${response.status}): ${JSON.stringify(parsed)}`,
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`GitHub merged pull request lookup returned an invalid response for ${repository}@${commitSha}`);
+  }
+
+  const associated = parsed.filter((pullRequest) =>
+    String(pullRequest?.base?.repo?.full_name || "").toLowerCase() === repository.toLowerCase(),
+  );
+  if (associated.length === 0) return null;
+  if (associated.length > 1) {
+    throw new Error(`GitHub merged pull request lookup returned multiple pull requests for ${repository}@${commitSha}`);
+  }
+
+  const pullRequest = associated[0];
+  const headRepository = String(pullRequest?.head?.repo?.full_name || "").trim();
+  if (!headRepository) {
+    throw new Error(`GitHub merged pull request lookup returned no head repository for ${repository}@${commitSha}`);
+  }
+  if (headRepository.toLowerCase() === repository.toLowerCase()) return null;
+
+  const pullRequestNumber = Number(pullRequest?.number);
+  const headSha = String(pullRequest?.head?.sha || "").trim();
+  if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber <= 0) {
+    throw new Error(`GitHub merged pull request lookup returned an invalid pull request number for ${repository}@${commitSha}`);
+  }
+  if (!/^[0-9a-f]{40,64}$/i.test(headSha)) {
+    throw new Error(`GitHub merged pull request lookup returned an invalid head SHA for ${repository}#${pullRequestNumber}`);
+  }
+  return { repository, pullRequestNumber, headSha };
 }
 
 async function resolveGitHubIdentity(login) {
@@ -111,6 +183,21 @@ async function resolveGitHubIdentity(login) {
     login: parsed.login,
     name: String(parsed.name || ""),
   };
+}
+
+function manifestCommitSha(manifestPath) {
+  if (!manifestPath.startsWith(repoRoot)) return "";
+  const result = spawnSync(
+    "git",
+    ["log", "-1", "--format=%H", "--", relativeToRepo(manifestPath)],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  if (result.error || result.status !== 0) return "";
+  return result.stdout.trim();
+}
+
+function encodeRepository(repository) {
+  return repository.split("/").map(encodeURIComponent).join("/");
 }
 
 async function getOptional(path) {

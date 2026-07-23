@@ -359,6 +359,13 @@ operation because it authorizes an exact fork head SHA; the admission-recording
 and provisioning routes continue to use the narrower `ARENA_ADMIN_API_TOKEN`.
 Both credentials remain confined to trusted default-branch workflows.
 
+After merge, the registry sync resolves fork bot ownership from the exact
+approved submission admission (repository, pull request number, reviewed head
+SHA, bot id, and immutable GitHub user identity). The manifest's
+`metadata.publisher` remains a free-form display label and is not treated as a
+GitHub login for approved fork submissions. Trusted same-repository bots retain
+the legacy publisher-login fallback when no fork admission applies.
+
 Current hosted value:
 
 ```text
