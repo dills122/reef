@@ -29,13 +29,11 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.pull_requests[0].number != '' &&
        (startsWith(github.event.workflow_run.head_branch, 'bots/add/') ||
         startsWith(github.event.workflow_run.head_branch, 'bots/update/') ||
         startsWith(github.event.workflow_run.head_branch, 'bots/remove/')))
     env:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      PR_NUMBER: ${{ inputs.pr_number || github.event.workflow_run.pull_requests[0].number }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -43,12 +41,62 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+      - name: Resolve trusted pull request number
+        id: resolve-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_PR_NUMBER: ${{ inputs.pr_number || '' }}
+          EVENT_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
+          WORKFLOW_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name || '' }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          EXPECTED_BASE_REPOSITORY: dills122/reef
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            node scripts/dev/bot-submission-resolve-pr.mjs >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "$EVENT_PR_NUMBER" ]; then
+            case "$EVENT_PR_NUMBER" in
+              *[!0-9]*|"")
+                echo "invalid pull request number in workflow_run event" >&2
+                exit 1
+                ;;
+            esac
+            gh api "repos/${EXPECTED_BASE_REPOSITORY}/pulls/${EVENT_PR_NUMBER}" > /tmp/reef-bot-submission-pr-candidates.json
+          else
+            case "$WORKFLOW_HEAD_REPOSITORY" in
+              */*) head_owner="${WORKFLOW_HEAD_REPOSITORY%%/*}" ;;
+              *)
+                echo "missing trusted workflow_run head repository" >&2
+                exit 1
+                ;;
+            esac
+            gh api --method GET "repos/${EXPECTED_BASE_REPOSITORY}/pulls" \
+              -f state=open \
+              -f "head=${head_owner}:${WORKFLOW_HEAD_BRANCH}" \
+              -f per_page=100 > /tmp/reef-bot-submission-pr-candidates.json
+          fi
+
+          node scripts/dev/bot-submission-resolve-pr.mjs \
+            /tmp/reef-bot-submission-pr-candidates.json >> "$GITHUB_OUTPUT"
       - name: Resolve current pull request metadata
         id: metadata
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.resolve-pr.outputs.pr-number }}
+          EVENT_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
+          WORKFLOW_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name || '' }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          EXPECTED_BASE_REPOSITORY: dills122/reef
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/reef-bot-submission-pr.json
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            node scripts/dev/bot-submission-resolve-pr.mjs \
+              /tmp/reef-bot-submission-pr.json > /dev/null
+          fi
           node -e '
             const fs = require("fs");
             const pr = JSON.parse(fs.readFileSync("/tmp/reef-bot-submission-pr.json", "utf8"));
