@@ -127,6 +127,7 @@ class AcceptedAsyncCommandIntake(
     private val commandIdByIdempotency = ConcurrentHashMap<String, String>()
     private val terminalCommandIds = ConcurrentHashMap.newKeySet<String>()
     private val terminalStatusOrder = ConcurrentLinkedQueue<AcceptedAsyncRetentionEntry>()
+    private val terminalStatusRetentionLock = Any()
     private val started = AtomicBoolean(false)
     private val received = AtomicLong(0)
     private val duplicates = AtomicLong(0)
@@ -441,16 +442,24 @@ class AcceptedAsyncCommandIntake(
 
     private fun markTerminalStatus(commandId: String) {
         if (terminalStatusMaxRecords <= 0) return
-        val record = recordsByCommandId[commandId] ?: return
-        if (!record.status.isTerminal()) return
-        if (terminalCommandIds.add(commandId)) {
-            retainedTerminalStatusRecords.incrementAndGet()
-            terminalStatusOrder.add(AcceptedAsyncRetentionEntry(commandId, record.updatedAtEpochMs))
+        synchronized(terminalStatusRetentionLock) {
+            val record = recordsByCommandId[commandId] ?: return
+            if (!record.status.isTerminal()) return
+            if (terminalCommandIds.add(commandId)) {
+                retainedTerminalStatusRecords.incrementAndGet()
+                terminalStatusOrder.add(AcceptedAsyncRetentionEntry(commandId, record.updatedAtEpochMs))
+            }
+            evictTerminalStatusesLocked(clockMillis())
         }
-        evictTerminalStatuses(clockMillis())
     }
 
     private fun evictTerminalStatuses(now: Long) {
+        synchronized(terminalStatusRetentionLock) {
+            evictTerminalStatusesLocked(now)
+        }
+    }
+
+    private fun evictTerminalStatusesLocked(now: Long) {
         while (true) {
             val next = terminalStatusOrder.peek() ?: return
             val overLimit = retainedTerminalStatusRecords.get() > terminalStatusMaxRecords
