@@ -121,6 +121,8 @@ test-bot-sdk:
 	bun scripts/dev/bot-submission-commit-status.test.mjs
 	bun scripts/dev/bot-submission-record-admission.test.mjs
 	bun scripts/dev/bot-submission-invite-workflow.test.mjs
+	bun scripts/dev/bot-submission-pr-comment.test.mjs
+	bun scripts/dev/arena-admin-access-normalize.test.mjs
 	bun scripts/dev/dependabot-automation-workflow.test.mjs
 	bun scripts/dev/bot-submission-provision-openbao.test.mjs
 	bun scripts/dev/bot-sdk-test-bot.test.mjs
@@ -147,6 +149,8 @@ test-bot-sdk:
 	node --check scripts/dev/bot-submission-provision-openbao.mjs
 	node --check scripts/dev/bot-submission-record-admission.mjs
 	node --check scripts/dev/bot-submission-invite-workflow.test.mjs
+	node --check scripts/dev/bot-submission-pr-comment.mjs
+	node --check scripts/dev/bot-submission-pr-comment.test.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
