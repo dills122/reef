@@ -70,11 +70,12 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
             runAdmissionStore,
             adminIdentityService = adminIdentityService
         )
+        val accountRiskDatabase = arenaAccountRiskDatabaseSettings()
         val accountRiskControlStore = PostgresAccountRiskCheck(
             dataSource = RuntimeDataSources.dataSource(
-                adminJdbcUrl,
-                RuntimeEnv.string("ADMIN_POSTGRES_USER", RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef")),
-                RuntimeEnv.string("ADMIN_POSTGRES_PASSWORD", RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef")),
+                accountRiskDatabase.jdbcUrl,
+                accountRiskDatabase.user,
+                accountRiskDatabase.password,
                 "arena-account-risk-control"
             )
         )
@@ -94,4 +95,22 @@ class ArenaRouteExtensionProvider : OptionalProductRouteExtensionProvider {
             )
         )
     }
+}
+
+internal data class ArenaAccountRiskDatabaseSettings(
+    val jdbcUrl: String,
+    val user: String,
+    val password: String
+)
+
+internal fun arenaAccountRiskDatabaseSettings(
+    lookup: (String) -> String? = { key -> System.getenv(key) }
+): ArenaAccountRiskDatabaseSettings {
+    val jdbcUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "", lookup)
+        .ifBlank { error("RUNTIME_POSTGRES_JDBC_URL is required for Arena account-risk controls") }
+    return ArenaAccountRiskDatabaseSettings(
+        jdbcUrl = jdbcUrl,
+        user = RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef", lookup),
+        password = RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef", lookup)
+    )
 }
