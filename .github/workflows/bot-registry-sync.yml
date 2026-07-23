@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   sync-merged-bots:
@@ -74,7 +75,14 @@ jobs:
             if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
               changed="$(git ls-files 'bots/*/bot.json')"
             else
-              changed="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- 'bots/*/bot.json')"
+              changed_paths="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- \
+                'bots/*/bot.json' \
+                'scripts/dev/bot-submission-register-merged.mjs')"
+              if printf '%s\n' "$changed_paths" | grep -Fxq 'scripts/dev/bot-submission-register-merged.mjs'; then
+                changed="$(git ls-files 'bots/*/bot.json')"
+              else
+                changed="$changed_paths"
+              fi
             fi
           fi
           if [ -z "$changed" ]; then
@@ -124,6 +132,7 @@ jobs:
       - name: Register merged bot metadata
         if: steps.manifests.outputs.paths != ''
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           MANIFEST_PATHS: ${{ steps.manifests.outputs.paths }}
         run: |
           printf '%s' "$MANIFEST_PATHS" \

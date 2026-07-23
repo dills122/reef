@@ -43,6 +43,7 @@ import com.reef.arena.controlplane.arena.ArenaRunRecord
 import com.reef.arena.controlplane.arena.ArenaRunStatus
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.ArenaSubmissionAdmission
+import com.reef.arena.controlplane.arena.ArenaSubmissionAdmissionState
 import com.reef.arena.controlplane.arena.ArenaSubmissionAdmissionStore
 import com.reef.arena.controlplane.arena.ApprovedForkOpenBaoProvisioningContext
 import com.reef.arena.controlplane.arena.BotConfigSecretService
@@ -665,13 +666,19 @@ internal class ArenaAdminGateway(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         val botId = json.string("botId")
+        val source = json.string("source")
         val githubLogin = json.string("githubLogin")
         val displayName = json.string("displayName")
-        if (botId.isBlank() || githubLogin.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and githubLogin are required"))
+        if (botId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
+        }
+        if (source.isNotBlank() && source != "approved-submission-admission") {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "unsupported bot ownership source"))
+        }
+        if (source.isBlank() && githubLogin.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "githubLogin is required"))
         }
         return try {
-            val githubUserId = json.requiredLong("githubUserId")
             val actor = currentPrincipal().actorId
             if (actor.startsWith("user-gh-")) {
                 val roles = identity.rolesForUser(actor).map { it.roleId }.toSet()
@@ -679,14 +686,43 @@ internal class ArenaAdminGateway(
                     return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot ownership"))
                 }
             }
-            val user = identity.ensureGitHubUser(
-                GitHubUserIdentity(
-                    githubUserId = githubUserId,
-                    githubLogin = githubLogin,
-                    displayName = displayName
-                ),
-                actorId = actor
-            )
+            val user = if (source == "approved-submission-admission") {
+                val store = arenaSubmissionAdmissionStore
+                    ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena submission admission store unavailable"))
+                val repository = json.string("repository")
+                val pullRequestNumber = json.requiredLong("pullRequestNumber")
+                val headSha = json.string("headSha").lowercase()
+                val admission = store.admission(repository, pullRequestNumber)
+                    ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "submission admission not found"))
+                if (
+                    admission.state != ArenaSubmissionAdmissionState.InviteApproved ||
+                    admission.botId != botId ||
+                    admission.headSha != headSha
+                ) {
+                    return PlatformHotPathResponse(
+                        409,
+                        JsonCodec.writeObject("error" to "approved submission admission does not match bot and head SHA")
+                    )
+                }
+                val admittedUser = identity.user("user-gh-${admission.githubUserId}")
+                    ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "approved submission participant identity not found"))
+                if (!admittedUser.githubLogin.equals(admission.githubLogin, ignoreCase = true)) {
+                    return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "approved submission participant identity mismatch"))
+                }
+                if (admittedUser.trustState != AdminTrustState.Trusted) {
+                    return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "approved submission participant is not trusted"))
+                }
+                admittedUser
+            } else {
+                identity.ensureGitHubUser(
+                    GitHubUserIdentity(
+                        githubUserId = json.requiredLong("githubUserId"),
+                        githubLogin = githubLogin,
+                        displayName = displayName
+                    ),
+                    actorId = actor
+                )
+            }
             val ownership = (arenaBotEntitlementStore
                 ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena entitlement store unavailable")))
                 .saveBotOwnership(ArenaBotOwnership(user.reefUserId, botId, ArenaBotOwnershipState.Owner, actor, java.time.Instant.now()))

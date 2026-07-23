@@ -193,9 +193,15 @@ class AcceptedAsyncCommandIntakeTest {
             // the second command's terminal record before checking its
             // synchronous retention side effect; loaded CI runners can delay
             // that worker past the default polling window.
-            assertTrue(waitFor(timeoutMs = 10_000) {
+            val secondCompleted = waitFor(timeoutMs = 10_000) {
                 intake.findCommandStatus("cmd-retention-2")?.status == CommandLogStatus.COMPLETED
-            })
+            }
+            assertTrue(
+                secondCompleted,
+                "secondStatus=${intake.findCommandStatus("cmd-retention-2")} " +
+                    "stats=${intake.stats()} pending=${gateway.pendingCount()} submitted=${gateway.submittedCount()} " +
+                    "persisted=${persistence.submitResult("cmd-retention-2")}"
+            )
             assertTrue(waitFor(timeoutMs = 10_000) { intake.stats().statusRecordsEvicted == 1L })
             assertNull(intake.findCommandStatus("cmd-retention-1"))
             assertNull(intake.findCommandStatus("client-1", "/api/v1/orders/submit", "idem-retention-1"))
