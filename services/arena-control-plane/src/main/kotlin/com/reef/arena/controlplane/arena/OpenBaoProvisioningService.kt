@@ -31,6 +31,14 @@ data class GitHubActionsOidcClaims(
     val audience: String
 )
 
+data class ApprovedForkOpenBaoProvisioningContext(
+    val repository: String,
+    val pullRequestNumber: Long,
+    val headSha: String,
+    val botId: String,
+    val admission: ArenaSubmissionAdmission
+)
+
 class OpenBaoProvisioningService(
     private val config: OpenBaoProvisioningConfig,
     private val httpClient: HttpClient = HttpClient.newBuilder()
@@ -41,31 +49,60 @@ class OpenBaoProvisioningService(
         githubOidcToken: String,
         submitterIdentity: String,
         botId: String,
-        secretData: Map<String, String>
+        secretData: Map<String, String>,
+        approvedForkContext: ApprovedForkOpenBaoProvisioningContext? = null
     ) {
         secretPathSegment(submitterIdentity)
         secretPathSegment(botId)
-        requireSubmitterIdentity(githubOidcToken, submitterIdentity)
+        requireSubmitterIdentity(githubOidcToken, submitterIdentity, approvedForkContext)
         val baoToken = exchangeJwtForToken(githubOidcToken)
         writeSecret(baoToken, submitterIdentity, botId, secretData)
     }
 
-    fun revokeBotSecretSlice(githubOidcToken: String, submitterIdentity: String, botId: String) {
+    fun revokeBotSecretSlice(
+        githubOidcToken: String,
+        submitterIdentity: String,
+        botId: String,
+        approvedForkContext: ApprovedForkOpenBaoProvisioningContext? = null
+    ) {
         secretPathSegment(submitterIdentity)
         secretPathSegment(botId)
-        requireSubmitterIdentity(githubOidcToken, submitterIdentity)
+        requireSubmitterIdentity(githubOidcToken, submitterIdentity, approvedForkContext)
         val baoToken = exchangeJwtForToken(githubOidcToken)
         deleteSecret(baoToken, submitterIdentity, botId)
     }
 
     companion object {
-        fun requireSubmitterIdentity(githubOidcToken: String, submitterIdentity: String): GitHubActionsOidcClaims {
+        fun requireSubmitterIdentity(
+            githubOidcToken: String,
+            submitterIdentity: String,
+            approvedForkContext: ApprovedForkOpenBaoProvisioningContext? = null
+        ): GitHubActionsOidcClaims {
             val claims = githubActionsOidcClaims(githubOidcToken)
-            require(claims.actor == submitterIdentity) {
-                "submitterIdentity must match GitHub OIDC actor"
+            require(
+                claims.actor.equals(submitterIdentity, ignoreCase = true) ||
+                    approvedForkContext?.matches(claims, submitterIdentity) == true
+            ) {
+                "submitterIdentity must match GitHub OIDC actor or an exact approved fork admission"
             }
             return claims
         }
+
+        private fun ApprovedForkOpenBaoProvisioningContext.matches(
+            claims: GitHubActionsOidcClaims,
+            submitterIdentity: String
+        ): Boolean = admission.state == ArenaSubmissionAdmissionState.InviteApproved &&
+            !admission.headRepository.equals(admission.repository, ignoreCase = true) &&
+            admission.invitationActor?.isNotBlank() == true &&
+            admission.invitedAt != null &&
+            claims.repository.equals(repository, ignoreCase = true) &&
+            admission.repository.equals(repository, ignoreCase = true) &&
+            admission.pullRequestNumber == pullRequestNumber &&
+            admission.headSha.equals(headSha, ignoreCase = true) &&
+            admission.botId == botId &&
+            admission.githubLogin.equals(submitterIdentity, ignoreCase = true) &&
+            admission.headOwnerLogin.equals(submitterIdentity, ignoreCase = true) &&
+            admission.headRepository.substringBefore("/").equals(admission.headOwnerLogin, ignoreCase = true)
 
         fun githubActionsOidcClaims(jwt: String): GitHubActionsOidcClaims {
             val segments = jwt.split(".")

@@ -533,10 +533,128 @@ class ArenaAdminGatewayTest {
         )
 
         assertEquals(200, assignment?.status, assignment?.body)
-        assertEquals(400, submitterMismatch?.status, submitterMismatch?.body)
-        assertContains(submitterMismatch!!.body, "submitterIdentity must match GitHub OIDC actor")
+        assertEquals(403, submitterMismatch?.status, submitterMismatch?.body)
+        assertContains(submitterMismatch!!.body, "exact approved fork admission is required")
         assertEquals(403, wrongOwner?.status, wrongOwner?.body)
         assertContains(wrongOwner!!.body, "not authorized for OpenBao bot secret slice")
+    }
+
+    @Test
+    fun openBaoProvisioningDelegatesOnlyForExactApprovedForkAdmission() {
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val identities = trustedAdmissionIdentities()
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(InMemoryArenaBotRegistryStore()),
+            adminIdentityService = identities,
+            analyticsRunExportService = null,
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val sha = "a".repeat(40)
+        val principal = AdminRequestPrincipal("bot-submission-ci", "gateway-test", "2026-07-23T00:00:00Z")
+        val pendingBody = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"bot-1","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+        gateway.handleInternal("POST", "/internal/admin/arena/submission-admissions", null, pendingBody, principal)
+        gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions/approve",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","approverActorId":"user-gh-999","reason":"invite verified"}""",
+            AdminRequestPrincipal("operator-1", "gateway-test", "2026-07-23T00:01:00Z")
+        )
+        val pendingOnly = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":43,"botId":"bot-1","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}""",
+            principal
+        )
+
+        val delegated = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/openbao-provision",
+            null,
+            openBaoProvisionBody(
+                githubOidcToken("reviewer", "dills122/reef"),
+                "octo",
+                "bot-1",
+                "add",
+                "dills122/reef",
+                42,
+                sha
+            ),
+            principal
+        )
+        val staleHead = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/openbao-provision",
+            null,
+            openBaoProvisionBody(
+                githubOidcToken("reviewer", "dills122/reef"),
+                "octo",
+                "bot-1",
+                "add",
+                "dills122/reef",
+                42,
+                "b".repeat(40)
+            ),
+            principal
+        )
+        val wrongBot = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/openbao-provision",
+            null,
+            openBaoProvisionBody(
+                githubOidcToken("reviewer", "dills122/reef"),
+                "octo",
+                "other-bot",
+                "add",
+                "dills122/reef",
+                42,
+                sha
+            ),
+            principal
+        )
+        val wrongRepositoryClaim = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/openbao-provision",
+            null,
+            openBaoProvisionBody(
+                githubOidcToken("reviewer", "other/reef"),
+                "octo",
+                "bot-1",
+                "add",
+                "dills122/reef",
+                42,
+                sha
+            ),
+            principal
+        )
+        val unapproved = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/openbao-provision",
+            null,
+            openBaoProvisionBody(
+                githubOidcToken("reviewer", "dills122/reef"),
+                "octo",
+                "bot-1",
+                "add",
+                "dills122/reef",
+                43,
+                sha
+            ),
+            principal
+        )
+
+        assertEquals(200, pendingOnly?.status, pendingOnly?.body)
+        assertEquals(503, delegated?.status, delegated?.body)
+        assertContains(delegated!!.body, "BAO_ADDR is not configured")
+        assertEquals(403, staleHead?.status, staleHead?.body)
+        assertContains(staleHead!!.body, "exact approved fork admission is required")
+        assertEquals(403, wrongBot?.status, wrongBot?.body)
+        assertContains(wrongBot!!.body, "exact approved fork admission is required")
+        assertEquals(403, wrongRepositoryClaim?.status, wrongRepositoryClaim?.body)
+        assertContains(wrongRepositoryClaim!!.body, "exact approved fork admission is required")
+        assertEquals(403, unapproved?.status, unapproved?.body)
+        assertContains(unapproved!!.body, "exact approved fork admission is required")
     }
 
     @Test
@@ -916,16 +1034,25 @@ class ArenaAdminGatewayTest {
         githubOidcToken: String,
         submitterIdentity: String,
         botId: String,
-        flow: String
-    ): String =
-        """{"githubOidcToken":"$githubOidcToken","submitterIdentity":"$submitterIdentity","botId":"$botId","flow":"$flow"}"""
+        flow: String,
+        repository: String? = null,
+        pullRequestNumber: Long? = null,
+        headSha: String? = null
+    ): String {
+        val submission = if (repository != null && pullRequestNumber != null && headSha != null) {
+            ",\"repository\":\"$repository\",\"pullRequestNumber\":$pullRequestNumber,\"headSha\":\"$headSha\""
+        } else {
+            ""
+        }
+        return """{"githubOidcToken":"$githubOidcToken","submitterIdentity":"$submitterIdentity","botId":"$botId","flow":"$flow"$submission}"""
+    }
 
-    private fun githubOidcToken(actor: String): String {
+    private fun githubOidcToken(actor: String, repository: String = "reef/reef"): String {
         fun encode(raw: String): String =
             Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
 
         val header = encode("""{"alg":"none","typ":"JWT"}""")
-        val payload = encode("""{"actor":"$actor","repository":"reef/reef","aud":"reef-bot-submission-ci"}""")
+        val payload = encode("""{"actor":"$actor","repository":"$repository","aud":"reef-bot-submission-ci"}""")
         return "$header.$payload.signature"
     }
 }

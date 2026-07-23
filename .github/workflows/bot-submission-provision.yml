@@ -272,6 +272,9 @@ jobs:
           REQUESTED_FLOW: ${{ steps.classify.outputs.flow }}
           REGISTRY_FLOW: ${{ steps.registry-diff.outputs.flow }}
           SUBMITTER_IDENTITY: ${{ steps.metadata.outputs.submitter-github-login }}
+          SUBMISSION_REPOSITORY: ${{ github.repository }}
+          SUBMISSION_PR_NUMBER: ${{ steps.resolve-pr.outputs.pr-number }}
+          SUBMISSION_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
         run: |
           if [ "$REQUESTED_FLOW" = "remove" ]; then
             provision_flow="remove"

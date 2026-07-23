@@ -37,6 +37,9 @@ const successServer = await fakeAdminApi((req, body, res) => {
     submitterIdentity: "octocat",
     botId: "bot-1",
     flow: "add",
+    repository: "reef/reef",
+    pullRequestNumber: 42,
+    headSha: "a".repeat(40),
   });
   json(res, 200, { status: "ok", botId: "bot-1", flow: "add" });
 });
@@ -47,6 +50,36 @@ try {
   assert.equal(successRequests.length, 1);
 } finally {
   await successServer.close();
+}
+
+const directRequests = [];
+const directServer = await fakeAdminApi((_req, body, res) => {
+  directRequests.push(JSON.parse(body));
+  json(res, 200, { status: "ok", botId: "bot-1", flow: "add" });
+});
+try {
+  const direct = await runProvisioner(["bot-1", "add", "octocat"], {
+    BOT_SUBMISSION_OPENBAO_MODE: "real",
+    ARENA_ADMIN_API_URL: directServer.url,
+    ARENA_ADMIN_API_TOKEN: "scoped-admin-token",
+    GITHUB_OIDC_TOKEN: "github-oidc-token",
+    GITHUB_REPOSITORY: "reef/reef",
+    PR_NUMBER: "42",
+    SUBMISSION_REPOSITORY: "",
+    SUBMISSION_PR_NUMBER: "",
+    SUBMISSION_HEAD_SHA: "",
+  });
+  assert.equal(direct.status, 0, direct.stderr);
+  assert.deepEqual(directRequests, [
+    {
+      githubOidcToken: "github-oidc-token",
+      submitterIdentity: "octocat",
+      botId: "bot-1",
+      flow: "add",
+    },
+  ]);
+} finally {
+  await directServer.close();
 }
 
 const oidcRequests = [];
@@ -69,6 +102,7 @@ try {
     GITHUB_OIDC_TOKEN: "",
     ACTIONS_ID_TOKEN_REQUEST_URL: `${oidcServer.url}/oidc/token`,
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "github-actions-request-token",
+    ...submissionEnv(),
   });
   assert.equal(real.status, 0, real.stderr);
   assert.equal(oidcRequests.length, 1);
@@ -111,6 +145,17 @@ assert.equal(authFailure.status, 1);
 assert.match(authFailure.stderr, /platform-fixable failure/);
 assert.match(authFailure.stderr, /ARENA_ADMIN_API_TOKEN is required/);
 
+const incompleteSubmissionContext = await runProvisioner(["bot-1", "add", "octocat"], {
+  BOT_SUBMISSION_OPENBAO_MODE: "real",
+  ARENA_ADMIN_API_URL: "http://127.0.0.1:1",
+  ARENA_ADMIN_API_TOKEN: "scoped-admin-token",
+  GITHUB_OIDC_TOKEN: "github-oidc-token",
+  SUBMISSION_REPOSITORY: "reef/reef",
+});
+assert.equal(incompleteSubmissionContext.status, 1);
+assert.match(incompleteSubmissionContext.stderr, /platform-fixable failure/);
+assert.match(incompleteSubmissionContext.stderr, /complete trusted submission repository, PR number, and head SHA/);
+
 console.log("bot submission OpenBao provisioning checks passed");
 
 function realEnv(adminApiUrl) {
@@ -119,6 +164,15 @@ function realEnv(adminApiUrl) {
     ARENA_ADMIN_API_URL: adminApiUrl,
     ARENA_ADMIN_API_TOKEN: "scoped-admin-token",
     GITHUB_OIDC_TOKEN: "github-oidc-token",
+    ...submissionEnv(),
+  };
+}
+
+function submissionEnv() {
+  return {
+    SUBMISSION_REPOSITORY: "reef/reef",
+    SUBMISSION_PR_NUMBER: "42",
+    SUBMISSION_HEAD_SHA: "a".repeat(40),
   };
 }
 

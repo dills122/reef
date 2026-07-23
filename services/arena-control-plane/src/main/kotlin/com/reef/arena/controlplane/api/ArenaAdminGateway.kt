@@ -44,6 +44,7 @@ import com.reef.arena.controlplane.arena.ArenaRunStatus
 import com.reef.arena.controlplane.arena.ArenaRuntimeConfigDescriptor
 import com.reef.arena.controlplane.arena.ArenaSubmissionAdmission
 import com.reef.arena.controlplane.arena.ArenaSubmissionAdmissionStore
+import com.reef.arena.controlplane.arena.ApprovedForkOpenBaoProvisioningContext
 import com.reef.arena.controlplane.arena.BotConfigSecretService
 import com.reef.arena.controlplane.arena.LocalDevBotConfigService
 import com.reef.arena.controlplane.arena.OpenBaoBotConfigService
@@ -594,19 +595,59 @@ internal class ArenaAdminGateway(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "flow must be add, update, or remove"))
         }
         val claims = try {
-            OpenBaoProvisioningService.requireSubmitterIdentity(githubOidcToken, submitterIdentity)
+            OpenBaoProvisioningService.githubActionsOidcClaims(githubOidcToken)
         } catch (ex: IllegalArgumentException) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid GitHub OIDC token")))
         }
-        openBaoProvisioningAuthorizationError(flow, claims.actor, botId)?.let { return it }
+        val approvedForkContext = if (claims.actor.equals(submitterIdentity, ignoreCase = true)) {
+            null
+        } else {
+            val repository = json.string("repository")
+            val headSha = json.string("headSha")
+            val pullRequestNumber = try {
+                json.requiredLong("pullRequestNumber")
+            } catch (_: IllegalArgumentException) {
+                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "exact approved fork admission is required"))
+            }
+            if (repository.isBlank() || headSha.isBlank()) {
+                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "exact approved fork admission is required"))
+            }
+            val admissions = arenaSubmissionAdmissionStore
+                ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena submission admission store unavailable"))
+            val admission = try {
+                admissions.admission(repository, pullRequestNumber)
+            } catch (_: IllegalArgumentException) {
+                null
+            } ?: return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "exact approved fork admission is required"))
+            ApprovedForkOpenBaoProvisioningContext(
+                repository = repository,
+                pullRequestNumber = pullRequestNumber,
+                headSha = headSha,
+                botId = botId,
+                admission = admission
+            ).also { context ->
+                try {
+                    OpenBaoProvisioningService.requireSubmitterIdentity(githubOidcToken, submitterIdentity, context)
+                } catch (_: IllegalArgumentException) {
+                    return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "exact approved fork admission is required"))
+                }
+            }
+        }
+        openBaoProvisioningAuthorizationError(flow, submitterIdentity, botId)?.let { return it }
         val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
             .ifBlank { return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "BAO_ADDR is not configured")) }
         val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig(baoAddr = baoAddr))
         return try {
             when (flow) {
-                "remove" -> service.revokeBotSecretSlice(githubOidcToken, submitterIdentity, botId)
+                "remove" -> service.revokeBotSecretSlice(githubOidcToken, submitterIdentity, botId, approvedForkContext)
                 "update" -> Unit // existing slice is reused; no new provisioning
-                else -> service.provisionBotSecretSlice(githubOidcToken, submitterIdentity, botId, emptyMap())
+                else -> service.provisionBotSecretSlice(
+                    githubOidcToken,
+                    submitterIdentity,
+                    botId,
+                    emptyMap(),
+                    approvedForkContext
+                )
             }
             PlatformHotPathResponse(
                 200,
