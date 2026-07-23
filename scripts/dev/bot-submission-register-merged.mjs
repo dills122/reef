@@ -99,6 +99,8 @@ async function syncBotOwnership(manifest, existingBot, manifestPath) {
       repository: approvedSubmission.repository,
       pullRequestNumber: approvedSubmission.pullRequestNumber,
       headSha: approvedSubmission.headSha,
+      githubUserId: approvedSubmission.githubUserId,
+      githubLogin: approvedSubmission.githubLogin,
     });
     const assignedLogin = String(assigned.githubLogin || "").trim();
     if (!assignedLogin) {
@@ -158,13 +160,18 @@ async function resolveApprovedSubmission(manifestPath) {
 
   const pullRequestNumber = Number(pullRequest?.number);
   const headSha = String(pullRequest?.head?.sha || "").trim();
+  const githubUserId = Number(pullRequest?.user?.id);
+  const githubLogin = String(pullRequest?.user?.login || "").trim();
   if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber <= 0) {
     throw new Error(`GitHub merged pull request lookup returned an invalid pull request number for ${repository}@${commitSha}`);
   }
   if (!/^[0-9a-f]{40,64}$/i.test(headSha)) {
     throw new Error(`GitHub merged pull request lookup returned an invalid head SHA for ${repository}#${pullRequestNumber}`);
   }
-  return { repository, pullRequestNumber, headSha };
+  if (!Number.isSafeInteger(githubUserId) || githubUserId <= 0 || githubLogin === "") {
+    throw new Error(`GitHub merged pull request lookup returned an invalid submitter identity for ${repository}#${pullRequestNumber}`);
+  }
+  return { repository, pullRequestNumber, headSha, githubUserId, githubLogin };
 }
 
 async function resolveGitHubIdentity(login) {
