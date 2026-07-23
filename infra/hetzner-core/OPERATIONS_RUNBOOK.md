@@ -165,6 +165,122 @@ before expecting the workflow to pass:
 make hetzner-core ARGS=deploy-receiver-up
 ```
 
+## Application Service Deployment Automation
+
+The application deploy workflow runs only after a successful immutable
+container-image publication for `master`, or by an explicit manual dispatch.
+It deploys matching engine and Arena platform runtime, and pins the simulator
+image without starting a run.
+
+It does not manage OpenBao. Specifically, it cannot:
+
+- recreate, restart, upgrade, initialize, seal, or unseal `openbao`;
+- read or store an unseal key or root token;
+- recreate or upgrade any Postgres container;
+- run a stack-wide Compose convergence command.
+
+The host refuses to begin unless OpenBao is running and unsealed. It requires
+the same OpenBao container ID and unsealed health after runtime becomes
+healthy. Normal application deployment therefore does not require an OpenBao
+unseal ceremony. A real host or OpenBao restart still uses the manual
+three-of-five unseal procedure.
+
+### One-time bootstrap
+
+1. Create a dedicated key. Do not reuse the operator or Noodle identity:
+
+   ```bash
+   ssh-keygen \
+     -t ed25519 \
+     -a 64 \
+     -f "$HOME/.ssh/reef-github-deploy" \
+     -C reef-github-actions-deploy
+   ```
+
+2. Sync the host scripts and install the public key as a restricted forced
+   command:
+
+   ```bash
+   REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH="$HOME/.ssh/reef-github-deploy.pub" \
+     make hetzner-core ARGS=deploy-automation-up
+   ```
+
+   Re-running the command rotates the one marked deploy key without touching
+   other `authorized_keys` entries.
+
+3. Capture the host key and compare its fingerprint with the value read through
+   the already trusted operator connection before storing it:
+
+   ```bash
+   known_host="$(mktemp)"
+   ssh-keyscan -t ed25519 "$REEF_HETZNER_HOST" > "$known_host"
+   ssh-keygen -lf "$known_host"
+   ssh "ops@$REEF_HETZNER_HOST" \
+     'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub'
+   ```
+
+   The fingerprints must match. Store the line in `$known_host` as
+   `REEF_DEPLOY_SSH_KNOWN_HOSTS`, then remove the temporary file.
+
+4. Configure the `backbone-production` GitHub environment secrets and
+   variables listed in
+   [`TAILSCALE_ACCESS.md`](./TAILSCALE_ACCESS.md#github-actions-deployment-access).
+   Put the private key file contents in
+   `REEF_DEPLOY_SSH_PRIVATE_KEY`, and the verified `ssh-keyscan` line in
+   `REEF_DEPLOY_SSH_KNOWN_HOSTS`.
+
+5. Configure the Tailscale federated identity, tag, and TCP 22-only grant from
+   the same section. Workload identity federation is preferred over a
+   long-lived Tailscale OAuth client secret.
+
+6. Run `Application Service Deploy` manually for the currently published
+   production SHA. Verify the job, then run:
+
+   ```bash
+   PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check
+   make hetzner-core ARGS=verify
+   ```
+
+### Automatic and manual operation
+
+Image-impacting `master` pushes trigger `Container Images`. A successful image
+workflow triggers `Application Service Deploy` for the exact
+`workflow_run.head_sha`; the deployment workflow verifies that SHA is an
+ancestor of `origin/master`.
+
+For a manual redeploy, open **Actions -> Application Service Deploy -> Run
+workflow**. Leave `git_sha` empty for current `master`, or supply a full
+40-character `master` commit whose `sha-<first-seven-characters>` images
+already exist.
+
+Deployment ordering is:
+
+1. Verify OpenBao is the existing, running, unsealed container.
+2. Pull matching, Arena runtime, and simulator SHA-tagged images and verify
+   their OCI revision labels against the requested full commit.
+3. Validate and apply forward migrations to the main, admin, and analytics
+   databases.
+4. Atomically update the three image pins in `/opt/reef/.env`.
+5. Recreate `matching-engine`, then `platform-runtime`, both with `--no-deps`.
+6. Wait for runtime `/health`.
+7. Confirm the same OpenBao container is still unsealed.
+8. Record the deployment. The simulator stays stopped until an intentional run.
+
+On a post-pin failure, the host restores the previous `.env` and recreates the
+previous matching/runtime images. Inspect:
+
+```bash
+ssh "ops@$REEF_HETZNER_HOST" '
+  tail -n 20 /opt/reef/deployments/application-services.jsonl
+  cd /opt/reef
+  docker compose ps openbao matching-engine platform-runtime
+'
+```
+
+Use the normal operator `deploy` flow instead when a change touches Compose
+topology, Caddy, the receiver, host packages, OpenBao configuration/version,
+database images, firewalling, or the deploy script itself.
+
 ## Bootstrap Order
 
 Use this order for a clean rebuild or new permanent host.

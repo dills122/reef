@@ -1003,3 +1003,42 @@ Primary references:
 - [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md#product-boundary)
 - [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 - [`docs/steering/architecture.md`](./steering/architecture.md)
+
+### D-054: Application Deployment Excludes Stateful Infrastructure
+
+Status: accepted
+
+Summary:
+- successful immutable image publication for `master` may automatically deploy
+  the hosted matching engine and Arena-enabled platform runtime; operators may
+  also redeploy an existing master image set through a manual GitHub Actions
+  dispatch.
+- deployed image identity is the source commit's `sha-<short-sha>` tag. Mutable
+  `latest` and branch tags are publishing conveniences, not production
+  deployment inputs.
+- the simulator image is pulled and pinned with the same image set but is not
+  started by deployment automation. Simulation execution remains an explicit
+  run-plane/operator action.
+- application deployment applies checksum-verified forward migrations before
+  replacing application containers. Migrations must remain compatible with the
+  previously running version because schema rollback is not automatic.
+- application container replacement is per-service and always uses
+  `docker compose up --no-deps`. Stack-wide convergence is outside the
+  automated application path.
+- OpenBao, all Postgres containers, Caddy, and deployment/control services are
+  excluded. The application deployer has no unseal material and cannot restart,
+  recreate, upgrade, initialize, seal, or unseal OpenBao.
+- the deployer records OpenBao's container identity and unsealed health before
+  and after each deployment. Any mismatch fails the deployment.
+- GitHub-hosted runners reach standard OpenSSH only over a short-lived tagged
+  Tailscale identity. A separate SSH key is constrained on the host with
+  `restrict` plus an exact forced command; normal operator SSH credentials are
+  not stored in GitHub.
+- Compose topology, stateful service versions, OpenBao configuration,
+  firewalling, receiver changes, and deployer upgrades remain explicit
+  operator-controlled deployments.
+
+Primary references:
+- [`infra/hetzner-core/README.md`](../infra/hetzner-core/README.md#application-service-auto-deploy)
+- [`infra/hetzner-core/OPERATIONS_RUNBOOK.md`](../infra/hetzner-core/OPERATIONS_RUNBOOK.md#application-service-deployment-automation)
+- [`infra/hetzner-core/TAILSCALE_ACCESS.md`](../infra/hetzner-core/TAILSCALE_ACCESS.md#github-actions-deployment-access)

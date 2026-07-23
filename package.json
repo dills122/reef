@@ -70,7 +70,8 @@
     "arena-admin:ui-audit": "bun scripts/dev/arena-admin-ui-audit.mjs",
     "arena-admin:test:access-normalize": "bun scripts/dev/arena-admin-access-normalize.test.mjs",
     "arena-admin:check": "bun run --cwd apps/arena-admin check",
-    "infra:test:deploy-receiver": "node scripts/dev/deploy-receiver.test.mjs"
+    "infra:test:deploy-receiver": "node scripts/dev/deploy-receiver.test.mjs",
+    "infra:test:service-deploy": "node scripts/dev/service-deploy.test.mjs"
   },
   "devDependencies": {
     "decimal.js": "10.6.0",

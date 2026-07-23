@@ -323,6 +323,65 @@ bun scripts/deploy/hetzner-core.mjs arena-admin
 That fallback still builds locally and rsyncs `apps/arena-admin/build/` over
 operator SSH.
 
+### Application service auto-deploy
+
+`.github/workflows/service-deploy.yml` deploys the application containers
+after the `Container Images` workflow successfully publishes an image set for
+`master`. It can also be started manually with `workflow_dispatch` for a full
+40-character commit SHA that is already reachable from `master`.
+
+The automated scope is deliberately smaller than the Compose stack:
+
+| Compose service | Automated behavior |
+| --- | --- |
+| `matching-engine` | Pull the immutable `sha-<short-sha>` image and recreate only this service with `--no-deps`. |
+| `platform-runtime` | Pull the Arena-enabled immutable image, apply forward migrations, and recreate only this service with `--no-deps`. |
+| `simulator` | Pull and pin the immutable image. Do not start it; starting the manual profile would launch a simulation as a deployment side effect. |
+| `openbao` | **Never restarted, recreated, upgraded, or unsealed by application deployment automation.** |
+| `postgres`, `postgres-admin`, `postgres-analytics` | Never restarted or upgraded by application deployment automation. |
+| `caddy`, `deploy-receiver` | Remain on their existing explicit operator/admin-UI deployment paths. |
+
+The host script records the OpenBao container ID and confirms
+`"sealed": false` before doing any work. It checks both again after the
+application health gate and fails if OpenBao changed. Every application
+recreate is an explicit per-service `docker compose up --no-deps`; the
+automation never runs a stack-wide `docker compose up`.
+
+The deployment workflow reaches standard OpenSSH through a short-lived tagged
+Tailscale GitHub Actions node. The SSH key installed on the host is a separate
+deploy-only key with an `authorized_keys` forced command and `restrict`
+options. It can invoke only:
+
+```text
+deploy <40-character-master-git-sha>
+```
+
+The forced command accepts a bounded archive containing only versioned SQL
+migration paths. The host pulls all three SHA-tagged images, verifies each
+image's OCI revision label against the requested full commit, applies forward
+migrations, updates `/opt/reef/.env` atomically, restarts matching before
+runtime, waits for runtime health, and writes deployment metadata to
+`/opt/reef/deployments/application-services.jsonl`. A failed application
+health gate restores the previous image pins and recreates the two previous
+application containers. Applied forward migrations are not rolled back, so
+new migrations must remain compatible with the previously running
+application version.
+
+One-time setup is documented in
+[`TAILSCALE_ACCESS.md`](./TAILSCALE_ACCESS.md#github-actions-deployment-access)
+and [`OPERATIONS_RUNBOOK.md`](./OPERATIONS_RUNBOOK.md#application-service-deployment-automation).
+The bootstrap command that syncs the deploy scripts and installs or rotates
+the restricted host key is:
+
+```bash
+REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH="$HOME/.ssh/reef-github-deploy.pub" \
+  make hetzner-core ARGS=deploy-automation-up
+```
+
+This application workflow does not replace `make hetzner-core ARGS=deploy`
+for Compose topology, OpenBao configuration/version, database container
+upgrades, Caddy, receiver, firewall, or other infrastructure changes.
+
 After changing the receiver or Caddy route, roll the host-side deploy receiver
 with:
 
