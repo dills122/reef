@@ -912,6 +912,91 @@ class ArenaAdminGatewayTest {
     }
 
     @Test
+    fun assignsForkBotOwnershipFromExactApprovedSubmissionAdmission() {
+        val sha = "a".repeat(40)
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val identities = trustedAdmissionIdentities()
+        val entitlements = InMemoryArenaBotEntitlementStore()
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(InMemoryArenaBotRegistryStore()),
+            adminIdentityService = identities,
+            analyticsRunExportService = null,
+            arenaBotEntitlementStore = entitlements,
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val pendingBody = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"sample-bot","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+        gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions",
+            null,
+            pendingBody,
+            AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-23T00:00:00Z")
+        )
+        gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions/approve",
+            null,
+            """{"repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha","approverActorId":"user-gh-999","reason":"invite verified"}""",
+            AdminRequestPrincipal("operator-1", "test", "2026-07-23T00:01:00Z")
+        )
+
+        val assigned = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/ownership",
+            null,
+            """{"botId":"sample-bot","source":"approved-submission-admission","repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha"}""",
+            AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-23T00:02:00Z")
+        )
+
+        assertEquals(200, assigned?.status, assigned?.body)
+        assertContains(assigned!!.body, """"githubLogin":"octo"""")
+        assertEquals("user-gh-123", entitlements.botOwnerships("sample-bot").single().reefUserId)
+
+        identities.updateTrustState("operator-1", "user-gh-123", AdminTrustState.Limited)
+        val blockedAfterTrustChange = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/ownership",
+            null,
+            """{"botId":"sample-bot","source":"approved-submission-admission","repository":"dills122/reef","pullRequestNumber":42,"headSha":"$sha"}""",
+            AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-23T00:03:00Z")
+        )
+        assertEquals(403, blockedAfterTrustChange?.status)
+        assertContains(blockedAfterTrustChange!!.body, "participant is not trusted")
+    }
+
+    @Test
+    fun rejectsForkBotOwnershipWhenApprovedAdmissionDoesNotMatchHead() {
+        val sha = "a".repeat(40)
+        val admissions = InMemoryArenaSubmissionAdmissionStore()
+        val gateway = ArenaAdminGateway(
+            arenaAdminService = ArenaAdminApplicationService(InMemoryArenaBotRegistryStore()),
+            adminIdentityService = trustedAdmissionIdentities(),
+            analyticsRunExportService = null,
+            arenaBotEntitlementStore = InMemoryArenaBotEntitlementStore(),
+            arenaSubmissionAdmissionStore = admissions
+        )
+        val pendingBody = """{"repository":"dills122/reef","pullRequestNumber":42,"botId":"sample-bot","headRepository":"octo/reef","headOwnerLogin":"octo","githubUserId":123,"githubLogin":"octo","headSha":"$sha"}"""
+        gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/submission-admissions",
+            null,
+            pendingBody,
+            AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-23T00:00:00Z")
+        )
+
+        val rejected = gateway.handleInternal(
+            "POST",
+            "/internal/admin/arena/bots/ownership",
+            null,
+            """{"botId":"sample-bot","source":"approved-submission-admission","repository":"dills122/reef","pullRequestNumber":42,"headSha":"${"b".repeat(40)}"}""",
+            AdminRequestPrincipal("bot-submission-ci", "test", "2026-07-23T00:02:00Z")
+        )
+
+        assertEquals(409, rejected?.status)
+        assertContains(rejected!!.body, "does not match bot and head SHA")
+    }
+
+    @Test
     fun exposesAdmissionEvaluationAndImmutableRosterLockRoutes() {
         var clock = Instant.parse("2026-07-20T00:00:00Z")
         val gateway = ArenaAdminGateway(
