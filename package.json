@@ -33,6 +33,7 @@
     "bot-sdk:test:submission-status": "bun scripts/dev/bot-submission-commit-status.test.mjs",
     "bot-sdk:test:submission-admission": "bun scripts/dev/bot-submission-record-admission.test.mjs",
     "bot-sdk:test:submission-invite-workflow": "bun scripts/dev/bot-submission-invite-workflow.test.mjs",
+    "bot-sdk:test:submission-pr-comment": "bun scripts/dev/bot-submission-pr-comment.test.mjs",
     "repo:test:dependabot-automation": "bun scripts/dev/dependabot-automation-workflow.test.mjs",
     "bot-sdk:test:openbao-provision": "bun scripts/dev/bot-submission-provision-openbao.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
@@ -66,6 +67,7 @@
     "arena-admin:build": "bun run --cwd apps/arena-admin build",
     "arena-admin:build:guarded": "bun run --cwd apps/arena-admin build:guarded",
     "arena-admin:ui-audit": "bun scripts/dev/arena-admin-ui-audit.mjs",
+    "arena-admin:test:access-normalize": "bun scripts/dev/arena-admin-access-normalize.test.mjs",
     "arena-admin:check": "bun run --cwd apps/arena-admin check",
     "infra:test:deploy-receiver": "node scripts/dev/deploy-receiver.test.mjs"
   },

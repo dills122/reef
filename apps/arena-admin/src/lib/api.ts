@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/public';
 import { resolveFixture } from './dev-fixtures';
+import { normalizeAdminAccessCollections } from './admin-access-normalize';
 
 export const ARENA_API_BASE_URL = env.PUBLIC_ARENA_API_BASE_URL?.trim() ?? '';
 
@@ -521,7 +522,7 @@ export async function fetchAdminRiskControls(): Promise<AccountRiskControl[]> {
 export async function fetchAdminAccessUsers(limit = 100): Promise<AdminAccessUser[]> {
 	const params = new URLSearchParams({ limit: String(limit) });
 	const body = await fetchAdminJson<{ users: AdminAccessUser[] }>(`/admin/v1/access/users?${params}`);
-	return body.users ?? [];
+	return (body.users ?? []).map((user) => normalizeAdminAccessCollections(user) as AdminAccessUser);
 }
 
 export async function fetchAdminAccessRoles(): Promise<AdminAccessRole[]> {
