@@ -24,8 +24,17 @@ assert.match(provision, /gh api --method GET "repos\/\$\{EXPECTED_BASE_REPOSITOR
 assert.match(provision, /-f state=open/);
 assert.match(provision, /-f "head=\$\{head_owner\}:\$\{WORKFLOW_HEAD_BRANCH\}"/);
 assert.match(provision, /PR_NUMBER: \$\{\{ steps\.resolve-pr\.outputs\.pr-number \}\}/);
+assert.match(provision, /Persist trusted pull request number/);
+assert.match(provision, /echo "PR_NUMBER=\$PR_NUMBER" >> "\$GITHUB_ENV"/);
 assert.match(provision, /steps\.admission\.outputs\.state == 'invite_approved'/);
 assert.match(provision, /steps\.admission\.outputs\.state != 'invite_approved'/);
+assert.match(provision, /Comment invite review pending/);
+assert.match(provision, /PROVISION_RESULT: pending/);
+assert.match(provision, /SUBMISSION_HEAD_SHA: \$\{\{ steps\.metadata\.outputs\.head-sha \}\}/);
+assert.match(
+  provision,
+  /if: steps\.openbao-provision\.outputs\['exit-code'\] != '' && steps\.openbao-provision\.outputs\['exit-code'\] == '0'/,
+);
 assert.match(provision, /startsWith\(github\.event\.workflow_run\.head_branch, 'bots\/add\/'\)/);
 assert.match(provision, /startsWith\(github\.event\.workflow_run\.head_branch, 'bots\/update\/'\)/);
 assert.match(provision, /startsWith\(github\.event\.workflow_run\.head_branch, 'bots\/remove\/'\)/);

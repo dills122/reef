@@ -93,7 +93,6 @@ BEGIN
       stream_sequence,
       jsonb_build_object(
         'commandId', command_id,
-        'streamSequence', stream_sequence::TEXT,
         'resultType', result_status,
         'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
         'orderId', order_id,

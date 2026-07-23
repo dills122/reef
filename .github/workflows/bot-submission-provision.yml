@@ -81,6 +81,10 @@ jobs:
 
           node scripts/dev/bot-submission-resolve-pr.mjs \
             /tmp/reef-bot-submission-pr-candidates.json >> "$GITHUB_OUTPUT"
+      - name: Persist trusted pull request number
+        env:
+          PR_NUMBER: ${{ steps.resolve-pr.outputs.pr-number }}
+        run: echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
       - name: Resolve current pull request metadata
         id: metadata
         env:
@@ -237,6 +241,17 @@ jobs:
           STATUS_DESCRIPTION: Fork submission is pending invite review
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
         run: node scripts/dev/bot-submission-commit-status.mjs
+      - name: Comment invite review pending
+        if: steps.classify.outputs.classification == 'pending' && steps.admission.outputs.state != 'invite_approved'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOT_ID: ${{ steps.classify.outputs.bot-name }}
+          SUBMITTER_IDENTITY: ${{ steps.metadata.outputs.submitter-github-login }}
+          PROVISION_FLOW: ${{ steps.classify.outputs.flow }}
+          PROVISION_RESULT: pending
+          SUBMISSION_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
+        run: node scripts/dev/bot-submission-pr-comment.mjs
       - name: Registry diff (new bot vs existing bot)
         id: registry-diff
         if: (steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved') && steps.classify.outputs.flow != 'remove'
@@ -301,9 +316,10 @@ jobs:
           PROVISION_RESULT: ${{ steps.openbao-provision.outputs.result }}
           PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
           OPENBAO_SLICE_PATH: ${{ steps.openbao-provision.outputs['slice-path'] }}
+          SUBMISSION_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
         run: node scripts/dev/bot-submission-pr-comment.mjs
       - name: Mark provisioning status success
-        if: steps.openbao-provision.outputs['exit-code'] == '0'
+        if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] == '0'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STATUS_SHA: ${{ steps.metadata.outputs.head-sha }}

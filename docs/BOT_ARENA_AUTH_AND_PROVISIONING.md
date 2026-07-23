@@ -566,13 +566,16 @@ Required before merge:
 - bot ownership and trust checks pass
 - OpenBao slice exists or has been provisioned
 
-The trusted provisioning workflow posts or updates a PR comment after the hosted
-OpenBao step. That comment includes only non-secret metadata: bot ID, submitter
-identity, provisioning flow, the OpenBao slice path, and the next user/operator
-action. It must never include token values, GitHub OIDC tokens, OpenBao tokens,
-or bot secret data. The slice path is an identifier, not a public URL. Normal
-participants use the Reef Admin secret/config surface; direct OpenBao access is
-reserved for `secret-admin`/operator workflows over a private SSH tunnel.
+The trusted provisioning workflow posts an idempotent PR comment when a fork
+submission enters pending invite review, then updates the same comment after the
+hosted OpenBao step. The pending state names the exact reviewed head SHA and
+maintainer action without claiming that provisioning ran. The completed state
+includes only non-secret metadata: bot ID, submitter identity, provisioning
+flow, the OpenBao slice path, and the next user/operator action. It must never
+include token values, GitHub OIDC tokens, OpenBao tokens, or bot secret data.
+The slice path is an identifier, not a public URL. Normal participants use the
+Reef Admin secret/config surface; direct OpenBao access is reserved for
+`secret-admin`/operator workflows over a private SSH tunnel.
 
 The same trusted workflow also publishes a `registry-diff-and-provision` commit
 status on the PR head SHA. Branch protection should require that explicit
