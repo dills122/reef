@@ -598,6 +598,17 @@ job name directly. Non-bot branches get a successful
 submission branches remain pending until the SHA-bound invite approval triggers
 trusted provisioning; a changed head SHA invalidates the approval.
 
+Repository-wide CI still starts for every pull request so job-level check names
+remain visible to branch protection. A trusted-base change-scope classifier may
+skip the expensive general matrix only when the head branch matches
+`bots/add|update|remove/<bot-id>` and every current and rename-source path is
+under the exact `bots/<bot-id>/` directory. Empty, malformed, cross-bot, or
+mixed-path changes fail closed to full CI. The untrusted Bot Submission workflow
+enforces the same exact-directory rule and continues to run manifest validation,
+approved-import scanning, and the container-isolated sandbox test. General
+service, documentation, infrastructure, replay, schema, benchmark, and image
+build jobs are not substitutes for those bot-specific security gates.
+
 Live configuration (verified 2026-07-19): `master` requires
 `registry-diff-and-provision` in addition to the untrusted submission checks.
 Bot-specific human approval is enforced by the maintainer-only invite workflow

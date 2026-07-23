@@ -35,6 +35,7 @@
     "bot-sdk:test:submission-invite-workflow": "bun scripts/dev/bot-submission-invite-workflow.test.mjs",
     "bot-sdk:test:submission-pr-comment": "bun scripts/dev/bot-submission-pr-comment.test.mjs",
     "repo:test:dependabot-automation": "bun scripts/dev/dependabot-automation-workflow.test.mjs",
+    "repo:test:ci-change-scope": "node scripts/dev/ci-pr-change-scope.test.mjs",
     "bot-sdk:test:openbao-provision": "bun scripts/dev/bot-submission-provision-openbao.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
     "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",
