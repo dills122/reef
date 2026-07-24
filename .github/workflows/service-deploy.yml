@@ -73,7 +73,14 @@ jobs:
         run: |
           set -euo pipefail
           migration_archive="$RUNNER_TEMP/reef-migrations.tar.gz"
-          tar -czf "$migration_archive" -C scripts/dev/db migrations
+          migration_files="$RUNNER_TEMP/reef-migration-files.txt"
+          (
+            cd scripts/dev/db
+            find migrations -type f -name '*.sql' -print |
+              LC_ALL=C sort > "$migration_files"
+            test -s "$migration_files"
+            tar -czf "$migration_archive" -T "$migration_files"
+          )
           test "$(wc -c < "$migration_archive")" -le 2097152
           echo "REEF_MIGRATION_ARCHIVE=$migration_archive" >> "$GITHUB_ENV"
 

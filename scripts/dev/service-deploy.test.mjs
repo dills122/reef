@@ -285,8 +285,19 @@ assert.match(workflow, /workflows:\s*\n\s*- Container Images/);
 assert.match(workflow, /git merge-base --is-ancestor "\$TARGET_SHA" origin\/master/);
 assert.match(workflow, /tailscale\/github-action@v4/);
 assert.match(workflow, /"deploy \$TARGET_SHA" < "\$REEF_MIGRATION_ARCHIVE"/);
+assert.match(workflow, /find migrations -type f -name '\*\.sql' -print/);
+assert.match(workflow, /tar -czf "\$migration_archive" -T "\$migration_files"/);
+assert.doesNotMatch(
+  workflow,
+  /tar -czf "\$migration_archive" -C scripts\/dev\/db migrations/,
+);
 assert.doesNotMatch(workflow, /openbao/i);
 assert.match(imageWorkflow, /- 'scripts\/dev\/db\/migrations\/\*\*'/);
+assert.match(imageWorkflow, /- '\.github\/workflows\/service-deploy\.yml'/);
+assert.match(
+  imageWorkflow,
+  /\\\.github\/workflows\/\(container-images\|service-deploy\)\\\.yml\$/,
+);
 
 const keyFixture = await mkdtemp(join(tmpdir(), "reef-deploy-key-test-"));
 try {
