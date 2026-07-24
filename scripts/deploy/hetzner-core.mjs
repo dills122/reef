@@ -270,6 +270,9 @@ Commands:
   deploy-receiver-up
              sync server bundle, generate receiver env, and rebuild/restart
              deploy-receiver plus Caddy public route
+  deploy-automation-up
+             sync the host deploy scripts and install/update the restricted
+             GitHub Actions SSH public key
   admin-auth-up
              persist GitHub OAuth config to host secrets and restart runtime
   admin-auth-down
@@ -296,6 +299,7 @@ Environment:
   REEF_HETZNER_OPS_USER   SSH user; default ops
   REEF_HETZNER_DEPLOY_DIR server deploy directory; default /opt/reef
   REEF_TAILSCALE_HOSTNAME optional host name override; default remote OS hostname
+  REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH local ed25519 public key installed by deploy-automation-up
   REEF_OPENBAO_INIT_JSON  optional local OpenBao init JSON used by bot-config-upgrade when BAO_TOKEN is not set
   REEF_BACKUP_AGE_IDENTITY_PATH local age identity path; default ~/Documents/reef-backups-age-identity.txt
   REEF_BACKUP_ARCHIVE_DIR local encrypted archive copy dir; default ~/Documents
@@ -419,6 +423,40 @@ function deployReceiverUp() {
       "docker compose --profile public up -d --build --force-recreate deploy-receiver caddy",
     ].join(" && "),
   ]);
+}
+
+function deployAutomationUp() {
+  const configuredPath = env("REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH").trim();
+  if (configuredPath === "") {
+    console.error("Missing REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH.");
+    console.error("Point it at the dedicated GitHub Actions deploy public key.");
+    process.exit(1);
+  }
+  const publicKeyPath = resolveUserPath(configuredPath);
+  if (!existsSync(publicKeyPath)) {
+    console.error(`GitHub deploy public key does not exist: ${publicKeyPath}`);
+    process.exit(1);
+  }
+  const publicKey = readFileSync(publicKeyPath, "utf8").trim();
+  if (!/^ssh-ed25519\s+[A-Za-z0-9+/]+={0,3}(?:\s+.*)?$/.test(publicKey)) {
+    console.error("REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH must contain one ssh-ed25519 public key.");
+    process.exit(1);
+  }
+
+  syncServerBundle();
+  runWithInput(
+    "ssh",
+    [
+      target,
+      [
+        "set -euo pipefail",
+        `chmod +x ${remoteDeployPath("scripts")}/*.sh`,
+        `cd ${remoteDeployDir}`,
+        `REEF_DEPLOY_DIR=${remoteDeployDir} ./scripts/install-github-deploy-key.sh`,
+      ].join(" && "),
+    ],
+    `${publicKey}\n`,
+  );
 }
 
 function requireLocalEnv(keys) {
@@ -1072,6 +1110,9 @@ switch (command) {
     break;
   case "deploy-receiver-up":
     deployReceiverUp();
+    break;
+  case "deploy-automation-up":
+    deployAutomationUp();
     break;
   case "admin-auth-up":
     configureAdminAuth(true);

@@ -1,0 +1,117 @@
+name: Application Service Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Container Images
+    types:
+      - completed
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: Full 40-character master commit SHA whose images should be deployed
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: application-service-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'master')
+    runs-on: ubuntu-latest
+    environment:
+      name: backbone-production
+      url: ${{ vars.REEF_ADMIN_PUBLIC_URL || 'https://reef-arena-admin.shrimpworks.dev/' }}
+    steps:
+      - name: Resolve deployment commit
+        id: target
+        env:
+          DISPATCH_SHA: ${{ inputs.git_sha }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            target_sha="$WORKFLOW_RUN_SHA"
+          elif [ -n "${DISPATCH_SHA:-}" ]; then
+            target_sha="$DISPATCH_SHA"
+          else
+            target_sha="$GITHUB_SHA"
+          fi
+          if ! [[ "$target_sha" =~ ^[a-fA-F0-9]{40}$ ]]; then
+            echo "deployment target must be a full 40-character Git SHA" >&2
+            exit 1
+          fi
+          target_sha="${target_sha,,}"
+          echo "sha=$target_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout deployment commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Verify commit belongs to master
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin master:refs/remotes/origin/master
+          git merge-base --is-ancestor "$TARGET_SHA" origin/master
+
+      - name: Package forward migrations
+        run: |
+          set -euo pipefail
+          migration_archive="$RUNNER_TEMP/reef-migrations.tar.gz"
+          tar -czf "$migration_archive" -C scripts/dev/db migrations
+          test "$(wc -c < "$migration_archive")" -le 2097152
+          echo "REEF_MIGRATION_ARCHIVE=$migration_archive" >> "$GITHUB_ENV"
+
+      - name: Connect deployment runner to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: ${{ vars.REEF_DEPLOY_TAILSCALE_TAG || 'tag:reef-deploy' }}
+          ping: ${{ vars.REEF_DEPLOY_HOST }}
+
+      - name: Configure restricted deploy SSH identity
+        env:
+          DEPLOY_PRIVATE_KEY: ${{ secrets.REEF_DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.REEF_DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_PRIVATE_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$HOME/.ssh/reef-deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/reef-deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy immutable application images
+        env:
+          DEPLOY_HOST: ${{ vars.REEF_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.REEF_DEPLOY_USER || 'ops' }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          ssh \
+            -i "$HOME/.ssh/reef-deploy" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "deploy $TARGET_SHA" < "$REEF_MIGRATION_ARCHIVE"

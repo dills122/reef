@@ -103,6 +103,60 @@ policy that restricts the Reef host and TCP 22 to an explicit operator group.
 That policy is owned by the tailnet, not this repository, and can evolve
 without changing the server or Reef deployment scripts.
 
+## GitHub Actions Deployment Access
+
+Application auto-deploy uses the official Tailscale GitHub Action to create a
+short-lived node tagged `tag:reef-deploy`. It continues to use standard
+OpenSSH on the host; Tailscale SSH remains disabled.
+
+Create a Tailscale workload identity federation credential with `auth_keys`
+scope limited to `tag:reef-deploy`. Bind the credential to this GitHub
+repository and the production deployment workflow, then store its client ID
+and audience as GitHub secrets `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE`.
+
+Define the tag and grant it only TCP 22 to the production host. Adapt the
+host alias to the current tailnet policy:
+
+```json
+{
+  "hosts": {
+    "reef-prod-core": "100.82.251.32"
+  },
+  "tagOwners": {
+    "tag:reef-deploy": ["autogroup:admin"]
+  },
+  "grants": [
+    {
+      "src": ["tag:reef-deploy"],
+      "dst": ["reef-prod-core"],
+      "ip": ["tcp:22"]
+    }
+  ]
+}
+```
+
+Do not grant this tag access to other tailnet devices or ports. The ephemeral
+node's network permission is only the first boundary: the host also requires a
+separate SSH key constrained to the application deploy forced command. It is
+not the operator's normal SSH key and cannot request a shell, forwarding,
+agent access, PTY, or arbitrary command.
+
+The GitHub `backbone-production` environment owns these settings:
+
+| Type | Name | Purpose |
+| --- | --- | --- |
+| Secret | `TS_OAUTH_CLIENT_ID` | Tailscale workload identity client ID. |
+| Secret | `TS_AUDIENCE` | Tailscale workload identity audience. |
+| Secret | `REEF_DEPLOY_SSH_PRIVATE_KEY` | Dedicated deploy-only private key. |
+| Secret | `REEF_DEPLOY_SSH_KNOWN_HOSTS` | Pinned OpenSSH host-key line for the private MagicDNS host. |
+| Variable | `REEF_DEPLOY_HOST` | Private MagicDNS host or Tailscale IP. |
+| Variable | `REEF_DEPLOY_USER` | Host account, normally `ops`. |
+| Variable | `REEF_DEPLOY_TAILSCALE_TAG` | Ephemeral runner tag; defaults to `tag:reef-deploy`. |
+
+Keep environment branch protection limited to `master`. Required reviewers are
+optional: enabling them turns every automatic deployment into an approval
+gate without changing the workflow.
+
 ## Break-Glass Recovery
 
 If the private route fails:

@@ -5,6 +5,7 @@ Docker Hub and GitHub Container Registry (GHCR). The deployment stack defaults
 to these Docker Hub mirrors:
 
 - `dills122/reef-platform-runtime:latest`
+- `dills122/reef-arena-platform-runtime:latest`
 - `dills122/reef-matching-engine:latest`
 - `dills122/reef-simulator:latest`
 
@@ -14,7 +15,8 @@ owner's `ghcr.io/<owner>/` namespace. Set the GitHub Actions variable
 `DOCKERHUB_NAMESPACE` when the Docker Hub namespace differs. Keep image names
 overridable with `REEF_PLATFORM_RUNTIME_IMAGE`, `REEF_MATCHING_ENGINE_IMAGE`,
 and `REEF_SIMULATOR_IMAGE` so either registry can be selected without changing
-Compose files.
+Compose files. The hosted Arena backbone sets the platform pin to
+`reef-arena-platform-runtime`.
 
 ## Docker Hub Setup
 
@@ -54,6 +56,12 @@ images are intentionally unstable while platform contracts are still moving.
 Publishing is one required operation: a failure to push either registry mirror
 fails the image job instead of silently leaving the registries inconsistent.
 
+A successful `master` image workflow is the source event for
+`.github/workflows/service-deploy.yml`. That deployment uses only the
+`sha-<short-sha>` tags; it never deploys mutable `master` or `latest` tags.
+Migration-only changes are image-impacting for this purpose so the deployment
+can apply the exact migration bundle associated with the target commit.
+
 ## Private Image Fallbacks
 
 Docker Hub Personal currently includes one private repository. That is fine for
@@ -79,9 +87,11 @@ pull from both mirrors:
 
 ```bash
 docker pull dills122/reef-platform-runtime:latest
+docker pull dills122/reef-arena-platform-runtime:latest
 docker pull dills122/reef-matching-engine:latest
 docker pull dills122/reef-simulator:latest
 docker pull ghcr.io/dills122/reef-platform-runtime:latest
+docker pull ghcr.io/dills122/reef-arena-platform-runtime:latest
 docker pull ghcr.io/dills122/reef-matching-engine:latest
 docker pull ghcr.io/dills122/reef-simulator:latest
 ```
