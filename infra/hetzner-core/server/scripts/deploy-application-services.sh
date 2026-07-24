@@ -245,7 +245,7 @@ exec 9>"$DEPLOY_ROOT/deployments/application-services.lock"
 flock 9
 
 cd "$DEPLOY_ROOT"
-compose_services="$(docker compose config --services)"
+compose_services="$(docker compose --profile manual config --services)"
 for service in openbao matching-engine platform-runtime simulator; do
   grep -Fxq "$service" <<<"$compose_services" ||
     fail "compose service is missing: $service"

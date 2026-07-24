@@ -94,7 +94,7 @@ async function createFixture() {
     `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
-if [[ "\${1:-}" == "compose" && "\${2:-}" == "config" ]]; then
+if [[ "$*" == "compose --profile manual config --services" ]]; then
   printf '%s\\n' openbao matching-engine platform-runtime simulator
 elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" && "\${3:-}" == "-q" ]]; then
   printf '%s-id\\n' "\${4}"
@@ -162,6 +162,7 @@ try {
   );
 
   const dockerLog = await readFile(join(fixture.root, "docker.log"), "utf8");
+  assert.match(dockerLog, /compose --profile manual config --services/);
   assert.match(
     dockerLog,
     /compose up -d --no-deps --force-recreate matching-engine/,
