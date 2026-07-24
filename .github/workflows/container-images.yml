@@ -11,6 +11,7 @@ on:
       - 'services/simulator/**'
       - 'scripts/dev/db/migrations/**'
       - '.github/workflows/container-images.yml'
+      - '.github/workflows/service-deploy.yml'
     tags:
       - 'v*'
   workflow_dispatch:
@@ -47,7 +48,7 @@ jobs:
           else
             changed_paths="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")"
           fi
-          if printf '%s\n' "$changed_paths" | grep -Eq '^(services/(platform-runtime|arena-control-plane|matching-engine|simulator)/|scripts/dev/db/migrations/|\.github/workflows/container-images\.yml$)'; then
+          if printf '%s\n' "$changed_paths" | grep -Eq '^(services/(platform-runtime|arena-control-plane|matching-engine|simulator)/|scripts/dev/db/migrations/|\.github/workflows/(container-images|service-deploy)\.yml$)'; then
             echo "image_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "image_changed=false" >> "$GITHUB_OUTPUT"
