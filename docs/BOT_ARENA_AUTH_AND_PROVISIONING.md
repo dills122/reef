@@ -364,7 +364,10 @@ approved submission admission (repository, pull request number, reviewed head
 SHA, bot id, and immutable GitHub user identity). The manifest's
 `metadata.publisher` remains a free-form display label and is not treated as a
 GitHub login for approved fork submissions. Trusted same-repository bots retain
-the legacy publisher-login fallback when no fork admission applies.
+the legacy publisher-login fallback when no fork admission applies. The sync
+also sends the trusted PR submitter id and login alongside the admission
+reference so ownership assignment remains compatible while the control-plane
+handler rolls out.
 
 Current hosted value:
 
