@@ -42,7 +42,7 @@ jobs:
 
       - name: Log in to GHCR
         if: inputs.provider == 'ghcr'
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.5.2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -50,7 +50,7 @@ jobs:
 
       - name: Log in to Docker Hub
         if: inputs.provider == 'dockerhub'
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.5.2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
