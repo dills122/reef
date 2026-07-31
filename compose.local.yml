@@ -136,7 +136,7 @@ services:
         condition: service_healthy
 
   redpanda:
-    image: redpandadata/redpanda:v26.1.13
+    image: redpandadata/redpanda:v26.2.1
     container_name: reef-redpanda
     profiles: ["redpanda"]
     command:
