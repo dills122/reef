@@ -1,0 +1,19 @@
+version = 1
+name = "reef"
+
+[setup]
+script = '''
+ai_central_root="${AI_CENTRAL_HOME:-$HOME/.ai-central}"
+if [ "$(basename "$ai_central_root")" = "templates" ]; then
+  ai_central_root="$(dirname "$ai_central_root")"
+fi
+setup_script="$ai_central_root/scripts/setup-codex-worktree.sh"
+
+if [ ! -x "$setup_script" ]; then
+  echo "Reef worktree setup requires AI Central at $ai_central_root." >&2
+  echo "Set AI_CENTRAL_HOME when the checkout lives elsewhere." >&2
+  exit 1
+fi
+
+"$setup_script" "$PWD"
+'''

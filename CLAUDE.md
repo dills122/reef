@@ -12,4 +12,4 @@ Do not duplicate that content here. If steering changes, edit `AGENTS.md` / `doc
 
 ## Not relevant to Claude
 
-`.codex/skills/` and most of `.codex/steering/` are symlinks to an external Codex-only template library (`~/Documents/ai-central/`) — generic, not repo-specific, and not usable here. Ignore them. The two real files in `.codex/steering/` (`repository-steering.md`, `testing-quality-gates-steering.md`) are already superseded by `docs/steering/repository.md` and `docs/steering/repository-scope-and-priorities.md`.
+`.codex/skills/` and most of `.codex/steering/` are machine-local links to the shared AI Central checkout (`$HOME/.ai-central` by default). They are generic, not repo-specific, and not usable here. Ignore them. The two real files in `.codex/steering/` (`repository-steering.md`, `testing-quality-gates-steering.md`) are already superseded by `docs/steering/repository.md` and `docs/steering/repository-scope-and-priorities.md`.

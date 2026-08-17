@@ -36,6 +36,7 @@ test: test-go test-simulator test-platform-runtime test-bot-sdk test-dev-tooling
 
 test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
+	node scripts/dev/lib/dev-links.test.mjs
 	node scripts/dev/onboarding-links.test.mjs
 	node scripts/dev/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs

@@ -116,6 +116,20 @@ bun scripts/dev/reef-dev.mjs list
 
 `make` targets remain the stable daily interface. `scripts/dev/reef-dev.mjs` groups lower-level stack, stress, and local link setup profiles behind one CLI so new automation does not need a new one-off wrapper file.
 
+AI Central context defaults to the shared user-profile checkout at
+`$HOME/.ai-central`. Run `bun run codex:links -- --dry-run` to preview a refresh
+and `bun run codex:links` to synchronize Reef's curated bundles: `core`, `node`,
+`jvm`, `frontend`, `infra`, `workflow`, `planning`, `orchestration`,
+`documentation`, and `brevity`. Run `bun run claude:links` afterward to mirror
+that canonical skill set for Claude-compatible clients. Set `AI_CENTRAL_HOME`
+when the checkout lives elsewhere; either the repository root or its `templates`
+directory is accepted.
+
+Codex-managed worktrees use `.codex/environments/environment.toml` to seed the
+primary checkout's Git-ignored skills and shared steering before a task starts.
+The AI Central seeder copies only allowlisted agent context, preserves existing
+worktree-owned paths, and does not copy environment files or credentials.
+
 Use `JS_RUNTIME=node` only as a temporary fallback for plain Node-compatible
 stack scripts when Bun is not installed:
 
