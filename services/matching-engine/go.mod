@@ -4,10 +4,10 @@ go 1.25.0
 
 require (
 	github.com/IBM/sarama v1.60.1
-	github.com/nats-io/nats.go v1.52.0
+	github.com/nats-io/nats.go v1.53.1
 	github.com/tidwall/btree v1.8.1
 	google.golang.org/grpc v1.83.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
