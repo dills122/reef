@@ -27,15 +27,14 @@ infra/hetzner-core/server/secrets/
 infra/hetzner-core/server/openbao/logs/
 .tmp-do-known-hosts
 
-# Codex local integration links. These point at user-specific template
-# checkouts and are recreated with `bun run codex:links`.
+# AI Central machine-local integration. Reusable Codex context defaults to the
+# shared `$HOME/.ai-central` checkout and is recreated with `bun run codex:links`.
 .codex/skills/
 .codex/steering/*-steering.md
 !.codex/steering/repository-steering.md
 !.codex/steering/testing-quality-gates-steering.md
 
-# Claude local integration links. These point at user-specific template
-# checkouts and are recreated with `bun run claude:links`.
+# Claude compatibility links mirror the selected canonical skills.
 .claude/skills/
 .aider*
 .agents
