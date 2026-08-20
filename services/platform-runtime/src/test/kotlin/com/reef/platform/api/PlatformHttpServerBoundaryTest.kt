@@ -1598,6 +1598,67 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1LifecycleMutationsRejectOwnershipClaimsOutsideAuthenticatedScopeBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val boundary = ExternalApiBoundary(
+            authHook = StaticTokenAuthHook(
+                mapOf(
+                    "client-1" to StaticTokenClientConfig(
+                        token = "token-1",
+                        principal = ExternalApiPrincipal(
+                            clientId = "client-1",
+                            participantIds = setOf("participant-1"),
+                            accountIds = setOf("account-1")
+                        )
+                    )
+                )
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            boundary = boundary,
+            captureStore = captureStore
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Authorization" to "Bearer token-1",
+                "Idempotency-Key" to "idem-lifecycle-owner"
+            )
+            val lifecycleContext =
+                ""","instrumentId":"AAPL","participantId":"participant-2","accountId":"account-1"${streamRoutingExtra()}"""
+            val cases = listOf(
+                "/api/v1/orders/cancel" to validCancelBody(
+                    "cmd-lifecycle-owner-cancel",
+                    "trace-lifecycle-owner-cancel",
+                    "ord-lifecycle-owner",
+                    extra = lifecycleContext
+                ),
+                "/api/v1/orders/modify" to validModifyBody(
+                    "cmd-lifecycle-owner-modify",
+                    "trace-lifecycle-owner-modify",
+                    "ord-lifecycle-owner",
+                    extra = lifecycleContext
+                )
+            )
+            cases.forEachIndexed { index, (route, body) ->
+                val denied = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = headers + ("Idempotency-Key" to "idem-lifecycle-owner-$index"),
+                    body = body
+                )
+                assertEquals(403, denied.status, route)
+                assertContains(denied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+                assertContains(denied.body, "participant scope")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1OrderMutationsRejectActorOutsideAuthenticatedScopeBeforeCapture() {
         val captureStore = RecordingCommandCaptureStore()
         val boundary = ExternalApiBoundary(
@@ -1676,6 +1737,42 @@ class PlatformHttpServerBoundaryTest {
                 assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
                 assertContains(response.body, "\"message\":\"invalid json payload\"")
                 assertContains(response.body, "\"correlationId\":\"corr-malformed-$index\"")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectMalformedOccurredAtBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val cases = listOf(
+                "/api/v1/orders/submit" to validSubmitBody("cmd-time-submit", "trace-time-submit", "ord-time-submit"),
+                "/api/v1/orders/cancel" to validCancelBody("cmd-time-cancel", "trace-time-cancel", "ord-time-cancel"),
+                "/api/v1/orders/modify" to validModifyBody("cmd-time-modify", "trace-time-modify", "ord-time-modify")
+            )
+            cases.forEachIndexed { index, (route, validBody) ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-invalid-time-$index"
+                    ),
+                    body = validBody.replace("2026-05-22T00:00:00Z", "not-a-timestamp")
+                )
+
+                assertEquals(400, response.status, route)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "invalid occurredAt: not-a-timestamp")
             }
             assertEquals(0, captureStore.receivedCalls)
             assertEquals(0, captureStore.completedCalls)
@@ -4973,11 +5070,15 @@ class PlatformHttpServerBoundaryTest {
                     "X-Client-Id" to "client-1",
                     "Idempotency-Key" to "idem-stream-missing-routing"
                 ),
-                body = validCancelBody("cmd-stream-missing-routing", "trace-stream-missing-routing", "ord-stream-missing-routing")
+                body = bodyWithoutField(
+                    validCancelBody("cmd-stream-missing-routing", "trace-stream-missing-routing", "ord-stream-missing-routing"),
+                    "runId"
+                )
             )
 
             assertEquals(400, response.status)
-            assertContains(response.body, "\"code\":\"STREAM_ROUTING_METADATA_REQUIRED\"")
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "missing required field: runId")
             assertEquals(0, publisher.published.size)
             assertEquals(null, intakeStore.findByCommandId("cmd-stream-missing-routing"))
         } finally {
@@ -5872,6 +5973,11 @@ class PlatformHttpServerBoundaryTest {
               "actorId":"bot-capture-1",
               "occurredAt":"2026-05-22T00:00:00Z",
               "orderId":"$orderId",
+              "runId":"run-1",
+              "venueSessionId":"session-1",
+              "instrumentId":"AAPL",
+              "participantId":"participant-1",
+              "accountId":"account-1",
               "reason":"test"$extra
             }
         """.trimIndent()
@@ -5887,6 +5993,11 @@ class PlatformHttpServerBoundaryTest {
               "actorId":"bot-capture-1",
               "occurredAt":"2026-05-22T00:00:00Z",
               "orderId":"$orderId",
+              "runId":"run-1",
+              "venueSessionId":"session-1",
+              "instrumentId":"AAPL",
+              "participantId":"participant-1",
+              "accountId":"account-1",
               "quantityUnits":"100",
               "limitPrice":"150250000001"$extra
             }

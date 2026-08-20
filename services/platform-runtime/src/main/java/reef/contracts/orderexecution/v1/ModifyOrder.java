@@ -29,6 +29,9 @@ private static final long serialVersionUID = 0L;
   }
   private ModifyOrder() {
     orderId_ = "";
+    instrumentId_ = "";
+    participantId_ = "";
+    accountId_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -84,7 +87,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       orderId_ = s;
@@ -100,7 +103,7 @@ private static final long serialVersionUID = 0L;
       getOrderIdBytes() {
     java.lang.Object ref = orderId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       orderId_ = b;
@@ -162,6 +165,123 @@ private static final long serialVersionUID = 0L;
     return limitPrice_ == null ? reef.contracts.orderexecution.v1.Price.getDefaultInstance() : limitPrice_;
   }
 
+  public static final int INSTRUMENT_ID_FIELD_NUMBER = 5;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object instrumentId_ = "";
+  /**
+   * <code>string instrument_id = 5;</code>
+   * @return The instrumentId.
+   */
+  @java.lang.Override
+  public java.lang.String getInstrumentId() {
+    java.lang.Object ref = instrumentId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      instrumentId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string instrument_id = 5;</code>
+   * @return The bytes for instrumentId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getInstrumentIdBytes() {
+    java.lang.Object ref = instrumentId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      instrumentId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int PARTICIPANT_ID_FIELD_NUMBER = 6;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object participantId_ = "";
+  /**
+   * <code>string participant_id = 6;</code>
+   * @return The participantId.
+   */
+  @java.lang.Override
+  public java.lang.String getParticipantId() {
+    java.lang.Object ref = participantId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      participantId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string participant_id = 6;</code>
+   * @return The bytes for participantId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParticipantIdBytes() {
+    java.lang.Object ref = participantId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      participantId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int ACCOUNT_ID_FIELD_NUMBER = 7;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object accountId_ = "";
+  /**
+   * <code>string account_id = 7;</code>
+   * @return The accountId.
+   */
+  @java.lang.Override
+  public java.lang.String getAccountId() {
+    java.lang.Object ref = accountId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      accountId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string account_id = 7;</code>
+   * @return The bytes for accountId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAccountIdBytes() {
+    java.lang.Object ref = accountId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      accountId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -188,6 +308,15 @@ private static final long serialVersionUID = 0L;
     if (((bitField0_ & 0x00000004) != 0)) {
       output.writeMessage(4, getLimitPrice());
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(instrumentId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 5, instrumentId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(participantId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 6, participantId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(accountId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 7, accountId_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -211,6 +340,15 @@ private static final long serialVersionUID = 0L;
     if (((bitField0_ & 0x00000004) != 0)) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(4, getLimitPrice());
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(instrumentId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(5, instrumentId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(participantId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(6, participantId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(accountId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(7, accountId_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -244,6 +382,12 @@ private static final long serialVersionUID = 0L;
       if (!getLimitPrice()
           .equals(other.getLimitPrice())) return false;
     }
+    if (!getInstrumentId()
+        .equals(other.getInstrumentId())) return false;
+    if (!getParticipantId()
+        .equals(other.getParticipantId())) return false;
+    if (!getAccountId()
+        .equals(other.getAccountId())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -269,6 +413,12 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + LIMIT_PRICE_FIELD_NUMBER;
       hash = (53 * hash) + getLimitPrice().hashCode();
     }
+    hash = (37 * hash) + INSTRUMENT_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getInstrumentId().hashCode();
+    hash = (37 * hash) + PARTICIPANT_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getParticipantId().hashCode();
+    hash = (37 * hash) + ACCOUNT_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getAccountId().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -424,6 +574,9 @@ private static final long serialVersionUID = 0L;
         limitPriceBuilder_.dispose();
         limitPriceBuilder_ = null;
       }
+      instrumentId_ = "";
+      participantId_ = "";
+      accountId_ = "";
       return this;
     }
 
@@ -479,6 +632,15 @@ private static final long serialVersionUID = 0L;
             : limitPriceBuilder_.build();
         to_bitField0_ |= 0x00000004;
       }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.instrumentId_ = instrumentId_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.participantId_ = participantId_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.accountId_ = accountId_;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -507,6 +669,21 @@ private static final long serialVersionUID = 0L;
       }
       if (other.hasLimitPrice()) {
         mergeLimitPrice(other.getLimitPrice());
+      }
+      if (!other.getInstrumentId().isEmpty()) {
+        instrumentId_ = other.instrumentId_;
+        bitField0_ |= 0x00000010;
+        onChanged();
+      }
+      if (!other.getParticipantId().isEmpty()) {
+        participantId_ = other.participantId_;
+        bitField0_ |= 0x00000020;
+        onChanged();
+      }
+      if (!other.getAccountId().isEmpty()) {
+        accountId_ = other.accountId_;
+        bitField0_ |= 0x00000040;
+        onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -560,6 +737,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000008;
               break;
             } // case 34
+            case 42: {
+              instrumentId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 42
+            case 50: {
+              participantId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 50
+            case 58: {
+              accountId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 58
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -685,7 +877,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.CommandMetadata metadata = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.CommandMetadata, reef.contracts.orderexecution.v1.CommandMetadata.Builder, reef.contracts.orderexecution.v1.CommandMetadataOrBuilder> 
+        reef.contracts.orderexecution.v1.CommandMetadata, reef.contracts.orderexecution.v1.CommandMetadata.Builder, reef.contracts.orderexecution.v1.CommandMetadataOrBuilder>
         internalGetMetadataFieldBuilder() {
       if (metadataBuilder_ == null) {
         metadataBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -723,7 +915,7 @@ private static final long serialVersionUID = 0L;
         getOrderIdBytes() {
       java.lang.Object ref = orderId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         orderId_ = b;
@@ -878,7 +1070,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.OrderQuantity quantity = 3;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder> 
+        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder>
         internalGetQuantityFieldBuilder() {
       if (quantityBuilder_ == null) {
         quantityBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -999,7 +1191,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.Price limit_price = 4;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder> 
+        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder>
         internalGetLimitPriceFieldBuilder() {
       if (limitPriceBuilder_ == null) {
         limitPriceBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1010,6 +1202,222 @@ private static final long serialVersionUID = 0L;
         limitPrice_ = null;
       }
       return limitPriceBuilder_;
+    }
+
+    private java.lang.Object instrumentId_ = "";
+    /**
+     * <code>string instrument_id = 5;</code>
+     * @return The instrumentId.
+     */
+    public java.lang.String getInstrumentId() {
+      java.lang.Object ref = instrumentId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        instrumentId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string instrument_id = 5;</code>
+     * @return The bytes for instrumentId.
+     */
+    public com.google.protobuf.ByteString
+        getInstrumentIdBytes() {
+      java.lang.Object ref = instrumentId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        instrumentId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string instrument_id = 5;</code>
+     * @param value The instrumentId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstrumentId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      instrumentId_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string instrument_id = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInstrumentId() {
+      instrumentId_ = getDefaultInstance().getInstrumentId();
+      bitField0_ = (bitField0_ & ~0x00000010);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string instrument_id = 5;</code>
+     * @param value The bytes for instrumentId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstrumentIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      instrumentId_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object participantId_ = "";
+    /**
+     * <code>string participant_id = 6;</code>
+     * @return The participantId.
+     */
+    public java.lang.String getParticipantId() {
+      java.lang.Object ref = participantId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        participantId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string participant_id = 6;</code>
+     * @return The bytes for participantId.
+     */
+    public com.google.protobuf.ByteString
+        getParticipantIdBytes() {
+      java.lang.Object ref = participantId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        participantId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string participant_id = 6;</code>
+     * @param value The participantId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParticipantId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      participantId_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string participant_id = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParticipantId() {
+      participantId_ = getDefaultInstance().getParticipantId();
+      bitField0_ = (bitField0_ & ~0x00000020);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string participant_id = 6;</code>
+     * @param value The bytes for participantId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParticipantIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      participantId_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object accountId_ = "";
+    /**
+     * <code>string account_id = 7;</code>
+     * @return The accountId.
+     */
+    public java.lang.String getAccountId() {
+      java.lang.Object ref = accountId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        accountId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string account_id = 7;</code>
+     * @return The bytes for accountId.
+     */
+    public com.google.protobuf.ByteString
+        getAccountIdBytes() {
+      java.lang.Object ref = accountId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        accountId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string account_id = 7;</code>
+     * @param value The accountId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAccountId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      accountId_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string account_id = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAccountId() {
+      accountId_ = getDefaultInstance().getAccountId();
+      bitField0_ = (bitField0_ & ~0x00000040);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string account_id = 7;</code>
+     * @param value The bytes for accountId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAccountIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      accountId_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
     }
 
     // @@protoc_insertion_point(builder_scope:reef.contracts.orderexecution.v1.ModifyOrder)
@@ -1062,4 +1470,3 @@ private static final long serialVersionUID = 0L;
   }
 
 }
-

@@ -131,4 +131,3 @@ public enum TimeInForce
 
   // @@protoc_insertion_point(enum_scope:reef.contracts.orderexecution.v1.TimeInForce)
 }
-

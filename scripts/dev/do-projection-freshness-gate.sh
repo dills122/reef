@@ -11,13 +11,14 @@ Runs the named DigitalOcean projection/read-model freshness gate for the
 Redpanda direct-stream plus venue-event-materializer path.
 
 optional:
-  REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=short|soak-5m|soak-15m
+  REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=short|soak-5m|5k-soak-5m|soak-15m
   REEF_DO_CONFIRM_DESTROYABLE=1
   DIGITALOCEAN_TOKEN or DO_TOKEN
 
 defaults:
   short     2.5k rps, 256 workers, 60s, 1 sample, c-16
   soak-5m   2.5k rps, 256 workers, 5m, 1 sample, c-16
+  5k-soak-5m 5k rps, 256 workers, 5m, 1 sample, c-16
   soak-15m  2.5k rps, 256 workers, 15m, 1 sample, c-16
 
 gates:
@@ -48,12 +49,19 @@ case "$command" in
 esac
 
 tier="${REEF_DO_PROJECTION_FRESHNESS_GATE_TIER:-short}"
+default_rate="2500"
+default_min_rate="2400"
 case "$tier" in
   short)
     default_duration="60s"
     ;;
   soak-5m)
     default_duration="5m"
+    ;;
+  5k-soak-5m)
+    default_duration="5m"
+    default_rate="5000"
+    default_min_rate="4800"
     ;;
   soak-15m)
     default_duration="15m"
@@ -66,14 +74,14 @@ esac
 
 export REEF_DO_BENCHMARK_PROFILE="${REEF_DO_BENCHMARK_PROFILE:-materializer-projection}"
 export REEF_DO_BENCHMARK_GOAL="${REEF_DO_BENCHMARK_GOAL:-fixed}"
-export REEF_DO_STRESS_RATES="${REEF_DO_STRESS_RATES:-2500}"
+export REEF_DO_STRESS_RATES="${REEF_DO_STRESS_RATES:-$default_rate}"
 export REEF_DO_STRESS_WORKERS="${REEF_DO_STRESS_WORKERS:-256}"
 export REEF_DO_STRESS_REPEAT_SAMPLES="${REEF_DO_STRESS_REPEAT_SAMPLES:-1}"
 export REEF_DO_STRESS_DURATION="${REEF_DO_STRESS_DURATION:-$default_duration}"
 export REEF_DO_SIZE="${REEF_DO_SIZE:-c-16}"
-export REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-2400}"
-export REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-2400}"
-export REEF_DO_MIN_PROJECTED_RPS="${REEF_DO_MIN_PROJECTED_RPS:-2400}"
+export REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$default_min_rate}"
+export REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$default_min_rate}"
+export REEF_DO_MIN_PROJECTED_RPS="${REEF_DO_MIN_PROJECTED_RPS:-$default_min_rate}"
 export REEF_DO_MAX_PROJECTION_LAG="${REEF_DO_MAX_PROJECTION_LAG:-0}"
 export REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-0}"
 export REEF_DO_MAX_PROJECTION_DB_DEADLOCKS="${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-0}"

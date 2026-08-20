@@ -30,7 +30,12 @@ data class CancelOrderCommand(
     val actorId: String,
     val occurredAt: String,
     val orderId: String,
-    val reason: String
+    val reason: String,
+    val runId: String = "",
+    val venueSessionId: String = "",
+    val instrumentId: String = "",
+    val participantId: String = "",
+    val accountId: String = ""
 )
 
 data class ModifyOrderCommand(
@@ -42,7 +47,12 @@ data class ModifyOrderCommand(
     val occurredAt: String,
     val orderId: String,
     val quantityUnits: String,
-    val limitPrice: String
+    val limitPrice: String,
+    val runId: String = "",
+    val venueSessionId: String = "",
+    val instrumentId: String = "",
+    val participantId: String = "",
+    val accountId: String = ""
 )
 
 data class EngineOrderAccepted(

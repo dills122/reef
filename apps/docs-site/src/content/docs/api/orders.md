@@ -28,7 +28,9 @@ Order mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [
 }
 ```
 
-`orderType` currently only accepts `LIMIT` — market orders are not yet validated at this boundary (see [Bot SDK Reference](../../arena/bot-sdk-reference/) for how the arena adapter handles this today).
+`orderType` accepts `LIMIT` and `LIMIT_HIDDEN`; market orders are not yet
+validated at this boundary (see [Bot SDK Reference](../../arena/bot-sdk-reference/)
+for how the arena adapter handles this today).
 
 ## POST /api/v1/orders/modify
 
@@ -41,6 +43,11 @@ Order mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [
   "actorId": "string",
   "occurredAt": "2026-07-05T14:00:00.000Z",
   "orderId": "uuid",
+  "runId": "run-uuid",
+  "venueSessionId": "session-uuid",
+  "instrumentId": "instrument-uuid",
+  "participantId": "participant-uuid",
+  "accountId": "account-uuid",
   "quantityUnits": "5",
   "limitPrice": "100.00"
 }
@@ -57,15 +64,29 @@ Order mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [
   "actorId": "string",
   "occurredAt": "2026-07-05T14:00:00.000Z",
   "orderId": "uuid",
+  "runId": "run-uuid",
+  "venueSessionId": "session-uuid",
+  "instrumentId": "instrument-uuid",
+  "participantId": "participant-uuid",
+  "accountId": "account-uuid",
   "reason": "string"
 }
 ```
 
+Cancel and modify require the complete target-order context. The boundary
+authorizes `participantId` and `accountId` against the authenticated principal;
+the matching engine then compares every routing and ownership value with the
+canonical target order before mutation. A mismatch is rejected as
+`ORDER_CONTEXT_MISMATCH` without changing the order.
+
 ## POST /api/v1/orders/cancel-by-client-order
 
-Slower resolver path for clients that know their own `clientOrderId` but do not have the routed venue cancel metadata. The runtime resolves `(participantId, clientOrderId)` outside the matching hot path, synthesizes the normal cancel body with `orderId`, `runId`, `venueSessionId`, and `instrumentId`, then submits it through `/api/v1/orders/cancel`.
+Slower resolver path for clients that know their own `clientOrderId` but do not have the routed venue cancel metadata. The runtime resolves `(participantId, clientOrderId)` outside the matching hot path, synthesizes the normal cancel body with order, routing, participant, and account identity, then submits it through `/api/v1/orders/cancel`.
 
 This route is not part of the throughput target. Hot-path cancels should include routing metadata and use `/api/v1/orders/cancel` directly.
+
+All mutation routes require a non-blank RFC 3339 `occurredAt`; malformed
+timestamps are rejected before durable intake.
 
 ```json
 {

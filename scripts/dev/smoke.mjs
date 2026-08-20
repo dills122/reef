@@ -142,6 +142,8 @@ const cancelResponse = await postJson(
     occurredAt: "2026-05-01T13:00:10Z",
     orderId: smokeIdentity.orderId,
     instrumentId: "AAPL",
+    participantId: "participant-1",
+    accountId: "account-1",
     reason: "smoke cancel",
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": smokeIdentity.cancelIdempotencyKey },

@@ -163,7 +163,7 @@ private static final long serialVersionUID = 0L;
    * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
    */
   @java.lang.Override
-  public java.util.List<? extends reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder> 
+  public java.util.List<? extends reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder>
       getExecutionsOrBuilderList() {
     return executions_;
   }
@@ -204,7 +204,7 @@ private static final long serialVersionUID = 0L;
    * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>
    */
   @java.lang.Override
-  public java.util.List<? extends reef.contracts.orderexecution.v1.TradeCreatedOrBuilder> 
+  public java.util.List<? extends reef.contracts.orderexecution.v1.TradeCreatedOrBuilder>
       getTradesOrBuilderList() {
     return trades_;
   }
@@ -599,7 +599,7 @@ private static final long serialVersionUID = 0L;
             executionsBuilder_ = null;
             executions_ = other.executions_;
             bitField0_ = (bitField0_ & ~0x00000004);
-            executionsBuilder_ = 
+            executionsBuilder_ =
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetExecutionsFieldBuilder() : null;
           } else {
@@ -625,7 +625,7 @@ private static final long serialVersionUID = 0L;
             tradesBuilder_ = null;
             trades_ = other.trades_;
             bitField0_ = (bitField0_ & ~0x00000008);
-            tradesBuilder_ = 
+            tradesBuilder_ =
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetTradesFieldBuilder() : null;
           } else {
@@ -868,7 +868,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.OrderAccepted accepted = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.OrderAccepted, reef.contracts.orderexecution.v1.OrderAccepted.Builder, reef.contracts.orderexecution.v1.OrderAcceptedOrBuilder> 
+        reef.contracts.orderexecution.v1.OrderAccepted, reef.contracts.orderexecution.v1.OrderAccepted.Builder, reef.contracts.orderexecution.v1.OrderAcceptedOrBuilder>
         internalGetAcceptedFieldBuilder() {
       if (acceptedBuilder_ == null) {
         if (!(outcomeCase_ == 1)) {
@@ -1010,7 +1010,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.OrderRejected rejected = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.OrderRejected, reef.contracts.orderexecution.v1.OrderRejected.Builder, reef.contracts.orderexecution.v1.OrderRejectedOrBuilder> 
+        reef.contracts.orderexecution.v1.OrderRejected, reef.contracts.orderexecution.v1.OrderRejected.Builder, reef.contracts.orderexecution.v1.OrderRejectedOrBuilder>
         internalGetRejectedFieldBuilder() {
       if (rejectedBuilder_ == null) {
         if (!(outcomeCase_ == 2)) {
@@ -1223,7 +1223,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
      */
-    public java.util.List<? extends reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder> 
+    public java.util.List<? extends reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder>
          getExecutionsOrBuilderList() {
       if (executionsBuilder_ != null) {
         return executionsBuilder_.getMessageOrBuilderList();
@@ -1249,12 +1249,12 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
      */
-    public java.util.List<reef.contracts.orderexecution.v1.ExecutionCreated.Builder> 
+    public java.util.List<reef.contracts.orderexecution.v1.ExecutionCreated.Builder>
          getExecutionsBuilderList() {
       return internalGetExecutionsFieldBuilder().getBuilderList();
     }
     private com.google.protobuf.RepeatedFieldBuilder<
-        reef.contracts.orderexecution.v1.ExecutionCreated, reef.contracts.orderexecution.v1.ExecutionCreated.Builder, reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder> 
+        reef.contracts.orderexecution.v1.ExecutionCreated, reef.contracts.orderexecution.v1.ExecutionCreated.Builder, reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder>
         internalGetExecutionsFieldBuilder() {
       if (executionsBuilder_ == null) {
         executionsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
@@ -1463,7 +1463,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>
      */
-    public java.util.List<? extends reef.contracts.orderexecution.v1.TradeCreatedOrBuilder> 
+    public java.util.List<? extends reef.contracts.orderexecution.v1.TradeCreatedOrBuilder>
          getTradesOrBuilderList() {
       if (tradesBuilder_ != null) {
         return tradesBuilder_.getMessageOrBuilderList();
@@ -1489,12 +1489,12 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>
      */
-    public java.util.List<reef.contracts.orderexecution.v1.TradeCreated.Builder> 
+    public java.util.List<reef.contracts.orderexecution.v1.TradeCreated.Builder>
          getTradesBuilderList() {
       return internalGetTradesFieldBuilder().getBuilderList();
     }
     private com.google.protobuf.RepeatedFieldBuilder<
-        reef.contracts.orderexecution.v1.TradeCreated, reef.contracts.orderexecution.v1.TradeCreated.Builder, reef.contracts.orderexecution.v1.TradeCreatedOrBuilder> 
+        reef.contracts.orderexecution.v1.TradeCreated, reef.contracts.orderexecution.v1.TradeCreated.Builder, reef.contracts.orderexecution.v1.TradeCreatedOrBuilder>
         internalGetTradesFieldBuilder() {
       if (tradesBuilder_ == null) {
         tradesBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
@@ -1558,4 +1558,3 @@ private static final long serialVersionUID = 0L;
   }
 
 }
-

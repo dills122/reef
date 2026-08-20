@@ -290,7 +290,7 @@ Current local evidence for durable materializer path:
 Matching-engine terminal retention:
 
 - `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0`: default, preserve all terminal order records.
-- `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=250000`: stress profile default, keep recent terminal order records bounded while preserving active order state.
+- `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=250000`: stress profile default, keep recent terminal order records bounded while preserving active order state. Bounded retention uses the deterministic terminal event-time and order-id key, so cross-partition completion scheduling and sequential recovery retain the same terminal set. Snapshot restore reconstructs this bounded set from retained terminal records before accepting more work.
 
 15k/5m final result:
 

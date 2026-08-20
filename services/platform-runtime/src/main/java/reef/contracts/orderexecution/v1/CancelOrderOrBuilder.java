@@ -48,4 +48,40 @@ public interface CancelOrderOrBuilder extends
    */
   com.google.protobuf.ByteString
       getReasonBytes();
+
+  /**
+   * <code>string instrument_id = 4;</code>
+   * @return The instrumentId.
+   */
+  java.lang.String getInstrumentId();
+  /**
+   * <code>string instrument_id = 4;</code>
+   * @return The bytes for instrumentId.
+   */
+  com.google.protobuf.ByteString
+      getInstrumentIdBytes();
+
+  /**
+   * <code>string participant_id = 5;</code>
+   * @return The participantId.
+   */
+  java.lang.String getParticipantId();
+  /**
+   * <code>string participant_id = 5;</code>
+   * @return The bytes for participantId.
+   */
+  com.google.protobuf.ByteString
+      getParticipantIdBytes();
+
+  /**
+   * <code>string account_id = 6;</code>
+   * @return The accountId.
+   */
+  java.lang.String getAccountId();
+  /**
+   * <code>string account_id = 6;</code>
+   * @return The bytes for accountId.
+   */
+  com.google.protobuf.ByteString
+      getAccountIdBytes();
 }

@@ -8,6 +8,8 @@ import com.reef.platform.domain.Participant
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.ActorRoleBinding
+import java.time.Instant
+import java.time.format.DateTimeParseException
 
 object PlatformCommandParsers {
     private val apiV1CommonOptionalFields = setOf(
@@ -54,6 +56,11 @@ object PlatformCommandParsers {
                 "actorId",
                 "occurredAt",
                 "orderId",
+                "runId",
+                "venueSessionId",
+                "instrumentId",
+                "participantId",
+                "accountId",
                 "reason"
             )
         ),
@@ -65,6 +72,11 @@ object PlatformCommandParsers {
                 "actorId",
                 "occurredAt",
                 "orderId",
+                "runId",
+                "venueSessionId",
+                "instrumentId",
+                "participantId",
+                "accountId",
                 "quantityUnits",
                 "limitPrice"
             )
@@ -106,6 +118,7 @@ object PlatformCommandParsers {
         if (missingField != null) {
             return ApiV1CommandValidation.Invalid("missing required field: $missingField")
         }
+        timestampValidationError(json, "occurredAt")?.let { return ApiV1CommandValidation.Invalid(it) }
         if (route == "/api/v1/orders/submit") {
             enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return ApiV1CommandValidation.Invalid(it) }
             enumValidationError(json, "orderType", setOf("LIMIT", "LIMIT_HIDDEN"))?.let { return ApiV1CommandValidation.Invalid(it) }
@@ -134,6 +147,16 @@ object PlatformCommandParsers {
             return null
         }
         return if (value.toBigDecimalOrNull() == null) "invalid ${fieldMessageName(field)}: $value" else null
+    }
+
+    private fun timestampValidationError(json: JsonDocument, field: String): String? {
+        val value = json.string(field)
+        return try {
+            Instant.parse(value)
+            null
+        } catch (_: DateTimeParseException) {
+            "invalid $field: $value"
+        }
     }
 
     private fun fieldMessageName(field: String): String {
@@ -186,7 +209,12 @@ object PlatformCommandParsers {
             actorId = json.string("actorId"),
             occurredAt = json.string("occurredAt"),
             orderId = json.string("orderId"),
-            reason = json.string("reason")
+            reason = json.string("reason"),
+            runId = json.string("runId").ifBlank { json.string("scenarioRunId") },
+            venueSessionId = json.string("venueSessionId"),
+            instrumentId = json.string("instrumentId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId")
         )
     }
 
@@ -201,7 +229,12 @@ object PlatformCommandParsers {
             occurredAt = json.string("occurredAt"),
             orderId = json.string("orderId"),
             quantityUnits = json.string("quantityUnits"),
-            limitPrice = json.string("limitPrice")
+            limitPrice = json.string("limitPrice"),
+            runId = json.string("runId").ifBlank { json.string("scenarioRunId") },
+            venueSessionId = json.string("venueSessionId"),
+            instrumentId = json.string("instrumentId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId")
         )
     }
 

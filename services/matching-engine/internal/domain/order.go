@@ -40,26 +40,36 @@ type SubmitOrder struct {
 }
 
 type CancelOrder struct {
-	CommandID     string `json:"commandId"`
-	TraceID       string `json:"traceId"`
-	CausationID   string `json:"causationId"`
-	CorrelationID string `json:"correlationId"`
-	ActorID       string `json:"actorId"`
-	OccurredAt    string `json:"occurredAt"`
-	OrderID       string `json:"orderId"`
-	Reason        string `json:"reason"`
+	CommandID      string `json:"commandId"`
+	TraceID        string `json:"traceId"`
+	CausationID    string `json:"causationId"`
+	CorrelationID  string `json:"correlationId"`
+	ActorID        string `json:"actorId"`
+	OccurredAt     string `json:"occurredAt"`
+	OrderID        string `json:"orderId"`
+	Reason         string `json:"reason"`
+	RunID          string `json:"runId"`
+	VenueSessionID string `json:"venueSessionId"`
+	InstrumentID   string `json:"instrumentId"`
+	ParticipantID  string `json:"participantId"`
+	AccountID      string `json:"accountId"`
 }
 
 type ModifyOrder struct {
-	CommandID     string `json:"commandId"`
-	TraceID       string `json:"traceId"`
-	CausationID   string `json:"causationId"`
-	CorrelationID string `json:"correlationId"`
-	ActorID       string `json:"actorId"`
-	OccurredAt    string `json:"occurredAt"`
-	OrderID       string `json:"orderId"`
-	QuantityUnits string `json:"quantityUnits"`
-	LimitPrice    string `json:"limitPrice"`
+	CommandID      string `json:"commandId"`
+	TraceID        string `json:"traceId"`
+	CausationID    string `json:"causationId"`
+	CorrelationID  string `json:"correlationId"`
+	ActorID        string `json:"actorId"`
+	OccurredAt     string `json:"occurredAt"`
+	OrderID        string `json:"orderId"`
+	QuantityUnits  string `json:"quantityUnits"`
+	LimitPrice     string `json:"limitPrice"`
+	RunID          string `json:"runId"`
+	VenueSessionID string `json:"venueSessionId"`
+	InstrumentID   string `json:"instrumentId"`
+	ParticipantID  string `json:"participantId"`
+	AccountID      string `json:"accountId"`
 }
 
 type OrderAccepted struct {

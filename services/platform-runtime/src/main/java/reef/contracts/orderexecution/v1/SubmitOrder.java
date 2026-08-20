@@ -90,7 +90,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       orderId_ = s;
@@ -106,7 +106,7 @@ private static final long serialVersionUID = 0L;
       getOrderIdBytes() {
     java.lang.Object ref = orderId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       orderId_ = b;
@@ -129,7 +129,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       instrumentId_ = s;
@@ -145,7 +145,7 @@ private static final long serialVersionUID = 0L;
       getInstrumentIdBytes() {
     java.lang.Object ref = instrumentId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       instrumentId_ = b;
@@ -168,7 +168,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       participantId_ = s;
@@ -184,7 +184,7 @@ private static final long serialVersionUID = 0L;
       getParticipantIdBytes() {
     java.lang.Object ref = participantId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       participantId_ = b;
@@ -207,7 +207,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       accountId_ = s;
@@ -223,7 +223,7 @@ private static final long serialVersionUID = 0L;
       getAccountIdBytes() {
     java.lang.Object ref = accountId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       accountId_ = b;
@@ -1000,7 +1000,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.CommandMetadata metadata = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.CommandMetadata, reef.contracts.orderexecution.v1.CommandMetadata.Builder, reef.contracts.orderexecution.v1.CommandMetadataOrBuilder> 
+        reef.contracts.orderexecution.v1.CommandMetadata, reef.contracts.orderexecution.v1.CommandMetadata.Builder, reef.contracts.orderexecution.v1.CommandMetadataOrBuilder>
         internalGetMetadataFieldBuilder() {
       if (metadataBuilder_ == null) {
         metadataBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1038,7 +1038,7 @@ private static final long serialVersionUID = 0L;
         getOrderIdBytes() {
       java.lang.Object ref = orderId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         orderId_ = b;
@@ -1110,7 +1110,7 @@ private static final long serialVersionUID = 0L;
         getInstrumentIdBytes() {
       java.lang.Object ref = instrumentId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         instrumentId_ = b;
@@ -1182,7 +1182,7 @@ private static final long serialVersionUID = 0L;
         getParticipantIdBytes() {
       java.lang.Object ref = participantId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         participantId_ = b;
@@ -1254,7 +1254,7 @@ private static final long serialVersionUID = 0L;
         getAccountIdBytes() {
       java.lang.Object ref = accountId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         accountId_ = b;
@@ -1511,7 +1511,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.OrderQuantity quantity = 8;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder> 
+        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder>
         internalGetQuantityFieldBuilder() {
       if (quantityBuilder_ == null) {
         quantityBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1632,7 +1632,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.Price limit_price = 9;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder> 
+        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder>
         internalGetLimitPriceFieldBuilder() {
       if (limitPriceBuilder_ == null) {
         limitPriceBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1746,4 +1746,3 @@ private static final long serialVersionUID = 0L;
   }
 
 }
-

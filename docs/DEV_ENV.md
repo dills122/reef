@@ -351,7 +351,7 @@ Equivalent grouped CLI form: `bun scripts/dev/reef-dev.mjs stack up stream-ack`.
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_MAX=24`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE=8`
 
-In this mode `platform-api` returns `202` only after JetStream publish acknowledgment. The worker containers expose health and internal metrics endpoints, but public command intake routes are not mounted in worker or projector roles. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
+In this mode `platform-api` returns `202` only after JetStream publish acknowledgment. The worker containers expose health and internal metrics endpoints, but public command intake routes are not mounted in worker or projector roles. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); cancel/modify also require `participantId` and `accountId`, which the engine binds to the canonical target order before mutation. Duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
 Engine-direct stream ingestion is the higher-headroom replacement path for the current generic worker -> engine RPC bridge. It is opt-in while it is being built:
 

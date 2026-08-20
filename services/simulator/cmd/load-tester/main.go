@@ -241,8 +241,12 @@ type workerState struct {
 }
 
 type trackedOrder struct {
-	OrderID      string
-	InstrumentID string
+	OrderID        string
+	RunID          string
+	VenueSessionID string
+	InstrumentID   string
+	ParticipantID  string
+	AccountID      string
 }
 
 const (
@@ -925,7 +929,14 @@ func runWorker(
 			status, body, err := submitCommand(client, stream, cfg, workerID, commandID, traceID, payload, ActionSubmit)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
-				state.orders = append(state.orders, trackedOrder{OrderID: orderID, InstrumentID: instrumentID})
+				state.orders = append(state.orders, trackedOrder{
+					OrderID:        orderID,
+					RunID:          payload["runId"],
+					VenueSessionID: payload["venueSessionId"],
+					InstrumentID:   instrumentID,
+					ParticipantID:  participantID,
+					AccountID:      accountID,
+				})
 				state.orders = compactTrackedOrders(state.orders, cfg)
 				state.rejectStreak = 0
 				traceSeen.offer(traceID)
@@ -948,7 +959,11 @@ func runWorker(
 			}
 			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = order.OrderID
+			payload["runId"] = order.RunID
+			payload["venueSessionId"] = order.VenueSessionID
 			payload["instrumentId"] = order.InstrumentID
+			payload["participantId"] = order.ParticipantID
+			payload["accountId"] = order.AccountID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrumentByID(cfg, order.InstrumentID)))
 			status, body, err := doPOST(
@@ -983,7 +998,11 @@ func runWorker(
 			}
 			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = order.OrderID
+			payload["runId"] = order.RunID
+			payload["venueSessionId"] = order.VenueSessionID
 			payload["instrumentId"] = order.InstrumentID
+			payload["participantId"] = order.ParticipantID
+			payload["accountId"] = order.AccountID
 			payload["reason"] = "load test"
 			status, body, err := doPOST(
 				client,

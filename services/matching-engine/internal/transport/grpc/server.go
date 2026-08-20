@@ -151,29 +151,39 @@ func submitOrderFromProto(req *orderv1.SubmitOrder) domain.SubmitOrder {
 func cancelOrderFromProto(req *orderv1.CancelOrder) domain.CancelOrder {
 	metadata := req.GetMetadata()
 	return domain.CancelOrder{
-		CommandID:     metadata.GetCommandId(),
-		TraceID:       metadata.GetTraceId(),
-		CausationID:   metadata.GetCausationId(),
-		CorrelationID: metadata.GetCorrelationId(),
-		ActorID:       metadata.GetActorId(),
-		OccurredAt:    metadata.GetOccurredAt(),
-		OrderID:       req.GetOrderId(),
-		Reason:        req.GetReason(),
+		CommandID:      metadata.GetCommandId(),
+		TraceID:        metadata.GetTraceId(),
+		CausationID:    metadata.GetCausationId(),
+		CorrelationID:  metadata.GetCorrelationId(),
+		ActorID:        metadata.GetActorId(),
+		OccurredAt:     metadata.GetOccurredAt(),
+		OrderID:        req.GetOrderId(),
+		Reason:         req.GetReason(),
+		RunID:          metadata.GetRunId(),
+		VenueSessionID: metadata.GetVenueSessionId(),
+		InstrumentID:   req.GetInstrumentId(),
+		ParticipantID:  req.GetParticipantId(),
+		AccountID:      req.GetAccountId(),
 	}
 }
 
 func modifyOrderFromProto(req *orderv1.ModifyOrder) domain.ModifyOrder {
 	metadata := req.GetMetadata()
 	return domain.ModifyOrder{
-		CommandID:     metadata.GetCommandId(),
-		TraceID:       metadata.GetTraceId(),
-		CausationID:   metadata.GetCausationId(),
-		CorrelationID: metadata.GetCorrelationId(),
-		ActorID:       metadata.GetActorId(),
-		OccurredAt:    metadata.GetOccurredAt(),
-		OrderID:       req.GetOrderId(),
-		QuantityUnits: req.GetQuantity().GetUnits(),
-		LimitPrice:    req.GetLimitPrice().GetNanos(),
+		CommandID:      metadata.GetCommandId(),
+		TraceID:        metadata.GetTraceId(),
+		CausationID:    metadata.GetCausationId(),
+		CorrelationID:  metadata.GetCorrelationId(),
+		ActorID:        metadata.GetActorId(),
+		OccurredAt:     metadata.GetOccurredAt(),
+		OrderID:        req.GetOrderId(),
+		QuantityUnits:  req.GetQuantity().GetUnits(),
+		LimitPrice:     req.GetLimitPrice().GetNanos(),
+		RunID:          metadata.GetRunId(),
+		VenueSessionID: metadata.GetVenueSessionId(),
+		InstrumentID:   req.GetInstrumentId(),
+		ParticipantID:  req.GetParticipantId(),
+		AccountID:      req.GetAccountId(),
 	}
 }
 

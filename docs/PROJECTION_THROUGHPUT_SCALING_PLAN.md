@@ -395,8 +395,10 @@ Next gates:
 
 1. `2.5k soak-5m`: zero lag, zero gaps, zero deadlocks, zero projector DB
    retry delta, DB diagnostics present.
-2. `5k soak-5m`: zero lag, zero gaps, zero deadlocks, zero projector DB retry
-   delta, DB diagnostics present, and table/WAL/temp pressure compared against
+2. `5k soak-5m`: run the named
+   `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=5k-soak-5m` tier; require zero lag,
+   zero gaps, zero deadlocks, zero projector DB retry delta, DB diagnostics
+   present, and table/WAL/temp pressure compared against
    `do-benchmark-20260717T134058Z`.
 3. `5k command-status-fresh`: green on `do-benchmark-20260717T131344Z` after
    fixing Docker Compose pass-through for `STREAM_ACK_PROJECTION_STAGE`.

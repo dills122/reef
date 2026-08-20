@@ -33,6 +33,14 @@ const soak5m = runGatePlan({ REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "soak-5m" }
 assert.equal(soak5m.status, 0, soak5m.stderr);
 assert.match(soak5m.stdout, /duration=5m/);
 
+const fiveKSoak5m = runGatePlan({ REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "5k-soak-5m" });
+assert.equal(fiveKSoak5m.status, 0, fiveKSoak5m.stderr);
+assert.match(fiveKSoak5m.stdout, /rates=5000/);
+assert.match(fiveKSoak5m.stdout, /duration=5m/);
+assert.match(fiveKSoak5m.stdout, /min_attempted_rps=4800/);
+assert.match(fiveKSoak5m.stdout, /min_accepted_rps=4800/);
+assert.match(fiveKSoak5m.stdout, /min_projected_rps=4800/);
+
 const soak15m = runGatePlan({ REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "soak-15m" });
 assert.equal(soak15m.status, 0, soak15m.stderr);
 assert.match(soak15m.stdout, /duration=15m/);

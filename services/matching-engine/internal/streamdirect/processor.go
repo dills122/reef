@@ -520,6 +520,12 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 				DecodeError: decodeErr,
 			}, true
 		}
+		// The durable subject is the route actually selected by intake. Bind
+		// those values into the command before the service compares the full
+		// context with canonical order state. A command on the wrong lane then
+		// rejects without mutating even if its payload claims another book.
+		command.VenueSessionID = venueSessionID
+		command.InstrumentID = instrumentID
 		return processedOutcome{
 			CommandID:      command.CommandID,
 			VenueSessionID: venueSessionID,
@@ -535,6 +541,8 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 				DecodeError: decodeErr,
 			}, true
 		}
+		command.VenueSessionID = venueSessionID
+		command.InstrumentID = instrumentID
 		return processedOutcome{
 			CommandID:      command.CommandID,
 			VenueSessionID: venueSessionID,

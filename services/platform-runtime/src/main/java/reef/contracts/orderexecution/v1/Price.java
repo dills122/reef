@@ -58,7 +58,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       nanos_ = s;
@@ -74,7 +74,7 @@ private static final long serialVersionUID = 0L;
       getNanosBytes() {
     java.lang.Object ref = nanos_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       nanos_ = b;
@@ -97,7 +97,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       currency_ = s;
@@ -113,7 +113,7 @@ private static final long serialVersionUID = 0L;
       getCurrencyBytes() {
     java.lang.Object ref = currency_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       currency_ = b;
@@ -466,7 +466,7 @@ private static final long serialVersionUID = 0L;
         getNanosBytes() {
       java.lang.Object ref = nanos_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         nanos_ = b;
@@ -538,7 +538,7 @@ private static final long serialVersionUID = 0L;
         getCurrencyBytes() {
       java.lang.Object ref = currency_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         currency_ = b;
@@ -635,4 +635,3 @@ private static final long serialVersionUID = 0L;
   }
 
 }
-

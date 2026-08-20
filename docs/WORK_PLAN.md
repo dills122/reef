@@ -8,7 +8,7 @@ documents that own detailed contracts, evidence, and sprint tasking.
 Read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) first for the implementation
 snapshot and verified performance claims.
 
-Last aligned: 2026-07-21.
+Last aligned: 2026-08-17.
 
 ## Source Of Truth
 
@@ -68,7 +68,24 @@ and readiness remain independent.
 
 ## Active Execution Ladder
 
-1. Complete the invite-only fork preview proof.
+1. Close the independent architecture-review correctness gate.
+   - `ARCH-IR-01` / `ARCH-IR-02`: require cancel/modify routing and ownership
+     claims at the public boundary, authorize participant/account scope, and
+     bind all claims to the canonical engine order before mutation. Acceptance:
+     mismatched claims produce `ORDER_CONTEXT_MISMATCH`, do not mutate state,
+     and valid submit/cancel/modify commands share the deterministic lane.
+   - `ARCH-IR-05`: reject malformed `occurredAt` before durable public intake
+     and keep direct-engine rejection facts deterministic. Acceptance: repeat
+     processing emits identical event identity and timestamp.
+   - `ARCH-IR-08`: replace text-diff protobuf governance with descriptor-level
+     compatibility and checked-in Go/Java generation drift. Acceptance:
+     `make check-proto-additive` fails closed on missing prerequisites, breaking
+     descriptors, or stale generated sources.
+   - Verification: `make test-go`, `make test-platform-runtime`,
+     `make test-simulator-go`, `make test-bot-sdk`, and
+     `make check-proto-additive`.
+
+2. Complete the invite-only fork preview proof.
    - Run a named external account through fork submission, pending admission,
      maintainer approval, trusted provisioning, merge, and registry sync.
    - Use the implemented and tested `T-72h` / `T-48h` / `T-24h` eligibility,
@@ -83,7 +100,7 @@ and readiness remain independent.
    - Do not advertise open or self-service submissions before the release
      matrix is green.
 
-2. Finish the API/control-plane hardening backlog.
+3. Finish the API/control-plane hardening backlog.
    - Close remaining account/client/object authorization gaps.
    - Keep hosted, CI, and operator callers off raw `/internal/*` HTTP. The
      current [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
@@ -94,7 +111,7 @@ and readiness remain independent.
    - Keep `/api/v1` and `/admin/v1` as the only externally reachable HTTP
      product families.
 
-3. Resume venue-core scaling only from the recorded pause handoff.
+4. Resume venue-core scaling only from the recorded pause handoff.
    - First prove bounded working-set/state-shape behavior, including live-order
      retention and terminal-order cleanup.
    - Then run the compact canonical storage A/B and measure WAL/table bytes per
@@ -104,7 +121,7 @@ and readiness remain independent.
    - Raise the verified ceiling only after short and soak gates close with zero
      accepted/direct-acked/materialized gaps.
 
-4. Reduce projection write amplification.
+5. Reduce projection write amplification.
    - Keep command-status/lifecycle and full timeline projection stages
      measurable independently.
    - Reduce `runtime_events`, lifecycle/fill, WAL, tuple, and temp-file pressure
@@ -112,7 +129,7 @@ and readiness remain independent.
    - Keep projection freshness claims separate from venue-core acceptance and
      canonical materialization claims.
 
-5. Harden the implemented post-trade lifecycle.
+6. Harden the implemented post-trade lifecycle.
    - Preserve the allocation, confirmation, affirmation, clearing, novation,
      obligation, instruction, attempt, leg, ledger, break, repair, resolution,
      exception-queue, proof, and score fact chain.
@@ -123,7 +140,7 @@ and readiness remain independent.
      not broaden this checkpoint into a clearinghouse build or mutate matching
      history.
 
-6. Keep documentation synchronized as behavior lands.
+7. Keep documentation synchronized as behavior lands.
    - Update contracts, internal docs, public docs/API pages, and README in the
      same change when routes, commands, deployment shape, or release claims
      change.

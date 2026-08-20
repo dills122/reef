@@ -530,32 +530,40 @@ func TestProcessorBatchFirstSequenceHandlesOutOfOrderZero(t *testing.T) {
 
 func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 	submit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 20, map[string]string{
-		"commandId":     "cmd-submit",
-		"occurredAt":    "2026-07-04T00:00:00Z",
-		"orderId":       "ord-life-1",
-		"instrumentId":  "STK001",
-		"participantId": "participant-1",
-		"accountId":     "account-1",
-		"actorId":       "actor-1",
-		"side":          "BUY",
-		"orderType":     "LIMIT",
-		"quantityUnits": "100",
-		"limitPrice":    "100000000000",
-		"currency":      "USD",
-		"timeInForce":   "DAY",
+		"commandId":      "cmd-submit",
+		"runId":          "run-1",
+		"venueSessionId": "session",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-life-1",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "100000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
 	})
 	modify := newFakeDelivery("reef.cmd.v1.p00.session.STK001.ModifyOrder", 21, map[string]string{
 		"commandId":     "cmd-modify",
+		"runId":         "run-1",
 		"occurredAt":    "2026-07-04T00:00:01Z",
 		"orderId":       "ord-life-1",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
 		"quantityUnits": "120",
 		"limitPrice":    "100100000000",
 	})
 	cancel := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 22, map[string]string{
-		"commandId":  "cmd-cancel",
-		"occurredAt": "2026-07-04T00:00:02Z",
-		"orderId":    "ord-life-1",
-		"reason":     "test",
+		"commandId":     "cmd-cancel",
+		"runId":         "run-1",
+		"occurredAt":    "2026-07-04T00:00:02Z",
+		"orderId":       "ord-life-1",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"reason":        "test",
 	})
 	source := &fakeSource{deliveries: []CommandDelivery{submit, modify, cancel}}
 	publisher := &fakePublisher{}
@@ -597,6 +605,7 @@ func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
 	submit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 25, map[string]string{
 		"commandId":      "cmd-rollback-submit",
+		"runId":          "run-1",
 		"occurredAt":     "2026-07-04T00:00:00Z",
 		"orderId":        "ord-rollback-life",
 		"venueSessionId": "session",
@@ -613,16 +622,22 @@ func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
 	})
 	modify := newFakeDelivery("reef.cmd.v1.p00.session.STK001.ModifyOrder", 26, map[string]string{
 		"commandId":     "cmd-rollback-modify",
+		"runId":         "run-1",
 		"occurredAt":    "2026-07-04T00:00:01Z",
 		"orderId":       "ord-rollback-life",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
 		"quantityUnits": "120",
 		"limitPrice":    "100100000000",
 	})
 	cancel := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 27, map[string]string{
-		"commandId":  "cmd-rollback-cancel",
-		"occurredAt": "2026-07-04T00:00:02Z",
-		"orderId":    "ord-rollback-life",
-		"reason":     "test",
+		"commandId":     "cmd-rollback-cancel",
+		"runId":         "run-1",
+		"occurredAt":    "2026-07-04T00:00:02Z",
+		"orderId":       "ord-rollback-life",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"reason":        "test",
 	})
 	service := app.NewService()
 	failingPublisher := &fakePublisher{err: errors.New("publish failed")}
@@ -646,6 +661,7 @@ func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
 
 	redeliveredSubmit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 25, map[string]string{
 		"commandId":      "cmd-rollback-submit",
+		"runId":          "run-1",
 		"occurredAt":     "2026-07-04T00:00:00Z",
 		"orderId":        "ord-rollback-life",
 		"venueSessionId": "session",
@@ -662,16 +678,22 @@ func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
 	})
 	redeliveredModify := newFakeDelivery("reef.cmd.v1.p00.session.STK001.ModifyOrder", 26, map[string]string{
 		"commandId":     "cmd-rollback-modify",
+		"runId":         "run-1",
 		"occurredAt":    "2026-07-04T00:00:01Z",
 		"orderId":       "ord-rollback-life",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
 		"quantityUnits": "120",
 		"limitPrice":    "100100000000",
 	})
 	redeliveredCancel := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 27, map[string]string{
-		"commandId":  "cmd-rollback-cancel",
-		"occurredAt": "2026-07-04T00:00:02Z",
-		"orderId":    "ord-rollback-life",
-		"reason":     "test",
+		"commandId":     "cmd-rollback-cancel",
+		"runId":         "run-1",
+		"occurredAt":    "2026-07-04T00:00:02Z",
+		"orderId":       "ord-rollback-life",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"reason":        "test",
 	})
 	successPublisher := &fakePublisher{}
 	redeliveryProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redeliveredSubmit, redeliveredModify, redeliveredCancel}}, successPublisher, ProcessorConfig{

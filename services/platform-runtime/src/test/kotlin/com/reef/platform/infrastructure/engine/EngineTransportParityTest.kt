@@ -180,15 +180,19 @@ class EngineTransportParityTest {
 
         var grpcCancelMetadata: CommandMetadata? = null
         var grpcModifyMetadata: CommandMetadata? = null
+        var grpcCancelRequest: CancelOrder? = null
+        var grpcModifyRequest: ModifyOrder? = null
         val grpcServer = ServerBuilder.forPort(0).directExecutor().addService(
             ServerServiceDefinition.builder(SERVICE_NAME_PARITY)
                 .addMethod(cancelMethod(), ServerCalls.asyncUnaryCall { request: CancelOrder, observer ->
                     grpcCancelMetadata = request.metadata
+                    grpcCancelRequest = request
                     observer.onNext(simpleAccepted(request.orderId, "evt-2"))
                     observer.onCompleted()
                 })
                 .addMethod(modifyMethod(), ServerCalls.asyncUnaryCall { request: ModifyOrder, observer ->
                     grpcModifyMetadata = request.metadata
+                    grpcModifyRequest = request
                     observer.onNext(simpleAccepted(request.orderId, "evt-2"))
                     observer.onCompleted()
                 })
@@ -208,7 +212,12 @@ class EngineTransportParityTest {
                 actorId = "trader-1",
                 occurredAt = "2026-03-14T18:00:00Z",
                 orderId = "ord-1",
-                reason = "test"
+                reason = "test",
+                runId = "run-1",
+                venueSessionId = "session-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1"
             )
             val modify = ModifyOrderCommand(
                 commandId = "cmd-modify",
@@ -219,19 +228,38 @@ class EngineTransportParityTest {
                 occurredAt = "2026-03-14T18:00:00Z",
                 orderId = "ord-1",
                 quantityUnits = "100",
-                limitPrice = "150250000000"
+                limitPrice = "150250000000",
+                runId = "run-1",
+                venueSessionId = "session-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1"
             )
 
             assertEquals(http.cancelOrder(cancel), grpc.cancelOrder(cancel))
             assertEquals(http.modifyOrder(modify), grpc.modifyOrder(modify))
             assertContains(httpCancelBody, "\"traceId\":\"trace-cancel\"")
             assertContains(httpCancelBody, "\"causationId\":\"cause-cancel\"")
+            assertContains(httpCancelBody, "\"participantId\":\"participant-1\"")
+            assertContains(httpCancelBody, "\"accountId\":\"account-1\"")
             assertContains(httpModifyBody, "\"traceId\":\"trace-modify\"")
             assertContains(httpModifyBody, "\"causationId\":\"cause-modify\"")
+            assertContains(httpModifyBody, "\"participantId\":\"participant-1\"")
+            assertContains(httpModifyBody, "\"accountId\":\"account-1\"")
             assertEquals("trace-cancel", grpcCancelMetadata?.traceId)
             assertEquals("cause-cancel", grpcCancelMetadata?.causationId)
             assertEquals("trace-modify", grpcModifyMetadata?.traceId)
             assertEquals("cause-modify", grpcModifyMetadata?.causationId)
+            assertEquals("run-1", grpcCancelMetadata?.runId)
+            assertEquals("session-1", grpcCancelMetadata?.venueSessionId)
+            assertEquals("AAPL", grpcCancelRequest?.instrumentId)
+            assertEquals("participant-1", grpcCancelRequest?.participantId)
+            assertEquals("account-1", grpcCancelRequest?.accountId)
+            assertEquals("run-1", grpcModifyMetadata?.runId)
+            assertEquals("session-1", grpcModifyMetadata?.venueSessionId)
+            assertEquals("AAPL", grpcModifyRequest?.instrumentId)
+            assertEquals("participant-1", grpcModifyRequest?.participantId)
+            assertEquals("account-1", grpcModifyRequest?.accountId)
         } finally {
             httpServer.stop(0)
             grpcServer.shutdownNow()

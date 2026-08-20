@@ -1707,12 +1707,10 @@ class ExternalApiBoundary(
         val actorError = requireScope("actor", command.string("actorId"), principal.actorIds)
         if (actorError != null) return actorError
 
-        if (route == "/api/v1/orders/submit") {
-            val participantError = requireScope("participant", command.string("participantId"), principal.participantIds)
-            if (participantError != null) return participantError
-            val accountError = requireScope("account", command.string("accountId"), principal.accountIds)
-            if (accountError != null) return accountError
-        }
+        val participantError = requireScope("participant", command.string("participantId"), principal.participantIds)
+        if (participantError != null) return participantError
+        val accountError = requireScope("account", command.string("accountId"), principal.accountIds)
+        if (accountError != null) return accountError
 
         val botId = command.string("botId")
         if (botId.isNotBlank()) {

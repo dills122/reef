@@ -153,6 +153,7 @@ Gate tiers:
 |---|---|---:|---:|---|
 | `short` | `make do-projection-freshness-gate ARGS=run-destroy` | `60s` | `1` | Default remote freshness confirmation. |
 | `soak-5m` | `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=soak-5m make do-projection-freshness-gate ARGS=run-destroy` | `5m` | `1` | First longer remote freshness soak. |
+| `5k-soak-5m` | `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=5k-soak-5m make do-projection-freshness-gate ARGS=run-destroy` | `5m` | `1` | Named 5k full-projection pressure/freshness gate; run only after the lower soak is clean. |
 | `soak-15m` | `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=soak-15m make do-projection-freshness-gate ARGS=run-destroy` | `15m` | `1` | Only after `soak-5m` is clean. |
 
 Default pass gates:

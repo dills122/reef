@@ -64,7 +64,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       eventId_ = s;
@@ -80,7 +80,7 @@ private static final long serialVersionUID = 0L;
       getEventIdBytes() {
     java.lang.Object ref = eventId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       eventId_ = b;
@@ -103,7 +103,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       tradeId_ = s;
@@ -119,7 +119,7 @@ private static final long serialVersionUID = 0L;
       getTradeIdBytes() {
     java.lang.Object ref = tradeId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       tradeId_ = b;
@@ -142,7 +142,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       executionId_ = s;
@@ -158,7 +158,7 @@ private static final long serialVersionUID = 0L;
       getExecutionIdBytes() {
     java.lang.Object ref = executionId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       executionId_ = b;
@@ -181,7 +181,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       buyOrderId_ = s;
@@ -197,7 +197,7 @@ private static final long serialVersionUID = 0L;
       getBuyOrderIdBytes() {
     java.lang.Object ref = buyOrderId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       buyOrderId_ = b;
@@ -220,7 +220,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       sellOrderId_ = s;
@@ -236,7 +236,7 @@ private static final long serialVersionUID = 0L;
       getSellOrderIdBytes() {
     java.lang.Object ref = sellOrderId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       sellOrderId_ = b;
@@ -259,7 +259,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       instrumentId_ = s;
@@ -275,7 +275,7 @@ private static final long serialVersionUID = 0L;
       getInstrumentIdBytes() {
     java.lang.Object ref = instrumentId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       instrumentId_ = b;
@@ -350,7 +350,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       occurredAt_ = s;
@@ -366,7 +366,7 @@ private static final long serialVersionUID = 0L;
       getOccurredAtBytes() {
     java.lang.Object ref = occurredAt_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       occurredAt_ = b;
@@ -922,7 +922,7 @@ private static final long serialVersionUID = 0L;
         getEventIdBytes() {
       java.lang.Object ref = eventId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         eventId_ = b;
@@ -994,7 +994,7 @@ private static final long serialVersionUID = 0L;
         getTradeIdBytes() {
       java.lang.Object ref = tradeId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         tradeId_ = b;
@@ -1066,7 +1066,7 @@ private static final long serialVersionUID = 0L;
         getExecutionIdBytes() {
       java.lang.Object ref = executionId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         executionId_ = b;
@@ -1138,7 +1138,7 @@ private static final long serialVersionUID = 0L;
         getBuyOrderIdBytes() {
       java.lang.Object ref = buyOrderId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         buyOrderId_ = b;
@@ -1210,7 +1210,7 @@ private static final long serialVersionUID = 0L;
         getSellOrderIdBytes() {
       java.lang.Object ref = sellOrderId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         sellOrderId_ = b;
@@ -1282,7 +1282,7 @@ private static final long serialVersionUID = 0L;
         getInstrumentIdBytes() {
       java.lang.Object ref = instrumentId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         instrumentId_ = b;
@@ -1437,7 +1437,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.OrderQuantity quantity = 7;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder> 
+        reef.contracts.orderexecution.v1.OrderQuantity, reef.contracts.orderexecution.v1.OrderQuantity.Builder, reef.contracts.orderexecution.v1.OrderQuantityOrBuilder>
         internalGetQuantityFieldBuilder() {
       if (quantityBuilder_ == null) {
         quantityBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1558,7 +1558,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.Price price = 8;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
-        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder> 
+        reef.contracts.orderexecution.v1.Price, reef.contracts.orderexecution.v1.Price.Builder, reef.contracts.orderexecution.v1.PriceOrBuilder>
         internalGetPriceFieldBuilder() {
       if (priceBuilder_ == null) {
         priceBuilder_ = new com.google.protobuf.SingleFieldBuilder<
@@ -1596,7 +1596,7 @@ private static final long serialVersionUID = 0L;
         getOccurredAtBytes() {
       java.lang.Object ref = occurredAt_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         occurredAt_ = b;
@@ -1693,4 +1693,3 @@ private static final long serialVersionUID = 0L;
   }
 
 }
-

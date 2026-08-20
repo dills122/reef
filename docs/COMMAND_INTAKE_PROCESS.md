@@ -8,12 +8,11 @@ It turns the current stream-ack and direct engine-consumer direction into implem
 
 ## Current Scope
 
-The first intake work covers:
+The promoted intake path covers:
 
 - `SubmitOrder`
 - `CancelOrder`
-
-`ModifyOrder` keeps the same target shape but is deferred from the first implementation gate. It is not required for the next intake readiness milestone.
+- `ModifyOrder`
 
 The hot path is for commands that already carry deterministic routing metadata. Commands that require lookup or repair belong on slower explicit paths and are not part of the throughput target.
 
@@ -55,7 +54,7 @@ Do not build an enterprise-messaging abstraction that hides partitioning, acknow
 
 ## Command Envelope
 
-Hot-path submit and cancel commands must include:
+Hot-path submit, cancel, and modify commands must include:
 
 - `commandId`
 - `idempotencyKey`
@@ -63,6 +62,8 @@ Hot-path submit and cancel commands must include:
 - `venueSessionId`
 - `instrumentId`
 - `orderId` for cancel, or order identifier assigned by submit path
+- `participantId`
+- `accountId`
 - `clientOrderId` when supplied by the client
 - `actorId`
 - `clientId`
@@ -78,20 +79,32 @@ Partition key:
 hash(runId + venueSessionId + instrumentId) % partitionCount
 ```
 
-All submit and cancel commands that affect the same run, venue session, and instrument must land on the same ordered partition lane.
+All submit, cancel, and modify commands that affect the same run, venue session,
+and instrument must land on the same ordered partition lane.
+
+For cancel and modify, routing and ownership values are claims, not authority.
+The public boundary authorizes the participant/account claims against the
+authenticated principal. Before any lifecycle mutation, the matching engine
+compares `runId`, `venueSessionId`, `instrumentId`, `participantId`, and
+`accountId` with the canonical target order record. A mismatch produces a
+deterministic `ORDER_CONTEXT_MISMATCH` outcome and leaves the order unchanged.
+This binding preserves no-DB intake while ensuring every accepted lifecycle
+mutation used the canonical book lane and owner.
 
 ## Cancel Policy
 
-Hot-path cancel requires routing metadata.
+Hot-path cancel and modify require routing and ownership metadata.
 
-If a cancel request does not include enough metadata to route to the same partition as the order, the boundary rejects it with `400`. It must not perform a synchronous DB or projection lookup on the hot path.
+If a lifecycle request does not include enough metadata to route to the same
+partition and identify the target owner, the boundary rejects it with `400`.
+It must not perform a synchronous DB or projection lookup on the hot path.
 
 A slower cancel resolver can be added later:
 
 ```text
 POST /api/v1/orders/cancel-by-client-order
   -> resolve clientOrderId/order context outside hot path
-  -> emit normal CancelOrder with runId, venueSessionId, instrumentId, and orderId
+  -> emit normal CancelOrder with routing, ownership, and order identity
 ```
 
 The slower resolver is not part of the throughput target.
@@ -229,11 +242,14 @@ In `venue-core` mode, projection lag is reported but does not reject command int
 
 ## Readiness Gate
 
-The first durable intake readiness gate should prove:
+The durable intake readiness gate should prove:
 
-- `SubmitOrder` and `CancelOrder` use the same public command boundary as manual users, simulators, and bots
-- `ModifyOrder` is explicitly deferred but reserved in the contract
-- hot cancel without routing metadata is rejected
+- `SubmitOrder`, `CancelOrder`, and `ModifyOrder` use the same public command
+  boundary as manual users, simulators, and bots
+- hot cancel/modify without routing or ownership metadata is rejected before
+  durable intake
+- mismatched lifecycle context produces a deterministic rejection and leaves
+  canonical order state unchanged
 - API returns `202` only after durable publish acknowledgement
 - duplicate same-key/same-payload replay returns the previous accepted reference
 - duplicate same-key/different-payload returns `409`

@@ -283,35 +283,51 @@ func TestCommandMetadataMapsTraceAndCausation(t *testing.T) {
 
 	cancel := cancelOrderFromProto(&orderv1.CancelOrder{
 		Metadata: &orderv1.CommandMetadata{
-			CommandId:     "cmd-cancel",
-			TraceId:       "trace-cancel",
-			CausationId:   "cause-cancel",
-			CorrelationId: "corr-cancel",
-			ActorId:       "trader-1",
-			OccurredAt:    "2026-03-14T18:00:00Z",
+			CommandId:      "cmd-cancel",
+			TraceId:        "trace-cancel",
+			CausationId:    "cause-cancel",
+			CorrelationId:  "corr-cancel",
+			ActorId:        "trader-1",
+			OccurredAt:     "2026-03-14T18:00:00Z",
+			RunId:          "run-cancel",
+			VenueSessionId: "session-cancel",
 		},
-		OrderId: "ord-cancel",
-		Reason:  "user requested",
+		OrderId:       "ord-cancel",
+		Reason:        "user requested",
+		InstrumentId:  "AAPL",
+		ParticipantId: "participant-1",
+		AccountId:     "account-1",
 	})
 	if cancel.TraceID != "trace-cancel" || cancel.CausationID != "cause-cancel" {
 		t.Fatalf("cancel metadata not mapped: %#v", cancel)
 	}
+	if cancel.RunID != "run-cancel" || cancel.VenueSessionID != "session-cancel" || cancel.InstrumentID != "AAPL" || cancel.ParticipantID != "participant-1" || cancel.AccountID != "account-1" {
+		t.Fatalf("cancel context not mapped: %#v", cancel)
+	}
 
 	modify := modifyOrderFromProto(&orderv1.ModifyOrder{
 		Metadata: &orderv1.CommandMetadata{
-			CommandId:     "cmd-modify",
-			TraceId:       "trace-modify",
-			CausationId:   "cause-modify",
-			CorrelationId: "corr-modify",
-			ActorId:       "trader-1",
-			OccurredAt:    "2026-03-14T18:00:00Z",
+			CommandId:      "cmd-modify",
+			TraceId:        "trace-modify",
+			CausationId:    "cause-modify",
+			CorrelationId:  "corr-modify",
+			ActorId:        "trader-1",
+			OccurredAt:     "2026-03-14T18:00:00Z",
+			RunId:          "run-modify",
+			VenueSessionId: "session-modify",
 		},
-		OrderId:    "ord-modify",
-		Quantity:   &orderv1.OrderQuantity{Units: "200"},
-		LimitPrice: &orderv1.Price{Nanos: "150350000000", Currency: "USD"},
+		OrderId:       "ord-modify",
+		Quantity:      &orderv1.OrderQuantity{Units: "200"},
+		LimitPrice:    &orderv1.Price{Nanos: "150350000000", Currency: "USD"},
+		InstrumentId:  "AAPL",
+		ParticipantId: "participant-1",
+		AccountId:     "account-1",
 	})
 	if modify.TraceID != "trace-modify" || modify.CausationID != "cause-modify" {
 		t.Fatalf("modify metadata not mapped: %#v", modify)
+	}
+	if modify.RunID != "run-modify" || modify.VenueSessionID != "session-modify" || modify.InstrumentID != "AAPL" || modify.ParticipantID != "participant-1" || modify.AccountID != "account-1" {
+		t.Fatalf("modify context not mapped: %#v", modify)
 	}
 }
 

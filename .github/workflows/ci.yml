@@ -77,7 +77,18 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Proto additive compatibility check
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/matching-engine/go.mod
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: '33.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install pinned Go protobuf generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.2
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+      - name: Proto compatibility and generated-source check
         run: ./scripts/check-proto-additive.sh
 
   go-matching-engine:

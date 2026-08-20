@@ -37,6 +37,7 @@ type orderBook struct {
 
 type orderRecord struct {
 	OrderID           string
+	RunID             string
 	InstrumentID      string
 	VenueSessionID    string
 	ParticipantID     string
@@ -79,6 +80,7 @@ type SnapshotMetadata struct {
 
 type SnapshotOrderRecord struct {
 	OrderID           string             `json:"orderId"`
+	RunID             string             `json:"runId"`
 	InstrumentID      string             `json:"instrumentId"`
 	VenueSessionID    string             `json:"venueSessionId"`
 	ParticipantID     string             `json:"participantId"`
@@ -210,7 +212,7 @@ func (s *Service) SubmitOrderInBatch(rollback *BatchRollback, cmd domain.SubmitO
 
 func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) domain.SubmitOrderResult {
 	if !validOccurredAt(cmd.OccurredAt) {
-		return rejectedResult("evt-reject-invalid-occurred-at", cmd.OrderID, "VALIDATION_ERROR", "occurredAt must be RFC3339", s.nowFormatted())
+		return invalidOccurredAtResult(cmd.CommandID, cmd.OrderID)
 	}
 	now := s.occurredAt(cmd.OccurredAt)
 
@@ -253,6 +255,7 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 
 	record := &orderRecord{
 		OrderID:           cmd.OrderID,
+		RunID:             cmd.RunID,
 		InstrumentID:      cmd.InstrumentID,
 		VenueSessionID:    cmd.VenueSessionID,
 		ParticipantID:     cmd.ParticipantID,
@@ -297,7 +300,7 @@ func (s *Service) CancelOrderInBatch(rollback *BatchRollback, cmd domain.CancelO
 
 func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) domain.SubmitOrderResult {
 	if !validOccurredAt(cmd.OccurredAt) {
-		return rejectedResult("evt-reject-invalid-occurred-at", cmd.OrderID, "VALIDATION_ERROR", "occurredAt must be RFC3339", s.nowFormatted())
+		return invalidOccurredAtResult(cmd.CommandID, cmd.OrderID)
 	}
 	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
@@ -307,6 +310,9 @@ func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) d
 	record, ok := s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	if !matchesOrderContext(record, cmd.RunID, cmd.VenueSessionID, cmd.InstrumentID, cmd.ParticipantID, cmd.AccountID) {
+		return rejectedResult(orderContextEventID(cmd.CommandID, cmd.OrderID), cmd.OrderID, "ORDER_CONTEXT_MISMATCH", "routing or ownership context does not match target order", now)
 	}
 	if rejection := s.validateSessionForCancel(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
 		return *rejection
@@ -341,7 +347,7 @@ func (s *Service) ModifyOrderInBatch(rollback *BatchRollback, cmd domain.ModifyO
 
 func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) domain.SubmitOrderResult {
 	if !validOccurredAt(cmd.OccurredAt) {
-		return rejectedResult("evt-reject-invalid-occurred-at", cmd.OrderID, "VALIDATION_ERROR", "occurredAt must be RFC3339", s.nowFormatted())
+		return invalidOccurredAtResult(cmd.CommandID, cmd.OrderID)
 	}
 	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
@@ -351,6 +357,9 @@ func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) d
 	record, ok := s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	if !matchesOrderContext(record, cmd.RunID, cmd.VenueSessionID, cmd.InstrumentID, cmd.ParticipantID, cmd.AccountID) {
+		return rejectedResult(orderContextEventID(cmd.CommandID, cmd.OrderID), cmd.OrderID, "ORDER_CONTEXT_MISMATCH", "routing or ownership context does not match target order", now)
 	}
 	if rejection := s.validateMatchingProfile(cmd.OrderID, record.InstrumentID, now); rejection != nil {
 		return *rejection
@@ -462,6 +471,49 @@ func validOccurredAt(commandOccurredAt string) bool {
 	}
 	_, err := time.Parse(time.RFC3339, trimmed)
 	return err == nil
+}
+
+func invalidOccurredAtResult(commandID string, orderID string) domain.SubmitOrderResult {
+	identity := strings.TrimSpace(commandID)
+	if identity == "" {
+		identity = strings.TrimSpace(orderID)
+	}
+	if identity == "" {
+		identity = "unknown-command"
+	}
+	return rejectedResult(
+		"evt-reject-invalid-occurred-at-"+identity,
+		orderID,
+		"VALIDATION_ERROR",
+		"occurredAt must be RFC3339",
+		time.Unix(0, 0).UTC().Format(time.RFC3339),
+	)
+}
+
+func matchesOrderContext(record *orderRecord, runID string, venueSessionID string, instrumentID string, participantID string, accountID string) bool {
+	if strings.TrimSpace(runID) == "" &&
+		strings.TrimSpace(venueSessionID) == "" &&
+		strings.TrimSpace(instrumentID) == "" &&
+		strings.TrimSpace(participantID) == "" &&
+		strings.TrimSpace(accountID) == "" {
+		return true
+	}
+	return runID == record.RunID &&
+		venueSessionID == record.VenueSessionID &&
+		instrumentID == record.InstrumentID &&
+		participantID == record.ParticipantID &&
+		accountID == record.AccountID
+}
+
+func orderContextEventID(commandID string, orderID string) string {
+	identity := strings.TrimSpace(commandID)
+	if identity == "" {
+		identity = strings.TrimSpace(orderID)
+	}
+	if identity == "" {
+		identity = "unknown-command"
+	}
+	return "evt-reject-order-context-" + identity
 }
 
 func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
@@ -610,7 +662,7 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
 	})
 	snapshot.Metadata = SnapshotMetadata{
-		SnapshotVersion: "matching-service-snapshot-v1",
+		SnapshotVersion: "matching-service-snapshot-v2",
 		EngineVersion:   "matching-engine-app-v1",
 		BookCount:       len(snapshot.Books),
 		OrderCount:      len(snapshot.Orders),
@@ -646,6 +698,7 @@ func (s *Service) lockSnapshotBooks(include func(string) bool) ([]string, map[st
 func snapshotOrderRecord(record *orderRecord) SnapshotOrderRecord {
 	return SnapshotOrderRecord{
 		OrderID:           record.OrderID,
+		RunID:             record.RunID,
 		InstrumentID:      record.InstrumentID,
 		VenueSessionID:    record.VenueSessionID,
 		ParticipantID:     record.ParticipantID,
@@ -686,6 +739,7 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 		service.books[instrumentID] = &orderBook{book: restored}
 	}
 	seenOrderIDs := make(map[string]bool, len(snapshot.Orders))
+	terminalRecords := make([]*orderRecord, 0)
 	for _, order := range snapshot.Orders {
 		if order.OrderID == "" || seenOrderIDs[order.OrderID] {
 			return nil, false
@@ -693,6 +747,7 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 		seenOrderIDs[order.OrderID] = true
 		record := &orderRecord{
 			OrderID:           order.OrderID,
+			RunID:             order.RunID,
 			InstrumentID:      order.InstrumentID,
 			VenueSessionID:    order.VenueSessionID,
 			ParticipantID:     order.ParticipantID,
@@ -706,6 +761,12 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 			LastUpdatedAt:     order.LastUpdatedAt,
 		}
 		service.orderIndex.restore(record)
+		if record.Status == domain.OrderStatusFilled || record.Status == domain.OrderStatusCancelled {
+			terminalRecords = append(terminalRecords, record)
+		}
+	}
+	for _, record := range terminalRecords {
+		service.trackTerminalOrder(nil, record)
 	}
 	if service.Snapshot().Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
 		return nil, false
@@ -866,7 +927,7 @@ func validSnapshotMetadata(snapshot Snapshot) bool {
 	if snapshot.Metadata.SnapshotVersion == "" && snapshot.Metadata.EngineVersion == "" {
 		return true
 	}
-	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v1" || snapshot.Metadata.EngineVersion == "" {
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2" || snapshot.Metadata.EngineVersion == "" {
 		return false
 	}
 	if snapshot.Metadata.BookCount != len(snapshot.Books) || snapshot.Metadata.OrderCount != len(snapshot.Orders) {
@@ -923,6 +984,8 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 	for _, order := range orders {
 		builder.WriteString("order:")
 		builder.WriteString(order.OrderID)
+		builder.WriteByte(':')
+		builder.WriteString(order.RunID)
 		builder.WriteByte(':')
 		builder.WriteString(order.InstrumentID)
 		builder.WriteByte(':')
@@ -1052,7 +1115,11 @@ func (rb *BatchRollback) Commit() {
 	}
 	rb.committed = true
 	for _, orderID := range rb.terminalOrderIDs {
-		rb.service.terminalRetention.commit(orderID, func(evictID string) {
+		record, ok := rb.service.loadOrder(orderID)
+		if !ok {
+			continue
+		}
+		rb.service.terminalRetention.commit(record, func(evictID string) {
 			evictRecord, ok := rb.service.loadOrder(evictID)
 			if !ok {
 				return

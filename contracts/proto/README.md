@@ -21,21 +21,14 @@ Current usage model:
 - HTTP JSON remains as a compatibility/fallback transport with equivalent command metadata
 - generated Java sources are checked in under `services/platform-runtime/src/main/java/reef/contracts/orderexecution/v1/`
 - generated Go sources are checked in under `services/matching-engine/internal/transport/grpc/pb/contracts/proto/`
-- the current submit stream uses existing generated message types and a manually registered Go service descriptor until protoc Go plugins are available locally
+- lifecycle mutation messages carry the target order's routing and ownership
+  claims so the engine can bind them to canonical in-memory order state
 
 Regenerate checked-in sources from the repository root:
 
 ```bash
-protoc -I . \
-  --java_out=services/platform-runtime/src/main/java \
-  contracts/proto/order_execution.proto
-
-PATH=$HOME/go/bin:$PATH protoc -I . \
-  --go_out=services/matching-engine/internal/transport/grpc/pb \
-  --go_opt=paths=source_relative \
-  --go-grpc_out=services/matching-engine/internal/transport/grpc/pb \
-  --go-grpc_opt=paths=source_relative \
-  contracts/proto/order_execution.proto
+./scripts/generate-proto.sh
+make check-proto-additive
 ```
 
 Contract rules:
@@ -44,14 +37,23 @@ Contract rules:
 - include actor, trace, causation, and correlation metadata
 - preserve canonical maker/taker attribution on every execution through the
   `ExecutionCreated.liquidity_role` field
-- include stream routing metadata on commands that may enter `stream-ack` (`runId`, `venueSessionId`, order/client-order identifiers, and bot attribution when present)
+- include stream routing metadata on commands that may enter `stream-ack`
+  (`runId`, `venueSessionId`, `instrumentId`, order/client-order identifiers,
+  and bot attribution when present)
+- include `participantId` and `accountId` on cancel/modify commands; the API
+  authorizes those claims and the engine rejects them when they do not match
+  the target order
 - avoid floating-point price and quantity fields
 - version messages deliberately
 
 Compatibility guard:
 
-- `make check-proto-additive` compares against `PROTO_BASE_REF` when set.
+- `make check-proto-additive` compiles baseline and current descriptor sets,
+  compares messages, fields, enums, services, and methods, and verifies that
+  checked-in Go and Java generated sources exactly match the contract.
+- Generation is pinned to `protoc 33.2`, `protoc-gen-go v1.34.2`, and
+  `protoc-gen-go-grpc 1.5.1` in CI.
+- The guard compares against `PROTO_BASE_REF` when set.
 - Without `PROTO_BASE_REF`, it defaults to `origin/HEAD`, then falls back to
   `origin/main` or `origin/master`.
-- If no base ref is available, the guard prints an explicit skip message and
-  exits successfully rather than pretending a compatibility check ran.
+- If no base ref or required tool is available, the guard fails closed.

@@ -979,6 +979,119 @@ func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	}
 }
 
+func TestLifecycleMutationsRejectClaimsThatDoNotMatchTargetOrder(t *testing.T) {
+	service := NewService()
+	service.SubmitOrder(domain.SubmitOrder{
+		CommandID:      "cmd-submit-owned",
+		OrderID:        "ord-owned",
+		RunID:          "run-1",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-1",
+		AccountID:      "account-1",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "100",
+		LimitPrice:     "150250000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:00Z",
+	})
+
+	cancel := service.CancelOrder(domain.CancelOrder{
+		CommandID:      "cmd-cancel-spoofed",
+		OrderID:        "ord-owned",
+		RunID:          "run-1",
+		VenueSessionID: "session-1",
+		InstrumentID:   "MSFT",
+		ParticipantID:  "participant-2",
+		AccountID:      "account-1",
+		OccurredAt:     "2026-03-14T18:00:01Z",
+	})
+	if cancel.Rejected == nil || cancel.Rejected.Code != "ORDER_CONTEXT_MISMATCH" {
+		t.Fatalf("expected cancel context rejection, got %#v", cancel)
+	}
+
+	modify := service.ModifyOrder(domain.ModifyOrder{
+		CommandID:      "cmd-modify-spoofed",
+		OrderID:        "ord-owned",
+		RunID:          "run-2",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-1",
+		AccountID:      "account-2",
+		QuantityUnits:  "90",
+		LimitPrice:     "150200000000",
+		OccurredAt:     "2026-03-14T18:00:02Z",
+	})
+	if modify.Rejected == nil || modify.Rejected.Code != "ORDER_CONTEXT_MISMATCH" {
+		t.Fatalf("expected modify context rejection, got %#v", modify)
+	}
+
+	state, ok := service.OrderState("ord-owned")
+	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
+		t.Fatalf("expected spoofed lifecycle mutations to leave order unchanged, got %#v", state)
+	}
+}
+
+func TestMalformedOccurredAtRejectionIsDeterministic(t *testing.T) {
+	service := NewService()
+	command := domain.SubmitOrder{
+		CommandID:  "cmd-invalid-occurred-at",
+		OrderID:    "ord-invalid-occurred-at",
+		OccurredAt: "not-a-timestamp",
+	}
+
+	first := service.SubmitOrder(command)
+	second := service.SubmitOrder(command)
+	if first.Rejected == nil || second.Rejected == nil {
+		t.Fatalf("expected deterministic validation rejections, got %#v and %#v", first, second)
+	}
+	if *first.Rejected != *second.Rejected {
+		t.Fatalf("expected identical rejection facts, got %#v and %#v", first.Rejected, second.Rejected)
+	}
+	if first.Rejected.EventID != "evt-reject-invalid-occurred-at-cmd-invalid-occurred-at" {
+		t.Fatalf("unexpected deterministic event id: %s", first.Rejected.EventID)
+	}
+	if first.Rejected.OccurredAt != "1970-01-01T00:00:00Z" {
+		t.Fatalf("unexpected deterministic rejection time: %s", first.Rejected.OccurredAt)
+	}
+}
+
+func TestSnapshotPreservesLifecycleRoutingAndOwnershipContext(t *testing.T) {
+	service := NewService()
+	service.SubmitOrder(domain.SubmitOrder{
+		CommandID:      "cmd-snapshot-context-submit",
+		OrderID:        "ord-snapshot-context",
+		RunID:          "run-snapshot",
+		VenueSessionID: "session-snapshot",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-snapshot",
+		AccountID:      "account-snapshot",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "100",
+		LimitPrice:     "150250000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:00Z",
+	})
+
+	restored, ok := Restore(service.Snapshot())
+	if !ok {
+		t.Fatal("expected snapshot restore to succeed")
+	}
+	result := restored.CancelOrder(domain.CancelOrder{
+		CommandID:      "cmd-snapshot-context-cancel",
+		OrderID:        "ord-snapshot-context",
+		RunID:          "run-snapshot",
+		VenueSessionID: "session-snapshot",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-snapshot",
+		AccountID:      "account-snapshot",
+		OccurredAt:     "2026-03-14T18:00:01Z",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected restored canonical context to authorize cancel, got %#v", result)
+	}
+}
+
 func TestTerminalOrderRetentionLimitPrunesOldestTerminalState(t *testing.T) {
 	service := NewService(WithTerminalOrderRetentionLimit(1))
 
@@ -1161,7 +1274,7 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if snapshot.Checksum == "" {
 		t.Fatal("expected service snapshot checksum")
 	}
-	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v1" || snapshot.Metadata.EngineVersion == "" {
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2" || snapshot.Metadata.EngineVersion == "" {
 		t.Fatalf("expected populated snapshot metadata, got %#v", snapshot.Metadata)
 	}
 	if snapshot.Metadata.BookCount != 1 || snapshot.Metadata.OrderCount != 4 {
