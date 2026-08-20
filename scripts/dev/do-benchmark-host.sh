@@ -499,6 +499,7 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   fi
 
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
+  run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans
   if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
     export STREAM_ACK_PROJECTOR_ENABLED=true
     export STREAM_ACK_PROJECTION_SOURCE=venue-event-batch

@@ -25,6 +25,17 @@ test("benchmark_run_stage returns zero for a successful command", () => {
   assert.equal(readFileSync(join(logDir, "stage-success.log"), "utf8"), "successful output\n");
 });
 
+test("materializer benchmark resets smoke state before measured stress", () => {
+  const source = readFileSync("scripts/dev/do-benchmark-host.sh", "utf8");
+  const smoke = source.indexOf("run_stage make-dev-smoke-venue-event-materializer");
+  const reset = source.indexOf("run_stage reset-after-materializer-smoke");
+  const stress = source.indexOf("run_stage make-dev-stress-venue-event-materializer");
+
+  assert.ok(smoke >= 0, "materializer smoke stage is missing");
+  assert.ok(reset > smoke, "remote state must reset after materializer smoke");
+  assert.ok(stress > reset, "measured materializer stress must start after the reset");
+});
+
 function runStage(logDir, name, exitCommand) {
   const output = name === "failure" ? "failed output" : "successful output";
   return spawnSync(
