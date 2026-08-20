@@ -261,7 +261,7 @@ cmd_reset_remote() {
   remote_script <<'REMOTE'
 set -euo pipefail
 cd "$REMOTE_DIR"
-docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans || true
+docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans || true
 rm -rf "$REMOTE_ARTIFACT_ROOT"
 mkdir -p "$REMOTE_ARTIFACT_ROOT"
 echo "remote benchmark Docker volumes and artifacts reset"
@@ -499,7 +499,7 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   fi
 
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
-  run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans
+  run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
   if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
     export STREAM_ACK_PROJECTOR_ENABLED=true
     export STREAM_ACK_PROJECTION_SOURCE=venue-event-batch

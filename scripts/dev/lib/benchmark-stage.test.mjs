@@ -34,6 +34,11 @@ test("materializer benchmark resets smoke state before measured stress", () => {
   assert.ok(smoke >= 0, "materializer smoke stage is missing");
   assert.ok(reset > smoke, "remote state must reset after materializer smoke");
   assert.ok(stress > reset, "measured materializer stress must start after the reset");
+  assert.match(
+    source,
+    /run_stage reset-after-materializer-smoke docker compose -f compose\.base\.yml -f compose\.local\.yml --profile '\*' down --volumes --remove-orphans/,
+    "the reset must activate every Compose profile so Redpanda and materializer state are removed",
+  );
 });
 
 function runStage(logDir, name, exitCommand) {
