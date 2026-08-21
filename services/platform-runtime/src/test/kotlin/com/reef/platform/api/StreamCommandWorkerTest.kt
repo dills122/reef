@@ -322,7 +322,11 @@ class StreamCommandWorkerTest {
         val status = persistence.projectionStatus("runtime-normalized-submit")
         assertEquals(0, status.lag)
         assertEquals(12, status.watermarks.single().lastPartitionSequence)
-        assertEquals(1, CanonicalProjectionMetrics.snapshot().projected)
+        val metrics = CanonicalProjectionMetrics.snapshot()
+        assertEquals(1, metrics.projected)
+        assertEquals(1, metrics.batches)
+        assertEquals(1, metrics.lastBatchSize)
+        assertEquals(1, metrics.maxBatchSize)
     }
 
     @Test

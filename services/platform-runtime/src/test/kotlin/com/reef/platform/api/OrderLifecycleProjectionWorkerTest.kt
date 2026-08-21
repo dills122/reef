@@ -47,6 +47,7 @@ class OrderLifecycleProjectionWorkerTest {
 
         val secondCycleProcessed = worker.processOnce()
         assertEquals(0, secondCycleProcessed)
+        assertEquals(0, OrderLifecycleProjectionMetrics.snapshot().lastProcessedRows)
     }
 
     /**

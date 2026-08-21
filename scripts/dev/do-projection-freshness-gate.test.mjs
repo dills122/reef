@@ -24,10 +24,17 @@ assert.match(short.stdout, /stream_ack_projector_0_partitions=0,1,2,3/);
 assert.match(short.stdout, /stream_ack_projector_1_partitions=4,5,6,7/);
 assert.match(short.stdout, /stream_ack_projector_2_partitions=8,9,10,11/);
 assert.match(short.stdout, /stream_ack_projector_3_partitions=12,13,14,15/);
+assert.match(short.stdout, /order_lifecycle_projector_0_enabled=true/);
+assert.match(short.stdout, /order_lifecycle_projector_1_enabled=false/);
+assert.match(short.stdout, /market_data_projector_0_enabled=true/);
+assert.match(short.stdout, /market_data_projector_1_enabled=false/);
+assert.match(short.stdout, /required_order_lifecycle_maintainers=1/);
+assert.match(short.stdout, /required_market_data_maintainers=1/);
 assert.match(short.stdout, /min_stream_direct_active_partitions=16/);
 assert.match(short.stdout, /max_stream_direct_partition_skew=4/);
 assert.match(short.stdout, /require_db_diagnostics=1/);
 assert.match(short.stdout, /require_pg_stat_io=1/);
+assert.match(short.stdout, /require_pg_stat_statements=1/);
 
 const soak5m = runGatePlan({ REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "soak-5m" });
 assert.equal(soak5m.status, 0, soak5m.stderr);
@@ -73,10 +80,21 @@ function runGatePlan(overrides) {
       STREAM_ACK_PROJECTOR_1_PARTITIONS: "",
       STREAM_ACK_PROJECTOR_2_PARTITIONS: "",
       STREAM_ACK_PROJECTOR_3_PARTITIONS: "",
+      ORDER_LIFECYCLE_PROJECTOR_0_ENABLED: "",
+      ORDER_LIFECYCLE_PROJECTOR_1_ENABLED: "",
+      ORDER_LIFECYCLE_PROJECTOR_2_ENABLED: "",
+      ORDER_LIFECYCLE_PROJECTOR_3_ENABLED: "",
+      MARKET_DATA_PROJECTOR_0_ENABLED: "",
+      MARKET_DATA_PROJECTOR_1_ENABLED: "",
+      MARKET_DATA_PROJECTOR_2_ENABLED: "",
+      MARKET_DATA_PROJECTOR_3_ENABLED: "",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "",
       REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS: "",
       REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW: "",
       REEF_DO_REQUIRE_DB_DIAGNOSTICS: "",
       REEF_DO_REQUIRE_PG_STAT_IO: "",
+      REEF_DO_REQUIRE_PG_STAT_STATEMENTS: "",
       REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "",
       ...overrides,
     },

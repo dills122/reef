@@ -22,6 +22,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -2730,20 +2731,22 @@ class PostgresRuntimePersistence(
         if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full) {
             return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
         }
-        canonicalConnection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?, ?)
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, projectionName)
-                ps.setInt(2, batchSize)
-                ps.setArray(3, conn.createArrayOf("integer", partitions.toTypedArray()))
-                ps.setBoolean(4, includeFills)
-                ps.setString(5, eventStream.trim().ifBlank { null })
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    return rs.getLong(1)
+        return HotPathMetrics.time("projector.venueEventBatch.projectionSql") {
+            canonicalConnection().use { conn ->
+                conn.prepareStatement(
+                    """
+                    SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?, ?)
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.setInt(2, batchSize)
+                    ps.setArray(3, conn.createArrayOf("integer", partitions.toTypedArray()))
+                    ps.setBoolean(4, includeFills)
+                    ps.setString(5, eventStream.trim().ifBlank { null })
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getLong(1)
+                    }
                 }
             }
         }
@@ -2756,29 +2759,37 @@ class PostgresRuntimePersistence(
     ): Long {
         val ownedPartitions = ownedProjectionPartitions(partitions)
         if (ownedPartitions.isEmpty()) return 0
-        val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
-        val perPartitionLimit = ((batchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
-        val candidates = ownedPartitions
-            .flatMap { partitionId ->
-                canonicalProjectionCandidates(
-                    partitionId = partitionId,
-                    afterPartitionSequence = watermarks[partitionId] ?: 0L,
-                    limit = perPartitionLimit
-                ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
-            }
-            .sortedWith(
-                compareBy<ProjectionCandidate> { it.partitionRow }
-                    .thenBy { it.partitionId }
-                    .thenBy { it.partitionSequence }
-            )
-            .take(batchSize)
+        val candidates = HotPathMetrics.time("projector.canonicalSubmit.canonicalRead") {
+            val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
+            val perPartitionLimit = ((batchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
+            ownedPartitions
+                .flatMap { partitionId ->
+                    canonicalProjectionCandidates(
+                        partitionId = partitionId,
+                        afterPartitionSequence = watermarks[partitionId] ?: 0L,
+                        limit = perPartitionLimit
+                    ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
+                }
+                .sortedWith(
+                    compareBy<ProjectionCandidate> { it.partitionRow }
+                        .thenBy { it.partitionId }
+                        .thenBy { it.partitionSequence }
+                )
+                .take(batchSize)
+        }
         if (candidates.isEmpty()) return 0
 
-        return executeProjectionTransactionWithRetry(projectionName) { conn ->
-            val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
-            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+        return executeProjectionTransactionWithRetry(projectionName, "projector.canonicalSubmit") { conn ->
+            val payloadJson = HotPathMetrics.time("projector.canonicalSubmit.transform") {
+                candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
+            }
+            HotPathMetrics.time("projector.canonicalSubmit.projectionSql") {
+                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+            }
             maybeFailAfterProjectorRowsBeforeWatermark(conn)
-            updateProjectionWatermarks(conn, projectionName, candidates)
+            HotPathMetrics.time("projector.canonicalSubmit.watermark") {
+                updateProjectionWatermarks(conn, projectionName, candidates)
+            }
             candidates.size.toLong()
         }
     }
@@ -2795,52 +2806,63 @@ class PostgresRuntimePersistence(
         val scopedEventStream = eventStream.trim()
         val ownedPartitions = ownedCommandProjectionPartitions(partitions, scopedEventStream)
         if (ownedPartitions.isEmpty()) return 0
-        val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
-        val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
-        val includeCommandPayload = commandPayloadSideTableAvailable()
-        val candidates = ownedPartitions
-            .flatMap { partitionId ->
-                contiguousCommandProjectionCandidates(
-                    partitionId = partitionId,
-                    afterPartitionSequence = watermarks[partitionId] ?: 0L,
-                    candidates = canonicalCommandProjectionCandidates(
+        val candidates = HotPathMetrics.time("projector.venueEventBatch.canonicalRead") {
+            val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
+            val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
+            val includeCommandPayload = commandPayloadSideTableAvailable()
+            ownedPartitions
+                .flatMap { partitionId ->
+                    contiguousCommandProjectionCandidates(
                         partitionId = partitionId,
                         afterPartitionSequence = watermarks[partitionId] ?: 0L,
-                        limit = perPartitionLimit,
-                        includeCommandPayload = includeCommandPayload,
-                        eventStream = scopedEventStream
-                    )
-                ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
-            }
-            .sortedWith(
-                compareBy<CommandProjectionCandidate> { it.partitionRow }
-                    .thenBy { it.partitionId }
-                    .thenBy { it.partitionSequence }
-            )
-            .take(effectiveBatchSize)
+                        candidates = canonicalCommandProjectionCandidates(
+                            partitionId = partitionId,
+                            afterPartitionSequence = watermarks[partitionId] ?: 0L,
+                            limit = perPartitionLimit,
+                            includeCommandPayload = includeCommandPayload,
+                            eventStream = scopedEventStream
+                        )
+                    ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
+                }
+                .sortedWith(
+                    compareBy<CommandProjectionCandidate> { it.partitionRow }
+                        .thenBy { it.partitionId }
+                        .thenBy { it.partitionSequence }
+                )
+                .take(effectiveBatchSize)
+        }
         if (candidates.isEmpty()) return 0
 
-        return executeProjectionTransactionWithRetry(projectionName) { conn ->
-            val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
-            persistSubmitOutcomePayloads(conn, payloadJson, candidates.size, projectionStage)
-            maybeFailAfterProjectorRowsBeforeWatermark(conn)
-            updateProjectionWatermarks(
-                conn,
-                projectionName,
-                candidates.map {
-                    ProjectionCandidate(
-                        partitionId = it.partitionId,
-                        partitionSequence = it.partitionSequence,
-                        resultPayload = ""
-                    )
+        return executeProjectionTransactionWithRetry(projectionName, "projector.venueEventBatch") { conn ->
+            val payloadJson = HotPathMetrics.time("projector.venueEventBatch.transform") {
+                candidates.toJsonArray {
+                    it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject()
                 }
-            )
+            }
+            HotPathMetrics.time("projector.venueEventBatch.projectionSql") {
+                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size, projectionStage)
+            }
+            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            HotPathMetrics.time("projector.venueEventBatch.watermark") {
+                updateProjectionWatermarks(
+                    conn,
+                    projectionName,
+                    candidates.map {
+                        ProjectionCandidate(
+                            partitionId = it.partitionId,
+                            partitionSequence = it.partitionSequence,
+                            resultPayload = ""
+                        )
+                    }
+                )
+            }
             candidates.size.toLong()
         }
     }
 
     private fun executeProjectionTransactionWithRetry(
         projectionName: String,
+        metricPrefix: String,
         operation: (Connection) -> Long
     ): Long {
         var attempt = 1
@@ -2850,7 +2872,9 @@ class PostgresRuntimePersistence(
                 conn.autoCommit = false
                 try {
                     val result = operation(conn)
-                    conn.commit()
+                    HotPathMetrics.time("$metricPrefix.commit") {
+                        conn.commit()
+                    }
                     return result
                 } catch (ex: Exception) {
                     rollbackQuietly(conn)

@@ -4804,6 +4804,24 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun projectorStatusReportsConfiguredDownstreamMaintainers() {
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            orderLifecycleProjectorEnabled = true,
+            marketDataProjectorEnabled = false
+        )
+        try {
+            val response = get(server.address.port, "/internal/projector/status")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"orderLifecycleProjectorEnabled\":true")
+            assertContains(response.body, "\"marketDataProjectorEnabled\":false")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedAckReplaysFirstAcceptedResponseForSameIdempotencyKey() {
         val captureStore = CommandLogCommandCaptureStore(
             delegate = NoopCommandCaptureStore(),
@@ -5722,6 +5740,8 @@ class PlatformHttpServerBoundaryTest {
         streamCommandBackpressureSampleMs: Long = 100L,
         streamCommandPublishResponseTimeoutMs: Long = 2_000L,
         venueEventMaterializerEnabled: Boolean = false,
+        marketDataProjectorEnabled: Boolean = false,
+        orderLifecycleProjectorEnabled: Boolean = false,
         localDevAdminUiBaseUrl: String? = null,
         runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence(),
         productRouteExtensions: List<OptionalProductRouteExtension> = emptyList()
@@ -5778,6 +5798,8 @@ class PlatformHttpServerBoundaryTest {
             streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
             streamCommandPublishResponseTimeoutMs = streamCommandPublishResponseTimeoutMs,
             venueEventMaterializerEnabled = venueEventMaterializerEnabled,
+            marketDataProjectorEnabled = marketDataProjectorEnabled,
+            orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
