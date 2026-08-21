@@ -168,6 +168,8 @@ test-bot-sdk:
 	bun scripts/dev/stream-partition-spread.test.mjs
 	bun scripts/dev/lib/stress-run-guard.test.mjs
 	bun scripts/dev/lib/dev-profiles.test.mjs
+	bun test scripts/dev/lib/compose-psql.test.mjs
+	bun test scripts/dev/lib/benchmark-stage.test.mjs
 	bun scripts/dev/do-benchmark-check.test.mjs
 	bun scripts/dev/do-materializer-10k-gate.test.mjs
 	bun scripts/dev/do-materializer-scaling-gate.test.mjs
