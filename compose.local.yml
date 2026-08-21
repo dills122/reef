@@ -18,6 +18,18 @@ services:
       - "wal_compression=${REEF_PG_WAL_COMPRESSION:-on}"
       - "-c"
       - "log_checkpoints=${REEF_PG_LOG_CHECKPOINTS:-on}"
+      - "-c"
+      - "shared_preload_libraries=${REEF_PG_SHARED_PRELOAD_LIBRARIES:-}"
+      - "-c"
+      - "track_io_timing=${REEF_PG_TRACK_IO_TIMING:-off}"
+      - "-c"
+      - "track_wal_io_timing=${REEF_PG_TRACK_WAL_IO_TIMING:-off}"
+      - "-c"
+      - "shared_buffers=${REEF_PG_SHARED_BUFFERS:-128MB}"
+      - "-c"
+      - "work_mem=${REEF_PG_WORK_MEM:-4MB}"
+      - "-c"
+      - "pg_stat_statements.track=${REEF_PG_STAT_STATEMENTS_TRACK:-top}"
     environment:
       POSTGRES_DB: reef
       POSTGRES_USER: reef
@@ -52,6 +64,18 @@ services:
       - "wal_compression=${REEF_PROJECTION_PG_WAL_COMPRESSION:-on}"
       - "-c"
       - "log_checkpoints=${REEF_PROJECTION_PG_LOG_CHECKPOINTS:-on}"
+      - "-c"
+      - "shared_preload_libraries=${REEF_PROJECTION_PG_SHARED_PRELOAD_LIBRARIES:-}"
+      - "-c"
+      - "track_io_timing=${REEF_PROJECTION_PG_TRACK_IO_TIMING:-off}"
+      - "-c"
+      - "track_wal_io_timing=${REEF_PROJECTION_PG_TRACK_WAL_IO_TIMING:-off}"
+      - "-c"
+      - "shared_buffers=${REEF_PROJECTION_PG_SHARED_BUFFERS:-128MB}"
+      - "-c"
+      - "work_mem=${REEF_PROJECTION_PG_WORK_MEM:-4MB}"
+      - "-c"
+      - "pg_stat_statements.track=${REEF_PROJECTION_PG_STAT_STATEMENTS_TRACK:-top}"
     environment:
       POSTGRES_DB: reef
       POSTGRES_USER: reef

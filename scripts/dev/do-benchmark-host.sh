@@ -164,12 +164,23 @@ cmd_plan_goal() {
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
   printf '  stream_ack_projector_2_partitions=%s\n' "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-none}"
   printf '  stream_ack_projector_3_partitions=%s\n' "${STREAM_ACK_PROJECTOR_3_PARTITIONS:-none}"
+  printf '  order_lifecycle_projector_0_enabled=%s\n' "${ORDER_LIFECYCLE_PROJECTOR_0_ENABLED:-none}"
+  printf '  order_lifecycle_projector_1_enabled=%s\n' "${ORDER_LIFECYCLE_PROJECTOR_1_ENABLED:-none}"
+  printf '  order_lifecycle_projector_2_enabled=%s\n' "${ORDER_LIFECYCLE_PROJECTOR_2_ENABLED:-none}"
+  printf '  order_lifecycle_projector_3_enabled=%s\n' "${ORDER_LIFECYCLE_PROJECTOR_3_ENABLED:-none}"
+  printf '  market_data_projector_0_enabled=%s\n' "${MARKET_DATA_PROJECTOR_0_ENABLED:-none}"
+  printf '  market_data_projector_1_enabled=%s\n' "${MARKET_DATA_PROJECTOR_1_ENABLED:-none}"
+  printf '  market_data_projector_2_enabled=%s\n' "${MARKET_DATA_PROJECTOR_2_ENABLED:-none}"
+  printf '  market_data_projector_3_enabled=%s\n' "${MARKET_DATA_PROJECTOR_3_ENABLED:-none}"
+  printf '  required_order_lifecycle_maintainers=%s\n' "${REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS:-none}"
+  printf '  required_market_data_maintainers=%s\n' "${REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS:-none}"
   printf '  max_p95_ms=%s\n' "${max_p95:-none}"
   printf '  max_p99_ms=%s\n' "${max_p99:-none}"
   printf '  min_stream_direct_active_partitions=%s\n' "${REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS:-none}"
   printf '  max_stream_direct_partition_skew=%s\n' "${REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW:-none}"
   printf '  require_db_diagnostics=%s\n' "${REEF_DO_REQUIRE_DB_DIAGNOSTICS:-0}"
   printf '  require_pg_stat_io=%s\n' "${REEF_DO_REQUIRE_PG_STAT_IO:-0}"
+  printf '  require_pg_stat_statements=%s\n' "${REEF_DO_REQUIRE_PG_STAT_STATEMENTS:-0}"
   printf '  image_mode=%s\n' "${REEF_DO_IMAGE_MODE:-source}"
 }
 
@@ -213,6 +224,8 @@ cmd_run() {
   REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-}" \
   REEF_DO_MAX_PROJECTION_DB_DEADLOCKS="${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-}" \
   REEF_DO_MAX_PROJECTION_DB_RETRIES="${REEF_DO_MAX_PROJECTION_DB_RETRIES:-}" \
+  REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS="${REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS:-}" \
+  REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS="${REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
@@ -233,6 +246,8 @@ cmd_check() {
   REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-}" \
   REEF_DO_MAX_PROJECTION_DB_DEADLOCKS="${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-}" \
   REEF_DO_MAX_PROJECTION_DB_RETRIES="${REEF_DO_MAX_PROJECTION_DB_RETRIES:-}" \
+  REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS="${REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS:-}" \
+  REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS="${REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$report_dir"
@@ -251,7 +266,7 @@ df -h /
 echo
 echo "docker compose:"
 cd "$REMOTE_DIR"
-docker compose ps || true
+docker compose -f compose.base.yml -f compose.local.yml ps || true
 REMOTE
 }
 
@@ -261,7 +276,7 @@ cmd_reset_remote() {
   remote_script <<'REMOTE'
 set -euo pipefail
 cd "$REMOTE_DIR"
-docker compose down --volumes --remove-orphans || true
+docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans || true
 rm -rf "$REMOTE_ARTIFACT_ROOT"
 mkdir -p "$REMOTE_ARTIFACT_ROOT"
 echo "remote benchmark Docker volumes and artifacts reset"
@@ -274,7 +289,7 @@ cmd_logs() {
   remote_script <<'REMOTE'
 set -euo pipefail
 cd "$REMOTE_DIR"
-docker compose logs --no-color --tail="${REEF_DO_LOG_TAIL:-300}" || true
+docker compose -f compose.base.yml -f compose.local.yml logs --no-color --tail="${REEF_DO_LOG_TAIL:-300}" || true
 REMOTE
 }
 
@@ -348,6 +363,11 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export STREAM_ACK_PROJECTOR_2_PARTITIONS="${STREAM_ACK_PROJECTOR_2_PARTITIONS:-8,9,10,11}"
     export STREAM_ACK_PROJECTOR_3_PARTITIONS="${STREAM_ACK_PROJECTOR_3_PARTITIONS:-12,13,14,15}"
     export STREAM_ACK_PROJECTION_STAGE="${STREAM_ACK_PROJECTION_STAGE:-${REEF_DO_PROJECTION_STAGE:-full}}"
+    case "$STREAM_ACK_PROJECTION_STAGE" in
+      command-status|status|lifecycle|core)
+        export STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC=true
+        ;;
+    esac
     export ORDER_LIFECYCLE_PROJECTOR_ENABLED=true
     export MARKET_DATA_PROJECTOR_ENABLED=true
     export MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME="$STREAM_ACK_PROJECTION_NAME"
@@ -422,6 +442,14 @@ remote_run_benchmark() {
     STREAM_ACK_PROJECTOR_1_PARTITIONS="${STREAM_ACK_PROJECTOR_1_PARTITIONS:-}" \
     STREAM_ACK_PROJECTOR_2_PARTITIONS="${STREAM_ACK_PROJECTOR_2_PARTITIONS:-}" \
     STREAM_ACK_PROJECTOR_3_PARTITIONS="${STREAM_ACK_PROJECTOR_3_PARTITIONS:-}" \
+    ORDER_LIFECYCLE_PROJECTOR_0_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_0_ENABLED:-}" \
+    ORDER_LIFECYCLE_PROJECTOR_1_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_1_ENABLED:-}" \
+    ORDER_LIFECYCLE_PROJECTOR_2_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_2_ENABLED:-}" \
+    ORDER_LIFECYCLE_PROJECTOR_3_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_3_ENABLED:-}" \
+    MARKET_DATA_PROJECTOR_0_ENABLED="${MARKET_DATA_PROJECTOR_0_ENABLED:-}" \
+    MARKET_DATA_PROJECTOR_1_ENABLED="${MARKET_DATA_PROJECTOR_1_ENABLED:-}" \
+    MARKET_DATA_PROJECTOR_2_ENABLED="${MARKET_DATA_PROJECTOR_2_ENABLED:-}" \
+    MARKET_DATA_PROJECTOR_3_ENABLED="${MARKET_DATA_PROJECTOR_3_ENABLED:-}" \
     REEF_DO_MAX_PROJECTION_DB_RETRIES="${REEF_DO_MAX_PROJECTION_DB_RETRIES:-}" \
     REEF_DO_PROJECTION_STAGE="${REEF_DO_PROJECTION_STAGE:-}" \
     DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-}" <<'REMOTE'
@@ -431,6 +459,7 @@ log_dir="$artifact_dir/logs"
 mkdir -p "$log_dir"
 exec > >(tee -a "$log_dir/remote-benchmark.log") 2>&1
 cd "$REMOTE_DIR"
+source scripts/dev/lib/benchmark-stage.sh
 
 echo "[$(date -Is)] remote benchmark starting"
 echo "profile=$REEF_BENCHMARK_PROFILE"
@@ -445,25 +474,7 @@ echo "drain_backpressure_policy=$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
 echo "image_mode=$REEF_BENCHMARK_IMAGE_MODE"
 
 run_stage() {
-  local name="$1"
-  shift
-  local log_file="$log_dir/stage-${name}.log"
-  local started_at
-  started_at="$(date +%s)"
-  echo "[$(date -Is)] stage: $name (log=$log_file)"
-  if "$@" >"$log_file" 2>&1 </dev/null; then
-    local finished_at
-    finished_at="$(date +%s)"
-    echo "[$(date -Is)] stage complete: $name duration_seconds=$((finished_at - started_at))"
-    return 0
-  fi
-  local status=$?
-  local finished_at
-  finished_at="$(date +%s)"
-  echo "[$(date -Is)] stage failed: $name status=$status duration_seconds=$((finished_at - started_at)) log=$log_file" >&2
-  echo "[$(date -Is)] tail: $name last ${REEF_BENCHMARK_STAGE_LOG_TAIL:-80} lines" >&2
-  tail -n "${REEF_BENCHMARK_STAGE_LOG_TAIL:-80}" "$log_file" >&2 || true
-  return "$status"
+  benchmark_run_stage "$log_dir" "${REEF_BENCHMARK_STAGE_LOG_TAIL:-80}" "$@"
 }
 
 export JS_RUNTIME=node
@@ -486,7 +497,7 @@ if [ "$REEF_BENCHMARK_IMAGE_MODE" = "dockerhub" ] && [ "$REEF_BENCHMARK_PROFILE"
   export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}"
   export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}"
   export DEV_COMPOSE_BUILD=0
-  run_stage docker-compose-pull docker compose pull platform-api matching-engine platform-materializer platform-materializer-1 platform-materializer-2 platform-materializer-3
+  run_stage docker-compose-pull docker compose -f compose.base.yml -f compose.local.yml pull platform-api matching-engine platform-materializer platform-materializer-1 platform-materializer-2 platform-materializer-3
 else
   export DEV_COMPOSE_BUILD="${DEV_COMPOSE_BUILD:-1}"
 fi
@@ -511,11 +522,21 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   export REEF_ADMIN_API_BEARER_TOKEN="${REEF_ADMIN_API_BEARER_TOKEN:-$ADMIN_API_TOKEN}"
   if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
     export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
+    export REEF_PG_SHARED_PRELOAD_LIBRARIES="${REEF_PG_SHARED_PRELOAD_LIBRARIES:-pg_stat_statements}"
+    export REEF_PROJECTION_PG_SHARED_PRELOAD_LIBRARIES="${REEF_PROJECTION_PG_SHARED_PRELOAD_LIBRARIES:-pg_stat_statements}"
+    export REEF_PG_TRACK_IO_TIMING="${REEF_PG_TRACK_IO_TIMING:-on}"
+    export REEF_PROJECTION_PG_TRACK_IO_TIMING="${REEF_PROJECTION_PG_TRACK_IO_TIMING:-on}"
+    export REEF_PG_TRACK_WAL_IO_TIMING="${REEF_PG_TRACK_WAL_IO_TIMING:-on}"
+    export REEF_PROJECTION_PG_TRACK_WAL_IO_TIMING="${REEF_PROJECTION_PG_TRACK_WAL_IO_TIMING:-on}"
+    export REEF_PG_STAT_STATEMENTS_TRACK="${REEF_PG_STAT_STATEMENTS_TRACK:-all}"
+    export REEF_PROJECTION_PG_STAT_STATEMENTS_TRACK="${REEF_PROJECTION_PG_STAT_STATEMENTS_TRACK:-all}"
+    export DEV_STRESS_ENABLE_PG_STAT_STATEMENTS=1
   else
     export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
   fi
 
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
+  run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
   if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
     export STREAM_ACK_PROJECTOR_ENABLED=true
     export STREAM_ACK_PROJECTION_SOURCE=venue-event-batch
@@ -525,7 +546,20 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export STREAM_ACK_PROJECTOR_1_PARTITIONS="${STREAM_ACK_PROJECTOR_1_PARTITIONS:-4,5,6,7}"
     export STREAM_ACK_PROJECTOR_2_PARTITIONS="${STREAM_ACK_PROJECTOR_2_PARTITIONS:-8,9,10,11}"
     export STREAM_ACK_PROJECTOR_3_PARTITIONS="${STREAM_ACK_PROJECTOR_3_PARTITIONS:-12,13,14,15}"
+    export ORDER_LIFECYCLE_PROJECTOR_0_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_0_ENABLED:-true}"
+    export ORDER_LIFECYCLE_PROJECTOR_1_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_1_ENABLED:-false}"
+    export ORDER_LIFECYCLE_PROJECTOR_2_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_2_ENABLED:-false}"
+    export ORDER_LIFECYCLE_PROJECTOR_3_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_3_ENABLED:-false}"
+    export MARKET_DATA_PROJECTOR_0_ENABLED="${MARKET_DATA_PROJECTOR_0_ENABLED:-true}"
+    export MARKET_DATA_PROJECTOR_1_ENABLED="${MARKET_DATA_PROJECTOR_1_ENABLED:-false}"
+    export MARKET_DATA_PROJECTOR_2_ENABLED="${MARKET_DATA_PROJECTOR_2_ENABLED:-false}"
+    export MARKET_DATA_PROJECTOR_3_ENABLED="${MARKET_DATA_PROJECTOR_3_ENABLED:-false}"
     export STREAM_ACK_PROJECTION_STAGE="${STREAM_ACK_PROJECTION_STAGE:-${REEF_DO_PROJECTION_STAGE:-full}}"
+    case "$STREAM_ACK_PROJECTION_STAGE" in
+      command-status|status|lifecycle|core)
+        export STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC=true
+        ;;
+    esac
     export ORDER_LIFECYCLE_PROJECTOR_ENABLED=true
     export MARKET_DATA_PROJECTOR_ENABLED=true
     export MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME="$STREAM_ACK_PROJECTION_NAME"
@@ -620,9 +654,9 @@ artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
 log_dir="$artifact_dir/logs"
 mkdir -p "$log_dir"
 cd "$REMOTE_DIR"
-docker compose ps > "$log_dir/docker-compose-ps.txt" 2>&1 || true
+docker compose -f compose.base.yml -f compose.local.yml ps > "$log_dir/docker-compose-ps.txt" 2>&1 || true
 docker stats --no-stream > "$log_dir/docker-stats.txt" 2>&1 || true
-docker compose logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 || true
+docker compose -f compose.base.yml -f compose.local.yml logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 || true
 free -h > "$log_dir/free.txt" 2>&1 || true
 df -h > "$log_dir/df.txt" 2>&1 || true
 uptime > "$log_dir/uptime.txt" 2>&1 || true

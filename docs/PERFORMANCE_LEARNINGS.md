@@ -277,11 +277,13 @@ Immediate implications:
    one-minute `5k` sample.
 3. Deterministic index-key ordering is worth keeping: it removed the observed
    deadlock/count-gap failure mode, but it does not solve zero-lag freshness.
-4. The projection-stage split is a valid direction: command-status plus
-   own-order lifecycle freshness is green at `5k`, and full projection is now
-   green at `5k/60s` after deterministic timeline sequencing. Keep separate
-   SLOs for command status, lifecycle, timeline, market data, and analytics
-   instead of forcing every query table to share one freshness claim.
+4. The projection-stage split is a valid direction: the command-status write
+   subset is green at `5k/60s`, and full projection is green at `5k/60s` after
+   deterministic timeline sequencing. The status-only result is a performance
+   ablation, not proof of independent own-order lifecycle freshness: lifecycle
+   derives cancel/reject/modify state from events written by the timeline
+   stage. Keep separate SLOs for command status, lifecycle, timeline, market
+   data, and analytics only after their data dependencies are explicit.
 5. The next fixes should reduce `runtime_events`, remaining dirty-table, and
    lifecycle/fill write amplification before promoting longer `5k` soaks or
    `7.5k`/`10k` projection gates.

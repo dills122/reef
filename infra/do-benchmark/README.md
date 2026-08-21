@@ -42,6 +42,11 @@ Benchmark profiles:
 | `materializer` | `10000` | `384` | `60s` | API accepted rate, direct-stream ack gap `0`, durable canonical materialization gap `0`, telemetry. |
 | `materializer-projection` | `2500` | `256` | `60s` | Materializer gates plus projector throughput, materialized/projected gap `0`, projector lag `0`, and projector health. |
 
+The materializer profiles run the correctness smoke first, then remove the
+smoke Compose stack and volumes before starting measured stress. This keeps the
+benchmark's Kafka topics, ownership leases, databases, and counters isolated
+from the preflight proof.
+
 Goal-driven sizing is opt-in. Without a goal or target, the table above remains
 the default. Use `plan-goal` before provisioning to see the resolved DO size,
 rates, worker count, duration, and report gates:

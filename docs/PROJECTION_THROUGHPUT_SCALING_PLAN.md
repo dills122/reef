@@ -6,6 +6,12 @@ Record the July 2026 DigitalOcean projection bottleneck evidence and define the
 fix sequence for scaling read-model freshness toward the proven venue-core
 materializer baseline.
 
+The sustained August follow-up and current recommendation are recorded in
+[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
+That spike supersedes the older assumption that a `5k/60s` pass was sufficient
+promotion evidence: `2.5k/5m` is green, while `5k/5m` accumulated about `758k`
+of projection watermark lag despite exact intake and canonical materialization.
+
 This plan is not a request to weaken command acceptance semantics. `202
 Accepted` still requires durable ingress acknowledgement, direct matching still
 commits command offsets only after durable `VenueEventBatch` publication, and
@@ -23,7 +29,7 @@ venue-event-materializer path on a DigitalOcean c-16 worker.
 | `do-benchmark-20260717T014839Z` | `2.5k rps`, `60s`, `256` workers, projection enabled | `149,975` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `31.31ms`, p99 `79.38ms` | Current named projection-fresh gate remains green. |
 | `do-benchmark-20260717T015658Z` | `5k rps`, `60s`, `256` workers, before deterministic event insert ordering | `299,950` accepted/direct-acked/materialized, p95 `67.57ms`, p99 `138.57ms`; projection ended with `1,834` lag, `1` projector failure, `1` projection-postgres deadlock | Venue-core held; projection failed by deadlock and freshness lag. |
 | `do-benchmark-20260717T020807Z` | same `5k` shape after ordering `runtime_events` inserts by `event_id` | `299,952` accepted/direct-acked/materialized/projected, materialized/projected gap `0`, deadlocks `0`, p95 `69.92ms`, p99 `136.68ms`; watermark lag `1,367` | The tactical ordering fix removed the deadlock/count-gap mode but did not make `5k` projection-fresh. |
-| `do-benchmark-20260717T131344Z` | same `5k` shape with `STREAM_ACK_PROJECTION_STAGE=command-status` after Docker Compose env pass-through fix | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `74.49ms`, p99 `112.93ms`, projector failures/retries/deadlocks `0` | Command status plus own-order lifecycle can keep up at `5k`; full event/timeline projection remains the active bottleneck. |
+| `do-benchmark-20260717T131344Z` | same `5k` shape with `STREAM_ACK_PROJECTION_STAGE=command-status` after Docker Compose env pass-through fix | `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `74.49ms`, p99 `112.93ms`, projector failures/retries/deadlocks `0` | The command-status write stage can keep up at `5k/60s`. Treat this as a performance ablation, not proof of correct cancel/modify own-order lifecycle; that derivation still depends on timeline-written events. |
 | `do-benchmark-20260717T134058Z` | same `5k` full-projection shape after deterministic timeline sequencing removed the trace allocator for new canonical payloads | `299,804` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `71.89ms`, p99 `112.89ms`, projector failures/retries/deadlocks `0` | Full projection is now green at `5k/60s`; remaining work is lowering WAL/temp/table pressure before longer soaks or higher gates. |
 | `do-benchmark-20260717T142157Z` | same `5k` full-projection shape after making dirty queues unlogged and avoiding redundant dirty conflict updates | `299,954` attempted/accepted/direct-acked/materialized, projected `252,866`, final lag/gap `47,088`, p95 `64.41ms`, p99 `105.69ms`, projector failures/retries/deadlocks `0` | Dirty queue WAL/table pressure improved, but this A/B did not preserve `5k` freshness. Treat it as diagnostic, not promotion evidence. |
 | `do-benchmark-20260717T145907Z` | same `5k` full-projection shape after runtime-event hot/cold payload split, before lifecycle zero-format patch | `299,953` attempted/accepted/direct-acked/materialized, projected `288,761`, final lag/gap `11,192`, p95 `74.55ms`, p99 `117.68ms`, projection DB deadlocks `0`; preflight smoke exposed `filled_quantity_units=''` for an unfilled open order | Hot `runtime_events` growth fell, but cold payload side-table growth offset much of it and freshness still failed. Treat as diagnostic; fix lifecycle zero rendering before any rerun. |
@@ -56,7 +62,7 @@ Projection-postgres pressure in the `5k` `command-status` run:
   and `runtime.order_lifecycle_dirty`.
 - `runtime.runtime_events` and `runtime.runtime_trace_sequences` had no row
   growth, confirming the stage split removed the timeline/event write path from
-  the command-status freshness gate.
+  the command-status write-stage ablation.
 
 Projection-postgres pressure in the deterministic-timeline `5k` full run:
 
@@ -168,10 +174,11 @@ In market-infrastructure terms:
 - The next throughput gains come from reducing projection work per command,
   making projector writes partition-local and deterministic, and assigning
   explicit freshness SLOs to read surfaces.
-- The stage split isolated the biggest class of coupling: command-status and
-  lifecycle freshness are now independently green at `5k`, so the next
-  bottleneck is reducing full-projection WAL/temp/table growth, not the durable
-  venue-core lane.
+- The stage split showed that the command-status write subset is independently
+  green at `5k/60s`. It did not establish an independent lifecycle freshness
+  lane: cancel/modify lifecycle still depends on events written by the timeline
+  stage. The next bottleneck remains full-projection WAL/temp/table growth, not
+  the durable venue-core lane.
 
 ## Non-Negotiable Constraints
 
@@ -251,8 +258,9 @@ work unless the caller explicitly asks for those surfaces to be fresh.
 Acceptance:
 
 - The benchmark report can show projected work by stage.
-- `5k` command status plus lifecycle freshness can be tested independently from
-  full runtime event/timeline freshness.
+- `5k` command-status write capacity can be tested independently from full
+  runtime event/timeline freshness. A correct independent lifecycle gate first
+  requires an explicit dependency or compact lifecycle-fact design.
 - Replay of each stage is idempotent from canonical facts.
 
 ### 3. Reduce Rows and WAL Per Command
@@ -369,7 +377,11 @@ Suggested classes:
 
 - `venue-core`: accepted, direct-acked, materialized. Projection lag reported,
   not gating.
-- `command-status-fresh`: command status and own-order state caught up.
+- `command-status-write`: status/order/fill/trade write subset caught up; this
+  is an ablation class, not an own-order freshness claim.
+- `own-order-fresh`: command status and complete submit/cancel/reject/modify
+  lifecycle state caught up. This class requires explicit order-state/timeline
+  dependencies before it can be promoted independently.
 - `market-data-fresh`: top-of-book/depth/trade surfaces caught up.
 - `timeline-fresh`: runtime event/trace history caught up.
 - `analytics-eventual`: leaderboard, reporting, bars, and historical analytics
@@ -388,22 +400,28 @@ Use gates to prevent vague throughput claims.
 Current:
 
 - `2.5k` projection freshness short: green.
-- `5k` command-status freshness short: green.
+- `5k` command-status write-stage short ablation: green; lifecycle semantics
+  are not independently proven.
 - `5k` full projection short: green after deterministic timeline sequencing.
+- `2.5k` full projection `5m` soak: green on
+  `do-benchmark-20260820T220557Z`.
+- `5k` full projection `5m` soak: failed on
+  `do-benchmark-20260820T222945Z`; accepted/materialized `1,500,002`, projected
+  `746,047`, final watermark lag `757,955`, with no projector failures,
+  retries, or deadlocks.
 
 Next gates:
 
-1. `2.5k soak-5m`: zero lag, zero gaps, zero deadlocks, zero projector DB
-   retry delta, DB diagnostics present.
-2. `5k soak-5m`: run the named
-   `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=5k-soak-5m` tier; require zero lag,
-   zero gaps, zero deadlocks, zero projector DB retry delta, DB diagnostics
-   present, and table/WAL/temp pressure compared against
-   `do-benchmark-20260717T134058Z`.
-3. `5k command-status-fresh`: green on `do-benchmark-20260717T131344Z` after
-   fixing Docker Compose pass-through for `STREAM_ACK_PROJECTION_STAGE`.
-   Re-run this after changes to submit status, order, fill, trade, or lifecycle
-   projection writes.
+1. `2.5k soak-5m`: passed on `do-benchmark-20260820T220557Z` with zero lag,
+   gaps, deadlocks, and projector DB retry delta.
+2. `5k soak-5m`: failed on `do-benchmark-20260820T222945Z`. Do not rerun the
+   same full shape until the dated research spike's instrumentation, stage
+   ablation, and bounded memory/batch experiments identify a material change.
+3. `5k command-status` performance ablation: green for `60s` on
+   `do-benchmark-20260717T131344Z` after fixing Docker Compose pass-through for
+   `STREAM_ACK_PROJECTION_STAGE`. Do not label it own-order-state-fresh until
+   cancel/modify lifecycle dependencies are implemented and tested. Re-run it
+   after changes to submit status, order, fill, or trade projection writes.
 4. `5k full-projection-fresh`: green on `do-benchmark-20260717T134058Z`.
    Re-run after changes to runtime events, executions/trades, lifecycle, dirty
    queues, or projection indexes.
@@ -450,7 +468,10 @@ structural separation:
 3. Split `runtime.runtime_persist_submit_outcomes` into projection stages.
    Initial SQL stage wrappers, Docker Compose env pass-through, and a remote
    `5k` `command-status` pass are in place; default `full` behavior remains
-   unchanged.
+   unchanged. Treat that pass as write-stage evidence only. Add configuration
+   validation and a regression test that prevent status-only plus lifecycle
+   from being presented as `own-order-fresh` until the lifecycle dependency is
+   implemented.
 4. Split or reduce the event/timeline stage so `runtime_events` and trace
    sequence writes no longer govern command-status freshness. Initial
    deterministic timeline sequencing is in place, and
@@ -469,9 +490,57 @@ structural separation:
    and the broad order-scoped runtime-event index is dropped. The next DO run
    should measure whether this closes the remaining `1,647` row lag before
    moving to payload/event row-volume cuts.
-7. Add maintained depth/top-of-book projections.
-8. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL per
-   command.
-9. Promote `7.5k`/`10k` projection gates only after `5k` remains stable with
-   zero final lag/deadlocks over longer soaks and materially lower write
-   amplification.
+7. Query-level projection instrumentation and a fixed-backlog projection-only
+   drain benchmark are now implemented locally. The persistence path reports
+   canonical-read, transform, projection-SQL, watermark, and commit phases;
+   batch count/size and every projector's DB-pool state are captured. The drain
+   harness rejects moving canonical ceilings and nonzero final lag. A live
+   isolated local validation drained an observed `52,250`-item backlog to zero
+   at `3,929.46/s`; projection SQL consumed `38.62s` of summed projector time,
+   versus `2.15s` transform, `2.05s` canonical read, `1.59s` commit, and `0.20s`
+   watermark time, with zero connection waiters. Treat this as attribution and
+   workflow evidence, not portable capacity evidence. See
+   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](./research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
+   The named remote projection gate now also preloads
+   `pg_stat_statements`, tracks nested PL/pgSQL statements, enables I/O and
+   WAL-I/O timing, records the relevant settings, and requires pre/post
+   statement artifacts. A disposable local PostgreSQL check captured a
+   top-level function call and its internal insert separately, including rows,
+   time, and WAL bytes; no paid remote run has used this instrumentation yet.
+   Before another paid promotion run, first re-mine the
+   existing `do-benchmark-20260820T222945Z` statistics: the measured window
+   added about `72.3GiB` of aggregate client/parallel-worker bulk relation
+   reads, `2,144` `submit_results` sequential scans, `4,923`
+   `order_lifecycle_dirty` sequential scans, and `6` lifecycle-dirty
+   autovacuum runs. These counters identify targets for plans but do not
+   attribute the aggregate I/O to one relation.
+8. Correct the stage dependency model: command-status currently marks
+   lifecycle dirties without writing the runtime events used for cancel/modify
+   lifecycle state, while timeline writes those events without re-dirtying the
+   order.
+9. Run the staged ablation and bounded projection-Postgres memory/batch matrix
+   from the dated research spike. Include lifecycle-worker cardinality,
+   table-local autovacuum settings, a qualified lifecycle fillfactor/HOT test,
+   and connection-pool topology. Test a pooler only if connection telemetry
+   shows it addresses a measured higher-tier limit.
+   The local lifecycle/market-data cardinality A/B is now directionally
+   decisive: one designated maintainer plus four canonical writers projected
+   `100,002` fixed outcomes within `10.383s` of container start (a conservative
+   `>=9,631.32/s` bound), with zero dirty residue/failures/retries/deadlocks.
+   Promote that topology to the next named remote A/B. The gate now records the
+   effective lifecycle/market-data flags from every projector and fails unless
+   it observes exactly one maintainer of each type, preventing a launch-plan
+   value from being mistaken for the topology actually tested. Statement
+   evidence also identified repeated exact `submit_results` counts as a
+   concrete scan source.
+   See
+   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](./research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
+10. Add maintained depth/top-of-book projections.
+11. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL/temp
+   work per projected outcome.
+12. Promote `7.5k`/`10k` projection gates only after `5k` remains stable with
+   zero final lag/deadlocks over longer soaks and at least `20%` measured drain
+   headroom plus a credible path to the next tier. The `20%` value is a minimum
+   anti-backlog promotion margin, not the architectural capacity target;
+   D-038's preferred practical target remains `2-3x` subsystem headroom when
+   cost and complexity are reasonable.

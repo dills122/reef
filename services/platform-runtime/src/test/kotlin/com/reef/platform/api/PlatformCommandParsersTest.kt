@@ -50,6 +50,8 @@ class PlatformCommandParsersTest {
             PlatformCommandParsers.validateApiV1Command("/api/v1/orders/cancel", cancel).orEmpty(),
             "missing required field: runId"
         )
+        assertEquals("", PlatformCommandParsers.cancelOrder("""{"scenarioRunId":"legacy-alias"}""").runId)
+        assertEquals("", PlatformCommandParsers.modifyOrder("""{"scenarioRunId":"legacy-alias"}""").runId)
     }
 
     @Test

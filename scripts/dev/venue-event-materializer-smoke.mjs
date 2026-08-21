@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
+import { composePsqlArgs } from "./lib/compose-psql.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 import { assertStableProjectionReplaySnapshot } from "./lib/projection-replay-proof.mjs";
@@ -746,22 +747,7 @@ async function runPsql(service, sql) {
       "-c",
       sql,
     ])
-    : await runCapture("docker", [
-      "compose",
-      "exec",
-      "-T",
-      service,
-      "psql",
-      "-U",
-      env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
-      "-d",
-      env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
-      "-At",
-      "-F",
-      "\t",
-      "-c",
-      sql,
-    ]);
+    : await runCapture("docker", composePsqlArgs(service, sql));
   return output;
 }
 

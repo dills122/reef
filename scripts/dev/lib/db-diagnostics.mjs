@@ -8,6 +8,43 @@ const execFileAsync = promisify(execFile);
 
 export const defaultDiagnosticSchemas = ["runtime", "boundary", "command_log"];
 
+export function diagnosticCapabilityFlags({ checkpointerRows, ioRows, pgStatStatementsRows }) {
+  return {
+    hasCheckpointer: Number(checkpointerRows?.[0]?.count ?? 0) > 0,
+    hasIo: Number(ioRows?.[0]?.count ?? 0) > 0,
+    hasPgStatStatements: Number(pgStatStatementsRows?.[0]?.count ?? 0) > 0,
+  };
+}
+
+export async function ensurePgStatStatements({
+  services,
+  dbUser = "reef",
+  dbName = "reef",
+}) {
+  for (const service of services) {
+    const preloadRows = await queryDbRows({
+      service,
+      dbUser,
+      dbName,
+      sql: "select current_setting('shared_preload_libraries', true) as shared_preload_libraries;",
+      columns: ["sharedPreloadLibraries"],
+    });
+    const preloaded = String(preloadRows[0]?.sharedPreloadLibraries ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .includes("pg_stat_statements");
+    if (!preloaded) {
+      throw new Error(`${service}: pg_stat_statements is not present in shared_preload_libraries`);
+    }
+    await queryDbRows({
+      service,
+      dbUser,
+      dbName,
+      sql: "create extension if not exists pg_stat_statements;",
+    });
+  }
+}
+
 export async function captureDbDiagnosticsSnapshot({
   diagnosticsDir,
   stage,
@@ -28,7 +65,9 @@ export async function captureDbDiagnosticsSnapshot({
       databaseRows,
       activityWaitRows,
       walSettingsRows,
+      diagnosticSettingsRows,
       hasCheckpointerRows,
+      hasPgStatStatementsRows,
       hasIoRows,
       tables,
     ] = await Promise.all([
@@ -100,7 +139,21 @@ export async function captureDbDiagnosticsSnapshot({
         service,
         dbUser,
         dbName,
+        sql: "select name, setting, coalesce(unit, '') as unit from pg_settings where name in ('shared_buffers', 'shared_preload_libraries', 'track_io_timing', 'track_wal_io_timing', 'work_mem', 'pg_stat_statements.track') order by name;",
+        columns: ["name", "setting", "unit"],
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
         sql: "select coalesce((select count(1) from pg_catalog.pg_views where schemaname='pg_catalog' and viewname='pg_stat_checkpointer'),0) as count;",
+        columns: ["count"],
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
+        sql: "select coalesce((select count(1) from pg_catalog.pg_extension where extname='pg_stat_statements'),0) as count;",
         columns: ["count"],
       }),
       queryDbRows({
@@ -138,8 +191,11 @@ export async function captureDbDiagnosticsSnapshot({
       }),
     ]);
 
-    const hasCheckpointer = Number(hasCheckpointerRows[0]?.count ?? 0) > 0;
-    const hasIo = Number(hasIoRows[0]?.count ?? 0) > 0;
+    const { hasCheckpointer, hasIo, hasPgStatStatements } = diagnosticCapabilityFlags({
+      checkpointerRows: hasCheckpointerRows,
+      ioRows: hasIoRows,
+      pgStatStatementsRows: hasPgStatStatementsRows,
+    });
     const checkpointerRows = hasCheckpointer
       ? await queryDbRows({
           service,
@@ -175,6 +231,55 @@ export async function captureDbDiagnosticsSnapshot({
           ],
         })
       : [];
+    const pgStatStatementsRows = hasPgStatStatements
+      ? await queryDbRows({
+          service,
+          dbUser,
+          dbName,
+          sql: `select
+  queryid,
+  toplevel,
+  left(regexp_replace(query, E'[\\t\\n\\r]+', ' ', 'g'), 4000) as query,
+  calls,
+  total_plan_time,
+  total_exec_time,
+  rows,
+  shared_blks_hit,
+  shared_blks_read,
+  shared_blks_dirtied,
+  shared_blks_written,
+  temp_blks_read,
+  temp_blks_written,
+  blk_read_time,
+  blk_write_time,
+  wal_records,
+  wal_fpi,
+  wal_bytes
+from pg_stat_statements
+where dbid = (select oid from pg_database where datname = current_database())
+order by total_exec_time desc, queryid;`,
+          columns: [
+            "queryId",
+            "topLevel",
+            "query",
+            "calls",
+            "totalPlanTime",
+            "totalExecTime",
+            "rows",
+            "sharedBlocksHit",
+            "sharedBlocksRead",
+            "sharedBlocksDirtied",
+            "sharedBlocksWritten",
+            "tempBlocksRead",
+            "tempBlocksWritten",
+            "blockReadTime",
+            "blockWriteTime",
+            "walRecords",
+            "walFpi",
+            "walBytes",
+          ],
+        })
+      : [];
     const snapshot = {
       ...info,
       serverVersionNum: serverVersionRows[0]?.serverVersionNum ?? "",
@@ -193,8 +298,18 @@ export async function captureDbDiagnosticsSnapshot({
           },
         ]),
       ),
+      diagnosticSettings: Object.fromEntries(
+        diagnosticSettingsRows.map((row) => [
+          row.name,
+          {
+            setting: coerceNumber(row.setting),
+            unit: row.unit ?? "",
+          },
+        ]),
+      ),
       io: ioRows.map(coerceNumericStats),
       walIo: summarizeIoRows(ioRows, "wal"),
+      pgStatStatements: pgStatStatementsRows.map(normalizePgStatStatementRow),
     };
 
     writeFileSync(join(diagnosticsDir, `${stage}-db-diagnostics.json`), JSON.stringify(snapshot, null, 2));
@@ -204,11 +319,15 @@ export async function captureDbDiagnosticsSnapshot({
     writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_database.csv`), toCsv(databaseRows) + "\n");
     writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_activity_waits.csv`), toCsv(activityWaitRows) + "\n");
     writeFileSync(join(diagnosticsDir, `${stage}-pg_settings_wal.csv`), toCsv(walSettingsRows) + "\n");
+    writeFileSync(join(diagnosticsDir, `${stage}-pg_settings_diagnostics.csv`), toCsv(diagnosticSettingsRows) + "\n");
     if (hasCheckpointer) {
       writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_checkpointer.csv`), toCsv(checkpointerRows) + "\n");
     }
     if (hasIo) {
       writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_io.csv`), toCsv(ioRows) + "\n");
+    }
+    if (hasPgStatStatements) {
+      writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_statements.csv`), toCsv(pgStatStatementsRows) + "\n");
     }
     return { ok: true, snapshot };
   } catch (error) {
@@ -263,8 +382,52 @@ export function summarizeDiagnosticsDelta(preResult, postResult) {
     wal: numericDelta(preResult.snapshot.wal, postResult.snapshot.wal),
     walIo: numericDelta(preResult.snapshot.walIo, postResult.snapshot.walIo),
     database: numericDelta(preResult.snapshot.database, postResult.snapshot.database),
+    pgStatStatements: summarizePgStatStatementsDelta(
+      preResult.snapshot.pgStatStatements,
+      postResult.snapshot.pgStatStatements,
+    ),
     activityWaitsAfter: postResult.snapshot.activityWaits ?? [],
   };
+}
+
+export function summarizePgStatStatementsDelta(preRows, postRows) {
+  const preByKey = new Map((preRows ?? []).map((row) => [statementKey(row), row]));
+  return (postRows ?? [])
+    .map((post) => {
+      const pre = preByKey.get(statementKey(post)) ?? {};
+      return {
+        queryId: String(post.queryId ?? ""),
+        topLevel: String(post.topLevel ?? ""),
+        query: String(post.query ?? ""),
+        callsDelta: numberValue(post.calls) - numberValue(pre.calls),
+        totalPlanTimeDelta: numberValue(post.totalPlanTime) - numberValue(pre.totalPlanTime),
+        totalExecTimeDelta: numberValue(post.totalExecTime) - numberValue(pre.totalExecTime),
+        rowsDelta: numberValue(post.rows) - numberValue(pre.rows),
+        sharedBlocksReadDelta: numberValue(post.sharedBlocksRead) - numberValue(pre.sharedBlocksRead),
+        tempBlocksReadDelta: numberValue(post.tempBlocksRead) - numberValue(pre.tempBlocksRead),
+        tempBlocksWrittenDelta: numberValue(post.tempBlocksWritten) - numberValue(pre.tempBlocksWritten),
+        blockReadTimeDelta: numberValue(post.blockReadTime) - numberValue(pre.blockReadTime),
+        blockWriteTimeDelta: numberValue(post.blockWriteTime) - numberValue(pre.blockWriteTime),
+        walRecordsDelta: numberValue(post.walRecords) - numberValue(pre.walRecords),
+        walFpiDelta: numberValue(post.walFpi) - numberValue(pre.walFpi),
+        walBytesDelta: numberValue(post.walBytes) - numberValue(pre.walBytes),
+      };
+    })
+    .filter((row) => row.callsDelta > 0 || row.totalExecTimeDelta > 0)
+    .sort((a, b) => b.totalExecTimeDelta - a.totalExecTimeDelta || a.queryId.localeCompare(b.queryId));
+}
+
+export function normalizePgStatStatementRow(row) {
+  return {
+    ...coerceNumericStats(row),
+    queryId: String(row?.queryId ?? ""),
+    topLevel: String(row?.topLevel ?? ""),
+    query: String(row?.query ?? ""),
+  };
+}
+
+function statementKey(row) {
+  return `${String(row?.queryId ?? "")}:${String(row?.topLevel ?? "")}`;
 }
 
 function tableStatsSql(schemas) {

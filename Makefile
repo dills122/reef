@@ -22,7 +22,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-smoke-bot-sdk-hosted-live-container dev-venue-event-replay-check
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
-.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
+.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-projection-drain-bench
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-admin-owned-bot-local-seed dev-smoke-admin-auth-local dev-control-room
 .PHONY: dev-bootstrap dev-doctor dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-compare-reef-arena-separation dev-replay
@@ -168,6 +168,11 @@ test-bot-sdk:
 	bun scripts/dev/stream-partition-spread.test.mjs
 	bun scripts/dev/lib/stress-run-guard.test.mjs
 	bun scripts/dev/lib/dev-profiles.test.mjs
+	bun test scripts/dev/lib/compose-psql.test.mjs
+	bun test scripts/dev/lib/benchmark-stage.test.mjs
+	bun scripts/dev/lib/db-diagnostics.test.mjs
+	bun scripts/dev/lib/telemetry-probes.test.mjs
+	bun scripts/dev/lib/projection-drain-report.test.mjs
 	bun scripts/dev/do-benchmark-check.test.mjs
 	bun scripts/dev/do-materializer-10k-gate.test.mjs
 	bun scripts/dev/do-materializer-scaling-gate.test.mjs
@@ -465,6 +470,10 @@ dev-export-simulation-run:
 dev-stress-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-materializer-stress.mjs
+
+dev-projection-drain-bench:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/projection-drain-bench.mjs
 
 dev-ablation-ladder:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

@@ -4,6 +4,25 @@ import com.reef.platform.infrastructure.persistence.ProjectionPersistenceRetryMe
 import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 
+internal data class ProjectionDiagnosticsConfig(
+    val venueEventMaterializerBatchSize: Int,
+    val venueEventMaterializerPollMs: Long,
+    val venueEventMaterializerFetchTimeoutMs: Long,
+    val marketDataProjectorProjectionName: String,
+    val marketDataProjectorSourceProjectionName: String,
+    val marketDataProjectorPollMs: Long,
+    val marketDataProjectorBatchSize: Int,
+    val marketDataProjectorEnabled: Boolean,
+    val orderLifecycleProjectorPollMs: Long,
+    val orderLifecycleProjectorBatchSize: Int,
+    val orderLifecycleProjectorEnabled: Boolean,
+    val streamAckProjectorEnabled: Boolean,
+    val streamAckProjectionName: String,
+    val streamAckProjectionSource: CanonicalProjectionSource,
+    val streamAckProjectionEventStream: String,
+    val streamAckProjectionStage: ProjectionStage
+)
+
 /**
  * Owns the internal read-only status/stats JSON endpoints (async command stats,
  * command accounting, DB pool stats, stream-ack health/worker stats, venue-event
@@ -39,41 +58,39 @@ internal class DiagnosticsGateway(
     private val streamCommandWorkerPollMs: Long,
     private val streamCommandWorkerFetchTimeoutMs: Long,
     private val streamCommandWorkerDedicatedRuntimePoolEnabled: Boolean,
-    private val venueEventMaterializerBatchSize: Int,
-    private val venueEventMaterializerPollMs: Long,
-    private val venueEventMaterializerFetchTimeoutMs: Long,
-    private val marketDataProjectorProjectionName: String,
-    private val marketDataProjectorSourceProjectionName: String,
-    private val marketDataProjectorPollMs: Long,
-    private val marketDataProjectorBatchSize: Int,
-    private val orderLifecycleProjectorPollMs: Long,
-    private val orderLifecycleProjectorBatchSize: Int,
+    private val projectionConfig: ProjectionDiagnosticsConfig,
     private val api: PlatformApi,
-    private val streamAckProjectorEnabled: Boolean,
-    private val streamAckProjectionName: String,
-    private val streamAckProjectionSource: CanonicalProjectionSource,
-    private val streamAckProjectionEventStream: String,
-    private val streamAckProjectionStage: ProjectionStage,
     private val runtimeLoopStarter: RuntimeLoopStarter
 ) {
     fun projectorStatusJson(): String {
         val partitions = runtimeLoopStarter.projectorPartitions()
-        val status = api.projectionStatus(streamAckProjectionName, partitions, streamAckProjectionSource.configValue)
+        val status = api.projectionStatus(
+            projectionConfig.streamAckProjectionName,
+            partitions,
+            projectionConfig.streamAckProjectionSource.configValue
+        )
         val metrics = CanonicalProjectionMetrics.snapshot()
         val retryMetrics = ProjectionPersistenceRetryMetrics.snapshot()
         return JsonCodec.writeObject(
             "role" to runtimeRole.configValue,
-            "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
+            "status" to if (
+                runtimeRole == PlatformRuntimeRole.Projector && projectionConfig.streamAckProjectorEnabled
+            ) "running" else "inactive",
             "implementation" to "canonical-submit-projector",
-            "source" to streamAckProjectionSource.configValue,
-            "eventStream" to streamAckProjectionEventStream,
-            "projectionStage" to streamAckProjectionStage.configValue,
+            "source" to projectionConfig.streamAckProjectionSource.configValue,
+            "eventStream" to projectionConfig.streamAckProjectionEventStream,
+            "projectionStage" to projectionConfig.streamAckProjectionStage.configValue,
+            "orderLifecycleProjectorEnabled" to projectionConfig.orderLifecycleProjectorEnabled,
+            "marketDataProjectorEnabled" to projectionConfig.marketDataProjectorEnabled,
             "projectionName" to status.projectionName,
             "partitions" to partitions,
             "projectedCount" to status.projectedCount,
             "lag" to status.lag,
             "metrics" to mapOf(
                 "projected" to metrics.projected,
+                "batches" to metrics.batches,
+                "lastBatchSize" to metrics.lastBatchSize,
+                "maxBatchSize" to metrics.maxBatchSize,
                 "failed" to metrics.failed,
                 "emptyPolls" to metrics.emptyPolls,
                 "lastProjectedAt" to metrics.lastProjectedAt,
@@ -373,9 +390,9 @@ internal class DiagnosticsGateway(
             "enabled" to runtimeLoopStarter.venueEventMaterializerShouldStart(),
             "role" to runtimeRole.configValue,
             "processingMode" to commandProcessingMode.configValue,
-            "batchSize" to venueEventMaterializerBatchSize,
-            "pollIntervalMs" to venueEventMaterializerPollMs,
-            "fetchTimeoutMs" to venueEventMaterializerFetchTimeoutMs,
+            "batchSize" to projectionConfig.venueEventMaterializerBatchSize,
+            "pollIntervalMs" to projectionConfig.venueEventMaterializerPollMs,
+            "fetchTimeoutMs" to projectionConfig.venueEventMaterializerFetchTimeoutMs,
             "source" to "kafka",
             "metrics" to mapOf(
                 "fetched" to stats.fetched,
@@ -404,13 +421,14 @@ internal class DiagnosticsGateway(
         return JsonCodec.writeObject(
             "enabled" to runtimeLoopStarter.marketDataProjectorShouldStart(),
             "role" to runtimeRole.configValue,
-            "projectionName" to marketDataProjectorProjectionName,
-            "sourceProjectionName" to marketDataProjectorSourceProjectionName,
-            "pollIntervalMs" to marketDataProjectorPollMs,
-            "batchSize" to marketDataProjectorBatchSize,
+            "projectionName" to projectionConfig.marketDataProjectorProjectionName,
+            "sourceProjectionName" to projectionConfig.marketDataProjectorSourceProjectionName,
+            "pollIntervalMs" to projectionConfig.marketDataProjectorPollMs,
+            "batchSize" to projectionConfig.marketDataProjectorBatchSize,
             "metrics" to mapOf(
                 "cycles" to stats.cycles,
                 "processedRows" to stats.processedRows,
+                "lastProcessedRows" to stats.lastProcessedRows,
                 "failed" to stats.failed,
                 "lastProcessedAt" to stats.lastProcessedAt,
                 "lastFailedAt" to stats.lastFailedAt,
@@ -424,11 +442,12 @@ internal class DiagnosticsGateway(
         return JsonCodec.writeObject(
             "enabled" to runtimeLoopStarter.orderLifecycleProjectorShouldStart(),
             "role" to runtimeRole.configValue,
-            "pollIntervalMs" to orderLifecycleProjectorPollMs,
-            "batchSize" to orderLifecycleProjectorBatchSize,
+            "pollIntervalMs" to projectionConfig.orderLifecycleProjectorPollMs,
+            "batchSize" to projectionConfig.orderLifecycleProjectorBatchSize,
             "metrics" to mapOf(
                 "cycles" to stats.cycles,
                 "processedRows" to stats.processedRows,
+                "lastProcessedRows" to stats.lastProcessedRows,
                 "failed" to stats.failed,
                 "lastProcessedAt" to stats.lastProcessedAt,
                 "lastFailedAt" to stats.lastFailedAt,
