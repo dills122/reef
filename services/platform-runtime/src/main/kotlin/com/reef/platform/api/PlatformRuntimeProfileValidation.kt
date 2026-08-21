@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.persistence.ProjectionStage
 
 /**
  * Explicit, fail-fast validation of the runtime "profile" implied by the current environment
@@ -30,6 +31,8 @@ data class PlatformRuntimeProfileConfig(
     val venueEventMaterializerEnabled: Boolean,
     val streamAckProjectorEnabled: Boolean,
     val streamAckProjectionSource: CanonicalProjectionSource,
+    val streamAckProjectionStage: ProjectionStage,
+    val streamAckProjectionStatusOnlyDiagnostic: Boolean,
     val marketDataProjectorEnabled: Boolean,
     val orderLifecycleProjectorEnabled: Boolean,
     val acceptedAsyncInFlightPerLane: Int,
@@ -93,6 +96,14 @@ data class PlatformRuntimeProfileConfig(
                         CanonicalProjectionSource.CanonicalSubmit.configValue,
                         lookup
                     )
+                ),
+                streamAckProjectionStage = ProjectionStage.fromConfig(
+                    RuntimeEnv.string("STREAM_ACK_PROJECTION_STAGE", ProjectionStage.Full.configValue, lookup)
+                ),
+                streamAckProjectionStatusOnlyDiagnostic = RuntimeEnv.bool(
+                    "STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC",
+                    false,
+                    lookup
                 ),
                 marketDataProjectorEnabled = RuntimeEnv.bool("MARKET_DATA_PROJECTOR_ENABLED", false, lookup),
                 orderLifecycleProjectorEnabled = RuntimeEnv.bool("ORDER_LIFECYCLE_PROJECTOR_ENABLED", false, lookup),
@@ -164,6 +175,24 @@ object PlatformRuntimeProfileValidator {
 
         val publisherKind = config.resolvedPublisherKind
         val intakeStoreKind = config.resolvedIntakeStoreKind
+
+        if (
+            config.streamAckProjectorEnabled &&
+            config.streamAckProjectionStage == ProjectionStage.CommandStatus &&
+            !config.streamAckProjectionStatusOnlyDiagnostic
+        ) {
+            val incompleteLifecycleConsumers = buildList {
+                if (config.orderLifecycleProjectorEnabled) add("ORDER_LIFECYCLE_PROJECTOR_ENABLED=true")
+                if (config.marketDataProjectorEnabled) add("MARKET_DATA_PROJECTOR_ENABLED=true")
+            }
+            if (incompleteLifecycleConsumers.isNotEmpty()) {
+                issues += "STREAM_ACK_PROJECTION_STAGE=command-status is incompatible with " +
+                    incompleteLifecycleConsumers.joinToString(" and ") +
+                    ": status-only projection does not write the runtime events required for complete " +
+                    "cancel/reject/modify lifecycle state. Set " +
+                    "STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC=true only for an explicit performance ablation"
+            }
+        }
 
         // Bounded in-memory intake retention is required for no-DB ceiling profiles: an unbounded
         // in-memory dedupe/reservation store grows without limit for the lifetime of the process,

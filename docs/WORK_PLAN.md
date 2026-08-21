@@ -122,8 +122,9 @@ and readiness remain independent.
      accepted/direct-acked/materialized gaps.
 
 5. Reduce projection write amplification.
-   - Keep command-status/lifecycle and full timeline projection stages
-     measurable independently.
+   - Keep the command-status write subset and full timeline projection stages
+     measurable independently, but do not claim independent lifecycle
+     freshness until cancel/modify event dependencies are explicit.
    - Reduce `runtime_events`, lifecycle/fill, WAL, tuple, and temp-file pressure
      before longer `5k` soaks or higher projection rates.
    - Keep projection freshness claims separate from venue-core acceptance and

@@ -27,6 +27,17 @@ const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX
 const maxArenaFinalCompletionLagMs = parseOptionalNonNegativeNumber(process.env.REEF_DO_ARENA_MAX_FINAL_COMPLETION_LAG_MS);
 const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
 const requirePgStatIo = process.env.REEF_DO_REQUIRE_PG_STAT_IO === "1";
+const requirePgStatStatements = process.env.REEF_DO_REQUIRE_PG_STAT_STATEMENTS === "1";
+const requiredOrderLifecycleMaintainers = parseOptionalNonNegativeNumber(
+  process.env.REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS,
+);
+const requiredMarketDataMaintainers = parseOptionalNonNegativeNumber(
+  process.env.REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS,
+);
+const configuredProjectorPoolCount = Number(process.env.REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT ?? 4);
+const requiredProjectorPoolCount = Number.isInteger(configuredProjectorPoolCount) && configuredProjectorPoolCount >= 0
+  ? configuredProjectorPoolCount
+  : 4;
 const failures = [];
 const evidenceRows = [];
 
@@ -424,6 +435,7 @@ function validateTelemetry(dir) {
 
   let sawDbPools = false;
   let sawStreamHealth = false;
+  const projectorDbPoolIndices = new Set();
   for (const path of telemetryFiles) {
     const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
     for (const line of lines) {
@@ -437,6 +449,10 @@ function validateTelemetry(dir) {
       const probes = sample.app?.probes ?? [];
       sawDbPools ||= probes.some((probe) => probe.name === "runtime.dbPools" && probe.ok);
       sawStreamHealth ||= probes.some((probe) => probe.name === "runtime.streamAckHealth" && probe.ok);
+      for (const probe of probes) {
+        const match = /^streamAckProjector\.(\d+)\.dbPools$/.exec(probe.name ?? "");
+        if (match && probe.ok) projectorDbPoolIndices.add(Number(match[1]));
+      }
     }
   }
 
@@ -445,6 +461,15 @@ function validateTelemetry(dir) {
   }
   if (!sawStreamHealth) {
     failures.push("telemetry did not capture a successful runtime.streamAckHealth probe");
+  }
+  if (reportProfile === "materializer-projection") {
+    const missingProjectorPools = Array.from({ length: requiredProjectorPoolCount }, (_, index) => index)
+      .filter((index) => !projectorDbPoolIndices.has(index));
+    if (missingProjectorPools.length > 0) {
+      failures.push(
+        `telemetry did not capture successful projector DB-pool probes; missing indices ${missingProjectorPools.join(",")}`,
+      );
+    }
   }
 }
 
@@ -527,6 +552,9 @@ function validateRequiredDbDiagnosticsFiles(diagnosticsDir) {
   if (requirePgStatIo) {
     requiredFiles.push("pre-pg_stat_io.csv", "post-pg_stat_io.csv");
   }
+  if (requirePgStatStatements) {
+    requiredFiles.push("pre-pg_stat_statements.csv", "post-pg_stat_statements.csv");
+  }
   for (const file of requiredFiles) {
     const path = join(diagnosticsDir, file);
     if (!existsSync(path)) {
@@ -563,6 +591,39 @@ function checkProjectorHealth(label, status) {
         `${label}: streamAckProjector.after.watermark partition=${watermark.partition ?? "unknown"} lastError must be empty`,
       );
     }
+  }
+  const projectors = Array.isArray(status.projectors) ? status.projectors : [];
+  if (
+    (requiredOrderLifecycleMaintainers !== undefined || requiredMarketDataMaintainers !== undefined) &&
+    projectors.length !== requiredProjectorPoolCount
+  ) {
+    failures.push(
+      `${label}: projector status records ${projectors.length} != required ${requiredProjectorPoolCount}`,
+    );
+  }
+  checkProjectorMaintainerCount(
+    label,
+    projectors,
+    "orderLifecycleProjectorEnabled",
+    "order-lifecycle",
+    requiredOrderLifecycleMaintainers,
+  );
+  checkProjectorMaintainerCount(
+    label,
+    projectors,
+    "marketDataProjectorEnabled",
+    "market-data",
+    requiredMarketDataMaintainers,
+  );
+}
+
+function checkProjectorMaintainerCount(label, projectors, field, description, requiredCount) {
+  if (requiredCount === undefined) return;
+  const enabledCount = Array.isArray(projectors)
+    ? projectors.filter((projector) => projector?.[field] === true).length
+    : 0;
+  if (enabledCount !== requiredCount) {
+    failures.push(`${label}: ${description} maintainers ${enabledCount} != required ${requiredCount}`);
   }
 }
 

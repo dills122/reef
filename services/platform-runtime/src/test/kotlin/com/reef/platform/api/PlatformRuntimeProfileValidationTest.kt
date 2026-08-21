@@ -359,6 +359,50 @@ class PlatformRuntimeProfileValidationTest {
     }
 
     @Test
+    fun rejectsCommandStatusStageWithLifecycleConsumers() {
+        val lifecycleConfig = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "stream-ack",
+                "STREAM_ACK_PROJECTOR_ENABLED" to "true",
+                "STREAM_ACK_PROJECTION_STAGE" to "command-status",
+                "ORDER_LIFECYCLE_PROJECTOR_ENABLED" to "true"
+            )
+        )
+        val marketDataConfig = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "stream-ack",
+                "STREAM_ACK_PROJECTOR_ENABLED" to "true",
+                "STREAM_ACK_PROJECTION_STAGE" to "command-status",
+                "MARKET_DATA_PROJECTOR_ENABLED" to "true"
+            )
+        )
+
+        val lifecycleIssues = PlatformRuntimeProfileValidator.violations(lifecycleConfig)
+        val marketDataIssues = PlatformRuntimeProfileValidator.violations(marketDataConfig)
+        assertEquals(1, lifecycleIssues.size)
+        assertTrue(lifecycleIssues.single().contains("STREAM_ACK_PROJECTION_STAGE=command-status"))
+        assertTrue(lifecycleIssues.single().contains("ORDER_LIFECYCLE_PROJECTOR_ENABLED"))
+        assertEquals(1, marketDataIssues.size)
+        assertTrue(marketDataIssues.single().contains("MARKET_DATA_PROJECTOR_ENABLED"))
+    }
+
+    @Test
+    fun allowsExplicitCommandStatusLifecycleDiagnosticAblation() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "stream-ack",
+                "STREAM_ACK_PROJECTOR_ENABLED" to "true",
+                "STREAM_ACK_PROJECTION_STAGE" to "command-status",
+                "ORDER_LIFECYCLE_PROJECTOR_ENABLED" to "true",
+                "MARKET_DATA_PROJECTOR_ENABLED" to "true",
+                "STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC" to "true"
+            )
+        )
+
+        assertEquals(emptyList(), PlatformRuntimeProfileValidator.violations(config))
+    }
+
+    @Test
     fun defaultPublisherAndProviderResolveToJetStreamWhenUnset() {
         val config = PlatformRuntimeProfileConfig.fromEnv(envLookup())
 

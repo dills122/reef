@@ -124,6 +124,89 @@ assert.equal(projectionResult.status, 0, projectionResult.stderr);
 assert.match(projectionResult.stdout, /projected=2500 lag=0/);
 assert.match(projectionResult.stdout, /materializedProjectedGap=0 projectionFreshness=caught-up/);
 
+const projectionMaintainerTopologyDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-maintainers-"));
+writeMaterializerProjectionReport(projectionMaintainerTopologyDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  projectors: Array.from({ length: 4 }, (_, index) => ({
+    index,
+    orderLifecycleProjectorEnabled: true,
+    marketDataProjectorEnabled: true,
+  })),
+});
+writeTelemetry(projectionMaintainerTopologyDir);
+const projectionMaintainerTopologyResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionMaintainerTopologyDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "1",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMaintainerTopologyResult.status, 1);
+assert.match(projectionMaintainerTopologyResult.stderr, /order-lifecycle maintainers 4 != required 1/);
+assert.match(projectionMaintainerTopologyResult.stderr, /market-data maintainers 4 != required 1/);
+
+const projectionSingleMaintainerDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-single-maintainer-"));
+writeMaterializerProjectionReport(projectionSingleMaintainerDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  projectors: Array.from({ length: 4 }, (_, index) => ({
+    index,
+    orderLifecycleProjectorEnabled: index === 0,
+    marketDataProjectorEnabled: index === 0,
+  })),
+});
+writeTelemetry(projectionSingleMaintainerDir);
+const projectionSingleMaintainerResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionSingleMaintainerDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "1",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionSingleMaintainerResult.status, 0, projectionSingleMaintainerResult.stderr);
+
+const projectionMissingPoolTelemetryDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-pools-"));
+writeMaterializerProjectionReport(projectionMissingPoolTelemetryDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionMissingPoolTelemetryDir, { projectorPools: false });
+const projectionMissingPoolTelemetryResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionMissingPoolTelemetryDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMissingPoolTelemetryResult.status, 1);
+assert.match(projectionMissingPoolTelemetryResult.stderr, /projector DB-pool probes; missing indices 0,1,2,3/);
+
 const projectionDiagnosticsArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-diagnostics-"));
 writeMaterializerProjectionReport(projectionDiagnosticsArtifactDir, "rate-2500.json", 2500, 2500, {
   projected: 2500,
@@ -145,6 +228,33 @@ const projectionDiagnosticsResult = spawnSync(process.execPath, ["scripts/dev/do
   encoding: "utf8",
 });
 assert.equal(projectionDiagnosticsResult.status, 0, projectionDiagnosticsResult.stderr);
+
+const projectionMissingStatementsDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-statements-"));
+writeMaterializerProjectionReport(projectionMissingStatementsDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionMissingStatementsDir);
+writeMaterializerDbDiagnostics(projectionMissingStatementsDir, { includeProjectionPostgres: true });
+const projectionMissingStatementsResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionMissingStatementsDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRE_DB_DIAGNOSTICS: "1",
+      REEF_DO_REQUIRE_PG_STAT_STATEMENTS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMissingStatementsResult.status, 1);
+assert.match(projectionMissingStatementsResult.stderr, /missing DB diagnostics artifact: .*pre-pg_stat_statements\.csv/);
+assert.match(projectionMissingStatementsResult.stderr, /missing DB diagnostics artifact: .*post-pg_stat_statements\.csv/);
 
 const projectionDeadlockArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-deadlock-"));
 writeMaterializerProjectionReport(projectionDeadlockArtifactDir, "rate-2500.json", 2500, 2500, {
@@ -476,7 +586,10 @@ function writeArenaReport(dir, { healthStatus, includeHardeningSummary = true, f
   }
 }
 
-function writeTelemetry(dir) {
+function writeTelemetry(dir, { projectorPools = true } = {}) {
+  const projectorPoolProbes = projectorPools
+    ? Array.from({ length: 4 }, (_, index) => ({ name: `streamAckProjector.${index}.dbPools`, ok: true }))
+    : [];
   writeFileSync(
     join(dir, "sample-telemetry.ndjson"),
     `${JSON.stringify({
@@ -484,6 +597,7 @@ function writeTelemetry(dir) {
         probes: [
           { name: "runtime.dbPools", ok: true },
           { name: "runtime.streamAckHealth", ok: true },
+          ...projectorPoolProbes,
         ],
       },
     })}\n`,
@@ -616,6 +730,7 @@ function writeMaterializerProjectionReport(dir, name, rate, total, options) {
           },
           after: {
             enabled: true,
+            projectors: options.projectors ?? [],
             metrics: {
               failed: 0,
               lastError: "",
