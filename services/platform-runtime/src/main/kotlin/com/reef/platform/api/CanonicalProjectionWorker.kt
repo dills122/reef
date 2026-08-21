@@ -88,6 +88,9 @@ enum class CanonicalProjectionSource(val configValue: String, val metricName: St
 
 data class CanonicalProjectionStats(
     val projected: Long,
+    val batches: Long,
+    val lastBatchSize: Long,
+    val maxBatchSize: Long,
     val failed: Long,
     val emptyPolls: Long,
     val lastProjectedAt: String,
@@ -97,6 +100,9 @@ data class CanonicalProjectionStats(
 
 object CanonicalProjectionMetrics {
     private val projected = AtomicLong(0)
+    private val batches = AtomicLong(0)
+    private val lastBatchSize = AtomicLong(0)
+    private val maxBatchSize = AtomicLong(0)
     private val failed = AtomicLong(0)
     private val emptyPolls = AtomicLong(0)
     private val lastProjectedAtEpochMs = AtomicLong(0)
@@ -106,6 +112,9 @@ object CanonicalProjectionMetrics {
 
     fun recordProjected(count: Long) {
         projected.addAndGet(count)
+        batches.incrementAndGet()
+        lastBatchSize.set(count)
+        maxBatchSize.updateAndGet { current -> maxOf(current, count) }
         lastProjectedAtEpochMs.set(System.currentTimeMillis())
     }
 
@@ -122,6 +131,9 @@ object CanonicalProjectionMetrics {
     fun snapshot(): CanonicalProjectionStats {
         return CanonicalProjectionStats(
             projected = projected.get(),
+            batches = batches.get(),
+            lastBatchSize = lastBatchSize.get(),
+            maxBatchSize = maxBatchSize.get(),
             failed = failed.get(),
             emptyPolls = emptyPolls.get(),
             lastProjectedAt = instantString(lastProjectedAtEpochMs.get()),
@@ -132,6 +144,9 @@ object CanonicalProjectionMetrics {
 
     fun resetForTests() {
         projected.set(0)
+        batches.set(0)
+        lastBatchSize.set(0)
+        maxBatchSize.set(0)
         failed.set(0)
         emptyPolls.set(0)
         lastProjectedAtEpochMs.set(0)

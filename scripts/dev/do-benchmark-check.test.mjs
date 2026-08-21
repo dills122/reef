@@ -124,6 +124,177 @@ assert.equal(projectionResult.status, 0, projectionResult.stderr);
 assert.match(projectionResult.stdout, /projected=2500 lag=0/);
 assert.match(projectionResult.stdout, /materializedProjectedGap=0 projectionFreshness=caught-up/);
 
+const projectionInvalidMaintainerConfigResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionArtifactDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "one",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionInvalidMaintainerConfigResult.status, 1);
+assert.match(
+  projectionInvalidMaintainerConfigResult.stderr,
+  /REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS must be a non-negative integer, got "one"/,
+);
+
+const projectionMaintainerTopologyDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-maintainers-"));
+writeMaterializerProjectionReport(projectionMaintainerTopologyDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  projectors: Array.from({ length: 4 }, (_, index) => ({
+    index,
+    orderLifecycleProjectorEnabled: true,
+    marketDataProjectorEnabled: true,
+  })),
+});
+writeTelemetry(projectionMaintainerTopologyDir);
+const projectionMaintainerTopologyResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionMaintainerTopologyDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "1",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMaintainerTopologyResult.status, 1);
+assert.match(projectionMaintainerTopologyResult.stderr, /order-lifecycle maintainers 4 != required 1/);
+assert.match(projectionMaintainerTopologyResult.stderr, /market-data maintainers 4 != required 1/);
+
+const projectionSingleMaintainerDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-single-maintainer-"));
+writeMaterializerProjectionReport(projectionSingleMaintainerDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  projectors: Array.from({ length: 4 }, (_, index) => ({
+    index,
+    orderLifecycleProjectorEnabled: index === 0,
+    marketDataProjectorEnabled: index === 0,
+  })),
+});
+writeTelemetry(projectionSingleMaintainerDir);
+const projectionSingleMaintainerResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionSingleMaintainerDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "1",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionSingleMaintainerResult.status, 0, projectionSingleMaintainerResult.stderr);
+
+const projectionUnhealthyMaintainerDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-unhealthy-"));
+writeMaterializerProjectionReport(projectionUnhealthyMaintainerDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  orderLifecycleFailureDelta: 1,
+  projectors: Array.from({ length: 4 }, (_, index) => ({
+    index,
+    orderLifecycleProjectorEnabled: index === 0,
+    marketDataProjectorEnabled: index === 0,
+  })),
+});
+writeTelemetry(projectionUnhealthyMaintainerDir);
+const projectionUnhealthyMaintainerResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionUnhealthyMaintainerDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "1",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionUnhealthyMaintainerResult.status, 1);
+assert.match(
+  projectionUnhealthyMaintainerResult.stderr,
+  /order-lifecycle maintainer index=0 failed delta must be 0, got 1/,
+);
+
+const projectionBackloggedMaintainerDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-backlogged-"));
+writeMaterializerProjectionReport(projectionBackloggedMaintainerDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+  orderLifecycleLastProcessedRows: 25,
+  projectors: Array.from({ length: 4 }, (_, index) => ({
+    index,
+    orderLifecycleProjectorEnabled: index === 0,
+    marketDataProjectorEnabled: index === 0,
+  })),
+});
+writeTelemetry(projectionBackloggedMaintainerDir);
+const projectionBackloggedMaintainerResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionBackloggedMaintainerDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS: "1",
+      REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionBackloggedMaintainerResult.status, 1);
+assert.match(
+  projectionBackloggedMaintainerResult.stderr,
+  /order-lifecycle maintainer index=0 last processed rows must be 0, got 25/,
+);
+
+const projectionMissingPoolTelemetryDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-pools-"));
+writeMaterializerProjectionReport(projectionMissingPoolTelemetryDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionMissingPoolTelemetryDir, { projectorPools: false });
+const projectionMissingPoolTelemetryResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionMissingPoolTelemetryDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMissingPoolTelemetryResult.status, 1);
+assert.match(projectionMissingPoolTelemetryResult.stderr, /projector DB-pool probes; missing indices 0,1,2,3/);
+
 const projectionDiagnosticsArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-diagnostics-"));
 writeMaterializerProjectionReport(projectionDiagnosticsArtifactDir, "rate-2500.json", 2500, 2500, {
   projected: 2500,
@@ -145,6 +316,33 @@ const projectionDiagnosticsResult = spawnSync(process.execPath, ["scripts/dev/do
   encoding: "utf8",
 });
 assert.equal(projectionDiagnosticsResult.status, 0, projectionDiagnosticsResult.stderr);
+
+const projectionMissingStatementsDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-statements-"));
+writeMaterializerProjectionReport(projectionMissingStatementsDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionMissingStatementsDir);
+writeMaterializerDbDiagnostics(projectionMissingStatementsDir, { includeProjectionPostgres: true });
+const projectionMissingStatementsResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionMissingStatementsDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRE_DB_DIAGNOSTICS: "1",
+      REEF_DO_REQUIRE_PG_STAT_STATEMENTS: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMissingStatementsResult.status, 1);
+assert.match(projectionMissingStatementsResult.stderr, /missing DB diagnostics artifact: .*pre-pg_stat_statements\.csv/);
+assert.match(projectionMissingStatementsResult.stderr, /missing DB diagnostics artifact: .*post-pg_stat_statements\.csv/);
 
 const projectionDeadlockArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-deadlock-"));
 writeMaterializerProjectionReport(projectionDeadlockArtifactDir, "rate-2500.json", 2500, 2500, {
@@ -476,7 +674,10 @@ function writeArenaReport(dir, { healthStatus, includeHardeningSummary = true, f
   }
 }
 
-function writeTelemetry(dir) {
+function writeTelemetry(dir, { projectorPools = true } = {}) {
+  const projectorPoolProbes = projectorPools
+    ? Array.from({ length: 4 }, (_, index) => ({ name: `streamAckProjector.${index}.dbPools`, ok: true }))
+    : [];
   writeFileSync(
     join(dir, "sample-telemetry.ndjson"),
     `${JSON.stringify({
@@ -484,6 +685,7 @@ function writeTelemetry(dir) {
         probes: [
           { name: "runtime.dbPools", ok: true },
           { name: "runtime.streamAckHealth", ok: true },
+          ...projectorPoolProbes,
         ],
       },
     })}\n`,
@@ -554,6 +756,39 @@ function writeMaterializerReport(dir, name, rate, total, options = {}) {
 }
 
 function writeMaterializerProjectionReport(dir, name, rate, total, options) {
+  const projectors = options.projectors ?? [];
+  const downstreamStatus = (enabled, cycles, failed = 0, lastProcessedRows = 0) => ({
+    enabled,
+    metrics: {
+      cycles,
+      processedRows: enabled ? total : 0,
+      lastProcessedRows,
+      failed,
+      lastProcessedAt: enabled ? "2026-08-20T12:00:00Z" : "",
+      lastFailedAt: failed > 0 ? "2026-08-20T12:00:01Z" : "",
+      lastError: failed > 0 ? "projection failed" : "",
+    },
+  });
+  const beforeProjectors = projectors.map((projector) => ({
+    ...projector,
+    orderLifecycleProjector: downstreamStatus(projector.orderLifecycleProjectorEnabled === true, 1),
+    marketDataProjector: downstreamStatus(projector.marketDataProjectorEnabled === true, 1),
+  }));
+  const afterProjectors = projectors.map((projector) => ({
+    ...projector,
+    orderLifecycleProjector: downstreamStatus(
+      projector.orderLifecycleProjectorEnabled === true,
+      projector.orderLifecycleProjectorEnabled === true ? 2 : 1,
+      projector.orderLifecycleProjectorEnabled === true ? options.orderLifecycleFailureDelta ?? 0 : 0,
+      projector.orderLifecycleProjectorEnabled === true ? options.orderLifecycleLastProcessedRows ?? 0 : 0,
+    ),
+    marketDataProjector: downstreamStatus(
+      projector.marketDataProjectorEnabled === true,
+      projector.marketDataProjectorEnabled === true ? 2 : 1,
+      projector.marketDataProjectorEnabled === true ? options.marketDataFailureDelta ?? 0 : 0,
+      projector.marketDataProjectorEnabled === true ? options.marketDataLastProcessedRows ?? 0 : 0,
+    ),
+  }));
   writeFileSync(
     join(dir, name),
     JSON.stringify(
@@ -607,6 +842,12 @@ function writeMaterializerProjectionReport(dir, name, rate, total, options) {
           probes: { after: { ok: true, status: 200 } },
         },
         streamAckProjector: {
+          before: {
+            enabled: true,
+            projectors: beforeProjectors,
+            metrics: { failed: 0, lastError: "" },
+            watermarks: [],
+          },
           delta: {
             projectedDelta: options.projected,
             failedDelta: 0,
@@ -616,6 +857,7 @@ function writeMaterializerProjectionReport(dir, name, rate, total, options) {
           },
           after: {
             enabled: true,
+            projectors: afterProjectors,
             metrics: {
               failed: 0,
               lastError: "",

@@ -287,11 +287,36 @@ EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=16 make dev-up-captured-ack
 ```
 
 Diagnostic artifacts are written under the stress artifact root with suffix `-diagnostics`:
+
 - `pre-db-diagnostics.json`, `post-db-diagnostics.json`
 - `pre-pg_stat_bgwriter.csv`, `post-pg_stat_bgwriter.csv`
 - `pre-pg_stat_checkpointer.csv`, `post-pg_stat_checkpointer.csv` (Postgres 17+ when available)
+- `pre-pg_stat_io.csv`, `post-pg_stat_io.csv` (Postgres 16+ when available)
+- `pre-pg_settings_diagnostics.csv`, `post-pg_settings_diagnostics.csv`
+- `pre-pg_stat_statements.csv`, `post-pg_stat_statements.csv` when the
+  extension is enabled
 - `pre-table-stats.csv`, `post-table-stats.csv`
 - `postgres-logs.txt`
+
+The named DigitalOcean projection-freshness gate enables
+`pg_stat_statements` with nested-statement tracking and turns on PostgreSQL I/O
+and WAL-I/O timing for both canonical and projection Postgres. The stress
+harness creates the extension after the disposable stack is healthy, captures
+pre/post statement snapshots, and ranks statement deltas by execution time in
+the diagnostics summary. The evidence checker fails when the named gate omits
+the statement CSVs. These settings have measurement overhead and are benchmark
+defaults, not production recommendations.
+
+The relevant configuration controls are
+`REEF_PG_SHARED_PRELOAD_LIBRARIES`,
+`REEF_PROJECTION_PG_SHARED_PRELOAD_LIBRARIES`,
+`REEF_PG_TRACK_IO_TIMING`, `REEF_PROJECTION_PG_TRACK_IO_TIMING`,
+`REEF_PG_TRACK_WAL_IO_TIMING`, `REEF_PROJECTION_PG_TRACK_WAL_IO_TIMING`,
+`REEF_PG_STAT_STATEMENTS_TRACK`, and
+`REEF_PROJECTION_PG_STAT_STATEMENTS_TRACK`. The bounded memory matrix can use
+`REEF_PG_SHARED_BUFFERS`, `REEF_PROJECTION_PG_SHARED_BUFFERS`,
+`REEF_PG_WORK_MEM`, and `REEF_PROJECTION_PG_WORK_MEM`; do not treat a global
+`work_mem` increase as the preferred projection-transaction implementation.
 
 Stress telemetry also samples runtime health, hot-path timings, async command queue stats, runtime DB pool stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 For stream-ack runs, worker-drain telemetry samples `platform-worker-0` through `platform-worker-3` directly from `REEF_PLATFORM_WORKER_0_HOST_PORT` through `REEF_PLATFORM_WORKER_3_HOST_PORT`; override with `DEV_STRESS_STREAM_ACK_WORKER_URLS` for custom worker layouts.
@@ -720,6 +745,70 @@ Accepted-async no-DB isolation knobs:
 - `GET /internal/commands/async/stats` includes an `acceptedAsync` block with aggregate queued, in-flight, completed-waiting, processing, completed, failed, duplicate, and backpressure counters plus per-lane queue/drain/window counters for accepted-async no-DB diagnostics.
 
 Each stress report includes `hotPathPhases.phases` from `/internal/perf/hot-path`. For no-DB sync-result runs, start with `api.mutation.total`, `api.operation`, `api.parse.submitOrder`, `runtime.submitOrder.total`, `runtime.engine.submit`, `runtime.persistence.persistSubmitOutcome`, `api.response.serializeSubmitOrder`, and `api.writeResponse`. `runtime.engine.submit` measures the platform runtime gateway call to the engine, including transport and response parsing; compare it against the matching-engine-only harness before attributing that time to matching logic itself.
+
+Projection pressure runs additionally collect `/internal/perf/hot-path` and
+`/internal/perf/db-pools` from every configured projector. The projector status
+reports successful batch count, last batch size, and maximum batch size. For a
+separate projection database, the phase names are
+`projector.venueEventBatch.canonicalRead`, `.transform`, `.projectionSql`,
+`.watermark`, and `.commit`; the canonical-submit projector uses the analogous
+`projector.canonicalSubmit.*` names. The DigitalOcean evidence checker requires
+a successful DB-pool probe from all four projectors by default; override the
+expected topology only with `REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT`.
+
+Lifecycle and market-data maintenance can be assigned independently per
+projector with `ORDER_LIFECYCLE_PROJECTOR_0_ENABLED` through
+`ORDER_LIFECYCLE_PROJECTOR_3_ENABLED` and
+`MARKET_DATA_PROJECTOR_0_ENABLED` through
+`MARKET_DATA_PROJECTOR_3_ENABLED`. If an indexed override is unset, it inherits
+the existing global `ORDER_LIFECYCLE_PROJECTOR_ENABLED` or
+`MARKET_DATA_PROJECTOR_ENABLED` value, preserving prior profiles. The named
+DigitalOcean projection-freshness gate explicitly enables both maintainers on
+projector 0 and disables them on projectors 1-3; all four canonical projectors
+remain partitioned and enabled. This topology is an evidence-backed benchmark
+candidate, not yet a remote promotion result. Each projector exposes its
+effective `orderLifecycleProjectorEnabled` and
+`marketDataProjectorEnabled` values at `GET /internal/projector/status`; the
+stress report retains those values per projector and samples the corresponding
+`/internal/order-lifecycle/projector/status` and
+`/internal/market-data/projector/status` endpoints before and after the run.
+The named gate fails unless exactly one of each maintainer is observed, each
+enabled maintainer completes at least one cycle and then reports an empty
+zero-row cycle, and its failure counter does not increase or retain a
+`lastError`. The expected counts are controlled by
+`REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS` and
+`REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS`; these values and
+`REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT` must be non-negative integers when set.
+
+`STREAM_ACK_PROJECTION_STAGE=command-status` is a diagnostic write-stage
+ablation. Startup rejects it when order-lifecycle or market-data consumers are
+enabled because those consumers require timeline-written runtime events for
+complete cancel/reject/modify state. A benchmark that intentionally measures
+that unsafe partial stage must set
+`STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC=true`; it must not label the
+result `own-order-fresh`.
+
+To measure projector capacity without mixing intake time into the result,
+first create a canonical backlog with all `platform-projector-*` services
+stopped, stop command intake/materialization, then recreate or start only the
+four projector services with `STREAM_ACK_PROJECTOR_ENABLED=true` and run:
+
+```bash
+make dev-projection-drain-bench
+```
+
+The default report is `/tmp/reef-projection-drain-benchmark.json`. Configure it
+with `DEV_PROJECTION_DRAIN_PROJECTOR_URLS`,
+`DEV_PROJECTION_DRAIN_TIMEOUT_MS`, `DEV_PROJECTION_DRAIN_POLL_MS`, and
+`DEV_PROJECTION_DRAIN_REPORT_OUT`. The benchmark resets projector hot-path
+timers, captures every projector's status/hot-path/pool snapshots, and reports
+initial/max/final lag, elapsed drain time, projected work items/sec, and lag area. It
+fails if the initial backlog is empty, final lag is nonzero, a probe fails, or
+the canonical ceiling changes during the window; that last gate proves new
+canonical intake did not contaminate the fixed-backlog measurement. Size the
+backlog so it remains nonzero after projector container startup: the harness
+intentionally reports only lag observed after its first successful status
+sample and refuses to infer work that completed before sampling.
 
 Use this comparison ladder when isolating throughput collapse:
 
