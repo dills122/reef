@@ -66,4 +66,40 @@ public interface ModifyOrderOrBuilder extends
    * <code>.reef.contracts.orderexecution.v1.Price limit_price = 4;</code>
    */
   reef.contracts.orderexecution.v1.PriceOrBuilder getLimitPriceOrBuilder();
+
+  /**
+   * <code>string instrument_id = 5;</code>
+   * @return The instrumentId.
+   */
+  java.lang.String getInstrumentId();
+  /**
+   * <code>string instrument_id = 5;</code>
+   * @return The bytes for instrumentId.
+   */
+  com.google.protobuf.ByteString
+      getInstrumentIdBytes();
+
+  /**
+   * <code>string participant_id = 6;</code>
+   * @return The participantId.
+   */
+  java.lang.String getParticipantId();
+  /**
+   * <code>string participant_id = 6;</code>
+   * @return The bytes for participantId.
+   */
+  com.google.protobuf.ByteString
+      getParticipantIdBytes();
+
+  /**
+   * <code>string account_id = 7;</code>
+   * @return The accountId.
+   */
+  java.lang.String getAccountId();
+  /**
+   * <code>string account_id = 7;</code>
+   * @return The bytes for accountId.
+   */
+  com.google.protobuf.ByteString
+      getAccountIdBytes();
 }

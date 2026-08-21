@@ -43,7 +43,7 @@ public interface SubmitOrderResultOrBuilder extends
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
    */
-  java.util.List<reef.contracts.orderexecution.v1.ExecutionCreated> 
+  java.util.List<reef.contracts.orderexecution.v1.ExecutionCreated>
       getExecutionsList();
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
@@ -56,7 +56,7 @@ public interface SubmitOrderResultOrBuilder extends
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
    */
-  java.util.List<? extends reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder> 
+  java.util.List<? extends reef.contracts.orderexecution.v1.ExecutionCreatedOrBuilder>
       getExecutionsOrBuilderList();
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.ExecutionCreated executions = 3;</code>
@@ -67,7 +67,7 @@ public interface SubmitOrderResultOrBuilder extends
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>
    */
-  java.util.List<reef.contracts.orderexecution.v1.TradeCreated> 
+  java.util.List<reef.contracts.orderexecution.v1.TradeCreated>
       getTradesList();
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>
@@ -80,7 +80,7 @@ public interface SubmitOrderResultOrBuilder extends
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>
    */
-  java.util.List<? extends reef.contracts.orderexecution.v1.TradeCreatedOrBuilder> 
+  java.util.List<? extends reef.contracts.orderexecution.v1.TradeCreatedOrBuilder>
       getTradesOrBuilderList();
   /**
    * <code>repeated .reef.contracts.orderexecution.v1.TradeCreated trades = 4;</code>

@@ -74,6 +74,9 @@ class GrpcEngineClient(
         val req = CancelOrder.newBuilder()
             .setMetadata(command.toMetadata())
             .setOrderId(command.orderId)
+            .setInstrumentId(command.instrumentId)
+            .setParticipantId(command.participantId)
+            .setAccountId(command.accountId)
             .setReason(command.reason)
             .build()
 
@@ -85,6 +88,9 @@ class GrpcEngineClient(
         val req = ModifyOrder.newBuilder()
             .setMetadata(command.toMetadata())
             .setOrderId(command.orderId)
+            .setInstrumentId(command.instrumentId)
+            .setParticipantId(command.participantId)
+            .setAccountId(command.accountId)
             .setQuantity(OrderQuantity.newBuilder().setUnits(command.quantityUnits).build())
             .setLimitPrice(Price.newBuilder().setNanos(command.limitPrice).setCurrency("USD").build())
             .build()
@@ -476,6 +482,8 @@ private fun CancelOrderCommand.toMetadata(): CommandMetadata =
         .setCorrelationId(correlationId)
         .setActorId(actorId)
         .setOccurredAt(occurredAt)
+        .setRunId(runId)
+        .setVenueSessionId(venueSessionId)
         .build()
 
 private fun ModifyOrderCommand.toMetadata(): CommandMetadata =
@@ -486,6 +494,8 @@ private fun ModifyOrderCommand.toMetadata(): CommandMetadata =
         .setCorrelationId(correlationId)
         .setActorId(actorId)
         .setOccurredAt(occurredAt)
+        .setRunId(runId)
+        .setVenueSessionId(venueSessionId)
         .build()
 
 private fun String.toProtoSide(): OrderSide =

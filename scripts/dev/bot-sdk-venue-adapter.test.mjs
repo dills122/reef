@@ -191,8 +191,8 @@ const cancelCommand = toVenueCommandRequestsV1(expandedCancelAll, {
 assert.equal(cancelCommand.ok, true);
 assert.equal(cancelCommand.value[0].route, "/api/v1/orders/cancel");
 assert.equal(cancelCommand.value[0].headers["X-Participant-Id"], "participant-1");
-assert.equal(Object.hasOwn(cancelCommand.value[0].body, "participantId"), false);
-assert.equal(Object.hasOwn(cancelCommand.value[0].body, "accountId"), false);
+assert.equal(cancelCommand.value[0].body.participantId, "participant-1");
+assert.equal(cancelCommand.value[0].body.accountId, "account-1");
 
 const badSubmitPrice = toVenueCommandRequestsV1(
   [{ type: "submit_limit", order: { instrumentId: "AAPL", side: "BUY", quantity: 10, limitPrice: Number.NaN } }],

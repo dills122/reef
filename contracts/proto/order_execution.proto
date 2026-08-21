@@ -47,6 +47,9 @@ message CancelOrder {
   CommandMetadata metadata = 1;
   string order_id = 2;
   string reason = 3;
+  string instrument_id = 4;
+  string participant_id = 5;
+  string account_id = 6;
 }
 
 message ModifyOrder {
@@ -54,6 +57,9 @@ message ModifyOrder {
   string order_id = 2;
   OrderQuantity quantity = 3;
   Price limit_price = 4;
+  string instrument_id = 5;
+  string participant_id = 6;
+  string account_id = 7;
 }
 
 message OrderAccepted {

@@ -45,6 +45,11 @@ class EngineClient : EngineGateway {
                 "actorId" to command.actorId,
                 "occurredAt" to command.occurredAt,
                 "orderId" to command.orderId,
+                "runId" to command.runId,
+                "venueSessionId" to command.venueSessionId,
+                "instrumentId" to command.instrumentId,
+                "participantId" to command.participantId,
+                "accountId" to command.accountId,
                 "reason" to command.reason
             )
         )
@@ -61,6 +66,11 @@ class EngineClient : EngineGateway {
                 "actorId" to command.actorId,
                 "occurredAt" to command.occurredAt,
                 "orderId" to command.orderId,
+                "runId" to command.runId,
+                "venueSessionId" to command.venueSessionId,
+                "instrumentId" to command.instrumentId,
+                "participantId" to command.participantId,
+                "accountId" to command.accountId,
                 "quantityUnits" to command.quantityUnits,
                 "limitPrice" to command.limitPrice
             )

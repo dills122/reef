@@ -14,8 +14,8 @@ Every command carries a `CommandMetadata`: `command_id`, `correlation_id`, `acto
 | Message | Fields |
 |---|---|
 | `SubmitOrder` | `metadata`, `order_id`, `instrument_id`, `participant_id`, `account_id`, `side`, `order_type`, `quantity`, `limit_price`, `time_in_force` |
-| `CancelOrder` | `metadata`, `order_id`, `reason` |
-| `ModifyOrder` | `metadata`, `order_id`, `quantity`, `limit_price` |
+| `CancelOrder` | `metadata`, `order_id`, `reason`, `instrument_id`, `participant_id`, `account_id` |
+| `ModifyOrder` | `metadata`, `order_id`, `quantity`, `limit_price`, `instrument_id`, `participant_id`, `account_id` |
 
 `OrderQuantity` is `{ units: string }`; `Price` is `{ nanos: string, currency: string }`.
 
@@ -47,7 +47,9 @@ service OrderExecutionService {
 - `OrderType`: `ORDER_TYPE_UNSPECIFIED`, `ORDER_TYPE_LIMIT` (market orders not yet defined at this layer)
 - `TimeInForce`: `TIME_IN_FORCE_UNSPECIFIED`, `TIME_IN_FORCE_DAY`, `TIME_IN_FORCE_IOC`
 
-Contracts are versioned and additive-first; `make check-proto-additive` verifies compatibility in CI.
+Contracts are versioned and additive-first; `make check-proto-additive`
+performs descriptor-level compatibility checks and verifies checked-in Go and
+Java generated-source drift in CI.
 
 ## Learn More
 

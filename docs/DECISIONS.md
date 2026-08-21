@@ -844,6 +844,17 @@ Primary references:
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
 - [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 
+Amendment (2026-08-17):
+- `ModifyOrder` is now implemented on the direct stream path and shares the
+  same routing and ownership contract as `CancelOrder`.
+- public cancel/modify requests require `runId`, `venueSessionId`,
+  `instrumentId`, `participantId`, and `accountId`; the boundary authorizes
+  participant/account claims and the matching engine binds every claim to the
+  canonical target order before mutation.
+- malformed non-blank `occurredAt` values are rejected before durable public
+  intake, with a deterministic engine rejection retained for trusted/direct
+  callers that bypass the HTTP boundary.
+
 ### D-048: Internal Interface And External Surface Hardline
 
 Status: accepted

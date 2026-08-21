@@ -3169,6 +3169,8 @@ class PlatformHttpServer(
             "runId" to resolved.runId,
             "venueSessionId" to resolved.venueSessionId,
             "instrumentId" to resolved.instrumentId,
+            "participantId" to resolved.participantId,
+            "accountId" to resolved.accountId,
             "clientOrderId" to clientOrderId
         )
         handleApiV1Mutation(exchange, "/api/v1/orders/cancel", presetBody = synthesizedCancelBody, boundaryPrechecked = true) { body ->
