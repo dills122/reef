@@ -546,23 +546,25 @@ class PlatformHttpServer(
         streamCommandWorkerPollMs = streamCommandWorkerPollMs,
         streamCommandWorkerFetchTimeoutMs = streamCommandWorkerFetchTimeoutMs,
         streamCommandWorkerDedicatedRuntimePoolEnabled = streamCommandWorkerDedicatedRuntimePoolEnabled,
-        venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
-        venueEventMaterializerPollMs = venueEventMaterializerPollMs,
-        venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs,
-        marketDataProjectorProjectionName = marketDataProjectorProjectionName,
-        marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
-        marketDataProjectorPollMs = marketDataProjectorPollMs,
-        marketDataProjectorBatchSize = marketDataProjectorBatchSize,
-        marketDataProjectorEnabled = marketDataProjectorEnabled,
-        orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
-        orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
-        orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
+        projectionConfig = ProjectionDiagnosticsConfig(
+            venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
+            venueEventMaterializerPollMs = venueEventMaterializerPollMs,
+            venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs,
+            marketDataProjectorProjectionName = marketDataProjectorProjectionName,
+            marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
+            marketDataProjectorPollMs = marketDataProjectorPollMs,
+            marketDataProjectorBatchSize = marketDataProjectorBatchSize,
+            marketDataProjectorEnabled = marketDataProjectorEnabled,
+            orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
+            orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+            orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
+            streamAckProjectorEnabled = streamAckProjectorEnabled,
+            streamAckProjectionName = streamAckProjectionName,
+            streamAckProjectionSource = streamAckProjectionSource,
+            streamAckProjectionEventStream = streamAckProjectionEventStream,
+            streamAckProjectionStage = streamAckProjectionStage
+        ),
         api = api,
-        streamAckProjectorEnabled = streamAckProjectorEnabled,
-        streamAckProjectionName = streamAckProjectionName,
-        streamAckProjectionSource = streamAckProjectionSource,
-        streamAckProjectionEventStream = streamAckProjectionEventStream,
-        streamAckProjectionStage = streamAckProjectionStage,
         runtimeLoopStarter = runtimeLoopStarter
     )
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
@@ -2027,7 +2029,7 @@ class PlatformHttpServer(
             is ApiV1CommandValidation.Valid -> validation.json
         }
         val identityViolation = HotPathMetrics.time("api.boundary.checkOrderMutationIdentity") {
-            boundary.checkOrderMutationIdentity(exchange.requestHeaders, route, parsedBody)
+            boundary.checkOrderMutationIdentity(exchange.requestHeaders, parsedBody)
         }
         if (identityViolation != null) {
             adminSessionAuth.writeJson(exchange, identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
@@ -2458,7 +2460,7 @@ class PlatformHttpServer(
             is ApiV1CommandValidation.Valid -> validation.json
         }
         val identityViolation = HotPathMetrics.time("api.boundary.checkOrderMutationIdentity") {
-            boundary.checkOrderMutationIdentity(request.headers, route, parsedBody)
+            boundary.checkOrderMutationIdentity(request.headers, parsedBody)
         }
         if (identityViolation != null) {
             return PreparedApiV1MutationResult.Rejected(

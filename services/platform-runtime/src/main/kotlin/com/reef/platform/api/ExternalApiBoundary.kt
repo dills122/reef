@@ -1699,7 +1699,7 @@ class ExternalApiBoundary(
         return null
     }
 
-    fun checkOrderMutationIdentity(headers: Headers, route: String, command: JsonDocument): BoundaryError? {
+    fun checkOrderMutationIdentity(headers: Headers, command: JsonDocument): BoundaryError? {
         val clientId = clientId(headers)
             ?: return BoundaryError(401, "CLIENT_ID_REQUIRED", "missing X-Client-Id header")
         val principal = authHook.principal(clientId)

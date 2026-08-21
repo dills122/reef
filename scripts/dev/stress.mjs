@@ -18,6 +18,7 @@ import {
 import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 import { validateStressRunShape } from "./lib/stress-run-guard.mjs";
 import { expectedRolesForRunProfile } from "./lib/run-profile-roles.mjs";
+import { runProbesConcurrently } from "./lib/telemetry-probes.mjs";
 
 loadDotEnv();
 const execFileAsync = promisify(execFile);
@@ -975,15 +976,24 @@ function defaultStreamAckProjectorUrls(runtimeUrl) {
 }
 
 async function sampleStreamAckProjectors() {
-  const probes = await Promise.all(
-    streamAckProjectorUrls.map((baseUrl, index) =>
-      requestAppProbe({
+  const probeSpecs = streamAckProjectorUrls.flatMap((baseUrl, index) => [
+    {
         name: `streamAckProjector.${index}.status`,
         url: `${baseUrl}/internal/projector/status`,
         captureJson: true,
-      }),
-    ),
-  );
+    },
+    {
+      name: `streamAckProjector.${index}.orderLifecycleStatus`,
+      url: `${baseUrl}/internal/order-lifecycle/projector/status`,
+      captureJson: true,
+    },
+    {
+      name: `streamAckProjector.${index}.marketDataStatus`,
+      url: `${baseUrl}/internal/market-data/projector/status`,
+      captureJson: true,
+    },
+  ]);
+  const probes = await runProbesConcurrently(probeSpecs, requestAppProbe);
   return {
     ok: probes.every((probe) => probe.ok),
     status: probes.find((probe) => !probe.ok)?.status ?? 200,
@@ -1030,12 +1040,48 @@ function streamAckProjectorDrainSatisfied(before, after, expectedProjected) {
   const projectedDelta = Number(after.metrics.projected ?? 0) - Number(before?.metrics?.projected ?? 0);
   const lag = Number(after.lag ?? 0);
   if (expectedProjected > 0 && projectedDelta < expectedProjected) return false;
-  return lag <= maxStreamAckProjectorLag;
+  return lag <= maxStreamAckProjectorLag && downstreamProjectorsDrained(before, after);
+}
+
+function downstreamProjectorsDrained(before, after) {
+  const beforeByIndex = new Map((before?.projectors ?? []).map((projector) => [projector.index, projector]));
+  const downstreamProjectors = [
+    ["orderLifecycleProjectorEnabled", "orderLifecycleProjector"],
+    ["marketDataProjectorEnabled", "marketDataProjector"],
+  ];
+  for (const afterProjector of after?.projectors ?? []) {
+    const beforeProjector = beforeByIndex.get(afterProjector.index);
+    for (const [configuredField, statusField] of downstreamProjectors) {
+      if (afterProjector[configuredField] !== true) continue;
+      const beforeStatus = beforeProjector?.[statusField];
+      const afterStatus = afterProjector[statusField];
+      const cyclesDelta = Number(afterStatus?.metrics?.cycles ?? 0) - Number(beforeStatus?.metrics?.cycles ?? 0);
+      if (afterStatus?.enabled !== true || cyclesDelta <= 0) return false;
+      if (Number(afterStatus.metrics?.lastProcessedRows) !== 0) return false;
+    }
+  }
+  return true;
 }
 
 function aggregateStreamAckProjectorStatus(probes) {
   const projectors = probes
-    .map((probe, index) => ({ index, url: streamAckProjectorUrls[index], status: probe.json }))
+    .map((probe) => {
+      const match = /^streamAckProjector\.(\d+)\.status$/.exec(probe.name ?? "");
+      if (!match) return null;
+      const index = Number(match[1]);
+      return {
+        index,
+        url: streamAckProjectorUrls[index],
+        status: probe.json,
+        orderLifecycleProjector: probes.find(
+          (candidate) => candidate.name === `streamAckProjector.${index}.orderLifecycleStatus`,
+        )?.json,
+        marketDataProjector: probes.find(
+          (candidate) => candidate.name === `streamAckProjector.${index}.marketDataStatus`,
+        )?.json,
+      };
+    })
+    .filter(Boolean)
     .filter((projector) => projector.status);
   const metrics = {
     projected: 0,
@@ -1093,6 +1139,8 @@ function aggregateStreamAckProjectorStatus(probes) {
       projectionStage: projector.status.projectionStage ?? "",
       orderLifecycleProjectorEnabled: projector.status.orderLifecycleProjectorEnabled === true,
       marketDataProjectorEnabled: projector.status.marketDataProjectorEnabled === true,
+      orderLifecycleProjector: projector.orderLifecycleProjector ?? null,
+      marketDataProjector: projector.marketDataProjector ?? null,
       partitions: projector.status.partitions ?? [],
       projectedCount: projector.status.projectedCount,
       lag: projector.status.lag,
@@ -2040,6 +2088,16 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
         url: `${baseUrl}/internal/perf/db-pools`,
         captureJson: true,
       },
+      {
+        name: `streamAckProjector.${index}.orderLifecycleStatus`,
+        url: `${baseUrl}/internal/order-lifecycle/projector/status`,
+        captureJson: true,
+      },
+      {
+        name: `streamAckProjector.${index}.marketDataStatus`,
+        url: `${baseUrl}/internal/market-data/projector/status`,
+        captureJson: true,
+      },
     ]),
     ...streamAckWorkerUrls.map((baseUrl, index) => ({
       name: `streamAckWorker.${index}.stats`,
@@ -2055,10 +2113,7 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
       captureJson: true,
     })),
   ];
-  const results = [];
-  for (const probe of probes) {
-    results.push(await requestAppProbe(probe));
-  }
+  const results = await runProbesConcurrently(probes, requestAppProbe);
   return { sampledAt, probes: results };
 }
 

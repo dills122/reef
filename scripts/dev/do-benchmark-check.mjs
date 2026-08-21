@@ -7,6 +7,7 @@ if (!target) {
   console.error("usage: node scripts/dev/do-benchmark-check.mjs <artifact-dir>");
   process.exit(2);
 }
+const failures = [];
 
 const requiredRates = parseCsvInts(process.env.REEF_DO_REQUIRED_RATES || "2500,5000");
 const allowBackpressure429 = process.env.REEF_DO_ALLOW_429 === "1";
@@ -28,17 +29,18 @@ const maxArenaFinalCompletionLagMs = parseOptionalNonNegativeNumber(process.env.
 const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
 const requirePgStatIo = process.env.REEF_DO_REQUIRE_PG_STAT_IO === "1";
 const requirePgStatStatements = process.env.REEF_DO_REQUIRE_PG_STAT_STATEMENTS === "1";
-const requiredOrderLifecycleMaintainers = parseOptionalNonNegativeNumber(
+const requiredOrderLifecycleMaintainers = parseOptionalNonNegativeInteger(
+  "REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS",
   process.env.REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS,
 );
-const requiredMarketDataMaintainers = parseOptionalNonNegativeNumber(
+const requiredMarketDataMaintainers = parseOptionalNonNegativeInteger(
+  "REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS",
   process.env.REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS,
 );
-const configuredProjectorPoolCount = Number(process.env.REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT ?? 4);
-const requiredProjectorPoolCount = Number.isInteger(configuredProjectorPoolCount) && configuredProjectorPoolCount >= 0
-  ? configuredProjectorPoolCount
-  : 4;
-const failures = [];
+const requiredProjectorPoolCount = parseOptionalNonNegativeInteger(
+  "REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT",
+  process.env.REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT,
+) ?? 4;
 const evidenceRows = [];
 
 if (!existsSync(target)) {
@@ -175,7 +177,7 @@ function validateStreamAckReport(label, report) {
     if (!Number.isFinite(Number(projectorDelta.afterLag))) {
       failures.push(`${label}: streamAckProjector.delta.afterLag must be numeric`);
     }
-    checkProjectorHealth(label, report.streamAckProjector?.after);
+    checkProjectorHealth(label, report.streamAckProjector?.before, report.streamAckProjector?.after);
   }
 
   if (!report.streamAckApiPhases?.phases) {
@@ -267,7 +269,7 @@ function validateMaterializerProjectionReport(label, report) {
       `${label}: materialized/projected gap ${formatNumber(materializedToProjectedGap)} > required ${formatNumber(maxMaterializedToProjectedGap)}`,
     );
   }
-  checkProjectorHealth(label, report.streamAckProjector?.after);
+  checkProjectorHealth(label, report.streamAckProjector?.before, report.streamAckProjector?.after);
 }
 
 function validateArenaArtifacts(jsonFiles) {
@@ -570,29 +572,30 @@ function checkZero(label, name, value) {
   }
 }
 
-function checkProjectorHealth(label, status) {
-  if (!status || typeof status !== "object") {
+function checkProjectorHealth(label, beforeStatus, afterStatus) {
+  if (!afterStatus || typeof afterStatus !== "object") {
     failures.push(`${label}: missing streamAckProjector.after status`);
     return;
   }
-  if (status.enabled === false) {
+  if (afterStatus.enabled === false) {
     failures.push(`${label}: streamAckProjector.after.enabled must not be false`);
   }
-  const metrics = status.metrics ?? {};
+  const metrics = afterStatus.metrics ?? {};
   if (Number(metrics.failed ?? 0) !== 0) {
     failures.push(`${label}: streamAckProjector.after.metrics.failed must be 0, got ${metrics.failed}`);
   }
   if (String(metrics.lastError ?? "").trim()) {
     failures.push(`${label}: streamAckProjector.after.metrics.lastError must be empty`);
   }
-  for (const watermark of status.watermarks ?? []) {
+  for (const watermark of afterStatus.watermarks ?? []) {
     if (String(watermark.lastError ?? "").trim()) {
       failures.push(
         `${label}: streamAckProjector.after.watermark partition=${watermark.partition ?? "unknown"} lastError must be empty`,
       );
     }
   }
-  const projectors = Array.isArray(status.projectors) ? status.projectors : [];
+  const beforeProjectors = Array.isArray(beforeStatus?.projectors) ? beforeStatus.projectors : [];
+  const projectors = Array.isArray(afterStatus.projectors) ? afterStatus.projectors : [];
   if (
     (requiredOrderLifecycleMaintainers !== undefined || requiredMarketDataMaintainers !== undefined) &&
     projectors.length !== requiredProjectorPoolCount
@@ -615,6 +618,24 @@ function checkProjectorHealth(label, status) {
     "market-data",
     requiredMarketDataMaintainers,
   );
+  checkDownstreamProjectorHealth(
+    label,
+    beforeProjectors,
+    projectors,
+    "orderLifecycleProjectorEnabled",
+    "orderLifecycleProjector",
+    "order-lifecycle",
+    requiredOrderLifecycleMaintainers,
+  );
+  checkDownstreamProjectorHealth(
+    label,
+    beforeProjectors,
+    projectors,
+    "marketDataProjectorEnabled",
+    "marketDataProjector",
+    "market-data",
+    requiredMarketDataMaintainers,
+  );
 }
 
 function checkProjectorMaintainerCount(label, projectors, field, description, requiredCount) {
@@ -624,6 +645,48 @@ function checkProjectorMaintainerCount(label, projectors, field, description, re
     : 0;
   if (enabledCount !== requiredCount) {
     failures.push(`${label}: ${description} maintainers ${enabledCount} != required ${requiredCount}`);
+  }
+}
+
+function checkDownstreamProjectorHealth(
+  label,
+  beforeProjectors,
+  afterProjectors,
+  configuredField,
+  statusField,
+  description,
+  requiredCount,
+) {
+  if (requiredCount === undefined) return;
+  const beforeByIndex = new Map(beforeProjectors.map((projector) => [Number(projector?.index), projector]));
+  for (const projector of afterProjectors.filter((candidate) => candidate?.[configuredField] === true)) {
+    const index = Number(projector.index);
+    const before = beforeByIndex.get(index)?.[statusField];
+    const after = projector[statusField];
+    if (!after || typeof after !== "object") {
+      failures.push(`${label}: ${description} maintainer index=${index} missing status evidence`);
+      continue;
+    }
+    if (after.enabled !== true) {
+      failures.push(`${label}: ${description} maintainer index=${index} enabled must be true`);
+    }
+    const cyclesDelta = Number(after.metrics?.cycles ?? 0) - Number(before?.metrics?.cycles ?? 0);
+    if (cyclesDelta <= 0) {
+      failures.push(`${label}: ${description} maintainer index=${index} cycles delta must be > 0, got ${cyclesDelta}`);
+    }
+    const failedDelta = Number(after.metrics?.failed ?? 0) - Number(before?.metrics?.failed ?? 0);
+    if (failedDelta !== 0) {
+      failures.push(`${label}: ${description} maintainer index=${index} failed delta must be 0, got ${failedDelta}`);
+    }
+    if (String(after.metrics?.lastError ?? "").trim()) {
+      failures.push(`${label}: ${description} maintainer index=${index} lastError must be empty`);
+    }
+    const lastProcessedRows = Number(after.metrics?.lastProcessedRows);
+    if (!Number.isFinite(lastProcessedRows) || lastProcessedRows !== 0) {
+      failures.push(
+        `${label}: ${description} maintainer index=${index} last processed rows must be 0, got ${after.metrics?.lastProcessedRows ?? "missing"}`,
+      );
+    }
   }
 }
 
@@ -692,6 +755,17 @@ function parseOptionalNonNegativeNumber(raw) {
   if (raw === undefined || String(raw).trim() === "") return undefined;
   const numeric = Number(String(raw).trim());
   return Number.isFinite(numeric) && numeric >= 0 ? numeric : undefined;
+}
+
+function parseOptionalNonNegativeInteger(name, raw) {
+  if (raw === undefined || String(raw).trim() === "") return undefined;
+  const value = String(raw).trim();
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    failures.push(`${name} must be a non-negative integer, got "${value}"`);
+    return undefined;
+  }
+  return numeric;
 }
 
 function formatNumber(value) {

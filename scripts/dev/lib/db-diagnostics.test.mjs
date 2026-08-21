@@ -1,9 +1,36 @@
 import assert from "node:assert/strict";
 
 import {
+  diagnosticCapabilityFlags,
   normalizePgStatStatementRow,
   summarizePgStatStatementsDelta,
 } from "./db-diagnostics.mjs";
+
+assert.deepEqual(
+  diagnosticCapabilityFlags({
+    checkpointerRows: [{ count: "1" }],
+    ioRows: [{ count: "1" }],
+    pgStatStatementsRows: [{ count: "0" }],
+  }),
+  {
+    hasCheckpointer: true,
+    hasIo: true,
+    hasPgStatStatements: false,
+  },
+);
+
+assert.deepEqual(
+  diagnosticCapabilityFlags({
+    checkpointerRows: [{ count: "0" }],
+    ioRows: [{ count: "0" }],
+    pgStatStatementsRows: [{ count: "1" }],
+  }),
+  {
+    hasCheckpointer: false,
+    hasIo: false,
+    hasPgStatStatements: true,
+  },
+);
 
 assert.equal(
   normalizePgStatStatementRow({

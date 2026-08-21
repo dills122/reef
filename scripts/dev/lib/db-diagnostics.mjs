@@ -8,6 +8,14 @@ const execFileAsync = promisify(execFile);
 
 export const defaultDiagnosticSchemas = ["runtime", "boundary", "command_log"];
 
+export function diagnosticCapabilityFlags({ checkpointerRows, ioRows, pgStatStatementsRows }) {
+  return {
+    hasCheckpointer: Number(checkpointerRows?.[0]?.count ?? 0) > 0,
+    hasIo: Number(ioRows?.[0]?.count ?? 0) > 0,
+    hasPgStatStatements: Number(pgStatStatementsRows?.[0]?.count ?? 0) > 0,
+  };
+}
+
 export async function ensurePgStatStatements({
   services,
   dbUser = "reef",
@@ -59,8 +67,8 @@ export async function captureDbDiagnosticsSnapshot({
       walSettingsRows,
       diagnosticSettingsRows,
       hasCheckpointerRows,
-      hasIoRows,
       hasPgStatStatementsRows,
+      hasIoRows,
       tables,
     ] = await Promise.all([
       queryDbRows({
@@ -183,9 +191,11 @@ export async function captureDbDiagnosticsSnapshot({
       }),
     ]);
 
-    const hasCheckpointer = Number(hasCheckpointerRows[0]?.count ?? 0) > 0;
-    const hasIo = Number(hasIoRows[0]?.count ?? 0) > 0;
-    const hasPgStatStatements = Number(hasPgStatStatementsRows[0]?.count ?? 0) > 0;
+    const { hasCheckpointer, hasIo, hasPgStatStatements } = diagnosticCapabilityFlags({
+      checkpointerRows: hasCheckpointerRows,
+      ioRows: hasIoRows,
+      pgStatStatementsRows: hasPgStatStatementsRows,
+    });
     const checkpointerRows = hasCheckpointer
       ? await queryDbRows({
           service,

@@ -769,10 +769,16 @@ remain partitioned and enabled. This topology is an evidence-backed benchmark
 candidate, not yet a remote promotion result. Each projector exposes its
 effective `orderLifecycleProjectorEnabled` and
 `marketDataProjectorEnabled` values at `GET /internal/projector/status`; the
-stress report retains those values per projector. The named gate fails unless
-exactly one of each maintainer is observed. The expected counts are controlled
-by `REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS` and
-`REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS`.
+stress report retains those values per projector and samples the corresponding
+`/internal/order-lifecycle/projector/status` and
+`/internal/market-data/projector/status` endpoints before and after the run.
+The named gate fails unless exactly one of each maintainer is observed, each
+enabled maintainer completes at least one cycle and then reports an empty
+zero-row cycle, and its failure counter does not increase or retain a
+`lastError`. The expected counts are controlled by
+`REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS` and
+`REEF_DO_REQUIRED_MARKET_DATA_MAINTAINERS`; these values and
+`REEF_DO_REQUIRED_PROJECTOR_POOL_COUNT` must be non-negative integers when set.
 
 `STREAM_ACK_PROJECTION_STAGE=command-status` is a diagnostic write-stage
 ablation. Startup rejects it when order-lifecycle or market-data consumers are

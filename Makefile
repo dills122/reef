@@ -171,6 +171,7 @@ test-bot-sdk:
 	bun test scripts/dev/lib/compose-psql.test.mjs
 	bun test scripts/dev/lib/benchmark-stage.test.mjs
 	bun scripts/dev/lib/db-diagnostics.test.mjs
+	bun scripts/dev/lib/telemetry-probes.test.mjs
 	bun scripts/dev/lib/projection-drain-report.test.mjs
 	bun scripts/dev/do-benchmark-check.test.mjs
 	bun scripts/dev/do-materializer-10k-gate.test.mjs

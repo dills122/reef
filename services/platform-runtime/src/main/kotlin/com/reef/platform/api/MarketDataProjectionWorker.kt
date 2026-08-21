@@ -55,6 +55,7 @@ class MarketDataProjectionWorker(
 data class MarketDataProjectionStats(
     val cycles: Long,
     val processedRows: Long,
+    val lastProcessedRows: Long,
     val failed: Long,
     val lastProcessedAt: String,
     val lastFailedAt: String,
@@ -64,6 +65,7 @@ data class MarketDataProjectionStats(
 object MarketDataProjectionMetrics {
     private val cycles = AtomicLong(0)
     private val processedRows = AtomicLong(0)
+    private val lastProcessedRows = AtomicLong(0)
     private val failed = AtomicLong(0)
     private val lastProcessedAtEpochMs = AtomicLong(0)
     private val lastFailedAtEpochMs = AtomicLong(0)
@@ -73,6 +75,7 @@ object MarketDataProjectionMetrics {
     fun recordProcessed(rows: Long) {
         cycles.incrementAndGet()
         processedRows.addAndGet(rows)
+        lastProcessedRows.set(rows)
         lastProcessedAtEpochMs.set(System.currentTimeMillis())
     }
 
@@ -86,6 +89,7 @@ object MarketDataProjectionMetrics {
         return MarketDataProjectionStats(
             cycles = cycles.get(),
             processedRows = processedRows.get(),
+            lastProcessedRows = lastProcessedRows.get(),
             failed = failed.get(),
             lastProcessedAt = instantString(lastProcessedAtEpochMs.get()),
             lastFailedAt = instantString(lastFailedAtEpochMs.get()),
@@ -96,6 +100,7 @@ object MarketDataProjectionMetrics {
     fun resetForTests() {
         cycles.set(0)
         processedRows.set(0)
+        lastProcessedRows.set(0)
         failed.set(0)
         lastProcessedAtEpochMs.set(0)
         lastFailedAtEpochMs.set(0)
