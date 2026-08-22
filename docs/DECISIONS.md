@@ -1053,3 +1053,32 @@ Primary references:
 - [`infra/hetzner-core/README.md`](../infra/hetzner-core/README.md#application-service-auto-deploy)
 - [`infra/hetzner-core/OPERATIONS_RUNBOOK.md`](../infra/hetzner-core/OPERATIONS_RUNBOOK.md#application-service-deployment-automation)
 - [`infra/hetzner-core/TAILSCALE_ACCESS.md`](../infra/hetzner-core/TAILSCALE_ACCESS.md#github-actions-deployment-access)
+
+### D-055: Retry-Safe Canonical Projection Batch Claims
+
+Status: accepted
+
+Summary:
+- canonical command-outcome projection batches use
+  `ProjectionBatchIdentityV1`, a SHA-256 digest over versioned,
+  length-prefixed effect configuration and full ordered canonical membership.
+- the projection database claims that identity before normalized projection,
+  dirty-enqueue, or watermark effects and completes the claim in the same
+  transaction. Rollback removes both authority and effects.
+- a completed duplicate validates immutable configuration and member
+  frontiers, reads the stored result, and skips all effects. It reports no new
+  work to outer worker counters.
+- every in-process retry has an immutable database-clock deadline checked
+  before each attempt. Claim cleanup requires both deadline expiry and strict
+  watermark advancement beyond every participating member frontier.
+- incomplete committed claims and identity/configuration conflicts fail closed.
+  Batch size, polling, benchmark attribution, and other non-semantic scheduling
+  settings do not alter the identity.
+- both the separated projection-store Kotlin transaction and migrated
+  same-store PostgreSQL function enforce this contract. Local compatibility
+  bootstrap installs the same primitives and uses the Kotlin transaction path.
+
+Primary references:
+- [`docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md#retry-safe-projection-batch-authority)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- [`docs/steering/data-platform.md`](./steering/data-platform.md)

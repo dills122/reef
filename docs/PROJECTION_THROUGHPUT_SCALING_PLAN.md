@@ -19,6 +19,33 @@ canonical materialization remains the source of audit/replay truth. The work
 here is about making rebuildable projections keep up without putting their cost
 back on the hot command path.
 
+## Retry-Safe Projection Batch Authority
+
+Slice 1A landed the correctness boundary required before new measurement or
+tuning work:
+
+- `ProjectionBatchIdentityV1` hashes effect-changing configuration plus every
+  canonical candidate in actual processing order using a versioned,
+  length-prefixed binary encoding.
+- migration `runtime/0050_projection_batch_claims.sql` claims that identity in
+  the projection transaction before normalized rows, dirty markers, or
+  watermarks change. Both the separated-store Kotlin transaction and the
+  migrated same-store SQL function use the same PostgreSQL claim contract.
+- rollback removes the claim and effects together. A retry after an ambiguous
+  commit reads the completed claim, skips every effect, and returns no newly
+  applied work to the outer worker counter.
+- each caller establishes an immutable database-clock retry deadline and must
+  pass it before every attempt. Cleanup additionally requires every
+  participating projection watermark to be strictly beyond the stored batch
+  frontier; time alone cannot retire a claim.
+- batch size, poll interval, benchmark attribution, and other scheduling knobs
+  are excluded from the identity. Projection name, event stream, stage, fill
+  semantics, and ordered canonical membership are included.
+
+This slice does not add benchmark residence telemetry, change scheduler
+behavior, tune SQL, or establish a new throughput claim. Those remain later
+gates in this plan.
+
 ## Current Evidence
 
 All runs below used the Redpanda/Kafka-compatible direct-stream plus

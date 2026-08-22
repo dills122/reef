@@ -1,10 +1,17 @@
 package com.reef.platform.infrastructure.persistence
 
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Proxy
+import java.sql.Connection
+import java.sql.SQLException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.UUID
+import javax.sql.DataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class PostgresVenueEventBatchMaterializationIntegrationTest {
     @Test
@@ -28,7 +35,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertNotNull(outcome)
         assertEquals("batch-$suffix", outcome.batchId)
         assertEquals("engine-0", outcome.shardId)
-        assertEquals(4, outcome.partition)
+        assertEquals(batch.partition, outcome.partition)
         assertEquals(1001L, outcome.streamSequence)
         assertEquals("CancelOrder", outcome.commandType)
         assertEquals("rejected", outcome.resultStatus)
@@ -38,7 +45,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertNotNull(reference)
         assertEquals("batch-$suffix", reference.batchId)
         assertEquals("engine-0", reference.shardId)
-        assertEquals(4, reference.partition)
+        assertEquals(batch.partition, reference.partition)
         assertEquals(1001L, reference.streamSequence)
         assertEquals("CancelOrder", reference.commandType)
         assertEquals("ORDER_ALREADY_FILLED", reference.rejectCode)
@@ -63,12 +70,14 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         )
         val suffix = UUID.randomUUID().toString()
         val projectionName = "runtime-normalized-venue-outcomes-$suffix"
-        val batch = submitVenueEventBatch(suffix)
+        val sequence = uniqueSequence(suffix)
+        val batch = submitVenueEventBatch(suffix, sequence)
 
         insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
         assertEquals(1, persistence.materializeVenueEventBatch(batch))
-        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(5)))
-        assertEquals(0, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(5)))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
 
         val result = persistence.submitResult("submit-cmd-$suffix")
         assertNotNull(result)
@@ -91,9 +100,9 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals("account-$suffix", order.accountId)
         assertEquals("100", order.quantityUnits)
 
-        val status = persistence.projectionStatus(projectionName, listOf(5), source = "venue-event-batch")
+        val status = persistence.projectionStatus(projectionName, listOf(batch.partition), source = "venue-event-batch")
         assertEquals(0, status.lag)
-        assertEquals(1002L, status.watermarks.single().lastPartitionSequence)
+        assertEquals(sequence, status.watermarks.single().lastPartitionSequence)
     }
 
     @Test
@@ -113,7 +122,8 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
 
         insertCommandPayload(dataSource, "match-cmd-$suffix", submitCommandPayload(suffix).replace("submit-cmd-$suffix", "match-cmd-$suffix"))
         assertEquals(1, persistence.materializeVenueEventBatch(batch))
-        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(6)))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
 
         val executions = persistence.executionsForOrder("match-order-$suffix")
         assertEquals(1, executions.size)
@@ -128,11 +138,109 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals("resting-order-$suffix", trades.single().sellOrderId)
     }
 
+    @Test
+    fun canonicalBatchIdentityMatchesPostgresEncodingWhenMigratedPostgresIsAvailable() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val candidates = listOf(
+            ProjectionBatchIdentityCandidate(3, 844424930131969, "command-a", "batch-a", "SubmitOrder", "payload-hash-a"),
+            ProjectionBatchIdentityCandidate(7, 1970324836974593, "command-b", "batch-b", "CancelOrder", "payload-hash-b")
+        )
+        val candidatesJson = projectionCandidatesJson(candidates)
+
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT runtime.runtime_projection_batch_identity_v1(?, ?, ?, ?, ?::jsonb)"
+            ).use { ps ->
+                ps.setString(1, "runtime-command-status")
+                ps.setString(2, "REEF_VENUE_EVENTS")
+                ps.setString(3, ProjectionStage.CommandStatus.configValue)
+                ps.setBoolean(4, false)
+                ps.setString(5, candidatesJson)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    assertEquals(
+                        ProjectionBatchIdentityV1.digest(
+                            "runtime-command-status",
+                            "REEF_VENUE_EVENTS",
+                            ProjectionStage.CommandStatus,
+                            false,
+                            candidates
+                        ),
+                        rs.getString(1)
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun compatBootstrapPreservesMigratedSameStoreClaimWrapperWhenPostgresIsAvailable() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        assertTrue(projectCommandOutcomesFunctionDefinition(dataSource).contains("runtime_claim_projection_batch_v1"))
+
+        PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Compat
+        )
+
+        assertTrue(projectCommandOutcomesFunctionDefinition(dataSource).contains("runtime_claim_projection_batch_v1"))
+    }
+
+    @Test
+    fun ambiguousCommitDoesNotRepeatProjectionEffectsWhenMigratedPostgresIsAvailable() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource)
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            projectionDataSource = projectionDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = projectionRetryEnv()
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-ambiguous-commit-$suffix"
+
+        insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
+
+        // The first commit applied the batch; the retry reads the completed claim and
+        // returns zero so the outer worker cannot count the same work twice.
+        val batch = submitVenueEventBatch(suffix, uniqueSequence(suffix))
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
+        assertEquals(1, countRows(dataSource, "runtime.submit_results", "submit-cmd-$suffix", "command_id"))
+        assertEquals(1, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix", "order_id"))
+    }
+
+    @Test
+    fun retryPastItsDatabaseDeadlineIsFencedWhenMigratedPostgresIsAvailable() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource, delayAfterCommitMs = 30)
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            projectionDataSource = projectionDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = projectionRetryEnv(horizonMs = 5)
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-expired-retry-$suffix"
+
+        insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
+        val batch = submitVenueEventBatch(suffix, uniqueSequence(suffix))
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+
+        assertFailsWith<IllegalStateException> {
+            persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition))
+        }
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
+        assertEquals(1, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix", "order_id"))
+    }
+
     private fun fillingVenueEventBatch(suffix: String): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = "fill-batch-$suffix",
             shardId = "engine-0",
-            partition = 6,
+            partition = uniquePartition(suffix, 6),
             commandStream = "REEF_COMMANDS",
             eventStream = "REEF_VENUE_EVENTS",
             firstSequence = 2001,
@@ -178,6 +286,105 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         }
     }
 
+    private fun migratedDataSourceOrNull(): DataSource? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        return RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+    }
+
+    private fun projectionCandidatesJson(candidates: List<ProjectionBatchIdentityCandidate>): String {
+        return com.reef.platform.api.JsonCodec.writeArray(
+            candidates.map { candidate ->
+                mapOf(
+                    "partitionId" to candidate.partitionId,
+                    "streamSequence" to candidate.streamSequence,
+                    "commandId" to candidate.commandId,
+                    "canonicalBatchId" to candidate.canonicalBatchId,
+                    "commandType" to candidate.commandType,
+                    "payloadHash" to candidate.payloadHash
+                )
+            }
+        )
+    }
+
+    private fun projectCommandOutcomesFunctionDefinition(dataSource: DataSource): String {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT pg_get_functiondef(
+                  'runtime.runtime_project_canonical_command_outcomes(text,integer,integer[],boolean,text)'::regprocedure
+                )
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getString(1)
+                }
+            }
+        }
+    }
+
+    private fun projectionRetryEnv(horizonMs: Long = 60_000): (String) -> String? = { key ->
+        when (key) {
+            "STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS" -> "2"
+            "STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS" -> "0"
+            "STREAM_ACK_PROJECTOR_DB_RETRY_HORIZON_MS" -> horizonMs.toString()
+            else -> null
+        }
+    }
+
+    private fun countRows(
+        dataSource: DataSource,
+        table: String,
+        value: String,
+        column: String = "projection_name"
+    ): Long {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("SELECT COUNT(*) FROM $table WHERE $column = ?").use { ps ->
+                ps.setString(1, value)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getLong(1)
+                }
+            }
+        }
+    }
+
+    private class CommitAmbiguityOnceDataSource(
+        private val delegate: DataSource,
+        private val delayAfterCommitMs: Long = 0
+    ) : DataSource by delegate {
+        private val failNextCommit = AtomicBoolean(true)
+
+        override fun getConnection(): Connection = wrap(delegate.connection)
+
+        override fun getConnection(username: String?, password: String?): Connection =
+            wrap(delegate.getConnection(username, password))
+
+        private fun wrap(connection: Connection): Connection {
+            return Proxy.newProxyInstance(
+                Connection::class.java.classLoader,
+                arrayOf(Connection::class.java)
+            ) { _, method, args ->
+                if (method.name == "commit" && failNextCommit.compareAndSet(true, false)) {
+                    invoke(connection, method, args)
+                    if (delayAfterCommitMs > 0) Thread.sleep(delayAfterCommitMs)
+                    throw SQLException("simulated ambiguous projection commit", "40001")
+                }
+                invoke(connection, method, args)
+            } as Connection
+        }
+
+        private fun invoke(target: Connection, method: java.lang.reflect.Method, args: Array<out Any?>?): Any? {
+            return try {
+                method.invoke(target, *(args ?: emptyArray()))
+            } catch (ex: InvocationTargetException) {
+                throw ex.targetException
+            }
+        }
+    }
+
     private fun submitCommandPayload(suffix: String): String {
         return """
             {
@@ -205,7 +412,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         return VenueEventBatchFact(
             batchId = "batch-$suffix",
             shardId = "engine-0",
-            partition = 4,
+            partition = uniquePartition(suffix, 4),
             commandStream = "REEF_COMMANDS",
             eventStream = "REEF_VENUE_EVENTS",
             firstSequence = 1001,
@@ -230,15 +437,15 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         )
     }
 
-    private fun submitVenueEventBatch(suffix: String): VenueEventBatchFact {
+    private fun submitVenueEventBatch(suffix: String, sequence: Long = 1002): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = "submit-batch-$suffix",
             shardId = "engine-0",
-            partition = 5,
+            partition = uniquePartition(suffix, 5),
             commandStream = "REEF_COMMANDS",
             eventStream = "REEF_VENUE_EVENTS",
-            firstSequence = 1002,
-            lastSequence = 1002,
+            firstSequence = sequence,
+            lastSequence = sequence,
             commandCount = 1,
             createdAt = "2026-07-04T18:01:00Z",
             payloadChecksum = "submit-checksum-$suffix",
@@ -246,7 +453,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
                 VenueCommandOutcomeFact(
                     commandId = "submit-cmd-$suffix",
                     commandType = "SubmitOrder",
-                    streamSequence = 1002,
+                    streamSequence = sequence,
                     deliveredCount = 1,
                     payloadHash = "submit-payload-hash-$suffix",
                     instrumentId = "AAPL",
@@ -257,4 +464,10 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
             )
         )
     }
+
+    private fun uniqueSequence(suffix: String): Long =
+        1_000_000L + (suffix.hashCode().toLong() and 0xffffffffL)
+
+    private fun uniquePartition(suffix: String, lane: Int): Int =
+        100 + ((suffix.hashCode().toLong() and 0x7fffffffL) % 1_000_000L).toInt() * 10 + lane
 }

@@ -64,6 +64,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0047_venue_event_batch_integrity.sql",
       "runtime/0048_execution_liquidity_role.sql",
       "runtime/0049_execution_replay_conflicts.sql",
+      "runtime/0050_projection_batch_claims.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -207,6 +208,24 @@ test("execution replay migration rejects conflicting immutable facts", async () 
   assert.match(migration.sql, /ON CONFLICT \(event_id\) DO UPDATE SET/);
   assert.match(migration.sql, /runtime\.executions\.liquidity_role/);
   assert.match(migration.sql, /IS DISTINCT FROM ROW/);
+});
+
+test("projection batch claim migration guards effects on both projection paths", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0050_projection_batch_claims.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE TABLE runtime\.projection_batch_claims/);
+  assert.match(migration.sql, /CREATE TABLE runtime\.projection_batch_claim_frontiers/);
+  assert.match(migration.sql, /runtime_projection_batch_identity_v1/);
+  assert.match(migration.sql, /runtime_claim_projection_batch_v1/);
+  assert.match(migration.sql, /runtime_complete_projection_batch_v1/);
+  assert.match(migration.sql, /runtime_cleanup_projection_batch_claims/);
+  assert.match(migration.sql, /claim\.retry_deadline_at < clock_timestamp\(\)/);
+  assert.match(migration.sql, /p_retry_deadline_at <= clock_timestamp\(\)/);
+  assert.match(migration.sql, /watermark\.last_partition_seq <= frontier\.max_stream_sequence/);
+  assert.match(migration.sql, /runtime_project_canonical_command_outcomes_unclaimed/);
+  assert.match(migration.sql, /IF NOT claim_is_new THEN\s+RETURN 0;/);
 });
 
 test("typed order migration adds native order facts", async () => {

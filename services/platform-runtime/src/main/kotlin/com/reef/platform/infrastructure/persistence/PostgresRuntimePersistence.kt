@@ -27,6 +27,7 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
+import java.sql.Timestamp
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -108,9 +109,11 @@ class PostgresRuntimePersistence(
     private val streamAckCanonicalQueryIndexesEnabled: Boolean =
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED", true)
     private val projectorDbRetryAttempts: Int =
-        RuntimeEnv.int("STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS", 3, min = 1)
+        RuntimeEnv.int("STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS", 3, min = 1, lookup = envLookup)
     private val projectorDbRetryBackoffMs: Long =
-        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L)
+        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L, lookup = envLookup)
+    private val projectorDbRetryHorizonMs: Long =
+        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_HORIZON_MS", 60_000L, min = 1L, lookup = envLookup)
 
     @Volatile
     private var commandPayloadSideTableAvailableCache: Boolean? = null
@@ -128,6 +131,16 @@ class PostgresRuntimePersistence(
         val outcome: CanonicalCommandOutcome,
         val commandPayloadJson: String = "{}",
         val partitionRow: Int = 0
+    )
+
+    private data class ProjectionBatchClaimResult(
+        val isNew: Boolean,
+        val storedResultCount: Long?
+    )
+
+    private data class ClaimedProjectionTransactionResult(
+        val resultCount: Long,
+        val appliedNow: Boolean
     )
 
     private companion object {
@@ -998,6 +1011,7 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
+                ProjectionBatchClaimBootstrap.install(stmt, names)
                 stmt.execute(
                     """
                     CREATE OR REPLACE FUNCTION ${names.validateReferenceDataFunction}(
@@ -1947,9 +1961,10 @@ class PostgresRuntimePersistence(
                     $$;
                     """.trimIndent()
                 )
-                stmt.execute(
-                    """
-                    CREATE OR REPLACE FUNCTION ${names.projectCanonicalCommandOutcomesFunction}(
+                if (!migratedProjectionBatchClaimWrapperAvailable(conn)) {
+                    stmt.execute(
+                        """
+                        CREATE OR REPLACE FUNCTION ${names.projectCanonicalCommandOutcomesFunction}(
                       p_projection_name TEXT,
                       p_batch_size INTEGER,
                       p_partitions INTEGER[] DEFAULT NULL,
@@ -2163,8 +2178,9 @@ class PostgresRuntimePersistence(
                       RAISE;
                     END;
                     $$;
-                    """.trimIndent()
-                )
+                        """.trimIndent()
+                    )
+                }
             }
         }
         if (bootstrapMode == PostgresBootstrapMode.Validate && projectionStoreSeparated()) {
@@ -2728,7 +2744,7 @@ class PostgresRuntimePersistence(
         projectionStage: ProjectionStage
     ): Long {
         if (batchSize <= 0) return 0
-        if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full) {
+        if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full || bootstrapMode == PostgresBootstrapMode.Compat) {
             return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
         }
         return HotPathMetrics.time("projector.venueEventBatch.projectionSql") {
@@ -2833,7 +2849,51 @@ class PostgresRuntimePersistence(
         }
         if (candidates.isEmpty()) return 0
 
-        return executeProjectionTransactionWithRetry(projectionName, "projector.venueEventBatch") { conn ->
+        val identityCandidates = candidates.map { candidate ->
+            ProjectionBatchIdentityCandidate(
+                partitionId = candidate.partitionId,
+                streamSequence = candidate.partitionSequence,
+                commandId = candidate.outcome.commandId,
+                canonicalBatchId = candidate.outcome.batchId,
+                commandType = candidate.outcome.commandType,
+                payloadHash = candidate.outcome.payloadHash
+            )
+        }
+        val batchIdentity = ProjectionBatchIdentityV1.digest(
+            projectionName = projectionName,
+            eventStream = scopedEventStream,
+            projectionStage = projectionStage,
+            includeFills = includeFills,
+            candidates = identityCandidates
+        )
+        val identityCandidatesJson = projectionBatchIdentityCandidatesJson(identityCandidates)
+        val retryDeadline = projectionRetryDeadline()
+
+        val transactionResult = executeClaimedProjectionTransactionWithRetry(
+            projectionName = projectionName,
+            metricPrefix = "projector.venueEventBatch",
+            retryDeadline = retryDeadline
+        ) { conn ->
+            cleanupProjectionBatchClaims(conn)
+            val claim = claimProjectionBatch(
+                conn = conn,
+                batchIdentity = batchIdentity,
+                projectionName = projectionName,
+                eventStream = scopedEventStream,
+                projectionStage = projectionStage,
+                includeFills = includeFills,
+                identityCandidatesJson = identityCandidatesJson,
+                retryDeadline = retryDeadline
+            )
+            if (!claim.isNew) {
+                return@executeClaimedProjectionTransactionWithRetry ClaimedProjectionTransactionResult(
+                    resultCount = checkNotNull(claim.storedResultCount) {
+                        "Completed projection batch claim must contain its stored result"
+                    },
+                    appliedNow = false
+                )
+            }
+
             val payloadJson = HotPathMetrics.time("projector.venueEventBatch.transform") {
                 candidates.toJsonArray {
                     it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject()
@@ -2856,15 +2916,127 @@ class PostgresRuntimePersistence(
                     }
                 )
             }
-            candidates.size.toLong()
+            val resultCount = candidates.size.toLong()
+            completeProjectionBatch(conn, batchIdentity, resultCount)
+            ClaimedProjectionTransactionResult(resultCount = resultCount, appliedNow = true)
+        }
+        return if (transactionResult.appliedNow) transactionResult.resultCount else 0L
+    }
+
+    private fun projectionBatchIdentityCandidatesJson(candidates: List<ProjectionBatchIdentityCandidate>): String {
+        return JsonCodec.writeArray(
+            candidates.map { candidate ->
+                mapOf(
+                    "partitionId" to candidate.partitionId,
+                    "streamSequence" to candidate.streamSequence,
+                    "commandId" to candidate.commandId,
+                    "canonicalBatchId" to candidate.canonicalBatchId,
+                    "commandType" to candidate.commandType,
+                    "payloadHash" to candidate.payloadHash
+                )
+            }
+        )
+    }
+
+    private fun projectionRetryDeadline(): Instant {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                "SELECT clock_timestamp() + (? * INTERVAL '1 millisecond')"
+            ).use { ps ->
+                ps.setLong(1, projectorDbRetryHorizonMs)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getTimestamp(1).toInstant()
+                }
+            }
         }
     }
 
-    private fun executeProjectionTransactionWithRetry(
+    private fun assertProjectionRetryWithinHorizon(conn: Connection, retryDeadline: Instant) {
+        conn.prepareStatement("SELECT clock_timestamp() <= ?").use { ps ->
+            ps.setTimestamp(1, Timestamp.from(retryDeadline))
+            ps.executeQuery().use { rs ->
+                rs.next()
+                check(rs.getBoolean(1)) {
+                    "Projection retry horizon expired before batch authority could be re-established"
+                }
+            }
+        }
+    }
+
+    private fun cleanupProjectionBatchClaims(conn: Connection) {
+        conn.prepareStatement("SELECT ${names.cleanupProjectionBatchClaimsFunction}(1000)").use { ps ->
+            ps.executeQuery().use { rs -> rs.next() }
+        }
+    }
+
+    private fun claimProjectionBatch(
+        conn: Connection,
+        batchIdentity: String,
+        projectionName: String,
+        eventStream: String,
+        projectionStage: ProjectionStage,
+        includeFills: Boolean,
+        identityCandidatesJson: String,
+        retryDeadline: Instant
+    ): ProjectionBatchClaimResult {
+        conn.prepareStatement(
+            """
+            SELECT is_new, stored_result_count
+            FROM ${names.claimProjectionBatchV1Function}(?, ?, ?, ?, ?, ?::jsonb, ?)
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, batchIdentity)
+            ps.setString(2, projectionName)
+            ps.setString(3, eventStream)
+            ps.setString(4, projectionStage.configValue)
+            ps.setBoolean(5, includeFills)
+            ps.setString(6, identityCandidatesJson)
+            ps.setTimestamp(7, Timestamp.from(retryDeadline))
+            ps.executeQuery().use { rs ->
+                check(rs.next()) { "Projection batch claim did not return a result" }
+                val storedResult = rs.getLong("stored_result_count").let { value ->
+                    if (rs.wasNull()) null else value
+                }
+                return ProjectionBatchClaimResult(
+                    isNew = rs.getBoolean("is_new"),
+                    storedResultCount = storedResult
+                )
+            }
+        }
+    }
+
+    private fun completeProjectionBatch(conn: Connection, batchIdentity: String, resultCount: Long) {
+        conn.prepareStatement(
+            "SELECT ${names.completeProjectionBatchV1Function}(?, ?)"
+        ).use { ps ->
+            ps.setString(1, batchIdentity)
+            ps.setLong(2, resultCount)
+            ps.executeQuery().use { rs ->
+                check(rs.next() && rs.getLong(1) == resultCount) {
+                    "Completed projection batch count did not match the applied result"
+                }
+            }
+        }
+    }
+
+    private fun executeClaimedProjectionTransactionWithRetry(
         projectionName: String,
         metricPrefix: String,
-        operation: (Connection) -> Long
-    ): Long {
+        retryDeadline: Instant,
+        operation: (Connection) -> ClaimedProjectionTransactionResult
+    ): ClaimedProjectionTransactionResult {
+        return executeProjectionTransactionWithRetry(projectionName, metricPrefix) { conn ->
+            assertProjectionRetryWithinHorizon(conn, retryDeadline)
+            operation(conn)
+        }
+    }
+
+    private fun <T> executeProjectionTransactionWithRetry(
+        projectionName: String,
+        metricPrefix: String,
+        operation: (Connection) -> T
+    ): T {
         var attempt = 1
         while (true) {
             projectionConnection().use { conn ->
@@ -5109,6 +5281,19 @@ class PostgresRuntimePersistence(
     }
 
     private fun projectionStoreSeparated(): Boolean = projectionDataSource !== dataSource
+
+    private fun migratedProjectionBatchClaimWrapperAvailable(conn: Connection): Boolean {
+        conn.prepareStatement("SELECT to_regprocedure(?) IS NOT NULL").use { ps ->
+            ps.setString(
+                1,
+                "${names.runtimeSchemaName}.runtime_project_canonical_command_outcomes_unclaimed(text,integer,integer[],boolean,text)"
+            )
+            ps.executeQuery().use { rs ->
+                rs.next()
+                return rs.getBoolean(1)
+            }
+        }
+    }
 
     private fun connection(): Connection = canonicalConnection()
 
