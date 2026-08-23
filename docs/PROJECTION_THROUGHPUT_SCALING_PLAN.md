@@ -29,15 +29,19 @@ tuning work:
   length-prefixed binary encoding.
 - migration `runtime/0050_projection_batch_claims.sql` claims that identity in
   the projection transaction before normalized rows, dirty markers, or
-  watermarks change. Both the separated-store Kotlin transaction and the
-  migrated same-store SQL function use the same PostgreSQL claim contract.
+  watermarks change. The migrated same-store path applies effects from the
+  exact claimed member set rather than selecting candidates again; concurrent
+  canonical materialization therefore cannot substitute a same-sized batch.
+  Both that path and the separated-store Kotlin transaction use the same
+  PostgreSQL claim contract.
 - rollback removes the claim and effects together. A retry after an ambiguous
   commit reads the completed claim, skips every effect, and returns no newly
   applied work to the outer worker counter.
 - each caller establishes an immutable database-clock retry deadline and must
-  pass it before every attempt. Cleanup additionally requires every
-  participating projection watermark to be strictly beyond the stored batch
-  frontier; time alone cannot retire a claim.
+  pass it before every attempt. The runtime-configured retry horizon is passed
+  to both same-store and separated-store paths. Cleanup additionally requires
+  every participating projection watermark to be strictly beyond the stored
+  batch frontier; time alone cannot retire a claim.
 - batch size, poll interval, benchmark attribution, and other scheduling knobs
   are excluded from the identity. Projection name, event stream, stage, fill
   semantics, and ordered canonical membership are included.
@@ -45,6 +49,45 @@ tuning work:
 This slice does not add benchmark residence telemetry, change scheduler
 behavior, tune SQL, or establish a new throughput claim. Those remain later
 gates in this plan.
+
+## Frozen Measurement-Before-Tuning Delivery Gates
+
+The reviewed August 2026 plan freezes the following dependency order. It
+supersedes the older tuning-oriented priority log retained later in this file.
+
+1. **Slice 1A — always-on retry correctness.** Status: implemented. Keep the
+   canonical batch identity and claim guard enabled in every benchmark arm;
+   rollback, retry, and ambiguous commit must not repeat projection or dirty
+   enqueue effects. This slice contains no benchmark-report or scheduler
+   change.
+2. **Slice 1B — cohort and upstream timing authority.** Status: not started.
+   Add the exclusive accepted-source frontier contract, materializer
+   membership/work-finished/commit-observed telemetry tied to the existing
+   checksum guard, durable-intake joins, canonical source-batch timing, exact
+   offset arithmetic, and clock guards. This slice contains no downstream
+   projection-function or scheduler change.
+3. **Slice 1C — downstream residence and gates.** Status: not started. Add
+   lifecycle/market marker identity, source-time and covering-marker
+   aggregates, post-commit observations, per-stage and end-to-end
+   reconciliation, a one-second diagnostic sampler, report/gate tests, the
+   optional-instrumentation A/B, and provisional `2.5k` evidence.
+4. **Task 2 — isolated downstream capacity benchmarks.** Status: blocked on
+   completion of all Task 1 slices. Measure lifecycle with exactly one caller
+   and market data with controlled repeated-redirty cycles; keep local results
+   directional rather than promotional.
+5. **Checkpoint A — attribution is trustworthy.** Status: blocked. It requires
+   an exclusive measured cohort, complete commit-observed residence
+   reconciliation, exact final zero/lag agreement, visible lifecycle caller
+   counts, frozen sustained-freshness thresholds, and an instrumentation A/B
+   within the documented `1%` perturbation limit.
+
+Dependencies are strict: Slice 1B depends on Slice 1A; Slice 1C depends on
+Slice 1B; Task 2 depends on all of Task 1; Checkpoint A depends on the resulting
+measurement and isolated-capacity evidence. None of Slices 1A-1C authorizes
+scheduler, batch-size, memory, index, SQL-shape, worker-count, pool, or paid
+tuning changes. No paid DigitalOcean matrix or tuning candidate may begin
+until Checkpoint A passes. Only then may Task 3 remove the lifecycle busy-path
+poll throttle and the subsequent one-lever-at-a-time capacity matrix proceed.
 
 ## Current Evidence
 
@@ -485,7 +528,12 @@ structural separation:
 - Revisit horizontal scale only with clear per-instance evidence. Scaling a
   write-amplified projector fleet can multiply the bottleneck.
 
-## Current Priority Order
+## Historical Evidence And Earlier Priority Log
+
+The numbered log below records how the July/August evidence was accumulated.
+It is not the current execution order and does not authorize tuning or remote
+runs ahead of the frozen Slice 1A -> Slice 1B -> Slice 1C -> Task 2 ->
+Checkpoint A sequence above.
 
 1. Land the benchmark harness token fix and deterministic `runtime_events`
    insert ordering. Initial patch is in place.

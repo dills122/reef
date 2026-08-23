@@ -224,7 +224,17 @@ test("projection batch claim migration guards effects on both projection paths",
   assert.match(migration.sql, /claim\.retry_deadline_at < clock_timestamp\(\)/);
   assert.match(migration.sql, /p_retry_deadline_at <= clock_timestamp\(\)/);
   assert.match(migration.sql, /watermark\.last_partition_seq <= frontier\.max_stream_sequence/);
-  assert.match(migration.sql, /runtime_project_canonical_command_outcomes_unclaimed/);
+  assert.match(migration.sql, /RENAME TO runtime_project_canonical_command_outcomes_unclaimed/);
+  assert.match(migration.sql, /runtime_project_canonical_command_outcome_members/);
+  assert.match(migration.sql, /p_retry_horizon_ms \* INTERVAL '1 millisecond'/);
+  assert.doesNotMatch(
+    migration.sql,
+    /projected_count := runtime\.runtime_project_canonical_command_outcomes_unclaimed/,
+  );
+  assert.match(
+    migration.sql,
+    /DROP FUNCTION runtime\.runtime_project_canonical_command_outcomes_unclaimed/,
+  );
   assert.match(migration.sql, /IF NOT claim_is_new THEN\s+RETURN 0;/);
 });
 

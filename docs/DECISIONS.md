@@ -1064,13 +1064,17 @@ Summary:
   length-prefixed effect configuration and full ordered canonical membership.
 - the projection database claims that identity before normalized projection,
   dirty-enqueue, or watermark effects and completes the claim in the same
-  transaction. Rollback removes both authority and effects.
+  transaction. The same-store function drives those effects from the exact
+  claimed canonical member set rather than selecting candidates again.
+  Rollback removes both authority and effects.
 - a completed duplicate validates immutable configuration and member
   frontiers, reads the stored result, and skips all effects. It reports no new
   work to outer worker counters.
 - every in-process retry has an immutable database-clock deadline checked
-  before each attempt. Claim cleanup requires both deadline expiry and strict
-  watermark advancement beyond every participating member frontier.
+  before each attempt. The configured retry horizon applies to both same-store
+  and separated-store projection paths. Claim cleanup requires both deadline
+  expiry and strict watermark advancement beyond every participating member
+  frontier.
 - incomplete committed claims and identity/configuration conflicts fail closed.
   Batch size, polling, benchmark attribution, and other non-semantic scheduling
   settings do not alter the identity.

@@ -2751,7 +2751,7 @@ class PostgresRuntimePersistence(
             canonicalConnection().use { conn ->
                 conn.prepareStatement(
                     """
-                    SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?, ?)
+                    SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?, ?, ?)
                     """.trimIndent()
                 ).use { ps ->
                     ps.setString(1, projectionName)
@@ -2759,6 +2759,7 @@ class PostgresRuntimePersistence(
                     ps.setArray(3, conn.createArrayOf("integer", partitions.toTypedArray()))
                     ps.setBoolean(4, includeFills)
                     ps.setString(5, eventStream.trim().ifBlank { null })
+                    ps.setLong(6, projectorDbRetryHorizonMs)
                     ps.executeQuery().use { rs ->
                         rs.next()
                         rs.getLong(1)
@@ -5286,7 +5287,7 @@ class PostgresRuntimePersistence(
         conn.prepareStatement("SELECT to_regprocedure(?) IS NOT NULL").use { ps ->
             ps.setString(
                 1,
-                "${names.runtimeSchemaName}.runtime_project_canonical_command_outcomes_unclaimed(text,integer,integer[],boolean,text)"
+                "${names.runtimeSchemaName}.runtime_project_canonical_command_outcomes(text,integer,integer[],boolean,text,bigint)"
             )
             ps.executeQuery().use { rs ->
                 rs.next()

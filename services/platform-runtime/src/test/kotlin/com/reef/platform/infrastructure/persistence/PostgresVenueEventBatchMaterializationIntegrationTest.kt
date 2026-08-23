@@ -4,6 +4,8 @@ import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.SQLException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.UUID
 import javax.sql.DataSource
@@ -187,6 +189,172 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
     }
 
     @Test
+    fun sameStoreProjectionAppliesTheMembershipClaimedBeforeConcurrentMaterialization() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-claimed-membership-$suffix"
+        val partitionA = uniquePartition(suffix, 7)
+        val partitionB = uniquePartition(suffix, 8)
+        val sequenceBase = uniqueSequence(suffix) * 10
+        val triggerToken = suffix.replace("-", "")
+        val triggerFunction = "runtime.test_pause_projection_claim_$triggerToken"
+        val triggerName = "test_pause_projection_claim_$triggerToken"
+        val advisoryKey = suffix.hashCode().toLong() * 31L + 17L
+        val executor = Executors.newSingleThreadExecutor()
+
+        materializeTestSubmit(persistence, dataSource, suffix, "a1", partitionA, sequenceBase + 1)
+        materializeTestSubmit(persistence, dataSource, suffix, "b1", partitionB, sequenceBase + 3)
+        materializeTestSubmit(persistence, dataSource, suffix, "b2", partitionB, sequenceBase + 4)
+
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { statement ->
+                statement.execute(
+                    """
+                    CREATE FUNCTION $triggerFunction() RETURNS trigger
+                    LANGUAGE plpgsql AS ${'$'}${'$'}
+                    BEGIN
+                      IF NEW.projection_name = '$projectionName' THEN
+                        PERFORM pg_advisory_lock($advisoryKey);
+                        PERFORM pg_advisory_unlock($advisoryKey);
+                      END IF;
+                      RETURN NEW;
+                    END;
+                    ${'$'}${'$'}
+                    """.trimIndent()
+                )
+                statement.execute(
+                    """
+                    CREATE TRIGGER $triggerName
+                    AFTER INSERT ON runtime.projection_batch_claims
+                    FOR EACH ROW EXECUTE FUNCTION $triggerFunction()
+                    """.trimIndent()
+                )
+            }
+        }
+
+        try {
+            dataSource.connection.use { blocker ->
+                blocker.prepareStatement("SELECT pg_advisory_lock(?)").use { ps ->
+                    ps.setLong(1, advisoryKey)
+                    ps.execute()
+                }
+                try {
+                    val projected = executor.submit<Long> {
+                        persistence.projectCanonicalCommandOutcomes(
+                            projectionName,
+                            3,
+                            listOf(partitionA, partitionB),
+                            includeFills = true,
+                            eventStream = "REEF_VENUE_EVENTS"
+                        )
+                    }
+                    waitForBlockedAdvisoryLock(dataSource)
+
+                    // This row becomes eligible after the claim. The old same-store wrapper
+                    // reselected and substituted a2 for b2 because both batches had size 3.
+                    materializeTestSubmit(persistence, dataSource, suffix, "a2", partitionA, sequenceBase + 2)
+
+                    blocker.prepareStatement("SELECT pg_advisory_unlock(?)").use { ps ->
+                        ps.setLong(1, advisoryKey)
+                        ps.execute()
+                    }
+
+                    assertEquals(3, projected.get(10, TimeUnit.SECONDS))
+                    assertEquals(1, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix-b2", "order_id"))
+                    assertEquals(0, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix-a2", "order_id"))
+                } finally {
+                    blocker.prepareStatement("SELECT pg_advisory_unlock(?)").use { ps ->
+                        ps.setLong(1, advisoryKey)
+                        ps.execute()
+                    }
+                }
+            }
+        } finally {
+            executor.shutdownNow()
+            dataSource.connection.use { conn ->
+                conn.createStatement().use { statement ->
+                    statement.execute("DROP TRIGGER IF EXISTS $triggerName ON runtime.projection_batch_claims")
+                    statement.execute("DROP FUNCTION IF EXISTS $triggerFunction()")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun sameStoreProjectionUsesConfiguredRetryHorizon() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val horizonMs = 1_234L
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = projectionRetryEnv(horizonMs = horizonMs)
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-same-store-horizon-$suffix"
+        val batch = submitVenueEventBatch(suffix, uniqueSequence(suffix))
+
+        insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+
+        val storedHorizonMs = dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT EXTRACT(EPOCH FROM (retry_deadline_at - created_at)) * 1000
+                FROM runtime.projection_batch_claims
+                WHERE projection_name = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getDouble(1)
+                }
+            }
+        }
+
+        assertTrue(storedHorizonMs in (horizonMs - 250.0)..(horizonMs + 250.0))
+    }
+
+    @Test
+    fun sameStoreExactDuplicateClaimSkipsEffectsAfterWatermarkRewind() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-same-store-duplicate-$suffix"
+        val batch = submitVenueEventBatch(suffix, uniqueSequence(suffix))
+
+        insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE runtime.projection_watermarks
+                SET last_partition_seq = 0, updated_at = now()
+                WHERE projection_name = ? AND partition_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.setInt(2, batch.partition)
+                assertEquals(1, ps.executeUpdate())
+            }
+        }
+
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
+        assertEquals(1, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix", "order_id"))
+    }
+
+    @Test
     fun ambiguousCommitDoesNotRepeatProjectionEffectsWhenMigratedPostgresIsAvailable() {
         val dataSource = migratedDataSourceOrNull() ?: return
         val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource)
@@ -286,6 +454,43 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         }
     }
 
+    private fun materializeTestSubmit(
+        persistence: PostgresRuntimePersistence,
+        dataSource: DataSource,
+        suffix: String,
+        label: String,
+        partition: Int,
+        sequence: Long
+    ) {
+        val labeledSuffix = "$suffix-$label"
+        insertCommandPayload(dataSource, "submit-cmd-$labeledSuffix", submitCommandPayload(labeledSuffix))
+        assertEquals(
+            1,
+            persistence.materializeVenueEventBatch(
+                submitVenueEventBatch(labeledSuffix, sequence).copy(partition = partition)
+            )
+        )
+    }
+
+    private fun waitForBlockedAdvisoryLock(dataSource: DataSource) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            val waiting = dataSource.connection.use { conn ->
+                conn.prepareStatement(
+                    "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted)"
+                ).use { ps ->
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
+                    }
+                }
+            }
+            if (waiting) return
+            Thread.sleep(10)
+        }
+        error("projection claim did not reach the advisory-lock test hook")
+    }
+
     private fun migratedDataSourceOrNull(): DataSource? {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
@@ -313,7 +518,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
             conn.prepareStatement(
                 """
                 SELECT pg_get_functiondef(
-                  'runtime.runtime_project_canonical_command_outcomes(text,integer,integer[],boolean,text)'::regprocedure
+                  'runtime.runtime_project_canonical_command_outcomes(text,integer,integer[],boolean,text,bigint)'::regprocedure
                 )
                 """.trimIndent()
             ).use { ps ->

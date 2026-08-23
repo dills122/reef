@@ -278,12 +278,186 @@ $$;
 ALTER FUNCTION runtime.runtime_project_canonical_command_outcomes(TEXT, INTEGER, INTEGER[], BOOLEAN, TEXT)
   RENAME TO runtime_project_canonical_command_outcomes_unclaimed;
 
+CREATE OR REPLACE FUNCTION runtime.runtime_project_canonical_command_outcome_members(
+  p_projection_name TEXT,
+  p_selected_members JSONB,
+  p_include_fills BOOLEAN DEFAULT TRUE
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  selected_count BIGINT;
+  projected_count BIGINT := 0;
+BEGIN
+  IF p_selected_members IS NULL
+     OR jsonb_typeof(p_selected_members) <> 'array'
+     OR jsonb_array_length(p_selected_members) = 0 THEN
+    RETURN 0;
+  END IF;
+
+  SELECT COUNT(*) INTO selected_count
+  FROM jsonb_array_elements(p_selected_members) AS members(candidate)
+  JOIN runtime.canonical_command_outcomes canonical
+    ON canonical.partition_id = (candidate->>'partitionId')::INTEGER
+   AND canonical.stream_sequence = (candidate->>'streamSequence')::BIGINT
+   AND canonical.command_id = candidate->>'commandId'
+   AND canonical.batch_id = candidate->>'canonicalBatchId'
+   AND canonical.command_type = candidate->>'commandType'
+   AND canonical.payload_hash = candidate->>'payloadHash';
+
+  IF selected_count <> jsonb_array_length(p_selected_members) THEN
+    RAISE EXCEPTION 'claimed projection batch membership no longer matches canonical facts';
+  END IF;
+
+  WITH selected AS MATERIALIZED (
+    SELECT
+      canonical.partition_id,
+      canonical.stream_sequence,
+      canonical.command_id,
+      canonical.command_type,
+      canonical.order_id,
+      canonical.result_status,
+      canonical.reject_code,
+      canonical.result_payload,
+      COALESCE(canonical.result_payload->'acceptedOrder', payloads.payload_json) AS order_payload,
+      COALESCE(payloads.payload_json, '{}'::jsonb) AS command_payload,
+      members.member_order
+    FROM jsonb_array_elements(p_selected_members) WITH ORDINALITY AS members(candidate, member_order)
+    JOIN runtime.canonical_command_outcomes canonical
+      ON canonical.partition_id = (candidate->>'partitionId')::INTEGER
+     AND canonical.stream_sequence = (candidate->>'streamSequence')::BIGINT
+     AND canonical.command_id = candidate->>'commandId'
+     AND canonical.batch_id = candidate->>'canonicalBatchId'
+     AND canonical.command_type = candidate->>'commandType'
+     AND canonical.payload_hash = candidate->>'payloadHash'
+    LEFT JOIN command_log.command_payloads payloads
+      ON payloads.command_id = canonical.command_id
+  ),
+  shaped AS (
+    SELECT
+      partition_id,
+      stream_sequence,
+      member_order,
+      jsonb_build_object(
+        'commandId', command_id,
+        'resultType', result_status,
+        'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
+        'orderId', order_id,
+        'engineOrderId', COALESCE(result_payload #>> '{accepted,engineOrderId}', ''),
+        'code', COALESCE(NULLIF(reject_code, ''), result_payload #>> '{rejected,code}', ''),
+        'reason', COALESCE(result_payload #>> '{rejected,reason}', ''),
+        'occurredAt', COALESCE(NULLIF(result_payload #>> '{accepted,occurredAt}', ''), NULLIF(result_payload #>> '{rejected,occurredAt}', ''), ''),
+        'acceptedOrder', CASE
+          WHEN command_type = 'SubmitOrder'
+           AND order_payload IS NOT NULL
+           AND COALESCE(order_payload->>'instrumentId', '') <> ''
+           AND COALESCE(order_payload->>'participantId', '') <> ''
+           AND COALESCE(order_payload->>'accountId', '') <> ''
+           AND (
+             result_status <> 'rejected'
+             OR COALESCE(NULLIF(reject_code, ''), result_payload #>> '{rejected,code}', '') NOT IN ('AUTHORIZATION_ERROR', 'REFERENCE_DATA_ERROR')
+           )
+          THEN jsonb_build_object(
+            'orderId', order_id,
+            'engineOrderId', CASE WHEN result_status = 'rejected' THEN '' ELSE COALESCE(result_payload #>> '{accepted,engineOrderId}', order_payload->>'engineOrderId', '') END,
+            'instrumentId', COALESCE(order_payload->>'instrumentId', ''),
+            'participantId', COALESCE(order_payload->>'participantId', ''),
+            'accountId', COALESCE(order_payload->>'accountId', ''),
+            'side', COALESCE(order_payload->>'side', ''),
+            'orderType', COALESCE(order_payload->>'orderType', ''),
+            'quantityUnits', COALESCE(order_payload->>'quantityUnits', ''),
+            'limitPrice', COALESCE(order_payload->>'limitPrice', ''),
+            'currency', COALESCE(order_payload->>'currency', ''),
+            'timeInForce', COALESCE(order_payload->>'timeInForce', ''),
+            'acceptedAt', COALESCE(
+              NULLIF(result_payload #>> '{accepted,occurredAt}', ''),
+              NULLIF(result_payload #>> '{rejected,occurredAt}', ''),
+              NULLIF(order_payload->>'acceptedAt', ''),
+              ''
+            )
+          )
+          ELSE NULL
+        END,
+        'executions', CASE WHEN p_include_fills THEN COALESCE(result_payload->'executions', '[]'::jsonb) ELSE '[]'::jsonb END,
+        'trades', CASE WHEN p_include_fills THEN COALESCE(result_payload->'trades', '[]'::jsonb) ELSE '[]'::jsonb END,
+        'events', jsonb_build_array(
+          jsonb_build_object(
+            'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
+            'eventType', CASE
+              WHEN result_status = 'rejected' THEN 'OrderRejected'
+              WHEN command_type = 'CancelOrder' THEN 'OrderCancelled'
+              WHEN command_type = 'ModifyOrder' THEN 'OrderModified'
+              ELSE 'OrderAccepted'
+            END,
+            'orderId', order_id,
+            'traceId', COALESCE(NULLIF(command_payload->>'traceId', ''), command_id),
+            'causationId', COALESCE(NULLIF(command_payload->>'causationId', ''), command_id),
+            'correlationId', COALESCE(NULLIF(command_payload->>'correlationId', ''), command_id),
+            'actorId', '',
+            'producer', 'venue-event-batch-projector',
+            'schemaVersion', 'v1',
+            'occurredAt', COALESCE(NULLIF(result_payload #>> '{accepted,occurredAt}', ''), NULLIF(result_payload #>> '{rejected,occurredAt}', ''), ''),
+            'payloadJson', result_payload
+          )
+        )
+      ) AS projected_payload
+    FROM selected
+  ),
+  projected AS (
+    SELECT runtime.runtime_persist_submit_outcomes(
+      COALESCE(
+        jsonb_agg(projected_payload ORDER BY member_order),
+        '[]'::jsonb
+      )
+    ) AS count
+    FROM shaped
+  ),
+  partition_max AS (
+    SELECT partition_id, MAX(stream_sequence) AS last_partition_seq
+    FROM shaped
+    GROUP BY partition_id
+  ),
+  upsert_watermarks AS (
+    INSERT INTO runtime.projection_watermarks(
+      projection_name,
+      partition_id,
+      last_partition_seq,
+      last_projected_at,
+      updated_at,
+      last_error
+    )
+    SELECT
+      p_projection_name,
+      partition_id,
+      last_partition_seq,
+      now(),
+      now(),
+      ''
+    FROM partition_max
+    ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+      last_partition_seq = GREATEST(
+        runtime.projection_watermarks.last_partition_seq,
+        EXCLUDED.last_partition_seq
+      ),
+      last_projected_at = EXCLUDED.last_projected_at,
+      updated_at = EXCLUDED.updated_at,
+      last_error = ''
+    RETURNING 1
+  )
+  SELECT COALESCE(MAX(count), 0) INTO projected_count FROM projected;
+
+  RETURN projected_count;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION runtime.runtime_project_canonical_command_outcomes(
   p_projection_name TEXT,
   p_batch_size INTEGER,
-  p_partitions INTEGER[] DEFAULT NULL,
-  p_include_fills BOOLEAN DEFAULT TRUE,
-  p_event_stream TEXT DEFAULT NULL
+  p_partitions INTEGER[],
+  p_include_fills BOOLEAN,
+  p_event_stream TEXT,
+  p_retry_horizon_ms BIGINT
 )
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -298,6 +472,10 @@ DECLARE
 BEGIN
   IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
     RETURN 0;
+  END IF;
+
+  IF p_retry_horizon_ms IS NULL OR p_retry_horizon_ms <= 0 THEN
+    RAISE EXCEPTION 'projection batch retry horizon must be positive';
   END IF;
 
   PERFORM runtime.runtime_cleanup_projection_batch_claims(1000);
@@ -371,7 +549,7 @@ BEGIN
       'commandType', command_type,
       'payloadHash', payload_hash
     )
-    ORDER BY stream_sequence, partition_id
+    ORDER BY partition_row, partition_id, stream_sequence
   ) INTO selected_members
   FROM eligible;
 
@@ -396,19 +574,17 @@ BEGIN
     'full',
     p_include_fills,
     selected_members,
-    clock_timestamp() + INTERVAL '60 seconds'
+    clock_timestamp() + (p_retry_horizon_ms * INTERVAL '1 millisecond')
   ) claim;
 
   IF NOT claim_is_new THEN
     RETURN 0;
   END IF;
 
-  projected_count := runtime.runtime_project_canonical_command_outcomes_unclaimed(
+  projected_count := runtime.runtime_project_canonical_command_outcome_members(
     p_projection_name,
-    p_batch_size,
-    p_partitions,
-    p_include_fills,
-    p_event_stream
+    selected_members,
+    p_include_fills
   );
 
   IF projected_count <> jsonb_array_length(selected_members) THEN
@@ -419,3 +595,31 @@ BEGIN
   RETURN projected_count;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION runtime.runtime_project_canonical_command_outcomes(
+  p_projection_name TEXT,
+  p_batch_size INTEGER,
+  p_partitions INTEGER[] DEFAULT NULL,
+  p_include_fills BOOLEAN DEFAULT TRUE,
+  p_event_stream TEXT DEFAULT NULL
+)
+RETURNS BIGINT
+LANGUAGE SQL
+AS $$
+  SELECT runtime.runtime_project_canonical_command_outcomes(
+    p_projection_name,
+    p_batch_size,
+    p_partitions,
+    p_include_fills,
+    p_event_stream,
+    60000::BIGINT
+  );
+$$;
+
+DROP FUNCTION runtime.runtime_project_canonical_command_outcomes_unclaimed(
+  TEXT,
+  INTEGER,
+  INTEGER[],
+  BOOLEAN,
+  TEXT
+);
