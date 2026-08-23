@@ -269,6 +269,26 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.projection_batch_claims.batch_identity:text",
+                "runtime.projection_batch_claims.identity_version:smallint",
+                "runtime.projection_batch_claims.projection_name:text",
+                "runtime.projection_batch_claims.event_stream:text",
+                "runtime.projection_batch_claims.projection_stage:text",
+                "runtime.projection_batch_claims.include_fills:boolean",
+                "runtime.projection_batch_claims.candidate_count:integer",
+                "runtime.projection_batch_claims.status:text",
+                "runtime.projection_batch_claims.result_count:bigint",
+                "runtime.projection_batch_claims.retry_deadline_at:timestamp with time zone",
+                "runtime.projection_batch_claims.retry_horizon_ms:bigint",
+                "runtime.projection_batch_claims.retain_until:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.projection_batch_claims" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.order_lifecycle_state.order_id:text",
                 "runtime.order_lifecycle_state.original_quantity_units_num:numeric",
                 "runtime.order_lifecycle_state.remaining_quantity_units:text",

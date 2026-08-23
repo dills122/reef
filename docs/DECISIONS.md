@@ -1072,11 +1072,17 @@ Summary:
   reads that result, and skips all effects. It reports no new work to outer
   worker counters.
 - every in-process retry has an immutable database-clock deadline checked
-  before each attempt. Separated-store callers establish that deadline before
-  acquiring watermarks or candidates, so paused stale reads cannot mint a new
-  authority window. The configured retry horizon applies to both same-store and
-  separated-store projection paths. Claim cleanup requires both deadline expiry
-  and strict watermark advancement beyond every participating member frontier.
+  before each attempt. Both same-store and separated-store callers establish
+  that deadline before acquiring watermarks or candidates, so paused stale
+  reads cannot mint a new authority window. The deployment-wide retry horizon
+  is stored with the claim; completion retains authority for a full additional
+  horizon, while completed duplicate observations may only extend retention.
+  Claim cleanup requires deadline and retention expiry plus strict watermark
+  advancement beyond every participating member frontier.
+- injected pre-watermark projector failures roll back the staged rows and claim
+  together. Ambiguous full-commit tests consume the lifecycle dirty marker
+  before retry, proving the completed claim prevents a repeated enqueue rather
+  than relying on dirty-table conflict coalescing.
 - incomplete committed claims and identity/configuration conflicts fail closed.
   Batch size, polling, benchmark attribution, and other non-semantic scheduling
   settings do not alter the identity.

@@ -21,7 +21,7 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         dataSource.connection.use { conn ->
             conn.autoCommit = false
-            assertTrue(claim(conn, fixture, Instant.now().plusSeconds(60)).first)
+            assertTrue(claim(conn, fixture, databaseNow(conn).plusSeconds(60)).first)
             upsertWatermark(conn, fixture.projectionName, fixture.candidate.partitionId, fixture.candidate.streamSequence)
             conn.rollback()
         }
@@ -31,7 +31,7 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         dataSource.connection.use { conn ->
             conn.autoCommit = false
-            assertTrue(claim(conn, fixture, Instant.now().plusSeconds(60)).first)
+            assertTrue(claim(conn, fixture, databaseNow(conn).plusSeconds(60)).first)
             upsertWatermark(conn, fixture.projectionName, fixture.candidate.partitionId, fixture.candidate.streamSequence)
             complete(conn, fixture.identity, 1)
             conn.commit()
@@ -39,7 +39,7 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         dataSource.connection.use { conn ->
             conn.autoCommit = false
-            val duplicate = claim(conn, fixture, Instant.now().plusSeconds(120))
+            val duplicate = claim(conn, fixture, databaseNow(conn).plusSeconds(60))
             assertFalse(duplicate.first)
             assertEquals(1, duplicate.second)
             conn.rollback()
@@ -53,13 +53,13 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         dataSource.connection.use { conn ->
             conn.autoCommit = false
-            assertTrue(claim(conn, fixture, Instant.now().plusSeconds(60)).first)
+            assertTrue(claim(conn, fixture, databaseNow(conn).plusSeconds(60)).first)
             conn.commit()
         }
 
         dataSource.connection.use { conn ->
             assertFailsWith<SQLException> {
-                claim(conn, fixture, Instant.now().plusSeconds(120))
+                claim(conn, fixture, databaseNow(conn).plusSeconds(60))
             }
         }
     }
@@ -71,7 +71,7 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         dataSource.connection.use { conn ->
             assertFailsWith<SQLException> {
-                claim(conn, fixture, Instant.now().plusSeconds(60))
+                claim(conn, fixture, databaseNow(conn).plusSeconds(60))
             }
         }
         assertEquals(0, countClaims(dataSource, fixture.projectionName))
@@ -84,7 +84,7 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         dataSource.connection.use { conn ->
             conn.autoCommit = false
-            assertTrue(claim(conn, fixture, Instant.now().plusMillis(100)).first)
+            assertTrue(claim(conn, fixture, databaseNow(conn).plusMillis(100), retryHorizonMs = 100).first)
             upsertWatermark(conn, fixture.projectionName, fixture.candidate.partitionId, fixture.candidate.streamSequence)
             complete(conn, fixture.identity, 1)
             conn.commit()
@@ -103,13 +103,47 @@ class PostgresProjectionBatchClaimIntegrationTest {
     }
 
     @Test
+    fun cleanupRetainsAuthorityUntilEveryStaleSelectorDeadlineHasExpired() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val fixture = fixture("staggered-cleanup")
+        val retryHorizonMs = 1_000L
+        val firstSelectorDeadline = databaseNow(dataSource).plusMillis(retryHorizonMs)
+
+        Thread.sleep(300)
+        val laterSelectorDeadline = databaseNow(dataSource).plusMillis(retryHorizonMs)
+
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            assertTrue(claim(conn, fixture, firstSelectorDeadline, retryHorizonMs).first)
+            upsertWatermark(
+                conn,
+                fixture.projectionName,
+                fixture.candidate.partitionId,
+                fixture.candidate.streamSequence + 1
+            )
+            complete(conn, fixture.identity, 1)
+            conn.commit()
+        }
+
+        waitUntilDatabaseAfter(dataSource, firstSelectorDeadline)
+        cleanup(dataSource)
+
+        dataSource.connection.use { conn ->
+            val duplicate = claim(conn, fixture, laterSelectorDeadline, retryHorizonMs)
+            assertFalse(duplicate.first)
+            assertEquals(1, duplicate.second)
+        }
+        assertEquals(1, countClaims(dataSource, fixture.projectionName))
+    }
+
+    @Test
     fun completionRejectsResultCountThatDoesNotMatchClaimedMembership() {
         val dataSource = migratedDataSourceOrNull() ?: return
         val fixture = fixture("completion-count")
 
         dataSource.connection.use { conn ->
             conn.autoCommit = false
-            assertTrue(claim(conn, fixture, Instant.now().plusSeconds(60)).first)
+            assertTrue(claim(conn, fixture, databaseNow(conn).plusSeconds(60)).first)
             assertFailsWith<SQLException> {
                 complete(conn, fixture.identity, 0)
             }
@@ -156,11 +190,16 @@ class PostgresProjectionBatchClaimIntegrationTest {
         )
     }
 
-    private fun claim(conn: Connection, fixture: ClaimFixture, deadline: Instant): Pair<Boolean, Long?> {
+    private fun claim(
+        conn: Connection,
+        fixture: ClaimFixture,
+        deadline: Instant,
+        retryHorizonMs: Long = 60_000
+    ): Pair<Boolean, Long?> {
         conn.prepareStatement(
             """
             SELECT is_new, stored_result_count
-            FROM runtime.runtime_claim_projection_batch_v1(?, ?, ?, ?, ?, ?::jsonb, ?)
+            FROM runtime.runtime_claim_projection_batch_v1(?, ?, ?, ?, ?, ?::jsonb, ?, ?)
             """.trimIndent()
         ).use { ps ->
             ps.setString(1, fixture.identity)
@@ -170,11 +209,35 @@ class PostgresProjectionBatchClaimIntegrationTest {
             ps.setBoolean(5, true)
             ps.setString(6, fixture.candidatesJson)
             ps.setTimestamp(7, Timestamp.from(deadline))
+            ps.setLong(8, retryHorizonMs)
             ps.executeQuery().use { rs ->
                 rs.next()
                 val stored = rs.getLong(2).let { if (rs.wasNull()) null else it }
                 return rs.getBoolean(1) to stored
             }
+        }
+    }
+
+    private fun databaseNow(dataSource: DataSource): Instant {
+        dataSource.connection.use { conn ->
+            return databaseNow(conn)
+        }
+    }
+
+    private fun databaseNow(conn: Connection): Instant {
+        conn.prepareStatement("SELECT clock_timestamp()").use { ps ->
+            ps.executeQuery().use { rs ->
+                rs.next()
+                return rs.getTimestamp(1).toInstant()
+            }
+        }
+    }
+
+    private fun waitUntilDatabaseAfter(dataSource: DataSource, deadline: Instant) {
+        val timeoutAt = System.nanoTime() + 5_000_000_000L
+        while (!databaseNow(dataSource).isAfter(deadline)) {
+            check(System.nanoTime() < timeoutAt) { "database clock did not pass the expected deadline" }
+            Thread.sleep(25)
         }
     }
 

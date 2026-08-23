@@ -222,6 +222,11 @@ test("projection batch claim migration guards effects on both projection paths",
   assert.match(migration.sql, /runtime_complete_projection_batch_v1/);
   assert.match(migration.sql, /runtime_cleanup_projection_batch_claims/);
   assert.match(migration.sql, /claim\.retry_deadline_at < clock_timestamp\(\)/);
+  assert.match(migration.sql, /retry_horizon_ms BIGINT NOT NULL/);
+  assert.match(
+    migration.sql,
+    /retain_until = completion_time \+ \(retry_horizon_ms \* INTERVAL '1 millisecond'\)/,
+  );
   assert.match(migration.sql, /p_retry_deadline_at <= clock_timestamp\(\)/);
   assert.match(migration.sql, /result_count IS NULL OR result_count = candidate_count/);
   assert.match(migration.sql, /p_result_count IS DISTINCT FROM expected_count/);
@@ -230,6 +235,10 @@ test("projection batch claim migration guards effects on both projection paths",
   assert.match(migration.sql, /RENAME TO runtime_project_canonical_command_outcomes_unclaimed/);
   assert.match(migration.sql, /runtime_project_canonical_command_outcome_members/);
   assert.match(migration.sql, /p_retry_horizon_ms \* INTERVAL '1 millisecond'/);
+  const deadlineAssignment = migration.sql.indexOf("retry_deadline_at :=");
+  const candidateSelection = migration.sql.indexOf("WITH selected_partitions AS");
+  assert.ok(deadlineAssignment >= 0);
+  assert.ok(candidateSelection > deadlineAssignment);
   assert.doesNotMatch(
     migration.sql,
     /projected_count := runtime\.runtime_project_canonical_command_outcomes_unclaimed/,

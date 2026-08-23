@@ -13,6 +13,7 @@ CREATE TABLE runtime.projection_batch_claims (
   result_count BIGINT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   retry_deadline_at TIMESTAMPTZ NOT NULL,
+  retry_horizon_ms BIGINT NOT NULL CHECK (retry_horizon_ms > 0),
   completed_at TIMESTAMPTZ,
   retain_until TIMESTAMPTZ,
   CHECK (batch_identity ~ '^[0-9a-f]{64}$'),
@@ -89,7 +90,8 @@ CREATE OR REPLACE FUNCTION runtime.runtime_claim_projection_batch_v1(
   p_projection_stage TEXT,
   p_include_fills BOOLEAN,
   p_candidates JSONB,
-  p_retry_deadline_at TIMESTAMPTZ
+  p_retry_deadline_at TIMESTAMPTZ,
+  p_retry_horizon_ms BIGINT
 )
 RETURNS TABLE(is_new BOOLEAN, stored_result_count BIGINT)
 LANGUAGE plpgsql
@@ -112,6 +114,14 @@ BEGIN
     RAISE EXCEPTION 'projection batch retry deadline has expired';
   END IF;
 
+  IF p_retry_horizon_ms IS NULL OR p_retry_horizon_ms <= 0 THEN
+    RAISE EXCEPTION 'projection batch retry horizon must be positive';
+  END IF;
+
+  IF p_retry_deadline_at > clock_timestamp() + (p_retry_horizon_ms * INTERVAL '1 millisecond') THEN
+    RAISE EXCEPTION 'projection batch retry deadline exceeds its configured horizon';
+  END IF;
+
   IF p_batch_identity IS DISTINCT FROM runtime.runtime_projection_batch_identity_v1(
     p_projection_name,
     p_event_stream,
@@ -131,7 +141,8 @@ BEGIN
     include_fills,
     candidate_count,
     status,
-    retry_deadline_at
+    retry_deadline_at,
+    retry_horizon_ms
   )
   VALUES (
     p_batch_identity,
@@ -142,7 +153,8 @@ BEGIN
     p_include_fills,
     expected_count,
     'in-progress',
-    p_retry_deadline_at
+    p_retry_deadline_at,
+    p_retry_horizon_ms
   )
   ON CONFLICT (batch_identity) DO NOTHING
   RETURNING batch_identity INTO inserted_identity;
@@ -173,7 +185,8 @@ BEGIN
      OR existing_claim.event_stream IS DISTINCT FROM p_event_stream
      OR existing_claim.projection_stage IS DISTINCT FROM p_projection_stage
      OR existing_claim.include_fills IS DISTINCT FROM p_include_fills
-     OR existing_claim.candidate_count IS DISTINCT FROM expected_count THEN
+     OR existing_claim.candidate_count IS DISTINCT FROM expected_count
+     OR existing_claim.retry_horizon_ms IS DISTINCT FROM p_retry_horizon_ms THEN
     RAISE EXCEPTION 'projection batch claim conflicts with immutable configuration';
   END IF;
 
@@ -205,6 +218,11 @@ BEGIN
     RAISE EXCEPTION 'projection batch claim is incomplete or has an inconsistent result count';
   END IF;
 
+  UPDATE runtime.projection_batch_claims
+  SET retain_until = GREATEST(retain_until, p_retry_deadline_at)
+  WHERE batch_identity = p_batch_identity
+  RETURNING * INTO existing_claim;
+
   RETURN QUERY SELECT FALSE, existing_claim.result_count;
 END;
 $$;
@@ -219,6 +237,7 @@ AS $$
 DECLARE
   completed_count BIGINT;
   expected_count INTEGER;
+  completion_time TIMESTAMPTZ;
 BEGIN
   SELECT candidate_count INTO expected_count
   FROM runtime.projection_batch_claims
@@ -234,11 +253,14 @@ BEGIN
     RAISE EXCEPTION 'projection batch result count does not match claimed membership';
   END IF;
 
+  completion_time := clock_timestamp();
+
   UPDATE runtime.projection_batch_claims
   SET
     status = 'completed',
     result_count = p_result_count,
-    completed_at = clock_timestamp()
+    completed_at = completion_time,
+    retain_until = completion_time + (retry_horizon_ms * INTERVAL '1 millisecond')
   WHERE batch_identity = p_batch_identity
     AND status = 'in-progress'
   RETURNING result_count INTO completed_count;
@@ -261,7 +283,7 @@ BEGIN
     FROM runtime.projection_batch_claims claim
     WHERE claim.status = 'completed'
       AND claim.retry_deadline_at < clock_timestamp()
-      AND (claim.retain_until IS NULL OR claim.retain_until < clock_timestamp())
+      AND claim.retain_until < clock_timestamp()
       AND NOT EXISTS (
         SELECT 1
         FROM runtime.projection_batch_claim_frontiers frontier
@@ -483,6 +505,7 @@ DECLARE
   claim_is_new BOOLEAN;
   stored_result_count BIGINT;
   projected_count BIGINT;
+  retry_deadline_at TIMESTAMPTZ;
 BEGIN
   IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
     RETURN 0;
@@ -491,6 +514,8 @@ BEGIN
   IF p_retry_horizon_ms IS NULL OR p_retry_horizon_ms <= 0 THEN
     RAISE EXCEPTION 'projection batch retry horizon must be positive';
   END IF;
+
+  retry_deadline_at := clock_timestamp() + (p_retry_horizon_ms * INTERVAL '1 millisecond');
 
   PERFORM runtime.runtime_cleanup_projection_batch_claims(1000);
   effective_batch_size := LEAST(p_batch_size, 5000);
@@ -588,7 +613,8 @@ BEGIN
     'full',
     p_include_fills,
     selected_members,
-    clock_timestamp() + (p_retry_horizon_ms * INTERVAL '1 millisecond')
+    retry_deadline_at,
+    p_retry_horizon_ms
   ) claim;
 
   IF NOT claim_is_new THEN

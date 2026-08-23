@@ -216,6 +216,8 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(projectionBatchClaims, "status", "text"),
                 PostgresSchemaColumn(projectionBatchClaims, "result_count", "bigint"),
                 PostgresSchemaColumn(projectionBatchClaims, "retry_deadline_at", "timestamp with time zone"),
+                PostgresSchemaColumn(projectionBatchClaims, "retry_horizon_ms", "bigint"),
+                PostgresSchemaColumn(projectionBatchClaims, "retain_until", "timestamp with time zone"),
                 PostgresSchemaColumn(projectionBatchClaimFrontiers, "batch_identity", "text"),
                 PostgresSchemaColumn(projectionBatchClaimFrontiers, "partition_id", "integer"),
                 PostgresSchemaColumn(projectionBatchClaimFrontiers, "max_stream_sequence", "bigint"),

@@ -22,6 +22,7 @@ internal object ProjectionBatchClaimBootstrap {
           result_count BIGINT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
           retry_deadline_at TIMESTAMPTZ NOT NULL,
+          retry_horizon_ms BIGINT NOT NULL CHECK (retry_horizon_ms > 0),
           completed_at TIMESTAMPTZ,
           retain_until TIMESTAMPTZ,
           CHECK (batch_identity ~ '^[0-9a-f]{64}${'$'}'),
@@ -32,6 +33,44 @@ internal object ProjectionBatchClaimBootstrap {
           CONSTRAINT projection_batch_claims_result_count_matches_candidates
             CHECK (result_count IS NULL OR result_count = candidate_count)
         )
+        """.trimIndent(),
+        """
+        ALTER TABLE ${names.projectionBatchClaims}
+          ADD COLUMN IF NOT EXISTS retry_horizon_ms BIGINT
+        """.trimIndent(),
+        """
+        UPDATE ${names.projectionBatchClaims}
+        SET retry_horizon_ms = GREATEST(
+          1,
+          CEIL(EXTRACT(EPOCH FROM (retry_deadline_at - created_at)) * 1000)::BIGINT
+        )
+        WHERE retry_horizon_ms IS NULL
+        """.trimIndent(),
+        """
+        ALTER TABLE ${names.projectionBatchClaims}
+          ALTER COLUMN retry_horizon_ms SET NOT NULL
+        """.trimIndent(),
+        """
+        DO ${'$'}${'$'}
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'projection_batch_claims_retry_horizon_positive'
+              AND conrelid = '${names.projectionBatchClaims}'::regclass
+          ) THEN
+            ALTER TABLE ${names.projectionBatchClaims}
+              ADD CONSTRAINT projection_batch_claims_retry_horizon_positive
+              CHECK (retry_horizon_ms > 0);
+          END IF;
+        END;
+        ${'$'}${'$'}
+        """.trimIndent(),
+        """
+        UPDATE ${names.projectionBatchClaims}
+        SET retain_until = completed_at + (retry_horizon_ms * INTERVAL '1 millisecond')
+        WHERE status = 'completed'
+          AND retain_until IS NULL
         """.trimIndent(),
         """
         DO ${'$'}${'$'}
@@ -122,6 +161,7 @@ internal object ProjectionBatchClaimBootstrap {
         DECLARE
           completed_count BIGINT;
           expected_count INTEGER;
+          completion_time TIMESTAMPTZ;
         BEGIN
           SELECT candidate_count INTO expected_count
           FROM ${names.projectionBatchClaims}
@@ -137,11 +177,14 @@ internal object ProjectionBatchClaimBootstrap {
             RAISE EXCEPTION 'projection batch result count does not match claimed membership';
           END IF;
 
+          completion_time := clock_timestamp();
+
           UPDATE ${names.projectionBatchClaims}
           SET
             status = 'completed',
             result_count = p_result_count,
-            completed_at = clock_timestamp()
+            completed_at = completion_time,
+            retain_until = completion_time + (retry_horizon_ms * INTERVAL '1 millisecond')
           WHERE batch_identity = p_batch_identity
             AND status = 'in-progress'
           RETURNING result_count INTO completed_count;
@@ -162,7 +205,8 @@ internal object ProjectionBatchClaimBootstrap {
           p_projection_stage TEXT,
           p_include_fills BOOLEAN,
           p_candidates JSONB,
-          p_retry_deadline_at TIMESTAMPTZ
+          p_retry_deadline_at TIMESTAMPTZ,
+          p_retry_horizon_ms BIGINT
         )
         RETURNS TABLE(is_new BOOLEAN, stored_result_count BIGINT)
         LANGUAGE plpgsql
@@ -185,6 +229,14 @@ internal object ProjectionBatchClaimBootstrap {
             RAISE EXCEPTION 'projection batch retry deadline has expired';
           END IF;
 
+          IF p_retry_horizon_ms IS NULL OR p_retry_horizon_ms <= 0 THEN
+            RAISE EXCEPTION 'projection batch retry horizon must be positive';
+          END IF;
+
+          IF p_retry_deadline_at > clock_timestamp() + (p_retry_horizon_ms * INTERVAL '1 millisecond') THEN
+            RAISE EXCEPTION 'projection batch retry deadline exceeds its configured horizon';
+          END IF;
+
           IF p_batch_identity IS DISTINCT FROM ${names.projectionBatchIdentityV1Function}(
             p_projection_name, p_event_stream, p_projection_stage, p_include_fills, p_candidates
           ) THEN
@@ -193,11 +245,11 @@ internal object ProjectionBatchClaimBootstrap {
 
           INSERT INTO ${names.projectionBatchClaims}(
             batch_identity, identity_version, projection_name, event_stream, projection_stage,
-            include_fills, candidate_count, status, retry_deadline_at
+            include_fills, candidate_count, status, retry_deadline_at, retry_horizon_ms
           )
           VALUES (
             p_batch_identity, 1, p_projection_name, p_event_stream, p_projection_stage,
-            p_include_fills, expected_count, 'in-progress', p_retry_deadline_at
+            p_include_fills, expected_count, 'in-progress', p_retry_deadline_at, p_retry_horizon_ms
           )
           ON CONFLICT (batch_identity) DO NOTHING
           RETURNING batch_identity INTO inserted_identity;
@@ -228,7 +280,8 @@ internal object ProjectionBatchClaimBootstrap {
              OR existing_claim.event_stream IS DISTINCT FROM p_event_stream
              OR existing_claim.projection_stage IS DISTINCT FROM p_projection_stage
              OR existing_claim.include_fills IS DISTINCT FROM p_include_fills
-             OR existing_claim.candidate_count IS DISTINCT FROM expected_count THEN
+             OR existing_claim.candidate_count IS DISTINCT FROM expected_count
+             OR existing_claim.retry_horizon_ms IS DISTINCT FROM p_retry_horizon_ms THEN
             RAISE EXCEPTION 'projection batch claim conflicts with immutable configuration';
           END IF;
 
@@ -260,6 +313,11 @@ internal object ProjectionBatchClaimBootstrap {
             RAISE EXCEPTION 'projection batch claim is incomplete or has an inconsistent result count';
           END IF;
 
+          UPDATE ${names.projectionBatchClaims}
+          SET retain_until = GREATEST(retain_until, p_retry_deadline_at)
+          WHERE batch_identity = p_batch_identity
+          RETURNING * INTO existing_claim;
+
           RETURN QUERY SELECT FALSE, existing_claim.result_count;
         END;
         ${'$'}${'$'}
@@ -281,7 +339,7 @@ internal object ProjectionBatchClaimBootstrap {
             FROM ${names.projectionBatchClaims} claim
             WHERE claim.status = 'completed'
               AND claim.retry_deadline_at < clock_timestamp()
-              AND (claim.retain_until IS NULL OR claim.retain_until < clock_timestamp())
+              AND claim.retain_until < clock_timestamp()
               AND NOT EXISTS (
                 SELECT 1
                 FROM ${names.projectionBatchClaimFrontiers} frontier

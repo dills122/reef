@@ -38,13 +38,20 @@ tuning work:
   commit reads the completed claim, skips every effect, and returns no newly
   applied work to the outer worker counter. Claim completion and duplicate
   validation require the stored result count to equal claimed membership.
-- each caller establishes an immutable database-clock retry deadline and must
-  pass it before every attempt. Separated-store callers establish that deadline
-  before reading watermarks or candidates, preventing a paused stale selection
-  from receiving a fresh authority window. The runtime-configured retry horizon
-  is passed to both same-store and separated-store paths. Cleanup additionally
-  requires every participating projection watermark to be strictly beyond the
+- each caller establishes an immutable database-clock retry deadline before
+  reading watermarks or candidates and must pass it before every attempt. The
+  deployment-wide retry horizon is stored with the claim. Completion retains
+  authority for a full additional horizon, and a completed duplicate may only
+  extend that retention through its own earlier-established deadline. This
+  covers staggered stale selectors without allowing cleanup to reuse the first
+  caller's shorter window. Cleanup additionally requires both retention expiry
+  and every participating projection watermark to be strictly beyond the
   stored batch frontier; time alone cannot retire a claim.
+- the projector fault hook rolls staged rows and its in-progress claim back
+  before watermark advancement. Full-commit ambiguity is tested after claim,
+  effects, watermark, and completion commit atomically; the fixture consumes
+  the dirty marker before retry so an erroneous re-enqueue cannot coalesce and
+  hide a replay.
 - batch size, poll interval, benchmark attribution, and other scheduling knobs
   are excluded from the identity. Projection name, event stream, stage, fill
   semantics, and ordered canonical membership are included.

@@ -359,14 +359,22 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
     @Test
     fun ambiguousCommitDoesNotRepeatProjectionEffectsWhenMigratedPostgresIsAvailable() {
         val dataSource = migratedDataSourceOrNull() ?: return
-        val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource)
+        val suffix = UUID.randomUUID().toString()
+        val orderId = "submit-order-$suffix"
+        val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource) {
+            dataSource.connection.use { conn ->
+                conn.prepareStatement("DELETE FROM runtime.order_lifecycle_dirty WHERE order_id = ?").use { ps ->
+                    ps.setString(1, orderId)
+                    assertEquals(1, ps.executeUpdate())
+                }
+            }
+        }
         val persistence = PostgresRuntimePersistence(
             dataSource = dataSource,
             projectionDataSource = projectionDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate,
             envLookup = projectionRetryEnv()
         )
-        val suffix = UUID.randomUUID().toString()
         val projectionName = "runtime-ambiguous-commit-$suffix"
 
         insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
@@ -375,11 +383,20 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         // returns zero so the outer worker cannot count the same work twice.
         val batch = submitVenueEventBatch(suffix, uniqueSequence(suffix))
         assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?) ON CONFLICT DO NOTHING"
+            ).use { ps ->
+                ps.setString(1, orderId)
+                assertEquals(1, ps.executeUpdate())
+            }
+        }
 
         assertEquals(0, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(batch.partition)))
         assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
         assertEquals(1, countRows(dataSource, "runtime.submit_results", "submit-cmd-$suffix", "command_id"))
         assertEquals(1, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix", "order_id"))
+        assertEquals(0, countRows(dataSource, "runtime.order_lifecycle_dirty", orderId, "order_id"))
     }
 
     @Test
@@ -657,7 +674,8 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
 
     private class CommitAmbiguityOnceDataSource(
         private val delegate: DataSource,
-        private val delayAfterCommitMs: Long = 0
+        private val delayAfterCommitMs: Long = 0,
+        private val afterAmbiguousCommit: () -> Unit = {}
     ) : DataSource by delegate {
         private val failNextCommit = AtomicBoolean(true)
 
@@ -673,6 +691,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
             ) { _, method, args ->
                 if (method.name == "commit" && failNextCommit.compareAndSet(true, false)) {
                     invoke(connection, method, args)
+                    afterAmbiguousCommit()
                     if (delayAfterCommitMs > 0) Thread.sleep(delayAfterCommitMs)
                     throw SQLException("simulated ambiguous projection commit", "40001")
                 }

@@ -25,6 +25,8 @@ class ProjectionBatchClaimBootstrapTest {
 
         val contractSql = executedSql.joinToString("\n")
         assertContains(contractSql, "result_count IS NULL OR result_count = candidate_count")
+        assertContains(contractSql, "retry_horizon_ms BIGINT NOT NULL")
+        assertContains(contractSql, "retain_until = completion_time + (retry_horizon_ms * INTERVAL '1 millisecond')")
         assertContains(contractSql, "p_result_count IS DISTINCT FROM expected_count")
         assertContains(
             contractSql,

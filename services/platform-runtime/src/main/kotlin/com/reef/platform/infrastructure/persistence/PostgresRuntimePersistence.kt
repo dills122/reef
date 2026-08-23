@@ -2803,7 +2803,7 @@ class PostgresRuntimePersistence(
             HotPathMetrics.time("projector.canonicalSubmit.projectionSql") {
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
             }
-            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            maybeFailAfterProjectorRowsBeforeWatermark()
             HotPathMetrics.time("projector.canonicalSubmit.watermark") {
                 updateProjectionWatermarks(conn, projectionName, candidates)
             }
@@ -2884,7 +2884,8 @@ class PostgresRuntimePersistence(
                 projectionStage = projectionStage,
                 includeFills = includeFills,
                 identityCandidatesJson = identityCandidatesJson,
-                retryDeadline = retryDeadline
+                retryDeadline = retryDeadline,
+                retryHorizonMs = projectorDbRetryHorizonMs
             )
             if (!claim.isNew) {
                 return@executeClaimedProjectionTransactionWithRetry ClaimedProjectionTransactionResult(
@@ -2903,7 +2904,7 @@ class PostgresRuntimePersistence(
             HotPathMetrics.time("projector.venueEventBatch.projectionSql") {
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size, projectionStage)
             }
-            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            maybeFailAfterProjectorRowsBeforeWatermark()
             HotPathMetrics.time("projector.venueEventBatch.watermark") {
                 updateProjectionWatermarks(
                     conn,
@@ -2979,12 +2980,13 @@ class PostgresRuntimePersistence(
         projectionStage: ProjectionStage,
         includeFills: Boolean,
         identityCandidatesJson: String,
-        retryDeadline: Instant
+        retryDeadline: Instant,
+        retryHorizonMs: Long
     ): ProjectionBatchClaimResult {
         conn.prepareStatement(
             """
             SELECT is_new, stored_result_count
-            FROM ${names.claimProjectionBatchV1Function}(?, ?, ?, ?, ?, ?::jsonb, ?)
+            FROM ${names.claimProjectionBatchV1Function}(?, ?, ?, ?, ?, ?::jsonb, ?, ?)
             """.trimIndent()
         ).use { ps ->
             ps.setString(1, batchIdentity)
@@ -2994,6 +2996,7 @@ class PostgresRuntimePersistence(
             ps.setBoolean(5, includeFills)
             ps.setString(6, identityCandidatesJson)
             ps.setTimestamp(7, Timestamp.from(retryDeadline))
+            ps.setLong(8, retryHorizonMs)
             ps.executeQuery().use { rs ->
                 check(rs.next()) { "Projection batch claim did not return a result" }
                 val storedResult = rs.getLong("stored_result_count").let { value ->
@@ -3109,15 +3112,14 @@ class PostgresRuntimePersistence(
         return if (state.isNullOrBlank()) message else "SQLSTATE $state: $message"
     }
 
-    private fun maybeFailAfterProjectorRowsBeforeWatermark(conn: Connection) {
+    private fun maybeFailAfterProjectorRowsBeforeWatermark() {
         if (!RuntimeEnv.bool("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", false, envLookup)) return
         val internalMode = RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local", envLookup)
         require(internalMode == "enabled") {
             "STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE requires PLATFORM_INTERNAL_HTTP_MODE=enabled"
         }
         if (!projectorRowsBeforeWatermarkFailureInjected.compareAndSet(false, true)) return
-        conn.commit()
-        error("injected projector failure after read-model rows before watermark")
+        error("injected projector rollback after read-model rows before watermark")
     }
 
     private fun ownedProjectionPartitions(partitions: List<Int>): List<Int> {
