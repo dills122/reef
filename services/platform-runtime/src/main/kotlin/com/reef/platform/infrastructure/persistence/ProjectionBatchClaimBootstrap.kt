@@ -28,8 +28,26 @@ internal object ProjectionBatchClaimBootstrap {
           CHECK (
             (status = 'in-progress' AND result_count IS NULL AND completed_at IS NULL)
             OR (status = 'completed' AND result_count IS NOT NULL AND completed_at IS NOT NULL)
-          )
+          ),
+          CONSTRAINT projection_batch_claims_result_count_matches_candidates
+            CHECK (result_count IS NULL OR result_count = candidate_count)
         )
+        """.trimIndent(),
+        """
+        DO ${'$'}${'$'}
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'projection_batch_claims_result_count_matches_candidates'
+              AND conrelid = '${names.projectionBatchClaims}'::regclass
+          ) THEN
+            ALTER TABLE ${names.projectionBatchClaims}
+              ADD CONSTRAINT projection_batch_claims_result_count_matches_candidates
+              CHECK (result_count IS NULL OR result_count = candidate_count);
+          END IF;
+        END;
+        ${'$'}${'$'}
         """.trimIndent(),
         """
         CREATE TABLE IF NOT EXISTS ${names.projectionBatchClaimFrontiers} (
@@ -103,7 +121,22 @@ internal object ProjectionBatchClaimBootstrap {
         AS ${'$'}${'$'}
         DECLARE
           completed_count BIGINT;
+          expected_count INTEGER;
         BEGIN
+          SELECT candidate_count INTO expected_count
+          FROM ${names.projectionBatchClaims}
+          WHERE batch_identity = p_batch_identity
+            AND status = 'in-progress'
+          FOR UPDATE;
+
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'projection batch claim cannot be completed from its current state';
+          END IF;
+
+          IF p_result_count IS DISTINCT FROM expected_count THEN
+            RAISE EXCEPTION 'projection batch result count does not match claimed membership';
+          END IF;
+
           UPDATE ${names.projectionBatchClaims}
           SET
             status = 'completed',
@@ -112,10 +145,6 @@ internal object ProjectionBatchClaimBootstrap {
           WHERE batch_identity = p_batch_identity
             AND status = 'in-progress'
           RETURNING result_count INTO completed_count;
-
-          IF NOT FOUND THEN
-            RAISE EXCEPTION 'projection batch claim cannot be completed from its current state';
-          END IF;
 
           RETURN completed_count;
         END;
@@ -226,8 +255,9 @@ internal object ProjectionBatchClaimBootstrap {
             RAISE EXCEPTION 'projection batch claim conflicts with immutable member frontiers';
           END IF;
 
-          IF existing_claim.status <> 'completed' OR existing_claim.result_count IS NULL THEN
-            RAISE EXCEPTION 'projection batch claim is incomplete';
+          IF existing_claim.status <> 'completed'
+             OR existing_claim.result_count IS DISTINCT FROM existing_claim.candidate_count THEN
+            RAISE EXCEPTION 'projection batch claim is incomplete or has an inconsistent result count';
           END IF;
 
           RETURN QUERY SELECT FALSE, existing_claim.result_count;

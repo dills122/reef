@@ -1068,13 +1068,15 @@ Summary:
   claimed canonical member set rather than selecting candidates again.
   Rollback removes both authority and effects.
 - a completed duplicate validates immutable configuration and member
-  frontiers, reads the stored result, and skips all effects. It reports no new
-  work to outer worker counters.
+  frontiers, requires its stored result count to equal the claimed membership,
+  reads that result, and skips all effects. It reports no new work to outer
+  worker counters.
 - every in-process retry has an immutable database-clock deadline checked
-  before each attempt. The configured retry horizon applies to both same-store
-  and separated-store projection paths. Claim cleanup requires both deadline
-  expiry and strict watermark advancement beyond every participating member
-  frontier.
+  before each attempt. Separated-store callers establish that deadline before
+  acquiring watermarks or candidates, so paused stale reads cannot mint a new
+  authority window. The configured retry horizon applies to both same-store and
+  separated-store projection paths. Claim cleanup requires both deadline expiry
+  and strict watermark advancement beyond every participating member frontier.
 - incomplete committed claims and identity/configuration conflicts fail closed.
   Batch size, polling, benchmark attribution, and other non-semantic scheduling
   settings do not alter the identity.

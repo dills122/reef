@@ -4,6 +4,8 @@ import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.SQLException
+import java.sql.Timestamp
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -404,6 +406,89 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals(1, countRows(dataSource, "runtime.runtime_events", "submit-order-$suffix", "order_id"))
     }
 
+    @Test
+    fun separatedStoreDeadlineFencesCandidatesPausedBeforeTheirClaim() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val projectionDataSource = RuntimeDataSources.dataSource(
+            System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST"),
+            System.getenv("RUNTIME_POSTGRES_USER_TEST"),
+            System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST")
+        )
+        val pausingCanonicalDataSource = PauseAfterCandidateReadDataSource(dataSource)
+        val env = projectionRetryEnv(horizonMs = 500)
+        val pausedPersistence = PostgresRuntimePersistence(
+            dataSource = pausingCanonicalDataSource,
+            projectionDataSource = projectionDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = env
+        )
+        val advancingPersistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            projectionDataSource = projectionDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = env
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-separated-late-claim-$suffix"
+        val partition = uniquePartition(suffix, 9)
+        val sequenceBase = uniqueSequence(suffix) * 10
+        val executor = Executors.newSingleThreadExecutor()
+
+        materializeTestSubmit(advancingPersistence, dataSource, suffix, "a", partition, sequenceBase + 1)
+        materializeTestSubmit(advancingPersistence, dataSource, suffix, "b", partition, sequenceBase + 2)
+
+        try {
+            val pausedResult = executor.submit<Throwable?> {
+                try {
+                    pausedPersistence.projectCanonicalCommandOutcomes(
+                        projectionName,
+                        1,
+                        listOf(partition),
+                        includeFills = true,
+                        eventStream = "REEF_VENUE_EVENTS"
+                    )
+                    null
+                } catch (ex: Throwable) {
+                    ex
+                }
+            }
+            assertTrue(pausingCanonicalDataSource.awaitCandidateRead())
+
+            assertEquals(
+                1,
+                advancingPersistence.projectCanonicalCommandOutcomes(
+                    projectionName,
+                    1,
+                    listOf(partition),
+                    includeFills = true,
+                    eventStream = "REEF_VENUE_EVENTS"
+                )
+            )
+            assertEquals(
+                1,
+                advancingPersistence.projectCanonicalCommandOutcomes(
+                    projectionName,
+                    1,
+                    listOf(partition),
+                    includeFills = true,
+                    eventStream = "REEF_VENUE_EVENTS"
+                )
+            )
+            val originalEarliestClaim = earliestClaimCreatedAt(dataSource, projectionName)
+            Thread.sleep(750)
+
+            pausingCanonicalDataSource.releaseCandidateRead()
+            val failure = pausedResult.get(10, TimeUnit.SECONDS)
+
+            assertTrue(failure is IllegalStateException, "expected expired authority failure, got $failure")
+            assertEquals(originalEarliestClaim, earliestClaimCreatedAt(dataSource, projectionName))
+            assertEquals(2, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
+        } finally {
+            pausingCanonicalDataSource.releaseCandidateRead()
+            executor.shutdownNow()
+        }
+    }
+
     private fun fillingVenueEventBatch(suffix: String): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = "fill-batch-$suffix",
@@ -556,6 +641,20 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         }
     }
 
+    private fun earliestClaimCreatedAt(dataSource: DataSource, projectionName: String): Timestamp {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT MIN(created_at) FROM runtime.projection_batch_claims WHERE projection_name = ?"
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getTimestamp(1)
+                }
+            }
+        }
+    }
+
     private class CommitAmbiguityOnceDataSource(
         private val delegate: DataSource,
         private val delayAfterCommitMs: Long = 0
@@ -576,6 +675,61 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
                     invoke(connection, method, args)
                     if (delayAfterCommitMs > 0) Thread.sleep(delayAfterCommitMs)
                     throw SQLException("simulated ambiguous projection commit", "40001")
+                }
+                invoke(connection, method, args)
+            } as Connection
+        }
+
+        private fun invoke(target: Connection, method: java.lang.reflect.Method, args: Array<out Any?>?): Any? {
+            return try {
+                method.invoke(target, *(args ?: emptyArray()))
+            } catch (ex: InvocationTargetException) {
+                throw ex.targetException
+            }
+        }
+    }
+
+    private class PauseAfterCandidateReadDataSource(
+        private val delegate: DataSource
+    ) : DataSource by delegate {
+        private val candidateRead = CountDownLatch(1)
+        private val release = CountDownLatch(1)
+        private val pauseNextCandidate = AtomicBoolean(true)
+
+        override fun getConnection(): Connection = wrap(delegate.connection)
+
+        override fun getConnection(username: String?, password: String?): Connection =
+            wrap(delegate.getConnection(username, password))
+
+        fun awaitCandidateRead(): Boolean = candidateRead.await(10, TimeUnit.SECONDS)
+
+        fun releaseCandidateRead() {
+            release.countDown()
+        }
+
+        private fun wrap(connection: Connection): Connection {
+            val candidateQueryPrepared = AtomicBoolean(false)
+            return Proxy.newProxyInstance(
+                Connection::class.java.classLoader,
+                arrayOf(Connection::class.java)
+            ) { _, method, args ->
+                if (method.name == "prepareStatement") {
+                    val sql = args?.firstOrNull() as? String
+                    if (sql != null &&
+                        sql.contains("FROM runtime.canonical_command_outcomes canonical") &&
+                        sql.contains("ORDER BY stream_sequence")
+                    ) {
+                        candidateQueryPrepared.set(true)
+                    }
+                }
+                if (method.name == "close" &&
+                    candidateQueryPrepared.get() &&
+                    pauseNextCandidate.compareAndSet(true, false)
+                ) {
+                    candidateRead.countDown()
+                    check(release.await(10, TimeUnit.SECONDS)) {
+                        "timed out waiting to release captured projection candidates"
+                    }
                 }
                 invoke(connection, method, args)
             } as Connection

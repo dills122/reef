@@ -223,6 +223,9 @@ test("projection batch claim migration guards effects on both projection paths",
   assert.match(migration.sql, /runtime_cleanup_projection_batch_claims/);
   assert.match(migration.sql, /claim\.retry_deadline_at < clock_timestamp\(\)/);
   assert.match(migration.sql, /p_retry_deadline_at <= clock_timestamp\(\)/);
+  assert.match(migration.sql, /result_count IS NULL OR result_count = candidate_count/);
+  assert.match(migration.sql, /p_result_count IS DISTINCT FROM expected_count/);
+  assert.match(migration.sql, /existing_claim\.result_count IS DISTINCT FROM existing_claim\.candidate_count/);
   assert.match(migration.sql, /watermark\.last_partition_seq <= frontier\.max_stream_sequence/);
   assert.match(migration.sql, /RENAME TO runtime_project_canonical_command_outcomes_unclaimed/);
   assert.match(migration.sql, /runtime_project_canonical_command_outcome_members/);

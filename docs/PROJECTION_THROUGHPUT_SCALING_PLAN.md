@@ -36,12 +36,15 @@ tuning work:
   PostgreSQL claim contract.
 - rollback removes the claim and effects together. A retry after an ambiguous
   commit reads the completed claim, skips every effect, and returns no newly
-  applied work to the outer worker counter.
+  applied work to the outer worker counter. Claim completion and duplicate
+  validation require the stored result count to equal claimed membership.
 - each caller establishes an immutable database-clock retry deadline and must
-  pass it before every attempt. The runtime-configured retry horizon is passed
-  to both same-store and separated-store paths. Cleanup additionally requires
-  every participating projection watermark to be strictly beyond the stored
-  batch frontier; time alone cannot retire a claim.
+  pass it before every attempt. Separated-store callers establish that deadline
+  before reading watermarks or candidates, preventing a paused stale selection
+  from receiving a fresh authority window. The runtime-configured retry horizon
+  is passed to both same-store and separated-store paths. Cleanup additionally
+  requires every participating projection watermark to be strictly beyond the
+  stored batch frontier; time alone cannot retire a claim.
 - batch size, poll interval, benchmark attribution, and other scheduling knobs
   are excluded from the identity. Projection name, event stream, stage, fill
   semantics, and ordered canonical membership are included.

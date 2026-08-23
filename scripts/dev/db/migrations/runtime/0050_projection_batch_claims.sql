@@ -19,7 +19,9 @@ CREATE TABLE runtime.projection_batch_claims (
   CHECK (
     (status = 'in-progress' AND result_count IS NULL AND completed_at IS NULL)
     OR (status = 'completed' AND result_count IS NOT NULL AND completed_at IS NOT NULL)
-  )
+  ),
+  CONSTRAINT projection_batch_claims_result_count_matches_candidates
+    CHECK (result_count IS NULL OR result_count = candidate_count)
 );
 
 CREATE TABLE runtime.projection_batch_claim_frontiers (
@@ -198,8 +200,9 @@ BEGIN
     RAISE EXCEPTION 'projection batch claim conflicts with immutable member frontiers';
   END IF;
 
-  IF existing_claim.status <> 'completed' OR existing_claim.result_count IS NULL THEN
-    RAISE EXCEPTION 'projection batch claim is incomplete';
+  IF existing_claim.status <> 'completed'
+     OR existing_claim.result_count IS DISTINCT FROM existing_claim.candidate_count THEN
+    RAISE EXCEPTION 'projection batch claim is incomplete or has an inconsistent result count';
   END IF;
 
   RETURN QUERY SELECT FALSE, existing_claim.result_count;
@@ -215,7 +218,22 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   completed_count BIGINT;
+  expected_count INTEGER;
 BEGIN
+  SELECT candidate_count INTO expected_count
+  FROM runtime.projection_batch_claims
+  WHERE batch_identity = p_batch_identity
+    AND status = 'in-progress'
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'projection batch claim cannot be completed from its current state';
+  END IF;
+
+  IF p_result_count IS DISTINCT FROM expected_count THEN
+    RAISE EXCEPTION 'projection batch result count does not match claimed membership';
+  END IF;
+
   UPDATE runtime.projection_batch_claims
   SET
     status = 'completed',
@@ -224,10 +242,6 @@ BEGIN
   WHERE batch_identity = p_batch_identity
     AND status = 'in-progress'
   RETURNING result_count INTO completed_count;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'projection batch claim cannot be completed from its current state';
-  END IF;
 
   RETURN completed_count;
 END;

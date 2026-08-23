@@ -92,13 +92,30 @@ class PostgresProjectionBatchClaimIntegrationTest {
 
         Thread.sleep(150)
 
-        assertEquals(0, cleanup(dataSource))
+        cleanup(dataSource)
         assertEquals(1, countClaims(dataSource, fixture.projectionName))
 
         dataSource.connection.use { conn ->
             upsertWatermark(conn, fixture.projectionName, fixture.candidate.partitionId, fixture.candidate.streamSequence + 1)
         }
-        assertEquals(1, cleanup(dataSource))
+        cleanup(dataSource)
+        assertEquals(0, countClaims(dataSource, fixture.projectionName))
+    }
+
+    @Test
+    fun completionRejectsResultCountThatDoesNotMatchClaimedMembership() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val fixture = fixture("completion-count")
+
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            assertTrue(claim(conn, fixture, Instant.now().plusSeconds(60)).first)
+            assertFailsWith<SQLException> {
+                complete(conn, fixture.identity, 0)
+            }
+            conn.rollback()
+        }
+
         assertEquals(0, countClaims(dataSource, fixture.projectionName))
     }
 

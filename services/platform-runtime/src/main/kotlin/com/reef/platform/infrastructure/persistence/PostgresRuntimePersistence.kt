@@ -2823,6 +2823,7 @@ class PostgresRuntimePersistence(
         val scopedEventStream = eventStream.trim()
         val ownedPartitions = ownedCommandProjectionPartitions(partitions, scopedEventStream)
         if (ownedPartitions.isEmpty()) return 0
+        val retryDeadline = projectionRetryDeadline()
         val candidates = HotPathMetrics.time("projector.venueEventBatch.canonicalRead") {
             val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
             val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
@@ -2868,7 +2869,6 @@ class PostgresRuntimePersistence(
             candidates = identityCandidates
         )
         val identityCandidatesJson = projectionBatchIdentityCandidatesJson(identityCandidates)
-        val retryDeadline = projectionRetryDeadline()
 
         val transactionResult = executeClaimedProjectionTransactionWithRetry(
             projectionName = projectionName,
