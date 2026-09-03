@@ -107,7 +107,7 @@ for (const [index, jobName] of jobNames.entries()) {
   assert.match(block, /\n    needs: change-scope\n/, `${jobName} must depend on change-scope`);
   assert.match(
     block,
-    /\n    if: .*needs\.change-scope\.outputs\.run-full-ci == 'true'/,
+    /\n    if: (?:>-\n      )?.*needs\.change-scope\.outputs\.run-full-ci == 'true'/,
     `${jobName} must skip only when the trusted classifier proves bot-only scope`,
   );
 }

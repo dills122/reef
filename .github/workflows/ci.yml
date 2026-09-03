@@ -440,7 +440,11 @@ jobs:
   scenario-replay:
     needs: change-scope
     runs-on: ubuntu-latest
-    if: needs.change-scope.outputs.run-full-ci == 'true' && (github.event_name == 'push' || github.event.pull_request.user.login == 'dependabot[bot]')
+    if: >-
+      needs.change-scope.outputs.run-full-ci == 'true' &&
+      (github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.user.login == 'dependabot[bot]')
     timeout-minutes: 25
     env:
       JS_RUNTIME: node

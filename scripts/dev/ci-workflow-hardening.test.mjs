@@ -67,6 +67,11 @@ assert.match(stress, /report-health:\n[\s\S]*permissions:\n      issues: write/)
 assert.match(stress, /if: \$\{\{ always\(\) && github\.event_name == 'schedule' \}\}/);
 
 assert.match(ci, /on:\n[\s\S]*?  workflow_dispatch:/);
+assert.match(
+  jobBlocks(ci).get("scenario-replay"),
+  /github\.event_name == 'workflow_dispatch'/,
+  "manual full-CI runs must exercise scenario replay",
+);
 assert.match(ci, /^permissions:\n  contents: read$/m);
 assert.match(ci, /concurrency:\n  group: ci-/);
 assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
