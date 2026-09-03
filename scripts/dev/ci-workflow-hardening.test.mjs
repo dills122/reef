@@ -79,9 +79,11 @@ assert.doesNotMatch(ci, /arduino\/setup-protoc@/, "proto setup must not depend o
 assert.match(ci, /protobuf\/releases\/download\/v33\.2\/protoc-33\.2-linux-x86_64\.zip/);
 assert.match(ci, /b24b53f87c151bfd48b112fe4c3a6e6574e5198874f38036aff41df3456b8caf/);
 const goVulnerabilityScan = jobBlocks(ci).get("go-vulnerability-scan");
-assert.match(goVulnerabilityScan, /repo-checkout: false/);
-assert.match(goVulnerabilityScan, /go-version-input: ''/);
+assert.doesNotMatch(ci, /golang\/govulncheck-action@/, "vulnerability scanner install must be version-pinned");
+assert.match(goVulnerabilityScan, /go-version: '1\.26\.x'/);
 assert.match(goVulnerabilityScan, /cache-dependency-path: \$\{\{ matrix\.workdir \}\}\/go\.sum/);
+assert.match(goVulnerabilityScan, /go install golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.7\.0/);
+assert.match(goVulnerabilityScan, /run: govulncheck \.\/\.\.\./);
 const ciRequired = jobBlocks(ci).get("ci-required");
 assert.ok(ciRequired, "CI must expose one stable required-check fan-in job");
 for (const requiredJob of ["change-scope", ...fullCiJobNames()]) {
