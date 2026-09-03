@@ -56,6 +56,7 @@ assert.match(
 assert.match(autoMerge, /on:\n  workflow_run:/);
 assert.match(autoMerge, /workflows:\n      - CI\n    types:\n      - completed/);
 assert.doesNotMatch(autoMerge, /pull_request_target:/);
+assert.match(autoMerge, /actions: write/);
 assert.match(autoMerge, /contents: write/);
 assert.match(autoMerge, /issues: write/);
 assert.match(autoMerge, /pull-requests: write/);
@@ -70,12 +71,23 @@ assert.match(autoMerge, /if \[ "\$merge_state" = 'BEHIND' \]; then/);
 assert.match(autoMerge, /gh pr comment "\$PR_NUMBER" --repo "\$GH_REPO" --body '@dependabot rebase'/);
 assert.ok(
   autoMerge.indexOf("@dependabot rebase") < autoMerge.indexOf('gh pr merge "$PR_NUMBER"'),
-  "stale Dependabot branches must rebase and rerun CI before auto-merge is enabled",
+  "stale Dependabot branches must rebase and rerun CI before merge",
 );
-assert.match(autoMerge, /gh pr merge "\$PR_NUMBER" --repo "\$GH_REPO" --auto --squash/);
+assert.match(
+  autoMerge,
+  /gh pr merge "\$PR_NUMBER" --repo "\$GH_REPO" --squash --match-head-commit "\$CI_HEAD_SHA"/,
+);
+assert.doesNotMatch(autoMerge, /gh pr merge[^\n]* --auto /);
+assert.match(autoMerge, /BASE_BRANCH=.*baseRefName/);
+assert.match(autoMerge, /gh workflow run ci\.yml --repo "\$GH_REPO" --ref "\$BASE_BRANCH"/);
+assert.match(autoMerge, /pulls\/\$PR_NUMBER\/files/);
+assert.match(autoMerge, /gh workflow run container-images\.yml --repo "\$GH_REPO" --ref "\$BASE_BRANCH"/);
+assert.match(autoMerge, /gh workflow run docs-site\.yml --repo "\$GH_REPO" --ref "\$BASE_BRANCH"/);
+assert.match(autoMerge, /gh workflow run admin-ui-deploy\.yml --repo "\$GH_REPO" --ref "\$BASE_BRANCH"/);
 assert.doesNotMatch(autoMerge, /actions\/checkout/);
 assert.doesNotMatch(autoMerge, /secrets\./);
 
+assert.match(ci, /workflow_dispatch:/);
 assert.match(ci, /dependency-alignment:/);
 assert.match(ci, /make check-dependency-alignment/);
 assert.equal((ci.match(/run: go mod tidy -diff/g) ?? []).length, 2);
@@ -84,7 +96,10 @@ assert.match(ci, /run: \.\/gradlew --no-daemon test/);
 assert.match(ci, /docs-site:/);
 assert.match(ci, /run: npm ci --include=optional/);
 assert.match(ci, /run: npm run typecheck/);
-assert.match(ci, /github\.event_name == 'push' \|\| github\.event\.pull_request\.user\.login == 'dependabot\[bot\]'/);
+assert.match(
+  ci,
+  /github\.event_name == 'push' \|\|\s+github\.event_name == 'workflow_dispatch' \|\|\s+github\.event\.pull_request\.user\.login == 'dependabot\[bot\]'/,
+);
 assert.match(ci, /name: deploy-receiver\n            context: infra\/hetzner-core\/server\/deploy-receiver/);
 assert.match(ci, /infrastructure-config:/);
 assert.match(ci, /tofu fmt -check -recursive infra/);

@@ -25,6 +25,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ADMIN_API_TOKEN: local-admin
+
 concurrency:
   group: throughput-stress-${{ github.ref }}
   cancel-in-progress: false
@@ -43,21 +46,23 @@ jobs:
       DEV_STRESS_RATE_SCHEDULE: precise
       DEV_STRESS_RATE_QUEUE_DEPTH: '200000'
       DEV_STRESS_MIN_SUCCESS_RATE_PCT: '95'
+      DEV_STRESS_SUCCESS_GUARDRAIL_METRIC: valid-intent
       DEV_STRESS_ARTIFACT_DIR: throughput-artifacts/runtime-nodb
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-nodb/runtime-nodb.json
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: services/simulator/go.mod
-      - uses: actions/setup-java@v6.0.0
+          cache-dependency-path: services/simulator/go.sum
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
       - name: Run no-persistence stress iteration 1
         env:
           DEV_STRESS_RUN_KIND: scheduled-throughput
@@ -77,7 +82,7 @@ jobs:
           find throughput-artifacts/runtime-nodb -name '*-kpi.md' -print -exec cat {} \; >> "$GITHUB_STEP_SUMMARY" || true
       - name: Upload no-persistence throughput artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: throughput-runtime-nodb
           path: throughput-artifacts/runtime-nodb
@@ -102,22 +107,26 @@ jobs:
       DEV_STRESS_RATE_SCHEDULE: precise
       DEV_STRESS_RATE_QUEUE_DEPTH: '200000'
       DEV_STRESS_MIN_SUCCESS_RATE_PCT: '90'
+      DEV_STRESS_SUCCESS_GUARDRAIL_METRIC: valid-intent
       DEV_STRESS_CAPTURE_DB_DIAGNOSTICS: '1'
       DEV_STRESS_ARTIFACT_DIR: throughput-artifacts/runtime-db
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-db/runtime-db.json
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: services/simulator/go.mod
-      - uses: actions/setup-java@v6.0.0
+          cache-dependency-path: services/simulator/go.sum
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Start DB-backed runtime stack
+        run: JS_RUNTIME=node make dev-up
       - name: Run db-backed stress iteration 1
         env:
           DEV_STRESS_RUN_KIND: scheduled-throughput
@@ -137,7 +146,7 @@ jobs:
           find throughput-artifacts/runtime-db -name '*-kpi.md' -print -exec cat {} \; >> "$GITHUB_STEP_SUMMARY" || true
       - name: Upload db-backed throughput artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: throughput-runtime-db
           path: throughput-artifacts/runtime-db
@@ -147,3 +156,37 @@ jobs:
       - name: Stop stack
         if: always()
         run: docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans
+
+  report-health:
+    name: Runtime stress schedule health
+    if: ${{ always() && github.event_name == 'schedule' }}
+    needs:
+      - runtime-nodb
+      - runtime-db
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RUNTIME_NODB_RESULT: ${{ needs.runtime-nodb.result }}
+      RUNTIME_DB_RESULT: ${{ needs.runtime-db.result }}
+    steps:
+      - name: Report persistent scheduled stress health
+        run: |
+          set -euo pipefail
+          title='Runtime Stress Sanity is failing'
+          issue_number="$(gh issue list --repo "$GH_REPO" --state open --search "${title} in:title" --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)"
+
+          if [ "$RUNTIME_NODB_RESULT" = success ] && [ "$RUNTIME_DB_RESULT" = success ]; then
+            if [ -n "$issue_number" ]; then
+              gh issue close "$issue_number" --repo "$GH_REPO" --comment "Recovered in $RUN_URL."
+            fi
+            exit 0
+          fi
+
+          if [ -z "$issue_number" ]; then
+            gh issue create --repo "$GH_REPO" --title "$title" --body "Scheduled stress failed: no-persistence=$RUNTIME_NODB_RESULT, db-backed=$RUNTIME_DB_RESULT. Run: $RUN_URL"
+          fi

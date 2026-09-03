@@ -312,8 +312,14 @@ function checkWorkflowSecurity() {
   requireIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
     dependabotAutoMerge,
-    "gh pr merge \"$PR_NUMBER\" --repo \"$GH_REPO\" --auto --squash",
-    "Dependabot workflow must use native gated auto-merge",
+    "gh pr merge \"$PR_NUMBER\" --repo \"$GH_REPO\" --squash --match-head-commit \"$CI_HEAD_SHA\"",
+    "Dependabot workflow must merge only the successfully checked head",
+  );
+  requireIncludes(
+    ".github/workflows/dependabot-auto-merge.yml",
+    dependabotAutoMerge,
+    "gh workflow run ci.yml --repo \"$GH_REPO\" --ref \"$BASE_BRANCH\"",
+    "Dependabot merges must explicitly dispatch post-merge CI",
   );
   requireIncludes(
     ".github/workflows/dependabot-auto-merge.yml",
