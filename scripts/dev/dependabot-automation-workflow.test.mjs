@@ -96,7 +96,10 @@ assert.match(ci, /run: \.\/gradlew --no-daemon test/);
 assert.match(ci, /docs-site:/);
 assert.match(ci, /run: npm ci --include=optional/);
 assert.match(ci, /run: npm run typecheck/);
-assert.match(ci, /github\.event_name == 'push' \|\| github\.event\.pull_request\.user\.login == 'dependabot\[bot\]'/);
+assert.match(
+  ci,
+  /github\.event_name == 'push' \|\|\s+github\.event_name == 'workflow_dispatch' \|\|\s+github\.event\.pull_request\.user\.login == 'dependabot\[bot\]'/,
+);
 assert.match(ci, /name: deploy-receiver\n            context: infra\/hetzner-core\/server\/deploy-receiver/);
 assert.match(ci, /infrastructure-config:/);
 assert.match(ci, /tofu fmt -check -recursive infra/);
