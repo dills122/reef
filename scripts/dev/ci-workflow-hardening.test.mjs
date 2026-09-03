@@ -80,6 +80,7 @@ assert.match(ci, /protobuf\/releases\/download\/v33\.2\/protoc-33\.2-linux-x86_6
 assert.match(ci, /b24b53f87c151bfd48b112fe4c3a6e6574e5198874f38036aff41df3456b8caf/);
 const goVulnerabilityScan = jobBlocks(ci).get("go-vulnerability-scan");
 assert.match(goVulnerabilityScan, /repo-checkout: false/);
+assert.match(goVulnerabilityScan, /go-version-input: ''/);
 assert.match(goVulnerabilityScan, /cache-dependency-path: \$\{\{ matrix\.workdir \}\}\/go\.sum/);
 const ciRequired = jobBlocks(ci).get("ci-required");
 assert.ok(ciRequired, "CI must expose one stable required-check fan-in job");
