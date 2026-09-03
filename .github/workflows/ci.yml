@@ -328,6 +328,7 @@ jobs:
           node --test --experimental-test-coverage \
             scripts/dev/lib/dev-stack.test.mjs \
             scripts/dev/lib/dev-profiles.test.mjs \
+            scripts/dev/lib/stress-success-guardrail.test.mjs \
             scripts/dev/ci-workflow-hardening.test.mjs \
             scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/ci/check-required-results.test.mjs \

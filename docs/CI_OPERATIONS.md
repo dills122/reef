@@ -24,7 +24,9 @@ job-name changes would recreate the drift that the aggregate context prevents.
 - Runtime Stress Sanity runs Monday, Wednesday, and Friday at 08:17 UTC. Both
   no-persistence and DB-backed lanes run twice. First scheduled failure opens
   one `Runtime Stress Sanity is failing` issue; repeated failures remain quiet;
-  first full recovery closes it with a run link.
+  first full recovery closes it with a run link. Lifecycle lanes gate
+  valid-intent success so expected business rejects such as self-trade
+  prevention remain visible without being misclassified as system failures.
 - Materializer 10k Gate runs its non-destructive `plan` command Tuesday at
   09:31 UTC. Infrastructure-provisioning `run-destroy` remains manual and still
   requires explicit confirmation plus provider credentials.

@@ -50,6 +50,11 @@ assert.match(
   /^env:\n  ADMIN_API_TOKEN: local-admin$/m,
   "both stress lanes must receive the same ephemeral admin credential",
 );
+assert.equal(
+  (stress.match(/DEV_STRESS_SUCCESS_GUARDRAIL_METRIC: valid-intent/g) ?? []).length,
+  2,
+  "both lifecycle stress lanes must gate valid intents instead of expected business rejects",
+);
 const runtimeDb = jobBlocks(stress).get("runtime-db");
 assert.ok(runtimeDb, "runtime-db job must exist");
 assert.match(runtimeDb, /name: Start DB-backed runtime stack[\s\S]*run: JS_RUNTIME=node make dev-up/);

@@ -46,6 +46,7 @@ jobs:
       DEV_STRESS_RATE_SCHEDULE: precise
       DEV_STRESS_RATE_QUEUE_DEPTH: '200000'
       DEV_STRESS_MIN_SUCCESS_RATE_PCT: '95'
+      DEV_STRESS_SUCCESS_GUARDRAIL_METRIC: valid-intent
       DEV_STRESS_ARTIFACT_DIR: throughput-artifacts/runtime-nodb
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-nodb/runtime-nodb.json
     steps:
@@ -106,6 +107,7 @@ jobs:
       DEV_STRESS_RATE_SCHEDULE: precise
       DEV_STRESS_RATE_QUEUE_DEPTH: '200000'
       DEV_STRESS_MIN_SUCCESS_RATE_PCT: '90'
+      DEV_STRESS_SUCCESS_GUARDRAIL_METRIC: valid-intent
       DEV_STRESS_CAPTURE_DB_DIAGNOSTICS: '1'
       DEV_STRESS_ARTIFACT_DIR: throughput-artifacts/runtime-db
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-db/runtime-db.json
