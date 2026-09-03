@@ -91,7 +91,7 @@ assert.match(ci, /EXPECTED_CHANGED_FILES: \$\{\{ github\.event\.pull_request\.ch
 
 const jobs = ci.slice(ci.indexOf("\njobs:\n") + "\njobs:\n".length);
 const jobNames = [...jobs.matchAll(/^  ([a-z0-9-]+):$/gm)].map((match) => match[1]);
-const fullCiJobs = jobNames.filter((name) => name !== "change-scope");
+const fullCiJobs = jobNames.filter((name) => !["change-scope", "ci-required"].includes(name));
 assert.ok(fullCiJobs.length >= 15, "expected the repository-wide CI job matrix");
 for (const [index, jobName] of jobNames.entries()) {
   if (jobName === "change-scope") continue;
@@ -99,6 +99,11 @@ for (const [index, jobName] of jobNames.entries()) {
   const nextJobName = jobNames[index + 1];
   const end = nextJobName ? jobs.indexOf(`  ${nextJobName}:`, start + 1) : jobs.length;
   const block = jobs.slice(start, end);
+  if (jobName === "ci-required") {
+    assert.match(block, /\n    if: always\(\)\n/);
+    assert.match(block, /\n      - change-scope\n/);
+    continue;
+  }
   assert.match(block, /\n    needs: change-scope\n/, `${jobName} must depend on change-scope`);
   assert.match(
     block,

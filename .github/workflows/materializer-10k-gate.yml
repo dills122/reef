@@ -1,6 +1,8 @@
 name: Materializer 10k Gate
 
 on:
+  schedule:
+    - cron: '31 9 * * 2'
   workflow_dispatch:
     inputs:
       command:
@@ -46,26 +48,26 @@ concurrency:
 
 jobs:
   materializer-10k-gate:
-    name: ${{ inputs.command }} ${{ inputs.tier }}
+    name: ${{ inputs.command || 'plan' }} ${{ inputs.tier || 'short' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       DO_TOKEN: ${{ secrets.DO_TOKEN }}
       REEF_DO_CONFIRM_DESTROYABLE: ${{ inputs.command == 'run-destroy' && '1' || '0' }}
-      REEF_DO_MATERIALIZER_10K_GATE_TIER: ${{ inputs.tier }}
-      REEF_DO_IMAGE_MODE: ${{ inputs.image_mode }}
+      REEF_DO_MATERIALIZER_10K_GATE_TIER: ${{ inputs.tier || 'short' }}
+      REEF_DO_IMAGE_MODE: ${{ inputs.image_mode || 'source' }}
       REEF_DO_EXPORT_TO_R2: ${{ inputs.export_to_r2 == 'true' && '1' || '0' }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
-      - uses: opentofu/setup-opentofu@v2.0.2
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
       - name: Validate DigitalOcean token
         if: ${{ inputs.command == 'run-destroy' }}
         run: |
@@ -88,24 +90,26 @@ jobs:
       - name: Run materializer gate command
         run: |
           set -o pipefail
-          make do-materializer-10k-gate ARGS="${{ inputs.command }}" | tee materializer-10k-gate.log
+          make do-materializer-10k-gate ARGS="${{ inputs.command || 'plan' }}" | tee materializer-10k-gate.log
       - name: Add gate summary
         if: always()
         run: |
-          echo "## materializer 10k gate" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          tail -n 120 materializer-10k-gate.log >> "$GITHUB_STEP_SUMMARY" || true
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## materializer 10k gate"
+            echo ""
+            echo '```text'
+            tail -n 120 materializer-10k-gate.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload gate log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: materializer-10k-gate-log
           path: materializer-10k-gate.log
       - name: Upload fetched benchmark artifacts
         if: ${{ always() && inputs.command == 'run-destroy' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: materializer-10k-gate-artifacts
           path: reports/do-benchmark

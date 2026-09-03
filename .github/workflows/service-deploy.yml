@@ -30,6 +30,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'master')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: backbone-production
       url: ${{ vars.REEF_ADMIN_PUBLIC_URL || 'https://reef-arena-admin.shrimpworks.dev/' }}
@@ -56,7 +57,7 @@ jobs:
           echo "sha=$target_sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout deployment commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.target.outputs.sha }}
           fetch-depth: 0
@@ -85,7 +86,7 @@ jobs:
           echo "REEF_MIGRATION_ARCHIVE=$migration_archive" >> "$GITHUB_ENV"
 
       - name: Connect deployment runner to Tailscale
-        uses: tailscale/github-action@v4
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           audience: ${{ secrets.TS_AUDIENCE }}
