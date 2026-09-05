@@ -8,6 +8,8 @@ These documents define how Reef should be built as the repository grows into the
   dependency bootstrap, first successful local smoke, work-area setup, hosted
   access boundaries, and troubleshooting
 - [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
+- [Work Board And Plan](../WORK_PLAN.md#work-board): canonical remaining-work statuses and execution ladder
+- [September Implementation Audit](../IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md): source/test/run evidence separating delivered code, unmerged work, failed gates, and missing reports
 - [Bot Arena Release Readiness](../BOT_ARENA_RELEASE_READINESS.md): verified preview/public-submission matrix, blockers, launch gates, and current release call
 - [Bot Arena Invite Preview Sprint](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md): fork-safe admission, cutoff policy, policy calibration, and recorded E2E run plan after separation promotion
 - [Reef And Bot Arena Separation Promotion](../REEF_BOT_ARENA_SEPARATION_PROMOTION.md): recorded artifact, route, Compose, isolation, and P1 equivalence evidence

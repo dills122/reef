@@ -17,6 +17,16 @@ Capture practical speed and impact lessons so performance stays a design constra
    - `strict-lifecycle` mode to stress correctness and state-machine behavior
 8. Always compare clean-reset and aged-state runs. Short tests can look healthy while persistence pressure is building.
 
+## Current Projection Evidence Alignment (September 4, 2026)
+
+The recorded sustained projection baseline is `2.5k/5m`; August `5k/5m`
+failed freshness. Recovered August 21 one-maintainer remote short evidence
+already exercises nested statement/I/O instrumentation: `2.5k` passes the
+current checker, while `5k` fails downstream lifecycle/market drain despite
+exact canonical counts. See the [audit record](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
+Earlier dated short-run interpretations below remain historical evidence;
+they do not replace this checkpoint or the [work board](./WORK_PLAN.md#work-board).
+
 ## Local Transactional Materializer Soak and Workload-Shape Correction (July 19, 2026)
 
 The post-hardening `10k`, `1024`-worker, `15m` materializer soak completed on a

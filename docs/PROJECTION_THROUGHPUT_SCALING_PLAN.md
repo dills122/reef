@@ -12,6 +12,14 @@ That spike supersedes the older assumption that a `5k/60s` pass was sufficient
 promotion evidence: `2.5k/5m` is green, while `5k/5m` accumulated about `758k`
 of projection watermark lag despite exact intake and canonical materialization.
 
+September 4 artifact reconciliation also recovered August 21 instrumented
+one-maintainer remote short runs. `2.5k/60s` passes the current checker;
+`5k/60s` reaches exact stage counts and zero canonical-projector lag but fails
+downstream lifecycle/market-data drain checks. See the
+[status audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
+for counts, settings and checker requirements. The first remote topology
+comparison is complete; sustained `5k` promotion remains open.
+
 This plan is not a request to weaken command acceptance semantics. `202
 Accepted` still requires durable ingress acknowledgement, direct matching still
 commits command offsets only after durable `VenueEventBatch` publication, and
@@ -460,6 +468,12 @@ structural separation:
 
 ## Current Priority Order
 
+Implementation checkpoint: PR #341 (`29fb9993`) landed the evidence tooling
+and stage-configuration guard described below. August 21 remote short artifacts
+now prove the one-maintainer experiment ran. Next close downstream `5k` drain
+before sustained promotion; older short-run proposals below do not supersede
+the August sustained failure or justify an unchanged rerun.
+
 1. Land the benchmark harness token fix and deterministic `runtime_events`
    insert ordering. Initial patch is in place.
 2. Add projector retry instrumentation and stricter deadlock/retry reporting.
@@ -468,10 +482,10 @@ structural separation:
 3. Split `runtime.runtime_persist_submit_outcomes` into projection stages.
    Initial SQL stage wrappers, Docker Compose env pass-through, and a remote
    `5k` `command-status` pass are in place; default `full` behavior remains
-   unchanged. Treat that pass as write-stage evidence only. Add configuration
-   validation and a regression test that prevent status-only plus lifecycle
-   from being presented as `own-order-fresh` until the lifecycle dependency is
-   implemented.
+   unchanged. Treat that pass as write-stage evidence only. Configuration
+   validation and regression tests now reject status-only plus lifecycle or
+   market-data workers unless explicitly marked as a diagnostic ablation.
+   Independent `own-order-fresh` still requires the lifecycle dependency fix.
 4. Split or reduce the event/timeline stage so `runtime_events` and trace
    sequence writes no longer govern command-status freshness. Initial
    deterministic timeline sequencing is in place, and
@@ -487,9 +501,9 @@ structural separation:
    Initial legacy all-event index removal is measured: event index bytes fell
    materially and lag improved, but zero-lag still failed. The next local cut
    is implemented: lifecycle modification lookup uses a narrow partial index
-   and the broad order-scoped runtime-event index is dropped. The next DO run
-   should measure whether this closes the remaining `1,647` row lag before
-   moving to payload/event row-volume cuts.
+   and the broad order-scoped runtime-event index is dropped. The `1,647` lag
+   above is historical short-run evidence; the August `5k/5m` failure and
+   instrumented August 21 comparison now govern the remaining drain work.
 7. Query-level projection instrumentation and a fixed-backlog projection-only
    drain benchmark are now implemented locally. The persistence path reports
    canonical-read, transform, projection-SQL, watermark, and commit phases;
@@ -506,7 +520,8 @@ structural separation:
    WAL-I/O timing, records the relevant settings, and requires pre/post
    statement artifacts. A disposable local PostgreSQL check captured a
    top-level function call and its internal insert separately, including rows,
-   time, and WAL bytes; no paid remote run has used this instrumentation yet.
+   time, and WAL bytes. August 21 remote short artifacts also contain nested
+   statement capture and the required I/O/WAL timing settings.
    Before another paid promotion run, first re-mine the
    existing `do-benchmark-20260820T222945Z` statistics: the measured window
    added about `72.3GiB` of aggregate client/parallel-worker bulk relation
@@ -527,7 +542,10 @@ structural separation:
    decisive: one designated maintainer plus four canonical writers projected
    `100,002` fixed outcomes within `10.383s` of container start (a conservative
    `>=9,631.32/s` bound), with zero dirty residue/failures/retries/deadlocks.
-   Promote that topology to the next named remote A/B. The gate now records the
+   August 21 remote short runs exercised that topology: `2.5k` passes today's
+   checker, while `5k` fails on lifecycle/market maintainer final processed rows
+   `500`/`32`. Close that downstream drain evidence before a sustained claim.
+   The gate records the
    effective lifecycle/market-data flags from every projector and fails unless
    it observes exactly one maintainer of each type, preventing a launch-plan
    value from being mistaken for the topology actually tested. Statement

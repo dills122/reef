@@ -8,7 +8,13 @@ documents that own detailed contracts, evidence, and sprint tasking.
 Read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) first for the implementation
 snapshot and verified performance claims.
 
-Last aligned: 2026-08-17.
+Last aligned: 2026-09-04 against `master` at `cebbffc1`; hosted release gates
+were not re-run during this documentation check.
+
+Source/test/artifact reconciliation:
+[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+Items below distinguish missing implementation from evidence not found in the
+audited checkout; missing local reports do not prove a run never happened.
 
 ## Source Of Truth
 
@@ -16,6 +22,8 @@ Last aligned: 2026-08-17.
   [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - API/control-plane boundary:
   [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
+- CI merge and scheduled-check operations:
+  [`CI_OPERATIONS.md`](./CI_OPERATIONS.md)
 - Active throughput handoff:
   [`THROUGHPUT_SCALING_IMPLEMENTATION_PLAN.md`](./THROUGHPUT_SCALING_IMPLEMENTATION_PLAN.md#pause--resume-handoff)
 - Projection scaling:
@@ -55,43 +63,70 @@ and readiness remain independent.
 - The verified venue-core ceiling remains `10k commands/sec`. The corrected
   local `15m` run closed `8,999,955` commands at `9,999.49/sec` with no final
   gap; it did not justify a `20k` claim.
-- Full projection freshness is separately green at `5k/60s`. Projection WAL,
-  tuple, and temporary-file amplification remain scaling constraints.
+- Full projection passed historical `5k/60s` gates, but the August sustained
+  baseline is `2.5k/5m`. The `5k/5m` run failed freshness with `757,955`
+  watermark lag despite exact intake and canonical materialization; see
+  [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md).
 - P1 hidden-cross and P2 settlement-break/repair scenarios have local public
   readback plus replay/checksum evidence.
 - Reef/Arena artifact, route, persistence, Compose, failure-isolation, and P1
   equivalence gates are promoted in
   [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
-- Fork admission and SHA-bound maintainer approval are implemented and locally
-  verified. Open submission remains blocked on named external-account E2E and
-  preview operations evidence.
+- Fork admission, SHA-bound maintainer approval, and external-account
+  onboarding are complete through the July 23 `noodle-invite-smoke` test and
+  follow-up fixes. The completion record lives in
+  [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion).
+  Hosted game evidence and open-intake release requirements remain separate.
+
+## Recent Implementation Checkpoint
+
+- PR #337 (`a38489a9`) implemented the named architecture-review code items:
+  canonical cancel/modify routing and ownership checks (`ARCH-IR-01/02`),
+  deterministic malformed-timestamp rejection (`ARCH-IR-05`), and descriptor
+  compatibility plus generated-source drift checks (`ARCH-IR-08`). Their
+  regression tests remain required; these are no longer initial implementation
+  tasks. This checkpoint does not claim a separate review sign-off.
+- PR #341 (`29fb9993`) landed fail-closed stress evidence, projection phase and
+  statement instrumentation, fixed-backlog drain tooling, unsafe stage
+  configuration guards, and the one-maintainer remote gate configuration.
+  August 21 remote short runs exercised that topology: `2.5k` passes the
+  current checker; `5k` fails downstream maintainer drain despite exact
+  canonical/projected counts. See the audit's recovered evidence.
+- PR #349 (`16d0022c`) landed CI reliability and scheduled-check hardening.
+  Treat subsequent failures and required-check rollout as CI operations under
+  [`CI_OPERATIONS.md`](./CI_OPERATIONS.md), not an unfinished feature sprint.
+
+## Work Board
+
+This is the repository work-board view of the execution ladder below. Status
+describes the remaining task, not whether the whole subsystem exists.
+
+| Work | Status | Next bounded action |
+| --- | --- | --- |
+| Settlement read visibility/authorization | Contract and code work | Define run/participant/operator visibility; enforce and test both adapters. |
+| Projection `5k` downstream drain | Failed evidence gate | Diagnose final lifecycle/market maintainer work; prove drain before sustained promotion. |
+| Bounded-state workload | Implemented, unmerged | Reconcile `codex/throughput-state-shape-control`; smoke all three shapes. |
+| Arena multi-seed/hosted games | Evidence to locate or produce | Complete missing campaign/rehearsal records; admission, roster and scoring code already exist. |
+| Post-trade scenario hardening | Evidence to locate or produce | Record live security-repair/realistic-pending reports; behavior already implemented/tested. |
+| Operational readiness and service identity | Partial implementation | Extend existing config/health/TLS foundations with operational and peer-identity proof. |
+| Compact canonical storage | Deferred until state-shape gate | Run measured storage A/B with retained audit/replay proof. |
+| CI, onboarding, mutation/protobuf hardening | Delivered; regression maintenance | Preserve gates; do not reopen initial implementation. |
+
+Evidence and source/test mapping:
+[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+Supplemental UI and simulator backlogs are candidate catalogs, not competing
+priority ladders; reconcile individual candidates before scheduling them.
 
 ## Active Execution Ladder
 
-1. Close the independent architecture-review correctness gate.
-   - `ARCH-IR-01` / `ARCH-IR-02`: require cancel/modify routing and ownership
-     claims at the public boundary, authorize participant/account scope, and
-     bind all claims to the canonical engine order before mutation. Acceptance:
-     mismatched claims produce `ORDER_CONTEXT_MISMATCH`, do not mutate state,
-     and valid submit/cancel/modify commands share the deterministic lane.
-   - `ARCH-IR-05`: reject malformed `occurredAt` before durable public intake
-     and keep direct-engine rejection facts deterministic. Acceptance: repeat
-     processing emits identical event identity and timestamp.
-   - `ARCH-IR-08`: replace text-diff protobuf governance with descriptor-level
-     compatibility and checked-in Go/Java generation drift. Acceptance:
-     `make check-proto-additive` fails closed on missing prerequisites, breaking
-     descriptors, or stale generated sources.
-   - Verification: `make test-go`, `make test-platform-runtime`,
-     `make test-simulator-go`, `make test-bot-sdk`, and
-     `make check-proto-additive`.
-
-2. Complete the invite-only fork preview proof.
-   - Run a named external account through fork submission, pending admission,
-     maintainer approval, trusted provisioning, merge, and registry sync.
+1. Complete the remaining invite-only game-preview evidence.
+   - Preserve the completed external admission/onboarding test as regression
+     evidence; do not repeat its implementation or initial proof as backlog.
    - Use the implemented and tested `T-72h` / `T-48h` / `T-24h` eligibility,
      roster lock, and `T-30m`/`T0` run binding in recorded preview evidence.
-   - Record local and hosted preview runs with immutable roster, policy, seed,
-     artifact, replay, accounting, and scoring evidence.
+   - Locate or record the remaining multi-seed and hosted preview runs with
+     immutable roster, policy, seed, artifact, replay, accounting, and scoring
+     evidence. Existing July 14 hosted scoring proof is already recorded.
    - Execution-role propagation and evidence isolation are corrected and the
      fresh local three-policy matrix passes with 30 scoped fills per policy,
      complete reconciliation, zero accounting gap, and no unspecified roles.
@@ -100,18 +135,31 @@ and readiness remain independent.
    - Do not advertise open or self-service submissions before the release
      matrix is green.
 
-3. Finish the API/control-plane hardening backlog.
-   - Close remaining account/client/object authorization gaps.
+2. Finish the API/control-plane hardening backlog.
+   - Participant order/current/history/fill reads and command client/participant
+     checks already have implementation and negative tests; preserve them.
+   - Next code slice: define run/participant/operator visibility for the six
+     `/api/v1/settlement/*/{scenarioRunId}` read families in the API surface
+     policy, then add allowed/denied tests and enforcement in both HTTP
+     adapters. These routes currently authenticate/rate-limit, but do not pass
+     a principal into the run-level read gateway. Do not silently choose a new
+     visibility policy or repeat the existing order-authorization work.
    - Keep hosted, CI, and operator callers off raw `/internal/*` HTTP. The
      current [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
      has no hosted migration candidate; retain local diagnostic callers as
      loopback-only tooling and treat new remote callers as regressions.
-   - Add service identity for non-local internal gRPC and deepen enabled-role
-     readiness checks.
+   - Extend existing TLS/mesh client configuration to explicit peer/service
+     identity and deployment proof. Standard engine gRPC health already exists.
+   - Deepen existing enabled-role readiness beyond configuration checks;
+     lifecycle/market-data readiness currently reports `true` when enabled.
    - Keep `/api/v1` and `/admin/v1` as the only externally reachable HTTP
      product families.
 
-4. Resume venue-core scaling only from the recorded pause handoff.
+3. Resume venue-core scaling only from the recorded pause handoff.
+   - Reconcile the existing local `codex/throughput-state-shape-control`
+     implementation (`f00dd590`) with current `master` before adding another
+     bounded-state implementation. It is not merged; its plan still requires
+     local three-shape smoke and hosted promotion evidence.
    - First prove bounded working-set/state-shape behavior, including live-order
      retention and terminal-order cleanup.
    - Then run the compact canonical storage A/B and measure WAL/table bytes per
@@ -121,7 +169,11 @@ and readiness remain independent.
    - Raise the verified ceiling only after short and soak gates close with zero
      accepted/direct-acked/materialized gaps.
 
-5. Reduce projection write amplification.
+4. Reduce projection write amplification.
+   - Reuse the completed August 21 instrumented one-maintainer short comparison.
+     Close the `5k` downstream-drain failure, then run the bounded memory/batch
+     matrix and sustained gates from the projection plan. Do not infer
+     downstream freshness from canonical/projected count equality alone.
    - Keep the command-status write subset and full timeline projection stages
      measurable independently, but do not claim independent lifecycle
      freshness until cancel/modify event dependencies are explicit.
@@ -130,18 +182,19 @@ and readiness remain independent.
    - Keep projection freshness claims separate from venue-core acceptance and
      canonical materialization claims.
 
-6. Harden the implemented post-trade lifecycle.
+5. Harden the implemented post-trade lifecycle.
    - Preserve the allocation, confirmation, affirmation, clearing, novation,
      obligation, instruction, attempt, leg, ledger, break, repair, resolution,
      exception-queue, proof, and score fact chain.
-   - Record the remaining live security-fail/repair and `ops-realistic-v1`
-     pending evidence, then define the next bounded operator workflow slice
-     from those results.
+   - Security-fail/repair and `ops-realistic-v1` pending behavior already have
+     implementation and passing tests. Locate or record their remaining live
+     scenario reports, then define one operator workflow slice from those
+     results. Missing reports are evidence work, not missing lifecycle code.
    - Keep deterministic netting as a separately scoped contract/preview; do
      not broaden this checkpoint into a clearinghouse build or mutate matching
      history.
 
-7. Keep documentation synchronized as behavior lands.
+6. Keep documentation synchronized as behavior lands.
    - Update contracts, internal docs, public docs/API pages, and README in the
      same change when routes, commands, deployment shape, or release claims
      change.
@@ -156,8 +209,8 @@ and readiness remain independent.
   contract.
 - No raw `/internal/*` route presented as a public, partner, bot, SDK, or stable
   operator API.
-- No open Bot Arena intake before the named external-account and hosted preview
-  gates pass.
+- No open Bot Arena intake before remaining hosted-preview and open-intake
+  requirements pass; admission/onboarding is already complete.
 - No Arena implementation dependency in Reef-only artifacts or deployment.
 - No broad clearinghouse build before the current post-trade facts and operator
   paths are hardened.

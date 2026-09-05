@@ -172,9 +172,9 @@ before enabling squash auto-merge.
 Bot-submission branches also run manifest validation and container-isolated bot
 qualification. Fork submissions now enter a persisted `pending_invite_review`
 state; a trusted base-branch workflow binds maintainer identity and the exact
-head SHA before provisioning. The path is still invite-only and has not yet
-completed its named external-account E2E proof, so open/self-service submission
-must not be advertised. See
+head SHA before provisioning. External-account admission/onboarding completed
+through the Noodle smoke test and follow-up fixes. The path remains invite-only;
+open/self-service submission depends on the remaining release requirements. See
 [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md)
 for the verified release matrix and blockers.
 
@@ -228,9 +228,12 @@ The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/C
 1. Keep validating hot-ingress paths with durable command-log, direct stream, and explicit partition semantics.
 2. Preserve deterministic lane assignment for matching-sensitive submit/cancel/modify commands.
 3. Resume venue-core scaling only through the bounded-working-set and compact-canonical-storage gates; the current verified ceiling remains `10k commands/sec`.
-4. Reduce projection write amplification while preserving the separate `5k/60s` full-projection freshness evidence.
+4. Close the recovered `5k` downstream projection-drain gap before sustained promotion beyond the recorded `2.5k/5m` baseline.
 5. Harden post-trade lifecycle and exception evidence without mutating matching history.
-6. Complete the named external-account fork E2E, cutoff/roster policy, and recorded invite-preview campaign before advertising external submissions.
+6. Locate or complete remaining multi-seed/hosted game evidence; external-account onboarding and cutoff/roster implementation are already complete.
+7. Define and enforce settlement run-read visibility; preserve existing order/command authorization.
+
+Use the [repository work board](./docs/WORK_PLAN.md#work-board) for remaining task status and the [implementation audit](./docs/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md) for evidence.
 
 ## Recommended Next Gates
 

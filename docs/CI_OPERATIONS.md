@@ -8,8 +8,10 @@ jobs. Bot-only pull requests may skip full CI; human pull requests may skip the
 expensive replay job; pushes, manual runs, and Dependabot pull requests must run
 replay.
 
-After this workflow reaches the default branch, configure the `main` ruleset to
-require `ci-required`. Keep the three bot-submission contexts required until
+The workflow landed on `master` in PR #349. Verify the ruleset targeting the
+default branch (`master`) requires `ci-required`; the ruleset's display name
+may differ from the branch name. Repository files alone do not prove the live
+required-check configuration. Keep the three bot-submission contexts required until
 their separate trusted workflow is folded into an equivalent aggregate gate:
 
 - `validate-manifest`

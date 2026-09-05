@@ -95,7 +95,7 @@ Design rule:
 - simulator implementation language is less important than command-path parity, deterministic seeds, traceable run artifacts, and replay assertions.
 
 Optional product extension:
-- [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) defines the tournament-style bot arena on top of the simulation control plane. The current implementation includes a separate Arena control-plane artifact, sandboxed qualification/runner paths, registry and run records, separate Arena storage, admission/provisioning workflow, and leaderboard reads while preserving venue command-path parity. Modular game modes, external-account proof, and broader hosted scale remain active work.
+- [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) defines the tournament-style bot arena on top of the simulation control plane. The current implementation includes a separate Arena control-plane artifact, sandboxed qualification/runner paths, registry and run records, separate Arena storage, admission/provisioning workflow, and leaderboard reads while preserving venue command-path parity. External-account admission/onboarding is complete; modular game modes, recorded hosted game evidence, and broader hosted scale remain active work.
 - [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
 
 ### 3.5 Admin operations surface (CLI first)
@@ -877,17 +877,21 @@ The project can become huge quickly. Favor a thin but coherent vertical slice fi
 
 ## 24. Immediate Next Steps
 
-1. Complete the invite-only fork preview's named external-account proof,
-   promoted hosted rehearsal, multi-seed policy evidence, and recorded run
-   campaign; cutoff/roster enforcement is implemented.
-2. Finish remaining API/control-plane hardening: object authorization,
-   non-local internal gRPC identity/readiness, and loopback-only containment of
-   raw diagnostic HTTP.
+1. Complete the invite-only preview's remaining hosted game rehearsal,
+   multi-seed policy evidence, and recorded run campaign; external-account
+   admission/onboarding and cutoff/roster implementation are complete.
+2. Finish remaining API/control-plane hardening: settlement run-read visibility
+   and authorization, peer/service identity beyond existing TLS/mesh client
+   settings, operational readiness beyond existing role/configuration checks,
+   and continued loopback-only containment of raw diagnostic HTTP.
 3. Preserve the verified `10k commands/sec` durable venue-core baseline while
    completing bounded-working-set and compact-canonical-storage gates before a
    higher claim.
-4. Reduce projection write amplification without weakening the separate
-   `5k/60s` full-projection freshness evidence.
+4. Reduce projection write amplification from the sustained `2.5k/5m`
+   baseline; historical `5k/60s` passes did not hold at `5k/5m`. Use the
+   recovered August 21 one-maintainer short evidence and downstream-drain gap in
+   [`docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+   before another sustained promotion attempt.
 5. Continue post-trade lifecycle and exception-operations hardening from the
    implemented allocation-through-novation and settlement fact chain.
 6. Keep Reef-only and Arena-enabled artifact, route, migration, Compose, and

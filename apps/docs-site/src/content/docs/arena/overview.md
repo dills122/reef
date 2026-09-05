@@ -2,7 +2,7 @@
 title: Bot Arena Overview
 description: The work-in-progress trading-bot game built on top of Reef's simulation control plane.
 banner:
-  content: Limited-preview stage. Fork admission and trusted approval are implemented, but the named external-account E2E is still required; open self-service intake is later.
+  content: Limited-preview stage. External-account admission and onboarding are complete; broader recorded-game evidence and open self-service intake remain later.
 ---
 
 Bot Arena is the game layer on top of Reef. Bots compete in deterministic simulated markets, but their orders still enter the same venue as everyone else. That keeps the arena more interesting than a backtest: bot behavior can change liquidity, fills, and outcomes for other bots.
@@ -42,18 +42,21 @@ Built:
 - GitHub PR validation, container-isolated fixture qualification, trusted OpenBao provisioning, post-merge registry sync, GitHub OAuth/Admin DB identity, owner-scoped bot config, and a deployed public leaderboard; the same-repository smoke bot has passed this lifecycle end to end
 - A separate Arena control-plane artifact and Compose overlay, with Reef-only route absence/storage independence and Arena-enabled route/persistence gates
 - Fork submissions persist as `pending_invite_review`; SHA-bound maintainer approval automatically dispatches a trusted base-branch provisioning workflow without executing fork code
+- Named external-account admission/onboarding through the Noodle smoke submission and follow-up fixes
+- Persisted cutoffs, roster locking, immutable run/policy binding, and local three-policy economic reconciliation
 
 Not ready for open release:
 
 - Sandboxed execution at scale connected to a dedicated arena runtime protocol (gRPC/protobuf)
 - Production-grade modular game-mode loading, final scoring policies, and replay UI
-- Named external-account lifecycle proof for the implemented fork workflow, plus denial/update/remove drills
-- External contributor onboarding, persisted cutoff/roster enforcement, and a first public scored run on the deployed leaderboard
+- Remaining hosted game/recovery drills and multi-seed policy campaign evidence
+- Open-intake contributor materials and a labelled public scored run; initial invite onboarding and cutoff/roster implementation are complete
 
 The chosen next release is an invite-only, fork-based preview. The trusted
-handoff is implemented, and Reef/Arena separation is promoted. External
-submissions remain unadvertised until a named external account completes the
-flow and the cutoff, roster, hosted-run, replay, and scoring evidence is green.
+handoff and external-account onboarding are complete, and Reef/Arena separation
+is promoted. Broader release still depends on recorded hosted-game, replay,
+scoring, and operations evidence; local onboarding success alone does not open
+self-service intake.
 
 ## Learn More
 

@@ -153,8 +153,8 @@ Current hardening checkpoint:
 - `/internal/*` HTTP is local/migration only and must be disabled or loopback-only in non-local profiles
 - non-local profiles must fail closed unless auth, rate limit, durable idempotency, and internal HTTP exposure mode are explicit
 - admin HTTP actor identity must come from the authenticated principal, peer/service identity, or request headers bound by the gateway, never body/query fields
-- participant-scoped order reads, command status, and market-data reads pass through read boundary checks; remaining object-id read endpoints must enforce object authorization before public-ready status
-- remaining raw internal callers in [`../INTERNAL_HTTP_CALLER_INVENTORY.md`](../INTERNAL_HTTP_CALLER_INVENTORY.md) should migrate to `/admin/v1/...`, CLI, gRPC, or durable-message contracts
+- participant order and command-status scope checks are implemented/tested; settlement scenario reads are the next bounded visibility/authorization contract, while market-data reads retain their documented public-data classification
+- the [`internal caller inventory`](../INTERNAL_HTTP_CALLER_INVENTORY.md) has no hosted migration candidate; preserve local diagnostic containment and prevent new remote raw-HTTP callers
 - canonical backlog: [`../API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog`](../API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
 
 ## Incremental Rollout

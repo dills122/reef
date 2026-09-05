@@ -99,15 +99,16 @@ Read in this order:
 - Hetzner backbone exists under `infra/hetzner-core`.
 - OpenBao, Caddy, `platform-runtime`, `postgres`, `postgres-admin`, and
   `postgres-analytics` are represented in the backbone Compose stack. The
-  checked-in runtime image default is Reef-core; an Arena-enabled deployment
-  must explicitly select `reef-arena-platform-runtime` and still needs a
-  recorded hosted rehearsal after the separation cutover.
+  Compose fallback image is Reef-core; application deployment automation now
+  explicitly selects the immutable Arena runtime image. Recorded hosted-game
+  rehearsal remains a separate evidence requirement.
 - DO simulation infrastructure still needs cleanup to fully mirror the Hetzner
   OpenTofu + compose + deploy-script pattern.
 - The export/cleanup service that pushes finished run summaries back to the
   backbone is planned, not complete.
 - The venue runtime stack has a promoted DigitalOcean `10k` `soak-5m`
   command-stream -> matching-engine -> event-batch -> materializer baseline,
-  corrected local `10k/15m` evidence, and separate `5k/60s` full-projection
-  freshness evidence. Higher venue-core claims are paused pending bounded-state
-  and compact-storage gates.
+  corrected local `10k/15m` evidence, and a separate recorded `2.5k/5m`
+  projection baseline. The August 21 `5k/60s` run still fails downstream drain
+  checks. Higher venue-core claims await reconciliation of the existing
+  state-shape branch and compact-storage gates.

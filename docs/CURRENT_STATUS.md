@@ -4,7 +4,8 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-21.
+Last aligned: 2026-09-04 against `master` at `cebbffc1`. Hosted observations
+below retain their recorded dates; this alignment did not re-run release gates.
 
 ## Current Project State
 
@@ -49,16 +50,20 @@ Bot Arena release call:
 - live `master` protection now requires `registry-diff-and-provision`; ordinary
   PRs receive a successful no-op result while fork bot submissions remain
   pending until trusted approval/provisioning completes
-- the fork path is locally verified but has not completed the named external
-  account E2E, so the preview is not open or self-service
+- external-account admission/onboarding is complete: `noodle-ventures` smoke
+  PR #307 and the July 22-23 approval, provisioning, secret-access, and
+  ownership-sync fixes close that checkpoint. See the
+  [completion record](./BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion).
+  Open/self-service intake remains a separate release decision.
 - separation promotion is local/release-equivalent Compose evidence, not a
-  hosted rehearsal; the checked-in Hetzner Compose default still names the
-  Reef-core image, so the next Arena deployment must select the
-  `reef-arena-platform-runtime` image and verify routes/storage before cutover
+  hosted rehearsal. The Hetzner Compose fallback still names the Reef-core
+  image; application deployment automation now explicitly selects the immutable
+  `reef-arena-platform-runtime` image under D-054. Hosted route/storage and
+  preview rehearsal evidence remain separate release gates.
 - the corrected 2026-07-21 local three-policy matrix passes with immutable
   roster bindings, 30 run-scoped fills per policy, complete reconciliation,
   zero command-accounting gap, and preserved maker/taker attribution; hosted
-  repetition and the named external-account rehearsal remain release gates
+  game repetition and multi-seed evidence remain release gates
 - use [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
   for admission, cutoff, policy, and recorded-run tasking; the Reef/Arena
   separation prerequisite is promoted with recorded local evidence in
@@ -89,7 +94,7 @@ Current decision anchors:
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 - D-047 defines the current command intake process: public `202` responses expose stable command references, provider details stay diagnostic, idempotency scopes by `clientId + route + idempotencyKey`, and canonical materialization closes accepted-command accounting after drain.
 - D-048 defines the internal interface and external surface hardline: internal service/control capabilities default to gRPC/protobuf or durable messaging, while externally reachable admin/data capabilities must be gateway-backed, authenticated, authorized, audited, and versioned.
-- D-049 tracks the active API/control-plane hardening backlog: finish remaining account/object authorization, keep hosted/CI/operator callers off raw `/internal/*` (the current [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) has no hosted migration candidate), add internal gRPC service identity, expand readiness, and make stream lane identity deterministic by run/session/instrument when command models support it.
+- D-049 remains the boundary-hardening decision; the [September implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md) narrows its remaining work. Order/command scope checks, durable run/session/instrument partitioning, TLS/mesh client modes, standard engine gRPC health, and role-aware readiness are implemented. Remaining work is settlement run-read visibility/enforcement, peer/service identity proof, and operational readiness beyond configuration flags. The [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) has no hosted migration candidate; containment remains a regression rule.
 - D-050 keeps one post-trade domain model with policy/timing profiles (`ops-realistic-v1` industry-baseline default, `instant-post-trade-v1` for simulator/game runs) rather than separate settlement models; see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md).
 - D-051 makes GitHub the first human identity provider for Bot Arena, keyed by GitHub's immutable numeric user id; see [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md).
 - D-052 defines the Bot Arena admin UI (`apps/arena-admin`, SvelteKit static, deployed behind Caddy on the backbone host): public landing/leaderboard pages plus a GitHub-OAuth-gated admin area. Public leaderboard reads land under the venue-intake `/api/v1/...` family, not `/admin/v1/...`; game types move from a free-form `mode_id` string to a seeded `arena.game_modes` reference table with a `mandatory` flag, with per-bot opt-out deferred past v1.
@@ -104,7 +109,7 @@ Current decision anchors:
 - DigitalOcean 2026-07-12 short projection evidence showed the projection path could catch up cleanly at `2.5k rps` on c-16 after splitting four projector instances across active direct-stream partitions `0-15`: run `do-benchmark-20260712T172412Z` accepted/materialized/projected `149,976` commands, projected rps `2499.56`, p95 `35.98ms`, p99 `82.06ms`, projection lag `0`, materialized/projected gap `0`, and projection Postgres deadlocks `0`.
 - DigitalOcean 2026-07-16 named projection freshness gate passed on c-16 with Redpanda direct-stream plus venue-event materializer and venue/order-lifecycle/market-data projectors enabled: run `do-benchmark-20260716T005756Z` accepted/direct-acked/materialized/projected `150,001` commands, throughput `2499.52/sec`, p95 `47.31ms`, p99 `159.32ms`, projection lag `0`, accepted/materialized gap `0`, materialized/projected gap `0`, and `100%` success. Artifacts live under `reports/do-benchmark/do-benchmark-20260716T005756Z/`. This closes the named short projection freshness gate; it is still separate from the `10k` venue-core materializer baseline and is not a UI/control-room capacity claim.
 - DigitalOcean 2026-07-17 projection pressure evidence found the read-model knee and validated the first projection-stage fixes. The corrected short gate run `do-benchmark-20260717T014839Z` passed at `2.5k rps` with `149,975` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `31.31ms`, and p99 `79.38ms`. A `5k rps` pressure run before SQL ordering (`do-benchmark-20260717T015658Z`) showed venue-core held `299,950` accepted/direct-acked/materialized with p95 `67.57ms` and p99 `138.57ms`, but projection ended with a `1,834` materialized/projected gap, one projector failure, one projection-postgres deadlock inside `runtime.runtime_persist_submit_outcomes`, and `~2.03GB` projection WAL. After ordering `runtime_events` inserts by `event_id`, the comparable full-projection run `do-benchmark-20260717T020807Z` removed the deadlock and count gap (`299,952` accepted/direct-acked/materialized/projected, deadlocks `0`) but still ended with watermark lag `1,367`, concentrated in partitions `8-11`, and projection-postgres still wrote about `2.01GB` WAL, `2.05M` inserted tuples, `47k` updated tuples, and `5.03GB` temp bytes. After splitting the projection function and fixing Docker Compose env pass-through for `STREAM_ACK_PROJECTION_STAGE`, `do-benchmark-20260717T131344Z` proved the `command-status` write-stage ablation could keep up at `5k`: `299,955` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `74.49ms`, p99 `112.93ms`, projector failures/retries/deadlocks `0`, and no `runtime_events`/trace-sequence row growth. It did not prove standalone cancel/reject/modify lifecycle freshness because that derivation depends on timeline-written events. After deterministic timeline sequencing removed the trace allocator from new canonical payloads, `do-benchmark-20260717T134058Z` proved full-projection freshness at `5k`: `299,804` attempted/accepted/direct-acked/materialized/projected, lag `0`, gaps `0`, p95 `71.89ms`, p99 `112.89ms`, projector failures/retries/deadlocks `0`, about `1.94GB` projection WAL, `1.75M` inserted tuples, `47k` updated tuples, and `5.59GB` temp bytes. The takeaway is explicit: venue-core and full projection can catch up at `5k/60s`, while command-status is useful only as a diagnostic write-stage ablation until its lifecycle dependency is redesigned; the next bottleneck is lowering projection write amplification before longer `5k` soaks or higher rates. See [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md).
-- The August 20 sustained rerun established the current promotion boundary: `do-benchmark-20260820T220557Z` kept full projection fresh at `2.5k/5m` (`749,976` accepted/materialized/projected, zero lag), while `do-benchmark-20260820T222945Z` accepted and materialized `1,500,002` at `5k/5m` but projected only `746,047`, leaving `757,955` watermark lag with no projector failures, retries, or deadlocks. Gate 0 now protects the unsafe status/lifecycle ablation, captures projector phase/batch/pool telemetry, and supplies a fixed-backlog drain harness. An isolated all-maintainer run drained an observed `52,250` items at `3,929.46/s`; the follow-up one-maintainer topology projected `100,002` fixed outcomes within `10.383s` of container start (a conservative `>=9,631.32/s` local bound) with correct final rows, empty dirty queues, and no failures/retries/deadlocks. Nested statement evidence ranks the status stage above timeline in this local shape and identifies repeated exact `submit_results` counts as a scan source. The named remote gate now selects one lifecycle/market-data maintainer and requires `pg_stat_statements` plus I/O/WAL-I/O artifacts, but no paid rerun has used that topology. The next action is the explicit remote A/B and remaining bounded memory/batch matrix, not another unchanged `5k/5m` run.
+- The August 20 sustained rerun established the current promotion boundary: `do-benchmark-20260820T220557Z` kept full projection fresh at `2.5k/5m` (`749,976` accepted/materialized/projected, zero lag), while `do-benchmark-20260820T222945Z` accepted and materialized `1,500,002` at `5k/5m` but projected only `746,047`, leaving `757,955` watermark lag with no projector failures, retries, or deadlocks. Gate 0 now protects the unsafe status/lifecycle ablation, captures projector phase/batch/pool telemetry, and supplies a fixed-backlog drain harness. An isolated all-maintainer run drained an observed `52,250` items at `3,929.46/s`; the follow-up one-maintainer topology projected `100,002` fixed outcomes within `10.383s` of container start (a conservative `>=9,631.32/s` local bound) with correct final rows, empty dirty queues, and no failures/retries/deadlocks. Nested statement evidence ranks the status stage above timeline in this local shape and identifies repeated exact `submit_results` counts as a scan source. The named remote gate selects one lifecycle/market-data maintainer and requires `pg_stat_statements` plus I/O/WAL-I/O artifacts. Recovered August 21 remote short runs used that topology and instrumentation: `2.5k/60s` passes the current checker; `5k/60s` reaches `299,959` exact stage counts and zero canonical-projector lag but fails final lifecycle/market maintainer drain checks (`500`/`32` processed rows). The next step is that downstream drain gap, then bounded experiments and sustained promotion; see the [audited evidence](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
 - Kafka-compatible command publish now performs one application send and relies on Kafka's idempotent producer for broker-level retries, avoiding a second application-layer resend path. The `202 Accepted` contract is unchanged: responses still require durable producer acknowledgement before acceptance.
 - Redpanda engine processing now uses one transactional producer per partition lane: event batch and highest contiguous command offset commit atomically; abort rolls back in-memory mutations; an ambiguous commit fails the shard closed. Materializers use `read_committed`. A broker-backed Redpanda test proves commit, abort invisibility, retry, static-owner replacement fencing, full-log restart recovery, and matching-state checksum equality. Durable snapshots and routing-epoch handoff remain required before live dynamic migration or bounded-time recovery from very large logs.
 - `/api/v1/commands/{commandId}` now exposes the provider-neutral public status vocabulary from `COMMAND_INTAKE_PROCESS.md`: stream/captured pending commands report `ACCEPTED`, worker-draining commands report `IN_FLIGHT`, canonical accepted outcomes report `COMPLETED`, canonical business rejects report `REJECTED`, and failure outcomes report `FAILED`. The legacy queue state remains available as diagnostic `internalStatus`.
@@ -120,19 +125,28 @@ Current decision anchors:
 
 ## Current Forward Path
 
+Order-mutation/replay/protobuf hardening landed in PR #337, projection evidence
+and stress-harness hardening in PR #341, and CI reliability in PR #349. See
+[`WORK_PLAN.md`](./WORK_PLAN.md#recent-implementation-checkpoint) for the code
+checkpoint and [`CI_OPERATIONS.md`](./CI_OPERATIONS.md) for ongoing CI gates.
+
 This is orientation for the single active execution ladder in
 [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder), not a second plan.
 The current order is:
 
-1. Complete the invite-only preview proof: named external-account lifecycle,
-   promoted hosted Arena rehearsal, multi-seed policy evidence, and a labelled
-   leaderboard run.
-2. Continue API/control-plane hardening: object authorization, internal gRPC
-   identity/readiness, and containment of raw `/internal/*` diagnostics.
+1. Complete remaining invite-only game-preview evidence: promoted hosted Arena
+   rehearsal, multi-seed policy evidence, and a labelled leaderboard run.
+   External-account admission/onboarding is already complete.
+2. Continue API/control-plane hardening from the implemented order/command
+   scope checks, TLS/mesh options, and role-aware readiness. Next code slice is
+   settlement run-read visibility/enforcement in both HTTP adapters, as scoped
+   in `WORK_PLAN.md`.
 3. Resume venue-core scaling only from the recorded pause handoff, beginning
-   with bounded working-set/state-shape and compact canonical storage gates.
-4. Reduce projection write amplification before longer `5k` soaks or higher
-   full-projection claims.
+   with reconciliation of the unmerged state-shape branch, then bounded
+   working-set and compact canonical storage gates.
+4. Reduce projection write amplification from the `2.5k/5m` sustained baseline:
+   reuse the completed August 21 one-maintainer short comparison, close its
+   `5k` downstream-drain gap, then pursue sustained promotion.
 5. Record the remaining post-trade scenario/operator evidence now that the
    clearing/novation and exception-queue slices are implemented.
 6. Keep docs synchronized and archive superseded planning without deleting

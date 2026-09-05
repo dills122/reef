@@ -878,6 +878,14 @@ Primary references:
 
 Status: accepted
 
+Implementation note (2026-09-04): the decision summary below preserves the
+accepted direction at the time. Current delivery status is in
+[`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
+and the [implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+Order/command authorization, durable scoped partitioning, TLS/mesh client modes,
+standard engine gRPC health and role-aware configuration checks have landed;
+the remaining work is narrower than the original future-tense summary.
+
 Summary:
 - D-048 is the hardline policy. D-049 is the active implementation backlog needed to make that policy complete across deployed, CI, operator, and local workflows.
 - Raw `/internal/*` HTTP remains local/migration tooling. Deployed profiles must block raw external access through service config, binding, firewall, and reverse-proxy policy.
