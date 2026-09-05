@@ -35,6 +35,8 @@ class PostgresSchemaRequirementsTest {
                 "runtime.canonical_command_outcomes",
                 "runtime.canonical_command_outcomes_archive",
                 "runtime.projection_watermarks",
+                "runtime.projection_batch_claims",
+                "runtime.projection_batch_claim_frontiers",
                 "runtime.order_lifecycle_state",
                 "runtime.order_lifecycle_dirty",
                 "runtime.market_data_snapshots",
@@ -56,6 +58,10 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_append_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_command_outcomes",
+                "runtime.runtime_projection_batch_identity_v1",
+                "runtime.runtime_claim_projection_batch_v1",
+                "runtime.runtime_complete_projection_batch_v1",
+                "runtime.runtime_cleanup_projection_batch_claims",
                 "runtime.runtime_materialize_venue_event_batch",
                 "runtime.runtime_project_order_lifecycle_state",
                 "runtime.runtime_project_market_data_snapshots"
@@ -258,6 +264,26 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.projection_watermarks" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.projection_batch_claims.batch_identity:text",
+                "runtime.projection_batch_claims.identity_version:smallint",
+                "runtime.projection_batch_claims.projection_name:text",
+                "runtime.projection_batch_claims.event_stream:text",
+                "runtime.projection_batch_claims.projection_stage:text",
+                "runtime.projection_batch_claims.include_fills:boolean",
+                "runtime.projection_batch_claims.candidate_count:integer",
+                "runtime.projection_batch_claims.status:text",
+                "runtime.projection_batch_claims.result_count:bigint",
+                "runtime.projection_batch_claims.retry_deadline_at:timestamp with time zone",
+                "runtime.projection_batch_claims.retry_horizon_ms:bigint",
+                "runtime.projection_batch_claims.retain_until:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.projection_batch_claims" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )
