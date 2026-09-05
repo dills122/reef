@@ -35,6 +35,9 @@ Early product slices:
 - Bot Arena local gates: persisted positive/negative smoke, static operator reports, and shared-time multi-instrument simulation proof with 5 active symbols and 18 bots.
 - Bot Arena hosted/control-plane slices: GitHub OAuth and Admin DB identity, public landing/leaderboard, owner-scoped bot config, container-isolated PR qualification, trusted OpenBao provisioning, and post-merge registry sync. A same-repository smoke bot passed the complete internal submission lifecycle.
 - Invite admission: fork PRs persist as `pending_invite_review`; trusted maintainer approval binds immutable GitHub identity and exact head SHA before dispatching base-branch provisioning. Local workflow tests cover pending, approval, changed-SHA, and non-bot behavior.
+- External-account admission/onboarding completed with the July 23 Noodle smoke submission and follow-up fixes.
+- Persisted eligibility cutoffs, roster lock, immutable run/policy binding, and scoped economic-policy evidence are implemented.
+- Participant order and command-status scope checks, TLS/mesh client modes, standard engine gRPC health, and role-aware readiness are implemented.
 
 ## Still Planned
 
@@ -42,18 +45,15 @@ Early product slices:
 - Remaining post-trade depth and operator UX beyond the implemented allocation/confirmation/affirmation, clearing/novation, obligation/instruction/attempt, ledger, break/repair, and exception-queue facts.
 - Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
 - Broader analytics facts, dashboards, and reports beyond initial run export.
-- Named external-account proof of fork submission through approval,
-  provisioning, merge, registry sync, owner config, eligibility, and a recorded
-  preview run. The code path exists, but the preview is not yet open or
-  self-service.
-- Persisted `T-72h`/`T-48h`/`T-24h` eligibility and roster-lock enforcement,
-  broader hosted hostile-code execution at scale, replay UI, and final scoring/economic policies.
-- Longer or higher-rate full-projection soaks. Full projection passed a short `5k/60s` gate, but write amplification remains high and is not yet promoted to the `10k` venue-core materializer claim.
+- Remaining multi-seed and hosted game-rehearsal evidence, plus open-intake publication requirements. Initial admission/onboarding is complete; open self-service intake remains later.
+- Broader hosted hostile-code execution at scale, replay UI, and final scoring/economic policy promotion beyond implemented policy/run binding.
+- Settlement run-read visibility and authorization; operational readiness beyond configuration checks; service identity beyond client TLS/mesh settings.
+- Sustained projection promotion beyond `2.5k/5m`. The `5k/5m` run failed; August 21's `5k/60s` one-maintainer run has exact canonical counts but fails downstream lifecycle/market drain checks.
 - Broader scenario campaigns beyond the now-promoted local P1/P2 locks and replay evidence.
 
 ## Active Architecture Direction
 
-The high-throughput path is organized around one promise: if Reef says `202 Accepted`, the configured durable ingress producer acknowledged the command. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. The direct-stream plus venue-event-materializer path is the canonical `10k` venue-core baseline; full projection has a separate short `5k/60s` green gate, and the next scaling concern is lowering projection write amplification before longer or higher-rate promotion. Speed work must not weaken audit, replay, or acceptance semantics.
+The high-throughput path is organized around one promise: if Reef says `202 Accepted`, the configured durable ingress producer acknowledged the command. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. The direct-stream plus venue-event-materializer path is the canonical `10k` venue-core baseline. Projection's recorded sustained baseline is `2.5k/5m`; close the measured downstream drain gap before promoting sustained `5k`. Bounded-state benchmark code exists on an unmerged branch and needs reconciliation. Speed work must not weaken audit, replay, or acceptance semantics.
 
 The first deterministic scenarios now have promoted target stories. P1 proves a hidden-cross trade lifecycle and P2 proves a settlement break and repair path, with direct-stream replay/checksum evidence kept separate from projection-freshness claims.
 

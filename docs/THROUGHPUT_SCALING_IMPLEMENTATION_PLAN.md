@@ -51,7 +51,13 @@ evidence; they do not promote `20k` and do not replace the hosted result.
 
 ### First slice when work resumes
 
-Implement benchmark state-shape control before raising the target:
+September 4 reconciliation: state-shape control is implemented on unmerged
+`codex/throughput-state-shape-control` at `f00dd590` (one commit ahead and 41
+behind audited `master`). Reconcile/review it and run local three-shape smoke
+before hosted promotion. Requirements below describe that slice, not a request
+to build a second implementation.
+
+Prove benchmark state-shape control before raising the target:
 
 1. Add a deterministic bounded-working-set mode. Each load worker owns a fixed
    live-order budget; at the budget it modifies/cancels/replaces instead of
@@ -83,8 +89,8 @@ restore proof.
 ### Resume commands and evidence
 
 ```text
-worktree: /Users/dsteele/repos/reef/.worktrees/throughput-50k-investigation
-branch:   codex/throughput-50k-investigation
+worktree: /Users/dsteele/repos/reef/.worktrees/throughput-state-shape-control
+branch:   codex/throughput-state-shape-control
 
 make do-materializer-scaling-gate ARGS=plan
 go test ./...                                      # each affected Go module

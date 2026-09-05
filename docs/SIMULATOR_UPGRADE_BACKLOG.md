@@ -4,7 +4,15 @@
 
 Capture post-v1 simulator enhancements, known pitfalls, and an execution policy for balancing new feature delivery with refactor debt.
 
-## Current Status (as of 2026-05-23; reconciled 2026-07-08)
+## Current Status (historical baseline; September follow-up below)
+
+September 4 reconciliation: this is a supporting candidate backlog, not the
+active execution ladder. Stress now has fail-closed success/accounting gates
+and valid-intent metric selection; those differ from the older campaign-level
+quality/capacity promotion described below. Bounded-state workload code exists
+on the unmerged `codex/throughput-state-shape-control` branch. Use the
+[work board](./WORK_PLAN.md#work-board) before scheduling new implementation.
+The May/July results below retain their original workload/provider context.
 
 Implemented:
 

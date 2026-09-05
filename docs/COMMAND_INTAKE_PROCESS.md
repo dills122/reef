@@ -438,7 +438,15 @@ Implement the matrix by subsystem so each change has clear ownership and evidenc
    - covers profile validation, short local durable gate, pre-DO admission, report validation, artifact fetch, and safe destroy behavior
    - expected evidence: scripts fail closed when gates are missing or counters are unsafe
 
-## Implementation Backlog
+## Original Intake Rollout Backlog (Historical)
+
+The Now/Next/Defer lists below preserve the initial rollout sequence, not
+current task status. Submit/cancel/modify routing and ownership checks,
+provider-neutral status/diagnostics, client-order cancel resolution, durable
+handoff/crash checks and the hosted `10k` materializer baseline have landed.
+In particular, `ModifyOrder` is no longer deferred from the supported path.
+Current remaining work is scoped in [`WORK_PLAN.md`](./WORK_PLAN.md#work-board)
+and the [implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 
 ### Now
 

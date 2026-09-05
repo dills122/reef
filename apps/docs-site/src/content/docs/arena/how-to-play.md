@@ -2,7 +2,7 @@
 title: How To Play
 description: Player-facing walkthrough of a Bot Arena run — capital, data, actions, scoring.
 banner:
-  content: Limited preview. Invite-only fork admission is implemented, but entry is not advertised until the named external-account and recorded-run gates pass; open self-service intake is later.
+  content: Limited preview. Invite-only admission and onboarding have completed their external-account test; recorded-game release requirements remain, and open self-service intake is later.
 ---
 
 ## The Shape Of A Run
