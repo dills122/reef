@@ -16,12 +16,12 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.2")
     implementation("org.postgresql:postgresql:42.7.13")
     implementation("com.zaxxer:HikariCP:7.1.0")
-    implementation("io.grpc:grpc-netty-shaded:1.83.1")
-    implementation("io.grpc:grpc-protobuf:1.83.1")
-    implementation("io.grpc:grpc-stub:1.83.1")
+    implementation("io.grpc:grpc-netty-shaded:1.84.0")
+    implementation("io.grpc:grpc-protobuf:1.84.0")
+    implementation("io.grpc:grpc-stub:1.84.0")
     implementation("io.nats:jnats:2.26.2")
     implementation("org.apache.kafka:kafka-clients:4.3.1")
-    implementation("com.google.protobuf:protobuf-java:4.36.0")
+    implementation("com.google.protobuf:protobuf-java:4.36.1")
     testImplementation(kotlin("test"))
 }
 
