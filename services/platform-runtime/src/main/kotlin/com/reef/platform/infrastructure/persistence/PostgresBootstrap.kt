@@ -62,6 +62,8 @@ object PostgresSchemaRequirements {
         val canonicalCommandOutcomes = PostgresSchemaObject.parse(names.canonicalCommandOutcomes)
         val canonicalCommandOutcomesArchive = PostgresSchemaObject.parse(names.canonicalCommandOutcomesArchive)
         val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
+        val projectionBatchClaims = PostgresSchemaObject.parse(names.projectionBatchClaims)
+        val projectionBatchClaimFrontiers = PostgresSchemaObject.parse(names.projectionBatchClaimFrontiers)
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         val orders = PostgresSchemaObject.parse(names.orders)
@@ -96,6 +98,8 @@ object PostgresSchemaRequirements {
                 names.canonicalCommandOutcomes,
                 names.canonicalCommandOutcomesArchive,
                 names.projectionWatermarks,
+                names.projectionBatchClaims,
+                names.projectionBatchClaimFrontiers,
                 names.orderLifecycleState,
                 names.orderLifecycleDirty,
                 names.marketDataSnapshots,
@@ -114,6 +118,10 @@ object PostgresSchemaRequirements {
                 names.appendCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalCommandOutcomesFunction,
+                names.projectionBatchIdentityV1Function,
+                names.claimProjectionBatchV1Function,
+                names.completeProjectionBatchV1Function,
+                names.cleanupProjectionBatchClaimsFunction,
                 names.materializeVenueEventBatchFunction,
                 names.projectOrderLifecycleStateFunction,
                 names.projectMarketDataSnapshotsFunction
@@ -198,6 +206,21 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
                 PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),
                 PostgresSchemaColumn(projectionWatermarks, "last_error", "text"),
+                PostgresSchemaColumn(projectionBatchClaims, "batch_identity", "text"),
+                PostgresSchemaColumn(projectionBatchClaims, "identity_version", "smallint"),
+                PostgresSchemaColumn(projectionBatchClaims, "projection_name", "text"),
+                PostgresSchemaColumn(projectionBatchClaims, "event_stream", "text"),
+                PostgresSchemaColumn(projectionBatchClaims, "projection_stage", "text"),
+                PostgresSchemaColumn(projectionBatchClaims, "include_fills", "boolean"),
+                PostgresSchemaColumn(projectionBatchClaims, "candidate_count", "integer"),
+                PostgresSchemaColumn(projectionBatchClaims, "status", "text"),
+                PostgresSchemaColumn(projectionBatchClaims, "result_count", "bigint"),
+                PostgresSchemaColumn(projectionBatchClaims, "retry_deadline_at", "timestamp with time zone"),
+                PostgresSchemaColumn(projectionBatchClaims, "retry_horizon_ms", "bigint"),
+                PostgresSchemaColumn(projectionBatchClaims, "retain_until", "timestamp with time zone"),
+                PostgresSchemaColumn(projectionBatchClaimFrontiers, "batch_identity", "text"),
+                PostgresSchemaColumn(projectionBatchClaimFrontiers, "partition_id", "integer"),
+                PostgresSchemaColumn(projectionBatchClaimFrontiers, "max_stream_sequence", "bigint"),
                 PostgresSchemaColumn(orderLifecycleState, "order_id", "text"),
                 PostgresSchemaColumn(orderLifecycleState, "original_quantity_units_num", "numeric"),
                 PostgresSchemaColumn(orderLifecycleState, "remaining_quantity_units", "text"),

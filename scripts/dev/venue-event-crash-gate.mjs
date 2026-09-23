@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import { composeArgs } from "./lib/compose-utils.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 
@@ -138,17 +139,17 @@ for (const command of engineStoppedCommands) {
   await submitOrder(command);
 }
 
-console.log("starting engine with one-shot command ack failure hook...");
+console.log("starting engine with one-shot transaction offset commit failure hook...");
 setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", "true");
 setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", "true");
 await dockerCompose(["up", "-d", "--force-recreate", "--wait", "matching-engine"]);
 await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
-const engineAckFailureStats = await waitForEngineAckFailure({
+const engineAckFailureStats = await waitForEngineTransactionOffsetFailure({
   minFailed: 1,
-  minPublished: 1,
+  minNacked: 1,
 });
 
-console.log("restarting engine without command ack failure hook...");
+console.log("restarting engine without transaction offset commit failure hook...");
 setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", "false");
 setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", "false");
 await dockerCompose(["up", "-d", "--force-recreate", "--wait", "matching-engine"]);
@@ -172,12 +173,12 @@ const redeliveryStats = await waitForMaterializerFetchedAtLeast(1);
 const outcomes = await waitForCanonicalOutcomes(commands.map((command) => command.commandId));
 assertPartitionCoverage(outcomes);
 
-console.log("starting projector with one-shot row-before-watermark failure hook...");
+console.log("starting projector with one-shot rollback-before-watermark failure hook...");
 setValue("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", "true");
 setValue("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", "true");
 await dockerCompose(["up", "-d", "--force-recreate", "--wait", "platform-projector-0"]);
 await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
-const projectorFailureStats = await waitForProjectorRowsBeforeWatermarkFailure(commands);
+const projectorFailureStats = await waitForProjectorRollbackBeforeWatermarkFailure(commands);
 
 console.log("restarting projector without failure hook...");
 setValue("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", "false");
@@ -212,6 +213,7 @@ console.log(JSON.stringify({
       failed: engineAckFailureStats.failed,
       published: engineAckFailureStats.published,
       acked: engineAckFailureStats.acked,
+      nacked: engineAckFailureStats.nacked,
       ackLag: engineAckFailureStats.ackLag,
       lastErrors: engineAckFailureStats.lastErrors,
     },
@@ -223,7 +225,7 @@ console.log(JSON.stringify({
     projector: {
       failed: projectorFailureStats.metrics?.failed ?? 0,
       lastError: projectorFailureStats.metrics?.lastError ?? "",
-      rowsCommittedBeforeWatermark: projectorFailureStats.rowsCommittedBeforeWatermark,
+      rowsAfterRollback: projectorFailureStats.rowsAfterRollback,
     },
   },
   canonicalOutcomes: outcomes,
@@ -346,14 +348,16 @@ async function enginePublished() {
   return summarizeEngineStats(stats).published;
 }
 
-async function waitForEngineAckFailure({ minFailed, minPublished }) {
+async function waitForEngineTransactionOffsetFailure({ minFailed, minNacked }) {
   let summary = {};
-  await waitForCondition(`engine ack failure failed >= ${minFailed}`, async () => {
+  await waitForCondition(`engine transaction offset failure failed >= ${minFailed}`, async () => {
     const stats = await internalGetJson(`${engineUrl}/internal/stream-direct/stats`);
     summary = summarizeEngineStats(stats);
     return summary.failed >= minFailed &&
-      summary.published >= minPublished &&
-      summary.lastErrors.includes("injected matching-engine ack failure before command offset commit");
+      summary.nacked >= minNacked &&
+      summary.published === 0 &&
+      summary.acked === 0 &&
+      summary.lastErrors.includes("injected matching-engine transaction offset failure before commit");
   });
   return summary;
 }
@@ -366,7 +370,7 @@ async function waitForEnginePublishFailure({ minFailed, minNacked }) {
     return summary.failed >= minFailed &&
       summary.nacked >= minNacked &&
       summary.published === 0 &&
-      summary.lastErrors.includes("injected matching-engine event-batch publish failure before command offset commit");
+      summary.lastErrors.includes("injected matching-engine event-batch publish failure before Kafka transaction");
   });
   return summary;
 }
@@ -411,10 +415,10 @@ async function waitForMaterializerFetchedAtLeast(target) {
   return stats;
 }
 
-async function waitForProjectorRowsBeforeWatermarkFailure(commands) {
+async function waitForProjectorRollbackBeforeWatermarkFailure(commands) {
   let stats = {};
   let rowCount = 0;
-  await waitForCondition("projector rows committed before watermark failure", async () => {
+  await waitForCondition("projector rows rolled back before watermark failure", async () => {
     stats = await internalGetJson(`${readApiUrl}/internal/projector/status`);
     const rows = await queryProjectionRows(`
       SELECT command_id
@@ -429,11 +433,11 @@ async function waitForProjectorRowsBeforeWatermarkFailure(commands) {
         AND partition_id >= 0
     `, ["partition_id"]);
     return Number(stats.metrics?.failed ?? 0) >= 1 &&
-      String(stats.metrics?.lastError ?? "").includes("injected projector failure after read-model rows before watermark") &&
-      rowCount > 0 &&
+      String(stats.metrics?.lastError ?? "").includes("injected projector rollback after read-model rows before watermark") &&
+      rowCount === 0 &&
       watermarkRows.length === 0;
   });
-  return { ...stats, rowsCommittedBeforeWatermark: rowCount };
+  return { ...stats, rowsAfterRollback: rowCount };
 }
 
 async function waitForCanonicalOutcomes(commandIds) {
@@ -537,7 +541,7 @@ async function runPsql(service, sql) {
 }
 
 async function dockerCompose(args) {
-  await runCapture("docker", ["compose", ...args], 60000);
+  await runCapture("docker", composeArgs(args), 60000);
 }
 
 async function getJson(url) {
