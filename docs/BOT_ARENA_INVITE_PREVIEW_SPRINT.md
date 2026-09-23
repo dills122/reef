@@ -14,9 +14,12 @@ This sprint combines three previously separate concerns:
 [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 was a hard prerequisite. Its evidence was promoted on 2026-07-19; see
 [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
-The main invite-preview code slices are now implemented. Remaining work is the
-multi-seed/local and promoted-host evidence campaign plus the named external
-account rehearsal, subject to the release gates below.
+The main invite-preview code slices and external-account admission/onboarding
+test are complete. The July 23 `noodle-invite-smoke` submission and subsequent
+fixes are recorded in
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion).
+Remaining work is the multi-seed/local and promoted-host game evidence
+campaign, subject to the release gates below.
 
 The current release gate remains
 [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md). This file
@@ -313,7 +316,8 @@ economic-policy content before accepting their version/hash references.
 Run registration is rejected before `T-30m`, start is rejected before `T0`,
 registration/start revalidate the active locked roster and audited removals,
 and legacy unbound records cannot publish to the PostgreSQL leaderboard.
-Remaining work here is recorded hosted/external-account evidence.
+External-account admission/onboarding is complete. Remaining evidence here is
+hosted game eligibility/roster operation and the recorded-run campaign.
 
 Deliverables:
 
@@ -481,8 +485,9 @@ the operator dataset can be richer, but access and retention must be explicit.
 ## Original 15-Day Execution Sequence
 
 Days 1-12 describe the implementation sequence and are substantially complete.
-Current execution is concentrated in the evidence and rehearsal work from days
-13-15; keep the earlier steps as the regression checklist for that campaign.
+Current execution is concentrated in the remaining game evidence and rehearsal
+work from days 13-15. External-account admission/onboarding has also completed;
+keep it and the earlier steps as the regression checklist for that campaign.
 
 ### Days 1-2: Contracts And Boundary Lock
 

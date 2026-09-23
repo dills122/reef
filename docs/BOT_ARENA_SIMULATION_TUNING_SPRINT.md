@@ -1,5 +1,13 @@
 # Bot Arena Simulation Tuning Sprint
 
+Status: supporting July design/task catalog, superseded as an execution order
+by [`WORK_PLAN.md`](./WORK_PLAN.md#work-board). The September
+[implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md) records
+completed admission/onboarding, roster/policy binding, local three-policy
+reconciliation, and hosted score-v1 evidence. Do not read the original
+checklists below as a list of missing implementations. Remaining multi-seed
+and hosted-game evidence lives in the invite-preview sprint/release matrix.
+
 ## Purpose
 
 This sprint turns the current Bot Arena direction into implementation-ready
@@ -407,7 +415,7 @@ Acceptance criteria:
 - promoted runs report projection lag, replay/checksum status, and score
   mismatch counts
 
-## Recommended Build Order
+## Original Recommended Build Order (Historical)
 
 1. Arena Run Diagnostic Bundle
 2. Arena Report And Comparison

@@ -1,5 +1,10 @@
 # Reef And Bot Arena Separation Readiness
 
+Historical pre-extraction baseline. Separation subsequently landed and was
+promoted in [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+The inventory/checklist below preserves the original gaps; do not reopen them
+as current work. Use [`WORK_PLAN.md`](./WORK_PLAN.md#work-board) for task status.
+
 ## Purpose
 
 This is the implementation baseline for

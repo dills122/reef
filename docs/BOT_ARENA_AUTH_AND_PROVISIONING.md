@@ -1,11 +1,12 @@
 # Bot Arena Auth And Provisioning
 
-Release status (2026-07-19): the same-repository smoke-bot flow has passed end
+Release status (aligned 2026-09-04): the same-repository smoke-bot flow has passed end
 to end. Fork PRs now persist as `pending_invite_review`; a maintainer-only
 base-branch workflow binds the approver's immutable GitHub identity and exact
 head SHA before automatically dispatching trusted provisioning. The path is
-locally verified but still needs a named external-account E2E before the
-invite-only preview is advertised. Open/self-service intake remains later.
+verified through the completed external-account Noodle admission/onboarding
+test and July 22-23 fixes. Recorded-game requirements remain separate;
+open/self-service intake remains later.
 Track implementation in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 and the release gates in
@@ -501,12 +502,12 @@ OpenBao slice provisioning should happen before merge. Secret/config completenes
 should gate run eligibility, not merge, because config values are user-managed
 opaque data and should not be exposed to CI or reviewers.
 
-The same-repository version of this flow is proven. The fork-based trusted
-handoff is implemented and locally verified: untrusted CI records pending
+The same-repository and external-account admission/onboarding flows are proven.
+The fork-based trusted handoff is implemented: untrusted CI records pending
 admission, maintainer approval is SHA-bound, and only the trusted base-branch
 workflow can provision. Do not grant hosted credentials or OIDC permission to
-the workflow that executes submitted code. A named external-account E2E and
-run-window evidence are still required. Admission and run cutoffs are defined in
+the workflow that executes submitted code. Initial onboarding is complete;
+remaining run-window/game evidence is tracked separately. Admission and run cutoffs are defined in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
 
 ### Existing Bot Update
@@ -814,8 +815,8 @@ and relevant object ids. Audit records must not contain secret values.
   `/admin/v1/arena/bots/openbao-provision` in real CI mode and keeps explicit
   dry-run mode for local workflow checks.
 - ~~Add participant config editor backed by Admin API and OpenBao.~~ Done in the
-  owner-scoped `/bot-admin` surface; it still needs a named external-participant
-  hosted proof before launch promotion.
-- Complete a named external-account E2E for the implemented fork-safe invite
-  contract, including pending admission, SHA-bound approval, trusted
-  provisioning, merge, registry sync, config, and run eligibility.
+  owner-scoped `/bot-admin` surface and included in completed onboarding.
+- ~~Complete initial external-account admission/onboarding.~~ Done through
+  Noodle smoke #307 and fixes #308/#310/#311/#313/#315/#316; see the
+  [completion record](./BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion).
+  Remaining hosted run-eligibility/game evidence stays in the preview sprint.

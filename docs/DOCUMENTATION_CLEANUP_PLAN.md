@@ -70,9 +70,15 @@ Rule: move to `docs/archive/` and leave a short note in the archive index.
 2. Move old sprint/baseline docs after any still-active tasking is extracted:
    - dated Bot Arena and benchmark baselines that are no longer active gates
 3. Split Bot Arena docs into active product work versus historical evidence.
-4. Keep post-trade sprint docs active until the lifecycle V1 work lands, then
-   fold stable decisions into `SETTLEMENT_CLEARING_STRATEGY.md` and archive the
-   sprint plan.
+4. Lifecycle V1 has landed. Keep its sprint doc active only for remaining
+   scenario evidence and bounded operator hardening; archive after that active
+   tasking moves to a successor, preserving the implementation record.
+
+September 4 alignment: `WORK_PLAN.md#work-board` is the repository status view;
+the dated implementation audit supplies evidence. Public status/Arena pages,
+auth/provisioning, throughput handoff, intake rollout and supplemental backlogs
+must defer to those current statuses. Preserve dated reports and accepted ADR
+history; use supersession notes instead of rewriting historical results.
 
 ## Acceptance For A Cleanup PR
 

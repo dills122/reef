@@ -17,6 +17,7 @@ import {
 } from "./lib/db-diagnostics.mjs";
 import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 import { validateStressRunShape } from "./lib/stress-run-guard.mjs";
+import { successRateForGuardrail } from "./lib/stress-success-guardrail.mjs";
 import { expectedRolesForRunProfile } from "./lib/run-profile-roles.mjs";
 import { runProbesConcurrently } from "./lib/telemetry-probes.mjs";
 
@@ -38,6 +39,7 @@ const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "
 const rateQueueDepth = env("DEV_STRESS_RATE_QUEUE_DEPTH", env("REEF_RATE_QUEUE_DEPTH", ""));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
+const successGuardrailMetric = env("DEV_STRESS_SUCCESS_GUARDRAIL_METRIC", "end-to-end");
 const recommendationTargetAcceptedRps = parseOptionalNumber(
   env("DEV_STRESS_RECOMMENDATION_TARGET_ACCEPTED_RPS", env("REEF_DO_TARGET_ACCEPTED_RPS", "")),
 );
@@ -281,9 +283,9 @@ if (kpiSummary) {
   console.log(`  ${kpiOutMd}`);
 }
 
-const guardrail = evaluateSuccessGuardrail(reportFiles, minSuccessRatePct);
+const guardrail = evaluateSuccessGuardrail(reportFiles, minSuccessRatePct, successGuardrailMetric);
 if (!guardrail.pass) {
-  console.error(`success-rate guardrail failed (min=${minSuccessRatePct}%)`);
+  console.error(`${successGuardrailMetric} success-rate guardrail failed (min=${minSuccessRatePct}%)`);
   for (const failure of guardrail.failures) {
     console.error(`  - ${failure}`);
   }
@@ -2351,7 +2353,7 @@ function producerMetricValue(metrics, name) {
   return values.length ? Math.max(...values) : 0;
 }
 
-function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct) {
+function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct, metric) {
   if (!Number.isFinite(minSuccessRatePct) || minSuccessRatePct <= 0) {
     return { pass: true, failures: [] };
   }
@@ -2359,12 +2361,9 @@ function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct) {
   for (const path of reportFiles) {
     try {
       const report = JSON.parse(readFileSync(path, "utf8"));
-      const successRatePct =
-        Number(report.totalRequests ?? 0) > 0
-          ? (Number(report.totalSuccess ?? 0) / Number(report.totalRequests)) * 100
-          : 0;
+      const successRatePct = successRateForGuardrail(report, metric);
       if (successRatePct < minSuccessRatePct) {
-        failures.push(`${path}: success-rate ${successRatePct.toFixed(2)}% < ${minSuccessRatePct}%`);
+        failures.push(`${path}: ${metric} success-rate ${successRatePct.toFixed(2)}% < ${minSuccessRatePct}%`);
       }
     } catch {
       failures.push(`${path}: unable to parse report for guardrail check`);

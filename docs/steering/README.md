@@ -8,12 +8,15 @@ These documents define how Reef should be built as the repository grows into the
   dependency bootstrap, first successful local smoke, work-area setup, hosted
   access boundaries, and troubleshooting
 - [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
+- [Work Board And Plan](../WORK_PLAN.md#work-board): canonical remaining-work statuses and execution ladder
+- [September Implementation Audit](../IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md): source/test/run evidence separating delivered code, unmerged work, failed gates, and missing reports
 - [Bot Arena Release Readiness](../BOT_ARENA_RELEASE_READINESS.md): verified preview/public-submission matrix, blockers, launch gates, and current release call
 - [Bot Arena Invite Preview Sprint](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md): fork-safe admission, cutoff policy, policy calibration, and recorded E2E run plan after separation promotion
 - [Reef And Bot Arena Separation Promotion](../REEF_BOT_ARENA_SEPARATION_PROMOTION.md): recorded artifact, route, Compose, isolation, and P1 equivalence evidence
 - [Reef And Bot Arena Separation Sprint](../REEF_BOT_ARENA_SEPARATION_SPRINT.md): implemented artifact, dependency, route, persistence, Compose, and standalone Reef separation design record
 - [Documentation Cleanup Plan](../DOCUMENTATION_CLEANUP_PLAN.md): active vs historical document rules and archive cleanup queue
 - [Engineering Delivery Policy](../ENGINEERING_DELIVERY_POLICY.md): delivery mode matrix, refactor triggers, and non-negotiable feature-test requirements
+- [CI Operations](../CI_OPERATIONS.md): required merge gate, scheduled health ownership, Dependabot post-merge verification, and workflow maintenance rules
 - [Repository Scope And Priorities](./repository-scope-and-priorities.md): repo-level correctness, throughput, audit, replay, and safe-change priorities
 - [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules
 - [Data Platform](./data-platform.md): canonical persistence posture, datatype standards, write-path rules, retention, and data pitfalls

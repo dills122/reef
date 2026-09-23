@@ -1,5 +1,15 @@
 # Bot Arena Simulation Soak Checklist
 
+September 4 status reconciliation: this file retains chronological run evidence
+and original checklists, not a live board of unfinished tasks. Local gates and
+the July 14 hosted `15m` score-v1 run have passed; later July 21 local evidence
+also verifies roster-bound three-policy reconciliation. Initial external
+onboarding is complete. Remaining corrected-policy multi-seed/hosted-game
+evidence is tracked in [`WORK_PLAN.md`](./WORK_PLAN.md#work-board) and
+[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
+Unchecked historical items below require reconciliation before scheduling;
+they do not establish missing implementations.
+
 ## Goal
 
 Prove Reef can run a bot arena simulation with a healthy market throughout and
@@ -9,7 +19,7 @@ Scope note (2026-07-09): this is the Bot Arena simulation gate checklist. It ref
 
 The near-term hardening path is local-first: use local 3-5 minute live runs to
 shake out arena behavior, health metrics, projection/readback gaps, and artifact
-capture. Keep the 15 minute run as a later promotion gate because `15m` is the
+capture. The original ladder used the 15 minute run as a later promotion gate because `15m` is the
 target length for the quickest real game simulation.
 
 The path should ramp in this order:

@@ -148,7 +148,7 @@ assert.match(
 );
 assert.match(
   approval,
-  /jobs:\n  approve:\n    runs-on: ubuntu-latest\n    permissions:\n      actions: write\n      contents: read\n      pull-requests: read/,
+  /jobs:\n  approve:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    permissions:\n      actions: write\n      contents: read\n      pull-requests: read/,
 );
 assert.match(approval, /permission.*maintain\|admin/);
 assert.match(approval, /requested SHA is not the current PR head/);

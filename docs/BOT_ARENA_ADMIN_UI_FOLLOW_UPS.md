@@ -1,6 +1,12 @@
 # Bot Arena Admin UI Follow-Ups
 
-Status: follow-up backlog, July 2026.
+Status: supporting UI backlog, reconciled against source 2026-09-04.
+
+Shipped: authenticated nav/account strip, bot/secret-path copy actions, JSON
+object validation, discard/clear dialogs, config updated time, run search/status
+filters and a dedicated run-detail route. Remaining polish is narrower;
+original PR slices below are partial delivery records, not all-new work.
+Priority remains in the [work board](./WORK_PLAN.md#work-board).
 
 Scope: `apps/arena-admin`, the hosted Bot Arena web app at
 `reef-arena-admin.shrimpworks.dev`.
@@ -53,19 +59,18 @@ Current responsibilities:
 
 Follow-ups:
 
-- Rename the nav label from `bot admin` to `my bots`.
+- Implemented: top-level nav label is `my bots`; a game-admin action still says `bot admin` and may be normalized.
 - Remove duplicate signed-in text where the header already shows it.
-- Add copy buttons for bot id and secret path.
+- Implemented: copy buttons for bot id and secret path.
 - Show latest bot version and submission/validation status when available.
-- Show config `last updated`, `updated by`, stored keys, and missing required
-  descriptor fields in the bot card.
-- Add local JSON validation before submit, including object-only validation and
-  clearer parse errors.
+- Config `last updated` is implemented; richer updater/descriptor completeness
+  remains follow-up work.
+- Implemented: local object-only JSON validation and explicit parse errors
+  before submit.
 - Add a config-template action that inserts descriptor keys with placeholder
   values.
-- Add an unsaved-changes guard before closing the config modal.
-- Replace browser `confirm()` on destructive config clear with an in-app
-  confirmation dialog.
+- Implemented: unsaved-changes guard before closing the config modal.
+- Implemented: in-app confirmation dialogs for destructive clear and discard.
 - Keep all-bot/operator roster actions out of this route.
 
 ### Game Admin
@@ -85,24 +90,20 @@ Current responsibilities:
 
 Follow-ups:
 
-- Rename the page title and nav consistently as `game admin`.
+- Implemented: page title and top-level nav use `game admin`.
 - Add a compact dashboard row:
   - recent runs
   - failed or disqualified runs
   - active game modes
   - last leaderboard update
-- Add run filters:
-  - mode
-  - status
-  - date window
-  - bot id
-- Add expandable run detail instead of forcing raw JSON links for common tasks.
+- Run text search and status/attention filters are implemented. Remaining:
+  explicit date-window and bot-id filters.
+- Dedicated `/admin/run` detail view is implemented; inline expansion remains
+  an optional UX choice, not a missing inspection capability.
 - Show run duration, completed time, disqualified count, and enforcement
   reasons inline.
-- Replace text links with compact action buttons:
-  - `results`
-  - `leaderboard`
-  - `events`
+- Compact details/results/leaderboard buttons are implemented; events remain
+  available through run inspection.
 - Add game-mode administration only when the API contract is ready.
 - Keep participant bot config editing out of this route.
 
@@ -114,7 +115,8 @@ Follow-ups:
   - `bot admin` -> `my bots`
   - `admin` -> `game admin`
   - consider `game types` -> `games`
-- Move `signed in as ...` into a compact account menu to reduce header width.
+- Implemented: compact login/trust/role strip. A menu remains an optional
+  extension for additional account actions.
 - Add account menu actions:
   - refresh session
   - sign out, once supported
@@ -172,14 +174,14 @@ Follow-ups:
 - Use stable dimensions for buttons, status chips, and modal content so loading
   or changing labels do not shift layout.
 
-## Suggested PR Slices
+## Original PR Slices And Remaining Polish
 
 ### PR 1: Navigation And Account Polish
 
-- Rename `bot admin` to `my bots`.
+- Top-level rename implemented; normalize remaining secondary action labels.
 - Keep `game admin` label everywhere.
 - Remove duplicate signed-in text from authenticated pages.
-- Add a compact role/trust account strip or dropdown.
+- Compact role/trust account strip implemented.
 
 Acceptance:
 
@@ -189,11 +191,11 @@ Acceptance:
 
 ### PR 2: Bot Admin Usability
 
-- Add copy bot id action.
+- Copy bot id action implemented.
 - Improve config status summaries.
-- Add local JSON parse validation.
-- Add unsaved-changes warning.
-- Replace clear-config browser confirm with a modal.
+- Local JSON parse validation implemented.
+- Modal-close unsaved-changes warning implemented.
+- Clear-config confirmation dialog implemented.
 
 Acceptance:
 
@@ -204,9 +206,9 @@ Acceptance:
 ### PR 3: Game Admin Run Inspection
 
 - Add dashboard summary row.
-- Add run filters.
-- Add expandable run detail.
-- Replace raw links with action buttons.
+- Search/status filters implemented; date/bot-id filters remain.
+- Dedicated run-detail page implemented; inline expansion remains optional.
+- Details/results/leaderboard action buttons implemented.
 
 Acceptance:
 

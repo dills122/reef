@@ -100,10 +100,17 @@ Migration target:
 
 This backlog is active work, not optional cleanup.
 
+Implementation checked against `cebbffc1` on 2026-09-04; detailed source/test
+evidence is in the [status audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+
 1. Finish read/object authorization.
-   - participant-scoped order reads require the caller's participant scope
-   - command status and market-data reads pass through read boundary checks
-   - command status denies mismatched client/participant scopes when materialized status carries those fields
+   - implemented/tested: current/history/fill order reads enforce participant
+     scope; command status rejects mismatched client/participant scope and
+     unavailable scope; market-data reads authenticate and rate-limit
+   - next bounded family: settlement facts/obligations/ledger/exceptions/proof/
+     score reads currently authenticate and select a `scenarioRunId` without
+     passing caller scope to the read gateway. Define run/participant/operator
+     visibility, then implement enforcement and positive/negative tests.
    - account/client/object-id reads must enforce ownership or operator role per object
    - market-data surfaces must stay classified as public, delayed, participant-scoped, or operator-scoped before broader external exposure
    - every object-id endpoint should have a positive and negative authorization test
@@ -124,18 +131,27 @@ This backlog is active work, not optional cleanup.
    - future engine admin/control operations should be protobuf-backed before any HTTP adapter is considered
 
 4. Add service identity for internal gRPC.
+   - implemented: runtime TLS/mesh client modes and non-local mode validation;
+     these do not alone prove authenticated peer identity or end-to-end mTLS
    - single-host/private-network plaintext is a temporary hosted posture
    - non-local multi-host deployments need TLS/mTLS or service-mesh identity
    - service principals and authorization rules must be explicit for admin/control calls
 
 5. Tighten health/readiness.
    - keep `/healthz` cheap and dependency-free
-   - make `/readyz` include DB, broker, engine, materializer, projector, and admin-store readiness where those dependencies are enabled
-   - expose standard gRPC health for internal service checks
+   - implemented: `/readyz` enabled-role dependency inventory and standard
+     matching-engine gRPC health
+   - remaining: replace configuration-only checks with operational readiness
+     where needed; lifecycle/market-data flags currently use literal ready
+     values, canonical projectors check partition configuration, and
+     materializer readiness checks the selected provider
 
-6. Complete deterministic stream lane identity.
-   - submit stream lanes should key by `runId + venueSessionId + instrumentId` once those fields are present in runtime command models
-   - until then, instrument-only lane hashing is a transitional compatibility shape
+6. Preserve deterministic stream lane identity.
+   - implemented durable ingress: `StreamCommandEnvelopeBuilder.partition`
+     hashes `runId + venueSessionId + instrumentId` and routing fields are
+     required during envelope construction
+   - instrument-only hashing remains in `PartitionedGrpcStreamEngineTransport`
+     for transport fan-out; do not describe it as the durable-ingress lane key
 
 7. Keep non-local boot fail-closed.
    - non-local runtime profiles must fail if auth, rate limit, durable idempotency, or internal HTTP exposure mode are implicit or unsafe

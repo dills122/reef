@@ -6,23 +6,26 @@ This is the current release gate for accepting external Bot Arena submissions.
 It separates implemented capability from repository or hosted configuration and
 from evidence that has actually been observed.
 
-Last verified: 2026-07-21.
+Hosted game-run observations last verified: 2026-07-21.
+Admission/onboarding completion aligned: 2026-09-04 from project-owner
+confirmation and the July 22-23 smoke/fix history below. No fresh hosted game
+rehearsal was performed during this documentation check.
 
 ## Release Call
 
 Bot Arena is ready for an operator-controlled preview with built-in bots and
 same-repository test submissions. The chosen next release is an **invite-only,
-fork-based preview**. The code path is implemented locally, but Bot Arena is
-**not ready to advertise open or self-service external submissions** until the
-named external-fork proof is complete.
+fork-based preview**. External-account admission and onboarding have been
+completed. Open or self-service external submissions still depend on the
+broader release requirements below; admission is no longer an outstanding gate.
 
 The venue, SDK, isolation gate, registry, hosted admin surface, public
 leaderboard read, same-repository submission proof, and corrected local
-economic attribution are substantial. The remaining blockers are external
-intake proof and hosted rehearsal:
+economic attribution are substantial. Admission/onboarding is complete;
+remaining preview evidence concerns hosted games and economic calibration:
 
-- fork submissions need a named external-account proof through approval,
-  provisioning, merge, and registry sync
+- `noodle-ventures` completed the external-account admission/onboarding test
+  with `noodle-invite-smoke` (PR #307), including the associated bug-fix cycle
 - repository protection requires the trusted `registry-diff-and-provision`
   status. The workflow publishes a successful no-op status for ordinary PRs,
   so this does not block non-bot work.
@@ -30,11 +33,12 @@ intake proof and hosted rehearsal:
   conventions. During preview, bot-specific human review is enforced by the
   trusted maintainer-only approval workflow, which binds the reviewer identity
   and exact SHA before provisioning.
-- no external/fork submission has completed the full lifecycle; the only merged
-  proof is the owner-controlled `bots/add/dsteele-smoke-bot` PR
-- the separation promotion did not include a hosted deployment rehearsal; the
-  Hetzner Compose default remains the Reef-core image and must explicitly select
-  the Arena-enabled image before the next Arena cutover
+- the earlier owner-controlled smoke is supplemented by the July 23 external
+  smoke and ownership-sync fixes; see the completion record below
+- the separation promotion did not include a hosted deployment rehearsal.
+  Hetzner Compose retains a Reef-core fallback, while application deployment
+  automation now selects the immutable Arena-enabled image under D-054 in
+  [`DECISIONS.md`](./DECISIONS.md). Hosted preview rehearsal remains unproven.
 - the corrected local three-policy matrix passed on 2026-07-21 with immutable
   roster bindings, 30 run-scoped fills per policy, complete reconciliation,
   zero command-accounting gap, and no unspecified execution roles. The reports
@@ -45,6 +49,25 @@ Do not solve the fork problem by giving PR-controlled workflows hosted secrets,
 OIDC minting permission, or a privileged checkout. Keep untrusted validation
 separate from trusted provisioning.
 
+## Admission And Onboarding Completion
+
+The project owner confirmed completion during the 2026-09-04 documentation
+audit. The repository records the external smoke bot and its fix sequence:
+
+- PR #307 (`fd96c0c4`, 2026-07-23) merged
+  [`noodle-invite-smoke`](../bots/noodle-invite-smoke/bot.json), authored by
+  `noodle-ventures`, for the invite-only external-account test.
+- PR #308 corrected submission PR resolution from workflow metadata.
+- PR #310 corrected invite-approval authentication; PR #311 restored trusted
+  provisioning dispatch permissions.
+- PR #313 bound delegated OpenBao access to the persisted invite approval.
+- PR #315 restored merged-fork ownership sync; PR #316 kept sync compatible
+  with the deployed handler during rollout.
+
+This closes the admission/onboarding checkpoint that July 21 planning still
+listed as pending. It does not by itself establish the separate multi-seed,
+recorded-game, scoring, quarantine/recovery, or hosted rehearsal requirements.
+
 ## Verified Readiness Matrix
 
 | Area | State | Evidence | Release consequence |
@@ -53,18 +76,18 @@ separate from trusted provisioning.
 | Untrusted test isolation | Ready for preview | Bot submission CI uses `--isolation=container`; container defaults to no network, read-only repository mount, tmpfs, and CPU/memory/PID caps | Suitable for a controlled preview; continue treating the sandbox as hostile-code infrastructure. |
 | Manifest and dependency policy | Ready for preview | `bot-submission-validate.mjs`, approved-package manifest, hosted artifact build, import scan, and negative fixtures | The automated pre-merge gate is real, but policy and issue messaging remain versioned pre-release contracts. |
 | Same-repository submission | Proven | PR #177 passed manifest validation, sandbox testing, trusted provisioning, merge, and later registry sync | Collaborator/invite-only submissions are viable. |
-| External fork submission | Locally verified; external proof pending | Forks persist `pending_invite_review`; trusted approval binds maintainer GitHub identity and exact SHA, then automatically dispatches base-branch provisioning; changed SHA resets approval | Do not advertise the flow until a named external account completes it. |
+| External fork submission | Admission/onboarding complete | `noodle-ventures` smoke PR #307 and fixes #308/#310/#311/#313/#315/#316; completion confirmed by project owner | Preserve as regression evidence; do not schedule the initial admission proof again. |
 | Required human review | Implemented for bot submissions | `Bot Submission Invite Approval` requires a `maintain` or `admin` GitHub actor; Arena additionally requires a trusted operator reviewer and trusted participant identity before recording approval | This is intentionally bot-specific; do not apply a global PR approval count solely for this preview gate. |
 | Required trusted provisioning | Enforced | Live `master` protection requires `registry-diff-and-provision`; it is pending until a fork is approved, succeeds after trusted provisioning, and succeeds as a no-op for non-bot PRs | Bot submissions cannot merge without the trusted provisioning outcome; ordinary PRs remain unblocked. |
 | Hosted credentials | Configured | Repository secret names include `ARENA_ADMIN_API_URL`, `ARENA_ADMIN_API_TOKEN`, and the admin-family `ADMIN_API_TOKEN` used only by trusted invite approval; values were not inspected | Hosted workflow prerequisites exist. |
-| Post-merge registry sync | Proven for internal smoke | `Bot Registry Sync` passed after the smoke bot merged and has subsequent green runs | Durable registration path exists for merged manifests. |
+| Post-merge registry sync | Included in completed onboarding checkpoint | External smoke PR #307 followed by ownership-sync and rollout-compatibility fixes #315/#316 | Keep ownership binding and mixed-version rollout regression checks. |
 | Admin identity and ownership | Implemented | Admin DB migrations and Kotlin stores cover GitHub-backed users, roles, trust state, limits, ownership, audit, OAuth state, and sessions | The earlier “implement Admin DB tables” follow-up is stale. |
-| Participant config surface | Implemented, needs named external-user proof | Arena admin exposes owner-scoped bot config through the Admin API/OpenBao boundary | Keep as a preview claim until a non-operator participant completes it. |
+| Participant config surface | Covered by completed onboarding checkpoint | Owner-scoped Admin API/OpenBao flow; approved-fork secret authorization corrected in PR #313 | Preserve ownership/secret-access regression coverage; broader self-service release remains separately gated. |
 | Bot-version venue risk gate | Implemented and tested | `ArenaBotVersionRiskCheck` and boundary tests reject disabled/non-active versions before acceptance | Strong release foundation. |
 | Public leaderboard | Deployed, empty | Hosted `/leaderboard` loaded without console errors and used `/api/v1/arena/leaderboard`; no public scored runs were present | Do not imply an active competition yet. Seed or promote one clearly labelled preview run before launch. |
 | Run correctness and capacity | Corrected local economic evidence; hosted proof pending | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green. `reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json` passes all three economic policies with 30 scoped fills each, complete reconciliation, zero accounting gap, and preserved role attribution. | Local non-zero economic attribution is proven; require hosted matrix/rehearsal evidence before preview promotion. |
-| Projection capacity | Adequate for preview, not final target | Venue core has a `10k` materializer baseline; full projection passed `5k/60s`, with write amplification still high | Optimize before longer/high-rate public seasons, but this is not the first external-submission blocker. |
-| Public onboarding | Blocked | No contribution guide, PR template, submission checklist, or copyable bot scaffold is exposed as the authoritative external flow | Even after trust-flow resolution, users do not yet have a safe, complete submission path. |
+| Projection capacity | Sustained baseline measured; hosted preview workload still needs proof | Venue core has a `10k` materializer baseline; full projection passed `2.5k/5m` but failed `5k/5m` with `757,955` watermark lag; see [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md) | Size the preview from its recorded workload/rehearsal; historical `5k/60s` passes do not prove sustained `5k` freshness. |
+| Public self-service onboarding materials | Separate publication checklist | Guided invite admission/onboarding is complete; verify contributor guide, PR template, submission checklist, and scaffold before open intake | Do not confuse open-intake documentation publication with the completed invite onboarding test. |
 | Product messaging | Needs alignment | Hosted landing invites users to submit; public docs say submissions are closed | Use “limited preview” language until the gates in this document are green. |
 
 ## Chosen Preview Intake
@@ -89,8 +112,8 @@ ordering and acceptance criteria live in
 Implementation proceeded after the product/artifact boundary in
 [`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 was promoted. Admission, immutable roster/run binding, and policy-lock code is
-now implemented; the remaining release work is hosted and external-account
-proof.
+now implemented, and external-account admission/onboarding is complete. The
+remaining release work is the recorded-game and hosted evidence campaign.
 
 The design must prove:
 
@@ -101,7 +124,8 @@ The design must prove:
 - the exact reviewed commit is the commit registered and later run
 - retries are idempotent and failure leaves no accepted-but-untracked bot
 
-Do not open the invite preview until this path has a named fork-based smoke.
+The named fork-based admission smoke is complete; retain it as regression
+evidence while closing the remaining preview requirements.
 
 ## Admission Window
 
@@ -155,14 +179,13 @@ codes, emergency-removal rules, and evidence envelope.
 
 ## Next Engineering Priority
 
-If external bot submission is the release objective, prioritize the named
-external-account lifecycle and promoted hosted rehearsal above further feature
-work or projection throughput tuning. Admission, repository enforcement,
-roster/run binding, and policy locks are implemented; the blocker is now
-release evidence and operations proof. Current projection evidence is
-sufficient for a bounded preview. Write amplification remains important for
-longer and higher-rate seasons, but it is not the blocker to advertising the
-invite-only external path.
+If the recorded preview is the release objective, prioritize hosted game
+rehearsal and multi-seed policy evidence. Admission/onboarding is complete;
+repository enforcement, roster/run binding, and policy locks are implemented.
+Size the rehearsal against its actual workload and measured projection
+freshness. For the next bounded code slice, follow API object-read
+authorization in [`WORK_PLAN.md`](./WORK_PLAN.md), rather than reopening the
+completed onboarding bug-fix cycle.
 
 ## Talking Points
 

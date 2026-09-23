@@ -40,6 +40,9 @@ test-dev-tooling:
 	node scripts/dev/onboarding-links.test.mjs
 	node scripts/dev/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
+	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
+	node scripts/dev/ci-workflow-hardening.test.mjs
+	node --test scripts/ci/check-required-results.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...

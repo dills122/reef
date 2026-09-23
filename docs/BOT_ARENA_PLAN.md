@@ -1,6 +1,6 @@
 # Bot Arena Plan
 
-Implementation status (2026-07-19): this remains the long-form product and
+Implementation status (aligned 2026-09-04): this remains the long-form product and
 architecture plan. It is not the release checklist. The control plane, hosted
 admin app, public leaderboard read, same-repository bot submission pipeline,
 OpenBao provisioning, post-merge registry sync, separate Arena artifact/overlay,
@@ -28,7 +28,7 @@ This is an active early-build planning document, not a final architecture decisi
 Status: accepted as a limited-preview workstream; open/self-service submission
 remains pre-production.
 
-Current checkpoint: Reef/Arena separation is promoted; the Bot SDK runtime bridge, Arena control-plane source facts, operator controls, local positive/negative persisted gates, static reports, shared-time multi-instrument proof, and hosted score-v1 evidence exist. Bot-originated commands use the normal venue boundary with durable/canonical/projection/replay coverage. Fork PRs can enter pending admission and receive SHA-bound maintainer approval before trusted provisioning. The next release proof is a named external-account E2E plus persisted cutoff/roster policy and recorded preview runs, not another packaging extraction.
+Current checkpoint: Reef/Arena separation is promoted; the Bot SDK runtime bridge, Arena control-plane source facts, operator controls, local positive/negative persisted gates, static reports, shared-time multi-instrument proof, and hosted score-v1 evidence exist. Bot-originated commands use the normal venue boundary with durable/canonical/projection/replay coverage. Fork PRs can enter pending admission and receive SHA-bound maintainer approval before trusted provisioning. External-account admission/onboarding and persisted cutoff/roster policy are complete. Remaining release evidence concerns multi-seed and hosted preview games; see the implementation audit and work board.
 
 Local hardening caveat: until market-data snapshot/depth reads are venue-session-scoped, repeated hardening runs over the same instruments can inherit previous local order-book state. Use a clean `make dev-reset` stack with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and `MARKET_DATA_PROJECTOR_ENABLED=true` before treating market-quality results as comparable.
 
