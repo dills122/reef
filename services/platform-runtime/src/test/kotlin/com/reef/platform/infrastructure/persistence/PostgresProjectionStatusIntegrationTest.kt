@@ -4,6 +4,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -18,6 +20,7 @@ class PostgresProjectionStatusIntegrationTest {
         val schema = "status_${UUID.randomUUID().toString().replace("-", "")}"
         try {
             val api = PostgresRuntimePersistence(canonical, PostgresRuntimeSqlNames(runtimeSchema = schema), PostgresBootstrapMode.Compat, projection)
+            val sameStore = PostgresRuntimePersistence(canonical, PostgresRuntimeSqlNames(runtimeSchema = schema), PostgresBootstrapMode.Compat)
             canonical.connection.use { c ->
                 c.exec(Files.readString(Path.of("../../scripts/dev/db/migrations/runtime/0058_canonical_status_covering_index.sql")).replace("runtime.", "$schema."))
                 c.createStatement().use { statement ->
@@ -54,6 +57,24 @@ class PostgresProjectionStatusIntegrationTest {
             val emptySource = api.projectionStatus("absent", source = "canonical-submit")
             assertEquals(emptyList(), emptySource.watermarks)
             assertEquals(0, emptySource.lag)
+            assertEquals(ProjectionLag("source", status.lag), api.projectionLag("source", source = "venue-event-batch"))
+            assertEquals(ProjectionLag("source", status.lag), sameStore.projectionLag("source", source = "venue-event-batch"))
+            canonical.connection.use { blocker ->
+                blocker.autoCommit = false
+                blocker.exec("LOCK TABLE $schema.submit_results IN ACCESS EXCLUSIVE MODE")
+                val executor = Executors.newSingleThreadExecutor()
+                try {
+                    for (persistence in listOf(api, sameStore)) {
+                        val lag = executor.submit<ProjectionLag> {
+                            persistence.projectionLag("source", source = "venue-event-batch")
+                        }
+                        assertEquals(ProjectionLag("source", status.lag), lag.get(5, TimeUnit.SECONDS))
+                    }
+                } finally {
+                    blocker.rollback()
+                    executor.shutdownNow()
+                }
+            }
         } finally {
             canonical.connection.use { it.exec("DROP SCHEMA IF EXISTS $schema CASCADE") }
             (projection as? AutoCloseable)?.close()

@@ -3456,9 +3456,22 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus {
+    override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus =
+        projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = true)
+
+    override fun projectionLag(projectionName: String, partitions: List<Int>, source: String): ProjectionLag {
+        val status = projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = false)
+        return ProjectionLag(status.projectionName, status.lag)
+    }
+
+    private fun projectionStatusInternal(
+        projectionName: String,
+        partitions: List<Int>,
+        source: String,
+        includeProjectedCount: Boolean
+    ): ProjectionStatus {
         if (projectionStoreSeparated()) {
-            return projectionStatusAcrossStores(projectionName, partitions, source)
+            return projectionStatusAcrossStores(projectionName, partitions, source, includeProjectedCount)
         }
         canonicalConnection().use { conn ->
             val canonicalRowsSql = canonicalProjectionRowsSql(source)
@@ -3556,13 +3569,15 @@ class PostgresRuntimePersistence(
                     rows
                 }
             }
-            val projectedCount = conn.prepareStatement(
-                "SELECT COUNT(*) FROM ${names.submitResults}"
-            ).use { ps ->
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getLong(1)
+            val projectedCount = if (includeProjectedCount) {
+                conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getLong(1)
+                    }
                 }
+            } else {
+                0L
             }
             return ProjectionStatus(
                 projectionName = projectionName,
@@ -3668,16 +3683,21 @@ class PostgresRuntimePersistence(
     private fun projectionStatusAcrossStores(
         projectionName: String,
         partitions: List<Int>,
-        source: String
+        source: String,
+        includeProjectedCount: Boolean
     ): ProjectionStatus {
         val watermarks = projectionStatusWatermarks(projectionName, partitions, source)
-        val projectedCount = projectionConnection().use { conn ->
-            conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getLong(1)
+        val projectedCount = if (includeProjectedCount) {
+            projectionConnection().use { conn ->
+                conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getLong(1)
+                    }
                 }
             }
+        } else {
+            0L
         }
         return ProjectionStatus(
             projectionName = projectionName,

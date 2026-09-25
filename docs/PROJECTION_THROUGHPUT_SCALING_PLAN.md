@@ -169,6 +169,19 @@ and hashes are explicitly limited evidence. New artifacts use persistent host
 storage. Current-image full-reference, freshness, recovery, warm/aged/read-load,
 and three >=20% headroom drains remain required before promotion.
 
+## Local SQL hot-path follow-up — 2026-09-25
+
+[Local SQL diagnostic](research/PROJECTION_SQL_HOT_PATH_LOCAL_2026-09-25.md)
+added a lag-only backpressure read so that sampling skips the exact
+`submit_results` count while public status retains it. A disposable PostgreSQL
+16.15 fixture confirmed lag parity, exposed the active status/fill statement's
+write-node costs, and reproduced an ordinary index-build write block. These
+local observations are diagnostic, not a sustained-throughput qualification.
+The targeted review's upgrade-repair gate remains: rebuild lifecycle and
+market projections on an existing upgraded target and compare full business
+state before promotion. Aged-target 0055/0058 DDL budget and a matched mixed
+cohort SQL profile remain open.
+
 ## Historical frozen measurement-before-tuning gates — August 2026
 
 The statuses and blocked instructions below describe that earlier checkpoint;

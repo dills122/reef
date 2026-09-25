@@ -1,6 +1,6 @@
 package com.reef.platform.api
 
-import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 
 enum class StreamCommandDrainBackpressurePolicy(val configValue: String) {
     ControlRoomFresh("control-room-fresh"),
@@ -55,7 +55,7 @@ data class StreamCommandDrainBackpressureSnapshot(
 
 class StreamCommandDrainBackpressureSampler(
     private val workerSources: List<StreamCommandTelemetrySource>,
-    private val projectionStatusProvider: (() -> ProjectionStatus?)? = null
+    private val projectionLagProvider: (() -> ProjectionLag?)? = null
 ) {
     fun snapshot(): StreamCommandDrainBackpressureSnapshot {
         val workerSnapshots = workerSources.map { source ->
@@ -70,7 +70,7 @@ class StreamCommandDrainBackpressureSampler(
                 )
             }
         }
-        val projectionStatus = projectionStatusProvider?.invoke()
+        val projectionLag = projectionLagProvider?.invoke()
         return StreamCommandDrainBackpressureSnapshot(
             maxWorkerStreamLag = workerSnapshots
                 .filter { it.error.isBlank() }
@@ -79,8 +79,8 @@ class StreamCommandDrainBackpressureSampler(
             workerErrors = workerSnapshots.mapNotNull { snapshot ->
                 snapshot.error.ifBlank { null }
             },
-            projectorLag = projectionStatus?.lag ?: 0L,
-            projectionName = projectionStatus?.projectionName.orEmpty()
+            projectorLag = projectionLag?.lag ?: 0L,
+            projectionName = projectionLag?.projectionName.orEmpty()
         )
     }
 }

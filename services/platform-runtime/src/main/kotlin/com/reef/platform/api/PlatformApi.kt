@@ -23,6 +23,7 @@ import com.reef.platform.infrastructure.persistence.MarketDataDepthSnapshot
 import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
 import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
@@ -139,6 +140,12 @@ class PlatformApi(
     ): ProjectionStatus {
         return orderService.projectionStatus(projectionName, partitions, source)
     }
+
+    fun projectionLag(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionLag = orderService.projectionLag(projectionName, partitions, source)
 
     fun dataAvailability(
         venueProjectionName: String = defaultVenueProjectionName,

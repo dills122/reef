@@ -84,6 +84,11 @@ data class ProjectionStatus(
     val watermarks: List<ProjectionWatermark>
 )
 
+data class ProjectionLag(
+    val projectionName: String,
+    val lag: Long
+)
+
 /** Committed projection prefix only; carries no assertion about current canonical lag. */
 data class CommittedProjectionWatermark(
     val partitionId: Int,
@@ -334,6 +339,14 @@ interface RuntimePersistence {
         source: String = "canonical-submit"
     ): ProjectionStatus {
         return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
+    }
+    fun projectionLag(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionLag {
+        val status = projectionStatus(projectionName, partitions, source)
+        return ProjectionLag(status.projectionName, status.lag)
     }
     fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier {
         return CommittedProjectionFrontier(projectionName, partitions.toList(), emptyList())

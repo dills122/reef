@@ -349,6 +349,12 @@ class OrderApplicationService(
         return runtimePersistence.projectionStatus(projectionName, partitions, source)
     }
 
+    fun projectionLag(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ) = runtimePersistence.projectionLag(projectionName, partitions, source)
+
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return HotPathMetrics.time("runtime.persistence.materializeVenueEventBatch") {
             runtimePersistence.materializeVenueEventBatch(batch)

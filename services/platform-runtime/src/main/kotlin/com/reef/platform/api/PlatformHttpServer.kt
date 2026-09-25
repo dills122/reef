@@ -55,8 +55,8 @@ import com.reef.platform.application.settlement.TradeSettlementObligationMateria
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 import com.reef.platform.infrastructure.persistence.ProjectionStage
-import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
 import com.sun.net.httpserver.HttpExchange
@@ -3414,15 +3414,15 @@ class PlatformHttpServer(
         } else {
             emptyList()
         }
-        val projectionStatusProvider: (() -> ProjectionStatus?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
-            { api.projectionStatus(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue) }
+        val projectionLagProvider: (() -> ProjectionLag?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
+            { api.projectionLag(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue) }
         } else {
             null
         }
-        if (workerSources.isEmpty() && projectionStatusProvider == null) {
+        if (workerSources.isEmpty() && projectionLagProvider == null) {
             return null
         }
-        return StreamCommandDrainBackpressureSampler(workerSources, projectionStatusProvider)
+        return StreamCommandDrainBackpressureSampler(workerSources, projectionLagProvider)
     }
 
     private fun streamCommandBackpressureWorkerDurableNames(): List<String> {
