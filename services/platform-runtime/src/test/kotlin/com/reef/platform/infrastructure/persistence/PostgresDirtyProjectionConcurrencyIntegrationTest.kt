@@ -13,6 +13,38 @@ import kotlin.test.assertTrue
 
 class PostgresDirtyProjectionConcurrencyIntegrationTest {
     @Test
+    fun repeatedDirtyMarksKeepExistingTupleAndOldestTimestamp() {
+        val url = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val user = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val password = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val source = RuntimeDataSources.dataSource(url, user, password, "dirty-tuple-${UUID.randomUUID()}")
+        val schema = "dirty_tuple_${UUID.randomUUID().toString().replace("-", "")}"
+        val names = PostgresRuntimeSqlNames(runtimeSchema = schema)
+        try {
+            PostgresRuntimePersistence(source, names, PostgresBootstrapMode.Compat)
+            source.connection.use { connection ->
+                connection.exec("CREATE TABLE ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                connection.exec("CREATE TABLE ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                listOf("runtime_reject_execution_replay_conflict", "runtime_reject_submit_result_replay_conflict", "runtime_reject_trade_replay_conflict", "runtime_persist_submit_outcome_status_stage", "runtime_project_order_lifecycle_state")
+                    .forEach { name -> connection.exec(latestFunction(name).replace("runtime.", "$schema.")) }
+                applyLockOnlyMigration(connection, schema)
+                connection.exec("INSERT INTO ${names.orders}(order_id,engine_order_id,instrument_id,participant_id,account_id,side,order_type,quantity_units,limit_price,currency,time_in_force,accepted_at) VALUES ('order','engine','instrument','participant','account','BUY','LIMIT','10','12','USD','GTC','2026-09-24T00:00:00Z')")
+                connection.exec("INSERT INTO ${names.orderLifecycleDirty}(order_id, dirtied_at) VALUES ('order', '2026-09-23T00:00:00Z')")
+                connection.exec("INSERT INTO ${names.marketDataSnapshotDirty}(instrument_id, dirtied_at) VALUES ('instrument', '2026-09-23T00:00:00Z')")
+                val lifecycleBefore = connection.markerTuple(names.orderLifecycleDirty)
+                val marketBefore = connection.markerTuple(names.marketDataSnapshotDirty)
+                assertEquals(1L, connection.scalar("SELECT $schema.runtime_persist_submit_outcome_status_stage(${payload()}::jsonb)"))
+                assertEquals(lifecycleBefore, connection.markerTuple(names.orderLifecycleDirty), "conflicting lifecycle dirt must lock without rewriting tuple")
+                assertEquals(1L, connection.scalar("SELECT $schema.runtime_project_order_lifecycle_state(500)"))
+                assertEquals(marketBefore, connection.markerTuple(names.marketDataSnapshotDirty), "conflicting market dirt must lock without rewriting tuple")
+            }
+        } finally {
+            source.connection.use { it.exec("DROP SCHEMA IF EXISTS $schema CASCADE") }
+            (source as? AutoCloseable)?.close()
+        }
+    }
+
+    @Test
     fun lifecycleRedirtyCannotBeLostBetweenRecomputeAndMarkerDeletion() = race(market = false, beforeClaim = false)
 
     @Test
@@ -38,12 +70,15 @@ class PostgresDirtyProjectionConcurrencyIntegrationTest {
             source.connection.use { observer ->
                 observer.exec("CREATE TABLE ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
                 observer.exec("CREATE TABLE ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
-                val functionNames = listOf("runtime_reject_execution_replay_conflict", "runtime_persist_submit_outcome_status_stage", "runtime_project_order_lifecycle_state", "runtime_project_market_data_snapshots")
+                val functionNames = listOf("runtime_reject_execution_replay_conflict", "runtime_reject_submit_result_replay_conflict", "runtime_reject_trade_replay_conflict", "runtime_persist_submit_outcome_status_stage", "runtime_project_order_lifecycle_state", "runtime_project_market_data_snapshots")
                 functionNames.forEach { name -> observer.exec(latestFunction(name).replace("runtime.", "$schema.")) }
                 val planMigration = Path.of(System.getenv("REEF_DIRTY_PROJECTION_MIGRATION_DIR_TEST") ?: "../../scripts/dev/db/migrations/runtime")
                     .resolve("0056_lifecycle_parameter_sensitive_plans.sql")
                 if (Files.exists(planMigration)) {
                     observer.exec(Files.readString(planMigration).replace("runtime.", "$schema."))
+                }
+                applyLockOnlyMigration(observer, schema)
+                if (Files.exists(planMigration)) {
                     assertEquals(1L, observer.scalar("SELECT count(*) FROM pg_proc WHERE oid='$schema.runtime_project_order_lifecycle_state(integer)'::regprocedure AND 'plan_cache_mode=force_custom_plan'=ANY(proconfig)"))
                 }
                 observer.exec("SET plan_cache_mode='force_generic_plan'")
@@ -154,6 +189,12 @@ class PostgresDirtyProjectionConcurrencyIntegrationTest {
         return sql.substring(start, sql.indexOf("$$;", start) + 3)
     }
 
+    private fun applyLockOnlyMigration(connection: Connection, schema: String) {
+        val migration = Path.of(System.getenv("REEF_DIRTY_PROJECTION_MIGRATION_DIR_TEST") ?: "../../scripts/dev/db/migrations/runtime")
+            .resolve("0065_lock_only_projection_dirty_conflicts.sql")
+        if (Files.exists(migration)) connection.exec(Files.readString(migration).replace("runtime.", "$schema."))
+    }
+
     private fun waitUntil(description: String, future: Future<*>? = null, condition: () -> Boolean) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
         while (System.nanoTime() < deadline) {
@@ -166,6 +207,12 @@ class PostgresDirtyProjectionConcurrencyIntegrationTest {
     private fun Connection.exec(sql: String) = createStatement().use { it.execute(sql) }
     private fun Connection.scalar(sql: String): Long = createStatement().use { statement ->
         statement.executeQuery(sql).use { rows -> assertTrue(rows.next()); rows.getLong(1) }
+    }
+    private fun Connection.markerTuple(table: String): String = createStatement().use { statement ->
+        statement.executeQuery("SELECT ctid::TEXT || '|' || dirtied_at::TEXT FROM $table").use { rows ->
+            assertTrue(rows.next())
+            rows.getString(1)
+        }
     }
     private fun Connection.rows(table: String): List<String> = createStatement().use { statement ->
         statement.executeQuery("SELECT (to_jsonb(row) - 'updated_at')::TEXT FROM $table row ORDER BY 1").use { rows ->

@@ -65,6 +65,17 @@ before another full-pipeline promotion run; retain canonical storage reduction
 as the following margin and aged-state target. Do not promote the six-consumer
 topology on source-only success.
 
+Migration `0065` is the next bounded projection treatment. C41 recorded
+275,082 lifecycle-dirty and 35,106 market-dirty updates, many non-HOT.
+Repeated marks now lock an existing queue row without rewriting it. Both queues
+are UNLOGGED, so this treatment targets tuple/index churn and contention, not
+direct projection WAL. Compare C42 against C41 with the same six materializers,
+16 projector owners, accepted fixture, database settings, 300-second load,
+and fixed stage-collection points. Capture queue update/HOT counters, projection
+lag and freshness, transaction waits, and the same postdrain replay and rebuild
+checks. Preserve artifacts and tear down the test droplet. Do not qualify the
+full pipeline unless the frozen checker and 20% drain-margin gates pass.
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or
