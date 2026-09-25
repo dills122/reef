@@ -57,6 +57,14 @@ next implementation slice should reduce duplicate retained batch/outcome
 payload and per-outcome write cost while retaining replay and audit facts; see
 the exact result in [`THROUGHPUT_BASELINES.md`](./THROUGHPUT_BASELINES.md#c40--fail-closed-single-pass-batch-insert-timed-fail).
 
+C41 then increased materializer consumers from four to six on the same code
+and fixture. The source cohort caught up exactly at 2,999,515, but the later
+projector collection retained 30,040 lag and downstream freshness failed.
+Prioritize a concrete projection SQL/write and dirty-queue contention change
+before another full-pipeline promotion run; retain canonical storage reduction
+as the following margin and aged-state target. Do not promote the six-consumer
+topology on source-only success.
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or

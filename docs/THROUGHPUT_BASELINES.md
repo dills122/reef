@@ -1073,3 +1073,51 @@ timed gate. All 109 transferred evidence files verified at
 Droplet `603722627` and firewall
 `c81f5b6f-c0b0-4230-9cf2-d22fddda4269` both returned provider 404;
 OpenTofu state was empty.
+
+## C41 — six materializers with 0064, source caught up, full pipeline timed FAIL
+
+September 25, fresh `nyc3` `c-32`, same committed runtime source `3de0702a`,
+fixture SHA256 `b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`,
+Node v22.22.1, Bun 1.3.14, database settings, 16 canonical owners, and
+projection topology as C40. The only intended capacity change was six
+materializer consumers instead of four. Both added consumers had distinct
+Kafka client IDs. Live proof found 16 correctly partitioned Redpanda
+projectors and six materializers, with no mismatch across the same 35
+nonsecret settings.
+
+| Fixed 300s stage snapshot | C40, four materializers | C41, six materializers |
+| --- | ---: | ---: |
+| HTTP accepted/direct acked | 2,999,098 (9,996.30/s) | 2,999,515 (9,997.99/s) |
+| Intake p95 / p99 | 74.51 / 140.00ms | 72.69 / 103.83ms |
+| Materializer metric delta at its collection | 2,872,096 (9,572.99/s) | 2,999,515 (9,997.99/s) |
+| Projector metric delta at its later collection | 2,992,120 (9,973.05/s) | 2,971,475 (9,904.53/s) |
+| Projector lag at collection | 7,478 | 30,040 |
+| Accepted minus materialized at materializer collection | 127,002 | 0 |
+
+C41's source cohort was authoritative with exact accepted/direct-acked/
+materialized counts and no materializer failures. The frozen full-pipeline
+checker **still failed**: projection lag was 30,040, its separately sampled
+materialized/projected gap was 28,040, lifecycle and market maintenance were
+still active, and downstream freshness/cohort authority failed. Stress and
+checker exited 1. These stage collections occur at different times; the table
+rows are not simultaneous counts. Full-pipeline capacity and the required 20%
+drain margin are unproven. Six consumers remove the observed source gap under
+this fixture but do not qualify as the accepted full-system configuration.
+
+Primary PostgreSQL block reads rose from C40's 10.495M to 18.354M while
+primary WAL remained about 6.59GB. Projection PostgreSQL wrote about 17.40GB
+WAL in C41, versus 17.56GB in C40, and sampled active sessions still included
+WAL-write and transaction-ID waits. These counters do not identify one SQL
+statement as the cause. The immediate code target is projection write and
+dirty-queue contention with the existing 16-owner topology; narrower canonical
+storage remains important for sustainable margin and aged state. Another
+materializer-only scaling step is not supported by this full-pipeline result.
+
+Postdrain, all 2,999,515 canonical and projected rows matched, all 16
+partition sequences were unique and contiguous, projection frontiers matched,
+and both dirty queues were empty. Rollback-only rebuild matched 2,471,278
+lifecycle rows and 64 market rows. All 109 transferred evidence files verified
+at `artifacts/sustained-10k-20260925/batch0064-six-materializers/run-10000-300s-c41/`.
+Droplet `603730171` and firewall
+`12454174-c19f-45f8-a98b-7930697e2cae` both returned provider 404;
+OpenTofu state was empty.
