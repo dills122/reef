@@ -1121,3 +1121,55 @@ at `artifacts/sustained-10k-20260925/batch0064-six-materializers/run-10000-300s-
 Droplet `603730171` and firewall
 `12454174-c19f-45f8-a98b-7930697e2cae` both returned provider 404;
 OpenTofu state was empty.
+
+## C42 — lock-only dirty conflicts, write target removed, full pipeline timed FAIL
+
+September 25, fresh `nyc3` `c-32`, committed source `9d6dd614` with migration
+`0065`, same fixture SHA256
+`b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`,
+Node v22.22.1, Bun 1.3.14, six materializers, 16 canonical projector owners,
+four lifecycle workers plus the nested caller, and the C41 database settings.
+The 35 nonsecret worker settings, partition ownership, distinct materializer
+client IDs, and both active `0065` function definitions were verified. One
+live verifier initially used the wrong Compose base-container names; its
+corrected live proof has zero mismatches. The flow sampler started partway
+through load, so its samples are diagnostic only; fixed pre/post database
+counters and the frozen report cover the full run.
+
+| Fixed 300s stage snapshot | C41, six materializers | C42, `0065` |
+| --- | ---: | ---: |
+| HTTP accepted/direct acked | 2,999,515 (9,997.99/s) | 2,999,882 (9,996.57/s) |
+| Intake p95 / p99 | 72.69 / 103.83ms | 73.37 / 103.38ms |
+| Materializer metric delta at its collection | 2,999,515 (9,997.99/s) | 2,999,882 (9,996.57/s) |
+| Projector metric delta at its later collection | 2,971,475 (9,904.53/s) | 2,966,681 (9,885.93/s) |
+| Projector lag at collection | 30,040 | 34,201 |
+| Lifecycle / market dirty tuple updates | 275,082 / 35,106 | 0 / 0 |
+
+`0065` removed the exact targeted no-op dirty-queue tuple updates. Lifecycle
+dirty total relation size fell from 133.10MB to 91.55MB. Both queues are
+UNLOGGED, and the change did not reduce projection WAL: 17.41GB in C41 versus
+17.47GB in C42. Projection database tuple updates fell from 444,404 to
+166,577, yet projector throughput did not improve. Its roughly 19.96M tuple
+inserts and 398.8M block hits remained. This is evidence that dirty-marker
+tuple rewrites were a real avoidable cost but not the 10k full-projection
+limiter under this fixture. Do not promote `0065` as a throughput solution.
+
+Stress and frozen checker both exited 1. Checker reported 33,201 separately
+sampled materialized/projected gap, 34,201 lag, projected rate below 9,900/s,
+and non-authoritative downstream freshness/covering markers. Stage counts in
+the table were sampled at different collection points. No direct failures,
+materializer failures, projection retries, or database deadlocks were observed.
+The full-pipeline gate and 20% drain margin remain unproven. The next code
+slice should reduce normalized projection write amplification while retaining
+immutable replay/audit facts; another dirty-queue micro-optimization is not
+supported by C42.
+
+Postdrain, all 2,999,882 canonical and projected rows matched, all 16
+partition sequences were unique and contiguous, projection frontiers matched,
+and both dirty queues were empty. Rollback-only rebuild matched 2,471,607
+lifecycle rows and 64 market rows. All 102 remote evidence files passed local
+SHA256 verification at
+`artifacts/sustained-10k-20260925/dirty0065-six-materializers/run-10000-300s-c42/`.
+Droplet `603737502` and firewall
+`77ce4dee-e610-49bc-b8b5-d495a7a64dc5` both returned provider 404;
+OpenTofu state was empty.

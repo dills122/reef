@@ -76,6 +76,13 @@ lag and freshness, transaction waits, and the same postdrain replay and rebuild
 checks. Preserve artifacts and tear down the test droplet. Do not qualify the
 full pipeline unless the frozen checker and 20% drain-margin gates pass.
 
+C42 completed this treatment: repeated dirty updates fell to zero and
+postdrain replay/rebuild checks passed, but projector rate fell to 9,885.93/s
+with 34,201 lag, versus C41's 9,904.53/s and 30,040 lag at the same later
+collection point. The frozen full-pipeline gate failed. Move to the specific
+normalized projection write path and retained row/index volume; 16-owner
+topology and six-source-consumer configuration are not yet promotable.
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or
