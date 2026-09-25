@@ -1021,3 +1021,55 @@ corrected-run evidence checksums verified at
 After evidence transfer, droplet `603699973` and firewall
 `583e64c0-dd01-45b2-9506-1a8312973046` both returned provider 404;
 OpenTofu state was empty.
+
+## C40 — fail-closed single-pass batch insert, timed FAIL
+
+September 25, fresh `nyc3` `c-32`, committed source `3de0702a`. Treatment
+`0064` replaces normal-path `COUNT(DISTINCT commandId)` plus a second JSON
+conflict comparison with one outcome insert, input array count, and PostgreSQL
+`ROW_COUNT` check. A skipped insert now aborts the new batch header and all
+outcomes. Same C39 fixture SHA256
+`b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`,
+Node v22.22.1, Bun 1.3.14, 16 canonical owners, four materializers, four
+dedicated lifecycle workers plus nested caller, batch 500, 512/512
+connections, and 128MB/2GB shared buffers. All 16 running projectors had
+Redpanda, distinct expected partitions, and identical hashes for 35
+nonsecret settings; the live proof is in the run artifacts.
+
+| Fixed 300s stage snapshot | C39 | C40 |
+| --- | ---: | ---: |
+| HTTP accepted/direct acked | 2,981,641 (9,937.34/s) | 2,999,098 (9,996.30/s) |
+| Intake p95 / p99 | 91.41 / 180.78ms | 74.51 / 140.00ms |
+| Materializer metric delta at its collection | 2,331,512 (7,770.56/s) | 2,872,096 (9,572.99/s) |
+| Projector metric delta at its later collection | 2,366,114 (7,885.88/s) | 2,992,120 (9,973.05/s) |
+| Projector lag at collection | 371,574 | 7,478 |
+| Accepted minus materialized at materializer collection | 650,129 | 127,002 |
+
+The materializer stage gained 1,802.43/s (23.2%) and the projector stage
+gained 2,087.16/s (26.5%) against C39's fixed collections. Those collections
+occur at different times; do not subtract their counts from each other. The
+frozen 10k full-pipeline gate **still failed**: materialization had a 127,002
+command gap, projector lag was 7,478, source/downstream cohort authority and
+freshness checks failed, and neither stage showed the required 20% drain
+margin. Stress and checker exited 1. There were zero direct-stream failures or
+NAKs, materializer failures, projector failures/retries, and database
+deadlocks. This one matched run supports an observed improvement, not isolated
+causal attribution or a sustained-capacity promotion.
+
+Primary PostgreSQL block reads fell from C39's 15.400M to 10.495M, while
+temp bytes rose from 5.834GB to 6.892GB and WAL rose from 6.299GB to
+6.566GB. C40's postdrain canonical outcome table still occupied 4.885GB
+(1.281GB indexes), and retained batch table 1.008GB; `0064` did not change
+their storage shape. The next code target is narrower canonical outcome and
+batch storage/write design, followed by projection write contention. Do not
+repeat count-query micro-tuning as the main 10k strategy.
+
+Postdrain, all 2,999,098 canonical and projected rows matched, all 16
+partition sequences were unique and contiguous, projector frontiers matched,
+and both dirty queues were empty. Rollback-only rebuild matched 2,470,978
+lifecycle rows and 64 market rows. This correctness result does not repair the
+timed gate. All 109 transferred evidence files verified at
+`artifacts/sustained-10k-20260925/batch0064-treatment/run-10000-300s-v1/`.
+Droplet `603722627` and firewall
+`c81f5b6f-c0b0-4230-9cf2-d22fddda4269` both returned provider 404;
+OpenTofu state was empty.

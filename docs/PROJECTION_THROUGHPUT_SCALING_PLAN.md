@@ -50,6 +50,13 @@ below target or projector capacity regresses, prioritize a narrower canonical
 storage/write design and projection write contention over more count-query
 changes.
 
+C40 completed this diagnostic with 9,572.99/s materialized and 9,973.05/s
+projected at their separate collection points, both above C39 but below the
+frozen full-pipeline gate and 20% margin. Postdrain correctness passed. The
+next implementation slice should reduce duplicate retained batch/outcome
+payload and per-outcome write cost while retaining replay and audit facts; see
+the exact result in [`THROUGHPUT_BASELINES.md`](./THROUGHPUT_BASELINES.md#c40--fail-closed-single-pass-batch-insert-timed-fail).
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or
