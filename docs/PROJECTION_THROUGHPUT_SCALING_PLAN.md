@@ -179,8 +179,16 @@ write-node costs, and reproduced an ordinary index-build write block. These
 local observations are diagnostic, not a sustained-throughput qualification.
 The targeted review's upgrade-repair gate remains: rebuild lifecycle and
 market projections on an existing upgraded target and compare full business
-state before promotion. Aged-target 0055/0058 DDL budget and a matched mixed
-cohort SQL profile remain open.
+state before promotion. Aged-target 0055/0058 DDL budget and a matched
+full-pipeline mixed-cohort SQL profile remain open.
+
+The [aged status/fill profile](research/PROJECTION_STATUS_FILL_AGED_PROFILE_2026-09-25.md)
+used a copy of C32's 13GB projection database. Five mixed writes all cost time;
+16 stage-only writers processed 240,000 synthetic outcomes at about 53k/s in
+the bounded probe. This does not reproduce C30's full-pipeline delay or qualify
+10k. No status/fill SQL change is supported yet. Next attribution must measure
+waits, I/O, and nested plans while the full pipeline runs, with a separate
+no-profiler control and unchanged business/freshness gates.
 
 ## Historical frozen measurement-before-tuning gates — August 2026
 
