@@ -26,6 +26,7 @@ import java.time.Instant
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val lock = Any()
+    private val databaseGeneration = java.util.UUID.randomUUID().toString()
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
     private val venueEventBatches = linkedMapOf<String, VenueEventBatchFact>()
     private val commandOutcomes = linkedMapOf<String, CanonicalCommandOutcome>()
@@ -627,6 +628,26 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             lag = watermarkRows.sumOf { it.lag },
             watermarks = watermarkRows
         )
+        }
+    }
+
+    override fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier = synchronized(lock) {
+        val rows = projectionWatermarks[projectionName].orEmpty()
+            .filterKeys { partitions.isEmpty() || it in partitions }
+            .map { (partition, sequence) -> CommittedProjectionWatermark(partition, sequence, "") }
+        CommittedProjectionFrontier(projectionName, partitions.toList(), rows.sortedBy { it.partitionId }, databaseGeneration)
+    }
+
+    override fun projectionDirtyQueueStats(): ProjectionDirtyQueueStats {
+        synchronized(lock) {
+            return ProjectionDirtyQueueStats(
+                orderLifecyclePending = orderLifecycleDirty.size.toLong(),
+                orderLifecycleOldestDirtiedAt = "",
+                marketDataPending = marketDataSnapshotDirty.size.toLong(),
+                marketDataOldestDirtiedAt = "",
+                databaseSnapshotAt = Instant.now().toString(),
+                databaseGeneration = databaseGeneration
+            )
         }
     }
 

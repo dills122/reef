@@ -1,0 +1,191 @@
+{
+  "id": "C29",
+  "cohortAuthorityPassed": false,
+  "diagnosticSamplerComplete": false,
+  "diagnosticSamplerMaxGapMs": 2005,
+  "scope": "C28 topology and image with grouped lifecycle loops 4 to 8, batch500, 10k/s 300s diagnostic",
+  "reportSha256": "a3646886c830556ee3ba5b3b25a99108816a9d4e4b60667bd6e6aa154e9dd102",
+  "commands": 2999995,
+  "batches": 36413,
+  "reproducedPublishedPercentiles": true,
+  "pairedCommandWeightedMs": {
+    "sourceToDurable": {
+      "count": 2999995,
+      "mean": 286.00198866998113,
+      "min": 21,
+      "p50": 208,
+      "p95": 763,
+      "p99": 1930,
+      "max": 3289
+    },
+    "durableToLifecyclePrefix": {
+      "count": 2999995,
+      "mean": 2146.009923683206,
+      "min": 88,
+      "p50": 1915,
+      "p95": 4322,
+      "p99": 5445,
+      "max": 7276
+    },
+    "lifecyclePrefixToLifecycleCovered": {
+      "count": 2999995,
+      "mean": 1200.334247890413,
+      "min": 0,
+      "p50": 1009,
+      "p95": 2010,
+      "p99": 2052,
+      "max": 2077
+    },
+    "lifecycleCoveredToLifecycleProof": {
+      "count": 2999995,
+      "mean": 0.6003776672961122,
+      "min": 0,
+      "p50": 0,
+      "p95": 3,
+      "p99": 4,
+      "max": 5
+    },
+    "durableToMarketPrefix": {
+      "count": 2999995,
+      "mean": 2229.761302268837,
+      "min": 66,
+      "p50": 2003,
+      "p95": 4506,
+      "p99": 5601,
+      "max": 7312
+    },
+    "marketPrefixToLifecycleCovered": {
+      "count": 2999995,
+      "mean": 1173.820891701486,
+      "min": 0,
+      "p50": 1009,
+      "p95": 2021,
+      "p99": 2058,
+      "max": 2091
+    },
+    "marketLifecycleCoveredToSnapshot": {
+      "count": 2999995,
+      "mean": 889.8991904986508,
+      "min": 0,
+      "p50": 994,
+      "p95": 1075,
+      "p99": 2021,
+      "max": 2022
+    },
+    "marketSnapshotToProof": {
+      "count": 2999995,
+      "mean": 0.4644437740729568,
+      "min": 0,
+      "p50": 0,
+      "p95": 2,
+      "p99": 6,
+      "max": 15
+    },
+    "sourceToLifecycleProof": {
+      "count": 2999995,
+      "mean": 3632.9465379108965,
+      "min": 1202,
+      "p50": 3423,
+      "p95": 6280,
+      "p99": 7377,
+      "max": 9023
+    },
+    "sourceToMarketProof": {
+      "count": 2999995,
+      "mean": 4579.947816913028,
+      "min": 1583,
+      "p50": 4373,
+      "p95": 7280,
+      "p99": 8398,
+      "max": 9985
+    }
+  },
+  "commandsOverFrozen5sProofBound": {
+    "Market": {
+      "commands": 900723,
+      "fraction": 0.3002415004025007,
+      "componentMeansMs": {
+        "sourceToDurable": 439.6663624665963,
+        "durableToLifecyclePrefix": 3228.6786792387893,
+        "lifecyclePrefixToLifecycleCovered": 1351.5199556356395,
+        "lifecycleCoveredToLifecycleProof": 0.5805314175390214,
+        "durableToMarketPrefix": 3345.739396018532,
+        "marketPrefixToLifecycleCovered": 1349.4136377110387,
+        "marketLifecycleCoveredToSnapshot": 964.8250549836076,
+        "marketSnapshotToProof": 0.4373153566634803,
+        "sourceToLifecycleProof": 5020.445528758564,
+        "sourceToMarketProof": 6100.0817665364375
+      }
+    },
+    "Lifecycle": {
+      "commands": 347906,
+      "fraction": 0.11596885994809991,
+      "componentMeansMs": {
+        "sourceToDurable": 728.9979965852846,
+        "durableToLifecyclePrefix": 4192.365725224629,
+        "lifecyclePrefixToLifecycleCovered": 1274.393071691779,
+        "lifecycleCoveredToLifecycleProof": 0.624525015377717,
+        "durableToMarketPrefix": 4265.9483538657,
+        "marketPrefixToLifecycleCovered": 1245.5460727897766,
+        "marketLifecycleCoveredToSnapshot": 904.4261179743954,
+        "marketSnapshotToProof": 0.4788649807706679,
+        "sourceToLifecycleProof": 6196.381318517071,
+        "sourceToMarketProof": 7145.397406195926
+      }
+    }
+  },
+  "markerStats": {
+    "lifecycle": {
+      "distinct": 239,
+      "prefixToLifecycleMs": {
+        "count": 239,
+        "mean": 1252.2845188284518,
+        "min": 0,
+        "p50": 1013,
+        "p95": 2017,
+        "p99": 2052,
+        "max": 2077
+      },
+      "lifecycleToSnapshotMs": {
+        "count": 239,
+        "mean": 0.0,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      }
+    },
+    "marketData": {
+      "distinct": 221,
+      "prefixToLifecycleMs": {
+        "count": 221,
+        "mean": 1227.6244343891403,
+        "min": 0,
+        "p50": 1009,
+        "p95": 2024,
+        "p99": 2058,
+        "max": 2091
+      },
+      "lifecycleToSnapshotMs": {
+        "count": 221,
+        "mean": 925.2262443438914,
+        "min": 0,
+        "p50": 996,
+        "p95": 1073,
+        "p99": 1127,
+        "max": 2022
+      }
+    }
+  },
+  "prefixBeforeDurable": {
+    "commands": 0,
+    "instances": 0,
+    "minimumMs": null
+  },
+  "limitations": [
+    "Prefix recorded is an observer snapshot after a canonical frontier read, not exact canonical projector commit",
+    "First covering marker may contain a wider prefix than a specific batch",
+    "Proof bound is not exact per-order visibility latency"
+  ]
+}

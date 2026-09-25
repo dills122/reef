@@ -129,6 +129,9 @@ class PlatformApi(
         return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
     }
 
+    fun committedProjectionFrontier(projectionName: String, partitions: List<Int>) =
+        orderService.committedProjectionFrontier(projectionName, partitions)
+
     fun projectionStatus(
         projectionName: String,
         partitions: List<Int> = emptyList(),
@@ -514,6 +517,8 @@ class PlatformApi(
     fun projectOrderLifecycleStateCount(batchSize: Int): Long {
         return orderService.projectOrderLifecycleState(batchSize)
     }
+
+    fun projectionDirtyQueueStats() = orderService.projectionDirtyQueueStats()
 
     fun marketDataSnapshot(
         instrumentId: String,

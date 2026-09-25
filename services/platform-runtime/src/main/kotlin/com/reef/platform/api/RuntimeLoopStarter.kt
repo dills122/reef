@@ -41,7 +41,8 @@ internal class RuntimeLoopStarter(
     private val venueEventMaterializerEnabled: Boolean,
     private val venueEventMaterializerBatchSize: Int,
     private val venueEventMaterializerPollMs: Long,
-    private val venueEventMaterializerFetchTimeoutMs: Long
+    private val venueEventMaterializerFetchTimeoutMs: Long,
+    private val orderLifecycleProjectorWorkers: Int = 1
 ) {
     fun startStreamCommandWorkers() {
         val partitions = streamWorkerPartitions()
@@ -106,14 +107,16 @@ internal class RuntimeLoopStarter(
         return runtimeRole == PlatformRuntimeRole.Projector && orderLifecycleProjectorEnabled
     }
 
-    fun startOrderLifecycleProjector() {
-        OrderLifecycleProjectionWorker(
+    private val orderLifecycleWorkers by lazy {
+        OrderLifecycleProjectionWorkerGroup(
             api = api,
+            workerCount = orderLifecycleProjectorWorkers,
             pollIntervalMs = orderLifecycleProjectorPollMs,
-            batchSize = orderLifecycleProjectorBatchSize,
-            workerName = "reef-order-lifecycle-projector"
-        ).start()
+            batchSize = orderLifecycleProjectorBatchSize
+        )
     }
+
+    fun startOrderLifecycleProjector() = orderLifecycleWorkers.start()
 
     fun venueEventMaterializerShouldStart(): Boolean {
         return commandProcessingMode == CommandProcessingMode.StreamAck &&

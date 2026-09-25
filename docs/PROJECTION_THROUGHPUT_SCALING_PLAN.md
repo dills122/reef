@@ -68,7 +68,111 @@ This slice does not add benchmark residence telemetry, change scheduler
 behavior, tune SQL, or establish a new throughput claim. Those remain later
 gates in this plan.
 
-## Frozen Measurement-Before-Tuning Delivery Gates
+## Cohort And Upstream Timing Authority
+
+Slice 1B adds the upstream measurement boundary without changing projection
+work or scheduling:
+
+- the Kafka intake health snapshot exposes per-partition topic end offsets plus
+  the producer's cumulative accepted counts, first offsets, and exclusive
+  last-offset frontiers. Benchmark membership is the topic interval
+  `[before end, after end)`. Its bounds must equal the producer acknowledgement
+  bounds and its exact span must equal accepted acknowledgements; records from
+  another producer before, during, or after the measured publishes therefore
+  make the cohort non-exclusive rather than silently joining it;
+- Kafka composite stream sequences are decoded to partition plus native offset
+  before distance arithmetic. Offset and frontier values cross the JSON/Node
+  boundary as decimal strings and use exact integer arithmetic;
+- after semantic checksum and ordered membership validation, materializer
+  telemetry records checksum-guarded command-source frontiers and their exact
+  covered offset ranges, engine work-finished time, canonical database commit
+  observation, source-offset commit observation, and monotonic durations.
+  Exact covered ranges plus the observed-outcome delta prevent an interior
+  duplicate from cancelling an interior gap across batches or materializer
+  instances. Legacy unchecked batches remain readable but are counted
+  separately and cannot satisfy cohort authority;
+- materializer source lag is now the sum of per-partition exclusive-offset
+  distances. Source-commit telemetry counts only deliveries behind the actual
+  Kafka consumer-group commit frontier returned by the source. The report also
+  reconciles fetched and committed per-partition frontiers, so a canonical
+  commit followed by a partial or ambiguous source-offset commit fails closed;
+- stress reports join each accepted partition span to direct-engine
+  acknowledgements and checksum-guarded canonical membership. They also require
+  canonical and source commit observations, complete source-commit frontiers,
+  exact covered canonical membership, complete source-residence samples, and
+  zero clock-guard failures before `upstreamSourceCohort.pass` is true;
+- source residence uses the checksum-bound canonical batch `workFinishedAt`
+  captured after matching and batch construction, plus the materializer's
+  canonical-commit observation. `createdAt` remains the earlier batch-start
+  timestamp. Missing, negative, or unparseable wall-clock residence and
+  backward monotonic elapsed time are rejected from timing aggregates and
+  counted explicitly.
+
+This authority is necessary but not sufficient for Checkpoint A. September 23
+reconciliation recovered unmerged 1B/1C implementation and found correctness
+and measurement gaps through independent review. Corrections are in validation;
+no new performance claim supersedes the sustained baseline.
+
+### September measurement corrections (validation in progress)
+
+- Engine work-finished time has a separate SHA-256 timing binding over the
+  retry-stable semantic checksum and timestamp. Volatile timing never changes
+  canonical batch identity. Missing timing binding remains legacy-readable but
+  cannot establish timing authority; corrupt binding fails validation.
+- Optional materializer journals capture exact source membership and canonical
+  commit observations. Dedicated `/internal/venue-event-materializer/timing`
+  checkpoints avoid repeatedly serializing journal contents in periodic stats.
+  Journals are bounded to 250,000 source batches per process; overflow,
+  duplicates, invalid records, restart or missing membership fail the gate.
+- Every accepted command contributes to command-weighted source-to-canonical,
+  source-to-lifecycle/market, and canonical-to-lifecycle/market residence bounds.
+  Downstream observations are conservative sampled post-commit upper bounds,
+  not actual transaction commit timestamps. The old latest-batch subtraction
+  is explicitly a tail-drain observation and cannot establish cohort residence.
+- A/B evidence requires stable before/after effective Docker service/image,
+  environment, topology, resource and PostgreSQL-setting fingerprints. Only the
+  instrumentation switch is excluded. Missing counters/configuration evidence
+  fail closed. Matched clean state and isolated execution remain operator gates;
+  fingerprints do not prove data distribution or absence of host contention.
+- Prefix markers use committed watermark reads followed by one committed
+  dirty-queue snapshot; they avoid full fact counts and need not wait for newer
+  canonical lag or in-flight callers to disappear. Transaction-interleaving
+  tests establish this diagnostic proof; business projection SQL is unchanged.
+- PostgreSQL generation is bound to both reads, markers and cohort boundaries.
+  A database restart invalidates measurement; empty unlogged queues after a
+  crash do not establish recovery. Rebuild/replay validation remains required.
+- Caller metrics and journals both honor the optional instrumentation switch.
+  A first September control sample was discarded after review exposed always-on
+  caller counters; no matched comparison or Checkpoint A pass is claimed.
+- Historical 1C local passes predate these checks and are diagnostic only.
+  The frozen 1% perturbation limit and minimum three samples per arm remain.
+
+## Current gate reconciliation — 2026-09-24
+
+Corrected instrumentation A/Bv5 passed all12checks (maximum measured change
+0.507998%, below frozen1%); Task2 isolated measurements and CheckpointA were
+completed before capacity tuning. See `.planning/sustained-10k/task_plan.md` and
+[authoritative throughput ledger](THROUGHPUT_BASELINES.md). Earlier local A/B
+p95 failure remains valid historical evidence, not an active block on the
+already-authorized tuning workstream.
+
+Current work has implemented productive lifecycle scheduling and migrations
+0051–0058. Full sustained10k qualification remains open. Latest c16 eight-writer
+7.5k attempt failed canonical and lifecycle capacity; c32/16canonical/four-life
+10k is diagnostic. Existing freshness/headroom qualification assumes one lifecycle
+maintainer and cannot qualify this expanded topology unchanged. Independent
+review3of3 found no confirmed implementation defect; documentation reconciliation
+was the nonblocking finding. Latest local PostgreSQL suite:621 tests passed.
+
+Raw host `/tmp` benchmark evidence was lost at resize reboot; retained aggregates
+and hashes are explicitly limited evidence. New artifacts use persistent host
+storage. Current-image full-reference, freshness, recovery, warm/aged/read-load,
+and three >=20% headroom drains remain required before promotion.
+
+## Historical frozen measurement-before-tuning gates — August 2026
+
+The statuses and blocked instructions below describe that earlier checkpoint;
+the dated reconciliation above supersedes their execution status.
 
 The reviewed August 2026 plan freezes the following dependency order. It
 supersedes the older tuning-oriented priority log retained later in this file.
@@ -78,17 +182,21 @@ supersedes the older tuning-oriented priority log retained later in this file.
    rollback, retry, and ambiguous commit must not repeat projection or dirty
    enqueue effects. This slice contains no benchmark-report or scheduler
    change.
-2. **Slice 1B — cohort and upstream timing authority.** Status: not started.
+2. **Slice 1B — cohort and upstream timing authority.** Status: implementation reconciled; revised timing binding under validation.
    Add the exclusive accepted-source frontier contract, materializer
    membership/work-finished/commit-observed telemetry tied to the existing
    checksum guard, durable-intake joins, canonical source-batch timing, exact
    offset arithmetic, and clock guards. This slice contains no downstream
    projection-function or scheduler change.
-3. **Slice 1C — downstream residence and gates.** Status: not started. Add
-   lifecycle/market marker identity, source-time and covering-marker
-   aggregates, post-commit observations, per-stage and end-to-end
-   reconciliation, a one-second diagnostic sampler, report/gate tests, the
-   optional-instrumentation A/B, and provisional `2.5k` evidence.
+3. **Slice 1C — downstream residence and gates.** Status: review corrections
+   under validation; previous A/B gate failed. Lifecycle/market marker identity,
+   source-time and covering-marker aggregates, post-commit observations,
+   per-stage and end-to-end reconciliation, a dedicated one-second diagnostic
+   sampler, fail-closed report/gate tests, and optional instrumentation are in
+   place. One provisional local `2.5k` sample is green. A clean-reset,
+   three-sample-per-arm A/B had effectively zero accepted/projected throughput
+   degradation but increased median p95 latency by `4.99%`, above the frozen
+   `1%` limit; it is therefore not green.
 4. **Task 2 — isolated downstream capacity benchmarks.** Status: blocked on
    completion of all Task 1 slices. Measure lifecycle with exactly one caller
    and market data with controlled repeated-redirty cycles; keep local results
@@ -107,7 +215,33 @@ tuning changes. No paid DigitalOcean matrix or tuning candidate may begin
 until Checkpoint A passes. Only then may Task 3 remove the lifecycle busy-path
 poll throttle and the subsequent one-lever-at-a-time capacity matrix proceed.
 
-## Current Evidence
+## Historical August measurement evidence
+
+Provisional local Slice 1C validation on 2026-08-24 is intentionally not a
+promotion result: one `30s` sample at a `2.5k rps` target accepted,
+materialized, and projected `75,000` commands at `2,499.42/s`, with final lag,
+failures, and retries all `0` (p95 `22.05ms`, p99 `43.23ms`). The exclusive
+upstream cohort and post-commit downstream cohort both passed; lifecycle and
+market-data markers matched the exact 16-partition frontier, all dirty queues
+were drained, all callers were idle, diagnostic sampling had `32/32`
+successful samples with a `1,004ms` maximum gap, and source-to-downstream
+post-commit residence was `1,521ms` lifecycle / `1,574ms` market data. This
+proves the measurement path locally, but does not replace the matched
+three-sample instrumentation A/B or DigitalOcean Checkpoint A evidence.
+
+The subsequent clean-reset local instrumentation A/B used three `60s` samples
+per arm at the same `2.5k rps` / `256`-worker configuration. All six samples
+had exact accepted/materialized/projected reconciliation, authoritative
+upstream cohorts, zero final lag, failures, and retries; all three instrumented
+samples also had authoritative downstream cohorts and complete one-second
+sampling. Median accepted/projected throughput was `2,499.54/s` control versus
+`2,499.55/s` instrumented (no measured degradation). Median p95 was `40.37ms`
+control versus `42.39ms` instrumented (`4.99%` increase); median p99 improved
+from `133.03ms` to `117.79ms`. The A/B therefore fails the frozen `1%`
+perturbation gate on p95 latency. Checkpoint A and paid DigitalOcean tuning
+remain blocked pending an evidence-backed instrumentation-cost reduction or a
+pre-reviewed measurement-method revision; the limit must not be relaxed merely
+to promote this result.
 
 All runs below used the Redpanda/Kafka-compatible direct-stream plus
 venue-event-materializer path on a DigitalOcean c-16 worker.
@@ -369,8 +503,12 @@ Target the tables that dominate the patched `5k` run.
   canonical command outcomes and event batches.
   - Initial implementation is in place: `order_lifecycle_dirty` and
     `market_data_snapshot_dirty` are unlogged rebuildable queues, and hot
-    dirty-marking paths use `ON CONFLICT DO NOTHING` because an already-dirty
-    id already preserves the required recompute signal.
+    dirty-marking paths originally used `ON CONFLICT DO NOTHING`. Online
+    validation exposed lost invalidations when producers commit new facts while
+    a consumer deletes an existing marker. Migration0052 restores conflict
+    updates and separates locked claims from fresh-snapshot recomputation.
+    Correctness and capacity revalidation are required before promotion;
+    an already-dirty id alone does not preserve concurrent recompute signals.
 - Collapse insert/delete dirty-table churn by batching dirty ids in memory or
   unlogged staging before merge.
 - Avoid writing `runtime_events` for every freshness-critical read if the read

@@ -15,13 +15,15 @@ const venueEventBatchChecksumAlgorithm = "sha256-reef-canonical-v1"
 
 var venueEventBatchChecksumExcludedFields = map[string]struct{}{
 	"createdAt":                {},
+	"workFinishedAt":           {},
+	"timingChecksum":           {},
 	"payloadChecksum":          {},
 	"payloadChecksumAlgorithm": {},
 }
 
 // venueEventBatchChecksum hashes the complete semantic batch body. Volatile
-// creation time and checksum metadata are excluded; routing, sequence identity,
-// outcome status, and the complete result body are included.
+// wall-clock timing and checksum metadata are excluded; routing,
+// sequence identity, outcome status, and the complete result body are included.
 func venueEventBatchChecksum(batch VenueEventBatch) (string, error) {
 	payload, err := json.Marshal(batch)
 	if err != nil {
@@ -92,4 +94,10 @@ func writeCanonicalToken(digest hash.Hash, kind byte, value []byte) {
 	_, _ = digest.Write([]byte(strconv.Itoa(len(value))))
 	_, _ = digest.Write([]byte{':'})
 	_, _ = digest.Write(value)
+}
+
+// Timing is integrity-bound to semantic membership without changing retry identity.
+func venueEventBatchTimingChecksum(batch VenueEventBatch) string {
+	digest := sha256.Sum256([]byte("reef-venue-batch-timing-v1\n" + batch.PayloadChecksum + "\n" + batch.WorkFinishedAt))
+	return hex.EncodeToString(digest[:])
 }

@@ -402,12 +402,12 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
     @Test
     fun retryPastItsDatabaseDeadlineIsFencedWhenMigratedPostgresIsAvailable() {
         val dataSource = migratedDataSourceOrNull() ?: return
-        val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource, delayAfterCommitMs = 30)
+        val projectionDataSource = CommitAmbiguityOnceDataSource(dataSource, delayAfterCommitMs = 1_100)
         val persistence = PostgresRuntimePersistence(
             dataSource = dataSource,
             projectionDataSource = projectionDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate,
-            envLookup = projectionRetryEnv(horizonMs = 5)
+            envLookup = projectionRetryEnv(horizonMs = 1_000)
         )
         val suffix = UUID.randomUUID().toString()
         val projectionName = "runtime-expired-retry-$suffix"

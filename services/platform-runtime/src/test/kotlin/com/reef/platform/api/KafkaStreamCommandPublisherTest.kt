@@ -19,6 +19,85 @@ import kotlin.test.assertTrue
 
 class KafkaStreamCommandPublisherTest {
     @Test
+    fun kafkaSourcePositionsUseExclusiveOffsetsWithoutCrossPartitionSubtraction() {
+        val encoded = kafkaStreamSequence(partition = 7, offset = 41L)
+
+        assertEquals(KafkaSourcePosition(partition = 7, offset = 41L), kafkaSourcePosition(encoded))
+        assertEquals(42L, kafkaSourcePosition(encoded).offsetExclusive)
+        assertEquals(3L, kafkaOffsetDistance(startExclusive = 42L, endExclusive = 45L))
+        assertFailsWith<IllegalArgumentException> {
+            kafkaOffsetDistance(startExclusive = 45L, endExclusive = 42L)
+        }
+    }
+
+    @Test
+    fun kafkaCommitCandidateSkipsControlOffsetsButStopsBeforeUnacknowledgedVisibleRecords() {
+        assertEquals(
+            3L,
+            kafkaVisibleCommitCandidate(
+                currentCommittedOffset = 0L,
+                observedPollOffset = 3L,
+                unacknowledgedVisibleOffsets = emptyList()
+            )
+        )
+        assertEquals(
+            1L,
+            kafkaVisibleCommitCandidate(
+                currentCommittedOffset = 0L,
+                observedPollOffset = 6L,
+                unacknowledgedVisibleOffsets = listOf(1L, 5L)
+            )
+        )
+        assertEquals(
+            5L,
+            kafkaVisibleCommitCandidate(
+                currentCommittedOffset = 0L,
+                observedPollOffset = 6L,
+                unacknowledgedVisibleOffsets = listOf(5L)
+            )
+        )
+    }
+
+    @Test
+    fun kafkaPublisherReportsAcceptedSourceFrontiersPerPartition() {
+        val producer = ScriptedKafkaProducer(
+            listOf(
+                { _, callback -> callback.onCompletion(metadata(partition = 0, offset = 100L), null) },
+                { _, callback -> callback.onCompletion(metadata(partition = 0, offset = 102L), null) },
+                { _, callback -> callback.onCompletion(metadata(partition = 3, offset = 9L), null) }
+            )
+        )
+        val publisher = KafkaStreamCommandPublisher(
+            ackTimeout = Duration.ofSeconds(2),
+            config = StreamCommandConfig(streamName = "REEF_COMMANDS", partitionCount = 4),
+            maxInFlight = 3,
+            producer = producer
+        )
+
+        publisher.publish(envelope(partition = 0))
+        publisher.publish(envelope(partition = 0, commandId = "cmd-2"))
+        publisher.publish(envelope(partition = 3, commandId = "cmd-3"))
+
+        assertEquals(
+            listOf(
+                AcceptedSourceFrontier(
+                    partition = 0,
+                    accepted = 2L,
+                    firstOffsetInclusive = 100L,
+                    lastOffsetExclusive = 103L
+                ),
+                AcceptedSourceFrontier(
+                    partition = 3,
+                    accepted = 1L,
+                    firstOffsetInclusive = 9L,
+                    lastOffsetExclusive = 10L
+                )
+            ),
+            publisher.acceptedSourceFrontiers()
+        )
+    }
+
+    @Test
     fun kafkaPublisherBuildsPartitionedRecordAndReturnsDurableSequence() {
         var sentRecord: ProducerRecord<String, String>? = null
         val producer = ScriptedKafkaProducer(

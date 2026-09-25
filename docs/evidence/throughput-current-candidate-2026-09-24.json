@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "reef.throughputAggregateEvidence.v1",
+  "rawBusinessRowsIncluded": false,
+  "runs": {
+    "C1": {
+      "reportSha256": "62eaffbbca89612406d60517b8901d48e15d4af579a71bdf1523510b7a3039c9",
+      "accepted": 149976,
+      "failures": 0,
+      "rate": 2500,
+      "durationNanoseconds": 60000000000,
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 149976,
+        "projected": 149976,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 2499.5531359615725,
+        "caughtUp": true
+      },
+      "completion.json": {
+        "pass": false,
+        "cleanupPassed": true,
+        "originalExitCode": 1,
+        "exitCode": 1
+      },
+      "business-reference.json": {
+        "pass": true,
+        "sourceCommands": "149976"
+      }
+    },
+    "C2": {
+      "reportSha256": "1182983ae16394b82994c1a44a9baf34db33d29f1a559d7805e5075ed3ba8c67",
+      "accepted": 1499950,
+      "failures": 0,
+      "rate": 5000,
+      "durationNanoseconds": 300000000000,
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 1499950,
+        "projected": 921095,
+        "materializedToProjectedGap": 578855,
+        "lag": 580855,
+        "projectedPerSecond": 3070.3126358374257,
+        "caughtUp": false
+      },
+      "completion.json": {
+        "pass": false,
+        "cleanupPassed": true,
+        "originalExitCode": 1,
+        "exitCode": 1
+      }
+    }
+  },
+  "C3": {
+    "artifactSha256": "79d3ec5fdf0db4056381c90be90954c3bc9e187dcd7ac8dede8f0ad6efa7f84d",
+    "executionTimesMs": [
+      403.553,
+      115.922,
+      115.487,
+      422.101
+    ],
+    "equality": {
+      "stage": "market-shaped-equality",
+      "currentRows": 64,
+      "instruments": 64,
+      "candidateRows": 64,
+      "candidateMinusCurrent": 0,
+      "currentMinusCandidate": 0
+    }
+  }
+}

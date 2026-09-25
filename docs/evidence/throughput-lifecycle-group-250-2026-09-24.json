@@ -1,0 +1,1248 @@
+{
+  "id": "C24",
+  "hostArtifactDirectory": "/home/reefbench/benchmarks/reef-productive-lifecyclegroup-250-10000-300s-1",
+  "reportSha256": "fba14b8955b60cf63090ce6540129e3ca1644c5b7d663e5001142ed8c3995c12",
+  "accepted": 3000004,
+  "failures": 0,
+  "projectionFreshness": {
+    "source": "venue-event-batch-projector",
+    "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+    "materialized": 3000004,
+    "projected": 3000004,
+    "materializedToProjectedGap": 0,
+    "lag": 0,
+    "projectedPerSecond": 9999.634832522124,
+    "caughtUp": true
+  },
+  "config": {
+    "Duration": 300000000000,
+    "RatePerSecond": 10000,
+    "Workers": 256
+  },
+  "sourceCohortPassed": true,
+  "reportAggregateKeys": [
+    "sessionId",
+    "startedAt",
+    "finishedAt",
+    "durationSeconds",
+    "config",
+    "throughputRps",
+    "acceptedBusinessOpsRps",
+    "throughput",
+    "totalRequests",
+    "totalSuccess",
+    "totalFailures",
+    "byAction",
+    "byProfile",
+    "byActor",
+    "byPersona",
+    "byStrategy",
+    "statusCodes",
+    "topErrors",
+    "rejectReasons",
+    "rejectTaxonomy",
+    "quality",
+    "latencyMs",
+    "traceChecks",
+    "loadSchedule",
+    "streamAckHealth",
+    "streamDirect",
+    "venueEventMaterializer",
+    "streamAckProjector",
+    "hotPathPhases",
+    "streamAckApiPhases",
+    "materializerTiming",
+    "runtimeConfigurationEvidence",
+    "stressRunMetadata",
+    "unitMetrics",
+    "projectionFreshness",
+    "partitionSkew",
+    "streamDirectPartitionSkew",
+    "projectionInstrumentation",
+    "upstreamSourceCohort",
+    "downstreamProjectionCohort",
+    "downstreamCoverageObservations",
+    "downstreamDiagnosticSampler"
+  ],
+  "streamAckProjectorDelta": {
+    "projectedDelta": 3000004,
+    "projectedRps": 9999.634832522124,
+    "failedDelta": 0,
+    "retryDelta": 0,
+    "retryExhaustedDelta": 0,
+    "lagDelta": 0,
+    "beforeLag": 0,
+    "afterLag": 0
+  },
+  "streamDirectDelta": {
+    "fetchedDelta": 3000004,
+    "processedDelta": 3000004,
+    "publishedDelta": 3000004,
+    "ackedDelta": 3000004,
+    "nackedDelta": 0,
+    "termedDelta": 0,
+    "failedDelta": 0,
+    "unsupportedDelta": 0,
+    "fetchedRps": 9999.634832522124,
+    "processedRps": 9999.634832522124,
+    "publishedRps": 9999.634832522124,
+    "ackedRps": 9999.634832522124,
+    "partitionDeltas": [
+      {
+        "partition": 0,
+        "shardId": "engine-0",
+        "fetchedDelta": 186980,
+        "processedDelta": 186980,
+        "publishedDelta": 186980,
+        "ackedDelta": 186980,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.2430760042275,
+        "processedRps": 623.2430760042275,
+        "publishedRps": 623.2430760042275,
+        "ackedRps": 623.2430760042275
+      },
+      {
+        "partition": 1,
+        "shardId": "engine-0",
+        "fetchedDelta": 187318,
+        "processedDelta": 187318,
+        "publishedDelta": 187318,
+        "ackedDelta": 187318,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.3697000265263,
+        "processedRps": 624.3697000265263,
+        "publishedRps": 624.3697000265263,
+        "ackedRps": 624.3697000265263
+      },
+      {
+        "partition": 2,
+        "shardId": "engine-0",
+        "fetchedDelta": 188043,
+        "processedDelta": 188043,
+        "publishedDelta": 188043,
+        "ackedDelta": 188043,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 626.7862752222856,
+        "processedRps": 626.7862752222856,
+        "publishedRps": 626.7862752222856,
+        "ackedRps": 626.7862752222856
+      },
+      {
+        "partition": 3,
+        "shardId": "engine-0",
+        "fetchedDelta": 187227,
+        "processedDelta": 187227,
+        "publishedDelta": 187227,
+        "ackedDelta": 187227,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.066378174369,
+        "processedRps": 624.066378174369,
+        "publishedRps": 624.066378174369,
+        "ackedRps": 624.066378174369
+      },
+      {
+        "partition": 4,
+        "shardId": "engine-0",
+        "fetchedDelta": 187880,
+        "processedDelta": 187880,
+        "publishedDelta": 187880,
+        "ackedDelta": 187880,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 626.2429624541355,
+        "processedRps": 626.2429624541355,
+        "publishedRps": 626.2429624541355,
+        "ackedRps": 626.2429624541355
+      },
+      {
+        "partition": 5,
+        "shardId": "engine-0",
+        "fetchedDelta": 187280,
+        "processedDelta": 187280,
+        "publishedDelta": 187280,
+        "ackedDelta": 187280,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.2430381541969,
+        "processedRps": 624.2430381541969,
+        "publishedRps": 624.2430381541969,
+        "ackedRps": 624.2430381541969
+      },
+      {
+        "partition": 6,
+        "shardId": "engine-0",
+        "fetchedDelta": 187550,
+        "processedDelta": 187550,
+        "publishedDelta": 187550,
+        "ackedDelta": 187550,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 625.1430040891693,
+        "processedRps": 625.1430040891693,
+        "publishedRps": 625.1430040891693,
+        "ackedRps": 625.1430040891693
+      },
+      {
+        "partition": 7,
+        "shardId": "engine-0",
+        "fetchedDelta": 187143,
+        "processedDelta": 187143,
+        "publishedDelta": 187143,
+        "ackedDelta": 187143,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.7863887723776,
+        "processedRps": 623.7863887723776,
+        "publishedRps": 623.7863887723776,
+        "ackedRps": 623.7863887723776
+      },
+      {
+        "partition": 8,
+        "shardId": "engine-0",
+        "fetchedDelta": 187025,
+        "processedDelta": 187025,
+        "publishedDelta": 187025,
+        "ackedDelta": 187025,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.393070326723,
+        "processedRps": 623.393070326723,
+        "publishedRps": 623.393070326723,
+        "ackedRps": 623.393070326723
+      },
+      {
+        "partition": 9,
+        "shardId": "engine-0",
+        "fetchedDelta": 187324,
+        "processedDelta": 187324,
+        "publishedDelta": 187324,
+        "ackedDelta": 187324,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.3896992695257,
+        "processedRps": 624.3896992695257,
+        "publishedRps": 624.3896992695257,
+        "ackedRps": 624.3896992695257
+      },
+      {
+        "partition": 10,
+        "shardId": "engine-0",
+        "fetchedDelta": 187678,
+        "processedDelta": 187678,
+        "publishedDelta": 187678,
+        "ackedDelta": 187678,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 625.5696546064895,
+        "processedRps": 625.5696546064895,
+        "publishedRps": 625.5696546064895,
+        "ackedRps": 625.5696546064895
+      },
+      {
+        "partition": 11,
+        "shardId": "engine-0",
+        "fetchedDelta": 187086,
+        "processedDelta": 187086,
+        "publishedDelta": 187086,
+        "ackedDelta": 187086,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.5963959638834,
+        "processedRps": 623.5963959638834,
+        "publishedRps": 623.5963959638834,
+        "ackedRps": 623.5963959638834
+      },
+      {
+        "partition": 12,
+        "shardId": "engine-0",
+        "fetchedDelta": 187620,
+        "processedDelta": 187620,
+        "publishedDelta": 187620,
+        "ackedDelta": 187620,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 625.3763285908288,
+        "processedRps": 625.3763285908288,
+        "publishedRps": 625.3763285908288,
+        "ackedRps": 625.3763285908288
+      },
+      {
+        "partition": 13,
+        "shardId": "engine-0",
+        "fetchedDelta": 187371,
+        "processedDelta": 187371,
+        "publishedDelta": 187371,
+        "ackedDelta": 187371,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.5463600063542,
+        "processedRps": 624.5463600063542,
+        "publishedRps": 624.5463600063542,
+        "ackedRps": 624.5463600063542
+      },
+      {
+        "partition": 14,
+        "shardId": "engine-0",
+        "fetchedDelta": 187884,
+        "processedDelta": 187884,
+        "publishedDelta": 187884,
+        "ackedDelta": 187884,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 626.2562952828018,
+        "processedRps": 626.2562952828018,
+        "publishedRps": 626.2562952828018,
+        "ackedRps": 626.2562952828018
+      },
+      {
+        "partition": 15,
+        "shardId": "engine-0",
+        "fetchedDelta": 188595,
+        "processedDelta": 188595,
+        "publishedDelta": 188595,
+        "ackedDelta": 188595,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 628.6262055782291,
+        "processedRps": 628.6262055782291,
+        "publishedRps": 628.6262055782291,
+        "ackedRps": 628.6262055782291
+      }
+    ]
+  },
+  "materializerDelta": {
+    "fetchedDelta": 35582,
+    "materializedDelta": 3000004,
+    "materializedBatchesDelta": 35582,
+    "failedDelta": 0,
+    "ackFailedDelta": 0,
+    "unsupportedDelta": 0,
+    "checksumValidatedBatchesDelta": 35582,
+    "legacyUncheckedBatchesDelta": 0,
+    "validatedMembershipOutcomesDelta": 3000004,
+    "canonicalCommitObservedBatchesDelta": 35582,
+    "sourceCommitObservedBatchesDelta": 35582,
+    "canonicalCommitElapsedNanosDelta": 893146170489,
+    "sourceCommitElapsedNanosDelta": 36308668483,
+    "sourceResidenceSamplesDelta": 35582,
+    "sourceResidenceElapsedMsDelta": 13199121,
+    "clockGuardFailuresDelta": 0,
+    "materializedRps": 9999.634832522124
+  },
+  "diagnosticsSha256": "364d20b968a9c052a370ca5c2ce219e4c21153597b04c43d7b85d950d2ce9928",
+  "databaseDiagnostics": {
+    "postgres": {
+      "xactCommit": 90326,
+      "xactRollback": 0,
+      "blocksRead": 520145,
+      "blocksHit": 69942299,
+      "tuplesReturned": 14485251,
+      "tuplesFetched": 11824001,
+      "tuplesInserted": 3530225,
+      "tuplesUpdated": 128,
+      "tuplesDeleted": 54,
+      "conflicts": 0,
+      "tempFiles": 35,
+      "tempBytes": 242430536,
+      "deadlocks": 0
+    },
+    "projection-postgres": {
+      "xactCommit": 158078,
+      "xactRollback": 0,
+      "blocksRead": 10912898,
+      "blocksHit": 443359722,
+      "tuplesReturned": 902816010,
+      "tuplesFetched": 63086405,
+      "tuplesInserted": 19876395,
+      "tuplesUpdated": 571874,
+      "tuplesDeleted": 2565487,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    },
+    "boundary-postgres": {
+      "xactCommit": 129,
+      "xactRollback": 0,
+      "blocksRead": 66,
+      "blocksHit": 17818,
+      "tuplesReturned": 21157,
+      "tuplesFetched": 9471,
+      "tuplesInserted": 35,
+      "tuplesUpdated": 145,
+      "tuplesDeleted": 1,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    }
+  },
+  "latencyMs": {
+    "min": 0.8036789999999999,
+    "p50": 10.420847,
+    "p95": 59.656393,
+    "p99": 83.620301,
+    "max": 303.05587499999996
+  },
+  "throughput": {
+    "attemptedPerSecond": 9999.634832522124,
+    "acceptedPerSecond": 9999.634832522124
+  },
+  "totalRequests": 3000004,
+  "completion.json": {
+    "stage": "protocol",
+    "pass": false,
+    "originalExitCode": 1,
+    "cleanupExitCode": 0,
+    "cleanupPassed": true,
+    "exitCode": 1
+  },
+  "candidate-build.json": {
+    "runtimeImage": "sha256:a1f3ec30dfb89b844d1c7ae4094406c95c4550c00582fd2060d445dabcf82b4e",
+    "sourceManifestSha256": "6d2592ec236b56d13fadf0264552c162abdd5d7b7389184a7fea49ec74410040",
+    "buildTree": "/home/reefbench/reef-lifecycle-group",
+    "provenance": "Native bounded lifecycle-group image;1109 frozen files verified before build; separate tree preserves C22 reference fixture source. Includes compatibility cleanup fix.",
+    "runtimeBuildSourceManifestSha256": "6d2592ec236b56d13fadf0264552c162abdd5d7b7389184a7fea49ec74410040",
+    "sqlOnlyAdditions": [
+      "scripts/dev/db/migrations/runtime/0053_market_data_indexed_top_of_book.sql",
+      "scripts/dev/db/migrations/runtime/0054_projection_claim_cleanup_skip_locked.sql",
+      "scripts/dev/db/migrations/runtime/0055_market_data_indexed_currency.sql",
+      "scripts/dev/db/migrations/runtime/0056_lifecycle_parameter_sensitive_plans.sql",
+      "scripts/dev/db/migrations/runtime/0057_market_data_idle_metadata.sql",
+      "scripts/dev/db/migrations/runtime/0058_canonical_status_covering_index.sql"
+    ]
+  },
+  "schema-pin.json": {
+    "migrationId": "runtime/0058_canonical_status_covering_index.sql",
+    "migrationSha256": "beab30034c1e26ad9242a74989d9f9fd1fa2a76b7ad3dafda23ef68fe6d3a4c2",
+    "functionBodySha256": {
+      "runtime_persist_submit_outcome_status_stage": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+      "runtime_project_order_lifecycle_state": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+      "runtime_project_market_data_snapshots": "cedf4d3e65dc4355bd0a0892e4f213a07eabac1b00f426d9225e327d87a4db02",
+      "runtime_cleanup_projection_batch_claims": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab"
+    },
+    "volatility": "v",
+    "functionConfig": {
+      "runtime_project_order_lifecycle_state": [
+        "plan_cache_mode=force_custom_plan"
+      ]
+    }
+  },
+  "schema-after.json": {
+    "ledger": [
+      {
+        "migration_id": "runtime/0058_canonical_status_covering_index.sql",
+        "checksum_sha256": "beab30034c1e26ad9242a74989d9f9fd1fa2a76b7ad3dafda23ef68fe6d3a4c2"
+      }
+    ],
+    "functions": {
+      "runtime_persist_submit_outcome_status_stage": {
+        "sha256": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+        "volatility": "v",
+        "config": null
+      },
+      "runtime_project_order_lifecycle_state": {
+        "sha256": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+        "volatility": "v",
+        "config": [
+          "plan_cache_mode=force_custom_plan"
+        ]
+      },
+      "runtime_project_market_data_snapshots": {
+        "sha256": "cedf4d3e65dc4355bd0a0892e4f213a07eabac1b00f426d9225e327d87a4db02",
+        "volatility": "v",
+        "config": null
+      },
+      "runtime_cleanup_projection_batch_claims": {
+        "sha256": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab",
+        "volatility": "v",
+        "config": null
+      }
+    },
+    "canonicalStatusIndex": {
+      "keys": 2,
+      "attributes": 3,
+      "includesCommandType": true
+    }
+  },
+  "baseline-measurement.json": {
+    "kind": "current-build-300-second-baseline",
+    "configuredRate": 10000,
+    "accepted": 3000004,
+    "failures": 0,
+    "durationNanoseconds": 300000000000,
+    "projectionFreshness": {
+      "source": "venue-event-batch-projector",
+      "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+      "materialized": 3000004,
+      "projected": 3000004,
+      "materializedToProjectedGap": 0,
+      "lag": 0,
+      "projectedPerSecond": 9999.634832522124,
+      "caughtUp": true
+    },
+    "freshness": {
+      "schemaVersion": "reef.sustainedDownstreamFreshness.v1",
+      "authority": "source-membership-to-sampled-commit-upper-bound-v1",
+      "pass": false,
+      "limitsMs": {
+        "p95": 5000,
+        "p99": 10000,
+        "max": 30000
+      },
+      "minimumDurationSeconds": 300,
+      "durationToleranceMs": 2,
+      "checks": {
+        "upstreamAuthoritative": true,
+        "downstreamAuthoritative": false,
+        "completeCommandWeightedResidence": true,
+        "acceptedCountsReconciled": true,
+        "sustainedDurationComplete": true,
+        "scheduledDemandComplete": true,
+        "finalQueuesDrained": true,
+        "marketProjectionSourceBound": true,
+        "finalCallersIdle": true,
+        "finalCanonicalLagZero": true,
+        "sourceToCanonical": true,
+        "sourceToLifecycle": false,
+        "sourceToMarketData": false
+      },
+      "stages": {
+        "sourceToCanonical": {
+          "commandCount": "3000004",
+          "meanMs": 402.6277851629531,
+          "maxMs": 5536,
+          "p95Ms": 1487,
+          "p99Ms": 3181
+        },
+        "sourceToLifecycle": {
+          "commandCount": "3000004",
+          "meanMs": 25771.45288139616,
+          "maxMs": 39606,
+          "p95Ms": 36232,
+          "p99Ms": 37742
+        },
+        "sourceToMarketData": {
+          "commandCount": "3000004",
+          "meanMs": 26757.179835426887,
+          "maxMs": 40611,
+          "p95Ms": 37212,
+          "p99Ms": 38762
+        }
+      }
+    },
+    "promotion": false
+  },
+  "queueSamples": {
+    "count": 325,
+    "first": {
+      "sampledAt": "2026-09-24T20:52:57.489Z",
+      "queue": {
+        "orderLifecyclePending": 0,
+        "orderLifecycleOldestDirtiedAt": "",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T20:52:57.870890Z",
+        "databaseGeneration": "2026-09-24 20:50:24.335908+00"
+      },
+      "failed": 0
+    },
+    "last": {
+      "sampledAt": "2026-09-24T20:58:22.751Z",
+      "queue": {
+        "orderLifecyclePending": 0,
+        "orderLifecycleOldestDirtiedAt": "",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T20:58:22.771966Z",
+        "databaseGeneration": "2026-09-24 20:50:24.335908+00"
+      },
+      "failed": 0
+    },
+    "maxPending": 291987
+  },
+  "measurementDetail": {
+    "sampler": {
+      "configuredIntervalMs": 1000,
+      "maxAllowedGapMs": 2000,
+      "sampleCount": 318,
+      "successfulSampleCount": 317,
+      "maxGapMs": 2001,
+      "startedAt": "2026-09-24T20:53:00.806334993Z",
+      "finishedAt": "2026-09-24T20:58:19.769616512Z",
+      "projectorIndices": [
+        0
+      ]
+    },
+    "cohortChecks": {
+      "databaseGenerationStable": true,
+      "completeCohortResidence": true,
+      "upstreamCohortAuthoritative": true,
+      "downstreamInstrumentationEnabled": true,
+      "coveringMarkersPresent": true,
+      "stageMarkerIdentityMatches": true,
+      "lifecycleMarkerCoversExclusiveCohort": true,
+      "marketDataMarkerCoversExclusiveCohort": true,
+      "finalQueuesDrained": true,
+      "postCommitObservationsComplete": true,
+      "callerTopologyVisibleAndIdle": true,
+      "clocksValid": true,
+      "diagnosticSamplerComplete": false,
+      "projectedCohortReconciled": true
+    }
+  },
+  "diagnosticWaitSamples": {
+    "diagnosticOnly": true,
+    "note": "20 aggregate activity samples added after clear backlog regression; not qualification evidence",
+    "samples": [
+      {
+        "at": "2026-09-24T20:55:06.616371+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 15,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:07.027551+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 12,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:07.437955+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 2,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "LWLock",
+            "wait_event": "LockManager",
+            "sessions": 3,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 13,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "LockManager",
+            "sessions": 4,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:07.863554+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 14,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "BufferContent",
+            "sessions": 1,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:08.270931+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 14,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:08.659462+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 13,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "Lock",
+            "wait_event": "extend",
+            "sessions": 1,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:09.038846+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 3,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "IO",
+            "wait_event": "WALInitSync",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "Lock",
+            "wait_event": "transactionid",
+            "sessions": 1,
+            "blocking_edges": 1
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 15,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:09.439687+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 17,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:09.872331+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 12,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileExtend",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "Lock",
+            "wait_event": "transactionid",
+            "sessions": 1,
+            "blocking_edges": 1
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:10.252870+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 14,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:10.641398+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 11,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "WALSync",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "BufferMapping",
+            "sessions": 2,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:11.118036+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 3,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "IO",
+            "wait_event": "WALSync",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 11,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:11.501670+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 12,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IPC",
+            "wait_event": "BgWorkerShutdown",
+            "sessions": 2,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:11.900178+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 3,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "LWLock",
+            "wait_event": "WALWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 9,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "ProcArray",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "Lock",
+            "wait_event": "transactionid",
+            "sessions": 1,
+            "blocking_edges": 1
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:12.261971+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "IO",
+            "wait_event": "DataFileWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileExtend",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileWrite",
+            "sessions": 6,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "BufferContent",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "BufferMapping",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "Lock",
+            "wait_event": "extend",
+            "sessions": 1,
+            "blocking_edges": 1
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:12.634178+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 10,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "LockManager",
+            "sessions": 5,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:13.084101+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 3,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "IO",
+            "wait_event": "WALSync",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 12,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:13.468455+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 3,
+            "blocking_edges": 0
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "LWLock",
+            "wait_event": "WALWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 14,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileExtend",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "WALInitWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IPC",
+            "wait_event": "BgWorkerShutdown",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "WALWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:13.885740+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 15,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "IO",
+            "wait_event": "DataFileWrite",
+            "sessions": 1,
+            "blocking_edges": 0
+          }
+        ]
+      },
+      {
+        "at": "2026-09-24T20:55:14.269445+00:00",
+        "groups": [
+          {
+            "category": "lifecycle",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 4,
+            "blocking_edges": 1
+          },
+          {
+            "category": "lifecycle",
+            "wait_type": "LWLock",
+            "wait_event": "LockManager",
+            "sessions": 1,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "CPU-or-running",
+            "wait_event": "none",
+            "sessions": 5,
+            "blocking_edges": 0
+          },
+          {
+            "category": "other",
+            "wait_type": "LWLock",
+            "wait_event": "LockManager",
+            "sessions": 9,
+            "blocking_edges": 0
+          }
+        ]
+      }
+    ]
+  },
+  "interpretation": "Rejected dedicated lifecycle250 treatment; market/canonical500 unchanged. Final3000004accepted/materialized/projected after drain,zero failures/retries/deadlocks. Lifecycle peak291987; p95life36232ms/market37212ms. Authority also fails sampler317/318 successful,maxgap2001ms. Added20 aggregate wait samples after clear regression; diagnostic only. Restored500 config after stopping writers. Full reference deferred; no promotion."
+}

@@ -65,6 +65,14 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0048_execution_liquidity_role.sql",
       "runtime/0049_execution_replay_conflicts.sql",
       "runtime/0050_projection_batch_claims.sql",
+      "runtime/0051_lifecycle_terminal_numeric_parity.sql",
+      "runtime/0052_projection_dirty_serialization.sql",
+      "runtime/0053_market_data_indexed_top_of_book.sql",
+      "runtime/0054_projection_claim_cleanup_skip_locked.sql",
+      "runtime/0055_market_data_indexed_currency.sql",
+      "runtime/0056_lifecycle_parameter_sensitive_plans.sql",
+      "runtime/0057_market_data_idle_metadata.sql",
+      "runtime/0058_canonical_status_covering_index.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));

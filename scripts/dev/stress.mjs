@@ -1,6 +1,4 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import http from "node:http";
-import https from "node:https";
 import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
@@ -19,7 +17,15 @@ import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 import { validateStressRunShape } from "./lib/stress-run-guard.mjs";
 import { successRateForGuardrail } from "./lib/stress-success-guardrail.mjs";
 import { expectedRolesForRunProfile } from "./lib/run-profile-roles.mjs";
-import { runProbesConcurrently } from "./lib/telemetry-probes.mjs";
+import { requestHttpProbe, runProbesConcurrently } from "./lib/telemetry-probes.mjs";
+import { buildUpstreamSourceCohort, mergeMaterializerTelemetry } from "./lib/source-cohort.mjs";
+import {
+  buildDownstreamProjectionCohort,
+  downstreamInstrumentationDrained,
+} from "./lib/downstream-cohort.mjs";
+import { summarizeDownstreamDiagnosticSamples } from "./lib/downstream-sampler.mjs";
+
+import { collectBenchmarkRuntimeSnapshot, buildRuntimeConfigurationEvidence } from "./lib/benchmark-runtime-signature.mjs";
 
 loadDotEnv();
 const execFileAsync = promisify(execFile);
@@ -89,6 +95,7 @@ const maxStreamAckProjectionGap = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTI
 const maxStreamAckProjectorRetryDelta = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA", "0"));
 const streamAckProjectorDrainWaitMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS", "0"));
 const streamAckProjectorDrainPollMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS", "1000"));
+const streamAckProjectorProbeTimeoutMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_PROBE_TIMEOUT_MS", "15000"));
 const streamAckProjectorUrls = parseCsvStrings(
   env(
     "DEV_STRESS_STREAM_ACK_PROJECTOR_URLS",
@@ -142,6 +149,7 @@ const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
 mkdirSync(artifactDir, { recursive: true });
 const telemetryOut = join(artifactDir, `${reportBaseName}-telemetry.ndjson`);
+const downstreamTelemetryOut = join(artifactDir, `${reportBaseName}-downstream-telemetry.ndjson`);
 const recommendationOut = join(artifactDir, `${reportBaseName}-recommendation.json`);
 const kpiOutJson = join(artifactDir, `${reportBaseName}-kpi.json`);
 const kpiOutMd = join(artifactDir, `${reportBaseName}-kpi.md`);
@@ -166,6 +174,12 @@ const telemetry = startTelemetryCapture({
   runtimeUrl,
   engineUrl,
 });
+const downstreamTelemetry = captureStreamAckProjectorStats
+  ? startDownstreamDiagnosticCapture({
+      outPath: downstreamTelemetryOut,
+      intervalMs: telemetryIntervalMs,
+    })
+  : null;
 if (captureDbDiagnostics) {
   resetDir(diagnosticsDir);
   if (enablePgStatStatements) {
@@ -220,6 +234,7 @@ try {
     }
   }
 } finally {
+  await downstreamTelemetry?.stop();
   await telemetry.stop();
   if (captureDbDiagnostics) {
     postDiagnosticsResults = await captureDbDiagnosticsSnapshotsForServices("post");
@@ -247,6 +262,11 @@ for (const rate of rates) {
   }
 }
 console.log(`  ${telemetryOut}`);
+if (downstreamTelemetry) console.log(`  ${downstreamTelemetryOut}`);
+for (const reportOut of reportFiles) {
+  attachDownstreamDiagnosticSampler({ reportOut, telemetryOut: downstreamTelemetryOut, intervalMs: telemetryIntervalMs });
+  attachDerivedStressMetrics({ reportOut, duration });
+}
 if (captureDbDiagnostics) {
   console.log(`  ${diagnosticsDir}`);
 }
@@ -417,6 +437,8 @@ function resolveActionMix(profileName) {
 
 async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
+  const runtimeBefore = captureStreamAckProjectorStats ? await collectBenchmarkRuntimeSnapshot() : null;
+  const timingBefore = captureVenueEventMaterializerStats ? await sampleMaterializerTiming() : [];
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
   const beforeStreamAckHealth = captureStreamAckHealth ? await sampleStreamAckHealth(runtimeUrl) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers() : null;
@@ -526,9 +548,25 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterHotPath = await sampleHotPath(runtimeUrl);
       attachHotPathPhases({ reportOut, afterHotPath });
     }
+    if (captureVenueEventMaterializerStats) {
+      const report = JSON.parse(readFileSync(reportOut, "utf8"));
+      report.materializerTiming = { before: timingBefore, after: await sampleMaterializerTiming() };
+      if (captureStreamAckProjectorStats) report.runtimeConfigurationEvidence = buildRuntimeConfigurationEvidence(runtimeBefore, await collectBenchmarkRuntimeSnapshot());
+      writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    }
     attachStressRunMetadata({ reportOut, rate, workers, runId });
     attachDerivedStressMetrics({ reportOut, duration });
   }
+}
+
+async function sampleMaterializerTiming() {
+  return Promise.all(venueEventMaterializerUrls.map(async (url) => {
+    try {
+      const response = await fetch(`${url}/internal/venue-event-materializer/timing`, { signal: AbortSignal.timeout(30000), headers: { "X-Reef-Internal-Route": "true" } });
+      if (!response.ok) return { enabled: false, error: "timing-probe-failed" };
+      return await response.json();
+    } catch { return { enabled: false, error: "timing-probe-failed" }; }
+  }));
 }
 
 async function buildStressRunMetadata() {
@@ -816,6 +854,7 @@ function aggregateVenueEventMaterializerStats(probes) {
     },
     { fetched: 0, materialized: 0, materializedOutcomes: 0, failed: 0, ackFailed: 0, unsupported: 0 },
   );
+  Object.assign(metrics, mergeMaterializerTelemetry(instances.map((instance) => instance.stats)));
   return { instances, metrics };
 }
 
@@ -983,16 +1022,19 @@ async function sampleStreamAckProjectors() {
         name: `streamAckProjector.${index}.status`,
         url: `${baseUrl}/internal/projector/status`,
         captureJson: true,
+        timeoutMs: streamAckProjectorProbeTimeoutMs,
     },
     {
       name: `streamAckProjector.${index}.orderLifecycleStatus`,
       url: `${baseUrl}/internal/order-lifecycle/projector/status`,
       captureJson: true,
+      timeoutMs: streamAckProjectorProbeTimeoutMs,
     },
     {
       name: `streamAckProjector.${index}.marketDataStatus`,
       url: `${baseUrl}/internal/market-data/projector/status`,
       captureJson: true,
+      timeoutMs: streamAckProjectorProbeTimeoutMs,
     },
   ]);
   const probes = await runProbesConcurrently(probeSpecs, requestAppProbe);
@@ -1062,7 +1104,7 @@ function downstreamProjectorsDrained(before, after) {
       if (Number(afterStatus.metrics?.lastProcessedRows) !== 0) return false;
     }
   }
-  return true;
+  return downstreamInstrumentationDrained(after);
 }
 
 function aggregateStreamAckProjectorStatus(probes) {
@@ -1510,6 +1552,26 @@ function venueEventMaterializerDelta(before, after, durationSeconds) {
     failedDelta: Number(afterMetrics.failed ?? 0) - Number(beforeMetrics.failed ?? 0),
     ackFailedDelta: Number(afterMetrics.ackFailed ?? 0) - Number(beforeMetrics.ackFailed ?? 0),
     unsupportedDelta: Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0),
+    checksumValidatedBatchesDelta:
+      Number(afterMetrics.checksumValidatedBatches ?? 0) - Number(beforeMetrics.checksumValidatedBatches ?? 0),
+    legacyUncheckedBatchesDelta:
+      Number(afterMetrics.legacyUncheckedBatches ?? 0) - Number(beforeMetrics.legacyUncheckedBatches ?? 0),
+    validatedMembershipOutcomesDelta:
+      Number(afterMetrics.validatedMembershipOutcomes ?? 0) - Number(beforeMetrics.validatedMembershipOutcomes ?? 0),
+    canonicalCommitObservedBatchesDelta:
+      Number(afterMetrics.canonicalCommitObservedBatches ?? 0) - Number(beforeMetrics.canonicalCommitObservedBatches ?? 0),
+    sourceCommitObservedBatchesDelta:
+      Number(afterMetrics.sourceCommitObservedBatches ?? 0) - Number(beforeMetrics.sourceCommitObservedBatches ?? 0),
+    canonicalCommitElapsedNanosDelta:
+      Number(afterMetrics.canonicalCommitElapsedNanos ?? 0) - Number(beforeMetrics.canonicalCommitElapsedNanos ?? 0),
+    sourceCommitElapsedNanosDelta:
+      Number(afterMetrics.sourceCommitElapsedNanos ?? 0) - Number(beforeMetrics.sourceCommitElapsedNanos ?? 0),
+    sourceResidenceSamplesDelta:
+      Number(afterMetrics.sourceResidenceSamples ?? 0) - Number(beforeMetrics.sourceResidenceSamples ?? 0),
+    sourceResidenceElapsedMsDelta:
+      Number(afterMetrics.sourceResidenceElapsedMs ?? 0) - Number(beforeMetrics.sourceResidenceElapsedMs ?? 0),
+    clockGuardFailuresDelta:
+      Number(afterMetrics.clockGuardFailures ?? 0) - Number(beforeMetrics.clockGuardFailures ?? 0),
     materializedRps: durationSeconds > 0 ? materializedDelta / durationSeconds : 0,
   };
 }
@@ -1630,9 +1692,78 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
     };
     report.partitionSkew = buildPartitionSkew(report.streamAckWorkers?.delta);
     report.streamDirectPartitionSkew = buildStreamDirectPartitionSkew(report.streamDirect?.delta);
+    report.projectionInstrumentation = projectionInstrumentationSummary(report.streamAckProjector?.after);
+    if (report.streamAckHealth && report.streamDirect && report.venueEventMaterializer) {
+      report.upstreamSourceCohort = buildUpstreamSourceCohort(report);
+    }
+    if (report.upstreamSourceCohort && report.streamAckProjector) {
+      report.downstreamProjectionCohort = buildDownstreamProjectionCohort(report);
+    }
     writeFileSync(reportOut, JSON.stringify(report, null, 2));
   } catch (error) {
     console.warn(`  derived stress metrics unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function projectionInstrumentationSummary(projectorStatus) {
+  const configuredStages = (projectorStatus?.projectors ?? []).flatMap((projector) => [
+    ...(projector.orderLifecycleProjector?.enabled === true ? [projector.orderLifecycleProjector] : []),
+    ...(projector.marketDataProjector?.enabled === true ? [projector.marketDataProjector] : []),
+  ]);
+  const observations = configuredStages
+    .map((stage) => stage.instrumentation?.enabled)
+    .filter((enabled) => typeof enabled === "boolean");
+  return {
+    enabled: configuredStages.length > 0 && observations.length === configuredStages.length && observations.every(Boolean),
+    state:
+      observations.length !== configuredStages.length
+        ? "unknown"
+        : observations.every(Boolean)
+          ? "enabled"
+          : observations.every((enabled) => !enabled)
+            ? "disabled"
+            : "mixed",
+    configuredStageCount: configuredStages.length,
+    observedStageCount: observations.length,
+  };
+}
+
+function attachDownstreamDiagnosticSampler({ reportOut, telemetryOut, intervalMs }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const telemetrySamples = readFileSync(telemetryOut, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const enabledProjectors = (report.streamAckProjector?.after?.projectors ?? [])
+      .filter((projector) =>
+        projector?.orderLifecycleProjectorEnabled === true || projector?.marketDataProjectorEnabled === true,
+      )
+      .map((projector) => Number(projector.index));
+    const markerTimes = (report.streamAckProjector?.after?.projectors ?? []).flatMap((projector) => [
+      projector?.orderLifecycleProjector?.instrumentation?.coverage?.lastMarker?.postCommitObservedAt,
+      projector?.marketDataProjector?.instrumentation?.coverage?.lastMarker?.postCommitObservedAt,
+    ]).filter(Boolean);
+    const finishedAt = markerTimes.reduce((latest, value) => maxIso(latest, value), report.finishedAt ?? "");
+    report.downstreamCoverageObservations = { lifecycle: [], marketData: [] };
+    for (const sample of telemetrySamples) {
+      for (const probe of sample?.app?.probes ?? []) {
+        const marker = probe?.json?.instrumentation?.coverage?.lastMarker;
+        if (probe.ok !== true || !marker) continue;
+        const stage = probe.name.endsWith(".orderLifecycleStatus") ? "lifecycle" : probe.name.endsWith(".marketDataStatus") ? "marketData" : null;
+        if (stage) report.downstreamCoverageObservations[stage].push(marker);
+      }
+    }
+    report.downstreamDiagnosticSampler = summarizeDownstreamDiagnosticSamples({
+      samples: telemetrySamples,
+      startAt: report.startedAt,
+      endAt: finishedAt,
+      configuredIntervalMs: intervalMs,
+      projectorIndices: enabledProjectors,
+    });
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+  } catch (error) {
+    console.warn(`  downstream diagnostic sampler unavailable: ${error?.message ?? error}`);
   }
 }
 
@@ -2065,6 +2196,40 @@ function startTelemetryCapture({ outPath, intervalMs, runtimeUrl, engineUrl }) {
   };
 }
 
+function startDownstreamDiagnosticCapture({ outPath, intervalMs }) {
+  let stopped = false;
+  const loop = (async () => {
+    while (!stopped) {
+      const cycleStartedAt = Date.now();
+      const sampledAt = new Date(cycleStartedAt).toISOString();
+      const probes = await runProbesConcurrently(
+        streamAckProjectorUrls.flatMap((baseUrl, index) => [
+          {
+            name: `streamAckProjector.${index}.orderLifecycleStatus`,
+            url: `${baseUrl}/internal/order-lifecycle/projector/status`,
+            captureJson: true,
+          },
+          {
+            name: `streamAckProjector.${index}.marketDataStatus`,
+            url: `${baseUrl}/internal/market-data/projector/status`,
+            captureJson: true,
+          },
+        ]),
+        requestAppProbe,
+      );
+      appendFileSync(outPath, `${JSON.stringify({ sampledAt, app: { sampledAt, probes } })}\n`);
+      const remainingMs = Math.max(0, Number(intervalMs) - (Date.now() - cycleStartedAt));
+      if (remainingMs > 0) await sleep(remainingMs);
+    }
+  })();
+  return {
+    async stop() {
+      stopped = true;
+      await loop;
+    },
+  };
+}
+
 async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
   const probes = [
     { name: "runtime.health", url: `${runtimeUrl}/health` },
@@ -2120,55 +2285,7 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
 }
 
 async function requestAppProbe(probe) {
-  const started = Date.now();
-  return new Promise((resolve) => {
-    const url = new URL(probe.url);
-    const client = url.protocol === "https:" ? https : http;
-    const headers = url.pathname.startsWith("/internal/")
-      ? { "X-Reef-Internal-Route": "true" }
-      : {};
-    const req = client.request(
-      url,
-      { method: probe.method ?? "GET", timeout: Math.max(1, Number(probe.timeoutMs ?? 2000)), headers },
-      (response) => {
-      const chunks = [];
-      let bytes = 0;
-      response.on("data", (chunk) => {
-        bytes += chunk.length;
-        if (bytes <= 1024 * 1024) {
-          chunks.push(chunk);
-        }
-      });
-      response.on("end", () => {
-        const result = {
-          name: probe.name,
-          status: response.statusCode,
-          ok: response.statusCode >= 200 && response.statusCode < 300,
-          latencyMs: Date.now() - started,
-        };
-        if (probe.captureJson) {
-          try {
-            result.json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-          } catch (error) {
-            result.bodyError = String(error.message || error);
-          }
-        }
-        resolve(result);
-      });
-    });
-    req.on("timeout", () => {
-      req.destroy(new Error("timeout"));
-    });
-    req.on("error", (error) => {
-      resolve({
-        name: probe.name,
-        ok: false,
-        latencyMs: Date.now() - started,
-        error: String(error.message || error),
-      });
-    });
-    req.end();
-  });
+  return requestHttpProbe(probe);
 }
 
 async function sampleDockerStats(sampledAt) {

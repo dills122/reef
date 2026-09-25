@@ -13,7 +13,8 @@ class MarketDataProjectionWorker(
     private val sourceProjectionName: String = RuntimeEnv.string("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", "runtime-normalized-venue-outcomes"),
     private val pollIntervalMs: Long = RuntimeEnv.long("MARKET_DATA_PROJECTOR_POLL_MS", 250L, min = 1L),
     private val batchSize: Int = RuntimeEnv.int("MARKET_DATA_PROJECTOR_BATCH_SIZE", 500, min = 1),
-    private val workerName: String = "reef-market-data-projector"
+    private val workerName: String = "reef-market-data-projector",
+    private val instrumentationEnabled: Boolean = RuntimeEnv.bool("PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED", false)
 ) {
     private val running = AtomicBoolean(false)
     private var workerThread: Thread? = null
@@ -41,7 +42,19 @@ class MarketDataProjectionWorker(
     fun processOnce(): Long {
         return try {
             HotPathMetrics.time("marketDataProjector.projectSnapshots") {
-                api.projectMarketDataSnapshotsCount(projectionName, sourceProjectionName, batchSize)
+                DownstreamProjectionCallerMetrics.record(
+                    stage = DownstreamProjectionStage.OrderLifecycle,
+                    caller = "market-data-projector",
+                    enabled = instrumentationEnabled
+                ) {
+                    DownstreamProjectionCallerMetrics.record(
+                        stage = DownstreamProjectionStage.MarketData,
+                        caller = "market-data-projector",
+                        enabled = instrumentationEnabled
+                    ) {
+                        api.projectMarketDataSnapshotsCount(projectionName, sourceProjectionName, batchSize)
+                    }
+                }
             }.also { processed ->
                 MarketDataProjectionMetrics.recordProcessed(processed)
             }

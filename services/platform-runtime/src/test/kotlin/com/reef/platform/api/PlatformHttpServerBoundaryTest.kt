@@ -1334,6 +1334,7 @@ class PlatformHttpServerBoundaryTest {
 
     @Test
     fun materializerRoleExposesOnlyInternalMaterializerStats() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
             runtimeRole = PlatformRuntimeRole.Materializer,
@@ -1355,6 +1356,10 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, internal.status)
             assertContains(internal.body, "\"role\":\"materializer\"")
             assertContains(internal.body, "\"source\":\"kafka\"")
+            assertContains(internal.body, "\"sourcePartitions\":[]")
+            assertContains(internal.body, "\"materializedSourceFrontiers\":[]")
+            assertContains(internal.body, "\"checksumValidatedBatches\":0")
+            assertContains(internal.body, "\"clockGuardFailures\":0")
             assertEquals(404, publicSubmit.status)
         } finally {
             server.stop(0)
@@ -4807,6 +4812,7 @@ class PlatformHttpServerBoundaryTest {
     fun projectorStatusReportsConfiguredDownstreamMaintainers() {
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
+            runtimeRole = PlatformRuntimeRole.Projector,
             orderLifecycleProjectorEnabled = true,
             marketDataProjectorEnabled = false
         )
@@ -4816,6 +4822,32 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"orderLifecycleProjectorEnabled\":true")
             assertContains(response.body, "\"marketDataProjectorEnabled\":false")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun downstreamProjectorStatusReportsOptionalCoverageInstrumentation() {
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimeRole = PlatformRuntimeRole.Projector,
+            orderLifecycleProjectorEnabled = true,
+            marketDataProjectorEnabled = true,
+            downstreamProjectionInstrumentationEnabled = true
+        )
+        try {
+            val lifecycle = get(server.address.port, "/internal/order-lifecycle/projector/status")
+            val marketData = get(server.address.port, "/internal/market-data/projector/status")
+
+            assertEquals(200, lifecycle.status)
+            assertContains(lifecycle.body, "\"instrumentation\":{")
+            assertContains(lifecycle.body, "\"enabled\":true")
+            assertContains(lifecycle.body, "\"dirtyQueues\":{")
+            assertContains(lifecycle.body, "\"callerStats\":{")
+            assertContains(lifecycle.body, "\"coverage\":{")
+            assertEquals(200, marketData.status)
+            assertContains(marketData.body, "\"instrumentation\":{")
         } finally {
             server.stop(0)
         }
@@ -5272,6 +5304,17 @@ class PlatformHttpServerBoundaryTest {
                     storageUtilization = 0.5,
                     publishAckLastMs = 7,
                     publishAckMaxMs = 11,
+                    sourceTopicFrontiers = listOf(
+                        SourceTopicFrontier(partition = 2, lastOffsetExclusive = 43)
+                    ),
+                    acceptedSourceFrontiers = listOf(
+                        AcceptedSourceFrontier(
+                            partition = 2,
+                            accepted = 3,
+                            firstOffsetInclusive = 40,
+                            lastOffsetExclusive = 43
+                        )
+                    ),
                     producerMetrics = mapOf("request-latency-max" to 13.0)
                 )
             )
@@ -5286,6 +5329,14 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"messages\":3")
             assertContains(response.body, "\"storageUtilization\":0.5")
             assertContains(response.body, "\"publishAckLastMs\":7")
+            assertContains(
+                response.body,
+                "\"sourceTopicFrontiers\":[{\"partition\":2,\"lastOffsetExclusive\":\"43\"}]"
+            )
+            assertContains(
+                response.body,
+                "\"acceptedSourceFrontiers\":[{\"partition\":2,\"accepted\":\"3\",\"firstOffsetInclusive\":\"40\",\"lastOffsetExclusive\":\"43\"}]"
+            )
             assertContains(response.body, "\"producerMetrics\":{\"request-latency-max\":13.0}")
         } finally {
             server.stop(0)
@@ -5742,6 +5793,7 @@ class PlatformHttpServerBoundaryTest {
         venueEventMaterializerEnabled: Boolean = false,
         marketDataProjectorEnabled: Boolean = false,
         orderLifecycleProjectorEnabled: Boolean = false,
+        downstreamProjectionInstrumentationEnabled: Boolean = false,
         localDevAdminUiBaseUrl: String? = null,
         runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence(),
         productRouteExtensions: List<OptionalProductRouteExtension> = emptyList()
@@ -5800,6 +5852,7 @@ class PlatformHttpServerBoundaryTest {
             venueEventMaterializerEnabled = venueEventMaterializerEnabled,
             marketDataProjectorEnabled = marketDataProjectorEnabled,
             orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
+            downstreamProjectionInstrumentationEnabled = downstreamProjectionInstrumentationEnabled,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,

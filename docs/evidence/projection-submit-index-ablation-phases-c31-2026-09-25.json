@@ -1,0 +1,78 @@
+{
+  "comparison": [
+    {
+      "runDirectory": "/home/reefbench/benchmarks/reef-productive-c28-prefix-10000-300s-1",
+      "telemetrySamples": 6,
+      "projectors": 16,
+      "phases": {
+        "projector.projectCanonicalCommandOutcomes": {
+          "calls": 24755,
+          "totalMs": 4200990.053,
+          "meanMs": 169.703
+        },
+        "projector.venueEventBatch.projectionSql": {
+          "calls": 7777,
+          "totalMs": 3511296.338,
+          "meanMs": 451.498
+        },
+        "projector.venueEventBatch.transform": {
+          "calls": 7790,
+          "totalMs": 298442.428,
+          "meanMs": 38.311
+        },
+        "projector.venueEventBatch.canonicalRead": {
+          "calls": 24771,
+          "totalMs": 154842.501,
+          "meanMs": 6.251
+        },
+        "projector.venueEventBatch.commit": {
+          "calls": 7777,
+          "totalMs": 62122.086,
+          "meanMs": 7.988
+        },
+        "projector.venueEventBatch.watermark": {
+          "calls": 7777,
+          "totalMs": 10971.375,
+          "meanMs": 1.411
+        }
+      }
+    },
+    {
+      "runDirectory": "/home/reefbench/benchmarks/reef-productive-c31-submitindex-10000-300s-1",
+      "telemetrySamples": 7,
+      "projectors": 16,
+      "phases": {
+        "projector.projectCanonicalCommandOutcomes": {
+          "calls": 61125,
+          "totalMs": 4886989.232,
+          "meanMs": 79.951
+        },
+        "projector.venueEventBatch.projectionSql": {
+          "calls": 7618,
+          "totalMs": 4030855.486,
+          "meanMs": 529.123
+        },
+        "projector.venueEventBatch.transform": {
+          "calls": 7618,
+          "totalMs": 337089.833,
+          "meanMs": 44.249
+        },
+        "projector.venueEventBatch.canonicalRead": {
+          "calls": 61125,
+          "totalMs": 270381.559,
+          "meanMs": 4.423
+        },
+        "projector.venueEventBatch.commit": {
+          "calls": 7618,
+          "totalMs": 56997.768,
+          "meanMs": 7.482
+        },
+        "projector.venueEventBatch.watermark": {
+          "calls": 7618,
+          "totalMs": 11036.907,
+          "meanMs": 1.449
+        }
+      }
+    }
+  ]
+}

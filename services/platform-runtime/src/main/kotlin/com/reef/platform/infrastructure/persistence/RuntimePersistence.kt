@@ -84,6 +84,29 @@ data class ProjectionStatus(
     val watermarks: List<ProjectionWatermark>
 )
 
+/** Committed projection prefix only; carries no assertion about current canonical lag. */
+data class CommittedProjectionWatermark(
+    val partitionId: Int,
+    val lastPartitionSequence: Long,
+    val lastError: String
+)
+
+data class CommittedProjectionFrontier(
+    val projectionName: String,
+    val requestedPartitions: List<Int>,
+    val watermarks: List<CommittedProjectionWatermark>,
+    val databaseGeneration: String = ""
+)
+
+data class ProjectionDirtyQueueStats(
+    val orderLifecyclePending: Long,
+    val orderLifecycleOldestDirtiedAt: String,
+    val marketDataPending: Long,
+    val marketDataOldestDirtiedAt: String,
+    val databaseSnapshotAt: String,
+    val databaseGeneration: String = ""
+)
+
 data class MarketDataSnapshot(
     val projectionName: String,
     val sourceProjectionName: String,
@@ -159,6 +182,7 @@ data class VenueEventBatchFact(
     val lastSequence: Long,
     val commandCount: Int,
     val createdAt: String,
+    val workFinishedAt: String = "",
     val payloadChecksum: String,
     val payloadChecksumAlgorithm: String = "",
     val payloadFormat: String = "venue-event-batch-json",
@@ -310,6 +334,18 @@ interface RuntimePersistence {
         source: String = "canonical-submit"
     ): ProjectionStatus {
         return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
+    }
+    fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier {
+        return CommittedProjectionFrontier(projectionName, partitions.toList(), emptyList())
+    }
+    fun projectionDirtyQueueStats(): ProjectionDirtyQueueStats {
+        return ProjectionDirtyQueueStats(
+            orderLifecyclePending = 0,
+            orderLifecycleOldestDirtiedAt = "",
+            marketDataPending = 0,
+            marketDataOldestDirtiedAt = "",
+            databaseSnapshotAt = ""
+        )
     }
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return 0

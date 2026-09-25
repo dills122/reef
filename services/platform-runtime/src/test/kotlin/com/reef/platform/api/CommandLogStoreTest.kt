@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.sql.DriverManager
@@ -242,9 +243,9 @@ class PostgresCommandLogStoreIntegrationTest {
         val stored = store.findByCommandId(record.commandId)
         val physicalPayloads = physicalCommandPayloads(record.commandId) ?: return
 
-        assertEquals(record.payloadJson, stored?.payloadJson)
+        assertEquals(JsonCodec.rawJsonOrText(record.payloadJson), JsonCodec.rawJsonOrText(assertNotNull(stored).payloadJson))
         assertEquals("""{}""", physicalPayloads.commandRowPayloadJson)
-        assertEquals(record.payloadJson, physicalPayloads.payloadRowPayloadJson)
+        assertEquals(JsonCodec.rawJsonOrText(record.payloadJson), JsonCodec.rawJsonOrText(assertNotNull(physicalPayloads.payloadRowPayloadJson)))
     }
 
     @Test

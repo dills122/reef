@@ -48,6 +48,7 @@ internal class PlatformAdminDataRoutes(
         "/internal/stream-ack/health",
         "/internal/stream-ack/worker/stats",
         "/internal/venue-event-materializer/stats",
+        "/internal/venue-event-materializer/timing",
         "/internal/projector/status",
         "/internal/market-data/projector/status",
         "/internal/order-lifecycle/projector/status"
@@ -80,6 +81,7 @@ internal class PlatformAdminDataRoutes(
             }
             "/internal/stream-ack/health" -> getOnly(method) { diagnosticsGateway.streamCommandHealthJson() }
             "/internal/stream-ack/worker/stats" -> getOnly(method) { diagnosticsGateway.streamCommandWorkerStatsJson() }
+            "/internal/venue-event-materializer/timing" -> getOnly(method) { diagnosticsGateway.venueEventMaterializerTimingJson() }
             "/internal/venue-event-materializer/stats" -> getOnly(method) { diagnosticsGateway.venueEventMaterializerStatsJson() }
             "/internal/projector/status" -> getOnly(method) { diagnosticsGateway.projectorStatusJson() }
             "/internal/market-data/projector/status" -> getOnly(method) { diagnosticsGateway.marketDataProjectorStatusJson() }

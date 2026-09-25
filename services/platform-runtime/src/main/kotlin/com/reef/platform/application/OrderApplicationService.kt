@@ -338,6 +338,9 @@ class OrderApplicationService(
         }
     }
 
+    fun committedProjectionFrontier(projectionName: String, partitions: List<Int>) =
+        runtimePersistence.committedProjectionFrontier(projectionName, partitions)
+
     fun projectionStatus(
         projectionName: String,
         partitions: List<Int> = emptyList(),
@@ -771,6 +774,8 @@ class OrderApplicationService(
     fun rebuildOrderLifecycleState() = runtimePersistence.rebuildOrderLifecycleState()
 
     fun projectOrderLifecycleState(batchSize: Int) = runtimePersistence.projectOrderLifecycleState(batchSize)
+
+    fun projectionDirtyQueueStats() = runtimePersistence.projectionDirtyQueueStats()
 
     fun orderLifecycleState(orderId: String) = runtimePersistence.orderLifecycleState(orderId)
 

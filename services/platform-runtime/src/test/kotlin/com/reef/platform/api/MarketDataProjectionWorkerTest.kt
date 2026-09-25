@@ -10,8 +10,14 @@ import kotlin.test.assertNotNull
 
 class MarketDataProjectionWorkerTest {
     @Test
-    fun processOnceRefreshesLifecycleBackedSnapshots() {
+    fun processOnceRefreshesLifecycleBackedSnapshots() = checkProjectionWithInstrumentation(true)
+
+    @Test
+    fun disabledInstrumentationStillProjectsWithoutCallerCounters() = checkProjectionWithInstrumentation(false)
+
+    private fun checkProjectionWithInstrumentation(enabled: Boolean) {
         MarketDataProjectionMetrics.resetForTests()
+        DownstreamProjectionCallerMetrics.resetForTests()
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
         persistence.saveAcceptedOrder(
@@ -32,7 +38,8 @@ class MarketDataProjectionWorkerTest {
         )
         val worker = MarketDataProjectionWorker(
             api = api,
-            pollIntervalMs = 1L
+            pollIntervalMs = 1L,
+            instrumentationEnabled = enabled
         )
 
         val processed = worker.processOnce()
@@ -44,6 +51,10 @@ class MarketDataProjectionWorkerTest {
         assertEquals(1, stats.cycles)
         assertEquals(1, stats.processedRows)
         assertEquals(0, stats.failed)
+        val lifecycleCallers = DownstreamProjectionCallerMetrics.snapshot(DownstreamProjectionStage.OrderLifecycle)
+        val marketDataCallers = DownstreamProjectionCallerMetrics.snapshot(DownstreamProjectionStage.MarketData)
+        assertEquals(if (enabled) 1L else null, lifecycleCallers.callers["market-data-projector"])
+        assertEquals(if (enabled) 1L else null, marketDataCallers.callers["market-data-projector"])
 
         val secondCycleProcessed = worker.processOnce()
         assertEquals(0, secondCycleProcessed)

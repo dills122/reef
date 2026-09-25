@@ -124,6 +124,64 @@ assert.equal(projectionResult.status, 0, projectionResult.stderr);
 assert.match(projectionResult.stdout, /projected=2500 lag=0/);
 assert.match(projectionResult.stdout, /materializedProjectedGap=0 projectionFreshness=caught-up/);
 
+const projectionMissingCohortAuthorityResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionArtifactDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRE_PROJECTION_COHORT_AUTHORITY: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionMissingCohortAuthorityResult.status, 1);
+assert.match(projectionMissingCohortAuthorityResult.stderr, /upstream source cohort is not authoritative/);
+assert.match(projectionMissingCohortAuthorityResult.stderr, /downstream projection cohort is not authoritative/);
+
+const projectionCohortAuthorityDir = mkdtempSync(
+  join(tmpdir(), "reef-do-benchmark-check-projection-cohort-authority-"),
+);
+writeMaterializerProjectionReport(projectionCohortAuthorityDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+const projectionCohortAuthorityPath = join(projectionCohortAuthorityDir, "rate-2500.json");
+const projectionCohortAuthorityReport = JSON.parse(readFileSync(projectionCohortAuthorityPath, "utf8"));
+projectionCohortAuthorityReport.upstreamSourceCohort = { pass: true };
+projectionCohortAuthorityReport.downstreamProjectionCohort = { pass: true, cohortResidence: { pass: true } };
+writeFileSync(projectionCohortAuthorityPath, JSON.stringify(projectionCohortAuthorityReport, null, 2));
+writeTelemetry(projectionCohortAuthorityDir);
+const projectionCohortAuthorityResult = spawnSync(
+  process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionCohortAuthorityDir],
+  {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection",
+      REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRE_PROJECTION_COHORT_AUTHORITY: "1",
+    },
+    encoding: "utf8",
+  },
+);
+assert.equal(projectionCohortAuthorityResult.status, 0, projectionCohortAuthorityResult.stderr);
+projectionCohortAuthorityReport.downstreamProjectionCohort = { pass: true };
+writeFileSync(projectionCohortAuthorityPath, JSON.stringify(projectionCohortAuthorityReport));
+const tailOnlyAuthorityResult = spawnSync(process.execPath,
+  ["scripts/dev/do-benchmark-check.mjs", projectionCohortAuthorityDir], {
+    cwd: process.cwd(), encoding: "utf8", env: { ...process.env,
+      REEF_DO_REPORT_PROFILE: "materializer-projection", REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRE_PROJECTION_COHORT_AUTHORITY: "1" },
+  });
+assert.notEqual(tailOnlyAuthorityResult.status, 0, "tail-only historical evidence must not pass cohort residence gate");
+
+
 const projectionInvalidMaintainerConfigResult = spawnSync(
   process.execPath,
   ["scripts/dev/do-benchmark-check.mjs", projectionArtifactDir],
@@ -415,6 +473,58 @@ const projectionRetryResult = spawnSync(process.execPath, ["scripts/dev/do-bench
 });
 assert.equal(projectionRetryResult.status, 1);
 assert.match(projectionRetryResult.stderr, /streamAckProjector\.delta\.retryDelta 1\.00 > required 0\.00/);
+
+// Explicit DB limits require measured numeric counters; legacy callers remain optional.
+const dbEvidenceFailures = [];
+for (const counter of ["deadlocks", "retryDelta"]) {
+  for (const value of [undefined, null, "", "0", "invalid", false, [], {}, -1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const dir = mkdtempSync(join(tmpdir(), "reef-do-db-evidence-"));
+    writeMaterializerProjectionReport(dir, "rate-2500.json", 2500, 2500, { projected: 2500, projectedRps: 2500, lag: 0 });
+    writeTelemetry(dir);
+    writeMaterializerDbDiagnostics(dir, { includeProjectionPostgres: true });
+    const path = join(dir, counter === "deadlocks"
+      ? "venue-event-materializer-stress-diagnostics-summary.json" : "rate-2500.json");
+    const report = JSON.parse(readFileSync(path, "utf8"));
+    const counters = counter === "deadlocks"
+      ? report.services["projection-postgres"].database : report.streamAckProjector.delta;
+    if (value === undefined) delete counters[counter]; else counters[counter] = value;
+    writeFileSync(path, JSON.stringify(report));
+    const env = { ...process.env, REEF_DO_REPORT_PROFILE: "materializer-projection", REEF_DO_REQUIRED_RATES: "2500",
+      REEF_DO_REQUIRE_DB_DIAGNOSTICS: "0", REEF_DO_MAX_PROJECTION_DB_DEADLOCKS: "", REEF_DO_MAX_PROJECTION_DB_RETRIES: "" };
+    const run = () => spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", dir], { cwd: process.cwd(), env, encoding: "utf8" });
+    assert.equal(run().status, 0, `legacy ${counter}=${JSON.stringify(value)}`);
+    env[counter === "deadlocks" ? "REEF_DO_MAX_PROJECTION_DB_DEADLOCKS" : "REEF_DO_MAX_PROJECTION_DB_RETRIES"] = "0";
+    const result = run();
+    if (result.status !== 1 || !result.stderr.includes("must be a non-negative safe integer")) {
+      dbEvidenceFailures.push(`${counter}=${JSON.stringify(value)}: status=${result.status} ${result.stderr}`);
+    }
+  }
+}
+assert.deepEqual(dbEvidenceFailures, []);
+
+const explicitDbLimitDir = mkdtempSync(join(tmpdir(), "reef-do-explicit-db-limit-"));
+writeMaterializerProjectionReport(explicitDbLimitDir, "rate-2500.json", 2500, 2500,
+  { projected: 2500, projectedRps: 2500, lag: 0 });
+writeTelemetry(explicitDbLimitDir);
+const explicitDbEnv = { ...process.env, REEF_DO_REPORT_PROFILE: "materializer-projection", REEF_DO_REQUIRED_RATES: "2500",
+  REEF_DO_REQUIRE_DB_DIAGNOSTICS: "0", REEF_DO_MAX_PROJECTION_DB_DEADLOCKS: "0", REEF_DO_MAX_PROJECTION_DB_RETRIES: "0" };
+const checkExplicitDb = () => spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", explicitDbLimitDir],
+  { cwd: process.cwd(), env: explicitDbEnv, encoding: "utf8" });
+const missingDbSummary = checkExplicitDb();
+assert.equal(missingDbSummary.status, 1);
+assert.match(missingDbSummary.stderr, /missing materializer DB diagnostics summary/);
+writeMaterializerDbDiagnostics(explicitDbLimitDir);
+const missingProjectionDb = checkExplicitDb();
+assert.equal(missingProjectionDb.status, 1);
+assert.match(missingProjectionDb.stderr, /services.projection-postgres.ok=true/);
+writeMaterializerDbDiagnostics(explicitDbLimitDir, { includeProjectionPostgres: true });
+const zeroDbCounters = checkExplicitDb();
+assert.equal(zeroDbCounters.status, 0, zeroDbCounters.stderr);
+writeMaterializerDbDiagnostics(explicitDbLimitDir, { includeProjectionPostgres: true, projectionDeadlocks: 1 });
+assert.equal(checkExplicitDb().status, 1);
+explicitDbEnv.REEF_DO_MAX_PROJECTION_DB_DEADLOCKS = "1";
+assert.equal(checkExplicitDb().status, 0);
+
 
 const arenaArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-"));
 writeArenaReport(arenaArtifactDir, { healthStatus: "warn" });
@@ -899,13 +1009,13 @@ function writeMaterializerDbDiagnostics(dir, options = {}) {
     ),
   );
   const diagnosticsDir = join(dir, "venue-event-materializer-stress-diagnostics");
-  mkdirSync(diagnosticsDir);
+  mkdirSync(diagnosticsDir, { recursive: true });
   writeDbDiagnosticsFiles(diagnosticsDir);
   if (options.includeProjectionPostgres) {
     const postgresDir = join(diagnosticsDir, "postgres");
     const projectionDir = join(diagnosticsDir, "projection-postgres");
-    mkdirSync(postgresDir);
-    mkdirSync(projectionDir);
+    mkdirSync(postgresDir, { recursive: true });
+    mkdirSync(projectionDir, { recursive: true });
     writeDbDiagnosticsFiles(postgresDir);
     writeDbDiagnosticsFiles(projectionDir);
     writeFileSync(join(projectionDir, "postgres-logs.txt"), options.projectionLogs ?? "");
@@ -979,3 +1089,50 @@ function writeBlockedStreamAckReport(dir, name, rate) {
     ),
   );
 }
+
+// Sustained freshness is an explicit postprocessing gate, never implied by A/B.
+const sustainedDir = mkdtempSync(join(tmpdir(), "reef-do-sustained-freshness-"));
+writeMaterializerProjectionReport(sustainedDir, "rate-2500.json", 2500, 750000, { projected: 750000, projectedRps: 2500, lag: 0 });
+writeTelemetry(sustainedDir);
+const sustainedPath = join(sustainedDir, "rate-2500.json");
+const checkSustained = (flag = "1") => spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", sustainedDir], {
+  cwd: process.cwd(), encoding: "utf8", env: { ...process.env, REEF_DO_REPORT_PROFILE: "materializer-projection", REEF_DO_REQUIRED_RATES: "2500", REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS: flag },
+});
+assert.equal(checkSustained("0").status, 0, "existing profile remains compatible without opt-in");
+assert.equal(checkSustained().status, 1, "missing sustained evidence must fail opt-in");
+const sustainedReport = JSON.parse(readFileSync(sustainedPath, "utf8"));
+Object.assign(sustainedReport.config, { Duration: 300e9, RatePerSecond: 2500, RateSchedule: "precise" });
+sustainedReport.loadSchedule = { mode: "precise", targetRatePerSecond: 2500, targetRequests: 750000, scheduled: 750000, enqueued: 750000, dropped: 0, completed: 750000, scheduleDeficit: 0, completionDeficit: 0, enqueuedPerSecond: 2500, completedPerSecond: 2500, completionToTargetPct: 100 };
+sustainedReport.upstreamSourceCohort = {
+  pass: true, authority: "exclusive-kafka-offset-frontier-v1", totals: { accepted: "750000", directAcked: "750000", materializedMembership: "750000" },
+  checks: Object.fromEntries(["acceptedCountMatchesReport", "acceptedSourceExclusive", "durableIntakeJoined", "materializerMembershipJoined", "checksumMembershipComplete", "canonicalCommitObserved", "sourceCommitObserved", "sourceCommitFrontiersComplete", "canonicalSourceTimingComplete", "clocksValid"].map(key => [key, true])),
+};
+Object.assign(sustainedReport, { durationSeconds: 300, startedAt: "2026-09-24T01:00:00.000Z", finishedAt: "2026-09-24T01:05:00.000Z" });
+const idleCallers = { calls: 10, completed: 10, failed: 0, active: 0, maxConcurrent: 1, callerCount: 1, callers: { worker: {} } };
+sustainedReport.downstreamProjectionCohort = {
+  pass: true, authority: "post-commit-downstream-covering-marker-v1",
+  checks: Object.fromEntries(["databaseGenerationStable", "completeCohortResidence", "upstreamCohortAuthoritative", "downstreamInstrumentationEnabled", "coveringMarkersPresent", "stageMarkerIdentityMatches", "lifecycleMarkerCoversExclusiveCohort", "marketDataMarkerCoversExclusiveCohort", "finalQueuesDrained", "postCommitObservationsComplete", "callerTopologyVisibleAndIdle", "clocksValid", "diagnosticSamplerComplete", "projectedCohortReconciled"].map(key => [key, true])),
+  markers: { lifecycle: { sourceProjectionName: "runtime-normalized-submit" }, marketData: { sourceProjectionName: "runtime-normalized-submit" } },
+  callers: { lifecycle: idleCallers, marketData: structuredClone(idleCallers) },
+  cohortResidence: { pass: true, authority: "source-membership-to-sampled-commit-upper-bound-v1", commandCount: "750000", stages: Object.fromEntries(["sourceToCanonical", "sourceToLifecycle", "sourceToMarketData"].map(key => [key, { commandCount: "750000", meanMs: 100, p95Ms: 5000, p99Ms: 10000, maxMs: 30000 }])) },
+};
+sustainedReport.streamAckProjector.after.projectionName = "runtime-normalized-submit";
+sustainedReport.streamAckProjector.after.projectors = [{ orderLifecycleProjectorEnabled: true, marketDataProjectorEnabled: true, ...Object.fromEntries(["orderLifecycleProjector", "marketDataProjector"].map(key => [key, { sourceProjectionName: "runtime-normalized-submit", instrumentation: { enabled: true, stageEnabled: true, dirtyQueues: { orderLifecyclePending: 0, marketDataPending: 0 } } }])) }];
+writeFileSync(sustainedPath, JSON.stringify(sustainedReport));
+const sustainedPass = checkSustained();
+assert.equal(sustainedPass.status, 0, sustainedPass.stderr);
+const sustainedSummary = JSON.parse(readFileSync(join(sustainedDir, "do-benchmark-evidence-summary.json"), "utf8"));
+assert.equal(sustainedSummary.reports[0].sustainedDownstreamFreshness.pass, true);
+const shortSustainedReport = structuredClone(sustainedReport);
+Object.assign(shortSustainedReport, { durationSeconds: 60, finishedAt: "2026-09-24T01:01:00.000Z" });
+writeFileSync(sustainedPath, JSON.stringify(shortSustainedReport));
+const shortSustainedResult = checkSustained();
+assert.equal(shortSustainedResult.status, 1);
+assert.match(shortSustainedResult.stderr, /sustained downstream freshness.*sustainedDurationComplete/);
+
+sustainedReport.downstreamProjectionCohort.cohortResidence.stages.sourceToLifecycle.p95Ms = 5001;
+writeFileSync(sustainedPath, JSON.stringify(sustainedReport));
+const sustainedSlow = checkSustained();
+assert.equal(sustainedSlow.status, 1);
+assert.match(sustainedSlow.stderr, /sustained downstream freshness.*sourceToLifecycle/);
+assert.equal(checkSustained("0").status, 0, "freshness violation does not implicitly gate observer-overhead evidence");

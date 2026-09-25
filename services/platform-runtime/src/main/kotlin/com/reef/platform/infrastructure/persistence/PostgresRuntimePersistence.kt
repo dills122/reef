@@ -1432,7 +1432,7 @@ class PostgresRuntimePersistence(
                         ON CONFLICT (event_id) DO NOTHING;
                       END IF;
 
-                      INSERT INTO ${names.orderLifecycleDirty}(order_id)
+                      INSERT INTO ${names.orderLifecycleDirty} AS dirty(order_id)
                       SELECT DISTINCT order_id FROM (
                         SELECT p_result_order_id AS order_id
                         WHERE COALESCE(p_result_order_id, '') <> ''
@@ -1444,7 +1444,8 @@ class PostgresRuntimePersistence(
                         SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
                       ) dirty_ids
                       WHERE COALESCE(order_id, '') <> ''
-                      ON CONFLICT (order_id) DO NOTHING;
+                      ORDER BY order_id
+                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at;
 
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
@@ -3572,18 +3573,83 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun projectionStatusAcrossStores(
+    override fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier {
+        // One committed projection-store snapshot; no canonical history or submit-result count.
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT pg_postmaster_start_time()::TEXT AS database_generation,
+                       watermark.partition_id, watermark.last_partition_seq, watermark.last_error
+                FROM (SELECT 1) singleton
+                LEFT JOIN ${names.projectionWatermarks} watermark
+                  ON watermark.projection_name = ?
+                  AND (cardinality(?::INTEGER[]) = 0 OR watermark.partition_id = ANY(?::INTEGER[])
+                       OR watermark.partition_id = -1)
+                ORDER BY watermark.partition_id
+                """.trimIndent()
+            ).use { ps ->
+                val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
+                ps.setString(1, projectionName)
+                ps.setArray(2, partitionArray)
+                ps.setArray(3, partitionArray)
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<CommittedProjectionWatermark>()
+                    var generation = ""
+                    while (rs.next()) {
+                        generation = rs.getString("database_generation")
+                        if (rs.getObject("partition_id") != null) {
+                            rows.add(CommittedProjectionWatermark(rs.getInt("partition_id"), rs.getLong("last_partition_seq"), rs.getString("last_error")))
+                        }
+                    }
+                    return CommittedProjectionFrontier(projectionName, partitions.toList(), rows, generation)
+                }
+            }
+        }
+    }
+
+    override fun projectionDirtyQueueStats(): ProjectionDirtyQueueStats {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM ${names.orderLifecycleDirty}) AS order_lifecycle_pending,
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.orderLifecycleDirty}), '') AS order_lifecycle_oldest_dirtied_at,
+                  (SELECT COUNT(*) FROM ${names.marketDataSnapshotDirty}) AS market_data_pending,
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.marketDataSnapshotDirty}), '') AS market_data_oldest_dirtied_at,
+                  to_char(
+                    clock_timestamp() AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                  ) AS database_snapshot_at,
+                  pg_postmaster_start_time()::TEXT AS database_generation
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return ProjectionDirtyQueueStats(
+                        orderLifecyclePending = rs.getLong("order_lifecycle_pending"),
+                        orderLifecycleOldestDirtiedAt = rs.getString("order_lifecycle_oldest_dirtied_at"),
+                        marketDataPending = rs.getLong("market_data_pending"),
+                        marketDataOldestDirtiedAt = rs.getString("market_data_oldest_dirtied_at"),
+                        databaseSnapshotAt = rs.getString("database_snapshot_at"),
+                        databaseGeneration = rs.getString("database_generation")
+                    )
+                }
+            }
+        }
+    }
+
+    private fun projectionStatusWatermarks(
         projectionName: String,
         partitions: List<Int>,
         source: String
-    ): ProjectionStatus {
+    ): List<ProjectionWatermark> {
         val watermarkRows = projectionWatermarkRows(projectionName, partitions)
         val canonicalStatsByPartition = canonicalPartitionStats(partitions, watermarkRows, source)
         val partitionIds = (partitions + canonicalStatsByPartition.keys + watermarkRows.keys)
             .filter { it >= 0 }
             .distinct()
             .sorted()
-        val watermarks = partitionIds.map { partitionId ->
+        return partitionIds.map { partitionId ->
             val watermark = watermarkRows[partitionId]
             val canonicalStats = canonicalStatsByPartition[partitionId]
             val projected = watermark?.lastPartitionSequence ?: 0L
@@ -3597,6 +3663,14 @@ class PostgresRuntimePersistence(
                 lastError = watermark?.lastError.orEmpty()
             )
         } + watermarkRows.values.filter { it.partitionId == -1 }
+    }
+
+    private fun projectionStatusAcrossStores(
+        projectionName: String,
+        partitions: List<Int>,
+        source: String
+    ): ProjectionStatus {
+        val watermarks = projectionStatusWatermarks(projectionName, partitions, source)
         val projectedCount = projectionConnection().use { conn ->
             conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
                 ps.executeQuery().use { rs ->
@@ -4134,8 +4208,9 @@ class PostgresRuntimePersistence(
     ): Long {
         if (batchSize <= 0) return 0
         projectOrderLifecycleState(batchSize)
-        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
-        val lastPartitionSequence = sourceStatus.watermarks
+        // Market metadata needs the source frontier and lag, not a global result count.
+        val sourceWatermarks = projectionStatusWatermarks(sourceProjectionName, emptyList(), "venue-event-batch")
+        val lastPartitionSequence = sourceWatermarks
             .filter { it.partitionId >= 0 }
             .maxOfOrNull { it.lastPartitionSequence } ?: 0L
         projectionConnection().use { conn ->
@@ -4147,7 +4222,7 @@ class PostgresRuntimePersistence(
                 ps.setString(1, projectionName)
                 ps.setString(2, sourceProjectionName)
                 ps.setLong(3, lastPartitionSequence)
-                ps.setLong(4, sourceStatus.lag)
+                ps.setLong(4, sourceWatermarks.sumOf { it.lag })
                 ps.setInt(5, batchSize)
                 ps.executeQuery().use { rs ->
                     rs.next()
@@ -4299,24 +4374,34 @@ class PostgresRuntimePersistence(
             val watermarkSequences = watermarkPartitions.map { watermarks.getValue(it).lastPartitionSequence }
             conn.prepareStatement(
                 """
-                WITH watermark_partitions AS (
+                WITH RECURSIVE watermark_partitions AS (
                   SELECT *
                   FROM unnest(?::INTEGER[], ?::BIGINT[]) AS watermark(partition_id, last_partition_seq)
                 ),
-                canonical_rows AS (
+                canonical_rows AS NOT MATERIALIZED (
                   $canonicalRowsSql
+                ),
+                partition_ids(partition_id) AS (
+                  SELECT MIN(partition_id) FROM canonical_rows
+                  UNION ALL
+                  SELECT (
+                    SELECT MIN(canonical.partition_id) FROM canonical_rows canonical
+                    WHERE canonical.partition_id > previous.partition_id
+                  )
+                  FROM partition_ids previous
+                  WHERE previous.partition_id IS NOT NULL
                 )
                 SELECT
-                  canonical.partition_id,
-                  MAX(canonical.partition_seq) AS canonical_max_partition_seq,
-                  COUNT(*) FILTER (
-                    WHERE canonical.partition_seq > COALESCE(watermark_partitions.last_partition_seq, 0)
-                  ) AS lag
-                FROM canonical_rows canonical
-                LEFT JOIN watermark_partitions
-                  ON watermark_partitions.partition_id = canonical.partition_id
-                WHERE cardinality(?::INTEGER[]) = 0 OR canonical.partition_id = ANY(?::INTEGER[])
-                GROUP BY canonical.partition_id
+                  partition_ids.partition_id,
+                  (SELECT MAX(canonical.partition_seq) FROM canonical_rows canonical
+                   WHERE canonical.partition_id = partition_ids.partition_id) AS canonical_max_partition_seq,
+                  (SELECT COUNT(*) FROM canonical_rows canonical
+                   WHERE canonical.partition_id = partition_ids.partition_id
+                     AND canonical.partition_seq > COALESCE(watermark_partitions.last_partition_seq, 0)) AS lag
+                FROM partition_ids
+                LEFT JOIN watermark_partitions ON watermark_partitions.partition_id = partition_ids.partition_id
+                WHERE partition_ids.partition_id IS NOT NULL
+                  AND (cardinality(?::INTEGER[]) = 0 OR partition_ids.partition_id = ANY(?::INTEGER[]))
                 """.trimIndent()
             ).use { ps ->
                 val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
