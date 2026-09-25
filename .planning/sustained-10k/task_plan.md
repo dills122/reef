@@ -26,6 +26,7 @@ Branch: codex/projection-sustained-10k. Base: 0dd72ba9. Checkout: /Users/dsteele
 - [ ] Preflight aged canonical source and plan unique-index rollout before aged deployment.
 - [x] Run focused PostgreSQL/behavior tests, then one fresh independent review of these changes and fixes for any blockers.
 - [x] Run the C28 full-system configuration on a clean disposable droplet with comparable stage/DB diagnostics; preserve all results and destroy owned resources. C38 timed gate failed; postdrain integrity and business reference passed.
+- [x] Consolidate overlapping canonical partition-sequence indexes in `0062`; live PostgreSQL tests cover uniqueness, covering read shape, wrong prebuild rejection, and valid prebuild adoption. No throughput claim until matched full-pipeline run.
 
 - [x] Trace the backpressure status contract; make its lag-only read avoid the exact submit-results count while retaining public diagnostics.
 - [x] Run focused Kotlin and live PostgreSQL tests for count/lag parity and the unchanged backpressure decision.

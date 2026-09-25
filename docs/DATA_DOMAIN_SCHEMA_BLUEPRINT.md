@@ -49,10 +49,11 @@ Do not put synchronous normalized order, trade, execution, or UI table writes ba
 - `batch_id text pk`, `shard_id text`, `partition_id int`, `command_stream text`, `event_stream text`, `first_sequence bigint`, `last_sequence bigint`, `command_count int`, `payload_checksum text`, `payload_format text default 'venue-event-batch-json'`, `payload_version text default 'v1'`, `payload_json jsonb`, `created_at text`, `materialized_at timestamptz default now()`, plus typed companion `created_at_ts timestamptz` (`0033`).
 - unique on `(event_stream, partition_id, first_sequence, last_sequence)`.
 
-2. `runtime.canonical_command_outcomes` (`runtime/0010`, `0033`, `0034`)
+2. `runtime.canonical_command_outcomes` (`runtime/0010`, `0013`, `0033`, `0034`, `0058`, `0061`, `0062`)
 - command-level lookup and replay rows projected from canonical event batches; this is the primary canonical-outcome table consumed by the venue-event-batch projector.
 - `command_id text pk`, `batch_id text`, `shard_id text`, `partition_id int`, `command_stream text`, `event_stream text`, `stream_sequence bigint`, `delivered_count bigint`, `command_type text`, `payload_hash text`, `instrument_id text`, `order_id text`, `result_status text`, `reject_code text`, `result_payload jsonb default '{}'`, `materialized_at timestamptz default now()`, plus typed companion `occurred_at_ts timestamptz` (`0033`).
-- unique on `(batch_id, stream_sequence)`.
+- unique on `(event_stream, batch_id, stream_sequence)`; `command_id` is the primary key.
+- one unique covering index on `(partition_id, stream_sequence) INCLUDE (command_type)` protects the partition sequence invariant and supports projection reads. Migration `0062` replaces the overlapping indexes from `0058` and `0061` without weakening either property.
 
 3. `runtime.canonical_venue_event_batches_archive` / `runtime.canonical_command_outcomes_archive` (`runtime/0036`)
 - partitioned archive targets for canonical venue-batch materialization history; these are not primary read/projection paths.

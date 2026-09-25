@@ -197,8 +197,16 @@ used a copy of C32's 13GB projection database. Five mixed writes all cost time;
 the bounded probe. This does not reproduce C30's full-pipeline delay or qualify
 10k. No status/fill SQL change is supported yet. C37 and C38 full-pipeline
 diagnostics now place the remaining deficit first in canonical materialization.
-Next implementation target: consolidate overlapping canonical sequence indexes
-without losing uniqueness or covering reads, then reduce batch-commit work.
+Migration `0062` consolidates overlapping canonical sequence indexes into one
+unique covering index without losing uniqueness or covering reads. On an aged
+target, prebuild the exact `idx_canonical_command_outcomes_partition_seq_next`
+definition concurrently before applying the transaction-wrapped migration;
+its five-second statement budget fails closed if a direct build is too slow.
+The accepted C28/C38 topology uses separate canonical and projection databases;
+its active Kotlin reader already limits candidates per owned partition. The
+single-store SQL selector remains unbounded, but changing it cannot address
+the measured C38 bottleneck. Next target: reduce canonical batch-commit work
+where it has a concrete write or read cost in this active topology.
 If that cannot supply 10k/s intake plus 20% drain margin, evaluate partitioned
 canonical storage with explicit global command-ID replay integrity. Aged-data
 preflight and safe unique-index rollout remain required before deployment.
