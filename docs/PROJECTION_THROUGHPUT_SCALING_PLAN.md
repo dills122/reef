@@ -27,6 +27,29 @@ canonical materialization remains the source of audit/replay truth. The work
 here is about making rebuildable projections keep up without putting their cost
 back on the hot command path.
 
+## September 25 Canonical Batch Insert Diagnostic
+
+C39's clean 300-second 10k/s run materialized 7,770.56/s at the materializer
+collection, versus 7,420.80/s in C38, while its projector collection fell
+from 9,112.03/s to 7,885.88/s. Both failed the timed full-pipeline gate.
+Migration `0064` tests one narrower hypothesis: removing the normal-path
+`COUNT(DISTINCT commandId)` and second JSON/conflict comparison from canonical
+batch insertion may reduce primary materializer work. It retains the same
+header/outcome storage shape, so it cannot by itself remove the measured
+4.756GB outcome table and 0.968GB retained batch table cost.
+
+Use a fresh C38/C39-matched c-32 setup: 16 canonical owners, four
+materializers, four dedicated lifecycle workers plus the nested caller,
+300 seconds at 10k/s, and the same accepted fixture, DB settings, and
+diagnostics. Compare accepted, materialized, and projected rates only at their
+respective fixed collection points; also compare primary block reads, WAL,
+temp bytes, outcome/table size, projection retries, and postdrain replay and
+frontier checks. Treat this as a diagnostic, not a promotion, unless the frozen
+10k full-pipeline and 20% drain-margin gates pass. If the materializer remains
+below target or projector capacity regresses, prioritize a narrower canonical
+storage/write design and projection write contention over more count-query
+changes.
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or

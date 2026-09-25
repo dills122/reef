@@ -1177,7 +1177,6 @@ class PostgresRuntimePersistence(
                       v_existing_checksum TEXT;
                       v_header_inserted BOOLEAN := FALSE;
                       v_outcome_count BIGINT := 0;
-                      v_unique_command_count BIGINT := 0;
                       inserted_count BIGINT := 0;
                     BEGIN
                       IF p_batch IS NULL OR jsonb_typeof(p_batch) <> 'object' THEN
@@ -1241,17 +1240,18 @@ class PostgresRuntimePersistence(
                         RETURN 0;
                       END IF;
 
-                      WITH outcomes AS MATERIALIZED (
-                        SELECT outcome
-                        FROM jsonb_array_elements(
-                          CASE
-                            WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
-                            ELSE '[]'::jsonb
-                          END
-                        ) AS outcome
-                      ),
-                      inserted AS (
-                        INSERT INTO ${names.canonicalCommandOutcomes}(
+                      v_outcome_count := jsonb_array_length(
+                        CASE
+                          WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
+                          ELSE '[]'::jsonb
+                        END
+                      );
+
+                      IF v_outcome_count <> COALESCE((p_batch->>'commandCount')::BIGINT, 0) THEN
+                        RAISE EXCEPTION 'venue event batch command count mismatch for eventStream %, batchId %', v_event_stream, v_batch_id;
+                      END IF;
+
+                      INSERT INTO ${names.canonicalCommandOutcomes}(
                           command_id,
                           batch_id,
                           shard_id,
@@ -1267,8 +1267,8 @@ class PostgresRuntimePersistence(
                           result_status,
                           reject_code,
                           result_payload
-                        )
-                        SELECT
+                      )
+                      SELECT
                           outcome->>'commandId',
                           v_batch_id,
                           COALESCE(p_batch->>'shardId', ''),
@@ -1284,43 +1284,16 @@ class PostgresRuntimePersistence(
                           COALESCE(outcome->>'status', ''),
                           COALESCE(outcome->>'rejectCode', outcome#>>'{result,rejected,code}', ''),
                           COALESCE(outcome->'result', '{}'::jsonb)
-                        FROM outcomes
-                        ON CONFLICT (command_id) DO NOTHING
-                        RETURNING 1
-                      )
-                      SELECT
-                        (SELECT COUNT(*) FROM outcomes),
-                        (SELECT COUNT(DISTINCT outcome->>'commandId') FROM outcomes),
-                        (SELECT COUNT(*) FROM inserted)
-                        INTO v_outcome_count, v_unique_command_count, inserted_count;
+                      FROM jsonb_array_elements(
+                        CASE
+                          WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
+                          ELSE '[]'::jsonb
+                        END
+                      ) AS outcome
+                      ON CONFLICT (command_id) DO NOTHING;
 
-                      IF v_outcome_count <> COALESCE((p_batch->>'commandCount')::BIGINT, 0) THEN
-                        RAISE EXCEPTION 'venue event batch command count mismatch for eventStream %, batchId %', v_event_stream, v_batch_id;
-                      END IF;
-
-                      IF v_outcome_count <> v_unique_command_count THEN
-                        RAISE EXCEPTION 'duplicate commandId in venue event batch for eventStream %, batchId %', v_event_stream, v_batch_id;
-                      END IF;
-
-                      IF inserted_count <> v_outcome_count AND EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p_batch->'outcomes') AS source(outcome)
-                        JOIN ${names.canonicalCommandOutcomes} existing
-                          ON existing.command_id = source.outcome->>'commandId'
-                        WHERE existing.batch_id IS DISTINCT FROM v_batch_id
-                           OR existing.shard_id IS DISTINCT FROM COALESCE(p_batch->>'shardId', '')
-                           OR existing.partition_id IS DISTINCT FROM COALESCE((p_batch->>'partition')::INTEGER, -1)
-                           OR existing.command_stream IS DISTINCT FROM COALESCE(p_batch->>'commandStream', '')
-                           OR existing.event_stream IS DISTINCT FROM v_event_stream
-                           OR existing.stream_sequence IS DISTINCT FROM COALESCE((source.outcome->>'streamSequence')::BIGINT, 0)
-                           OR existing.command_type IS DISTINCT FROM COALESCE(source.outcome->>'commandType', '')
-                           OR existing.payload_hash IS DISTINCT FROM COALESCE(source.outcome->>'payloadHash', '')
-                           OR existing.instrument_id IS DISTINCT FROM COALESCE(source.outcome->>'instrumentId', '')
-                           OR existing.order_id IS DISTINCT FROM COALESCE(source.outcome->>'orderId', '')
-                           OR existing.result_status IS DISTINCT FROM COALESCE(source.outcome->>'status', '')
-                           OR existing.reject_code IS DISTINCT FROM COALESCE(source.outcome->>'rejectCode', source.outcome#>>'{result,rejected,code}', '')
-                           OR existing.result_payload IS DISTINCT FROM COALESCE(source.outcome->'result', '{}'::jsonb)
-                      ) THEN
+                      GET DIAGNOSTICS inserted_count = ROW_COUNT;
+                      IF inserted_count <> v_outcome_count THEN
                         RAISE EXCEPTION 'canonical command outcome conflict for eventStream %, batchId %', v_event_stream, v_batch_id;
                       END IF;
 

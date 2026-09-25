@@ -3,8 +3,13 @@ package com.reef.platform.infrastructure.persistence
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
+import java.sql.DriverManager
 import java.sql.SQLException
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -30,7 +35,7 @@ class PostgresVenueBatchOutcomeReuseIntegrationTest {
     @Test
     fun duplicateCommandIdsRejectWholeBatch() = withSchema { conn, schema ->
         val duplicate = batch("duplicate", "checksum-duplicate", 2, "cmd-a" to 1, "cmd-a" to 2)
-        assertTrue(assertFailsWith<SQLException> { conn.materialize(schema, duplicate) }.message.orEmpty().contains("duplicate commandId"))
+        assertTrue(assertFailsWith<SQLException> { conn.materialize(schema, duplicate) }.message.orEmpty().contains("canonical command outcome conflict"))
         assertEquals(0, conn.count(schema, "canonical_venue_event_batches"))
         assertEquals(0, conn.count(schema, "canonical_command_outcomes"))
     }
@@ -41,6 +46,52 @@ class PostgresVenueBatchOutcomeReuseIntegrationTest {
         assertTrue(assertFailsWith<SQLException> { conn.materialize(schema, mismatch) }.message.orEmpty().contains("command count mismatch"))
         assertEquals(0, conn.count(schema, "canonical_venue_event_batches"))
         assertEquals(0, conn.count(schema, "canonical_command_outcomes"))
+    }
+
+    @Test
+    fun newHeaderCannotAdoptAnExistingMatchingOutcome() = withSchema { conn, schema ->
+        conn.exec(
+            "INSERT INTO $schema.canonical_command_outcomes(" +
+                "command_id, batch_id, shard_id, partition_id, command_stream, event_stream, " +
+                "stream_sequence, delivered_count, command_type, payload_hash, instrument_id, order_id, " +
+                "result_status, reject_code, result_payload) VALUES (" +
+                "'cmd-a', 'orphan', 'shard', 1, 'commands', 'events', 1, 0, 'SubmitOrder', '', '', '', '', '', '{}'::jsonb)"
+        )
+        val batch = batch("orphan", "checksum-orphan", 1, "cmd-a" to 1)
+        assertTrue(assertFailsWith<SQLException> { conn.materialize(schema, batch) }.message.orEmpty().contains("canonical command outcome conflict"))
+        assertEquals(0, conn.count(schema, "canonical_venue_event_batches"))
+        assertEquals(1, conn.count(schema, "canonical_command_outcomes"))
+    }
+
+    @Test
+    fun concurrentBatchesClaimingOneCommandCommitOnlyOneHeader() = withSchema { conn, schema ->
+        val url = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST")
+        val user = System.getenv("RUNTIME_POSTGRES_USER_TEST")
+        val password = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST")
+        val start = CountDownLatch(1)
+        val workers = Executors.newFixedThreadPool(2)
+        try {
+            val results = listOf(
+                batch("first", "checksum-first", 1, "shared-command" to 1),
+                batch("second", "checksum-second", 1, "shared-command" to 2),
+            ).map { payload ->
+                workers.submit(Callable<Result<Long>> {
+                    DriverManager.getConnection(url, user, password).use { concurrentConn ->
+                        start.await()
+                        runCatching { concurrentConn.materialize(schema, payload) }
+                    }
+                })
+            }
+            start.countDown()
+            val outcomes = results.map { it.get(15, TimeUnit.SECONDS) }
+            assertEquals(1, outcomes.count { it.getOrNull() == 1L })
+            assertEquals(1, outcomes.count { it.exceptionOrNull()?.message.orEmpty().contains("canonical command outcome conflict") })
+            assertEquals(1, conn.count(schema, "canonical_venue_event_batches"))
+            assertEquals(1, conn.count(schema, "canonical_command_outcomes"))
+        } finally {
+            start.countDown()
+            workers.shutdownNow()
+        }
     }
 
     private fun withSchema(block: (Connection, String) -> Unit) {
@@ -69,7 +120,7 @@ class PostgresVenueBatchOutcomeReuseIntegrationTest {
                             "UNIQUE(partition_id, stream_sequence))"
                     )
                     conn.exec(
-                        Files.readString(Path.of("../../scripts/dev/db/migrations/runtime/0063_reuse_materialized_batch_outcomes.sql"))
+                        Files.readString(Path.of("../../scripts/dev/db/migrations/runtime/0064_fail_closed_batch_outcome_insert.sql"))
                             .replace("runtime.", "$schema.")
                     )
                     block(conn, schema)
