@@ -80,6 +80,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0063_reuse_materialized_batch_outcomes.sql",
       "runtime/0064_fail_closed_batch_outcome_insert.sql",
       "runtime/0065_lock_only_projection_dirty_conflicts.sql",
+      "runtime/0066_drop_unused_order_event_time_index.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));

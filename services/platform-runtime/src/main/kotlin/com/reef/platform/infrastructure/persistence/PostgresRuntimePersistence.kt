@@ -563,13 +563,6 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_runtime_events_order_occurred_typed
-                    ON ${names.runtimeEvents}(order_id, occurred_at_ts DESC, event_id_uuid DESC)
-                    WHERE occurred_at_ts IS NOT NULL
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_order_modified_lifecycle
                     ON ${names.runtimeEvents}(
                       order_id,

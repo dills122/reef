@@ -1173,3 +1173,42 @@ SHA256 verification at
 Droplet `603737502` and firewall
 `77ce4dee-e610-49bc-b8b5-d495a7a64dc5` both returned provider 404;
 OpenTofu state was empty.
+
+## C43 — broad runtime-event order/time index removed, full pipeline timed FAIL
+
+September 25, fresh `nyc3` `c-32`, base source `3e763b39` plus migration
+`0066` and compat-bootstrap removal (exact file hashes in the artifact source
+manifest). C42's fixture SHA256 `b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`,
+six materializers, 16 projector owners, 35 compared settings, 10k/s for 300s,
+Node v22.22.1, Bun 1.3.14, and database settings were retained. The flow
+sampler started before load in C43, versus partway through C42; these are
+matched declared workloads, not a perfectly isolated causal pair.
+
+| Fixed 300s stage snapshot | C42, index present | C43, index absent |
+| --- | ---: | ---: |
+| HTTP accepted/direct acked and source materialized | 2,999,882 (9,996.57/s) | 2,992,504 (9,973.99/s) |
+| Intake p95 / p99 | 73.37 / 103.38ms | 78.06 / 122.08ms |
+| Projector metric at its later collection | 2,966,681 (9,885.93/s) | 2,967,975 (9,892.24/s) |
+| Projector lag at collection | 34,201 | 26,029 |
+| Projection WAL delta per accepted command | 5,820.59B | 5,658.69B |
+
+C28 had recorded zero scans and 284MB for
+`idx_runtime_events_order_occurred_typed`. Migration `0066` applied to all
+three fresh databases; the index was absent and order/trace and narrow
+`OrderModified` indexes remained. On populated C43 data, order-event and
+latest-modification reads planned on those retained indexes. Projection WAL
+per accepted command fell about 2.8%, consistent with less index maintenance;
+the different intake and sampler timing prevent a causal throughput claim.
+Projector rate rose only 6.31/s and remained below 9,900/s. Stress and frozen
+checker exited 1; checker also rejected lag, downstream freshness, and cohort
+authority. No projection retries or database deadlocks were observed. The
+index removal is a bounded write/storage cleanup, not a sustained-10k fix or
+evidence for 20% drain headroom.
+
+Postdrain source/projected counts both equalled 2,992,504, all 16 sequence
+frontiers were contiguous, both dirty queues emptied, and rollback-only
+business rebuild matched 2,465,524 lifecycle rows and 64 market rows. All 102
+remote evidence files passed SHA256 verification under
+`artifacts/sustained-10k-20260925/index0066-six-materializers/run-10000-300s-c43/`.
+Droplet `603746089` was intentionally retained for follow-up testing, with a
+scheduled local-time cost cutoff before 21:00; destruction remains pending.

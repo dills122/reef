@@ -83,6 +83,14 @@ collection point. The frozen full-pipeline gate failed. Move to the specific
 normalized projection write path and retained row/index volume; 16-owner
 topology and six-source-consumer configuration are not yet promotable.
 
+C43 removed the zero-scan broad `runtime_events` order/time index. The fresh
+C42-matched 10k/300s run kept read plans and postdrain business state correct,
+with about 2.8% lower projection WAL per accepted command, but projector rate
+was only 9,892.24/s with 26,029 lag; the frozen gate still failed. Retain this
+as index-write cleanup only. The next throughput slice must change the larger
+normalized projection row/index write shape, not remove another index on the
+assumption that unused scans imply a capacity gain.
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or
