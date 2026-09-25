@@ -77,6 +77,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0060_canonical_sequence_prefix_guard.sql",
       "runtime/0061_canonical_sequence_uniqueness.sql",
       "runtime/0062_consolidate_canonical_sequence_index.sql",
+      "runtime/0063_reuse_materialized_batch_outcomes.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));

@@ -205,8 +205,13 @@ its five-second statement budget fails closed if a direct build is too slow.
 The accepted C28/C38 topology uses separate canonical and projection databases;
 its active Kotlin reader already limits candidates per owned partition. The
 single-store SQL selector remains unbounded, but changing it cannot address
-the measured C38 bottleneck. Next target: reduce canonical batch-commit work
-where it has a concrete write or read cost in this active topology.
+the measured C38 bottleneck. Migration `0063` now reuses the already-materialized
+outcome set for duplicate command-ID validation in canonical batch ingestion;
+the Kotlin compatibility function matches it. Local PostgreSQL tests cover
+normal insertion, replay, conflicting command IDs, duplicate IDs, count
+mismatch, and statement rollback. Independent review found no code blocker.
+Neither `0062` nor `0063` has a measured throughput gain yet. Next gate is one
+clean C28-topology treatment run against C38's timed stage boundaries.
 If that cannot supply 10k/s intake plus 20% drain margin, evaluate partitioned
 canonical storage with explicit global command-ID replay integrity. Aged-data
 preflight and safe unique-index rollout remain required before deployment.

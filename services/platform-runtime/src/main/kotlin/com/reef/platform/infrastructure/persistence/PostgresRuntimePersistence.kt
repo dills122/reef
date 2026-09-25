@@ -1177,6 +1177,7 @@ class PostgresRuntimePersistence(
                       v_existing_checksum TEXT;
                       v_header_inserted BOOLEAN := FALSE;
                       v_outcome_count BIGINT := 0;
+                      v_unique_command_count BIGINT := 0;
                       inserted_count BIGINT := 0;
                     BEGIN
                       IF p_batch IS NULL OR jsonb_typeof(p_batch) <> 'object' THEN
@@ -1289,17 +1290,15 @@ class PostgresRuntimePersistence(
                       )
                       SELECT
                         (SELECT COUNT(*) FROM outcomes),
+                        (SELECT COUNT(DISTINCT outcome->>'commandId') FROM outcomes),
                         (SELECT COUNT(*) FROM inserted)
-                        INTO v_outcome_count, inserted_count;
+                        INTO v_outcome_count, v_unique_command_count, inserted_count;
 
                       IF v_outcome_count <> COALESCE((p_batch->>'commandCount')::BIGINT, 0) THEN
                         RAISE EXCEPTION 'venue event batch command count mismatch for eventStream %, batchId %', v_event_stream, v_batch_id;
                       END IF;
 
-                      IF v_outcome_count <> (
-                        SELECT COUNT(DISTINCT outcome->>'commandId')
-                        FROM jsonb_array_elements(p_batch->'outcomes') AS source(outcome)
-                      ) THEN
+                      IF v_outcome_count <> v_unique_command_count THEN
                         RAISE EXCEPTION 'duplicate commandId in venue event batch for eventStream %, batchId %', v_event_stream, v_batch_id;
                       END IF;
 
