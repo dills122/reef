@@ -3415,7 +3415,7 @@ class PlatformHttpServer(
             emptyList()
         }
         val projectionLagProvider: (() -> ProjectionLag?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
-            { api.projectionLag(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue) }
+            { api.projectionLagUpTo(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue, streamCommandMaxProjectorLag) }
         } else {
             null
         }

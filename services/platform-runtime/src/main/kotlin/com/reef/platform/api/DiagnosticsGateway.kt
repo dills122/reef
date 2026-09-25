@@ -64,16 +64,24 @@ internal class DiagnosticsGateway(
     private val api: PlatformApi,
     private val runtimeLoopStarter: RuntimeLoopStarter
 ) {
-    fun projectorStatusJson(): String {
+    fun projectorStatusJson(includeProjectedCount: Boolean = true): String {
         val partitions = runtimeLoopStarter.projectorPartitions()
-        val status = api.projectionStatus(
-            projectionConfig.streamAckProjectionName,
-            partitions,
-            projectionConfig.streamAckProjectionSource.configValue
-        )
+        val status = if (includeProjectedCount) {
+            api.projectionStatus(
+                projectionConfig.streamAckProjectionName,
+                partitions,
+                projectionConfig.streamAckProjectionSource.configValue
+            )
+        } else {
+            api.projectionStatusWithoutCount(
+                projectionConfig.streamAckProjectionName,
+                partitions,
+                projectionConfig.streamAckProjectionSource.configValue
+            )
+        }
         val metrics = CanonicalProjectionMetrics.snapshot()
         val retryMetrics = ProjectionPersistenceRetryMetrics.snapshot()
-        return JsonCodec.writeObject(
+        val fields = mutableListOf<Pair<String, Any?>>(
             "role" to runtimeRole.configValue,
             "status" to if (
                 runtimeRole == PlatformRuntimeRole.Projector && projectionConfig.streamAckProjectorEnabled
@@ -86,7 +94,6 @@ internal class DiagnosticsGateway(
             "marketDataProjectorEnabled" to projectionConfig.marketDataProjectorEnabled,
             "projectionName" to status.projectionName,
             "partitions" to partitions,
-            "projectedCount" to status.projectedCount,
             "lag" to status.lag,
             "metrics" to mapOf(
                 "projected" to metrics.projected,
@@ -116,6 +123,8 @@ internal class DiagnosticsGateway(
                 )
             }
         )
+        if (includeProjectedCount) fields.add("projectedCount" to status.projectedCount)
+        return JsonCodec.writeObject(*fields.toTypedArray())
     }
     fun asyncCommandStatsJson(): String {
         val acceptedAsyncStats = acceptedAsyncCommandIntake?.stats()
@@ -478,7 +487,7 @@ internal class DiagnosticsGateway(
         )
     }
 
-    fun marketDataProjectorStatusJson(): String {
+    fun marketDataProjectorStatusJson(includeDirtyCounts: Boolean = true): String {
         val stats = MarketDataProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
             "enabled" to runtimeLoopStarter.marketDataProjectorShouldStart(),
@@ -496,11 +505,11 @@ internal class DiagnosticsGateway(
                 "lastFailedAt" to stats.lastFailedAt,
                 "lastError" to stats.lastError
             ),
-            "instrumentation" to downstreamProjectionInstrumentation(DownstreamProjectionStage.MarketData)
+            "instrumentation" to downstreamProjectionInstrumentation(DownstreamProjectionStage.MarketData, includeDirtyCounts)
         )
     }
 
-    fun orderLifecycleProjectorStatusJson(): String {
+    fun orderLifecycleProjectorStatusJson(includeDirtyCounts: Boolean = true): String {
         val stats = OrderLifecycleProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
             "enabled" to runtimeLoopStarter.orderLifecycleProjectorShouldStart(),
@@ -517,11 +526,11 @@ internal class DiagnosticsGateway(
                 "lastFailedAt" to stats.lastFailedAt,
                 "lastError" to stats.lastError
             ),
-            "instrumentation" to downstreamProjectionInstrumentation(DownstreamProjectionStage.OrderLifecycle)
+            "instrumentation" to downstreamProjectionInstrumentation(DownstreamProjectionStage.OrderLifecycle, includeDirtyCounts)
         )
     }
 
-    private fun downstreamProjectionInstrumentation(stage: DownstreamProjectionStage): Map<String, Any?> {
+    private fun downstreamProjectionInstrumentation(stage: DownstreamProjectionStage, includeDirtyCounts: Boolean): Map<String, Any?> {
         val callerStats = DownstreamProjectionCallerMetrics.snapshot(stage)
         if (!projectionConfig.downstreamProjectionInstrumentationEnabled) {
             return mapOf(
@@ -552,7 +561,7 @@ internal class DiagnosticsGateway(
             projectionConfig.streamAckProjectionName,
             partitions
         )
-        val dirtyQueues = api.projectionDirtyQueueStats()
+        val dirtyQueues = if (includeDirtyCounts) api.projectionDirtyQueueStats() else api.projectionDirtyQueueMarkerStats()
         DownstreamProjectionCoverageMetrics.observe(
             stage = stage,
             sourceFrontier = sourceFrontier,
@@ -564,7 +573,7 @@ internal class DiagnosticsGateway(
             "enabled" to true,
             "stageEnabled" to stageEnabled,
             "sampleIntervalMs" to 1_000,
-            "dirtyQueues" to dirtyQueues.toMap(),
+            "dirtyQueues" to if (includeDirtyCounts) dirtyQueues.toMap() else dirtyQueues.toMarkerMap(),
             "callerStats" to callerStats.toMap(),
             "coverage" to coverage.toMap()
         )
@@ -574,6 +583,15 @@ internal class DiagnosticsGateway(
         "orderLifecyclePending" to orderLifecyclePending,
         "orderLifecycleOldestDirtiedAt" to orderLifecycleOldestDirtiedAt,
         "marketDataPending" to marketDataPending,
+        "marketDataOldestDirtiedAt" to marketDataOldestDirtiedAt,
+        "databaseSnapshotAt" to databaseSnapshotAt,
+        "databaseGeneration" to databaseGeneration
+    )
+
+    private fun com.reef.platform.infrastructure.persistence.ProjectionDirtyQueueStats.toMarkerMap(): Map<String, Any> = mapOf(
+        "orderLifecycleEmpty" to (orderLifecyclePending == 0L),
+        "orderLifecycleOldestDirtiedAt" to orderLifecycleOldestDirtiedAt,
+        "marketDataEmpty" to (marketDataPending == 0L),
         "marketDataOldestDirtiedAt" to marketDataOldestDirtiedAt,
         "databaseSnapshotAt" to databaseSnapshotAt,
         "databaseGeneration" to databaseGeneration

@@ -3459,9 +3459,73 @@ class PostgresRuntimePersistence(
     override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus =
         projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = true)
 
+    override fun projectionStatusWithoutCount(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus =
+        projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = false)
+
     override fun projectionLag(projectionName: String, partitions: List<Int>, source: String): ProjectionLag {
         val status = projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = false)
         return ProjectionLag(status.projectionName, status.lag)
+    }
+
+    override fun projectionLagUpTo(
+        projectionName: String,
+        partitions: List<Int>,
+        source: String,
+        threshold: Long
+    ): ProjectionLag {
+        if (threshold <= 0L) return projectionLag(projectionName, partitions, source)
+        // Read watermark first. New canonical commits between stores can only make this
+        // conservative; they cannot hide backlog behind a newer watermark.
+        val watermarks = projectionWatermarkRows(projectionName, partitions)
+        val watermarkPartitions = watermarks.keys.filter { it >= 0 }.sorted()
+        val watermarkSequences = watermarkPartitions.map { watermarks.getValue(it).lastPartitionSequence }
+        canonicalConnection().use { conn ->
+            val canonicalRowsSql = canonicalProjectionRowsSql(source)
+            conn.prepareStatement(
+                """
+                WITH RECURSIVE watermark_partitions AS (
+                  SELECT * FROM unnest(?::INTEGER[], ?::BIGINT[]) AS watermark(partition_id, last_partition_seq)
+                ),
+                canonical_rows AS NOT MATERIALIZED ($canonicalRowsSql),
+                discovered(partition_id) AS (
+                  SELECT MIN(partition_id) FROM canonical_rows WHERE cardinality(?::INTEGER[]) = 0
+                  UNION ALL
+                  SELECT (SELECT MIN(canonical.partition_id) FROM canonical_rows canonical
+                          WHERE canonical.partition_id > previous.partition_id)
+                  FROM discovered previous WHERE previous.partition_id IS NOT NULL
+                ),
+                partition_ids AS (
+                  SELECT partition_id FROM discovered WHERE partition_id IS NOT NULL
+                  UNION
+                  SELECT unnest(?::INTEGER[])
+                )
+                SELECT LEAST(COALESCE(SUM(backlog.lag), 0), ?::BIGINT) AS lag
+                FROM partition_ids ids
+                LEFT JOIN watermark_partitions watermark ON watermark.partition_id = ids.partition_id
+                CROSS JOIN LATERAL (
+                  SELECT COUNT(*) AS lag FROM (
+                    SELECT 1 FROM canonical_rows canonical
+                    WHERE canonical.partition_id = ids.partition_id
+                      AND canonical.partition_seq > COALESCE(watermark.last_partition_seq, 0)
+                    LIMIT ?
+                  ) bounded
+                ) backlog
+                """.trimIndent()
+            ).use { ps ->
+                ps.setArray(1, conn.createArrayOf("integer", watermarkPartitions.toTypedArray()))
+                ps.setArray(2, conn.createArrayOf("bigint", watermarkSequences.toTypedArray()))
+                val requested = conn.createArrayOf("integer", partitions.toTypedArray())
+                ps.setArray(3, requested)
+                ps.setArray(4, requested)
+                ps.setLong(5, threshold)
+                ps.setLong(6, threshold)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    val boundedLag = rs.getLong("lag").coerceAtMost(threshold)
+                    return ProjectionLag(projectionName, boundedLag, isLowerBound = boundedLag >= threshold)
+                }
+            }
+        }
     }
 
     private fun projectionStatusInternal(
@@ -3645,6 +3709,36 @@ class PostgresRuntimePersistence(
                         orderLifecycleOldestDirtiedAt = rs.getString("order_lifecycle_oldest_dirtied_at"),
                         marketDataPending = rs.getLong("market_data_pending"),
                         marketDataOldestDirtiedAt = rs.getString("market_data_oldest_dirtied_at"),
+                        databaseSnapshotAt = rs.getString("database_snapshot_at"),
+                        databaseGeneration = rs.getString("database_generation")
+                    )
+                }
+            }
+        }
+    }
+
+    override fun projectionDirtyQueueMarkerStats(): ProjectionDirtyQueueStats {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.orderLifecycleDirty}), '') AS order_lifecycle_oldest_dirtied_at,
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.marketDataSnapshotDirty}), '') AS market_data_oldest_dirtied_at,
+                  to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS database_snapshot_at,
+                  pg_postmaster_start_time()::TEXT AS database_generation
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    val lifecycleOldest = rs.getString("order_lifecycle_oldest_dirtied_at")
+                    val marketOldest = rs.getString("market_data_oldest_dirtied_at")
+                    // MIN is null exactly when its NOT NULL dirtied_at queue is empty.
+                    // These are occupancy sentinels for coverage, never exposed as exact counts.
+                    return ProjectionDirtyQueueStats(
+                        orderLifecyclePending = if (lifecycleOldest.isEmpty()) 0 else 1,
+                        orderLifecycleOldestDirtiedAt = lifecycleOldest,
+                        marketDataPending = if (marketOldest.isEmpty()) 0 else 1,
+                        marketDataOldestDirtiedAt = marketOldest,
                         databaseSnapshotAt = rs.getString("database_snapshot_at"),
                         databaseGeneration = rs.getString("database_generation")
                     )
@@ -4101,7 +4195,9 @@ class PostgresRuntimePersistence(
         // See marketDataDepthSnapshot: order_lifecycle_state is already kept
         // current by the incremental OrderLifecycleProjectionWorker, so a
         // synchronous full-venue rebuild here is redundant.
-        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceStatus = projectionStatusInternal(
+            sourceProjectionName, emptyList(), "venue-event-batch", includeProjectedCount = false
+        )
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }
             .maxOfOrNull { it.lastPartitionSequence } ?: 0L
@@ -4224,10 +4320,11 @@ class PostgresRuntimePersistence(
     override fun projectMarketDataSnapshots(
         projectionName: String,
         sourceProjectionName: String,
-        batchSize: Int
+        batchSize: Int,
+        projectLifecycleFirst: Boolean
     ): Long {
         if (batchSize <= 0) return 0
-        projectOrderLifecycleState(batchSize)
+        if (projectLifecycleFirst) projectOrderLifecycleState(batchSize)
         // Market metadata needs the source frontier and lag, not a global result count.
         val sourceWatermarks = projectionStatusWatermarks(sourceProjectionName, emptyList(), "venue-event-batch")
         val lastPartitionSequence = sourceWatermarks
@@ -4304,7 +4401,9 @@ class PostgresRuntimePersistence(
         // every depth-book read paid for a full DELETE+rebuild across every
         // order/execution/event in the system. Callers that need a forced
         // full rebuild use the dedicated rebuildOrderLifecycleState route.
-        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceStatus = projectionStatusInternal(
+            sourceProjectionName, emptyList(), "venue-event-batch", includeProjectedCount = false
+        )
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }
             .maxOfOrNull { it.lastPartitionSequence } ?: 0L
@@ -4600,7 +4699,29 @@ class PostgresRuntimePersistence(
                 """
                 INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (event_id) DO NOTHING
+                ON CONFLICT (event_id) DO UPDATE SET
+                  event_id = ${names.rejectTradeReplayConflictFunction}(EXCLUDED.event_id)
+                WHERE ROW(
+                  ${names.trades}.trade_id,
+                  ${names.trades}.execution_id,
+                  ${names.trades}.buy_order_id,
+                  ${names.trades}.sell_order_id,
+                  ${names.trades}.instrument_id,
+                  ${names.trades}.quantity_units,
+                  ${names.trades}.price,
+                  ${names.trades}.currency,
+                  ${names.trades}.occurred_at
+                ) IS DISTINCT FROM ROW(
+                  EXCLUDED.trade_id,
+                  EXCLUDED.execution_id,
+                  EXCLUDED.buy_order_id,
+                  EXCLUDED.sell_order_id,
+                  EXCLUDED.instrument_id,
+                  EXCLUDED.quantity_units,
+                  EXCLUDED.price,
+                  EXCLUDED.currency,
+                  EXCLUDED.occurred_at
+                )
                 """.trimIndent()
             ).use { ps ->
                 trades.forEach { trade ->

@@ -86,7 +86,8 @@ data class ProjectionStatus(
 
 data class ProjectionLag(
     val projectionName: String,
-    val lag: Long
+    val lag: Long,
+    val isLowerBound: Boolean = false
 )
 
 /** Committed projection prefix only; carries no assertion about current canonical lag. */
@@ -340,6 +341,12 @@ interface RuntimePersistence {
     ): ProjectionStatus {
         return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
     }
+    /** Status for frequent polling; projectedCount is not populated. */
+    fun projectionStatusWithoutCount(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus = projectionStatus(projectionName, partitions, source).copy(projectedCount = 0L)
     fun projectionLag(
         projectionName: String,
         partitions: List<Int> = emptyList(),
@@ -360,6 +367,9 @@ interface RuntimePersistence {
             databaseSnapshotAt = ""
         )
     }
+    fun projectionDirtyQueueMarkerStats(): ProjectionDirtyQueueStats = projectionDirtyQueueStats()
+    fun projectionLagUpTo(projectionName: String, partitions: List<Int>, source: String, threshold: Long): ProjectionLag =
+        projectionLag(projectionName, partitions, source)
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return 0
     }
@@ -393,7 +403,8 @@ interface RuntimePersistence {
     fun projectMarketDataSnapshots(
         projectionName: String = "market-data-top-of-book",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes",
-        batchSize: Int = 500
+        batchSize: Int = 500,
+        projectLifecycleFirst: Boolean = true
     ): Long {
         return refreshMarketDataSnapshots(projectionName, sourceProjectionName)
     }

@@ -910,11 +910,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun projectMarketDataSnapshots(
         projectionName: String,
         sourceProjectionName: String,
-        batchSize: Int
+        batchSize: Int,
+        projectLifecycleFirst: Boolean
     ): Long {
         synchronized(lock) {
         if (batchSize <= 0) return 0
-        projectOrderLifecycleState(batchSize)
+        if (projectLifecycleFirst) projectOrderLifecycleState(batchSize)
         val batch = marketDataSnapshotDirty.take(batchSize)
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }

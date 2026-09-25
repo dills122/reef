@@ -141,6 +141,12 @@ class PlatformApi(
         return orderService.projectionStatus(projectionName, partitions, source)
     }
 
+    fun projectionStatusWithoutCount(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus = orderService.projectionStatusWithoutCount(projectionName, partitions, source)
+
     fun projectionLag(
         projectionName: String,
         partitions: List<Int> = emptyList(),
@@ -508,9 +514,10 @@ class PlatformApi(
     fun projectMarketDataSnapshotsCount(
         projectionName: String = "market-data-top-of-book",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes",
-        batchSize: Int = 500
+        batchSize: Int = 500,
+        projectLifecycleFirst: Boolean = true
     ): Long {
-        return orderService.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize)
+        return orderService.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize, projectLifecycleFirst)
     }
 
     fun rebuildOrderLifecycleState(): String {
@@ -526,6 +533,9 @@ class PlatformApi(
     }
 
     fun projectionDirtyQueueStats() = orderService.projectionDirtyQueueStats()
+    fun projectionDirtyQueueMarkerStats() = orderService.projectionDirtyQueueMarkerStats()
+    fun projectionLagUpTo(projectionName: String, partitions: List<Int>, source: String, threshold: Long) =
+        orderService.projectionLagUpTo(projectionName, partitions, source, threshold)
 
     fun marketDataSnapshot(
         instrumentId: String,

@@ -36,7 +36,7 @@ class PostgresCommittedProjectionFrontierIntegrationTest {
             DownstreamProjectionCoverageMetrics.resetForTests()
             fun sample(stage: DownstreamProjectionStage) = DownstreamProjectionCoverageMetrics.observe(
                 stage, persistence.committedProjectionFrontier("prefix", listOf(0)),
-                persistence.projectionDirtyQueueStats(), DownstreamProjectionCallerStats.empty())
+                persistence.projectionDirtyQueueMarkerStats(), DownstreamProjectionCallerStats.empty())
             assertNull(sample(DownstreamProjectionStage.OrderLifecycle))
             assertNull(sample(DownstreamProjectionStage.MarketData))
             source.connection.use { c ->
@@ -60,6 +60,16 @@ class PostgresCommittedProjectionFrontierIntegrationTest {
             val queues = persistence.projectionDirtyQueueStats()
             assertEquals(1, queues.orderLifecyclePending)
             assertEquals(1, queues.marketDataPending)
+            source.connection.use { c ->
+                c.exec("INSERT INTO ${names.orderLifecycleDirty}(order_id) VALUES ('another-new')")
+                c.exec("INSERT INTO ${names.marketDataSnapshotDirty}(instrument_id) VALUES ('another-market')")
+            }
+            val markers = persistence.projectionDirtyQueueMarkerStats()
+            assertEquals(2, persistence.projectionDirtyQueueStats().orderLifecyclePending)
+            assertEquals(1, markers.orderLifecyclePending, "marker read reports occupancy, not exact count")
+            assertEquals(1, markers.marketDataPending)
+            assertTrue(markers.orderLifecycleOldestDirtiedAt.isNotBlank())
+            assertTrue(markers.marketDataOldestDirtiedAt.isNotBlank())
             assertEquals(41, assertNotNull(sample(DownstreamProjectionStage.MarketData)).sourceWatermarks.single().lastPartitionSequence)
         } finally {
             source.connection.use { it.exec("DROP SCHEMA IF EXISTS $schema CASCADE") }

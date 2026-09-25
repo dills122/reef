@@ -99,7 +99,8 @@ internal class RuntimeLoopStarter(
             sourceProjectionName = marketDataProjectorSourceProjectionName,
             pollIntervalMs = marketDataProjectorPollMs,
             batchSize = marketDataProjectorBatchSize,
-            workerName = "reef-market-data-projector-$marketDataProjectorProjectionName"
+            workerName = "reef-market-data-projector-$marketDataProjectorProjectionName",
+            projectLifecycleFirst = !orderLifecycleProjectorShouldStart()
         ).start()
     }
 

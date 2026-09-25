@@ -59,16 +59,34 @@ class PostgresProjectionStatusIntegrationTest {
             assertEquals(0, emptySource.lag)
             assertEquals(ProjectionLag("source", status.lag), api.projectionLag("source", source = "venue-event-batch"))
             assertEquals(ProjectionLag("source", status.lag), sameStore.projectionLag("source", source = "venue-event-batch"))
+            for (persistence in listOf(api, sameStore)) {
+                assertEquals(ProjectionLag("source", 2, isLowerBound = true), persistence.projectionLagUpTo("source", emptyList(), "venue-event-batch", 2))
+                assertEquals(ProjectionLag("source", 3), persistence.projectionLagUpTo("source", emptyList(), "venue-event-batch", 4))
+                assertEquals(ProjectionLag("source", 1), persistence.projectionLagUpTo("source", listOf(0), "venue-event-batch", 2))
+                assertEquals(ProjectionLag("source", 0), persistence.projectionLagUpTo("source", listOf(2), "venue-event-batch", 2))
+            }
             canonical.connection.use { blocker ->
                 blocker.autoCommit = false
                 blocker.exec("LOCK TABLE $schema.submit_results IN ACCESS EXCLUSIVE MODE")
                 val executor = Executors.newSingleThreadExecutor()
                 try {
                     for (persistence in listOf(api, sameStore)) {
+                        val statusWithoutCount = executor.submit<ProjectionStatus> {
+                            persistence.projectionStatusWithoutCount("source", source = "venue-event-batch")
+                        }
+                        assertEquals(status.lag, statusWithoutCount.get(5, TimeUnit.SECONDS).lag)
                         val lag = executor.submit<ProjectionLag> {
                             persistence.projectionLag("source", source = "venue-event-batch")
                         }
                         assertEquals(ProjectionLag("source", status.lag), lag.get(5, TimeUnit.SECONDS))
+                        val refresh = executor.submit<Long> {
+                            persistence.refreshMarketDataSnapshots("market", "source")
+                        }
+                        assertEquals(0L, refresh.get(5, TimeUnit.SECONDS))
+                        val depth = executor.submit<MarketDataDepthSnapshot?> {
+                            persistence.marketDataDepthSnapshot("missing", sourceProjectionName = "source")
+                        }
+                        assertEquals(null, depth.get(5, TimeUnit.SECONDS))
                     }
                 } finally {
                     blocker.rollback()

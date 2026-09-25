@@ -55,6 +55,7 @@ data class PostgresRuntimeSqlNames(
     val cleanupProjectionBatchClaimsFunction = qualify(runtimeSchemaName, "runtime_cleanup_projection_batch_claims")
     val materializeVenueEventBatchFunction = qualify(runtimeSchemaName, "runtime_materialize_venue_event_batch")
     val projectOrderLifecycleStateFunction = qualify(runtimeSchemaName, "runtime_project_order_lifecycle_state")
+    val rejectTradeReplayConflictFunction = qualify(runtimeSchemaName, "runtime_reject_trade_replay_conflict")
     val projectMarketDataSnapshotsFunction = qualify(runtimeSchemaName, "runtime_project_market_data_snapshots")
 
     val authRoles = qualify(authSchemaName, "auth_roles")

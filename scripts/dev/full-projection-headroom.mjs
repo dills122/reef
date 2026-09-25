@@ -72,7 +72,10 @@ export function validateStage(s,expected,m,generation,v,final=false) {
  check(s?.enabled===true&&s.pollIntervalMs===expected.pollIntervalMs&&s.batchSize===expected.batchSize,'stage configuration missing/drift');
  check(zero(s.metrics?.failed),'stage failed');number(s.metrics.processedRows);
  const i=s.instrumentation;check(i?.enabled===true&&i.stageEnabled===true&&i.sampleIntervalMs===1000,'instrumentation disabled/cadence mismatch');
- const q=i.dirtyQueues,c=i.callerStats,cov=i.coverage;number(q?.orderLifecyclePending);number(q?.marketDataPending);
+ const q=i.dirtyQueues,c=i.callerStats,cov=i.coverage;
+ if(final){number(q?.orderLifecyclePending);number(q?.marketDataPending);}
+ else if(typeof q?.orderLifecycleEmpty==='boolean'&&typeof q?.marketDataEmpty==='boolean'){}
+ else {number(q?.orderLifecyclePending);number(q?.marketDataPending);}
  check(gen(q.databaseGeneration)===gen(generation)&&gen(cov?.databaseGeneration)===gen(generation),'database generation drift');
  check(zero(cov.generationGuardFailures)&&zero(cov.clockGuardFailures),'coverage guard failed');
  for(const key of ['calls','completed','active','maxConcurrent','callerCount'])number(c?.[key]);check(zero(c.failed),'caller failed');
@@ -208,7 +211,7 @@ export async function run(options) {
    dbs.forEach((s,i)=>{check(gen(s.generation)===gen(dbBefore[i].generation),'DB generation changed');check(s.deadlocks===dbBefore[i].deadlocks,'database deadlock counter changed');const allowed=[m.canonicalDb,m.projectionDb][i].allowedClients;check(s.clients.every(c=>allowed.some(a=>{const addresses=a.containerId?Object.values(all.find(item=>item.Id===a.containerId)?.NetworkSettings?.Networks??{}).flatMap(n=>[n.IPAddress,n.GlobalIPv6Address]).filter(Boolean):[a.address];return a.applicationName===c.applicationName&&a.user===c.user&&addresses.includes(c.address);})), 'foreign DB client');});
    let sample;
    try{
-    sample=await Promise.all(m.projectors.map(async p=>{const get=async path=>JSON.parse(await command(['exec',p.id,'curl','--silent','--show-error','--fail','--max-time','1',`http://127.0.0.1:${p.port}${path}`],2000));const [canonical,lifecycle,market]=await Promise.all([get('/internal/projector/status'),get('/internal/order-lifecycle/projector/status'),get('/internal/market-data/projector/status')]);return {id:p.id,canonical,lifecycle,market};}));
+    sample=await Promise.all(m.projectors.map(async p=>{const get=async path=>JSON.parse(await command(['exec',p.id,'curl','--silent','--show-error','--fail','--max-time','1',`http://127.0.0.1:${p.port}${path}`],2000));const [canonical,lifecycle,market]=await Promise.all([get('/internal/projector/status?includeProjectedCount=false'),get('/internal/order-lifecycle/projector/status?includeDirtyCounts=false'),get('/internal/market-data/projector/status?includeDirtyCounts=false')]);return {id:p.id,canonical,lifecycle,market};}));
    }catch(e){check(firstHealthy===null,'diagnostic sample failed after readiness');appendFileSync(join(options.out,'samples.ndjson'),JSON.stringify({elapsedNs:(process.hrtime.bigint()-t0).toString(),ready:false,error:String(e)})+'\n');await sleep(1000);continue;}
    const completed=process.hrtime.bigint();if(firstHealthy===null)firstHealthy=completed;
    if(lastComplete!==null){check(completed-lastComplete<=2_000_000_000n,'sampler gap exceeded2000ms');maxGapMs=Math.max(maxGapMs,Number(completed-lastComplete)/1e6);}lastComplete=completed;readySamples++;
@@ -217,12 +220,14 @@ export async function run(options) {
    check(market.sourceProjectionName===m.sourceProjectionName&&market.projectionName===m.marketProjectionName,'market source binding mismatch');
    validateStage(life,m.lifecycle,m,dbBefore[1].generation,v);validateStage(market,m.market,m,dbBefore[1].generation,v);
    appendFileSync(join(options.out,'samples.ndjson'),JSON.stringify({elapsedNs:(completed-t0).toString(),ready:true,projectors:sample})+'\n');
-   let drained=sample.every(s=>s.canonical.lag===0)&&life.instrumentation.dirtyQueues.orderLifecyclePending===0&&market.instrumentation.dirtyQueues.marketDataPending===0&&life.instrumentation.callerStats.active===0&&market.instrumentation.callerStats.active===0;
+   let drained=sample.every(s=>s.canonical.lag===0)&&life.instrumentation.dirtyQueues.orderLifecycleEmpty===true&&market.instrumentation.dirtyQueues.marketDataEmpty===true&&life.instrumentation.callerStats.active===0&&market.instrumentation.callerStats.active===0;
    if(drained&&readySamples>=2){
-    validateStage(life,m.lifecycle,m,dbBefore[1].generation,v,true);validateStage(market,m.market,m,dbBefore[1].generation,v,true);
-    check(life.instrumentation.coverage.lastMarker.markerId===market.instrumentation.coverage.lastMarker.markerId,'different covering cohort');
+    const exact=await Promise.all([[m.lifecycle,'/internal/order-lifecycle/projector/status'],[m.market,'/internal/market-data/projector/status']].map(async([p,path])=>JSON.parse(await command(['exec',p.id,'curl','--silent','--show-error','--fail','--max-time','5',`http://127.0.0.1:${p.port}${path}`],6000))));
+    if(exact[0].instrumentation.dirtyQueues.orderLifecyclePending!==0||exact[1].instrumentation.dirtyQueues.marketDataPending!==0)continue;
+    validateStage(exact[0],m.lifecycle,m,dbBefore[1].generation,v,true);validateStage(exact[1],m.market,m,dbBefore[1].generation,v,true);
+    check(exact[0].instrumentation.coverage.lastMarker.markerId===exact[1].instrumentation.coverage.lastMarker.markerId,'different covering cohort');
     check(sample.reduce((n,s)=>n+BigInt(s.canonical.metrics.projected),0n)===v.count,'projected source command count mismatch');
-    finalSample={sample,completed};break;
+    finalSample={sample:sample.map(s=>({...s,lifecycle:s.id===m.lifecycle.id?exact[0]:s.lifecycle,market:s.id===m.market.id?exact[1]:s.market})),completed};break;
    }
    await sleep(Math.max(0,1000-Number(process.hrtime.bigint()-tick)/1e6));
   }

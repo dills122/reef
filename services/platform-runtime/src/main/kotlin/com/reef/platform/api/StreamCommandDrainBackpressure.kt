@@ -24,7 +24,8 @@ data class StreamCommandDrainBackpressureSnapshot(
     val workerSamples: Int,
     val workerErrors: List<String>,
     val projectorLag: Long,
-    val projectionName: String
+    val projectionName: String,
+    val projectorLagIsLowerBound: Boolean = false
 ) {
     fun backpressure(
         maxWorkerStreamLag: Long,
@@ -46,7 +47,7 @@ data class StreamCommandDrainBackpressureSnapshot(
             return BoundaryError(
                 429,
                 "STREAM_COMMAND_PROJECTOR_BACKPRESSURE",
-                "stream command intake rejected because projection lag is $projectorLag"
+                "stream command intake rejected because projection lag is ${if (projectorLagIsLowerBound) "at least " else ""}$projectorLag"
             )
         }
         return null
@@ -80,7 +81,8 @@ class StreamCommandDrainBackpressureSampler(
                 snapshot.error.ifBlank { null }
             },
             projectorLag = projectionLag?.lag ?: 0L,
-            projectionName = projectionLag?.projectionName.orEmpty()
+            projectionName = projectionLag?.projectionName.orEmpty(),
+            projectorLagIsLowerBound = projectionLag?.isLowerBound ?: false
         )
     }
 }

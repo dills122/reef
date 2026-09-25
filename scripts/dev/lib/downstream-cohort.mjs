@@ -136,9 +136,12 @@ function markerExactlyCovers(marker, partitions) {
 }
 
 function queuesDrained(instrumentation) {
-  return instrumentation?.dirtyQueues &&
-    validZero(instrumentation.dirtyQueues.orderLifecyclePending) &&
-    validZero(instrumentation.dirtyQueues.marketDataPending);
+  const queues = instrumentation?.dirtyQueues;
+  const empty = (marker, pending) => marker === false ? false :
+    marker === true ? pending === undefined || validZero(pending) : validZero(pending);
+  return Boolean(queues) &&
+    empty(queues.orderLifecycleEmpty, queues.orderLifecyclePending) &&
+    empty(queues.marketDataEmpty, queues.marketDataPending);
 }
 
 function postCommitObservationValid(marker) {

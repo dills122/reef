@@ -755,3 +755,213 @@ report SHA256`1e833077a0b2b2a0de47f93c801187094a5e2c06359e587876d1f9e610926ad0`;
 C32 `/home/reefbench/benchmarks/reef-productive-c32-control-10000-300s-1`,
 report SHA256`c183d14a0fac346351490486e533deb21e058e2fbb61a390378d9723f0414cb5`.
 All runtime writers stopped; five DB/broker containers remain on owned host.
+
+## C33 — fifth-caller candidate cloud setup, no throughput run
+
+On September 25, the C32 host was absent from DigitalOcean inventory and the
+benchmark OpenTofu state was empty. A new `c-32` create attempt in `sfo2`
+failed before resource creation because that size was unavailable. A reviewed
+two-resource plan then created temporary `nyc3` droplet `603508014` and firewall
+`5819dac7-dc16-4fe8-acda-c1c6b85701ac`. Automatic approval review rejected
+syncing private repository source to the external host without specific user
+authorization; no application source, workload, or throughput result was sent
+or run. The reviewed destroy plan removed both resources. OpenTofu state and
+provider benchmark inventory were empty afterward. This is setup evidence only:
+the fifth-caller change and migration 0059 have local focused tests but no
+remote capacity/freshness result. C28/C32 remain the relevant failed 10k
+full-projection observations, with their previous image and five-caller topology.
+
+## C34 — fifth-caller removal and trade replay SQL, 10k full-projection diagnostic
+
+September 25 disposable DigitalOcean `nyc3` `c-32`, OpenTofu 1.12.5/provider
+2.100.0, fresh volumes, source-synced candidate including runtime migration
+0059. Pinned local images; 16 canonical owners, four dedicated lifecycle loops
+on projector0, market worker, batches500, 256 load workers, target10k/s for
+300s. PostgreSQL max connections400/320, projection shared buffers2GB, 1s
+downstream sampler, unchanged5s lifecycle/market p95 gate. This is not a
+matched C28/C32 A/B: host region, database configuration and code differ.
+Initial startup attempt failed at default primary connection limit. Second
+attempt (`v2`) had invalid downstream probes because extra projector settings
+were not propagated; retained as setup failure. Fresh reset and explicit safe
+setting propagation preceded valid `v3`; neither failed attempt is throughput
+evidence.
+
+`v3`: stress exit0, 2,998,276 accepted/direct-acked/materialized/canonical
+projected (9,993.78/s), zero reported command failures, final lag/count gap0.
+Source and downstream cohort authority pass; 409/409 sampler observations,
+max gap1,378ms. Lifecycle had only `order-lifecycle-projector` caller,
+max concurrent4; market had only `market-data-projector`. Full canonical
+sequence integrity passed across16 partitions (2,998,276 distinct contiguous
+rows); dirty queues0. Rollback-only full business reference passed:
+2,470,276 lifecycle rows and64 market rows, no missing/extra rows; `updated_at`
+excluded as documented by reference protocol.
+
+**Freshness FAIL, no 10k qualification.** Conservative source-to-canonical,
+source-to-lifecycle and source-to-market p95 bounds were62,527ms,90,738ms and
+92,675ms respectively; frozen checker exit1. These are sampled cohort upper
+bounds, not observed per-command latency. The fifth caller was removed as
+intended but did not meet the retention gate on this fixture. No causal SQL or
+caller performance attribution is claimed from this nonmatched run.
+
+Post-run correction: this was a growing pipeline backlog, not merely a slow
+final read-model flush. At 04:30:37Z sampled counts were 2,736,856 published,
+2,225,187 materialized, and 1,997,803 projected: 511,669 waiting before
+materialization plus 227,384 after it. Compared with C32, primary PostgreSQL
+block reads rose 521,082→14,437,026 and projection reads 4,186,036→25,055,023;
+projection SQL mean rose 428.673→654.697ms and commit mean 7.954→90.373ms.
+These identify throughput loss in both materialization and projection, but
+different host/configuration/code and absent matched control leave its root
+cause unproven. In particular, this run does not justify blaming migration0059
+or treating the earlier canonical status/fill statement as its proven cause.
+
+All203 nonsecret protocol/results files saved at
+`artifacts/sustained-10k-20260925/test2/`; checksum dry-run matched remote.
+`v3` report SHA256`2271fbd35aefd0d94c1ce13609708c742ced1ad7723aa5f899520fa229d1391d`,
+business result SHA256`5ab57bb3949b6b76f225f8b0ad022d14a67e265c59c876314d9eb3cd83099c59`.
+Reviewed destroy plan removed only benchmark droplet `603509874` and firewall
+`d38af38a-3626-4805-887b-7b6fcece4968`; state empty and both absent from
+provider inventory afterward. Unrelated provider resources remained.
+
+## C35–C36 — new-host control and primary-cache treatment, both failed
+
+September 25, disposable `nyc3` c-32, fresh volumes for each 10k/s × 300s run,
+256 load workers, 16 canonical projectors, four materializers, four dedicated
+lifecycle loops plus market's nested fifth lifecycle caller, batch 500. Source
+was the `dc5c355b` branch control without migration 0059 or fifth-caller
+removal. Projection PostgreSQL shared buffers 2GB; max connections 400/320.
+These runs are separate from historical C28's image/host/database settings.
+
+| ID | Primary shared buffers | Fixed report snapshots and verdict |
+| --- | --- | --- |
+| C35 (`paired/A`) | 128MB | 2,998,669 accepted (9,995.6/s), 2,395,223 materialized at materializer collection, 2,658,530 projected at later projector collection, lag 342,139. Stress/checker exit 1; source cohort incomplete. |
+| C36 (`paired/A-primary2g`) | 2GB | 2,915,449 accepted (9,718.2/s), 2,884,448 materialized, 2,749,194 projected, lag 171,255. Stress/checker exit 1; intake and projection gates fail. |
+
+Counts above are at their respective collection times; do not subtract stages
+sampled at different instants. C35 eventually reached 2,998,669 unique,
+contiguous canonical outcomes, matching projector frontiers and zero dirty
+queues after the failed timed gate. The primary-cache treatment reduced the
+materializer backlog but did not establish a full-system improvement. Original
+reports, diagnostics, postdrain queries and remote checksums are preserved in
+`artifacts/sustained-10k-20260925/paired/`. Reviewed teardown removed droplet
+`603628136` and firewall `bc7ce0fb-e083-4703-833f-53a9c4f142cf`; provider
+returned 404 for both and state was empty.
+
+## C37 — fresh reproduction of best 10k full-system C28 setup, diagnostic FAIL
+
+User-directed clean rerun, September 25, on new `nyc3` c-32. C28 was the best
+recorded 10k full-pipeline topology, **not** an accepted 10k qualification:
+its 2,999,868 final stage counts passed, but lifecycle/market conservative
+p95 bounds were 6,314/7,315ms versus the unchanged 5s gate. Exact archived
+C28 Compose SHA256 `34a571b232dd5cee9ad2398a3caab49b05405504052eec506189d8d3423e2c5e`
+and 64-instrument fixture SHA256 `b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`
+were used. 1,107 of 1,109 pinned source files matched the C28 manifest; only
+two non-executable `.planning/` notes were unrecoverable. All application,
+migration and benchmark source files matched. Native rebuilt image IDs differ
+from the original C28 images, and the host/region differs; this is a
+reproduction, not a matched causal A/B. Original C28 settings: primary/projection
+shared buffers 128MB/2GB, max connections 512/512, 16 canonical owners, four
+materializers, four grouped lifecycle loops plus market's nested caller, all
+projection batches 500. No `pg_stat_statements` profiler was added. Read-only
+five-second database wait/I/O and 15-second container samples ran alongside the
+existing one-second downstream observer.
+
+Precisely 2,999,951 commands received HTTP 202 and direct-engine ack in
+300.0009s (9,999.81/s), with zero command failures. The fixed materializer
+snapshot had 2,294,741 outcomes (705,210 short); the later projector snapshot
+had 2,659,318 projected with lag 341,633. Stress and unchanged checker both
+exited 1. Source/downstream cohort authority and freshness are unavailable;
+HTTP p95 87.083ms is intake latency, not read-model latency. Same-sample flow
+at 14:54:04Z showed 2,999,951 engine-acked, 1,952,007 materialized,
+1,640,818 projected, and 281,444 lifecycle-dirty. At 14:56:49Z all were
+materialized, 2,651,818 projected, and lifecycle-dirty had grown to 514,818.
+Thus backlog began before canonical materialization and then grew in both
+projection stages; it was not merely a final flush artifact.
+
+During the timed load, primary PostgreSQL added 3,614,992 block reads,
+3.394GB temporary data, and 137,483 `wal_buffers_full` events. Across the
+full diagnostic collection, primary block reads were 13,716,772 and temp
+bytes 6.191GB versus C28's 518,706 and 0.152GB; projection reads were
+1,489,090 versus C28's 3,963,512, so the primary read increase is not a
+whole-system read increase. Five-second `pg_stat_activity` samples found
+84/268 active primary backend observations waiting on `WALWrite`, and
+453/1,159 active projection observations on `WALWrite` plus 201/1,159 on
+`transactionid` locks. These are sampled backend observations, not elapsed
+wait-time shares. Postdrain stats showed 12,671,406 heap blocks read from
+primary `canonical_command_outcomes` and 2,547,676,038 sequential tuples
+read from projection `submit_results` in 2,584 sequential scans. C28 had 465
+`submit_results` sequential scans. The exact-count path in
+`PostgresRuntimePersistence.projectionStatusAcrossStores` executes
+`SELECT COUNT(*) FROM submit_results`; `canonicalPartitionStats` also performs
+per-partition exact lag counts. These are concrete high-volume status reads,
+but this run does not prove either query alone caused the materializer deficit.
+
+Writers were stopped after late catch-up. A separately labelled postdrain
+diagnostic found all 2,999,951 canonical rows unique and contiguous across
+16 partitions, projector frontiers equal to source maxima, and both dirty
+queues empty. Rollback-only full business reference then passed 2,471,642
+lifecycle rows and 64 market rows, excluding only `updated_at`. These late
+checks do **not** change the frozen timed failure. All 98 sealed remote files
+were copied and SHA256-verified at
+`artifacts/sustained-10k-20260925/accepted-c28-diagnostic/`, including stage
+flow, database samples, report/checker, and reference output. Reviewed destroy
+plan removed only droplet `603639011` and firewall
+`0206482d-807b-4927-9b3c-f043a9ed615d`; provider GET returned 404 for both
+and OpenTofu state was empty. Next implementation target: remove exact full-row
+status counts from frequent projection/backpressure paths while preserving
+exact public/report checks, then address materializer write/read and projection
+WAL/transaction contention against this pinned fixture.
+
+## C38 — reviewed SQL remediation on clean C28 topology, timed FAIL
+
+September 25, new `nyc3` c-32, current `codex/projection-sustained-10k`
+source after focused PostgreSQL tests and fresh independent review. The 300s
+10k/s run used C28's 16 owners, four materializers, four dedicated lifecycle
+workers plus nested fifth caller, batch 500, 128MB/2GB shared buffers,
+512/512 connections, and the same fixture SHA256
+`b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`.
+The archived C28 Compose SHA256 was
+`34a571b232dd5cee9ad2398a3caab49b05405504052eec506189d8d3423e2c5e`.
+Its three database-init bind paths referred to an old host directory; first
+startup stopped before load because `runtime` schema was absent. After saving
+that failure, all containers and volumes were removed. The active Compose
+changed only those three paths to the synced init directory (SHA256
+`1717001fc9fdc5fadaaa0686d236e4af7f19b886968b7aeaf191efaf54b1c3a9`).
+Fresh source verification matched all 1,142 manifest files. Node remained
+v22.22.1; no SQL statement profiler was added.
+
+| Fixed 300s stage snapshot | C37 same topology | C38 SQL treatment |
+| --- | ---: | ---: |
+| HTTP accepted/direct acked | 2,999,951 (9,999.81/s) | 2,998,112 (9,992.81/s) |
+| Intake p95 | 87.083ms | 88.757ms |
+| Materialized at materializer collection | 2,294,741 (7,649.11/s) | 2,226,441 (7,420.80/s) |
+| Projected at later projector collection | 2,659,318 (8,864.37/s) | 2,733,855 (9,112.03/s) |
+| Projector lag at collection | 341,633 | 266,257 |
+
+C38 had zero HTTP/engine failures, materializer failures, projector failures,
+retries, or deadlocks, but stress and checker both exited 1: the fixed
+accepted-to-materialized gap was 771,671, projector lag was 266,257, and
+cohort/freshness authority was incomplete. HTTP p95 measures intake only; no
+qualified downstream p95 exists. Stage snapshots were collected at different
+times and must not be subtracted as simultaneous counts. C4 remains the proven
+2.5k/s full-projection reference; neither C37 nor C38 qualifies 10k/s.
+
+Treatment cut projection `submit_results` sequential scans from 2,584 to 43
+and projection PostgreSQL returned tuples from 2.967B to 186.7M (pre/post
+database counters). Primary WAL grew from 6.565GB to 6.811GB while the new
+canonical unique index enforced partition-sequence integrity; primary block
+reads grew from 13.717M to 14.791M. These are observed run differences, not
+isolated causal attribution. The projection read reduction did not remove the
+primary materializer deficit. Next code target is the canonical batch commit
+and its indexed writes; preserve uniqueness and replay semantics while reducing
+primary work. Separately revisit projection capacity if the canonical stage
+reaches 10k/s.
+
+After the failed timed gate, all 2,998,112 canonical rows were unique and
+contiguous across 16 partitions; source and projector frontiers matched and
+both dirty queues were empty. The rollback-only lifecycle/market business
+reference passed, excluding only `updated_at`. These are postdrain diagnostics,
+not a timed pass. All 101 sealed evidence files verified locally at
+`artifacts/sustained-10k-20260925/sql-remediation-c28/`. Reviewed teardown
+removed only droplet `603665006` and firewall
+`fb4d845e-be4c-416a-8802-d5201928d0c4`; provider GET returned 404 for
+both and OpenTofu state was empty.

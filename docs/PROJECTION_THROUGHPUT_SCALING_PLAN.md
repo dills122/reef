@@ -157,7 +157,7 @@ p95 failure remains valid historical evidence, not an active block on the
 already-authorized tuning workstream.
 
 Current work has implemented productive lifecycle scheduling and migrations
-0051–0058. Full sustained10k qualification remains open. Latest c16 eight-writer
+0051–0061. Full sustained10k qualification remains open. Latest c16 eight-writer
 7.5k attempt failed canonical and lifecycle capacity; c32/16canonical/four-life
 10k is diagnostic. Existing freshness/headroom qualification assumes one lifecycle
 maintainer and cannot qualify this expanded topology unchanged. Independent
@@ -182,13 +182,26 @@ market projections on an existing upgraded target and compare full business
 state before promotion. Aged-target 0055/0058 DDL budget and a matched
 full-pipeline mixed-cohort SQL profile remain open.
 
+Follow-up count fix: market refresh/depth reads skip the unused exact
+`submit_results` count. Frequent projector status polls can request
+`includeProjectedCount=false`; benchmark boundary snapshots and default status
+retain exact counts. PostgreSQL lock and HTTP contract tests pass. C38's clean
+C28-topology run reduced projection `submit_results` sequential scans from
+2,584 to 43 versus C37, but materialization was 7,420.80/s and the timed
+10k gate still failed. Both stages caught up after the gate and the business
+reference passed. See [C38 evidence](THROUGHPUT_BASELINES.md#c38--reviewed-sql-remediation-on-clean-c28-topology-timed-fail).
+
 The [aged status/fill profile](research/PROJECTION_STATUS_FILL_AGED_PROFILE_2026-09-25.md)
 used a copy of C32's 13GB projection database. Five mixed writes all cost time;
 16 stage-only writers processed 240,000 synthetic outcomes at about 53k/s in
 the bounded probe. This does not reproduce C30's full-pipeline delay or qualify
-10k. No status/fill SQL change is supported yet. Next attribution must measure
-waits, I/O, and nested plans while the full pipeline runs, with a separate
-no-profiler control and unchanged business/freshness gates.
+10k. No status/fill SQL change is supported yet. C37 and C38 full-pipeline
+diagnostics now place the remaining deficit first in canonical materialization.
+Next implementation target: consolidate overlapping canonical sequence indexes
+without losing uniqueness or covering reads, then reduce batch-commit work.
+If that cannot supply 10k/s intake plus 20% drain margin, evaluate partitioned
+canonical storage with explicit global command-ID replay integrity. Aged-data
+preflight and safe unique-index rollout remain required before deployment.
 
 ## Historical frozen measurement-before-tuning gates — August 2026
 

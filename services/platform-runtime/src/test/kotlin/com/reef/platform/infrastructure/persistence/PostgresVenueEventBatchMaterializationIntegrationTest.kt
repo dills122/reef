@@ -19,6 +19,21 @@ import kotlin.test.assertTrue
 
 class PostgresVenueEventBatchMaterializationIntegrationTest {
     @Test
+    fun rejectsSamePartitionSequenceFromAnotherBatch() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val persistence = PostgresRuntimePersistence(dataSource = dataSource, bootstrapMode = PostgresBootstrapMode.Validate)
+        val suffix = UUID.randomUUID().toString()
+        val partition = uniquePartition(suffix, 13)
+        val sequence = uniqueSequence(suffix) * 10 + 1
+        materializeTestSubmit(persistence, dataSource, suffix, "first", partition, sequence)
+        assertFailsWith<Exception> {
+            materializeTestSubmit(persistence, dataSource, suffix, "conflict", partition, sequence)
+        }
+        assertNotNull(persistence.canonicalCommandOutcome("submit-cmd-$suffix-first"))
+        assertEquals(null, persistence.canonicalCommandOutcome("submit-cmd-$suffix-conflict"))
+    }
+
+    @Test
     fun materializesVenueEventBatchIdempotentlyWhenMigratedPostgresIsAvailable() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return

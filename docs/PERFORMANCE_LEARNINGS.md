@@ -67,6 +67,16 @@ Sustained full-projection baseline remains 2.5k/5m. Raw evidence, failed checks,
 and current work are recorded in the
 [measurement validation report](./research/PROJECTION_MEASUREMENT_VALIDATION_2026-09-24.md).
 
+## Projection SQL remediation and materializer limit (September 25, 2026)
+
+C38 cut projection `submit_results` sequential scans from C37's 2,584 to 43,
+yet canonical materialization reached only 7,420.80/s against 9,992.81/s
+accepted intake. Do not infer end-to-end capacity from a large scan reduction
+in one downstream database. Keep the sequence/replay correctness repairs;
+target the primary canonical batch commit and index write cost next. C38's
+timed gate failed, while postdrain sequence and business-state checks passed.
+See the [C38 ledger entry](THROUGHPUT_BASELINES.md#c38--reviewed-sql-remediation-on-clean-c28-topology-timed-fail).
+
 ## Local Transactional Materializer Soak and Workload-Shape Correction (July 19, 2026)
 
 The post-hardening `10k`, `1024`-worker, `15m` materializer soak completed on a

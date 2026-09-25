@@ -129,6 +129,7 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - `event_id text pk`, `trade_id text not null`, `execution_id text not null`, `buy_order_id text not null`, `sell_order_id text not null`, `instrument_id text not null`, `quantity_units text not null`, `price text not null`, `currency text not null`, `occurred_at text not null`, `sequence bigint generated always as identity` (monotonic trade-tape cursor, `0022`).
 - typed companions: `event_id_uuid uuid`, `quantity_units_num numeric`, `price_num numeric`, `occurred_at_ts timestamptz`.
 - indexes include `idx_trades_instrument_sequence (instrument_id, sequence desc)` for the public trade tape read path.
+- `event_id` replay accepts identical trade facts and rejects changed trade fields with SQLSTATE `23505` in both status-stage SQL and direct persistence (`runtime/0059`).
 
 7a. `runtime.trades_archive` (`runtime/0037`)
 - partitioned archive target for old trade-tape facts; not a current trade read path.

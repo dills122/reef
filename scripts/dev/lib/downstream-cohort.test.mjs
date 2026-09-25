@@ -134,6 +134,20 @@ test("drain authority waits for idle callers and matching full-frontier markers"
   assert.equal(downstreamInstrumentationDrained(after), false);
 });
 
+test("lightweight queue markers prove drain without claiming exact counts", () => {
+  const after = exactReport().streamAckProjector.after;
+  for (const key of ["orderLifecycleProjector", "marketDataProjector"]) {
+    const queues = after.projectors[0][key].instrumentation.dirtyQueues;
+    delete queues.orderLifecyclePending;
+    delete queues.marketDataPending;
+    queues.orderLifecycleEmpty = true;
+    queues.marketDataEmpty = true;
+  }
+  assert.equal(downstreamInstrumentationDrained(after), true);
+  after.projectors[0].marketDataProjector.instrumentation.dirtyQueues.marketDataEmpty = false;
+  assert.equal(downstreamInstrumentationDrained(after), false);
+});
+
 test("drain authority rejects partial-partition markers", () => {
   const after = exactReport().streamAckProjector.after;
   after.projectors[0].orderLifecycleProjector.instrumentation.coverage.lastMarker.sourceWatermarks.pop();

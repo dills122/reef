@@ -1016,23 +1016,23 @@ function defaultStreamAckProjectorUrls(runtimeUrl) {
   ];
 }
 
-async function sampleStreamAckProjectors() {
+async function sampleStreamAckProjectors({ includeProjectedCount = true } = {}) {
   const probeSpecs = streamAckProjectorUrls.flatMap((baseUrl, index) => [
     {
         name: `streamAckProjector.${index}.status`,
-        url: `${baseUrl}/internal/projector/status`,
+        url: `${baseUrl}/internal/projector/status${includeProjectedCount ? "" : "?includeProjectedCount=false"}`,
         captureJson: true,
         timeoutMs: streamAckProjectorProbeTimeoutMs,
     },
     {
       name: `streamAckProjector.${index}.orderLifecycleStatus`,
-      url: `${baseUrl}/internal/order-lifecycle/projector/status`,
+      url: `${baseUrl}/internal/order-lifecycle/projector/status${includeProjectedCount ? "" : "?includeDirtyCounts=false"}`,
       captureJson: true,
       timeoutMs: streamAckProjectorProbeTimeoutMs,
     },
     {
       name: `streamAckProjector.${index}.marketDataStatus`,
-      url: `${baseUrl}/internal/market-data/projector/status`,
+      url: `${baseUrl}/internal/market-data/projector/status${includeProjectedCount ? "" : "?includeDirtyCounts=false"}`,
       captureJson: true,
       timeoutMs: streamAckProjectorProbeTimeoutMs,
     },
@@ -1053,14 +1053,14 @@ async function waitForStreamAckProjectorDrain({ reportOut, beforeProjector, time
   const timeout = Math.max(0, Number(timeoutMs) || 0);
   const interval = Math.max(100, Number(pollMs) || 1000);
   const expectedProjected = streamAckExpectedProjectedWorkItems(reportOut);
-  let latest = await sampleStreamAckProjectors();
+  let latest = await sampleStreamAckProjectors({ includeProjectedCount: false });
 
   while (timeout > 0 && !streamAckProjectorDrainSatisfied(beforeProjector?.json, latest?.json, expectedProjected)) {
     if (Date.now() - started >= timeout) break;
     await sleep(Math.min(interval, Math.max(0, timeout - (Date.now() - started))));
-    latest = await sampleStreamAckProjectors();
+    latest = await sampleStreamAckProjectors({ includeProjectedCount: false });
   }
-  return latest;
+  return sampleStreamAckProjectors();
 }
 
 function streamAckExpectedProjectedWorkItems(reportOut) {
@@ -1143,7 +1143,7 @@ function aggregateStreamAckProjectorStatus(probes) {
     lastRetrySqlState: "",
     lastRetryError: "",
   };
-  let projectedCount = 0;
+  let projectedCount = null;
   let statusLag = 0;
   const rawWatermarks = [];
   for (const projector of projectors) {
@@ -1162,7 +1162,9 @@ function aggregateStreamAckProjectorStatus(probes) {
     metrics.lastRetryAt = maxIso(metrics.lastRetryAt, rawMetrics.lastRetryAt ?? "");
     metrics.lastRetrySqlState = rawMetrics.lastRetrySqlState || metrics.lastRetrySqlState;
     metrics.lastRetryError = rawMetrics.lastRetryError || metrics.lastRetryError;
-    projectedCount = Math.max(projectedCount, Number(projector.status.projectedCount ?? 0));
+    if (projector.status.projectedCount != null) {
+      projectedCount = Math.max(projectedCount ?? 0, Number(projector.status.projectedCount));
+    }
     statusLag += Number(projector.status.lag ?? 0);
     rawWatermarks.push(...(projector.status.watermarks ?? []));
   }
@@ -1186,7 +1188,7 @@ function aggregateStreamAckProjectorStatus(probes) {
       orderLifecycleProjector: projector.orderLifecycleProjector ?? null,
       marketDataProjector: projector.marketDataProjector ?? null,
       partitions: projector.status.partitions ?? [],
-      projectedCount: projector.status.projectedCount,
+      projectedCount: projector.status.projectedCount ?? null,
       lag: projector.status.lag,
       metrics: projector.status.metrics ?? {},
     })),
@@ -2206,12 +2208,12 @@ function startDownstreamDiagnosticCapture({ outPath, intervalMs }) {
         streamAckProjectorUrls.flatMap((baseUrl, index) => [
           {
             name: `streamAckProjector.${index}.orderLifecycleStatus`,
-            url: `${baseUrl}/internal/order-lifecycle/projector/status`,
+            url: `${baseUrl}/internal/order-lifecycle/projector/status?includeDirtyCounts=false`,
             captureJson: true,
           },
           {
             name: `streamAckProjector.${index}.marketDataStatus`,
-            url: `${baseUrl}/internal/market-data/projector/status`,
+            url: `${baseUrl}/internal/market-data/projector/status?includeDirtyCounts=false`,
             captureJson: true,
           },
         ]),
@@ -2242,7 +2244,7 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     ...streamAckProjectorUrls.flatMap((baseUrl, index) => [
       {
         name: `streamAckProjector.${index}.status`,
-        url: `${baseUrl}/internal/projector/status`,
+        url: `${baseUrl}/internal/projector/status?includeProjectedCount=false`,
         captureJson: true,
       },
       {
@@ -2257,12 +2259,12 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
       },
       {
         name: `streamAckProjector.${index}.orderLifecycleStatus`,
-        url: `${baseUrl}/internal/order-lifecycle/projector/status`,
+        url: `${baseUrl}/internal/order-lifecycle/projector/status?includeDirtyCounts=false`,
         captureJson: true,
       },
       {
         name: `streamAckProjector.${index}.marketDataStatus`,
-        url: `${baseUrl}/internal/market-data/projector/status`,
+        url: `${baseUrl}/internal/market-data/projector/status?includeDirtyCounts=false`,
         captureJson: true,
       },
     ]),

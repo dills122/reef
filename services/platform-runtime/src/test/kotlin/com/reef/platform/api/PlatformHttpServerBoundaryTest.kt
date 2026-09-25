@@ -4822,6 +4822,11 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"orderLifecycleProjectorEnabled\":true")
             assertContains(response.body, "\"marketDataProjectorEnabled\":false")
+            assertContains(response.body, "\"projectedCount\":")
+            val withoutCount = get(server.address.port, "/internal/projector/status?includeProjectedCount=false")
+            assertEquals(200, withoutCount.status)
+            assertFalse(withoutCount.body.contains("\"projectedCount\":"))
+            assertContains(withoutCount.body, "\"lag\":")
         } finally {
             server.stop(0)
         }
@@ -4848,6 +4853,12 @@ class PlatformHttpServerBoundaryTest {
             assertContains(lifecycle.body, "\"coverage\":{")
             assertEquals(200, marketData.status)
             assertContains(marketData.body, "\"instrumentation\":{")
+            val lightweight = get(server.address.port, "/internal/order-lifecycle/projector/status?includeDirtyCounts=false")
+            assertEquals(200, lightweight.status)
+            assertContains(lightweight.body, "\"orderLifecycleEmpty\":true")
+            assertContains(lightweight.body, "\"marketDataEmpty\":true")
+            assertFalse(lightweight.body.contains("\"orderLifecyclePending\":"))
+            assertFalse(lightweight.body.contains("\"marketDataPending\":"))
         } finally {
             server.stop(0)
         }

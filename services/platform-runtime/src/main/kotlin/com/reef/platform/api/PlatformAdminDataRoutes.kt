@@ -83,9 +83,17 @@ internal class PlatformAdminDataRoutes(
             "/internal/stream-ack/worker/stats" -> getOnly(method) { diagnosticsGateway.streamCommandWorkerStatsJson() }
             "/internal/venue-event-materializer/timing" -> getOnly(method) { diagnosticsGateway.venueEventMaterializerTimingJson() }
             "/internal/venue-event-materializer/stats" -> getOnly(method) { diagnosticsGateway.venueEventMaterializerStatsJson() }
-            "/internal/projector/status" -> getOnly(method) { diagnosticsGateway.projectorStatusJson() }
-            "/internal/market-data/projector/status" -> getOnly(method) { diagnosticsGateway.marketDataProjectorStatusJson() }
-            "/internal/order-lifecycle/projector/status" -> getOnly(method) { diagnosticsGateway.orderLifecycleProjectorStatusJson() }
+            "/internal/projector/status" -> getOnly(method) {
+                diagnosticsGateway.projectorStatusJson(
+                    includeProjectedCount = !queryValue(query, "includeProjectedCount").equals("false", ignoreCase = true)
+                )
+            }
+            "/internal/market-data/projector/status" -> getOnly(method) {
+                diagnosticsGateway.marketDataProjectorStatusJson(!queryValue(query, "includeDirtyCounts").equals("false", ignoreCase = true))
+            }
+            "/internal/order-lifecycle/projector/status" -> getOnly(method) {
+                diagnosticsGateway.orderLifecycleProjectorStatusJson(!queryValue(query, "includeDirtyCounts").equals("false", ignoreCase = true))
+            }
             else -> optionalProductRouteExtensions.firstNotNullOfOrNull {
                 it.handleInternal(method, path, query, body, currentAdminPrincipal())
             }
