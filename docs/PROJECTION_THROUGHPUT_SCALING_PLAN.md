@@ -210,11 +210,20 @@ outcome set for duplicate command-ID validation in canonical batch ingestion;
 the Kotlin compatibility function matches it. Local PostgreSQL tests cover
 normal insertion, replay, conflicting command IDs, duplicate IDs, count
 mismatch, and statement rollback. Independent review found no code blocker.
-Neither `0062` nor `0063` has a measured throughput gain yet. Next gate is one
-clean C28-topology treatment run against C38's timed stage boundaries.
-If that cannot supply 10k/s intake plus 20% drain margin, evaluate partitioned
-canonical storage with explicit global command-ID replay integrity. Aged-data
-preflight and safe unique-index rollout remain required before deployment.
+The clean C39 C28-topology run measured `0062`+`0063` together against C38:
+canonical materialization rose from 7,420.80/s to 7,770.56/s at the same
+collection point, while projected progress fell from 9,112.03/s to 7,885.88/s.
+The frozen 10k gate failed; postdrain uniqueness, frontiers, dirty queues, and
+the rollback-only business rebuild passed. This is a combined treatment, not
+an isolated gain for either migration. The next implementation target is the
+canonical write shape: nearly 4.76GB of outcome table/index growth plus
+0.97GB of retained batch-payload growth and 5.83GB of primary temp writes in
+one run. Prototype a leaner retained-batch/outcome representation that keeps
+global command-ID replay rejection, exact batch checksum validation, and
+rebuildability. The projection-stage regression also needs its own fix before
+another full 10k qualification. See [C39 evidence](THROUGHPUT_BASELINES.md#c39--canonical-batch-sqlindex-treatment-on-clean-c38-topology-timed-fail).
+Aged-data preflight and safe unique-index rollout remain required before
+deploying `0062`.
 
 ## Historical frozen measurement-before-tuning gates — August 2026
 

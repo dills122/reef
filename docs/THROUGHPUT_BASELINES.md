@@ -965,3 +965,59 @@ not a timed pass. All 101 sealed evidence files verified locally at
 removed only droplet `603665006` and firewall
 `fb4d845e-be4c-416a-8802-d5201928d0c4`; provider GET returned 404 for
 both and OpenTofu state was empty.
+
+## C39 — canonical batch SQL/index treatment on clean C38 topology, timed FAIL
+
+September 25, new `nyc3` `c-32`, committed source `f066fdfe`. Treatment adds
+`0062` (one unique covering partition-sequence index in place of overlapping
+indexes) and `0063` (reuse parsed batch outcomes for duplicate-ID validation)
+to C38's reviewed SQL fixes. Same 300s × 10k/s fixture SHA256
+`b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`,
+Node v22.22.1, 16 canonical projector owners, four materializers, four
+dedicated lifecycle workers plus nested fifth caller, batch 500, 512/512
+connections, and 128MB/2GB shared buffers. Added projectors were checked
+against the active projector's 35 nonsecret benchmark settings; owners 4–15
+used Redpanda, the correct stream and partition, and responded to diagnostics.
+
+| Fixed 300s stage snapshot | C38 | C39 |
+| --- | ---: | ---: |
+| HTTP accepted/direct acked | 2,998,112 (9,992.81/s) | 2,981,641 (9,937.34/s) |
+| Intake p95 | 88.757ms | 91.41ms |
+| Materializer metric delta at its collection | 2,226,441 (7,420.80/s) | 2,331,512 (7,770.56/s) |
+| Projector metric delta at its later collection | 2,733,855 (9,112.03/s) | 2,366,114 (7,885.88/s) |
+| Projector lag at collection | 266,257 | 371,574 |
+| Accepted minus materialized at materializer collection | 771,671 | 650,129 |
+
+C39's canonical stage gained 105,071 items (4.7%) versus C38 at the same
+collection point, but intake fell 0.55%, projector progress fell 13.5%, and
+the frozen 10k gate still failed. Stage collections occur at different times;
+do not subtract the materializer and projector rows as simultaneous counts.
+Stress and checker exited 1. All HTTP commands were acknowledged and there
+were zero materializer/projector failures, retries, and database deadlocks.
+Neither run has a qualified downstream latency distribution. C4's 2.5k/s
+full-projection result remains the proven sustained reference.
+
+C39 primary PostgreSQL counters: 15.400M block reads, 5.834GB temp bytes,
+6.299GB WAL; C38: 14.791M, 6.314GB, 6.811GB. C39's canonical outcome table
+grew about 4.756GB, including 1.260GB of indexes; the canonical batch table
+grew about 0.968GB, largely in TOAST storage. This is concrete write and
+temp-I/O cost, though this
+combined treatment and one run cannot assign the 4.7% gain or projector
+regression to one statement. The canonical stage remains about 2.23k/s below
+the 10k target, before the required 20% drain margin. Next work should change
+the canonical storage/write shape while preserving replay uniqueness and
+auditability, then separately address projector contention. More count-query
+cleanup is not supported as the main 10k fix.
+
+Postdrain, all 2,981,641 canonical and projected rows matched, all 16
+canonical partition sequences were unique and contiguous, projection frontiers
+matched, and both dirty queues emptied. Rollback-only rebuild matched
+2,456,576 lifecycle rows and 64 market rows, excluding only `updated_at`.
+These checks do not change the timed failure. Two setup attempts were kept:
+first stopped before load because the new host lacked Bun; second had 12
+projectors on fallback stream/partition settings and is not comparable. All
+corrected-run evidence checksums verified at
+`artifacts/sustained-10k-20260925/batch0063-treatment/run-10000-300s-v3/`.
+After evidence transfer, droplet `603699973` and firewall
+`583e64c0-dd01-45b2-9506-1a8312973046` both returned provider 404;
+OpenTofu state was empty.
