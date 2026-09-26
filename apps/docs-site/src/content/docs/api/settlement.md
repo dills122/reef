@@ -116,6 +116,12 @@ must not be exposed raw.
 | `/admin/v1/settlement/force-settle` | Force settlement finality for controlled repair/evidence paths |
 | `/admin/v1/settlement/reverse-ledger-entry` | Append compensating reversal evidence for a ledger entry |
 
+Settlement fact IDs are immutable across scenario runs. Reappending identical
+facts is idempotent; reusing an ID with different stored content fails the
+entire append transaction, including other facts in that bundle. PostgreSQL
+stores fact timestamps at microsecond precision, which is used when comparing
+retries.
+
 ## Profile Behavior
 
 Post-trade profile resolution is active:
