@@ -13,23 +13,30 @@ work packet, and the throughput ledger.
 September 26 implementation checkpoint: [#376](https://github.com/dills122/reef/pull/376)
 landed the versioned canonical effect producer and decoder;
 [#377](https://github.com/dills122/reef/pull/377) landed the opt-in isolated
-operational store schema. Current code slice adds exact source coverage and
-atomic consumer progress. Live and market consumers, audit and settlement
-ownership, route cutover, and the integrated capacity gate remain ahead.
+operational store schema. [#378](https://github.com/dills122/reef/pull/378)
+landed exact source coverage and atomic consumer progress. Live and market
+state, audit and settlement ownership, route cutover, and the integrated
+capacity gate remain ahead of this dated checkpoint.
 
-Live-state slice in progress: bounded batches write final state for each
+Live-state slice landed in [#379](https://github.com/dills122/reef/pull/379): bounded batches write final state for each
 affected order plus every execution and trade fact into the isolated store.
 Filled quantity advances from execution facts, so canceling an unfilled
 residual does not count that residual as a fill. Source coverage, facts, and
-frontier commit together. Market state, live read routes, and parity cutover
-remain separate follow-on changes.
+frontier commit together. Live read routes and parity cutover remain separate
+follow-on changes.
 
-Market-state slice in progress: the live transaction records a bounded change
+Market-state slice landed in [#380](https://github.com/dills122/reef/pull/380): the live transaction records a bounded change
 window for each source window; an independent maintainer applies visible
 price-level deltas and best-level snapshots under its own frontier. See the
 [market stage contract](work/POST_MATCH_MARKET_STAGE_CONTRACT_2026-09-26.md).
-Live read-route cutover and capacity qualification still require parity and
-recovery evidence.
+Runtime worker wiring, live read-route cutover, and capacity qualification
+still require source-origin proof, parity, and recovery evidence.
+
+Current implementation slice wires opt-in live and market shadow workers to
+the canonical runtime source and isolated post-match store. It records a stable
+source generation, uses each partition's encoded offset origin, and leaves
+public reads on the existing projection. PostgreSQL integration evidence and
+review are required before this slice lands.
 
 ## Purpose
 

@@ -51,6 +51,13 @@ canonical accepted-order facts and protected by the same replay checks.
 
 Per-consumer progress is `(consumer, eventStream, partitionId,
 lastContiguousStreamSequence)` plus source-generation/coverage evidence.
+The empty frontier for Kafka partition `p` starts at `p << 48`, matching the
+matching engine's encoded `offset + 1` sequence. Partition zero starts at zero.
+An initial outcome above that origin is an unproven source gap.
+The runtime database holds one durable `runtime.postmatch_source_generation`
+UUID. Isolated consumers read it before source windows and reject a target
+frontier from a different generation. A new runtime database receives a new
+generation during migration; an ordinary database restart retains it.
 Effects, dedupe identities, and frontier advance commit in one target-store
 transaction. A batch can advance only through verified contiguous source
 membership. Any valid Kafka offset gap needs explicit source coverage proof;
@@ -64,10 +71,13 @@ position and records one receipt per outcome. The source window, keyed accepted
 order identities, consumer effects, coverage digest, and frontier are committed
 in one transaction in the isolated target store. Exact replay verifies stored
 coverage and receipts before skipping effects; changed payloads and overlapping
-windows fail closed. It only initializes a new frontier at sequence zero.
-Kafka offset holes and nonzero partition origins still require an authoritative
+windows fail closed. It only initializes a new frontier at the partition's
+encoded origin. Kafka offset holes and nonzero starting offsets still require an authoritative
 source proof and bootstrap contract before those windows can advance. The
 strict reader currently stops there rather than treating missing rows as proof.
+Opt-in shadow workers read indexed partition high-water marks, verify bounded
+windows against retained batch membership, and commit live state and market
+state under separate frontiers. They do not switch public reads.
 
 ## Compatibility and promotion
 

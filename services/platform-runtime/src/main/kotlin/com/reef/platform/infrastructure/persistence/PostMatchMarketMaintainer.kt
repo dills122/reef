@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import java.math.BigDecimal
 import java.sql.Connection
 import javax.sql.DataSource
@@ -73,12 +74,13 @@ class PostMatchMarketMaintainer(private val dataSource: DataSource) {
         connection.prepareStatement(
             """INSERT INTO postmatch.consumer_frontiers(
                consumer_name, event_stream, partition_id, source_generation, last_stream_sequence)
-               VALUES (?, ?, ?, ?, 0) ON CONFLICT (consumer_name, event_stream, partition_id) DO NOTHING"""
+               VALUES (?, ?, ?, ?, ?) ON CONFLICT (consumer_name, event_stream, partition_id) DO NOTHING"""
         ).use { statement ->
             statement.setString(1, consumerName)
             statement.setString(2, stream)
             statement.setInt(3, partition)
             statement.setString(4, generation)
+            statement.setLong(5, CanonicalStreamPosition.origin(partition))
             statement.executeUpdate()
         }
     }

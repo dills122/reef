@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalEffect
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import com.reef.platform.application.postmatch.VerifiedCanonicalSourceWindow
 import java.sql.Connection
 import javax.sql.DataSource
@@ -9,6 +10,24 @@ enum class PostMatchApplyResult { APPLIED, DUPLICATE }
 
 /** Target-store transaction authority for one verified canonical source window. */
 class PostMatchOperationalStore(private val dataSource: DataSource) {
+    fun lastCommittedSequence(consumerName: String, eventStream: String, partitionId: Int, sourceGeneration: String): Long =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """SELECT source_generation, last_stream_sequence FROM postmatch.consumer_frontiers
+                   WHERE consumer_name = ? AND event_stream = ? AND partition_id = ?"""
+            ).use { statement ->
+                statement.setString(1, consumerName)
+                statement.setString(2, eventStream)
+                statement.setInt(3, partitionId)
+                statement.executeQuery().use { rows ->
+                    if (!rows.next()) CanonicalStreamPosition.origin(partitionId) else {
+                        check(rows.getString(1) == sourceGeneration) { "post-match source generation changed" }
+                        rows.getLong(2)
+                    }
+                }
+            }
+        }
+
     fun apply(
         window: VerifiedCanonicalSourceWindow,
         applyEffects: (Connection, VerifiedCanonicalSourceWindow) -> Unit
@@ -47,12 +66,13 @@ class PostMatchOperationalStore(private val dataSource: DataSource) {
     private data class Frontier(val sourceGeneration: String, val lastSequence: Long)
 
     private fun initializeOriginIfEmpty(connection: Connection, window: VerifiedCanonicalSourceWindow) {
-        if (window.fromExclusiveSequence != 0L) return
+        val origin = CanonicalStreamPosition.origin(window.partitionId)
+        if (window.fromExclusiveSequence != origin) return
         connection.prepareStatement(
             """
             INSERT INTO postmatch.consumer_frontiers(
               consumer_name, event_stream, partition_id, source_generation, last_stream_sequence
-            ) VALUES (?, ?, ?, ?, 0)
+            ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (consumer_name, event_stream, partition_id) DO NOTHING
             """.trimIndent()
         ).use { statement ->
@@ -60,6 +80,7 @@ class PostMatchOperationalStore(private val dataSource: DataSource) {
             statement.setString(2, window.eventStream)
             statement.setInt(3, window.partitionId)
             statement.setString(4, window.sourceGeneration)
+            statement.setLong(5, origin)
             statement.executeUpdate()
         }
     }
