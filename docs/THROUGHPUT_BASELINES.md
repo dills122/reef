@@ -1212,3 +1212,57 @@ remote evidence files passed SHA256 verification under
 `artifacts/sustained-10k-20260925/index0066-six-materializers/run-10000-300s-c43/`.
 Droplet `603746089` was intentionally retained for follow-up testing, with a
 scheduled local-time cost cutoff before 21:00; destruction remains pending.
+
+## F02 — LOGGED dirty-queue crash recovery, matched hosted 10k/300s diagnostic
+
+September 26, fresh-volume sequential control/treatment on one `sfo3` `c-32`.
+The first UNLOGGED control attempt was **invalid**: 2,999,951 accepted and
+materialized, only 1,021 projected, due to reused matching event IDs rejected
+by migration `0068`'s replay check. Preserve its original artifact under
+`artifacts/projection-dirty-f02-20260926/failed-control/`; do not count it as
+capacity evidence. Event-ID correction `fabc556c` (draft PR #371) was applied
+identically to both rerun arms. The arms used runtime `de93d526`, runtime image
+`sha256:63921b7d4b5e7dc850059d77a7edbb8422ce3e7c15a756e3cae85cff1d4afd5a`,
+matching image `sha256:2202fe760be115df7ffc6ea4158e42e598e798053488d0e0f43411f149847365`,
+Node 22.22.1, Bun 1.3.14, the same C43-shaped fixture, six materializers, 16
+projector owners, four lifecycle workers plus the nested caller, and fixed
+observer settings. Control omitted migration `0069` and verified UNLOGGED queue
+storage; treatment included it and verified LOGGED storage. Full configuration,
+fixture, protocol, image, and source hashes are in each local ignored artifact.
+
+| Fixed workload and later stage collection | UNLOGGED control | LOGGED treatment |
+| --- | ---: | ---: |
+| Accepted/direct-acked/materialized/projected | 2,999,880 | 3,000,005 |
+| Projected rate | 9,999.20/s | 9,997.40/s |
+| Projector lag | 0 | 0 |
+| Intake p95 / p99 | 59.50 / 83.65ms | 59.25 / 83.90ms |
+| Conservative source→canonical p95 / p99 | 358 / 632ms | 373 / 819ms |
+| Conservative source→lifecycle p95 / p99 | 42,289 / 45,934ms | 41,871 / 62,271ms |
+| Conservative source→market p95 / p99 | 44,418 / 53,006ms | 47,777 / 62,451ms |
+| Projection database WAL | 17,641,971,924B | 19,236,983,026B |
+| Projection database blocks read | 1,466,202 | 2,285,875 |
+
+Both stress runs exited 0. Both frozen checkers exited 1 **solely on lifecycle
+and market sustained freshness**; exact cohort, authority, duration, and queue
+checks passed. Source/projected equality, 16 contiguous unique frontiers, empty
+dirty queues, zero projection retries/deadlocks, and rollback-only exact business
+reference passed after drain: 2,471,569 lifecycle/64 market rows in control and
+2,471,661/64 in treatment. LOGGED added 1,595,011,102B WAL (9.04%, about
+532B/accepted command) without an observed projected-rate loss in this one
+pair. The higher block reads and market p99 bound cannot be assigned causally
+from one sequential pair. Neither arm passes the frozen 5s downstream limit or
+proves independent 20% drain headroom. These are conservative covering
+observation intervals, **not actual per-order visibility latency**.
+
+Same-prefix analysis of the no-profiler control reproduced published cohort
+percentiles and split command-weighted p95 into durable→observed lifecycle
+prefix 10,849ms and prefix→covering lifecycle marker 34,027ms; market
+counterparts 12,445ms and 34,054ms. These p95s are not additive and each
+includes observation. F04 must separate execution, waiting, barrier and
+observation before a work-reduction trial. The fresh-region, current source,
+event-ID correction, and differing observer timing prevent direct causal
+comparison with C43. Raw evidence and 125-file SHA256 manifests per arm passed
+verification under `artifacts/projection-dirty-f02-20260926/hosted-control/`
+and `artifacts/projection-dirty-f02-20260926/hosted-treatment/`. Further
+interpretation and crash/DDL limits are in
+[F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
