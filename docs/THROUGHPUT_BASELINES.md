@@ -1212,3 +1212,78 @@ remote evidence files passed SHA256 verification under
 `artifacts/sustained-10k-20260925/index0066-six-materializers/run-10000-300s-c43/`.
 Droplet `603746089` was intentionally retained for follow-up testing, with a
 scheduled local-time cost cutoff before 21:00; destruction remains pending.
+
+## C44 — bounded canonical selection promoted, local proof only, no full-pipeline run
+
+September 25/26, local Docker Postgres 16 only (`compose.local.yml`
+`projection-postgres`), no droplet. This is a local-evidence code promotion,
+not a sustained-throughput measurement; it does not supersede C43's timed-gate
+failure and makes no rate claim.
+
+`0060`'s canonical selector ranked and prefix-checked the entire post-watermark
+backlog per partition (`row_number`, `first_value`, `lead`, and a `bool_and`
+window each scanning every unclaimed row) before slicing to the per-partition
+budget, regardless of budget size. `EXPLAIN (ANALYZE, BUFFERS)` against a
+synthetic 500,000-row backlog (16 partitions, empty watermarks, explicit
+partitions passed as production does) measured 839ms per selection call: a
+`Seq Scan`, an external-merge disk sort (18.6MB), and two full-backlog
+`WindowAgg` passes. The parked
+`.planning/sustained-10k/bounded-canonical-selection.candidate.sql` (LATERAL
+per-partition `LIMIT` before ranking) measured 1.05ms on the same fixture and
+data: an `Index Only Scan` on `idx_canonical_command_outcomes_partition_seq`
+with `Heap Fetches: 0`. Both selected the identical 489 of 500 rows end to end
+(via the real `runtime_project_canonical_command_outcomes` call, not just the
+bare `SELECT`) on a fixture with a deliberately punched gap, and both correctly
+stopped at the gap (9 of 9 rows before it, none after). `0061`/`0062` already
+made `(partition_id, stream_sequence)` globally unique, closing the integrity
+gap that had parked the candidate.
+
+`0067_bounded_canonical_selection.sql` promotes this, keeping every
+prefix-validity branch from `0060` verbatim (including the pre-encoding
+legacy-data compatibility branches) plus the adjacent-duplicate tie guard,
+evaluated over the bounded LATERAL fetch instead of the full backlog (fetching
+`per_partition_limit + 1` rows so the last budgeted row can still see whether
+an immediate duplicate follows it). `PostgresCanonicalSequencePrefixGuardIntegrationTest`
+(gap/duplicate/tie/legacy-namespace cases) now runs against `0067` and passes.
+A new `PostgresVenueEventBatchMaterializationIntegrationTest` case seeds a
+20,000-row backlog directly in the real schema and asserts the call completes
+in well under 2s regardless. Full `platform-runtime` suite (640 tests),
+`scripts/dev/db/migrate.test.mjs` (25 tests), and arena-control-plane's
+`PostgresSchemaMigrationIntegrationTest` all pass against `0067`.
+
+Needs runtime validation: this closes a real, measured, backlog-scaling cost
+in the selection query itself, and is a plausible mechanism for why C38-C43
+plateaued (every write-amplification fix was downstream of this SELECT), but
+that is inference, not proof. No matched full-pipeline treatment run has been
+made against `0067`; C43's 10k/300s timed-gate failure stands until one is.
+
+## C45 — cloud treatment attempt for `0067`, inconclusive (host CPU, not the selector)
+
+September 26, fresh `nyc3` `c-8` droplet (`sfo2` no longer offers `c-8` at
+all as of this date; C43 likely ran on different physical hardware as a
+result), same 16-projector/6-materializer topology as C43 reconstructed from
+its preserved protocol files, `verify-workers.py` confirmed 35/35 settings
+matching with zero mismatches across all 22 app containers. Full setup,
+every command run, every gap found and fixed, is recorded at
+`.planning/sustained-10k/c45-dirty0067-cloud-attempt.md`; do not re-derive it
+from scratch, read that file.
+
+The 300s run completed (stress and checker both exit 1) but at 3,523.87/s
+accepted, not 10,000/s: only 45.2% of scheduled commands were even scheduled
+(1,357,241 of 3,000,000), intake p50/p95/p99 was 59.93/178.36/254.24ms
+(worse than C43's own 78.06/122.08ms p95/p99), and this held steady on a
+separate 30s repeat (3,755.86/s, 55.43/174.53/241.82ms) - not a warm-up
+fluke. Live container CPU during the repeat (`sample-flow.py`, 8 vCPUs):
+`reef-postgres` 149.84%, `reef-matching-engine` 117.20%, `reef-platform-api`
+115.28%, `reef-projection-postgres` 107.84%, versus roughly 4-10% each
+across all 16 projectors and 6 materializers combined. The bottleneck is the
+intake/accept/match path, entirely upstream of what `0067` changes; the
+projection layer never came under real pressure. Idle single-request
+latency was 2ms, ruling out a static network/proxy misconfiguration.
+
+This run neither confirms nor refutes `0067`. C44's local EXPLAIN evidence
+is unaffected by this result. The leading unverified suspect is the
+region/hardware difference above, not a setting mismatch - every checkable
+config item matched C43 exactly. A valid retest needs either matching
+hardware (try `c-8-intel`) or accepting that intake capacity is a separate,
+pre-existing ceiling from `0067` on whatever hardware is available.

@@ -193,6 +193,75 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
     }
 
     @Test
+    fun selectionCostStaysBoundedByBudgetNotByBacklogSizeWhenMigratedPostgresIsAvailable() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val persistence = PostgresRuntimePersistence(dataSource = dataSource, bootstrapMode = PostgresBootstrapMode.Validate)
+        val suffix = UUID.randomUUID().toString()
+        val partition = uniquePartition(suffix, 90)
+        val projectionName = "bounded-selection-scale-$suffix"
+        val backlogSize = 20_000
+        try {
+            // Sequential, unencoded sequence values (legacy-passthrough range, well
+            // under the 281474976710656 partition-encoding threshold): row_number()
+            // over the whole backlog is not needed to validate the prefix here, only
+            // to prove the selector's cost tracks the requested budget (50) rather
+            // than this 20,000-row backlog. Before 0067, the equivalent call scanned
+            // and sorted the whole backlog every time; a bounded selector should
+            // finish in single-digit ms regardless of backlog size.
+            dataSource.connection.use { conn ->
+                conn.autoCommit = false
+                // The shared default-pool connection this borrows may carry a
+                // leftover short statement_timeout set by another test on this
+                // pooled physical connection (Hikari does not reset session GUCs
+                // on return); pin an explicit generous one for this bulk seed.
+                conn.createStatement().use { it.execute("SET statement_timeout = '30s'") }
+                conn.prepareStatement(
+                    """
+                    INSERT INTO runtime.canonical_command_outcomes(
+                      command_id, batch_id, shard_id, partition_id, command_stream, event_stream,
+                      stream_sequence, delivered_count, command_type, payload_hash,
+                      instrument_id, order_id, result_status, reject_code, result_payload
+                    )
+                    SELECT
+                      'scale-$suffix-' || s, 'scale-batch-$suffix', 'shard-0', ?, 'commands', 'events',
+                      s, 1, 'SubmitOrder', 'hash-' || s, 'AAPL', 'order-' || s, 'ACCEPTED', '', '{}'::jsonb
+                    FROM generate_series(1, $backlogSize) AS s
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setInt(1, partition)
+                    ps.executeUpdate()
+                }
+                conn.commit()
+            }
+
+            val elapsedNanos = System.nanoTime()
+            val projected = persistence.projectCanonicalCommandOutcomes(projectionName, 50, listOf(partition))
+            val elapsedMs = (System.nanoTime() - elapsedNanos) / 1_000_000
+
+            assertEquals(50, projected)
+            assertTrue(
+                elapsedMs < 2_000,
+                "expected bounded selection well under 2s regardless of the $backlogSize-row backlog, took ${elapsedMs}ms"
+            )
+        } finally {
+            dataSource.connection.use { conn ->
+                conn.prepareStatement("DELETE FROM runtime.canonical_command_outcomes WHERE partition_id = ?").use { ps ->
+                    ps.setInt(1, partition)
+                    ps.executeUpdate()
+                }
+                conn.prepareStatement("DELETE FROM runtime.projection_watermarks WHERE projection_name = ?").use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.executeUpdate()
+                }
+                conn.prepareStatement("DELETE FROM runtime.projection_batch_claims WHERE projection_name = ?").use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.executeUpdate()
+                }
+            }
+        }
+    }
+
+    @Test
     fun compatBootstrapPreservesMigratedSameStoreClaimWrapperWhenPostgresIsAvailable() {
         val dataSource = migratedDataSourceOrNull() ?: return
         assertTrue(projectCommandOutcomesFunctionDefinition(dataSource).contains("runtime_claim_projection_batch_v1"))
