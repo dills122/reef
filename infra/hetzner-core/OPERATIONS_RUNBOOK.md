@@ -283,6 +283,11 @@ database images, firewalling, or the deploy script itself.
 
 ### Runtime 0069 dirty-queue conversion
 
+This section applies only to the lightweight backbone runtime and its existing
+database. Full Reef simulation runs and workload-sized migration rehearsals
+use disposable DigitalOcean workers. Never use this permanent host as a
+benchmark target.
+
 `runtime/0069_logged_projection_dirty_queues.sql` rewrites two UNLOGGED
 projection queues under exclusive locks. The `Application Service Deploy`
 workflow fails before sending migrations while the `backbone-production`
@@ -291,10 +296,14 @@ it until the migration ledger and both LOGGED relations are verified on the
 target. The host migration runner also rejects automatic application of a
 pending 0069, even if an opt-in flag reaches the forced SSH command.
 
-Before applying 0069, rehearse the rewrite on a target-sized restored copy and
-record queue sizes, lock wait, rewrite wall time, and the allowed downtime
-window. The local aged-control conversion took 0.13s, but does not bound the
-target. Schedule an operator window with an application rollback plan. Sync the
+Before applying 0069, use the disposable-worker rehearsal evidence and compare
+its queue sizes with the current deployment target. Rehearse again on an
+isolated worker if the target is larger. The September 26 `sfo3` `c-32`
+same-schema synthetic rehearsal exceeded the aged run-plane queue sizes:
+159,678,464B order and 999,424B market. A held reader hit the 2s lock
+timeout; the quiesced rewrite committed in 2.542s. This single run is not an
+upper bound. Record current queue sizes and schedule an operator window with
+an application rollback plan. Sync the
 current host scripts with `make hetzner-core ARGS=deploy-automation-up` and
 stage the exact versioned migration at
 `/opt/reef/postgres/migrations/runtime/0069_logged_projection_dirty_queues.sql`.

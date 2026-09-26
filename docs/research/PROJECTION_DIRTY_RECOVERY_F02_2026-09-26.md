@@ -169,6 +169,36 @@ observation bounds, not actual per-order visibility times or additive p95s.
 They point F04 at downstream execution/barrier/observation as well as canonical
 processing; the LOGGED change itself does not solve that delay.
 
+## Workload-sized DDL rehearsal and environment correction — September 26
+
+The permanent backbone is the wrong target for a Reef throughput rehearsal:
+heavy venue runs use disposable DigitalOcean workers. An isolated PostgreSQL
+container was briefly used on the backbone after read-only queue-size and
+schema queries. Two setup attempts failed before conversion (startup handoff
+and script stdin consumption); a third synthetic 30,000-row conversion took
+190ms. All containers and the temporary script were removed. The live database
+was never written, its services were not stopped, and `0069` remained unapplied.
+This result is excluded from run-plane qualification.
+
+The corrected rehearsal used disposable `sfo3` `c-32` droplet `603914045` and
+an isolated `postgres:16-alpine` container with the current two-queue columns,
+primary keys, and `dirtied_at` indexes. One million synthetic order markers
+occupied 159,678,464B, exceeding the aged hosted control's 127,041,536B;
+10,000 market markers occupied 999,424B, exceeding its 335,872B. A held reader
+made the exact `2s` lock timeout cancel the transaction in 2,068ms. With that
+reader gone, both `SET LOGGED` statements committed under the `30s` statement
+timeout in 2,542ms wall time. Both relations became LOGGED and row counts stayed
+1,000,000 and 10,000. The test container, droplet, and firewall were destroyed;
+provider resource lists and OpenTofu state contain no rehearsal resources.
+Ignored local evidence, including the script and its SHA256, is under
+`artifacts/projection-dirty-f02-20260926/droplet-rehearsal-20260926/`.
+
+This is a same-schema synthetic size/lock rehearsal on the relevant worker
+class, not a restored dataset or an upper bound for later, larger runs. It
+supports a bounded, quiesced conversion for the observed aged queue size. It
+does not prove downstream freshness or authorize touching the permanent
+backbone as a benchmark host.
+
 ## Decision and remaining proof
 
 Keep the small LOGGED migration as draft F02 candidate: crash and exact rebuild

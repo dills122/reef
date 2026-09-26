@@ -1269,3 +1269,20 @@ interpretation and crash/DDL limits are in
 Disposable droplet `603811601` and firewall
 `0e3d8cf7-d244-4546-a6db-8310a7f8b7c0` were destroyed after local evidence
 verification; both provider lookups returned 404 and OpenTofu state was empty.
+
+### F02 DDL rehearsal — disposable c-32, diagnostic
+
+September 26, isolated `sfo3` `c-32` droplet `603914045`, PostgreSQL 16,
+same two-queue columns and indexes, synthetic data. The order queue held
+1,000,000 rows/159,678,464B against the prior aged control's 127,041,536B;
+market held 10,000 rows/999,424B against 335,872B. A reader-held lock made
+the configured 2s timeout cancel conversion after 2,068ms. With the reader
+gone, both `SET LOGGED` operations committed in 2,542ms under the configured
+30s statement timeout; both relations were LOGGED and all rows remained.
+This is a size/lock diagnostic on the run-plane worker class, not a restored
+dataset, capacity run, or statistical upper bound. The temporary droplet and
+firewall were destroyed and provider lists contain neither. Original script,
+hash and result record are under ignored local
+`artifacts/projection-dirty-f02-20260926/droplet-rehearsal-20260926/`;
+interpretation and the excluded backbone setup attempts are in the
+[F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
