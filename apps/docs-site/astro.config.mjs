@@ -13,7 +13,6 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Reef",
-      tagline: "Simulation-first institutional trading venue and post-trade platform",
       description:
         "Reef project overview, bot arena/game docs, trading API surface, and data schema reference. Pre-release, under heavy development.",
       customCss: ["./src/styles/reef.css"],
