@@ -45,6 +45,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
     private val events = mutableListOf<RuntimeEvent>()
+    private val eventById = mutableMapOf<String, RuntimeEvent>()
     private val traceSequences = mutableMapOf<String, Long>()
     private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
     private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
@@ -244,13 +245,26 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun saveEvent(event: RuntimeEvent) {
+        saveEvents(listOf(event))
+    }
+
+    override fun saveEvents(events: List<RuntimeEvent>) {
         synchronized(lock) {
-        val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
-        traceSequences[event.traceId] = nextSequence
-        events.add(event.copy(sequenceNumber = nextSequence))
-        if (event.orderId.isNotBlank()) {
-            orderLifecycleDirty.add(event.orderId)
-        }
+            require(events.map { it.eventId }.toSet().size == events.size) { "duplicate runtime event ID in batch" }
+            events.forEach { event ->
+                val existing = eventById[event.eventId]
+                require(existing == null || existing.copy(sequenceNumber = 0) == event.copy(sequenceNumber = 0)) {
+                    "runtime event replay conflict for existing event_id ${event.eventId}"
+                }
+            }
+            events.filterNot { it.eventId in eventById }.forEach { event ->
+                val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
+                traceSequences[event.traceId] = nextSequence
+                val stored = event.copy(sequenceNumber = nextSequence)
+                this.events.add(stored)
+                eventById[event.eventId] = stored
+                if (event.orderId.isNotBlank()) orderLifecycleDirty.add(event.orderId)
+            }
         }
     }
 
