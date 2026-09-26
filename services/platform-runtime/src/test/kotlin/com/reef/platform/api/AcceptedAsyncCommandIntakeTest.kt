@@ -21,6 +21,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -220,7 +221,7 @@ class AcceptedAsyncCommandIntakeTest {
 
     @Test
     fun terminalStatusesExpireByRetentionTtl() {
-        var now = 1_000L
+        val now = AtomicLong(1_000L)
         val persistence = seededPersistence()
         val gateway = ControlledAsyncSubmitGateway()
         val intake = AcceptedAsyncCommandIntake(
@@ -235,7 +236,7 @@ class AcceptedAsyncCommandIntakeTest {
             inFlightPerLane = 1,
             terminalStatusMaxRecords = 10,
             terminalStatusTtlMs = 100L,
-            clockMillis = { now }
+            clockMillis = now::get
         )
 
         intake.start()
@@ -244,12 +245,17 @@ class AcceptedAsyncCommandIntakeTest {
             assertTrue(waitFor { gateway.pendingCount() == 1 })
             gateway.completeNextAccepted()
             assertTrue(waitFor { intake.findCommandStatus("cmd-retention-ttl-1")?.status == CommandLogStatus.COMPLETED })
+            assertTrue(waitFor { intake.stats().retainedTerminalStatusRecords == 1L })
 
-            now += 100L
+            now.addAndGet(100L)
             assertTrue(enqueue(intake, "cmd-retention-ttl-2", "ord-retention-ttl-2", "idem-retention-ttl-2").accepted)
             assertTrue(waitFor { gateway.pendingCount() == 1 })
             gateway.completeNextAccepted()
             assertTrue(waitFor { intake.findCommandStatus("cmd-retention-ttl-2")?.status == CommandLogStatus.COMPLETED })
+            assertTrue(waitFor(timeoutMs = 10_000) {
+                val stats = intake.stats()
+                stats.retainedTerminalStatusRecords == 1L && stats.statusRecordsEvicted == 1L
+            })
 
             assertNull(intake.findCommandStatus("cmd-retention-ttl-1"))
             assertEquals(1L, intake.stats().retainedTerminalStatusRecords)

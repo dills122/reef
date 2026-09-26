@@ -484,15 +484,15 @@ private class RecordingEngineGateway : EngineGateway {
         lastCommand = command
         return SubmitOrderResult(
             accepted = EngineOrderAccepted(
-                eventId = "evt-1",
+                eventId = "evt-${command.commandId}",
                 orderId = command.orderId,
                 engineOrderId = "eng-${command.orderId}",
                 occurredAt = "2026-03-14T18:00:00Z"
             ),
             executions = listOf(
                 ExecutionCreated(
-                    eventId = "evt-exec-1",
-                    executionId = "exec-1",
+                    eventId = "evt-exec-${command.commandId}",
+                    executionId = "exec-${command.commandId}",
                     orderId = command.orderId,
                     instrumentId = command.instrumentId,
                     quantityUnits = command.quantityUnits,
@@ -503,9 +503,9 @@ private class RecordingEngineGateway : EngineGateway {
             ),
             trades = listOf(
                 TradeCreated(
-                    eventId = "evt-trade-1",
-                    tradeId = "trade-1",
-                    executionId = "exec-1",
+                    eventId = "evt-trade-${command.commandId}",
+                    tradeId = "trade-${command.commandId}",
+                    executionId = "exec-${command.commandId}",
                     buyOrderId = command.orderId,
                     sellOrderId = "ord-2",
                     instrumentId = command.instrumentId,
@@ -522,7 +522,7 @@ private class RecordingEngineGateway : EngineGateway {
         submitCalls += 1
         return SubmitOrderResult(
             accepted = EngineOrderAccepted(
-                eventId = "evt-cancel-1",
+                eventId = "evt-cancel-${command.commandId}",
                 orderId = command.orderId,
                 engineOrderId = "eng-${command.orderId}",
                 occurredAt = "2026-03-14T18:00:00Z"
@@ -534,7 +534,7 @@ private class RecordingEngineGateway : EngineGateway {
         submitCalls += 1
         return SubmitOrderResult(
             accepted = EngineOrderAccepted(
-                eventId = "evt-modify-1",
+                eventId = "evt-modify-${command.commandId}",
                 orderId = command.orderId,
                 engineOrderId = "eng-${command.orderId}",
                 occurredAt = "2026-03-14T18:00:00Z"

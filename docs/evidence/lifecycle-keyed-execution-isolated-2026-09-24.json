@@ -1,0 +1,139 @@
+{
+  "diagnosticOnly": true,
+  "elapsedSeconds": 2.192702054977417,
+  "fixture": "C24 retained, stopped writers, first1000 lifecycle order_id sorted, forced last_event_at mismatch inside rollback",
+  "cohort": {
+    "cohortRows": 1000,
+    "instruments": 64,
+    "statuses": 5
+  },
+  "factsUnchanged": true,
+  "before": {
+    "function": "fed2990d6ed6421bd587c1b35fbe8cf8",
+    "life": "a62f9468d4a4000c91900c23aac88458",
+    "lifeDirty": "d41d8cd98f00b204e9800998ecf8427e",
+    "marketDirty": "d41d8cd98f00b204e9800998ecf8427e",
+    "market": "0eaef88d9ce491c6aa36794358894455"
+  },
+  "after": {
+    "function": "fed2990d6ed6421bd587c1b35fbe8cf8",
+    "life": "a62f9468d4a4000c91900c23aac88458",
+    "lifeDirty": "d41d8cd98f00b204e9800998ecf8427e",
+    "marketDirty": "d41d8cd98f00b204e9800998ecf8427e",
+    "market": "0eaef88d9ce491c6aa36794358894455"
+  },
+  "privateLogSha256": "5bdc086be60e524a19b30e2c88126d18eba8afcbb8314eb30371d18f86c21c25",
+  "sqlSha256": "e7250066943ccb03f2b40bb7ddd37d6e88301019e2c8ed1ec7ecda09ea185bd1",
+  "arms": [
+    {
+      "arm": "base250",
+      "batch": 250,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.4689999999999999,
+        "recompute-write": 205.454,
+        "outer-call": 230.28300000000002
+      }
+    },
+    {
+      "arm": "candidate250",
+      "batch": 250,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.387,
+        "recompute-write": 158.90800000000002,
+        "outer-call": 172.186
+      }
+    },
+    {
+      "arm": "candidate250repeat",
+      "batch": 250,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.3980000000000001,
+        "recompute-write": 164.01,
+        "outer-call": 177.32
+      }
+    },
+    {
+      "arm": "base250repeat",
+      "batch": 250,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.499,
+        "recompute-write": 187.239,
+        "outer-call": 202.60500000000002
+      }
+    },
+    {
+      "arm": "base500",
+      "batch": 500,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.125,
+        "recompute-write": 111.543,
+        "outer-call": 119.795
+      }
+    },
+    {
+      "arm": "candidate500",
+      "batch": 500,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.173,
+        "recompute-write": 93.004,
+        "outer-call": 101.553
+      }
+    },
+    {
+      "arm": "candidate500repeat",
+      "batch": 500,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.089,
+        "recompute-write": 88.206,
+        "outer-call": 96.205
+      }
+    },
+    {
+      "arm": "base500repeat",
+      "batch": 500,
+      "nodeTiming": false,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 1.1219999999999999,
+        "recompute-write": 106.959,
+        "outer-call": 116.15
+      }
+    },
+    {
+      "arm": "candidateTimed500",
+      "batch": 500,
+      "nodeTiming": true,
+      "processed": 1000,
+      "businessMismatches": 0,
+      "elapsedByCategoryMs": {
+        "claim": 2.022,
+        "recompute-write": 87.425,
+        "outer-call": 96.445
+      }
+    }
+  ],
+  "candidate": "0059 keyed LEFT JOIN LATERAL execution SUM; prior batched aggregate CTE removed; numeric predicate unchanged",
+  "scope": "isolated rollback comparison only; not throughput qualification"
+}

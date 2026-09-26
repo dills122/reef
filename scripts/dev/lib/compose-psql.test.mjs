@@ -47,3 +47,34 @@ test("composePsqlArgs honors an explicit compose overlay", () => {
   ]);
   assert.deepEqual(args.slice(7, 11), ["exec", "-T", "projection-postgres", "psql"]);
 });
+
+test("composePsqlArgs accepts caller-specific database credentials without losing compose files", () => {
+  assert.deepEqual(
+    composePsqlArgs(
+      "postgres",
+      "SELECT 3",
+      {},
+      { user: "replay_reader", database: "replay_evidence" },
+    ),
+    [
+      "compose",
+      "-f",
+      "compose.base.yml",
+      "-f",
+      "compose.local.yml",
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "replay_reader",
+      "-d",
+      "replay_evidence",
+      "-At",
+      "-F",
+      "\t",
+      "-c",
+      "SELECT 3",
+    ],
+  );
+});

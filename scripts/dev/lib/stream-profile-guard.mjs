@@ -63,7 +63,31 @@ export function validateStreamProfile(profileName, options = {}) {
     }
   }
 
+  issues.push(...projectionSourceBindingIssues());
   return report(profile, issues, warnings, options);
+}
+
+// Match Compose's canonical fallback without renaming retained watermarks.
+export function configureProjectionSourceNames(processEnv = process.env) {
+  if (!processEnv.STREAM_ACK_PROJECTION_NAME) processEnv.STREAM_ACK_PROJECTION_NAME = "runtime-normalized-submit";
+  if (!processEnv.MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME) {
+    processEnv.MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME = processEnv.STREAM_ACK_PROJECTION_NAME;
+  }
+}
+
+export function projectionSourceBindingIssues(processEnv = process.env) {
+  const enabled = value => String(value ?? "").trim().toLowerCase() === "true";
+  const anyMaintainer = stage => [0, 1, 2, 3].some(index =>
+    enabled(processEnv[`${stage}_${index}_ENABLED`] || processEnv[`${stage}_ENABLED`]));
+  if (!enabled(processEnv.STREAM_ACK_PROJECTOR_ENABLED) ||
+      (processEnv.STREAM_ACK_PROJECTION_STAGE || "full") !== "full" ||
+      !anyMaintainer("MARKET_DATA_PROJECTOR")) return [];
+  const canonical = processEnv.STREAM_ACK_PROJECTION_NAME || "runtime-normalized-submit";
+  // An unconfigured custom caller still receives Compose's historical fallback.
+  const marketSource = processEnv.MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME || "runtime-normalized-venue-outcomes";
+  return canonical === marketSource ? [] : [
+    `MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME '${marketSource}' must match STREAM_ACK_PROJECTION_NAME '${canonical}' for full projection maintainers`,
+  ];
 }
 
 export function printStreamProfileSummary(profileName) {
@@ -83,6 +107,8 @@ export function printStreamProfileSummary(profileName) {
     "MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS",
     "MATCHING_ENGINE_EVENT_STREAM",
     "VENUE_EVENT_MATERIALIZER_ENABLED",
+    "STREAM_ACK_PROJECTION_NAME",
+    "MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME",
     "DEV_STRESS_FAIL_ON_STREAM_DIRECT_FAILURES",
     "DEV_STRESS_MAX_STREAM_DIRECT_COMPLETION_GAP",
     "DEV_STRESS_FAIL_ON_VENUE_EVENT_MATERIALIZER_FAILURES",

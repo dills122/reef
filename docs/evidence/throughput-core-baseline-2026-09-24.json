@@ -1,0 +1,538 @@
+{
+  "id": "C5",
+  "scope": "intake-matching-canonical-materialization; projection disabled",
+  "samples": [
+    {
+      "artifact": "report-rate-10000-workers-1024-sample-1.json",
+      "sha256": "791a6e1629f416a922506c5cd0ca891d32843f20a6f6dd4e0dd8549263e5d613",
+      "accepted": 2999959,
+      "failures": 0,
+      "latencyMs": {
+        "min": 0.803504,
+        "p50": 7.001741,
+        "p95": 67.60964299999999,
+        "p99": 127.19261600000002,
+        "max": 494.504991
+      },
+      "config": {
+        "Duration": 300000000000,
+        "RatePerSecond": 10000,
+        "Workers": 1024
+      },
+      "unitMetrics": {
+        "attemptedCommands": 2999959,
+        "acceptedCommands": 2999959,
+        "directAckedCommands": 2999959,
+        "durableCanonicalCompletedItems": 2999959,
+        "attemptedCommandsPerSecond": 9998.738058387717,
+        "acceptedCommandsPerSecond": 9998.738058387717,
+        "directAckedCommandsPerSecond": 9998.738058387717,
+        "durableCanonicalCompletedPerSecond": 9998.738058387717
+      },
+      "sourceCohortPassed": true,
+      "sessionConfigSha256": "b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a",
+      "streamDirect": {
+        "ackedDelta": 2999959,
+        "failedDelta": 0,
+        "nackedDelta": 0
+      },
+      "venueEventMaterializer": {
+        "materializedDelta": 2999959,
+        "failedDelta": 0,
+        "ackFailedDelta": 0
+      }
+    },
+    {
+      "artifact": "report-rate-10000-workers-1024-sample-2.json",
+      "sha256": "a7a862565c78a82f5c9cd743fd3c465bc83da2b2bca82d9ea4ed9236ac43e768",
+      "accepted": 2999963,
+      "failures": 0,
+      "latencyMs": {
+        "min": 0.650867,
+        "p50": 6.48031,
+        "p95": 57.810857,
+        "p99": 100.546149,
+        "max": 211.435496
+      },
+      "config": {
+        "Duration": 300000000000,
+        "RatePerSecond": 10000,
+        "Workers": 1024
+      },
+      "unitMetrics": {
+        "attemptedCommands": 2999963,
+        "acceptedCommands": 2999963,
+        "directAckedCommands": 2999963,
+        "durableCanonicalCompletedItems": 2999963,
+        "attemptedCommandsPerSecond": 9999.451258078567,
+        "acceptedCommandsPerSecond": 9999.451258078567,
+        "directAckedCommandsPerSecond": 9999.451258078567,
+        "durableCanonicalCompletedPerSecond": 9999.451258078567
+      },
+      "sourceCohortPassed": true,
+      "sessionConfigSha256": "b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a",
+      "streamDirect": {
+        "ackedDelta": 2999963,
+        "failedDelta": 0,
+        "nackedDelta": 0
+      },
+      "venueEventMaterializer": {
+        "materializedDelta": 2999963,
+        "failedDelta": 0,
+        "ackFailedDelta": 0
+      }
+    }
+  ],
+  "completion": {
+    "originalExitCode": 0,
+    "cleanupExitCode": 0,
+    "cleanupPassed": true,
+    "exitCode": 0
+  },
+  "sourceManifestSha256": "b30badccab7b0a5e8e508cb547032cc511ae5080d1980531fbe20541044107c3",
+  "candidateBuild": {
+    "runtimeImage": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+    "sourceManifestSha256": "b30badccab7b0a5e8e508cb547032cc511ae5080d1980531fbe20541044107c3",
+    "buildTree": "/home/reefbench/reef-productive",
+    "provenance": "Native image built and source verified by parent; preparer performed no remote build."
+  },
+  "checkerLogSha256": "8e1c2e6479800090303582a73538491670e68f3493adeada38695ccf6eb4c293",
+  "runtime": [
+    {
+      "service": "boundary-postgres",
+      "imageId": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {},
+      "jvmResourceOptions": []
+    },
+    {
+      "service": "matching-engine",
+      "imageId": "sha256:7cfd35ee3c8eb71b0f23ec624fd4b7e39ee224d7127158e52585d686f95a2711",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {},
+      "jvmResourceOptions": []
+    },
+    {
+      "service": "nats",
+      "imageId": "sha256:4063edae0717ba5f7501bfde75f97fd9b57f5b93597b92c70b6a6fbbf6a74e06",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {},
+      "jvmResourceOptions": []
+    },
+    {
+      "service": "platform-api",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "api",
+        "RUNTIME_PERSISTENCE": "noop"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-materializer",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "materializer",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-materializer-1",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "materializer",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-materializer-2",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "materializer",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-materializer-3",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "materializer",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-projector-0",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "STREAM_ACK_PROJECTOR_PARTITIONS": "0,1,2,3",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "projector",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-projector-1",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "STREAM_ACK_PROJECTOR_PARTITIONS": "4,5,6,7",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "projector",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-projector-2",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "STREAM_ACK_PROJECTOR_PARTITIONS": "8,9,10,11",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "projector",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-projector-3",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "STREAM_ACK_PROJECTOR_PARTITIONS": "12,13,14,15",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "projector",
+        "RUNTIME_PERSISTENCE": "postgres"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-worker-0",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "worker",
+        "RUNTIME_PERSISTENCE": "noop"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-worker-1",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "worker",
+        "RUNTIME_PERSISTENCE": "noop"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-worker-2",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "worker",
+        "RUNTIME_PERSISTENCE": "noop"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "platform-worker-3",
+      "imageId": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {
+        "RUNTIME_DB_BOOTSTRAP_MODE": "validate",
+        "EXTERNAL_API_COMMAND_PROCESSING_MODE": "stream-ack",
+        "STREAM_ACK_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_ENABLED": "false",
+        "MARKET_DATA_PROJECTOR_ENABLED": "false",
+        "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE": "500",
+        "MARKET_DATA_PROJECTOR_BATCH_SIZE": "500",
+        "STREAM_ACK_PROJECTOR_BATCH_SIZE": "2000",
+        "VENUE_EVENT_MATERIALIZER_ENABLED": "true",
+        "VENUE_EVENT_MATERIALIZER_BATCH_SIZE": "1000",
+        "VENUE_EVENT_MATERIALIZER_POLL_MS": "10",
+        "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS": "200",
+        "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED": "false",
+        "PLATFORM_RUNTIME_ROLE": "worker",
+        "RUNTIME_PERSISTENCE": "noop"
+      },
+      "jvmResourceOptions": [
+        "-Xms128m",
+        "-Xmx512m",
+        "-XX:ActiveProcessorCount=2"
+      ]
+    },
+    {
+      "service": "postgres",
+      "imageId": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {},
+      "jvmResourceOptions": []
+    },
+    {
+      "service": "projection-postgres",
+      "imageId": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {},
+      "jvmResourceOptions": []
+    },
+    {
+      "service": "redpanda",
+      "imageId": "sha256:468bd13a9f2bd24794cb7fddc867c767fb1008b9a07b297b89fde48c564d7d96",
+      "runningAfterCleanup": false,
+      "nanoCpus": 0,
+      "memoryLimitBytes": 0,
+      "settings": {},
+      "jvmResourceOptions": []
+    }
+  ],
+  "protocolSha256": "709292a6cddbfdae84454936eae8a0b9ba2aec52dafc0610836b2321c296c536"
+}

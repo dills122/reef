@@ -26,6 +26,7 @@ import java.time.Instant
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val lock = Any()
+    private val databaseGeneration = java.util.UUID.randomUUID().toString()
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
     private val venueEventBatches = linkedMapOf<String, VenueEventBatchFact>()
     private val commandOutcomes = linkedMapOf<String, CanonicalCommandOutcome>()
@@ -44,6 +45,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
     private val events = mutableListOf<RuntimeEvent>()
+    private val eventById = mutableMapOf<String, RuntimeEvent>()
     private val traceSequences = mutableMapOf<String, Long>()
     private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
     private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
@@ -243,13 +245,26 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun saveEvent(event: RuntimeEvent) {
+        saveEvents(listOf(event))
+    }
+
+    override fun saveEvents(events: List<RuntimeEvent>) {
         synchronized(lock) {
-        val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
-        traceSequences[event.traceId] = nextSequence
-        events.add(event.copy(sequenceNumber = nextSequence))
-        if (event.orderId.isNotBlank()) {
-            orderLifecycleDirty.add(event.orderId)
-        }
+            require(events.map { it.eventId }.toSet().size == events.size) { "duplicate runtime event ID in batch" }
+            events.forEach { event ->
+                val existing = eventById[event.eventId]
+                require(existing == null || existing.copy(sequenceNumber = 0) == event.copy(sequenceNumber = 0)) {
+                    "runtime event replay conflict for existing event_id ${event.eventId}"
+                }
+            }
+            events.filterNot { it.eventId in eventById }.forEach { event ->
+                val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
+                traceSequences[event.traceId] = nextSequence
+                val stored = event.copy(sequenceNumber = nextSequence)
+                this.events.add(stored)
+                eventById[event.eventId] = stored
+                if (event.orderId.isNotBlank()) orderLifecycleDirty.add(event.orderId)
+            }
         }
     }
 
@@ -630,6 +645,26 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         }
     }
 
+    override fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier = synchronized(lock) {
+        val rows = projectionWatermarks[projectionName].orEmpty()
+            .filterKeys { partitions.isEmpty() || it in partitions }
+            .map { (partition, sequence) -> CommittedProjectionWatermark(partition, sequence, "") }
+        CommittedProjectionFrontier(projectionName, partitions.toList(), rows.sortedBy { it.partitionId }, databaseGeneration)
+    }
+
+    override fun projectionDirtyQueueStats(): ProjectionDirtyQueueStats {
+        synchronized(lock) {
+            return ProjectionDirtyQueueStats(
+                orderLifecyclePending = orderLifecycleDirty.size.toLong(),
+                orderLifecycleOldestDirtiedAt = "",
+                marketDataPending = marketDataSnapshotDirty.size.toLong(),
+                marketDataOldestDirtiedAt = "",
+                databaseSnapshotAt = Instant.now().toString(),
+                databaseGeneration = databaseGeneration
+            )
+        }
+    }
+
     override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         synchronized(lock) {
         val canonicalOutcomes = canonicalOutcomes(batch)
@@ -889,11 +924,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun projectMarketDataSnapshots(
         projectionName: String,
         sourceProjectionName: String,
-        batchSize: Int
+        batchSize: Int,
+        projectLifecycleFirst: Boolean
     ): Long {
         synchronized(lock) {
         if (batchSize <= 0) return 0
-        projectOrderLifecycleState(batchSize)
+        if (projectLifecycleFirst) projectOrderLifecycleState(batchSize)
         val batch = marketDataSnapshotDirty.take(batchSize)
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }

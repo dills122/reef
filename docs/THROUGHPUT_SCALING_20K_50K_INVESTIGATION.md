@@ -75,7 +75,7 @@ The July 12 c-16 DigitalOcean gate proved, across two five-minute samples:
 - all 16 direct-stream partitions active.
 
 See [Performance Learnings](./PERFORMANCE_LEARNINGS.md),
-[DigitalOcean Stress Test Plan](./DIGITALOCEAN_STRESS_TEST_PLAN.md), and
+[DigitalOcean Stress Test Plan](./archive/DIGITALOCEAN_STRESS_TEST_PLAN.md), and
 [Command Intake Process](./COMMAND_INTAKE_PROCESS.md).
 
 The gate is strong venue-core evidence. Its boundary must remain explicit:

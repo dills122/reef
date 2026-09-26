@@ -214,8 +214,11 @@ message schemas remain out of scope.
 
 Current next slice:
 
-- record live security-fail/repair and `ops-realistic-v1` pending assertion
-  reports with replay/checksum evidence where available
+- security-fail/repair and `ops-realistic-v1` pending behavior are implemented
+  and covered by passing materializer/HTTP tests. PR #305 also scopes
+  repair/resolution by break. The September 4 audit did not find standalone
+  live reports for these remaining scenarios; locate or record them with
+  replay/checksum evidence where available, rather than rebuilding the behavior.
 - use those reports to scope one operator workflow improvement, rather than
   starting a broad post-trade UI
 - treat affirmation timeout, clearing-reject repair, and deterministic netting

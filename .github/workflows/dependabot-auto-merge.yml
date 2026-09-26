@@ -8,20 +8,22 @@ on:
       - completed
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
 
 jobs:
-  enable-auto-merge:
+  merge-and-verify:
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.actor.login == 'dependabot[bot]' &&
       github.repository == 'dills122/reef'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Update stale Dependabot branch or enable squash auto-merge
+      - name: Update stale Dependabot branch or squash merge
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -33,6 +35,8 @@ jobs:
           pr_author="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.user.login')"
           current_head="$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')"
           merge_state="$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeStateStatus --jq '.mergeStateStatus')"
+          BASE_BRANCH="$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json baseRefName --jq '.baseRefName')"
+          CHANGED_FILES="$(gh api --paginate "repos/$GH_REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')"
           test "$pr_author" = 'dependabot[bot]'
           test "$current_head" = "$CI_HEAD_SHA"
 
@@ -41,4 +45,15 @@ jobs:
             exit 0
           fi
 
-          gh pr merge "$PR_NUMBER" --repo "$GH_REPO" --auto --squash
+          gh pr merge "$PR_NUMBER" --repo "$GH_REPO" --squash --match-head-commit "$CI_HEAD_SHA"
+          gh workflow run ci.yml --repo "$GH_REPO" --ref "$BASE_BRANCH"
+
+          if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(services/(platform-runtime|arena-control-plane|matching-engine|simulator)/|scripts/dev/db/migrations/|\.github/workflows/(container-images|service-deploy)\.yml$)'; then
+            gh workflow run container-images.yml --repo "$GH_REPO" --ref "$BASE_BRANCH"
+          fi
+          if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/docs-site/|\.github/workflows/docs-site\.yml$)'; then
+            gh workflow run docs-site.yml --repo "$GH_REPO" --ref "$BASE_BRANCH"
+          fi
+          if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(apps/arena-admin/|scripts/deploy/hetzner-core\.mjs$|\.github/workflows/admin-ui-deploy\.yml$)'; then
+            gh workflow run admin-ui-deploy.yml --repo "$GH_REPO" --ref "$BASE_BRANCH"
+          fi

@@ -83,6 +83,11 @@ with a short GitHub-facing entry point in [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 Normal local development does not require hosted credentials, Tailscale, or
 direct access to the production box.
 
+To reproduce or compare throughput work, choose a measured configuration from
+the [run selector](./docs/LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need).
+The 10k/s venue-core result and the historical full-projection results use
+different runtime roles and prove different pipeline stages.
+
 For Arena-owned work, use the explicit overlay:
 
 ```bash
@@ -137,8 +142,9 @@ stack scripts when Bun is not installed:
 JS_RUNTIME=node make dev-up
 ```
 
-For advanced local runtime profiles and diagnostics after onboarding, continue
-with [`docs/DEV_ENV.md`](./docs/DEV_ENV.md).
+For accepted local defaults, teardown, reset, and optional overlays, use
+[`docs/LOCAL_CONFIGURATION.md`](./docs/LOCAL_CONFIGURATION.md). For advanced
+runtime profiles and diagnostics, use [`docs/DEV_ENV.md`](./docs/DEV_ENV.md).
 
 ## CI And Quality Gates
 
@@ -172,9 +178,9 @@ before enabling squash auto-merge.
 Bot-submission branches also run manifest validation and container-isolated bot
 qualification. Fork submissions now enter a persisted `pending_invite_review`
 state; a trusted base-branch workflow binds maintainer identity and the exact
-head SHA before provisioning. The path is still invite-only and has not yet
-completed its named external-account E2E proof, so open/self-service submission
-must not be advertised. See
+head SHA before provisioning. External-account admission/onboarding completed
+through the Noodle smoke test and follow-up fixes. The path remains invite-only;
+open/self-service submission depends on the remaining release requirements. See
 [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md)
 for the verified release matrix and blockers.
 
@@ -198,39 +204,19 @@ make dev-stress
 
 To tune a manual GitHub Actions run, use the workflow inputs for duration, target rates, and whether to include the db-backed profile.
 
-## Canonical Docs
+## Documentation And Current Work
 
-Read these before changing architecture, behavior, contracts, or delivery policy:
+Start with the [documentation map](./docs/README.md). It separates developer
+setup, accepted local configuration, architecture and contracts, the repository
+work plan, and historical evidence. For AI work, use
+[`AGENTS.md`](./AGENTS.md) and the [AI context map](./docs/AI_CONTEXT.md).
 
-- [`REEF_PROJECT_OVERVIEW.md`](./REEF_PROJECT_OVERVIEW.md)
-- [`REEF_TECHNICAL_DESIGN.md`](./REEF_TECHNICAL_DESIGN.md)
-- [`docs/steering/README.md`](./docs/steering/README.md)
-- [`docs/steering/repository-scope-and-priorities.md`](./docs/steering/repository-scope-and-priorities.md)
-- [`docs/steering/architecture.md`](./docs/steering/architecture.md)
-- [`docs/steering/repository.md`](./docs/steering/repository.md)
-- [`docs/PERFORMANCE_LEARNINGS.md`](./docs/PERFORMANCE_LEARNINGS.md)
-- [`docs/ENGINEERING_DELIVERY_POLICY.md`](./docs/ENGINEERING_DELIVERY_POLICY.md)
-- [`docs/DECISIONS.md`](./docs/DECISIONS.md)
-
-Surface-specific steering:
-
-- [`docs/steering/go.md`](./docs/steering/go.md)
-- [`docs/steering/kotlin.md`](./docs/steering/kotlin.md)
-- [`docs/steering/astro.md`](./docs/steering/astro.md)
-- [`docs/steering/data-platform.md`](./docs/steering/data-platform.md)
-- [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)
-- [`docs/steering/external-api-boundary.md`](./docs/steering/external-api-boundary.md)
-
-## Current Development Focus
-
-The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md) and [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md). Reef/Arena separation is promoted and recorded in [`docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md). The active Arena milestone is the invite-preview campaign in [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md); release gates remain in [`docs/BOT_ARENA_RELEASE_READINESS.md`](./docs/BOT_ARENA_RELEASE_READINESS.md). At a high level:
-
-1. Keep validating hot-ingress paths with durable command-log, direct stream, and explicit partition semantics.
-2. Preserve deterministic lane assignment for matching-sensitive submit/cancel/modify commands.
-3. Resume venue-core scaling only through the bounded-working-set and compact-canonical-storage gates; the current verified ceiling remains `10k commands/sec`.
-4. Reduce projection write amplification while preserving the separate `5k/60s` full-projection freshness evidence.
-5. Harden post-trade lifecycle and exception evidence without mutating matching history.
-6. Complete the named external-account fork E2E, cutoff/roster policy, and recorded invite-preview campaign before advertising external submissions.
+The [work plan](./docs/WORK_PLAN.md) is the execution board; read its alignment
+date and verify newer code and run evidence before repeating status. Throughput
+claims require the [baseline ledger](./docs/THROUGHPUT_BASELINES.md) and its
+linked original successes and failures. The September 4
+[current-status snapshot](./docs/CURRENT_STATUS.md) is orientation, not a live
+release or capacity report.
 
 ## Recommended Next Gates
 

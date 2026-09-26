@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SettlementFactStoreTest {
     @Test
@@ -216,6 +217,18 @@ class SettlementFactStoreTest {
         assertEquals(1, stored.breaks.size)
         assertEquals(1, stored.repairs.size)
         assertEquals(1, stored.resolutions.size)
+    }
+
+    @Test
+    fun rejectsCrossRunFactIdCollisionBeforeWritingAnyFacts() {
+        val store = InMemorySettlementFactStore()
+        store.appendFacts(p2Facts("run-first"))
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(p2Facts("run-second"))
+        }
+
+        assertTrue(store.factsByScenarioRunId("run-second").isEmpty())
     }
 
     @Test

@@ -6,8 +6,9 @@ the repository, and the point where developer setup ends and hosted operations
 begin.
 
 If a command here disagrees with another setup document, fix this guide and the
-other document together. [`DEV_ENV.md`](./DEV_ENV.md) is the detailed runtime
-and performance runbook after onboarding, not a second first-run guide.
+other document together. [Local configuration](LOCAL_CONFIGURATION.md) names
+the accepted default stack and start/stop/reset behavior. [`DEV_ENV.md`](./DEV_ENV.md)
+is the detailed runtime and performance runbook after onboarding.
 
 ## Choose The Setup You Need
 
@@ -184,8 +185,10 @@ make dev-reset
 make dev-smoke
 ```
 
-`make dev-reset` removes Reef's local Compose volumes. Treat it as destructive
-to local development data. It does not affect hosted environments.
+`make dev-reset` removes Reef's local Compose volumes, reapplies migrations,
+and starts the stack. It does not run smoke unless `DEV_RESET_RUN_SMOKE=1`; run
+`make dev-smoke` yourself after reset. Treat reset as destructive to local
+development data. It does not affect hosted environments.
 
 Migrations normally run during startup and reset. Use this only for migration
 repair or development:
@@ -274,7 +277,7 @@ bun run arena-admin:dev
 
 Use `make dev-smoke-arena` for the overlay integration smoke. Real GitHub OAuth
 setup is a separate optional flow documented in
-[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md).
+[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
 
 ### Docs site
 

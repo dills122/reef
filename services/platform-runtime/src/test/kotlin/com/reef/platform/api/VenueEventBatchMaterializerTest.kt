@@ -5,6 +5,9 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.nio.charset.StandardCharsets
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,6 +15,246 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class VenueEventBatchMaterializerTest {
+    @Test
+    fun materializerReportsChecksumBoundMembershipAndCommitObservedTiming() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        val firstSequence = kafkaStreamSequence(partition = 2, offset = 40L)
+        val lastSequence = kafkaStreamSequence(partition = 2, offset = 41L)
+        val delivery = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-timing-1",
+                checksum = "checksum-timing-1",
+                streamSequence = firstSequence,
+                partition = 2,
+                lastSequence = lastSequence,
+                commandCount = 2,
+                createdAt = "2026-08-24T11:59:00Z",
+                workFinishedAt = "2026-08-24T12:00:00Z",
+                semanticChecksum = true
+            ),
+            streamSequence = kafkaStreamSequence(partition = 5, offset = 9L)
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(delivery),
+            api = api,
+            clock = SequenceClock(
+                Instant.parse("2026-08-24T12:00:01Z"),
+                Instant.parse("2026-08-24T12:00:01.010Z")
+            ),
+            nanoTime = sequenceLongs(100L, 1_000_100L, 1_500_100L)
+        )
+
+        materializer.processOnce()
+
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(2L, stats.validatedMembershipOutcomes)
+        assertEquals(1L, stats.checksumValidatedBatches)
+        assertEquals(0L, stats.legacyUncheckedBatches)
+        assertEquals(1L, stats.canonicalCommitObservedBatches)
+        assertEquals(1L, stats.sourceCommitObservedBatches)
+        assertEquals(1_000_000L, stats.canonicalCommitElapsedNanos)
+        assertEquals(500_000L, stats.sourceCommitElapsedNanos)
+        assertEquals(1L, stats.sourceResidenceSamples)
+        assertEquals(1_000L, stats.sourceResidenceElapsedMs)
+        assertEquals(0L, stats.clockGuardFailures)
+        assertEquals(
+            listOf(
+                MaterializedSourceFrontier(
+                    partition = 2,
+                    observedBatches = 1L,
+                    observedOutcomes = 2L,
+                    firstOffsetInclusive = 40L,
+                    lastOffsetExclusive = 42L,
+                    coveredRanges = listOf(SourceOffsetRange(40L, 42L))
+                )
+            ),
+            stats.materializedSourceFrontiers
+        )
+        assertEquals("2026-08-24T12:00:00Z", stats.lastSourceWorkFinishedAt)
+        assertEquals("2026-08-24T12:00:01Z", stats.lastCanonicalCommitObservedAt)
+        assertEquals("2026-08-24T12:00:01.010Z", stats.lastSourceCommitObservedAt)
+    }
+
+    @Test
+    fun materializerClockGuardRejectsNegativeSourceResidence() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val delivery = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-future-clock",
+                checksum = "checksum-future-clock",
+                streamSequence = kafkaStreamSequence(partition = 0, offset = 3L),
+                partition = 0,
+                createdAt = "2026-08-24T12:00:02Z",
+                semanticChecksum = true
+            )
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(delivery),
+            api = PlatformApi(OrderApplicationService(runtimePersistence = persistence)),
+            clock = SequenceClock(
+                Instant.parse("2026-08-24T12:00:01Z"),
+                Instant.parse("2026-08-24T12:00:01.010Z")
+            ),
+            nanoTime = sequenceLongs(0L, 1L, 2L)
+        )
+
+        materializer.processOnce()
+
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(1L, stats.clockGuardFailures)
+        assertEquals(0L, stats.sourceResidenceSamples)
+        assertEquals(0L, stats.sourceResidenceElapsedMs)
+    }
+
+    @Test
+    fun materializerClockGuardRejectsBackwardMonotonicDurations() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(
+                RecordingVenueEventBatchDelivery(
+                    payloadJson = venueEventBatchJson(
+                        batchId = "batch-backward-monotonic",
+                        checksum = "ignored",
+                        streamSequence = kafkaStreamSequence(partition = 0, offset = 4L),
+                        partition = 0,
+                        createdAt = "2026-08-24T12:00:00Z",
+                        semanticChecksum = true
+                    )
+                )
+            ),
+            api = PlatformApi(OrderApplicationService(runtimePersistence = persistence)),
+            clock = SequenceClock(
+                Instant.parse("2026-08-24T12:00:01Z"),
+                Instant.parse("2026-08-24T12:00:01.010Z")
+            ),
+            nanoTime = sequenceLongs(100L, 90L, 80L)
+        )
+
+        materializer.processOnce()
+
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(2L, stats.clockGuardFailures)
+        assertEquals(0L, stats.canonicalCommitElapsedNanos)
+        assertEquals(0L, stats.sourceCommitElapsedNanos)
+    }
+
+    @Test
+    fun materializerPreservesChecksumGuardedOffsetGapsForCohortRejection() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val delivery = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-membership-gap",
+                checksum = "ignored",
+                streamSequence = kafkaStreamSequence(partition = 1, offset = 10L),
+                partition = 1,
+                lastSequence = kafkaStreamSequence(partition = 1, offset = 12L),
+                commandCount = 2,
+                outcomeSequences = listOf(
+                    kafkaStreamSequence(partition = 1, offset = 10L),
+                    kafkaStreamSequence(partition = 1, offset = 12L)
+                ),
+                semanticChecksum = true
+            )
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(delivery),
+            api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        )
+
+        materializer.processOnce()
+
+        assertEquals(1, delivery.ackCalls)
+        assertEquals(0, delivery.termCalls + delivery.nakCalls)
+        assertNotNull(persistence.canonicalCommandOutcome("cmd-1"))
+        assertEquals(
+            MaterializedSourceFrontier(
+                partition = 1,
+                observedBatches = 1,
+                observedOutcomes = 2,
+                firstOffsetInclusive = 10,
+                lastOffsetExclusive = 13,
+                coveredRanges = listOf(
+                    SourceOffsetRange(10L, 11L),
+                    SourceOffsetRange(12L, 13L)
+                )
+            ),
+            VenueEventBatchMaterializerMetrics.snapshot().materializedSourceFrontiers.single()
+        )
+    }
+
+    @Test
+    fun materializerRecordsOnlyDeliveriesBehindTheObservedSourceCommitFrontier() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val first = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-partial-commit-1",
+                checksum = "checksum-partial-commit-1",
+                commandId = "cmd-partial-commit-1",
+                streamSequence = kafkaStreamSequence(partition = 0, offset = 10L)
+            ),
+            streamSequence = kafkaStreamSequence(partition = 0, offset = 10L)
+        )
+        val later = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-partial-commit-2",
+                checksum = "checksum-partial-commit-2",
+                commandId = "cmd-partial-commit-2",
+                streamSequence = kafkaStreamSequence(partition = 0, offset = 12L)
+            ),
+            streamSequence = kafkaStreamSequence(partition = 0, offset = 12L)
+        )
+        val source = PartialCommitVenueEventBatchSource(
+            deliveries = listOf(first, later),
+            committedStreamSequences = listOf(first.streamSequence)
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = source,
+            api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        )
+
+        materializer.processOnce()
+
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(1L, stats.sourceCommitObservedBatches)
+        assertEquals(1L, stats.sourcePartitions.single().commitObserved)
+        assertEquals(kafkaSourcePosition(first.streamSequence).offsetExclusive, stats.sourcePartitions.single().lastCommitObservedOffsetExclusive)
+        assertEquals(2L, stats.sourcePartitions.single().lag)
+    }
+
+    @Test
+    fun materializerNaksChecksumGuardedMembershipMismatch() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val delivery = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-membership-mismatch",
+                checksum = "ignored",
+                streamSequence = kafkaStreamSequence(partition = 1, offset = 20L),
+                partition = 1,
+                commandCount = 1,
+                declaredCommandCount = 2,
+                semanticChecksum = true
+            )
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(delivery),
+            api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        )
+
+        materializer.processOnce()
+
+        assertEquals(1, delivery.nakCalls)
+        assertEquals(0, delivery.ackCalls + delivery.termCalls)
+        assertEquals(1L, VenueEventBatchMaterializerMetrics.snapshot().failed)
+        assertEquals(null, persistence.canonicalCommandOutcome("cmd-1"))
+    }
+
     @Test
     fun kafkaMaterializerReadsOnlyCommittedTransactions() {
         val properties = kafkaVenueEventConsumerProperties(
@@ -262,7 +505,11 @@ class VenueEventBatchMaterializerTest {
         assertEquals("batch-offset-crash-1", statsAfterCrash.lastMaterializedBatchId)
         assertEquals(70L, statsAfterCrash.lastFetchedStreamSequence)
         assertEquals(70L, statsAfterCrash.lastMaterializedStreamSequence)
-        assertEquals(0L, statsAfterCrash.materializerLag)
+        assertEquals(1L, statsAfterCrash.canonicalCommitObservedBatches)
+        assertEquals(0L, statsAfterCrash.sourceCommitObservedBatches)
+        // Canonical rows are committed, but the source offset is still one
+        // delivery behind until the redelivery's acknowledgement commits.
+        assertEquals(1L, statsAfterCrash.materializerLag)
 
         // "Restart": a brand new materializer instance over the same durable
         // persistence receives the redelivered (still-unacked) batch and must not
@@ -285,6 +532,10 @@ class VenueEventBatchMaterializerTest {
         // not a duplicate row.
         assertEquals(outcomeAfterCrash.batchId, outcomeAfterReplay.batchId)
         assertEquals(outcomeAfterCrash.streamSequence, outcomeAfterReplay.streamSequence)
+        val statsAfterReplay = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(2L, statsAfterReplay.canonicalCommitObservedBatches)
+        assertEquals(1L, statsAfterReplay.sourceCommitObservedBatches)
+        assertEquals(0L, statsAfterReplay.materializerLag)
     }
 
     @Test
@@ -391,7 +642,7 @@ class VenueEventBatchMaterializerTest {
         VenueEventBatchMaterializerMetrics.resetForTests()
         val payload = semanticChecksumVectorPayload()
         val expected = "83bf9c8f68dfe9eff49e35578ae3e20f3b4b4b4feb08f5636a677bcf9be9da7c"
-        val excluded = setOf("createdAt", "payloadChecksum", "payloadChecksumAlgorithm")
+        val excluded = setOf("createdAt", "workFinishedAt", "timingChecksum", "payloadChecksum", "payloadChecksumAlgorithm")
         assertEquals(expected, JsonCodec.parseObject(payload).semanticSha256(excluded))
 
         val persistence = InMemoryRuntimePersistence()
@@ -410,6 +661,23 @@ class VenueEventBatchMaterializerTest {
         assertEquals(1, drifted.nakCalls)
         assertEquals(0, drifted.ackCalls + drifted.termCalls)
         assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().failed)
+    }
+
+    @Test
+    fun separatelyBoundTimingRejectsTamperingWithoutChangingSemanticIdentity() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val original = venueEventBatchJson("timing-bound", "unused", partition = 0, streamSequence = 1,
+            workFinishedAt = "2026-08-24T12:00:00Z", semanticChecksum = true)
+        val tampered = original.replace("2026-08-24T12:00:00Z", "2026-08-24T12:00:01Z")
+        val excluded = setOf("createdAt", "workFinishedAt", "timingChecksum", "payloadChecksum", "payloadChecksumAlgorithm")
+        assertEquals(JsonCodec.parseObject(original).semanticSha256(excluded), JsonCodec.parseObject(tampered).semanticSha256(excluded))
+        val delivery = RecordingVenueEventBatchDelivery(payloadJson = tampered, streamSequence = 1)
+        val materializer = VenueEventBatchMaterializer(FixedVenueEventBatchSource(delivery),
+            PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence())))
+        materializer.processOnce()
+        assertEquals(1, delivery.nakCalls)
+        assertEquals(0, delivery.ackCalls)
+        assertEquals(0, VenueEventBatchMaterializerMetrics.snapshot().materialized)
     }
 
     private fun semanticChecksumVectorPayload(): String {
@@ -481,39 +749,85 @@ class VenueEventBatchMaterializerTest {
         checksum: String,
         commandId: String = "cmd-1",
         orderId: String = "ord-1",
-        streamSequence: Long = 100L
+        streamSequence: Long = 100L,
+        partition: Int = 2,
+        lastSequence: Long = streamSequence,
+        commandCount: Int = 1,
+        declaredCommandCount: Int = commandCount,
+        createdAt: String = "2026-07-04T18:00:00Z",
+        workFinishedAt: String = createdAt,
+        outcomeSequences: List<Long>? = null,
+        semanticChecksum: Boolean = false
     ): String {
-        return JsonCodec.writeObject(
+        val outcomes = (0 until commandCount).map { index ->
+            val outcomeSequence = outcomeSequences?.get(index) ?: streamSequence + index
+            mapOf(
+                "commandId" to if (index == 0) commandId else "$commandId-$index",
+                "commandType" to "SubmitOrder",
+                "streamSequence" to outcomeSequence,
+                "deliveredCount" to 1L,
+                "payloadHash" to "payload-hash-$commandId-$index",
+                "instrumentId" to "AAPL",
+                "orderId" to if (index == 0) orderId else "$orderId-$index",
+                "status" to "accepted",
+                "result" to mapOf("accepted" to mapOf("eventId" to "evt-$index"))
+            )
+        }
+        val fields = linkedMapOf<String, Any?>(
             "batchId" to batchId,
             "shardId" to "engine-0",
-            "partition" to 2,
+            "partition" to partition,
             "commandStream" to "REEF_COMMANDS",
             "eventStream" to "REEF_VENUE_EVENTS",
             "firstSequence" to streamSequence,
-            "lastSequence" to streamSequence,
-            "commandCount" to 1,
-            "createdAt" to "2026-07-04T18:00:00Z",
+            "lastSequence" to lastSequence,
+            "commandCount" to declaredCommandCount,
+            "createdAt" to createdAt,
+            "workFinishedAt" to workFinishedAt,
             "payloadChecksum" to checksum,
-            "outcomes" to listOf(
-                mapOf(
-                    "commandId" to commandId,
-                    "commandType" to "SubmitOrder",
-                    "streamSequence" to streamSequence,
-                    "deliveredCount" to 1L,
-                    "payloadHash" to "payload-hash-$commandId",
-                    "instrumentId" to "AAPL",
-                    "orderId" to orderId,
-                    "status" to "accepted",
-                    "result" to mapOf("accepted" to mapOf("eventId" to "evt-1"))
-                )
-            )
+            "outcomes" to outcomes
         )
+        if (!semanticChecksum) return JsonCodec.writeObject(*fields.entries.map { it.key to it.value }.toTypedArray())
+
+        fields["payloadChecksumAlgorithm"] = "sha256-reef-canonical-v1"
+        val excluded = setOf("createdAt", "workFinishedAt", "timingChecksum", "payloadChecksum", "payloadChecksumAlgorithm")
+        val guardedChecksum = JsonCodec.parseObject(
+            JsonCodec.writeObject(*fields.entries.map { it.key to it.value }.toTypedArray())
+        ).semanticSha256(excluded)
+        fields["payloadChecksum"] = guardedChecksum
+        fields["timingChecksum"] = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("reef-venue-batch-timing-v1\n$guardedChecksum\n$workFinishedAt".toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return JsonCodec.writeObject(*fields.entries.map { it.key to it.value }.toTypedArray())
     }
 
     private fun resourceText(path: String): String {
         val stream = javaClass.classLoader.getResourceAsStream(path)
         requireNotNull(stream) { "missing test resource: $path" }
         return stream.use { String(it.readBytes(), StandardCharsets.UTF_8) }
+    }
+}
+
+private class SequenceClock(vararg instants: Instant) : Clock() {
+    private val values = ArrayDeque(instants.toList())
+    private var last = instants.last()
+
+    override fun getZone(): ZoneId = ZoneId.of("UTC")
+
+    override fun withZone(zone: ZoneId): Clock = this
+
+    override fun instant(): Instant {
+        if (values.isNotEmpty()) last = values.removeFirst()
+        return last
+    }
+}
+
+private fun sequenceLongs(vararg values: Long): () -> Long {
+    val remaining = ArrayDeque(values.toList())
+    var last = values.last()
+    return {
+        if (remaining.isNotEmpty()) last = remaining.removeFirst()
+        last
     }
 }
 
@@ -529,9 +843,27 @@ private class FixedVenueEventBatchSource(
         return deliveries.toList()
     }
 
-    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>) {
+    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>): VenueEventBatchAckResult {
         ackBatchCalls++
         deliveries.forEach { it.ack() }
+        return VenueEventBatchAckResult(deliveries.map { it.streamSequence })
+    }
+}
+
+private class PartialCommitVenueEventBatchSource(
+    private val deliveries: List<VenueEventBatchDelivery>,
+    private val committedStreamSequences: List<Long>
+) : VenueEventBatchSource {
+    private var delivered = false
+
+    override fun fetch(batchSize: Int, timeout: java.time.Duration): List<VenueEventBatchDelivery> {
+        if (delivered) return emptyList()
+        delivered = true
+        return deliveries
+    }
+
+    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>): VenueEventBatchAckResult {
+        return VenueEventBatchAckResult(committedStreamSequences)
     }
 }
 

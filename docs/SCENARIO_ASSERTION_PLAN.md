@@ -8,7 +8,10 @@ The YAML fixtures and dry-run smoke goldens prove request shape. They do not pro
 
 ## Assertion Tool Shape
 
-Add a live assertion harness as `scenario-assert`, or extend `scenario-smoke` with an assertion mode if that keeps the implementation smaller.
+The live assertion harness is implemented. P1/P2 public-read and replay evidence
+are recorded; the required behavior below is its contract, not a new harness
+task. Remaining post-trade scenario reports are tracked in
+[`POST_TRADE_LIFECYCLE_SPRINT.md`](./POST_TRADE_LIFECYCLE_SPRINT.md#implementation-record-and-next-slice).
 
 Required behavior:
 

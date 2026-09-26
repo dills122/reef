@@ -187,7 +187,7 @@ Summary:
 - scenarios should be deterministic, versioned, and replayable.
 
 Primary references:
-- [`docs/SIMULATION_TRAFFIC_PLAN.md`](./SIMULATION_TRAFFIC_PLAN.md)
+- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-013: Operational UI Target Style
@@ -215,7 +215,7 @@ Summary:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/SIMULATION_TRAFFIC_PLAN.md`](./SIMULATION_TRAFFIC_PLAN.md)
+- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
 
 ### D-015: Engine vs Service Extraction Criteria
 
@@ -296,7 +296,7 @@ Summary:
 
 Primary references:
 - [`docs/steering/architecture.md`](./steering/architecture.md)
-- [`docs/SIMULATION_TRAFFIC_PLAN.md`](./SIMULATION_TRAFFIC_PLAN.md)
+- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
 
 ### D-021: Baseline Performance Envelope Targets
 
@@ -324,7 +324,7 @@ Summary:
 - cross-stage objectives (order path, boundary, and post-match stages) should be tracked and refined as architecture matures.
 
 Primary references:
-- [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
+- [`docs/archive/SLO_BASELINES.md`](./archive/SLO_BASELINES.md)
 - [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-023: Single-Instance Capacity Objective
@@ -338,7 +338,7 @@ Summary:
 - superseded for the bot-arena scaling track by D-035, which raises the active target to `7500-10000` completed commands/sec with no accepted-command accounting gaps.
 
 Primary references:
-- [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
+- [`docs/archive/SLO_BASELINES.md`](./archive/SLO_BASELINES.md)
 
 ### D-024: Event Durability and Distribution Pattern
 
@@ -433,7 +433,7 @@ Summary:
 Primary references:
 - [`docs/PROJECT_PITCH.md`](./archive/PROJECT_PITCH.md)
 - [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
-- [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
+- [`docs/archive/SIMULATOR_UPGRADE_BACKLOG.md`](./archive/SIMULATOR_UPGRADE_BACKLOG.md)
 
 ### D-030: Runtime Event Schema Baseline And Outbox Timing
 
@@ -593,7 +593,7 @@ Summary:
 
 Primary references:
 - [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`docs/archive/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./archive/DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
 ### D-039: Redpanda Stream-Ack Provider Comparison
@@ -878,6 +878,14 @@ Primary references:
 
 Status: accepted
 
+Implementation note (2026-09-04): the decision summary below preserves the
+accepted direction at the time. Current delivery status is in
+[`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
+and the [implementation audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+Order/command authorization, durable scoped partitioning, TLS/mesh client modes,
+standard engine gRPC health and role-aware configuration checks have landed;
+the remaining work is narrower than the original future-tense summary.
+
 Summary:
 - D-048 is the hardline policy. D-049 is the active implementation backlog needed to make that policy complete across deployed, CI, operator, and local workflows.
 - Raw `/internal/*` HTTP remains local/migration tooling. Deployed profiles must block raw external access through service config, binding, firewall, and reverse-proxy policy.
@@ -894,7 +902,7 @@ Primary references:
 - [`docs/INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
-- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 
 ### D-050: Settlement Instant-Post-Trade Profile
 
@@ -944,9 +952,9 @@ Summary:
 - PR feedback must classify failures as user-fixable or maintainer/platform-fixable. Platform failures should comment on the PR and tag the configured maintainer group.
 
 Primary references:
-- [`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 
 ### D-052: Bot Arena Admin UI And Public Leaderboard Surface
@@ -962,8 +970,8 @@ Summary:
 - The admin-only area reuses the existing GitHub OAuth session flow and `AdminIdentityService` role/trust-state model from D-051 for gating. It starts scoped to a single operator but uses the existing role model so access can expand without a new auth mechanism.
 
 Primary references:
-- [`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
-- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - [`docs/steering/astro.md`](./steering/astro.md)
 
@@ -1001,7 +1009,7 @@ Summary:
 - the matching-engine artifact and Reef canonical behavior are identical
   between Reef-only and Arena-enabled profiles for the same commit.
 - the separation sprint was implemented and promoted on 2026-07-19; see
-  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
   Invite-only fork admission implementation may proceed subject to its own
   release gates.
 - D-053 supersedes the parts of D-046 and D-052 that assumed Arena registry or
@@ -1010,7 +1018,7 @@ Summary:
   remains accepted.
 
 Primary references:
-- [`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+- [`docs/archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 - [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md#product-boundary)
 - [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 - [`docs/steering/architecture.md`](./steering/architecture.md)
@@ -1053,3 +1061,236 @@ Primary references:
 - [`infra/hetzner-core/README.md`](../infra/hetzner-core/README.md#application-service-auto-deploy)
 - [`infra/hetzner-core/OPERATIONS_RUNBOOK.md`](../infra/hetzner-core/OPERATIONS_RUNBOOK.md#application-service-deployment-automation)
 - [`infra/hetzner-core/TAILSCALE_ACCESS.md`](../infra/hetzner-core/TAILSCALE_ACCESS.md#github-actions-deployment-access)
+
+### D-055: Retry-Safe Canonical Projection Batch Claims
+
+Status: accepted
+
+Summary:
+- canonical command-outcome projection batches use
+  `ProjectionBatchIdentityV1`, a SHA-256 digest over versioned,
+  length-prefixed effect configuration and full ordered canonical membership.
+- the projection database claims that identity before normalized projection,
+  dirty-enqueue, or watermark effects and completes the claim in the same
+  transaction. The same-store function drives those effects from the exact
+  claimed canonical member set rather than selecting candidates again.
+  Rollback removes both authority and effects.
+- a completed duplicate validates immutable configuration and member
+  frontiers, requires its stored result count to equal the claimed membership,
+  reads that result, and skips all effects. It reports no new work to outer
+  worker counters.
+- every in-process retry has an immutable database-clock deadline checked
+  before each attempt. Both same-store and separated-store callers establish
+  that deadline before acquiring watermarks or candidates, so paused stale
+  reads cannot mint a new authority window. The deployment-wide retry horizon
+  is stored with the claim; completion retains authority for a full additional
+  horizon, while completed duplicate observations may only extend retention.
+  Claim cleanup requires deadline and retention expiry plus strict watermark
+  advancement beyond every participating member frontier.
+- injected pre-watermark projector failures roll back the staged rows and claim
+  together. Ambiguous full-commit tests consume the lifecycle dirty marker
+  before retry, proving the completed claim prevents a repeated enqueue rather
+  than relying on dirty-table conflict coalescing.
+- incomplete committed claims and identity/configuration conflicts fail closed.
+  Batch size, polling, benchmark attribution, and other non-semantic scheduling
+  settings do not alter the identity.
+- both the separated projection-store Kotlin transaction and migrated
+  same-store PostgreSQL function enforce this contract. Local compatibility
+  bootstrap installs the same primitives and uses the Kotlin transaction path.
+
+Primary references:
+- [`docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md#retry-safe-projection-batch-authority)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- [`docs/steering/data-platform.md`](./steering/data-platform.md)
+
+### D-056: Exclusive Source Cohorts And Commit-Observed Timing
+
+Status: accepted
+
+Summary:
+- projection promotion evidence uses per-partition Kafka topic end offsets plus
+  cumulative intake acknowledgements with native exclusive offsets. The
+  measured accepted cohort is `[before topic end, after topic end)` and is
+  authoritative only when those bounds equal the producer acknowledgement
+  bounds and each partition's offset span equals its accepted delta.
+- composite stream sequences are decoded before offset arithmetic. JSON report
+  offsets are decimal strings and Node report joins use exact integer
+  arithmetic, so partition bits and JavaScript number precision cannot distort
+  lag or cohort membership.
+- canonical materializer membership authority requires the existing
+  `sha256-reef-canonical-v1` semantic checksum plus ordered membership and exact
+  declared bounds. Telemetry retains the exact union of covered native-offset
+  ranges per partition; the report requires complete coverage plus the exact
+  observed-outcome delta, so a duplicate and missing interior offset cannot
+  cancel across batches or materializer instances. Valid Kafka offset gaps
+  remain materializable but cannot become authoritative benchmark evidence.
+  Legacy unchecked batches remain compatible but are separately visible and
+  cannot satisfy the benchmark cohort contract.
+- upstream timing distinguishes engine source-batch work finished, canonical
+  database commit observed by the materializer, and source-offset commit
+  observed. The engine emits `workFinishedAt` with the separate timing binding in D-057 only after matching
+  and batch construction. Source-commit observations include only supplied
+  deliveries behind the actual Kafka committed frontier. Monotonic clocks
+  measure local stage duration; wall-clock source residence is included only
+  when timestamps parse and do not run backward.
+- the stress artifact joins accepted source membership to per-partition direct
+  engine acknowledgements, checksum-guarded canonical coverage, and fetched vs
+  committed materializer source frontiers. Missing or partial commit
+  observations, incomplete timing, non-exclusive offsets, incomplete exact
+  coverage, or clock guard failures make the upstream cohort non-authoritative.
+- this is measurement authority only. It does not change command acceptance,
+  matching, materialization, projection SQL, scheduling, batching, worker
+  cardinality, or a throughput promotion gate.
+
+Primary references:
+- [`docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md#cohort-and-upstream-timing-authority)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- [`docs/steering/data-platform.md`](./steering/data-platform.md)
+
+### D-057: Retry-stable timing binding and complete cohort residence evidence
+
+Status: implementation under validation
+
+- Keep wall-clock `workFinishedAt` outside canonical semantic identity. A separate
+  `timingChecksum` is SHA-256 of UTF-8 `reef-venue-batch-timing-v1\n`, the
+  semantic checksum, newline, and the exact timestamp. Both fields are excluded
+  from the semantic digest; the timing digest binds measurement to batch facts
+  without making ambiguous-publication retries conflict.
+- Optional bounded materializer journals record each source batch only after
+  canonical commit. Source membership reconciles exactly to the measured
+  accepted offset cohort. Drops, duplicates, restarts and invalid clocks fail.
+- Downstream sampled covering observations supply conservative residence upper
+  bounds for every source member; the maximum source timestamp alone is not
+  cohort evidence. Report command-weighted distributions and sampling gaps.
+- Effective runtime A/B fingerprints and frozen 1%/three-sample policy must pass
+  before capacity tuning. No throughput promotion follows from this change.
+
+- Downstream prefix coverage reads committed projection watermarks before a
+  single MVCC dirty-queue snapshot. Empty queues cover that committed prefix;
+  newer canonical lag and active callers do not invalidate it. In-flight dirty
+  deletions must remain visible until their projection transaction commits.
+  This diagnostic path does not count canonical or projected fact tables.
+- Coverage binds PostgreSQL postmaster generation at both reads and throughout
+  the measured cohort. Missing or changed generation permanently invalidates
+  that observer and the report. Unlogged queues require explicit rebuild after
+  database crash; generation checks do not prove recovery of pre-existing state.
+- Optional caller instrumentation follows the same switch as coverage and timing
+  journals. Caller metrics describe calls and concurrency, not mixed order and
+  instrument row counts. Required benchmark health counters must be present and
+  valid; missing counters never mean zero failures.
+
+## 2026-09-24 — Serialize projection invalidations before claiming freshness
+
+Online synthetic C3 validation found382stale lifecycle rows and39market snapshots
+behind empty queues. Replace dirty-producer conflict no-ops with conflict updates
+and split consumer locked-ID claims from fresh-snapshot recomputation (0052).
+Keep canonical facts, replay identity, business formulas, batch limits, and
+UNLOGGED queue recovery contract unchanged. Compatibility bootstrap also updates
+dirty conflicts in deterministic order. This correctness requirement supersedes
+earlier assumption that existing dirty IDs always preserve recompute signals.
+
+READ COMMITTED and VOLATILE per-query snapshot semantics are required for fresh
+source reads after claims; row locks stay held until transaction completion.
+Previously stale rows require explicit quiesced lifecycle rebuild then market
+refresh. Deterministic interleaving tests and new online full-reference proof
+must pass before capacity promotion; extra conflict writes require remeasurement.
+
+## 2026-09-24 — Throughput evidence is a required engineering input
+
+Owner directs throughput work to read, cite and build upon historical results
+and failed attempts before proposing experiments or making performance claims.
+`THROUGHPUT_BASELINES.md` is authoritative within each recorded scope; raw report
+hashes and original sources back its claims. Append explicit evidence-backed
+corrections instead of erasing historical results. Distinguish pipeline stages,
+configurations, durations and observer limits. Reuse existing test paths and
+prioritize measured fixes; diagnostic runs may precede final qualification.
+AGENTS.md, steering index and delivery policy require this workflow.
+
+### 2026-09-24 — refresh caught-up market metadata on idle polls
+
+A market snapshot can retain nonzero source lag and an older source watermark
+when its last dirty update precedes canonical catch-up. Migration0057 refreshes
+only metadata for the same projection and source when source lag is zero and
+both lifecycle and market dirty queues are empty in a fresh statement snapshot.
+An empty SKIP LOCKED claim alone is insufficient. Preserve newer watermarks,
+leave book values unchanged, avoid no-op rewrites, and return zero processed
+instruments for metadata-only work. Full-state reference still compares these
+columns; they are not excluded to make correctness checks pass.
+
+### 2026-09-24 — bounded prefix proof during continuous downstream work
+
+The original empty-queue observer can bound a command only at the next global
+empty observation, so a busy but bounded queue produces unusably loose SLO
+bounds. Keep the same thresholds and command-weighted residence model. Retain
+up to128 prior committed source frontiers with a later database observation time.
+Under0052, dirty producers preserve the earliest pending invalidation time; a
+minimum strictly newer than an earlier observation proves its older lifecycle
+prefix drained. Market requires a second observation barrier after lifecycle
+coverage, since lifecycle commits enqueue market work. Uncommitted deletions
+remain visible under MVCC. Empty-queue proof remains valid and immediate.
+
+Fail closed on incomplete source frontiers, database-generation changes, invalid
+pending timestamps, observed clock regression or future dirtied times. Do not
+regress an emitted partition frontier. This proof relies on database dirtied
+clock ordering and0052 invalidation semantics, and needs independent review and
+hosted measurement before promotion. Unit and real PostgreSQL commit-barrier
+regressions pass; new runtime image has not yet been deployed.
+
+### 2026-09-24 — bounded canonical status reads with covering index
+
+Market refresh needs source watermarks and lag, not a count of every projected
+result. Reuse a watermark-only helper there; public status still returns its
+exact projected count. Discover sparse canonical partitions by indexed minimum
+lookups, then read each maximum and count only its unprojected sequence range.
+Keep command-type filtering, missing-watermark behavior and error sentinels.
+Migration0058 replaces the existing nonunique partition/sequence index with the
+same keys plus included command_type, preserving access paths and index count.
+
+On stopped C17's2,249,929-command fixture, original query/index710.841/705.749ms;
+rewrite without covering index946.150/899.534ms (rejected on its own). With a
+transactional covering index: original348.258/398.034ms, rewrite170.211/153.412ms.
+All16partition rows equal in both EXCEPT ALL directions; probe index rolled back.
+This is query-level evidence; hosted capacity and extra index-byte costs still
+require measurement. Changes preserve exact lag/count semantics, not estimates.
+
+### 2026-09-24 — preserve claim cleanup locking in compatibility bootstrap
+
+Full PostgreSQL regression run exposed compatibility bootstrap replacing migration
+0054's skip-locked cleanup with its older blocking function. Keep bootstrap SQL
+identical at claim selection: `FOR UPDATE OF claim SKIP LOCKED`. Retain completed,
+expiry, retry horizon, and watermark guards. Regression exercises both migrated
+and reinstalled compatibility functions while another transaction holds an
+eligible claim. Full suite:621 tests, zero failures on migrated PostgreSQL.
+
+### 2026-09-24 — bounded lifecycle worker group in one maintainer
+
+C22 shows10k count reconciliation with four concurrent lifecycle maintainers but
+existing qualified observer/headroom contract binds one maintainer process. Keep
+parallel SQL processing in one explicit owner rather than relaxing that contract:
+`ORDER_LIFECYCLE_PROJECTOR_WORKERS` (default1, allowed1..32) creates independent
+existing productive worker loops sharing the owner's DB pool and caller metrics.
+Diagnostics expose configured workers; caller counts identify entrypoints while
+`maxConcurrent` measures overlapping calls across all loops and market's helper.
+SQL claiming, snapshots, ordering, business formulas and idle/error backoff stay
+unchanged. Duplicate starts and interrupted stop/restart retain each loop's bound.
+
+New group follows final independent review's frozen scope; it has not received
+an additional independent pass (review budget3of3 exhausted). Focused concurrent
+progress/accounting/restart tests pass; full regression and hosted measurement
+are required before any performance or delivery claim for this group.
+
+### 2026-09-24 — reject keyed lifecycle execution aggregation after full load
+
+C26 tested a keyed LATERAL execution SUM replacing the batch-wide grouped-result
+join. Isolated500-row work improved116–120ms to96–102ms per1,000; exact scoped
+parity and25migration/7focusedPGtests passed. Actual10k/s300s reconciled2,999,951
+commands with zero failures/retries/deadlocks, but lifecyclep956050ms and market
+p957037ms did not improve C23control5702/6662ms.302/302sampler observations passed;
+SLO failure remains despite authoritative measurement. One run per arm does not
+establish statistical harm, but it fails the agreed retain criterion.
+
+Reject candidate0059: remove it from active source; restore prior function and
+force_custom_plan on both benchmark DBs, removing only candidate ledger entries.
+Guarded rollback passes without business DML. Candidate SQL and all evidence kept
+in artifacts; baseline ledgerC26 records this failed attempt. No throughput
+promotion or renewed validation expansion follows from the microbenchmark gain.

@@ -7,8 +7,8 @@ Reef bots are TypeScript classes extending `ReefBotV1`. Bots are tick-based: the
 
 The SDK is currently repository-local and Bot Arena is in limited preview. You
 can author and qualify a bot from a Reef checkout. The invite-only fork workflow
-is implemented but not yet advertised pending a named external-account E2E and
-recorded preview run; open self-service intake comes later. Do not interpret a
+has completed external-account admission/onboarding. Recorded preview-game
+requirements remain; open self-service intake comes later. Do not interpret a
 successful local report as admission to a competition.
 
 ## Minimal Bot

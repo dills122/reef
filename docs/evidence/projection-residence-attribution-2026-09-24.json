@@ -1,0 +1,227 @@
+{
+  "id": "C27",
+  "scope": "offline analysis of C26 retained telemetry only; no runtime/DB/load changes",
+  "reportSha256": "06a0ba56df568a4b87dcb1e3048cc4168fb7fb8c1357bff96e8d62520b68b12f",
+  "commands": 2999951,
+  "batches": 36248,
+  "reproducedPublishedPercentiles": true,
+  "pairedCommandWeightedMs": {
+    "sourceToDurableMaterializationMs": {
+      "count": 2999951,
+      "mean": 284.9984443079237,
+      "min": 25,
+      "p50": 202,
+      "p95": 847,
+      "p99": 1814,
+      "max": 2589
+    },
+    "durableMaterializationToLifecycleProofMs": {
+      "count": 2999951,
+      "mean": 3129.7095845898816,
+      "min": 703,
+      "p50": 2933,
+      "p95": 5289,
+      "p99": 6438,
+      "max": 8170
+    },
+    "sourceToLifecycleProofMs": {
+      "count": 2999951,
+      "mean": 3414.7080288978054,
+      "min": 811,
+      "p50": 3162,
+      "p95": 6050,
+      "p99": 7368,
+      "max": 8872
+    },
+    "lifecycleProofToMarketProofMs": {
+      "count": 2999951,
+      "mean": 972.4134360861227,
+      "min": -1982,
+      "p50": 1000,
+      "p95": 1978,
+      "p99": 2023,
+      "max": 3057
+    },
+    "sourceToMarketProofMs": {
+      "count": 2999951,
+      "mean": 4387.1214649839285,
+      "min": 1350,
+      "p50": 4158,
+      "p95": 7037,
+      "p99": 8234,
+      "max": 9886
+    }
+  },
+  "commandsOverFrozen5sBound": {
+    "Market": {
+      "commands": 741041,
+      "fraction": 0.24701770128912107,
+      "componentMeansMs": {
+        "sourceToDurableMaterializationMs": 497.73255325953625,
+        "durableMaterializationToLifecycleProofMs": 4507.959628414622,
+        "sourceToLifecycleProofMs": 5005.692181674159,
+        "lifecycleProofToMarketProofMs": 1103.8772726475324,
+        "sourceToMarketProofMs": 6109.5694543216905
+      }
+    },
+    "Lifecycle": {
+      "commands": 298952,
+      "fraction": 0.09965229432080724,
+      "componentMeansMs": {
+        "sourceToDurableMaterializationMs": 828.0196151890605,
+        "durableMaterializationToLifecycleProofMs": 5341.796258262196,
+        "sourceToLifecycleProofMs": 6169.815873451256,
+        "lifecycleProofToMarketProofMs": 912.8959833016671,
+        "sourceToMarketProofMs": 7082.711856752923
+      }
+    }
+  },
+  "negativeLifeToMarketProofDifferenceCommands": 100627,
+  "timeSampledQueueStats": {
+    "lifecycle": {
+      "pending": {
+        "count": 302,
+        "mean": 2022.976821192053,
+        "min": 0,
+        "p50": 1889,
+        "p95": 3744,
+        "p99": 4547,
+        "max": 4798
+      },
+      "oldestAgeWhenNonemptyMs": {
+        "count": 299,
+        "mean": 991.2909698996656,
+        "min": 128,
+        "p50": 950,
+        "p95": 1494,
+        "p99": 1894,
+        "max": 2031
+      }
+    },
+    "market": {
+      "pending": {
+        "count": 302,
+        "mean": 31.370860927152318,
+        "min": 0,
+        "p50": 32,
+        "p95": 64,
+        "p99": 64,
+        "max": 64
+      },
+      "oldestAgeWhenNonemptyMs": {
+        "count": 280,
+        "mean": 475.65,
+        "min": 92,
+        "p50": 439,
+        "p95": 942,
+        "p99": 1342,
+        "max": 1583
+      }
+    }
+  },
+  "diagnosticHttpLatencyMs": {
+    "lifecycle": {
+      "count": 302,
+      "mean": 50.102649006622514,
+      "min": 16,
+      "p50": 45,
+      "p95": 95,
+      "p99": 117,
+      "max": 160
+    },
+    "market": {
+      "count": 302,
+      "mean": 50.41059602649007,
+      "min": 18,
+      "p50": 46,
+      "p95": 93,
+      "p99": 118,
+      "max": 160
+    }
+  },
+  "markerStats": {
+    "lifecycle": {
+      "distinctMarkers": 234,
+      "interMarkerGapMs": {
+        "count": 233,
+        "mean": 1284.206008583691,
+        "min": 916,
+        "p50": 1013,
+        "p95": 2011,
+        "p99": 2073,
+        "max": 2082
+      },
+      "databaseSnapshotToResponseMs": {
+        "count": 234,
+        "mean": 0.5170940170940171,
+        "min": 0,
+        "p50": 0,
+        "p95": 2,
+        "p99": 4,
+        "max": 11
+      }
+    },
+    "marketData": {
+      "distinctMarkers": 220,
+      "interMarkerGapMs": {
+        "count": 219,
+        "mean": 1361.662100456621,
+        "min": 926,
+        "p50": 1012,
+        "p95": 2045,
+        "p99": 2988,
+        "max": 3001
+      },
+      "databaseSnapshotToResponseMs": {
+        "count": 220,
+        "mean": 0.4772727272727273,
+        "min": 0,
+        "p50": 0,
+        "p95": 2,
+        "p99": 3,
+        "max": 4
+      }
+    }
+  },
+  "sparseCanonicalProjectorStatus": [
+    {
+      "sampledAt": "2026-09-24T21:27:32.349Z",
+      "coveredPartitions": 16,
+      "summedReportedLag": 0
+    },
+    {
+      "sampledAt": "2026-09-24T21:28:27.543Z",
+      "coveredPartitions": 16,
+      "summedReportedLag": 18589
+    },
+    {
+      "sampledAt": "2026-09-24T21:29:22.826Z",
+      "coveredPartitions": 16,
+      "summedReportedLag": 6169
+    },
+    {
+      "sampledAt": "2026-09-24T21:30:18.065Z",
+      "coveredPartitions": 16,
+      "summedReportedLag": 11340
+    },
+    {
+      "sampledAt": "2026-09-24T21:31:13.334Z",
+      "coveredPartitions": 4,
+      "summedReportedLag": 1903
+    },
+    {
+      "sampledAt": "2026-09-24T21:32:08.656Z",
+      "coveredPartitions": 4,
+      "summedReportedLag": 1875
+    }
+  ],
+  "missingFields": [
+    "Each completed marker does not expose PendingPrefix.observedThrough (first observed canonical-projector frontier time)",
+    "Market marker does not expose PendingPrefix.lifecycleCoveredAt",
+    "Materializer timing ends at durable materialization, not canonical projector completion"
+  ],
+  "interpretation": "Durable-materialization-to-lifecycle-proof remains compound: canonical projection plus lifecycle processing plus conservative prefix barrier/observation delay. Queue-age samples cannot replace command-weighted latency. Paired market-minus-life measures proof spacing, not exact market processing time.",
+  "decision": "No processing bottleneck asserted. Expose existing PendingPrefix.observedThrough as prefixRecordedAt and lifecycleCoveredAt on the same coverage marker, preserving original metrics/cadence/limits. Use same-marker intervals to distinguish canonical-projector-plus-observation delay from lifecycle/market proof waits.",
+  "startedAt": "2026-09-24T22:28:10Z",
+  "timeboxMinutes": 15
+}

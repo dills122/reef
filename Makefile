@@ -22,7 +22,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-smoke-bot-sdk-hosted-live-container dev-venue-event-replay-check
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
-.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-projection-drain-bench
+.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-projection-drain-bench dev-projection-instrumentation-ab-check
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-admin-owned-bot-local-seed dev-smoke-admin-auth-local dev-control-room
 .PHONY: dev-bootstrap dev-doctor dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-compare-reef-arena-separation dev-replay
@@ -40,6 +40,10 @@ test-dev-tooling:
 	node scripts/dev/onboarding-links.test.mjs
 	node scripts/dev/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
+	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
+	node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
+	node scripts/dev/ci-workflow-hardening.test.mjs
+	node --test scripts/ci/check-required-results.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...
@@ -474,6 +478,11 @@ dev-stress-venue-event-materializer:
 dev-projection-drain-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/projection-drain-bench.mjs
+
+dev-projection-instrumentation-ab-check:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	@if [ -z "$(CONTROL)" ] || [ -z "$(INSTRUMENTED)" ]; then echo 'usage: make dev-projection-instrumentation-ab-check CONTROL=path INSTRUMENTED=path [OUT=path]'; exit 1; fi
+	$(JS_RUNTIME) scripts/dev/projection-instrumentation-ab-check.mjs "$(CONTROL)" "$(INSTRUMENTED)" $(if $(OUT),"$(OUT)")
 
 dev-ablation-ladder:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

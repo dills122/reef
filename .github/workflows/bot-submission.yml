@@ -31,6 +31,7 @@ jobs:
   detect-flow:
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       flow: ${{ steps.parse.outputs.flow }}
       bot-name: ${{ steps.parse.outputs.bot-name }}
@@ -69,7 +70,7 @@ jobs:
           echo "bot-name=$bot_name" >> "$GITHUB_OUTPUT"
       - name: Check out trusted scope classifier
         if: steps.parse.outputs.flow != 'skip'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
       - name: Validate exact bot-only change scope
@@ -99,10 +100,11 @@ jobs:
   validate-manifest:
     needs: detect-flow
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: needs.detect-flow.outputs.flow != 'remove' && needs.detect-flow.outputs.flow != 'skip'
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
       - name: Validate bot manifest
@@ -119,13 +121,14 @@ jobs:
   scan-and-sandbox-test:
     needs: [detect-flow, validate-manifest]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: needs.detect-flow.outputs.flow != 'remove' && needs.detect-flow.outputs.flow != 'skip'
     steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: '1.3.14'
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
       - name: Install dependencies
@@ -146,9 +149,10 @@ jobs:
   warn-unconventional-bot-changes:
     needs: detect-flow
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: needs.detect-flow.outputs.flow == 'skip'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Warn if bot files changed off-convention
