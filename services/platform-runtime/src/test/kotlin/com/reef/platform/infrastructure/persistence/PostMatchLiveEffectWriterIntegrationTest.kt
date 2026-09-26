@@ -172,7 +172,8 @@ class PostMatchLiveEffectWriterIntegrationTest {
 
     private fun clean(dataSource: javax.sql.DataSource, stream: String, generation: String, consumer: String) {
         dataSource.connection.use { connection ->
-            listOf("live_trade_facts", "live_execution_facts", "live_order_state", "canonical_order_directory").forEach { table ->
+            listOf("live_market_order_changes", "live_market_change_windows", "live_trade_facts",
+                "live_execution_facts", "live_order_state", "canonical_order_directory").forEach { table ->
                 connection.prepareStatement("DELETE FROM postmatch.$table WHERE event_stream = ? AND source_generation = ?").use { statement ->
                     statement.setString(1, stream)
                     statement.setString(2, generation)

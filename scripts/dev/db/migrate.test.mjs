@@ -117,6 +117,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "analytics/0002_run_bot_performance_summaries.sql"));
   assert.ok(migrations.some((migration) => migration.id === "postmatch/0001_operational_effect_foundation.sql"));
   assert.ok(migrations.some((migration) => migration.id === "postmatch/0002_live_order_execution_trade_state.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "postmatch/0003_market_change_windows.sql"));
 });
 
 test("venue event batch integrity migration removes duplicate index and rejects conflicts", async () => {
@@ -484,5 +485,6 @@ test("routes post-match schema only to its isolated database target", async () =
   assert.deepEqual(postmatch.map((migration) => migration.id), [
     "postmatch/0001_operational_effect_foundation.sql",
     "postmatch/0002_live_order_execution_trade_state.sql",
+    "postmatch/0003_market_change_windows.sql",
   ]);
 });

@@ -23,7 +23,10 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
             referenced += trade.buyOrderId
             referenced += trade.sellOrderId
         }
-        if (referenced.isEmpty()) return
+        if (referenced.isEmpty()) {
+            recordMarketChanges(connection, window, emptyList())
+            return
+        }
         val identities = loadIdentities(connection, window, referenced)
         check(identities.keys == referenced) { "live effects reference an order without canonical identity" }
         val prior = loadPriorStates(connection, window, states.keys)
@@ -79,22 +82,28 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
         insertExecutions(connection, window, plan.executions)
         insertTrades(connection, window, plan.trades)
         upsertStates(connection, window, plan.finalOrderStates, prior, filledThisWindow)
+        recordMarketChanges(connection, window, marketChanges(plan.finalOrderStates, identities, prior))
     }
 
     private data class Identity(
         val instrumentId: String, val side: String, val currency: String,
+        val runId: String, val venueSessionId: String, val orderType: String,
         val acceptedSequence: Long, val acceptedOrdinal: Int
     ) {
         fun acceptedBefore(envelope: CanonicalEffectEnvelope): Boolean =
             acceptedSequence < envelope.position.streamSequence ||
                 acceptedSequence == envelope.position.streamSequence && acceptedOrdinal < envelope.position.effectOrdinal
     }
-    private data class PriorState(val filled: BigDecimal, val partitionId: Int, val sequence: Long, val ordinal: Int)
+    private data class PriorState(
+        val filled: BigDecimal, val partitionId: Int, val sequence: Long, val ordinal: Int,
+        val status: String, val remaining: BigDecimal, val price: BigDecimal
+    )
 
     private fun loadIdentities(
         connection: Connection, window: VerifiedCanonicalSourceWindow, orderIds: Set<String>
     ): Map<String, Identity> = connection.prepareStatement(
-        """SELECT order_id, instrument_id, side, currency, source_stream_sequence, source_effect_ordinal
+        """SELECT order_id, instrument_id, side, currency, run_id, venue_session_id, order_type,
+                  source_stream_sequence, source_effect_ordinal
            FROM postmatch.canonical_order_directory
            WHERE event_stream = ? AND source_generation = ? AND source_partition_id = ? AND order_id = ANY (?)"""
     ).use { statement ->
@@ -107,7 +116,8 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
             statement.executeQuery().use { rows ->
                 buildMap<String, Identity> {
                     while (rows.next()) put(rows.getString(1), Identity(
-                        rows.getString(2), rows.getString(3), rows.getString(4), rows.getLong(5), rows.getInt(6)
+                        rows.getString(2), rows.getString(3), rows.getString(4), rows.getString(5), rows.getString(6),
+                        rows.getString(7), rows.getLong(8), rows.getInt(9)
                     ))
                 }
             }
@@ -121,7 +131,8 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
     ): Map<String, PriorState> {
         if (orderIds.isEmpty()) return emptyMap()
         return connection.prepareStatement(
-            """SELECT order_id, filled_quantity, source_partition_id, source_stream_sequence, source_effect_ordinal
+            """SELECT order_id, filled_quantity, source_partition_id, source_stream_sequence, source_effect_ordinal,
+                      status, remaining_quantity, limit_price
                FROM postmatch.live_order_state WHERE event_stream = ? AND source_generation = ? AND order_id = ANY (?)
                ORDER BY order_id FOR UPDATE"""
         ).use { statement ->
@@ -133,7 +144,8 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
                 statement.executeQuery().use { rows ->
                     buildMap<String, PriorState> {
                         while (rows.next()) put(rows.getString(1), PriorState(
-                            rows.getBigDecimal(2), rows.getInt(3), rows.getLong(4), rows.getInt(5)
+                            rows.getBigDecimal(2), rows.getInt(3), rows.getLong(4), rows.getInt(5),
+                            rows.getString(6), rows.getBigDecimal(7), rows.getBigDecimal(8)
                         ))
                     }
                 }
@@ -258,6 +270,83 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
                 statement.addBatch()
             }
             check(statement.executeBatch().all { it == 1 }) { "live order state position did not advance" }
+        }
+    }
+
+    private data class Contribution(val price: BigDecimal?, val quantity: BigDecimal)
+    private data class MarketChange(
+        val envelope: CanonicalEffectEnvelope, val identity: Identity,
+        val old: Contribution, val current: Contribution
+    )
+
+    private fun contribution(orderType: String, status: String, remaining: BigDecimal, price: BigDecimal): Contribution =
+        if (orderType == "LIMIT" && (status == "ACCEPTED" || status == "PARTIALLY_FILLED") && remaining.signum() > 0) {
+            Contribution(price, remaining)
+        } else {
+            Contribution(null, BigDecimal.ZERO)
+        }
+
+    private fun marketChanges(
+        finalStates: List<CanonicalEffectEnvelope>, identities: Map<String, Identity>, prior: Map<String, PriorState>
+    ): List<MarketChange> = finalStates.mapNotNull { envelope ->
+        val state = envelope.effect as CanonicalEffect.OrderStateChanged
+        val identity = identities.getValue(state.orderId)
+        val previous = prior[state.orderId]
+        val old = if (previous == null) Contribution(null, BigDecimal.ZERO) else
+            contribution(identity.orderType, previous.status, previous.remaining, previous.price)
+        val current = contribution(identity.orderType, state.status,
+            nonnegative(state.remainingQuantity), nonnegative(state.limitPrice))
+        val samePrice = (old.price == null && current.price == null) ||
+            (old.price != null && current.price != null && old.price.compareTo(current.price) == 0)
+        if (old.quantity.compareTo(current.quantity) == 0 && samePrice) null
+        else MarketChange(envelope, identity, old, current)
+    }
+
+    private fun recordMarketChanges(
+        connection: Connection, window: VerifiedCanonicalSourceWindow, changes: List<MarketChange>
+    ) {
+        connection.prepareStatement(
+            """INSERT INTO postmatch.live_market_change_windows(
+               event_stream, source_generation, partition_id, from_exclusive_sequence,
+               through_inclusive_sequence, source_digest, change_count) VALUES (?, ?, ?, ?, ?, ?, ?)"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setInt(3, window.partitionId)
+            statement.setLong(4, window.fromExclusiveSequence)
+            statement.setLong(5, window.throughInclusiveSequence)
+            statement.setString(6, window.sourceDigest)
+            statement.setInt(7, changes.size)
+            check(statement.executeUpdate() == 1) { "live market change window was not recorded" }
+        }
+        connection.prepareStatement(
+            """INSERT INTO postmatch.live_market_order_changes(
+               event_stream, source_generation, partition_id, through_inclusive_sequence, order_id,
+               run_id, venue_session_id, instrument_id, currency, side, old_price, old_quantity,
+               new_price, new_quantity, source_stream_sequence, source_effect_ordinal)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        ).use { statement ->
+            changes.forEach { change ->
+                val state = change.envelope.effect as CanonicalEffect.OrderStateChanged
+                statement.setString(1, window.eventStream)
+                statement.setString(2, window.sourceGeneration)
+                statement.setInt(3, window.partitionId)
+                statement.setLong(4, window.throughInclusiveSequence)
+                statement.setString(5, state.orderId)
+                statement.setString(6, change.identity.runId)
+                statement.setString(7, change.identity.venueSessionId)
+                statement.setString(8, state.instrumentId)
+                statement.setString(9, state.currency)
+                statement.setString(10, state.side)
+                statement.setBigDecimal(11, change.old.price)
+                statement.setBigDecimal(12, change.old.quantity)
+                statement.setBigDecimal(13, change.current.price)
+                statement.setBigDecimal(14, change.current.quantity)
+                statement.setLong(15, change.envelope.position.streamSequence)
+                statement.setInt(16, change.envelope.position.effectOrdinal)
+                statement.addBatch()
+            }
+            check(statement.executeBatch().all { it == 1 }) { "live market change was not recorded" }
         }
     }
 
