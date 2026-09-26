@@ -38,7 +38,7 @@ class PostgresCanonicalSequencePrefixGuardIntegrationTest {
                     """.trimIndent()
                 )
                 conn.exec(
-                    Files.readString(Path.of("../../scripts/dev/db/migrations/runtime/0060_canonical_sequence_prefix_guard.sql"))
+                    Files.readString(Path.of("../../scripts/dev/db/migrations/runtime/0067_bounded_canonical_selection.sql"))
                         .replace("runtime.", "$schema.")
                 )
 
