@@ -17,6 +17,13 @@ operational store schema. Current code slice adds exact source coverage and
 atomic consumer progress. Live and market consumers, audit and settlement
 ownership, route cutover, and the integrated capacity gate remain ahead.
 
+Live-state slice in progress: bounded batches write final state for each
+affected order plus every execution and trade fact into the isolated store.
+Filled quantity advances from execution facts, so canceling an unfilled
+residual does not count that residual as a fill. Source coverage, facts, and
+frontier commit together. Market state, live read routes, and parity cutover
+remain separate follow-on changes.
+
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents

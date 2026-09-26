@@ -620,7 +620,7 @@ jobs:
           POSTMATCH_DB_URL_TEST: jdbc:postgresql://localhost:5436/reef
           POSTMATCH_DB_USER_TEST: reef
           POSTMATCH_DB_PASSWORD_TEST: reef
-        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests com.reef.platform.infrastructure.persistence.PostMatchOperationalStoreIntegrationTest && ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime jar && ./services/platform-runtime/gradlew --no-daemon -p services/arena-control-plane test --tests com.reef.arena.controlplane.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests com.reef.platform.infrastructure.persistence.PostMatchOperationalStoreIntegrationTest --tests com.reef.platform.infrastructure.persistence.PostMatchLiveEffectWriterIntegrationTest && ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime jar && ./services/platform-runtime/gradlew --no-daemon -p services/arena-control-plane test --tests com.reef.arena.controlplane.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
       - name: Dump Postgres logs on failure
         if: failure()
         run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml --profile postmatch logs postgres boundary-postgres projection-postgres arena-postgres postmatch-postgres
