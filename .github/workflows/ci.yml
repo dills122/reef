@@ -606,9 +606,9 @@ jobs:
       - name: Validate dev migration scripts
         run: node --test scripts/dev/lib/dev-stack.test.mjs scripts/dev/lib/dev-profiles.test.mjs scripts/dev/db/migrate.test.mjs
       - name: Start Postgres databases
-        run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml up -d postgres boundary-postgres projection-postgres arena-postgres --wait --wait-timeout 120
+        run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml --profile postmatch up -d postgres boundary-postgres projection-postgres arena-postgres postmatch-postgres --wait --wait-timeout 120
       - name: Apply migrations
-        run: JS_RUNTIME=node REEF_ARENA_POSTGRES_MIGRATIONS=1 make dev-db-migrate
+        run: DEV_COMPOSE_FILES='compose.base.yml,compose.local.yml,compose.arena.yml' DEV_COMPOSE_PROFILES=postmatch JS_RUNTIME=node REEF_ARENA_POSTGRES_MIGRATIONS=1 make dev-db-migrate
       - name: Run schema placement integration test
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
@@ -617,13 +617,16 @@ jobs:
           ARENA_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5435/reef
           ARENA_POSTGRES_USER_TEST: reef
           ARENA_POSTGRES_PASSWORD_TEST: reef
-        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime jar && ./services/platform-runtime/gradlew --no-daemon -p services/arena-control-plane test --tests com.reef.arena.controlplane.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
+          POSTMATCH_DB_URL_TEST: jdbc:postgresql://localhost:5436/reef
+          POSTMATCH_DB_USER_TEST: reef
+          POSTMATCH_DB_PASSWORD_TEST: reef
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests com.reef.platform.infrastructure.persistence.PostMatchOperationalStoreIntegrationTest && ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime jar && ./services/platform-runtime/gradlew --no-daemon -p services/arena-control-plane test --tests com.reef.arena.controlplane.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
       - name: Dump Postgres logs on failure
         if: failure()
-        run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml logs postgres boundary-postgres projection-postgres arena-postgres
+        run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml --profile postmatch logs postgres boundary-postgres projection-postgres arena-postgres postmatch-postgres
       - name: Stop Postgres
         if: always()
-        run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml down --volumes --remove-orphans
+        run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml --profile postmatch down --volumes --remove-orphans
 
   ci-required:
     name: ci-required
