@@ -354,6 +354,7 @@ internal object ProjectionBatchClaimBootstrap {
               )
             ORDER BY claim.retry_deadline_at, claim.batch_identity
             LIMIT GREATEST(COALESCE(p_limit, 0), 0)
+            FOR UPDATE OF claim SKIP LOCKED
           ),
           deleted AS (
             DELETE FROM ${names.projectionBatchClaims} claim

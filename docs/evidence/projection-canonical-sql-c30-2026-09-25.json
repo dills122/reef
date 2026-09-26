@@ -1,0 +1,650 @@
+{
+  "id": "C30",
+  "sourceSummarySha256": "9728bb27cbe3e5696ec2e88fb424db67bfe182fda21fb34e93ab55d88fc8df8b",
+  "summaryOk": true,
+  "accepted": 2999771,
+  "projectionStatsOk": true,
+  "topStatements": [
+    {
+      "queryId": "4936784947188834985",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "runtime_persist_submit_outcomes"
+      ],
+      "calls": 6624,
+      "executionMs": 4004237.698125019,
+      "meanMs": 604.504,
+      "sharedBlocksRead": 335910,
+      "tempBlocksWritten": 0,
+      "walBytes": 15552934872
+    },
+    {
+      "queryId": "-7084531938720370603",
+      "topLevel": "f",
+      "statementKind": "with",
+      "mentionedObjects": [
+        "runtime_reject_execution_replay_conflict",
+        "submit_results",
+        "orders",
+        "executions"
+      ],
+      "calls": 6624,
+      "executionMs": 2370198.5210500006,
+      "meanMs": 357.82,
+      "sharedBlocksRead": 200956,
+      "tempBlocksWritten": 0,
+      "walBytes": 8929362409
+    },
+    {
+      "queryId": "-6490021959071117807",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 8331,
+      "executionMs": 1050474.3035249978,
+      "meanMs": 126.092,
+      "sharedBlocksRead": 150189,
+      "tempBlocksWritten": 0,
+      "walBytes": 1933838058
+    },
+    {
+      "queryId": "5501582859287429116",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "runtime_persist_submit_outcome_timeline_stage"
+      ],
+      "calls": 6624,
+      "executionMs": 977062.427026,
+      "meanMs": 147.503,
+      "sharedBlocksRead": 119894,
+      "tempBlocksWritten": 0,
+      "walBytes": 6623572406
+    },
+    {
+      "queryId": "-5716280152786845567",
+      "topLevel": "f",
+      "statementKind": "with",
+      "mentionedObjects": [
+        "runtime_events",
+        "runtime_event_payloads",
+        "runtime_trace_sequences"
+      ],
+      "calls": 6624,
+      "executionMs": 958398.7734829984,
+      "meanMs": 144.686,
+      "sharedBlocksRead": 119890,
+      "tempBlocksWritten": 0,
+      "walBytes": 6623572406
+    },
+    {
+      "queryId": "-3322953527703258016",
+      "topLevel": "f",
+      "statementKind": "with",
+      "mentionedObjects": [
+        "orders",
+        "executions",
+        "runtime_events"
+      ],
+      "calls": 5789,
+      "executionMs": 906395.0712930014,
+      "meanMs": 156.572,
+      "sharedBlocksRead": 150023,
+      "tempBlocksWritten": 0,
+      "walBytes": 1933837666
+    },
+    {
+      "queryId": "-4792329736109723626",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "submit_results"
+      ],
+      "calls": 576,
+      "executionMs": 354121.91751100024,
+      "meanMs": 614.795,
+      "sharedBlocksRead": 26401267,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "3488773141288305919",
+      "topLevel": "f",
+      "statementKind": "exists",
+      "mentionedObjects": [
+        "submit_results"
+      ],
+      "calls": 6624,
+      "executionMs": 284629.4780560007,
+      "meanMs": 42.969,
+      "sharedBlocksRead": 15029,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "6553139953244861724",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "order_lifecycle_dirty"
+      ],
+      "calls": 8331,
+      "executionMs": 104226.11944200018,
+      "meanMs": 12.511,
+      "sharedBlocksRead": 10,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-2840107344473377982",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 81363.1277329998,
+      "meanMs": 12.283,
+      "sharedBlocksRead": 80,
+      "tempBlocksWritten": 0,
+      "walBytes": 5913156
+    },
+    {
+      "queryId": "-8147980235800648700",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 34460.417397999794,
+      "meanMs": 5.202,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "348317032530307894",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "order_lifecycle_dirty"
+      ],
+      "calls": 780,
+      "executionMs": 21047.01484699999,
+      "meanMs": 26.983,
+      "sharedBlocksRead": 2,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "8733996640177757534",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 19639.053076000044,
+      "meanMs": 2.965,
+      "sharedBlocksRead": 46,
+      "tempBlocksWritten": 0,
+      "walBytes": 1430141
+    },
+    {
+      "queryId": "2101880313006653385",
+      "topLevel": "f",
+      "statementKind": "with",
+      "mentionedObjects": [
+        "projection_watermarks"
+      ],
+      "calls": 6624,
+      "executionMs": 16456.533581999956,
+      "meanMs": 2.484,
+      "sharedBlocksRead": 22,
+      "tempBlocksWritten": 0,
+      "walBytes": 1430141
+    },
+    {
+      "queryId": "-4527260704038383435",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 671,
+      "executionMs": 14871.125766999996,
+      "meanMs": 22.163,
+      "sharedBlocksRead": 375,
+      "tempBlocksWritten": 0,
+      "walBytes": 4993129
+    },
+    {
+      "queryId": "7256984691866321941",
+      "topLevel": "f",
+      "statementKind": "with",
+      "mentionedObjects": [
+        "orders"
+      ],
+      "calls": 481,
+      "executionMs": 14011.582976000009,
+      "meanMs": 29.13,
+      "sharedBlocksRead": 304,
+      "tempBlocksWritten": 0,
+      "walBytes": 4982902
+    },
+    {
+      "queryId": "-4811980409807583878",
+      "topLevel": "f",
+      "statementKind": "insert",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 7596.376164000024,
+      "meanMs": 1.147,
+      "sharedBlocksRead": 16,
+      "tempBlocksWritten": 0,
+      "walBytes": 2635676
+    },
+    {
+      "queryId": "-3400425316085062195",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 3472.072528000002,
+      "meanMs": 0.524,
+      "sharedBlocksRead": 33,
+      "tempBlocksWritten": 0,
+      "walBytes": 3198849
+    },
+    {
+      "queryId": "-5329039106928363544",
+      "topLevel": "f",
+      "statementKind": "insert",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 2660.1925999999994,
+      "meanMs": 0.402,
+      "sharedBlocksRead": 33,
+      "tempBlocksWritten": 0,
+      "walBytes": 3277480
+    },
+    {
+      "queryId": "2731389522799816521",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "projection_watermarks"
+      ],
+      "calls": 130559,
+      "executionMs": 2028.7670560000022,
+      "meanMs": 0.016,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 16404
+    },
+    {
+      "queryId": "6679693336650733028",
+      "topLevel": "f",
+      "statementKind": "update",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 1744.4685690000078,
+      "meanMs": 0.263,
+      "sharedBlocksRead": 31,
+      "tempBlocksWritten": 0,
+      "walBytes": 2804305
+    },
+    {
+      "queryId": "6774297407621504371",
+      "topLevel": "t",
+      "statementKind": "insert",
+      "mentionedObjects": [
+        "projection_watermarks"
+      ],
+      "calls": 6624,
+      "executionMs": 976.6976960000021,
+      "meanMs": 0.147,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 962896
+    },
+    {
+      "queryId": "-1583294732292069499",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 130560,
+      "executionMs": 489.3004759999996,
+      "meanMs": 0.004,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-9197830151750227571",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 438.95028900000193,
+      "meanMs": 0.066,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 394396
+    },
+    {
+      "queryId": "2453560291854430530",
+      "topLevel": "f",
+      "statementKind": "delete",
+      "mentionedObjects": [],
+      "calls": 6242,
+      "executionMs": 396.7271939999992,
+      "meanMs": 0.064,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 404613
+    },
+    {
+      "queryId": "-4716435625533538386",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 396.5712809999997,
+      "meanMs": 0.06,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 387303
+    },
+    {
+      "queryId": "949539905567683650",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 671,
+      "executionMs": 167.92420299999986,
+      "meanMs": 0.25,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-1089802100782205276",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "projection_watermarks"
+      ],
+      "calls": 780,
+      "executionMs": 142.60452600000013,
+      "meanMs": 0.183,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 207
+    },
+    {
+      "queryId": "-3402607830392284225",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 52.07371200000016,
+      "meanMs": 0.008,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "4806383250703235102",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "projection_watermarks"
+      ],
+      "calls": 671,
+      "executionMs": 49.38547500000001,
+      "meanMs": 0.074,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 219
+    },
+    {
+      "queryId": "4997851177344291562",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [
+        "projection_watermarks"
+      ],
+      "calls": 576,
+      "executionMs": 37.849380000000004,
+      "meanMs": 0.066,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "3018359514859704019",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 29.391503999999998,
+      "meanMs": 29.392,
+      "sharedBlocksRead": 30,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-5681243923361755542",
+      "topLevel": "f",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 21.68887799999997,
+      "meanMs": 0.003,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-106192389053542876",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 17.185501,
+      "meanMs": 17.186,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "393782002652080992",
+      "topLevel": "f",
+      "statementKind": "update",
+      "mentionedObjects": [],
+      "calls": 160,
+      "executionMs": 16.392253,
+      "meanMs": 0.102,
+      "sharedBlocksRead": 17,
+      "tempBlocksWritten": 0,
+      "walBytes": 10024
+    },
+    {
+      "queryId": "6650430479887907887",
+      "topLevel": "t",
+      "statementKind": "begin",
+      "mentionedObjects": [],
+      "calls": 6624,
+      "executionMs": 10.215189999999982,
+      "meanMs": 0.002,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-748110437783947633",
+      "topLevel": "f",
+      "statementKind": "p_lag",
+      "mentionedObjects": [
+        "order_lifecycle_dirty"
+      ],
+      "calls": 190,
+      "executionMs": 4.214707999999998,
+      "meanMs": 0.022,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "7824485984950375368",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 2,
+      "executionMs": 3.9026190000000005,
+      "meanMs": 1.951,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-6671059641450981885",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 1.093985,
+      "meanMs": 1.094,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-6792305814141453380",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.8885750000000001,
+      "meanMs": 0.889,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "5317505054332808723",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.806253,
+      "meanMs": 0.806,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-3136912395674931128",
+      "topLevel": "t",
+      "statementKind": "set",
+      "mentionedObjects": [],
+      "calls": 33,
+      "executionMs": 0.6537299999999995,
+      "meanMs": 0.02,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "7072993134236307888",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.219122,
+      "meanMs": 0.219,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-3732293583633518758",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 2,
+      "executionMs": 0.0857,
+      "meanMs": 0.043,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-5361954599398179342",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.055809,
+      "meanMs": 0.056,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "8065054665630512740",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.040785,
+      "meanMs": 0.041,
+      "sharedBlocksRead": 1,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-6911109443227572258",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.027911,
+      "meanMs": 0.028,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-4224899187873981304",
+      "topLevel": "t",
+      "statementKind": "select",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.027479999999999997,
+      "meanMs": 0.027,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "2064869707185898531",
+      "topLevel": "t",
+      "statementKind": "commit",
+      "mentionedObjects": [],
+      "calls": 17,
+      "executionMs": 0.022787,
+      "meanMs": 0.001,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    },
+    {
+      "queryId": "-5178764705191707841",
+      "topLevel": "t",
+      "statementKind": "show",
+      "mentionedObjects": [],
+      "calls": 1,
+      "executionMs": 0.014837,
+      "meanMs": 0.015,
+      "sharedBlocksRead": 0,
+      "tempBlocksWritten": 0,
+      "walBytes": 0
+    }
+  ]
+}

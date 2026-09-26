@@ -4,8 +4,10 @@ import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import java.sql.Connection
+import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Timestamp
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.sql.DataSource
@@ -369,10 +371,39 @@ class InMemorySettlementFactStore : SettlementFactStore {
     private val resolutions = ConcurrentHashMap<String, SettlementResolvedFact>()
     private val operatorActions = ConcurrentHashMap<String, SettlementOperatorActionFact>()
 
+    @Synchronized
     override fun appendFacts(facts: SettlementFactBundle): SettlementFactBundle {
         if (facts.isEmpty()) return facts
         val existing = factsByScenarioRunId(facts.scenarioRunId)
         validateSettlementFacts(existing.merge(facts))
+        fun <T : Any> verifyIdentity(
+            stored: ConcurrentHashMap<String, T>,
+            candidates: List<T>,
+            id: (T) -> String
+        ) {
+            candidates.forEach { candidate ->
+                val previous = stored[id(candidate)]
+                require(previous == null || previous == candidate) { "Conflicting settlement fact ${id(candidate)}" }
+            }
+        }
+        verifyIdentity(resourcePositions, facts.resourcePositions) { it.resourcePositionId }
+        verifyIdentity(obligations, facts.obligations) { it.settlementObligationId }
+        verifyIdentity(allocations, facts.allocations) { it.settlementAllocationId }
+        verifyIdentity(confirmations, facts.confirmations) { it.settlementConfirmationId }
+        verifyIdentity(affirmations, facts.affirmations) { it.settlementAffirmationId }
+        verifyIdentity(clearingSubmissions, facts.clearingSubmissions) { it.settlementClearingSubmissionId }
+        verifyIdentity(clearingAcceptances, facts.clearingAcceptances) { it.settlementClearingAcceptanceId }
+        verifyIdentity(clearingRejections, facts.clearingRejections) { it.settlementClearingRejectionId }
+        verifyIdentity(novations, facts.novations) { it.settlementNovationId }
+        verifyIdentity(instructions, facts.instructions) { it.settlementInstructionId }
+        verifyIdentity(attempts, facts.attempts) { it.settlementAttemptId }
+        verifyIdentity(legOutcomes, facts.legOutcomes) { it.settlementLegOutcomeId }
+        verifyIdentity(ledgerEntries, facts.ledgerEntries) { it.ledgerEntryId }
+        verifyIdentity(settlements, facts.settlements) { it.settlementId }
+        verifyIdentity(breaks, facts.breaks) { it.settlementBreakId }
+        verifyIdentity(repairs, facts.repairs) { it.settlementRepairId }
+        verifyIdentity(resolutions, facts.resolutions) { it.settlementResolutionId }
+        verifyIdentity(operatorActions, facts.operatorActions) { it.settlementOperatorActionId }
         facts.resourcePositions.forEach { resourcePositions.putIfAbsent(it.resourcePositionId, it) }
         facts.obligations.forEach { obligations.putIfAbsent(it.settlementObligationId, it) }
         facts.allocations.forEach { allocations.putIfAbsent(it.settlementAllocationId, it) }
@@ -394,6 +425,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
         return facts
     }
 
+    @Synchronized
     override fun factsByScenarioRunId(scenarioRunId: String): SettlementFactBundle {
         require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
         return SettlementFactBundle(
@@ -840,30 +872,36 @@ class PostgresSettlementFactStore(
 
     override fun appendFacts(facts: SettlementFactBundle): SettlementFactBundle {
         if (facts.isEmpty()) return facts
+        val databaseFacts = facts.withMicrosecondTimestamps()
         connection().use { conn ->
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 val existing = factsByScenarioRunId(conn, facts.scenarioRunId)
-                validateSettlementFacts(existing.merge(facts))
-                insertResourcePositions(conn, facts.resourcePositions)
-                insertObligations(conn, facts.obligations)
-                insertAllocations(conn, facts.allocations)
-                insertConfirmations(conn, facts.confirmations)
-                insertAffirmations(conn, facts.affirmations)
-                insertClearingSubmissions(conn, facts.clearingSubmissions)
-                insertClearingAcceptances(conn, facts.clearingAcceptances)
-                insertClearingRejections(conn, facts.clearingRejections)
-                insertNovations(conn, facts.novations)
-                insertInstructions(conn, facts.instructions)
-                insertAttempts(conn, facts.attempts)
-                insertLegOutcomes(conn, facts.legOutcomes)
-                insertLedgerEntries(conn, facts.ledgerEntries)
-                insertSettlements(conn, facts.settlements)
-                insertBreaks(conn, facts.breaks)
-                insertRepairs(conn, facts.repairs)
-                insertResolutions(conn, facts.resolutions)
-                insertOperatorActions(conn, facts.operatorActions)
+                validateSettlementFacts(existing.merge(databaseFacts))
+                val uncertainInserts = listOf(
+                    insertResourcePositions(conn, databaseFacts.resourcePositions),
+                    insertObligations(conn, databaseFacts.obligations),
+                    insertAllocations(conn, databaseFacts.allocations),
+                    insertConfirmations(conn, databaseFacts.confirmations),
+                    insertAffirmations(conn, databaseFacts.affirmations),
+                    insertClearingSubmissions(conn, databaseFacts.clearingSubmissions),
+                    insertClearingAcceptances(conn, databaseFacts.clearingAcceptances),
+                    insertClearingRejections(conn, databaseFacts.clearingRejections),
+                    insertNovations(conn, databaseFacts.novations),
+                    insertInstructions(conn, databaseFacts.instructions),
+                    insertAttempts(conn, databaseFacts.attempts),
+                    insertLegOutcomes(conn, databaseFacts.legOutcomes),
+                    insertLedgerEntries(conn, databaseFacts.ledgerEntries),
+                    insertSettlements(conn, databaseFacts.settlements),
+                    insertBreaks(conn, databaseFacts.breaks),
+                    insertRepairs(conn, databaseFacts.repairs),
+                    insertResolutions(conn, databaseFacts.resolutions),
+                    insertOperatorActions(conn, databaseFacts.operatorActions)
+                ).any { it }
+                if (uncertainInserts) {
+                    requirePersistedFacts(databaseFacts, factsByScenarioRunId(conn, facts.scenarioRunId))
+                }
                 conn.commit()
             } catch (error: Throwable) {
                 conn.rollback()
@@ -904,14 +942,104 @@ class PostgresSettlementFactStore(
         )
     }
 
-    private fun insertResourcePositions(conn: Connection, facts: List<SettlementResourcePositionFact>) {
-        conn.prepareStatement(
+    private fun PreparedStatement.executeFactBatch(): Boolean {
+        val counts = executeBatch()
+        // INSERT ... SELECT keeps per-fact counts when pgjdbc batch rewriting is enabled.
+        return counts.any { it != 1 }
+    }
+
+    private fun SettlementFactBundle.withMicrosecondTimestamps(): SettlementFactBundle {
+        fun Instant.forPostgres(): Instant =
+            Instant.ofEpochSecond(epochSecond, ((nano + 500) / 1_000 * 1_000).toLong())
+
+        return copy(
+            resourcePositions = resourcePositions.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            obligations = obligations.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            allocations = allocations.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            confirmations = confirmations.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            affirmations = affirmations.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            clearingSubmissions = clearingSubmissions.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            clearingAcceptances = clearingAcceptances.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            clearingRejections = clearingRejections.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            novations = novations.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            instructions = instructions.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            attempts = attempts.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            legOutcomes = legOutcomes.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            ledgerEntries = ledgerEntries.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            settlements = settlements.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            breaks = breaks.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            repairs = repairs.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            resolutions = resolutions.map { it.copy(occurredAt = it.occurredAt.forPostgres()) },
+            operatorActions = operatorActions.map { it.copy(occurredAt = it.occurredAt.forPostgres()) }
+        )
+    }
+
+    private fun requirePersistedFacts(requested: SettlementFactBundle, persisted: SettlementFactBundle) {
+        fun <T : Any> verify(
+            family: String,
+            candidates: List<T>,
+            records: List<T>,
+            id: (T) -> String,
+            occurredAt: (T) -> Instant,
+            withOccurredAt: (T, Instant) -> T
+        ) {
+            val byId = records.associateBy(id)
+            candidates.forEach { candidate ->
+                val record = byId[id(candidate)]
+                require(
+                    record != null &&
+                        Duration.between(occurredAt(candidate), occurredAt(record)).abs() <= Duration.ofNanos(1_000) &&
+                        withOccurredAt(candidate, occurredAt(record)) == record
+                ) { "Conflicting $family fact ${id(candidate)} in scenario run ${requested.scenarioRunId}" }
+            }
+        }
+
+        verify("resource position", requested.resourcePositions, persisted.resourcePositions,
+            { it.resourcePositionId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("obligation", requested.obligations, persisted.obligations,
+            { it.settlementObligationId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("allocation", requested.allocations, persisted.allocations,
+            { it.settlementAllocationId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("confirmation", requested.confirmations, persisted.confirmations,
+            { it.settlementConfirmationId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("affirmation", requested.affirmations, persisted.affirmations,
+            { it.settlementAffirmationId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("clearing submission", requested.clearingSubmissions, persisted.clearingSubmissions,
+            { it.settlementClearingSubmissionId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("clearing acceptance", requested.clearingAcceptances, persisted.clearingAcceptances,
+            { it.settlementClearingAcceptanceId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("clearing rejection", requested.clearingRejections, persisted.clearingRejections,
+            { it.settlementClearingRejectionId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("novation", requested.novations, persisted.novations,
+            { it.settlementNovationId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("instruction", requested.instructions, persisted.instructions,
+            { it.settlementInstructionId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("attempt", requested.attempts, persisted.attempts,
+            { it.settlementAttemptId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("leg outcome", requested.legOutcomes, persisted.legOutcomes,
+            { it.settlementLegOutcomeId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("ledger entry", requested.ledgerEntries, persisted.ledgerEntries,
+            { it.ledgerEntryId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("settlement", requested.settlements, persisted.settlements,
+            { it.settlementId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("break", requested.breaks, persisted.breaks,
+            { it.settlementBreakId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("repair", requested.repairs, persisted.repairs,
+            { it.settlementRepairId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("resolution", requested.resolutions, persisted.resolutions,
+            { it.settlementResolutionId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+        verify("operator action", requested.operatorActions, persisted.operatorActions,
+            { it.settlementOperatorActionId }, { it.occurredAt }, { fact, at -> fact.copy(occurredAt = at) })
+    }
+
+    private fun insertResourcePositions(conn: Connection, facts: List<SettlementResourcePositionFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.resourcePositions}(
               resource_position_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, participant_id, account_id, asset_type, asset_id, quantity, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (resource_position_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -930,12 +1058,12 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertObligations(conn: Connection, facts: List<SettlementObligationCreatedFact>) {
-        conn.prepareStatement(
+    private fun insertObligations(conn: Connection, facts: List<SettlementObligationCreatedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.obligations}(
               settlement_obligation_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
@@ -943,7 +1071,7 @@ class PostgresSettlementFactStore(
               buyer_participant_id, seller_participant_id, instrument_id, quantity, cash_amount,
               currency, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_obligation_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -965,12 +1093,12 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(15, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertAllocations(conn: Connection, facts: List<SettlementAllocationProposedFact>) {
-        conn.prepareStatement(
+    private fun insertAllocations(conn: Connection, facts: List<SettlementAllocationProposedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.allocations}(
               settlement_allocation_id, settlement_obligation_id, scenario_run_id,
@@ -978,7 +1106,7 @@ class PostgresSettlementFactStore(
               trade_id, buy_order_id, sell_order_id, buyer_account_id, seller_account_id,
               quantity, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_allocation_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1000,19 +1128,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(15, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertConfirmations(conn: Connection, facts: List<SettlementConfirmationGeneratedFact>) {
-        conn.prepareStatement(
+    private fun insertConfirmations(conn: Connection, facts: List<SettlementConfirmationGeneratedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.confirmations}(
               settlement_confirmation_id, settlement_allocation_id, settlement_obligation_id,
               scenario_run_id, post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, trade_id, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_confirmation_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1030,19 +1158,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(11, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertAffirmations(conn: Connection, facts: List<SettlementAffirmationAcceptedFact>) {
-        conn.prepareStatement(
+    private fun insertAffirmations(conn: Connection, facts: List<SettlementAffirmationAcceptedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.affirmations}(
               settlement_affirmation_id, settlement_confirmation_id, settlement_allocation_id,
               settlement_obligation_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, trade_id, actor_type, actor_id, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_affirmation_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1063,19 +1191,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(14, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertClearingSubmissions(conn: Connection, facts: List<SettlementClearingSubmittedFact>) {
-        conn.prepareStatement(
+    private fun insertClearingSubmissions(conn: Connection, facts: List<SettlementClearingSubmittedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.clearingSubmissions}(
               settlement_clearing_submission_id, settlement_obligation_id, settlement_affirmation_id,
               scenario_run_id, post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_clearing_submission_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1092,19 +1220,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertClearingAcceptances(conn: Connection, facts: List<SettlementClearingAcceptedFact>) {
-        conn.prepareStatement(
+    private fun insertClearingAcceptances(conn: Connection, facts: List<SettlementClearingAcceptedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.clearingAcceptances}(
               settlement_clearing_acceptance_id, settlement_clearing_submission_id,
               settlement_obligation_id, scenario_run_id, post_trade_profile_id,
               post_trade_policy_version, correlation_id, causation_id, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_clearing_acceptance_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1121,19 +1249,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertClearingRejections(conn: Connection, facts: List<SettlementClearingRejectedFact>) {
-        conn.prepareStatement(
+    private fun insertClearingRejections(conn: Connection, facts: List<SettlementClearingRejectedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.clearingRejections}(
               settlement_clearing_rejection_id, settlement_clearing_submission_id,
               settlement_obligation_id, scenario_run_id, post_trade_profile_id,
               post_trade_policy_version, correlation_id, causation_id, reason, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_clearing_rejection_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1151,19 +1279,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(11, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertNovations(conn: Connection, facts: List<SettlementNovationRecordedFact>) {
-        conn.prepareStatement(
+    private fun insertNovations(conn: Connection, facts: List<SettlementNovationRecordedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.novations}(
               settlement_novation_id, settlement_clearing_acceptance_id, settlement_obligation_id,
               scenario_run_id, post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_novation_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1180,12 +1308,12 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertAttempts(conn: Connection, facts: List<SettlementAttemptStartedFact>) {
-        conn.prepareStatement(
+    private fun insertAttempts(conn: Connection, facts: List<SettlementAttemptStartedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.attempts}(
               settlement_attempt_id, settlement_obligation_id, scenario_run_id,
@@ -1193,7 +1321,7 @@ class PostgresSettlementFactStore(
               post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, attempt_number, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_attempt_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1211,19 +1339,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(11, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertInstructions(conn: Connection, facts: List<SettlementInstructionCreatedFact>) {
-        conn.prepareStatement(
+    private fun insertInstructions(conn: Connection, facts: List<SettlementInstructionCreatedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.instructions}(
               settlement_instruction_id, settlement_obligation_id, scenario_run_id,
               post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, instruction_type, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_instruction_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1240,19 +1368,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertLegOutcomes(conn: Connection, facts: List<SettlementLegOutcomeFact>) {
-        conn.prepareStatement(
+    private fun insertLegOutcomes(conn: Connection, facts: List<SettlementLegOutcomeFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.legOutcomes}(
               settlement_leg_outcome_id, settlement_obligation_id, settlement_instruction_id,
               settlement_attempt_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
               correlation_id, causation_id, leg_type, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_leg_outcome_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1271,12 +1399,12 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertLedgerEntries(conn: Connection, facts: List<SettlementLedgerEntryFact>) {
-        conn.prepareStatement(
+    private fun insertLedgerEntries(conn: Connection, facts: List<SettlementLedgerEntryFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.ledgerEntries}(
               ledger_entry_id, settlement_obligation_id, settlement_instruction_id,
@@ -1284,7 +1412,7 @@ class PostgresSettlementFactStore(
               correlation_id, causation_id, participant_id, account_id, asset_type, asset_id,
               direction, quantity, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (ledger_entry_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1307,19 +1435,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(16, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertSettlements(conn: Connection, facts: List<SettlementSettledFact>) {
-        conn.prepareStatement(
+    private fun insertSettlements(conn: Connection, facts: List<SettlementSettledFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.settlements}(
               settlement_id, settlement_obligation_id, settlement_instruction_id, settlement_attempt_id,
               scenario_run_id, post_trade_profile_id, post_trade_policy_version, correlation_id,
               causation_id, settlement_state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1337,18 +1465,18 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(11, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertBreaks(conn: Connection, facts: List<SettlementBreakOpenedFact>) {
-        conn.prepareStatement(
+    private fun insertBreaks(conn: Connection, facts: List<SettlementBreakOpenedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.breaks}(
               settlement_break_id, settlement_obligation_id, scenario_run_id, correlation_id,
               causation_id, post_trade_profile_id, post_trade_policy_version, reason, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_break_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1365,19 +1493,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertRepairs(conn: Connection, facts: List<SettlementRepairPostedFact>) {
-        conn.prepareStatement(
+    private fun insertRepairs(conn: Connection, facts: List<SettlementRepairPostedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.repairs}(
               settlement_repair_id, settlement_break_id, settlement_obligation_id, scenario_run_id,
               correlation_id, causation_id, post_trade_profile_id, post_trade_policy_version,
               repair_action, actor_type, actor_id, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_repair_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1396,19 +1524,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertResolutions(conn: Connection, facts: List<SettlementResolvedFact>) {
-        conn.prepareStatement(
+    private fun insertResolutions(conn: Connection, facts: List<SettlementResolvedFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.resolutions}(
               settlement_resolution_id, settlement_obligation_id, settlement_break_id, settlement_repair_id,
               scenario_run_id, correlation_id, causation_id, post_trade_profile_id, post_trade_policy_version,
               settlement_state, exception_state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_resolution_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1427,19 +1555,19 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 
-    private fun insertOperatorActions(conn: Connection, facts: List<SettlementOperatorActionFact>) {
-        conn.prepareStatement(
+    private fun insertOperatorActions(conn: Connection, facts: List<SettlementOperatorActionFact>): Boolean {
+        return conn.prepareStatement(
             """
             INSERT INTO ${names.operatorActions}(
               settlement_operator_action_id, scenario_run_id, post_trade_profile_id,
               post_trade_policy_version, correlation_id, causation_id, action, target_id,
               reason_note, actor_type, actor_id, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             ON CONFLICT (settlement_operator_action_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -1458,7 +1586,7 @@ class PostgresSettlementFactStore(
                 ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
-            ps.executeBatch()
+            ps.executeFactBatch()
         }
     }
 

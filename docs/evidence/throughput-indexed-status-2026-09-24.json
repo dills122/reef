@@ -1,0 +1,897 @@
+{
+  "id": "C19",
+  "hostArtifactDirectory": "/tmp/reef-productive-indexedstatus-7500-300s-1",
+  "reportSha256": "b3890130eb957fd51d487eb71bddc6dfad83bd6bd10b1378612c570cce4bc8b5",
+  "accepted": 2249927,
+  "failures": 0,
+  "projectionFreshness": {
+    "source": "venue-event-batch-projector",
+    "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+    "materialized": 2249927,
+    "projected": 1508928,
+    "materializedToProjectedGap": 740999,
+    "lag": 741999,
+    "projectedPerSecond": 5029.666094926888,
+    "caughtUp": false
+  },
+  "config": {
+    "Duration": 300000000000,
+    "RatePerSecond": 7500,
+    "Workers": 256
+  },
+  "sourceCohortPassed": true,
+  "reportAggregateKeys": [
+    "sessionId",
+    "startedAt",
+    "finishedAt",
+    "durationSeconds",
+    "config",
+    "throughputRps",
+    "acceptedBusinessOpsRps",
+    "throughput",
+    "totalRequests",
+    "totalSuccess",
+    "totalFailures",
+    "byAction",
+    "byProfile",
+    "byActor",
+    "byPersona",
+    "byStrategy",
+    "statusCodes",
+    "topErrors",
+    "rejectReasons",
+    "rejectTaxonomy",
+    "quality",
+    "latencyMs",
+    "traceChecks",
+    "loadSchedule",
+    "streamAckHealth",
+    "streamDirect",
+    "venueEventMaterializer",
+    "streamAckProjector",
+    "hotPathPhases",
+    "streamAckApiPhases",
+    "materializerTiming",
+    "runtimeConfigurationEvidence",
+    "stressRunMetadata",
+    "unitMetrics",
+    "projectionFreshness",
+    "partitionSkew",
+    "streamDirectPartitionSkew",
+    "projectionInstrumentation",
+    "upstreamSourceCohort",
+    "downstreamProjectionCohort",
+    "downstreamCoverageObservations",
+    "downstreamDiagnosticSampler"
+  ],
+  "streamAckProjectorDelta": {
+    "projectedDelta": 1508928,
+    "projectedRps": 5029.666094926888,
+    "failedDelta": 0,
+    "retryDelta": 0,
+    "retryExhaustedDelta": 0,
+    "lagDelta": 741999,
+    "beforeLag": 0,
+    "afterLag": 741999
+  },
+  "streamDirectDelta": {
+    "fetchedDelta": 2249927,
+    "processedDelta": 2249927,
+    "publishedDelta": 2249927,
+    "ackedDelta": 2249927,
+    "nackedDelta": 0,
+    "termedDelta": 0,
+    "failedDelta": 0,
+    "unsupportedDelta": 0,
+    "fetchedRps": 7499.616647023959,
+    "processedRps": 7499.616647023959,
+    "publishedRps": 7499.616647023959,
+    "ackedRps": 7499.616647023959,
+    "partitionDeltas": [
+      {
+        "partition": 0,
+        "shardId": "engine-0",
+        "fetchedDelta": 139963,
+        "processedDelta": 139963,
+        "publishedDelta": 139963,
+        "ackedDelta": 139963,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 466.53462301995324,
+        "processedRps": 466.53462301995324,
+        "publishedRps": 466.53462301995324,
+        "ackedRps": 466.53462301995324
+      },
+      {
+        "partition": 1,
+        "shardId": "engine-0",
+        "fetchedDelta": 140258,
+        "processedDelta": 140258,
+        "publishedDelta": 140258,
+        "ackedDelta": 140258,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 467.51793799456004,
+        "processedRps": 467.51793799456004,
+        "publishedRps": 467.51793799456004,
+        "ackedRps": 467.51793799456004
+      },
+      {
+        "partition": 2,
+        "shardId": "engine-0",
+        "fetchedDelta": 140982,
+        "processedDelta": 140982,
+        "publishedDelta": 140982,
+        "ackedDelta": 140982,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 469.93122627122204,
+        "processedRps": 469.93122627122204,
+        "publishedRps": 469.93122627122204,
+        "ackedRps": 469.93122627122204
+      },
+      {
+        "partition": 3,
+        "shardId": "engine-0",
+        "fetchedDelta": 140447,
+        "processedDelta": 140447,
+        "publishedDelta": 140447,
+        "ackedDelta": 140447,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 468.1479262325284,
+        "processedRps": 468.1479262325284,
+        "publishedRps": 468.1479262325284,
+        "ackedRps": 468.1479262325284
+      },
+      {
+        "partition": 4,
+        "shardId": "engine-0",
+        "fetchedDelta": 140875,
+        "processedDelta": 140875,
+        "publishedDelta": 140875,
+        "ackedDelta": 140875,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 469.5745662634833,
+        "processedRps": 469.5745662634833,
+        "publishedRps": 469.5745662634833,
+        "ackedRps": 469.5745662634833
+      },
+      {
+        "partition": 5,
+        "shardId": "engine-0",
+        "fetchedDelta": 140843,
+        "processedDelta": 140843,
+        "publishedDelta": 140843,
+        "ackedDelta": 140843,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 469.46790158827173,
+        "processedRps": 469.46790158827173,
+        "publishedRps": 469.46790158827173,
+        "ackedRps": 469.46790158827173
+      },
+      {
+        "partition": 6,
+        "shardId": "engine-0",
+        "fetchedDelta": 140605,
+        "processedDelta": 140605,
+        "publishedDelta": 140605,
+        "ackedDelta": 140605,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 468.6745830663856,
+        "processedRps": 468.6745830663856,
+        "publishedRps": 468.6745830663856,
+        "ackedRps": 468.6745830663856
+      },
+      {
+        "partition": 7,
+        "shardId": "engine-0",
+        "fetchedDelta": 140081,
+        "processedDelta": 140081,
+        "publishedDelta": 140081,
+        "ackedDelta": 140081,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 466.92794900979595,
+        "processedRps": 466.92794900979595,
+        "publishedRps": 466.92794900979595,
+        "ackedRps": 466.92794900979595
+      },
+      {
+        "partition": 8,
+        "shardId": "engine-0",
+        "fetchedDelta": 140424,
+        "processedDelta": 140424,
+        "publishedDelta": 140424,
+        "ackedDelta": 140424,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 468.0712609972201,
+        "processedRps": 468.0712609972201,
+        "publishedRps": 468.0712609972201,
+        "ackedRps": 468.0712609972201
+      },
+      {
+        "partition": 9,
+        "shardId": "engine-0",
+        "fetchedDelta": 140634,
+        "processedDelta": 140634,
+        "publishedDelta": 140634,
+        "ackedDelta": 140634,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 468.7712479282961,
+        "processedRps": 468.7712479282961,
+        "publishedRps": 468.7712479282961,
+        "ackedRps": 468.7712479282961
+      },
+      {
+        "partition": 10,
+        "shardId": "engine-0",
+        "fetchedDelta": 141169,
+        "processedDelta": 141169,
+        "publishedDelta": 141169,
+        "ackedDelta": 141169,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 470.55454796698973,
+        "processedRps": 470.55454796698973,
+        "publishedRps": 470.55454796698973,
+        "ackedRps": 470.55454796698973
+      },
+      {
+        "partition": 11,
+        "shardId": "engine-0",
+        "fetchedDelta": 140523,
+        "processedDelta": 140523,
+        "publishedDelta": 140523,
+        "ackedDelta": 140523,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 468.40125483615594,
+        "processedRps": 468.40125483615594,
+        "publishedRps": 468.40125483615594,
+        "ackedRps": 468.40125483615594
+      },
+      {
+        "partition": 12,
+        "shardId": "engine-0",
+        "fetchedDelta": 140574,
+        "processedDelta": 140574,
+        "publishedDelta": 140574,
+        "ackedDelta": 140574,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 468.5712516622744,
+        "processedRps": 468.5712516622744,
+        "publishedRps": 468.5712516622744,
+        "ackedRps": 468.5712516622744
+      },
+      {
+        "partition": 13,
+        "shardId": "engine-0",
+        "fetchedDelta": 140838,
+        "processedDelta": 140838,
+        "publishedDelta": 140838,
+        "ackedDelta": 140838,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 469.45123523276993,
+        "processedRps": 469.45123523276993,
+        "publishedRps": 469.45123523276993,
+        "ackedRps": 469.45123523276993
+      },
+      {
+        "partition": 14,
+        "shardId": "engine-0",
+        "fetchedDelta": 140744,
+        "processedDelta": 140744,
+        "publishedDelta": 140744,
+        "ackedDelta": 140744,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 469.1379077493359,
+        "processedRps": 469.1379077493359,
+        "publishedRps": 469.1379077493359,
+        "ackedRps": 469.1379077493359
+      },
+      {
+        "partition": 15,
+        "shardId": "engine-0",
+        "fetchedDelta": 140967,
+        "processedDelta": 140967,
+        "publishedDelta": 140967,
+        "ackedDelta": 140967,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 469.8812272047166,
+        "processedRps": 469.8812272047166,
+        "publishedRps": 469.8812272047166,
+        "ackedRps": 469.8812272047166
+      }
+    ]
+  },
+  "materializerDelta": {
+    "fetchedDelta": 37991,
+    "materializedDelta": 2249927,
+    "materializedBatchesDelta": 37991,
+    "failedDelta": 0,
+    "ackFailedDelta": 0,
+    "unsupportedDelta": 0,
+    "checksumValidatedBatchesDelta": 37991,
+    "legacyUncheckedBatchesDelta": 0,
+    "validatedMembershipOutcomesDelta": 2249927,
+    "canonicalCommitObservedBatchesDelta": 37991,
+    "sourceCommitObservedBatchesDelta": 37991,
+    "canonicalCommitElapsedNanosDelta": 706145311994,
+    "sourceCommitElapsedNanosDelta": 47111469288,
+    "sourceResidenceSamplesDelta": 37991,
+    "sourceResidenceElapsedMsDelta": 4771385,
+    "clockGuardFailuresDelta": 0,
+    "materializedRps": 7499.616647023959
+  },
+  "diagnosticsSha256": "30d5116eb1d0c63c4df64144e2d843270318f474553bc80cb362075643b1f9a6",
+  "databaseDiagnostics": {
+    "postgres": {
+      "xactCommit": 46593,
+      "xactRollback": 0,
+      "blocksRead": 24638919,
+      "blocksHit": 53571732,
+      "tuplesReturned": 323964056,
+      "tuplesFetched": 133900762,
+      "tuplesInserted": 2669861,
+      "tuplesUpdated": 160,
+      "tuplesDeleted": 65,
+      "conflicts": 0,
+      "tempFiles": 3,
+      "tempBytes": 23095103,
+      "deadlocks": 0
+    },
+    "projection-postgres": {
+      "xactCommit": 22578,
+      "xactRollback": 0,
+      "blocksRead": 413921,
+      "blocksHit": 227990523,
+      "tuplesReturned": 325993900,
+      "tuplesFetched": 9766228,
+      "tuplesInserted": 10572872,
+      "tuplesUpdated": 502226,
+      "tuplesDeleted": 1625568,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    },
+    "boundary-postgres": {
+      "xactCommit": 134,
+      "xactRollback": 0,
+      "blocksRead": 110,
+      "blocksHit": 17310,
+      "tuplesReturned": 22226,
+      "tuplesFetched": 8957,
+      "tuplesInserted": 35,
+      "tuplesUpdated": 145,
+      "tuplesDeleted": 1,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    }
+  },
+  "latencyMs": {
+    "min": 1.092824,
+    "p50": 9.983429000000001,
+    "p95": 53.912028,
+    "p99": 81.313225,
+    "max": 458.44108300000005
+  },
+  "throughput": {
+    "attemptedPerSecond": 7499.616647023959,
+    "acceptedPerSecond": 7499.616647023959
+  },
+  "totalRequests": 2249927,
+  "completion.json": {
+    "stage": "protocol",
+    "pass": false,
+    "originalExitCode": 1,
+    "cleanupExitCode": 0,
+    "cleanupPassed": true,
+    "exitCode": 1
+  },
+  "candidate-build.json": {
+    "runtimeImage": "sha256:1666e9727bb48421a8c81b8d072bdad568ee349805ac773ee82fa7ebcc67c712",
+    "sourceManifestSha256": "d9837259ec781060edcc02d6cfc379f996833d9bc347ffc85d17fd36e6826d46",
+    "buildTree": "/home/reefbench/reef",
+    "provenance": "Native indexed-status image built after all benchmark services stopped; 1107 source files verified before and after build.",
+    "runtimeBuildSourceManifestSha256": "d9837259ec781060edcc02d6cfc379f996833d9bc347ffc85d17fd36e6826d46",
+    "sqlOnlyAdditions": [
+      "scripts/dev/db/migrations/runtime/0053_market_data_indexed_top_of_book.sql",
+      "scripts/dev/db/migrations/runtime/0054_projection_claim_cleanup_skip_locked.sql",
+      "scripts/dev/db/migrations/runtime/0055_market_data_indexed_currency.sql",
+      "scripts/dev/db/migrations/runtime/0056_lifecycle_parameter_sensitive_plans.sql",
+      "scripts/dev/db/migrations/runtime/0057_market_data_idle_metadata.sql",
+      "scripts/dev/db/migrations/runtime/0058_canonical_status_covering_index.sql"
+    ]
+  },
+  "schema-pin.json": {
+    "migrationId": "runtime/0058_canonical_status_covering_index.sql",
+    "migrationSha256": "beab30034c1e26ad9242a74989d9f9fd1fa2a76b7ad3dafda23ef68fe6d3a4c2",
+    "functionBodySha256": {
+      "runtime_persist_submit_outcome_status_stage": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+      "runtime_project_order_lifecycle_state": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+      "runtime_project_market_data_snapshots": "cedf4d3e65dc4355bd0a0892e4f213a07eabac1b00f426d9225e327d87a4db02",
+      "runtime_cleanup_projection_batch_claims": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab"
+    },
+    "volatility": "v",
+    "functionConfig": {
+      "runtime_project_order_lifecycle_state": [
+        "plan_cache_mode=force_custom_plan"
+      ]
+    }
+  },
+  "schema-after.json": {
+    "ledger": [
+      {
+        "migration_id": "runtime/0058_canonical_status_covering_index.sql",
+        "checksum_sha256": "beab30034c1e26ad9242a74989d9f9fd1fa2a76b7ad3dafda23ef68fe6d3a4c2"
+      }
+    ],
+    "functions": {
+      "runtime_persist_submit_outcome_status_stage": {
+        "sha256": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+        "volatility": "v",
+        "config": null
+      },
+      "runtime_project_order_lifecycle_state": {
+        "sha256": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+        "volatility": "v",
+        "config": [
+          "plan_cache_mode=force_custom_plan"
+        ]
+      },
+      "runtime_project_market_data_snapshots": {
+        "sha256": "cedf4d3e65dc4355bd0a0892e4f213a07eabac1b00f426d9225e327d87a4db02",
+        "volatility": "v",
+        "config": null
+      },
+      "runtime_cleanup_projection_batch_claims": {
+        "sha256": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab",
+        "volatility": "v",
+        "config": null
+      }
+    },
+    "canonicalStatusIndex": {
+      "keys": 2,
+      "attributes": 3,
+      "includesCommandType": true
+    }
+  },
+  "baseline-measurement.json": {
+    "kind": "current-build-300-second-baseline",
+    "configuredRate": 7500,
+    "accepted": 2249927,
+    "failures": 0,
+    "durationNanoseconds": 300000000000,
+    "projectionFreshness": {
+      "source": "venue-event-batch-projector",
+      "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+      "materialized": 2249927,
+      "projected": 1508928,
+      "materializedToProjectedGap": 740999,
+      "lag": 741999,
+      "projectedPerSecond": 5029.666094926888,
+      "caughtUp": false
+    },
+    "freshness": {
+      "schemaVersion": "reef.sustainedDownstreamFreshness.v1",
+      "authority": "source-membership-to-sampled-commit-upper-bound-v1",
+      "pass": false,
+      "limitsMs": {
+        "p95": 5000,
+        "p99": 10000,
+        "max": 30000
+      },
+      "minimumDurationSeconds": 300,
+      "durationToleranceMs": 2,
+      "checks": {
+        "upstreamAuthoritative": true,
+        "downstreamAuthoritative": false,
+        "completeCommandWeightedResidence": false,
+        "acceptedCountsReconciled": false,
+        "sustainedDurationComplete": true,
+        "scheduledDemandComplete": true,
+        "finalQueuesDrained": false,
+        "marketProjectionSourceBound": true,
+        "finalCallersIdle": false,
+        "finalCanonicalLagZero": false,
+        "sourceToCanonical": false,
+        "sourceToLifecycle": false,
+        "sourceToMarketData": false
+      },
+      "stages": {
+        "sourceToCanonical": null,
+        "sourceToLifecycle": null,
+        "sourceToMarketData": null
+      }
+    },
+    "promotion": false
+  },
+  "queueSamples": {
+    "count": 367,
+    "first": {
+      "sampledAt": "2026-09-24T19:05:22.391Z",
+      "queue": {
+        "orderLifecyclePending": 0,
+        "orderLifecycleOldestDirtiedAt": "",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T19:05:22.725404Z",
+        "databaseGeneration": "2026-09-24 19:03:54.501456+00"
+      },
+      "failed": 0
+    },
+    "last": {
+      "sampledAt": "2026-09-24T19:11:28.610Z",
+      "queue": {
+        "orderLifecyclePending": 565,
+        "orderLifecycleOldestDirtiedAt": "2026-09-24 19:11:27.700804+00",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T19:11:28.616675Z",
+        "databaseGeneration": "2026-09-24 19:03:54.501456+00"
+      },
+      "failed": 0
+    },
+    "maxPending": 3121
+  },
+  "C6": {
+    "artifactSha256": "a56e1577b5a026e0498282a96b0f940fb5ca3057515f7812ef8647b06b4efe57",
+    "executionTimesMs": [
+      514.305,
+      222.919,
+      219.995,
+      510.844
+    ],
+    "equality": {
+      "stage": "market-shaped-equality",
+      "currentRows": 64,
+      "instruments": 64,
+      "candidateRows": 64,
+      "candidateMinusCurrent": 0,
+      "currentMinusCandidate": 0
+    }
+  },
+  "diagnosticWaitSamples": [
+    {
+      "at": "2026-09-24T19:08:31.677210+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 3
+        },
+        {
+          "category": "lifecycle",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 47
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:32.015907+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 4
+        },
+        {
+          "category": "lifecycle",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 1
+        },
+        {
+          "category": "market",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 46
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:32.410562+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "IO",
+          "wait_event": "DataFileWrite",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 2
+        },
+        {
+          "category": "lifecycle",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 47
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:32.784162+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 2
+        },
+        {
+          "category": "lifecycle",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 47
+        },
+        {
+          "category": "other",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:33.112961+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "IO",
+          "wait_event": "DataFileExtend",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "IO",
+          "wait_event": "DataFileWrite",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 1
+        },
+        {
+          "category": "lifecycle",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 47
+        },
+        {
+          "category": "other",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:33.425955+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 3
+        },
+        {
+          "category": "lifecycle",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 2
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 46
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:33.759456+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 3
+        },
+        {
+          "category": "lifecycle",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 48
+        }
+      ]
+    },
+    {
+      "at": "2026-09-24T19:08:34.075288+00:00",
+      "groups": [
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "calls": 1
+        },
+        {
+          "category": "canonical-write",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 2
+        },
+        {
+          "category": "lifecycle",
+          "state": "active",
+          "wait_event_type": null,
+          "wait_event": null,
+          "calls": 1
+        },
+        {
+          "category": "other",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 47
+        },
+        {
+          "category": "other",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "calls": 1
+        }
+      ]
+    }
+  ],
+  "fullBusinessReference": {
+    "executed": false,
+    "reason": "canonical gap; capacity-only diagnostic"
+  }
+}

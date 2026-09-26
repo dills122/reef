@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "proof": [
+    {
+      "service": "postgres",
+      "beforeFunctionSha256": "1a8079d22727f966c32309ceec867558fdec59cb5077a1b715dce0416c473967",
+      "afterFunctionSha256": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+      "candidateLedgerRemoved": true,
+      "customPlanPreserved": true
+    },
+    {
+      "service": "projection-postgres",
+      "beforeFunctionSha256": "1a8079d22727f966c32309ceec867558fdec59cb5077a1b715dce0416c473967",
+      "afterFunctionSha256": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+      "candidateLedgerRemoved": true,
+      "customPlanPreserved": true
+    }
+  ],
+  "businessDml": false
+}

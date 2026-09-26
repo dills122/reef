@@ -21,12 +21,13 @@ Reef is split by job, not by ceremony. The Reef runtime handles the public API a
 
 ## Deployment Shape (Current)
 
-Current local development can still run in a deliberately simple shape:
+The default local Reef profile runs these separate roles:
 
 ```text
-Kotlin platform runtime  (one process)
-  -> Postgres            (one instance)
-  -> Go matching engine  (one process)
+Kotlin platform API, four workers, four projectors
+  -> runtime, boundary, and projection Postgres
+  -> NATS
+  -> Go matching engine
 ```
 
 That is the default Reef-only profile (`compose.base.yml` plus
@@ -79,4 +80,5 @@ Orders-and-execution, command status, market-data/own-order reads, durable venue
 - `docs/steering/architecture.md` — full architecture steering
 - `docs/steering/external-api-boundary.md` — API boundary steering
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — schema blueprint (see [Schema](../../schema/overview/) on this site)
-- `docs/ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md` — infrastructure diagrams
+- `docs/LOCAL_CONFIGURATION.md` — accepted local stack and lifecycle
+- `docs/archive/ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md` — July infrastructure diagram snapshot

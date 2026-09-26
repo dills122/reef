@@ -10,7 +10,7 @@ small, verifiable work that protects command correctness, replay determinism,
 API trust boundaries, authorization, and audit persistence.
 
 Primary findings source:
-- [`docs/research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md`](../research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md)
+- [`docs/research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md`](research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md)
 
 ## Sprint Goal
 

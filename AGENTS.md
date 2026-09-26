@@ -1,122 +1,97 @@
 # AGENTS
 
-AI coding guidance for this repository.
+AI coding guidance for Reef. Start with [AI working context](docs/AI_CONTEXT.md)
+and the [documentation map](docs/README.md). Read task-relevant sections, not
+the entire doc tree. A dated status or archived plan is evidence in its stated
+scope, not an instruction to reopen old work.
 
-## Purpose
+## Invariants
 
-Reef is a simulation-first institutional trading venue and post-trade platform.
-
-Optimize for:
-
-- realistic market-infrastructure domain boundaries
-- deterministic scenario execution, replay, and auditability
-- high-throughput command intake and lifecycle processing with measured evidence
-- low write amplification, partitionable processing, and async projections on hot paths
-- local-first development with inspectable workflows
-- small, explicit changes over broad refactors
-- tests and documentation when behavior, contracts, setup, or commands change
-
-Performance work must never weaken correctness, determinism, auditability, idempotency, or replay semantics.
-
-## Canonical Docs
-
-Read these before changing architecture or behavior:
-
-- `REEF_PROJECT_OVERVIEW.md`
-- `REEF_TECHNICAL_DESIGN.md`
-- `docs/steering/README.md`
-- `docs/steering/repository-scope-and-priorities.md`
-- `docs/steering/architecture.md`
-- `docs/steering/repository.md`
-- `docs/PERFORMANCE_LEARNINGS.md`
-- `docs/ENGINEERING_DELIVERY_POLICY.md`
-- `docs/DECISIONS.md`
-
-Language and surface-specific steering:
-
-- `docs/steering/go.md`
-- `docs/steering/kotlin.md`
-- `docs/steering/astro.md`
-- `docs/steering/data-platform.md`
-- `docs/steering/inter-service-communication.md`
-- `docs/steering/external-api-boundary.md`
-
-`docs/steering/README.md` additionally curates `docs/ONBOARDING.md`, `docs/CURRENT_STATUS.md`, `docs/API_SURFACE_POLICY.md`, `docs/POST_MATCH_STANDARDS.md`, and `docs/PERFORMANCE_LIBRARY_INVESTIGATION.md` — check that list too.
-
-## Architecture Boundaries
-
-Primary areas:
-
-- `apps/docs-site/`: Astro documentation/marketing surface
-- `services/platform-runtime/`: Kotlin API/runtime, workflow orchestration, persistence, read models, and admin modules
-- `services/matching-engine/`: Go matching and execution engine behavior
-- `services/simulator/`: scenario execution, seeded simulation, replay, and traffic generation
-- `contracts/proto/`: versionable inter-service contracts
-- `packages/scenario-definitions/`: reusable scenario definitions and simulation inputs
-- `packages/bot-sdk/`: first-party bot authoring contract (`ReefBotV1`), examples, and fixtures
-- `docs/`: roadmap, delivery policy, architecture, decisions, steering, and operational notes
-- `scripts/`: local development, smoke, stress, admin, replay, and throughput automation
-- `infra/`: hosted/remote-run infrastructure (`hetzner-core/`, `simulation-runner/`, `local-kube/`, `do-benchmark/`), separate from local Compose dev stack
-
-When a change spans areas, preserve ownership boundaries and update shared contracts first.
-
-## Contract-First Files
-
-Treat these as interface contracts before implementation details:
-
-- `contracts/proto/`
-- `docs/steering/inter-service-communication.md`
-- `docs/steering/external-api-boundary.md`
-- `docs/API_BOUNDARY_STORAGE_DECISIONS.md`
-- `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`
-- `docs/DECISIONS.md`
-
-If behavior changes, update the relevant contract and docs in the same change.
-
-## Scope Control
-
-- Keep simulation actors on the same command/API paths as manual users.
-- Keep domain logic framework-light and outside adapters.
-- Keep Go matching-engine behavior isolated from Kotlin runtime orchestration.
-- Keep UI projections from leaking into core write-model logic.
+- Reef is a simulation-first institutional venue and post-trade platform.
+- Preserve deterministic execution and replay, auditability, idempotency, and
+  same-lane ordering for matching-sensitive commands within a venue session and
+  instrument. Simulators use the same command/API paths as manual users.
+- Do not acknowledge `202 Accepted` before the configured durable ingress
+  mechanism acknowledges acceptance.
 - Keep canonical command/event facts separate from rebuildable projections.
-- Keep matching-sensitive submit/cancel/modify commands for the same venue session and instrument on the same deterministic processing lane.
-- Do not return `202 Accepted` until the configured durable ingress mechanism has acknowledged acceptance.
-- Avoid premature service extraction; bounded contexts can begin as modules.
-- Avoid unrelated refactors and generated artifact churn.
-- Do not change public API routes, event semantics, storage formats, or scenario determinism without explicit intent.
-- Do not add synchronous hot-path writes, table scans, or read-model updates without a clear reason and, where relevant, benchmark evidence.
+  Keep Go matching behavior separate from Kotlin orchestration and UI read
+  models. Do not add synchronous hot-path writes or scans without evidence.
+- Changes to API routes, events, storage, scenarios, or shared behavior update
+  contracts, focused tests, and relevant docs in the same change.
 
-## Repository Conventions
+## Read by task
 
-- Follow `docs/steering/repository.md` for repo layout, naming, scripting, and documentation expectations.
-- Prefer `bun` scripts under `scripts/` for repository automation; keep `make` as thin wrappers.
-- Add focused tests for behavior changes.
-- Update docs when setup steps, commands, contracts, workflows, or architecture direction change.
-- Preserve local-first setup/reset/smoke flows.
+- Setup, teardown, or configuration: `docs/LOCAL_CONFIGURATION.md`, then
+  `docs/ONBOARDING.md`; inspect `.env.example`, Make targets, and Compose for
+  exact behavior. Use `docs/DEV_ENV.md` only for advanced profiles.
+- Architecture or behavior: relevant part of `REEF_PROJECT_OVERVIEW.md`,
+  `REEF_TECHNICAL_DESIGN.md`, `docs/steering/README.md`, and accepted
+  `docs/DECISIONS.md`. Follow relevant language and boundary steering.
+- Contracts: `contracts/proto/`, `docs/steering/inter-service-communication.md`,
+  `docs/steering/external-api-boundary.md`, `docs/API_BOUNDARY_STORAGE_DECISIONS.md`,
+  and `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` as applicable.
+- Current work: `docs/WORK_PLAN.md` and source/test evidence. Its September 4
+  alignment and `docs/CURRENT_STATUS.md` are dated checkpoints; verify newer
+  changes before reporting status.
+- Throughput: first read `docs/THROUGHPUT_BASELINES.md`, original relevant
+  success and failure artifacts, `docs/PERFORMANCE_LEARNINGS.md`, and active
+  scaling plan. State baseline, code/config/workload/measurement differences,
+  and pipeline stage. Record every run and correction; never silently rewrite
+  historical claims or report a conservative bound as actual latency.
+- Delivery: `docs/ENGINEERING_DELIVERY_POLICY.md`; repository conventions:
+  `docs/steering/repository.md`. Read surface-specific steering as needed.
 
-## Useful Commands
+## Workflow
 
-- First-time dependency setup: `make dev-bootstrap`
-- Developer prerequisite check: `make dev-doctor` (or `make dev-doctor ARGS=--full`)
-- Local setup: `cp .env.example .env`
-- Start local stack: `make dev-up`
-- Stop local stack: `make dev-down`
-- Reset local stack: `make dev-reset`
-- Smoke test local stack: `make dev-smoke`
-- Repository tests: `make test`
-- Go matching engine tests: `make test-go`
-- Kotlin platform runtime tests: `make test-platform-runtime`
-- Proto compatibility check: `make check-proto-additive`
-- Simulator run: `make dev-sim`
-- Admin command: `make dev-admin CMD="instrument-upsert AAPL AAPL"`
+- Keep changes small and local-first. Prefer Bun scripts under `scripts/` and
+  thin Make wrappers. Do not change public behavior or scenario determinism
+  without explicit intent.
+- Use feature branches; do not commit directly to `main`. Preserve unrelated
+  working-tree changes. When ready, provide branch, PR title, summary, and tests.
+- Default loop: `cp .env.example .env`, `make dev-doctor`, `make dev-up`,
+  `make dev-smoke`; `make dev-down` preserves volumes and `make dev-reset`
+  destroys local volumes and starts the stack. See local configuration for
+  overlays, detailed behavior, and smoke after reset.
 
-## Branch And PR Metadata
+## Context Engine (CCE)
 
-- Use feature branches for behavior, contract, test, or documentation changes.
-- Do not commit directly to `main`.
-- When work is ready, provide:
-  - branch name
-  - PR title
-  - PR summary
-  - test evidence
+This project uses Code Context Engine for intelligent code retrieval and
+cross-session memory.
+
+### Searching the codebase
+
+**Use `context_search` instead of reading files directly** when exploring
+the codebase, answering questions about code, or understanding how things
+work. `context_search` returns the most relevant code chunks with
+confidence scores instead of whole files.
+
+When to use `context_search`:
+- Answering questions about the codebase ("how does X work?", "where is Y?")
+- Exploring structure or architecture
+- Finding related code, functions, or patterns
+
+Other tools:
+- `expand_chunk` for full source of a compressed result
+- `related_context` for what calls/imports a function
+- `session_recall` to recall past decisions
+
+### Cross-session memory
+
+Call `session_recall("topic phrase")` before answering non-trivial questions.
+Call `record_decision(decision="...", reason="...")` after making choices.
+Call `record_code_area(file_path="...", description="...")` after meaningful work.
+
+### Output style
+
+Respond in compressed style. Drop articles (a, an, the) in prose. Use
+sentence fragments over full sentences. Use short synonyms (fix not resolve,
+check not investigate). Pattern: [thing] [action] [reason]. [next step].
+No filler, hedging, pleasantries, trailing summaries, or restating what
+the user said. One sentence if one sentence is enough.
+
+When suggesting code changes, show only the changed lines with 3 lines of
+context. Never rewrite entire files. Multiple changes in one file: show each
+change separately. Never echo back unchanged code the user already has.
+
+Code blocks, file paths, commands, error messages: always written in full.
+Security warnings and destructive action confirmations: use full clarity.

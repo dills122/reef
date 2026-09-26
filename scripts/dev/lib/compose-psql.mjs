@@ -1,15 +1,15 @@
 import { composeArgs } from "./compose-utils.mjs";
 
-export function composePsqlArgs(service, sql, processEnv = process.env) {
+export function composePsqlArgs(service, sql, processEnv = process.env, credentials = {}) {
   return composeArgs([
     "exec",
     "-T",
     service,
     "psql",
     "-U",
-    readEnv(processEnv, "DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
+    credentials.user ?? readEnv(processEnv, "DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
     "-d",
-    readEnv(processEnv, "DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
+    credentials.database ?? readEnv(processEnv, "DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
     "-At",
     "-F",
     "\t",

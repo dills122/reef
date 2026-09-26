@@ -1,0 +1,20 @@
+{
+  "id": "C9",
+  "artifactSha256": "448995ab1ee8b11d344ee2f114b181cdae78f9477ad0043d72af74f89302dbe8",
+  "timingsMs": [
+    115.245,
+    113.455,
+    77.014,
+    1.714,
+    1.539,
+    62.09
+  ],
+  "equality": {
+    "stage": "market-shaped-equality",
+    "currentRows": 64,
+    "instruments": 64,
+    "candidateRows": 64,
+    "candidateMinusCurrent": 0,
+    "currentMinusCandidate": 0
+  }
+}

@@ -4,6 +4,15 @@
 
 Define how Reef balances net-new feature delivery with refactors and test hardening without compromising quality or velocity.
 
+## Throughput Evidence Rule
+
+Throughput work must follow [the baseline ledger](THROUGHPUT_BASELINES.md).
+Before planning or changing performance behavior, read and cite relevant historic
+successes and failures, identify configuration differences, and define a measured
+comparison. Record results, artifacts and explicit corrections without deleting
+prior evidence. Diagnostic exploration may precede final qualification; label it
+accordingly. Prioritize the user's throughput objective over validation expansion.
+
 ## Non-Negotiable Test Rule
 
 - every new feature must include tests for newly introduced behavior

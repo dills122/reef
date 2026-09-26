@@ -91,7 +91,7 @@ Historical-scope note: this section records the initial same-repository
 provisioning design. The current fork-safe pending/approval handoff supersedes
 its statements that fork PRs are rejected or that branch protection is still a
 manual gap. Use
-[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md) and
+[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md) and
 [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for the
 current contract.
 
@@ -193,7 +193,7 @@ The current working direction is:
 - use TypeScript as the first public bot authoring SDK — implemented as the TypeScript-only `ReefBotV1` (`packages/bot-sdk`)
 - use SES compartments as the first sandbox boundary — implemented in `packages/bot-sdk/src/hosted-runner.ts` (`createSesCompartmentFactoryV1`); container/WASM boundaries remain a possible later addition for a stronger threat model, not a currently open question
 - keep the durable bot-runtime contract language-neutral through protobuf-defined snapshots, actions, outcomes, and resource reports
-- today's shipped runner-pool prototype (`scripts/dev/arena-runner-pool-smoke.mjs`, see `docs/BOT_ARENA_RUNNER_BENCH.md`) uses a JSON-line protocol over each worker's stdin/stdout; a dedicated gRPC/protobuf protocol between sandbox workers and the arena orchestrator remains a future intent, not yet decided or implemented — no arena proto files exist under `contracts/proto/` today
+- today's shipped runner-pool prototype (`scripts/dev/arena-runner-pool-smoke.mjs`, see `docs/archive/BOT_ARENA_RUNNER_BENCH.md`) uses a JSON-line protocol over each worker's stdin/stdout; a dedicated gRPC/protobuf protocol between sandbox workers and the arena orchestrator remains a future intent, not yet decided or implemented — no arena proto files exist under `contracts/proto/` today
 - do not allow bot code to create REST or gRPC clients to Reef services
 - preserve venue command semantics, validation, idempotency, abuse controls, and audit metadata for every bot-originated action
 - model arena runs as real interactive markets with controlled market makers, controlled background traffic, and user competitor bots
@@ -761,8 +761,8 @@ First local stress baseline:
 - add a small leaderboard report
 
 Detailed execution plan and benchmark evidence for this phase live in:
-- [`docs/BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./BOT_ARENA_PHASE_1_READINESS_PLAN.md) — the detailed Phase 1 work order: current foundations, the concrete local arena run path, and the smoke gate that proves it uses normal Reef venue commands.
-- [`docs/BOT_ARENA_RUNNER_BENCH.md`](./BOT_ARENA_RUNNER_BENCH.md) — benchmark evidence and reproducible commands for the grouped TypeScript-capable bot runner shape this phase depends on.
+- [`docs/archive/BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./archive/BOT_ARENA_PHASE_1_READINESS_PLAN.md) — the detailed Phase 1 work order: current foundations, the concrete local arena run path, and the smoke gate that proves it uses normal Reef venue commands.
+- [`docs/archive/BOT_ARENA_RUNNER_BENCH.md`](./archive/BOT_ARENA_RUNNER_BENCH.md) — benchmark evidence and reproducible commands for the grouped TypeScript-capable bot runner shape this phase depends on.
 
 ### Phase 2: Sandbox Execution
 

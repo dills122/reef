@@ -23,6 +23,7 @@ import com.reef.platform.infrastructure.persistence.MarketDataDepthSnapshot
 import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
 import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
@@ -129,6 +130,9 @@ class PlatformApi(
         return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
     }
 
+    fun committedProjectionFrontier(projectionName: String, partitions: List<Int>) =
+        orderService.committedProjectionFrontier(projectionName, partitions)
+
     fun projectionStatus(
         projectionName: String,
         partitions: List<Int> = emptyList(),
@@ -136,6 +140,18 @@ class PlatformApi(
     ): ProjectionStatus {
         return orderService.projectionStatus(projectionName, partitions, source)
     }
+
+    fun projectionStatusWithoutCount(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus = orderService.projectionStatusWithoutCount(projectionName, partitions, source)
+
+    fun projectionLag(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionLag = orderService.projectionLag(projectionName, partitions, source)
 
     fun dataAvailability(
         venueProjectionName: String = defaultVenueProjectionName,
@@ -498,9 +514,10 @@ class PlatformApi(
     fun projectMarketDataSnapshotsCount(
         projectionName: String = "market-data-top-of-book",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes",
-        batchSize: Int = 500
+        batchSize: Int = 500,
+        projectLifecycleFirst: Boolean = true
     ): Long {
-        return orderService.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize)
+        return orderService.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize, projectLifecycleFirst)
     }
 
     fun rebuildOrderLifecycleState(): String {
@@ -514,6 +531,11 @@ class PlatformApi(
     fun projectOrderLifecycleStateCount(batchSize: Int): Long {
         return orderService.projectOrderLifecycleState(batchSize)
     }
+
+    fun projectionDirtyQueueStats() = orderService.projectionDirtyQueueStats()
+    fun projectionDirtyQueueMarkerStats() = orderService.projectionDirtyQueueMarkerStats()
+    fun projectionLagUpTo(projectionName: String, partitions: List<Int>, source: String, threshold: Long) =
+        orderService.projectionLagUpTo(projectionName, partitions, source, threshold)
 
     fun marketDataSnapshot(
         instrumentId: String,

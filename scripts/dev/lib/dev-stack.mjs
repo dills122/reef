@@ -15,7 +15,10 @@ export async function devReset(options = {}) {
   configureComposeProfiles(context);
 
   context.log("stopping stack and removing volumes...");
-  await context.run("docker", composeArgs(["down", "--volumes", "--remove-orphans"], context.processEnv));
+  await context.run(
+    "docker",
+    composeArgs(["--profile", "*", "down", "--volumes", "--remove-orphans"], context.processEnv),
+  );
 
   context.log("starting postgres...");
   await startPostgres(context);

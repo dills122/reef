@@ -1,0 +1,2537 @@
+{
+  "artifactSha256": "cd340e5ce8f2fbaa74019beda9a018cb81db495494ef7a5e21ca396a8b07b545",
+  "plans": [
+    {
+      "elapsedMs": 3.649,
+      "category": "claim",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 885,
+        "Shared Read Blocks": 1,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "Subquery Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 885,
+            "Shared Read Blocks": 1,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Limit",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 885,
+                "Shared Read Blocks": 1,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "LockRows",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 885,
+                    "Shared Read Blocks": 1,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Incremental Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 190,
+                        "Shared Read Blocks": 1,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Relation Name": "order_lifecycle_dirty",
+                            "Index Name": "idx_order_lifecycle_dirty_dirtied_at",
+                            "Actual Rows": 786,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 181,
+                            "Shared Read Blocks": 1,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 209.086,
+      "category": "lifecycle-write",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 3012,
+        "Shared Read Blocks": 1,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "ProjectSet",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Result",
+                "Actual Rows": 1,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 0,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_state",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14243,
+            "Shared Read Blocks": 106,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2336,
+            "WAL Bytes": 344126,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 7882,
+                "Shared Read Blocks": 97,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Nested Loop",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5357,
+                    "Shared Read Blocks": 64,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Hash Join",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 3506,
+                        "Shared Read Blocks": 37,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Nested Loop",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1971,
+                            "Shared Read Blocks": 29,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "CTE Scan",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 0,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Relation Name": "orders",
+                                "Index Name": "orders_pkey",
+                                "Actual Rows": 1,
+                                "Actual Loops": 500,
+                                "Shared Hit Blocks": 1971,
+                                "Shared Read Blocks": 29,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              }
+                            ]
+                          },
+                          {
+                            "Node Type": "Hash",
+                            "Actual Rows": 37,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1535,
+                            "Shared Read Blocks": 8,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Subquery Scan",
+                                "Actual Rows": 37,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1535,
+                                "Shared Read Blocks": 8,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Unique",
+                                    "Actual Rows": 37,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 1535,
+                                    "Shared Read Blocks": 8,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Sort",
+                                        "Actual Rows": 37,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 1535,
+                                        "Shared Read Blocks": 8,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "Sort Method": "quicksort",
+                                        "Sort Space Used": 31,
+                                        "Sort Space Type": "Memory",
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0,
+                                        "Plans": [
+                                          {
+                                            "Node Type": "Nested Loop",
+                                            "Actual Rows": 37,
+                                            "Actual Loops": 1,
+                                            "Shared Hit Blocks": 1529,
+                                            "Shared Read Blocks": 8,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "WAL Records": 0,
+                                            "WAL Bytes": 0,
+                                            "Plans": [
+                                              {
+                                                "Node Type": "Aggregate",
+                                                "Actual Rows": 500,
+                                                "Actual Loops": 1,
+                                                "Shared Hit Blocks": 0,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0,
+                                                "Plans": [
+                                                  {
+                                                    "Node Type": "CTE Scan",
+                                                    "Actual Rows": 500,
+                                                    "Actual Loops": 1,
+                                                    "Shared Hit Blocks": 0,
+                                                    "Shared Read Blocks": 0,
+                                                    "Temp Read Blocks": 0,
+                                                    "Temp Written Blocks": 0,
+                                                    "WAL Records": 0,
+                                                    "WAL Bytes": 0
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "Node Type": "Index Scan",
+                                                "Relation Name": "runtime_events",
+                                                "Index Name": "idx_runtime_events_order_modified_lifecycle",
+                                                "Actual Rows": 0,
+                                                "Actual Loops": 500,
+                                                "Shared Hit Blocks": 1529,
+                                                "Shared Read Blocks": 8,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "Node Type": "Aggregate",
+                        "Actual Rows": 191,
+                        "Actual Loops": 500,
+                        "Shared Hit Blocks": 1851,
+                        "Shared Read Blocks": 27,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Actual Rows": 385,
+                            "Actual Loops": 500,
+                            "Shared Hit Blocks": 1851,
+                            "Shared Read Blocks": 27,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Method": "quicksort",
+                            "Sort Space Used": 60,
+                            "Sort Space Type": "Memory",
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Nested Loop",
+                                "Actual Rows": 504,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1851,
+                                "Shared Read Blocks": 27,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Aggregate",
+                                    "Actual Rows": 500,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 0,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "CTE Scan",
+                                        "Actual Rows": 500,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 0,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Node Type": "Index Scan",
+                                    "Relation Name": "executions",
+                                    "Index Name": "idx_executions_order_occurred",
+                                    "Actual Rows": 1,
+                                    "Actual Loops": 500,
+                                    "Shared Hit Blocks": 1851,
+                                    "Shared Read Blocks": 27,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Node Type": "Aggregate",
+                    "Actual Rows": 250,
+                    "Actual Loops": 500,
+                    "Shared Hit Blocks": 2525,
+                    "Shared Read Blocks": 33,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Actual Rows": 279,
+                        "Actual Loops": 500,
+                        "Shared Hit Blocks": 2525,
+                        "Shared Read Blocks": 33,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 81,
+                        "Sort Space Type": "Memory",
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Nested Loop",
+                            "Actual Rows": 558,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2525,
+                            "Shared Read Blocks": 33,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Aggregate",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 0,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "CTE Scan",
+                                    "Actual Rows": 500,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 0,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0
+                                  }
+                                ]
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Relation Name": "runtime_events",
+                                "Index Name": "idx_runtime_events_order_trace_sequence",
+                                "Actual Rows": 1,
+                                "Actual Loops": 500,
+                                "Shared Hit Blocks": 2525,
+                                "Shared Read Blocks": 33,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "market_data_snapshot_dirty",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14372,
+            "Shared Read Blocks": 106,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2336,
+            "WAL Bytes": 344126,
+            "Plans": [
+              {
+                "Node Type": "Subquery Scan",
+                "Actual Rows": 32,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 14243,
+                "Shared Read Blocks": 106,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 2336,
+                "WAL Bytes": 344126,
+                "Plans": [
+                  {
+                    "Node Type": "Unique",
+                    "Actual Rows": 32,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 14243,
+                    "Shared Read Blocks": 106,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 2336,
+                    "WAL Bytes": 344126,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 14243,
+                        "Shared Read Blocks": 106,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 32,
+                        "Sort Space Type": "Memory",
+                        "WAL Records": 2336,
+                        "WAL Bytes": 344126,
+                        "Plans": [
+                          {
+                            "Node Type": "CTE Scan",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 14243,
+                            "Shared Read Blocks": 106,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 2336,
+                            "WAL Bytes": 344126
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_dirty",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3012,
+            "Shared Read Blocks": 1,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 1999,
+                "Shared Read Blocks": 1,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  },
+                  {
+                    "Node Type": "Index Scan",
+                    "Relation Name": "order_lifecycle_dirty",
+                    "Index Name": "order_lifecycle_dirty_pkey",
+                    "Actual Rows": 1,
+                    "Actual Loops": 500,
+                    "Shared Hit Blocks": 1999,
+                    "Shared Read Blocks": 1,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "CTE Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3012,
+            "Shared Read Blocks": 1,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 232.694,
+      "category": "outer-call",
+      "plan": {
+        "Node Type": "Result",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 19912,
+        "Shared Read Blocks": 126,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 2336,
+        "WAL Bytes": 344126
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 1.952,
+      "category": "claim",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 576,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "Subquery Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 576,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Limit",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 576,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "LockRows",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 576,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Incremental Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 76,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Relation Name": "order_lifecycle_dirty",
+                            "Index Name": "idx_order_lifecycle_dirty_dirtied_at",
+                            "Actual Rows": 786,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 76,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 191.105,
+      "category": "lifecycle-write",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 3000,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "ProjectSet",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Result",
+                "Actual Rows": 1,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 0,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_state",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14834,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2341,
+            "WAL Bytes": 313923,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 7973,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Nested Loop",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5415,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Hash Join",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 3537,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Nested Loop",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2000,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "CTE Scan",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 0,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Relation Name": "orders",
+                                "Index Name": "orders_pkey",
+                                "Actual Rows": 1,
+                                "Actual Loops": 500,
+                                "Shared Hit Blocks": 2000,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              }
+                            ]
+                          },
+                          {
+                            "Node Type": "Hash",
+                            "Actual Rows": 37,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1537,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Subquery Scan",
+                                "Actual Rows": 37,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1537,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Unique",
+                                    "Actual Rows": 37,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 1537,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Sort",
+                                        "Actual Rows": 37,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 1537,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "Sort Method": "quicksort",
+                                        "Sort Space Used": 31,
+                                        "Sort Space Type": "Memory",
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0,
+                                        "Plans": [
+                                          {
+                                            "Node Type": "Nested Loop",
+                                            "Actual Rows": 37,
+                                            "Actual Loops": 1,
+                                            "Shared Hit Blocks": 1537,
+                                            "Shared Read Blocks": 0,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "WAL Records": 0,
+                                            "WAL Bytes": 0,
+                                            "Plans": [
+                                              {
+                                                "Node Type": "Aggregate",
+                                                "Actual Rows": 500,
+                                                "Actual Loops": 1,
+                                                "Shared Hit Blocks": 0,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0,
+                                                "Plans": [
+                                                  {
+                                                    "Node Type": "CTE Scan",
+                                                    "Actual Rows": 500,
+                                                    "Actual Loops": 1,
+                                                    "Shared Hit Blocks": 0,
+                                                    "Shared Read Blocks": 0,
+                                                    "Temp Read Blocks": 0,
+                                                    "Temp Written Blocks": 0,
+                                                    "WAL Records": 0,
+                                                    "WAL Bytes": 0
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "Node Type": "Index Scan",
+                                                "Relation Name": "runtime_events",
+                                                "Index Name": "idx_runtime_events_order_modified_lifecycle",
+                                                "Actual Rows": 0,
+                                                "Actual Loops": 500,
+                                                "Shared Hit Blocks": 1537,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "Node Type": "Aggregate",
+                        "Actual Rows": 191,
+                        "Actual Loops": 500,
+                        "Shared Hit Blocks": 1878,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Actual Rows": 385,
+                            "Actual Loops": 500,
+                            "Shared Hit Blocks": 1878,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Method": "quicksort",
+                            "Sort Space Used": 60,
+                            "Sort Space Type": "Memory",
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Nested Loop",
+                                "Actual Rows": 504,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1878,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Aggregate",
+                                    "Actual Rows": 500,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 0,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "CTE Scan",
+                                        "Actual Rows": 500,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 0,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Node Type": "Index Scan",
+                                    "Relation Name": "executions",
+                                    "Index Name": "idx_executions_order_occurred",
+                                    "Actual Rows": 1,
+                                    "Actual Loops": 500,
+                                    "Shared Hit Blocks": 1878,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Node Type": "Aggregate",
+                    "Actual Rows": 250,
+                    "Actual Loops": 500,
+                    "Shared Hit Blocks": 2558,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Actual Rows": 279,
+                        "Actual Loops": 500,
+                        "Shared Hit Blocks": 2558,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 81,
+                        "Sort Space Type": "Memory",
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Nested Loop",
+                            "Actual Rows": 558,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2558,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Aggregate",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 0,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "CTE Scan",
+                                    "Actual Rows": 500,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 0,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0
+                                  }
+                                ]
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Relation Name": "runtime_events",
+                                "Index Name": "idx_runtime_events_order_trace_sequence",
+                                "Actual Rows": 1,
+                                "Actual Loops": 500,
+                                "Shared Hit Blocks": 2558,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "market_data_snapshot_dirty",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14962,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2341,
+            "WAL Bytes": 313923,
+            "Plans": [
+              {
+                "Node Type": "Subquery Scan",
+                "Actual Rows": 32,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 14834,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 2341,
+                "WAL Bytes": 313923,
+                "Plans": [
+                  {
+                    "Node Type": "Unique",
+                    "Actual Rows": 32,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 14834,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 2341,
+                    "WAL Bytes": 313923,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 14834,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 32,
+                        "Sort Space Type": "Memory",
+                        "WAL Records": 2341,
+                        "WAL Bytes": 313923,
+                        "Plans": [
+                          {
+                            "Node Type": "CTE Scan",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 14834,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 2341,
+                            "WAL Bytes": 313923
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_dirty",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3000,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 2000,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  },
+                  {
+                    "Node Type": "Index Scan",
+                    "Relation Name": "order_lifecycle_dirty",
+                    "Index Name": "order_lifecycle_dirty_pkey",
+                    "Actual Rows": 1,
+                    "Actual Loops": 500,
+                    "Shared Hit Blocks": 2000,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "CTE Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3000,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 194.902,
+      "category": "outer-call",
+      "plan": {
+        "Node Type": "Result",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 18538,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 2341,
+        "WAL Bytes": 313923
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 1.931,
+      "category": "claim",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 576,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "Subquery Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 576,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Limit",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 576,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "LockRows",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 576,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Incremental Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 76,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Relation Name": "order_lifecycle_dirty",
+                            "Index Name": "idx_order_lifecycle_dirty_dirtied_at",
+                            "Actual Rows": 786,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 76,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 36.005,
+      "category": "lifecycle-write",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 3000,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "ProjectSet",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Result",
+                "Actual Rows": 1,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 0,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_state",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14850,
+            "Shared Read Blocks": 1,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2351,
+            "WAL Bytes": 330506,
+            "Plans": [
+              {
+                "Node Type": "Hash Join",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 7973,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Hash Join",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6095,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Hash Join",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 3537,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Nested Loop",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2000,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "CTE Scan",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 0,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Relation Name": "orders",
+                                "Index Name": "orders_pkey",
+                                "Actual Rows": 1,
+                                "Actual Loops": 500,
+                                "Shared Hit Blocks": 2000,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              }
+                            ]
+                          },
+                          {
+                            "Node Type": "Hash",
+                            "Actual Rows": 37,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1537,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Subquery Scan",
+                                "Actual Rows": 37,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1537,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Unique",
+                                    "Actual Rows": 37,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 1537,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Sort",
+                                        "Actual Rows": 37,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 1537,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "Sort Method": "quicksort",
+                                        "Sort Space Used": 31,
+                                        "Sort Space Type": "Memory",
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0,
+                                        "Plans": [
+                                          {
+                                            "Node Type": "Nested Loop",
+                                            "Actual Rows": 37,
+                                            "Actual Loops": 1,
+                                            "Shared Hit Blocks": 1537,
+                                            "Shared Read Blocks": 0,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "WAL Records": 0,
+                                            "WAL Bytes": 0,
+                                            "Plans": [
+                                              {
+                                                "Node Type": "Aggregate",
+                                                "Actual Rows": 500,
+                                                "Actual Loops": 1,
+                                                "Shared Hit Blocks": 0,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0,
+                                                "Plans": [
+                                                  {
+                                                    "Node Type": "CTE Scan",
+                                                    "Actual Rows": 500,
+                                                    "Actual Loops": 1,
+                                                    "Shared Hit Blocks": 0,
+                                                    "Shared Read Blocks": 0,
+                                                    "Temp Read Blocks": 0,
+                                                    "Temp Written Blocks": 0,
+                                                    "WAL Records": 0,
+                                                    "WAL Bytes": 0
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "Node Type": "Index Scan",
+                                                "Relation Name": "runtime_events",
+                                                "Index Name": "idx_runtime_events_order_modified_lifecycle",
+                                                "Actual Rows": 0,
+                                                "Actual Loops": 500,
+                                                "Shared Hit Blocks": 1537,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "Node Type": "Hash",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 2558,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Subquery Scan",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2558,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Aggregate",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 2558,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Nested Loop",
+                                    "Actual Rows": 558,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 2558,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Aggregate",
+                                        "Actual Rows": 500,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 0,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0,
+                                        "Plans": [
+                                          {
+                                            "Node Type": "CTE Scan",
+                                            "Actual Rows": 500,
+                                            "Actual Loops": 1,
+                                            "Shared Hit Blocks": 0,
+                                            "Shared Read Blocks": 0,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "WAL Records": 0,
+                                            "WAL Bytes": 0
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "Node Type": "Index Scan",
+                                        "Relation Name": "runtime_events",
+                                        "Index Name": "idx_runtime_events_order_trace_sequence",
+                                        "Actual Rows": 1,
+                                        "Actual Loops": 500,
+                                        "Shared Hit Blocks": 2558,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Node Type": "Hash",
+                    "Actual Rows": 257,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1878,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Subquery Scan",
+                        "Actual Rows": 257,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1878,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Actual Rows": 257,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1878,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Nested Loop",
+                                "Actual Rows": 504,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1878,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Aggregate",
+                                    "Actual Rows": 500,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 0,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "CTE Scan",
+                                        "Actual Rows": 500,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 0,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Node Type": "Index Scan",
+                                    "Relation Name": "executions",
+                                    "Index Name": "idx_executions_order_occurred",
+                                    "Actual Rows": 1,
+                                    "Actual Loops": 500,
+                                    "Shared Hit Blocks": 1878,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "market_data_snapshot_dirty",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14978,
+            "Shared Read Blocks": 1,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2351,
+            "WAL Bytes": 330506,
+            "Plans": [
+              {
+                "Node Type": "Subquery Scan",
+                "Actual Rows": 32,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 14850,
+                "Shared Read Blocks": 1,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 2351,
+                "WAL Bytes": 330506,
+                "Plans": [
+                  {
+                    "Node Type": "Unique",
+                    "Actual Rows": 32,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 14850,
+                    "Shared Read Blocks": 1,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 2351,
+                    "WAL Bytes": 330506,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 14850,
+                        "Shared Read Blocks": 1,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 32,
+                        "Sort Space Type": "Memory",
+                        "WAL Records": 2351,
+                        "WAL Bytes": 330506,
+                        "Plans": [
+                          {
+                            "Node Type": "CTE Scan",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 14850,
+                            "Shared Read Blocks": 1,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 2351,
+                            "WAL Bytes": 330506
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_dirty",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3000,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 2000,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  },
+                  {
+                    "Node Type": "Index Scan",
+                    "Relation Name": "order_lifecycle_dirty",
+                    "Index Name": "order_lifecycle_dirty_pkey",
+                    "Actual Rows": 1,
+                    "Actual Loops": 500,
+                    "Shared Hit Blocks": 2000,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "CTE Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3000,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 41.799,
+      "category": "outer-call",
+      "plan": {
+        "Node Type": "Result",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 18556,
+        "Shared Read Blocks": 1,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 2351,
+        "WAL Bytes": 330506
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 1.971,
+      "category": "claim",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 576,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "Subquery Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 576,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Limit",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 576,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "LockRows",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 576,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Incremental Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 76,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Relation Name": "order_lifecycle_dirty",
+                            "Index Name": "idx_order_lifecycle_dirty_dirtied_at",
+                            "Actual Rows": 786,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 76,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 34.946,
+      "category": "lifecycle-write",
+      "plan": {
+        "Node Type": "Aggregate",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 3000,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 0,
+        "WAL Bytes": 0,
+        "Plans": [
+          {
+            "Node Type": "ProjectSet",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Result",
+                "Actual Rows": 1,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 0,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_state",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14858,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2350,
+            "WAL Bytes": 322651,
+            "Plans": [
+              {
+                "Node Type": "Hash Join",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 7973,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Hash Join",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6095,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Hash Join",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 3537,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Nested Loop",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2000,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "CTE Scan",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 0,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              },
+                              {
+                                "Node Type": "Index Scan",
+                                "Relation Name": "orders",
+                                "Index Name": "orders_pkey",
+                                "Actual Rows": 1,
+                                "Actual Loops": 500,
+                                "Shared Hit Blocks": 2000,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0
+                              }
+                            ]
+                          },
+                          {
+                            "Node Type": "Hash",
+                            "Actual Rows": 37,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1537,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Subquery Scan",
+                                "Actual Rows": 37,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1537,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Unique",
+                                    "Actual Rows": 37,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 1537,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Sort",
+                                        "Actual Rows": 37,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 1537,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "Sort Method": "quicksort",
+                                        "Sort Space Used": 31,
+                                        "Sort Space Type": "Memory",
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0,
+                                        "Plans": [
+                                          {
+                                            "Node Type": "Nested Loop",
+                                            "Actual Rows": 37,
+                                            "Actual Loops": 1,
+                                            "Shared Hit Blocks": 1537,
+                                            "Shared Read Blocks": 0,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "WAL Records": 0,
+                                            "WAL Bytes": 0,
+                                            "Plans": [
+                                              {
+                                                "Node Type": "Aggregate",
+                                                "Actual Rows": 500,
+                                                "Actual Loops": 1,
+                                                "Shared Hit Blocks": 0,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0,
+                                                "Plans": [
+                                                  {
+                                                    "Node Type": "CTE Scan",
+                                                    "Actual Rows": 500,
+                                                    "Actual Loops": 1,
+                                                    "Shared Hit Blocks": 0,
+                                                    "Shared Read Blocks": 0,
+                                                    "Temp Read Blocks": 0,
+                                                    "Temp Written Blocks": 0,
+                                                    "WAL Records": 0,
+                                                    "WAL Bytes": 0
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "Node Type": "Index Scan",
+                                                "Relation Name": "runtime_events",
+                                                "Index Name": "idx_runtime_events_order_modified_lifecycle",
+                                                "Actual Rows": 0,
+                                                "Actual Loops": 500,
+                                                "Shared Hit Blocks": 1537,
+                                                "Shared Read Blocks": 0,
+                                                "Temp Read Blocks": 0,
+                                                "Temp Written Blocks": 0,
+                                                "WAL Records": 0,
+                                                "WAL Bytes": 0
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "Node Type": "Hash",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 2558,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Subquery Scan",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 2558,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Aggregate",
+                                "Actual Rows": 500,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 2558,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Nested Loop",
+                                    "Actual Rows": 558,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 2558,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Aggregate",
+                                        "Actual Rows": 500,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 0,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0,
+                                        "Plans": [
+                                          {
+                                            "Node Type": "CTE Scan",
+                                            "Actual Rows": 500,
+                                            "Actual Loops": 1,
+                                            "Shared Hit Blocks": 0,
+                                            "Shared Read Blocks": 0,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "WAL Records": 0,
+                                            "WAL Bytes": 0
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "Node Type": "Index Scan",
+                                        "Relation Name": "runtime_events",
+                                        "Index Name": "idx_runtime_events_order_trace_sequence",
+                                        "Actual Rows": 1,
+                                        "Actual Loops": 500,
+                                        "Shared Hit Blocks": 2558,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Node Type": "Hash",
+                    "Actual Rows": 257,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1878,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Subquery Scan",
+                        "Actual Rows": 257,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1878,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "WAL Records": 0,
+                        "WAL Bytes": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Actual Rows": 257,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 1878,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 0,
+                            "WAL Bytes": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Nested Loop",
+                                "Actual Rows": 504,
+                                "Actual Loops": 1,
+                                "Shared Hit Blocks": 1878,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "WAL Records": 0,
+                                "WAL Bytes": 0,
+                                "Plans": [
+                                  {
+                                    "Node Type": "Aggregate",
+                                    "Actual Rows": 500,
+                                    "Actual Loops": 1,
+                                    "Shared Hit Blocks": 0,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0,
+                                    "Plans": [
+                                      {
+                                        "Node Type": "CTE Scan",
+                                        "Actual Rows": 500,
+                                        "Actual Loops": 1,
+                                        "Shared Hit Blocks": 0,
+                                        "Shared Read Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "WAL Records": 0,
+                                        "WAL Bytes": 0
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Node Type": "Index Scan",
+                                    "Relation Name": "executions",
+                                    "Index Name": "idx_executions_order_occurred",
+                                    "Actual Rows": 1,
+                                    "Actual Loops": 500,
+                                    "Shared Hit Blocks": 1878,
+                                    "Shared Read Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "WAL Records": 0,
+                                    "WAL Bytes": 0
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "market_data_snapshot_dirty",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 14986,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 2350,
+            "WAL Bytes": 322651,
+            "Plans": [
+              {
+                "Node Type": "Subquery Scan",
+                "Actual Rows": 32,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 14858,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 2350,
+                "WAL Bytes": 322651,
+                "Plans": [
+                  {
+                    "Node Type": "Unique",
+                    "Actual Rows": 32,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 14858,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 2350,
+                    "WAL Bytes": 322651,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Actual Rows": 500,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 14858,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 32,
+                        "Sort Space Type": "Memory",
+                        "WAL Records": 2350,
+                        "WAL Bytes": 322651,
+                        "Plans": [
+                          {
+                            "Node Type": "CTE Scan",
+                            "Actual Rows": 500,
+                            "Actual Loops": 1,
+                            "Shared Hit Blocks": 14858,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "WAL Records": 2350,
+                            "WAL Bytes": 322651
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "ModifyTable",
+            "Relation Name": "order_lifecycle_dirty",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3000,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Actual Rows": 500,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 2000,
+                "Shared Read Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "WAL Records": 0,
+                "WAL Bytes": 0,
+                "Plans": [
+                  {
+                    "Node Type": "CTE Scan",
+                    "Actual Rows": 500,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  },
+                  {
+                    "Node Type": "Index Scan",
+                    "Relation Name": "order_lifecycle_dirty",
+                    "Index Name": "order_lifecycle_dirty_pkey",
+                    "Actual Rows": 1,
+                    "Actual Loops": 500,
+                    "Shared Hit Blocks": 2000,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "WAL Records": 0,
+                    "WAL Bytes": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Node Type": "CTE Scan",
+            "Actual Rows": 500,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3000,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "WAL Records": 0,
+            "WAL Bytes": 0
+          }
+        ]
+      },
+      "jit": null
+    },
+    {
+      "elapsedMs": 40.685,
+      "category": "outer-call",
+      "plan": {
+        "Node Type": "Result",
+        "Actual Rows": 1,
+        "Actual Loops": 1,
+        "Shared Hit Blocks": 18564,
+        "Shared Read Blocks": 0,
+        "Temp Read Blocks": 0,
+        "Temp Written Blocks": 0,
+        "WAL Records": 2350,
+        "WAL Bytes": 322651
+      },
+      "jit": null
+    }
+  ]
+}

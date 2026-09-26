@@ -27,6 +27,7 @@ import java.time.Instant
 import java.util.ArrayDeque
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,6 +38,26 @@ import kotlin.math.max
 private const val STREAM_SUBJECT_HEADER = "reef-stream-subject"
 private const val KAFKA_OFFSET_SEQUENCE_BITS = 48
 private const val KAFKA_OFFSET_SEQUENCE_MASK = (1L shl KAFKA_OFFSET_SEQUENCE_BITS) - 1L
+
+internal data class KafkaSourcePosition(val partition: Int, val offset: Long) {
+    val offsetExclusive: Long get() = offset + 1L
+}
+
+internal fun kafkaSourcePosition(streamSequence: Long): KafkaSourcePosition {
+    require(streamSequence > 0L) { "Kafka stream sequence must be positive: $streamSequence" }
+    val partition = (streamSequence ushr KAFKA_OFFSET_SEQUENCE_BITS).toInt()
+    val logicalOffset = streamSequence and KAFKA_OFFSET_SEQUENCE_MASK
+    require(logicalOffset > 0L) { "Kafka stream sequence has no encoded offset: $streamSequence" }
+    return KafkaSourcePosition(partition = partition, offset = logicalOffset - 1L)
+}
+
+internal fun kafkaOffsetDistance(startExclusive: Long, endExclusive: Long): Long {
+    require(startExclusive >= 0L) { "Kafka start frontier must be non-negative: $startExclusive" }
+    require(endExclusive >= startExclusive) {
+        "Kafka end frontier $endExclusive precedes start frontier $startExclusive"
+    }
+    return endExclusive - startExclusive
+}
 
 class KafkaStreamCommandPublisher(
     private val bootstrapServers: String = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
@@ -50,6 +71,7 @@ class KafkaStreamCommandPublisher(
     private val maxPublishAckMs = AtomicLong(0L)
     private val inFlightSlots = Semaphore(maxInFlight)
     private val inFlight = AtomicInteger(0)
+    private val acceptedFrontiers = ConcurrentHashMap<Int, AcceptedSourceFrontierTracker>()
     private var producerOverride: KafkaCommandProducer? = null
     private val producer by lazy {
         producerOverride ?: KafkaCommandProducerAdapter(
@@ -152,6 +174,7 @@ class KafkaStreamCommandPublisher(
                     completePublish(started, result, IllegalStateException("Kafka publish callback completed without metadata"))
                     return@send
                 }
+                recordAcceptedSourceOffset(metadata.partition(), metadata.offset())
                 completePublish(
                     started,
                     result,
@@ -207,6 +230,13 @@ class KafkaStreamCommandPublisher(
                     publishMaxInFlight = maxInFlight,
                     publishAckLastMs = lastPublishAckMs.get(),
                     publishAckMaxMs = maxPublishAckMs.get(),
+                    sourceTopicFrontiers = topicPartitions.map { partition ->
+                        SourceTopicFrontier(
+                            partition = partition.partition(),
+                            lastOffsetExclusive = ends.getValue(partition).offset()
+                        )
+                    }.sortedBy { it.partition },
+                    acceptedSourceFrontiers = acceptedSourceFrontiers(),
                     producerMetrics = producerMetricsSnapshot()
                 )
             }
@@ -219,6 +249,7 @@ class KafkaStreamCommandPublisher(
                 publishMaxInFlight = maxInFlight,
                 publishAckLastMs = lastPublishAckMs.get(),
                 publishAckMaxMs = maxPublishAckMs.get(),
+                acceptedSourceFrontiers = acceptedSourceFrontiers(),
                 producerMetrics = producerMetricsSnapshot(),
                 error = ex.message ?: "unknown"
             )
@@ -278,6 +309,14 @@ class KafkaStreamCommandPublisher(
         maxPublishAckMs.accumulateAndGet(elapsedMs, ::maxOf)
     }
 
+    private fun recordAcceptedSourceOffset(partition: Int, offset: Long) {
+        acceptedFrontiers.computeIfAbsent(partition) { AcceptedSourceFrontierTracker(partition) }.record(offset)
+    }
+
+    internal fun acceptedSourceFrontiers(): List<AcceptedSourceFrontier> {
+        return acceptedFrontiers.values.map { it.snapshot() }.sortedBy { it.partition }
+    }
+
     private fun producerMetricsSnapshot(): Map<String, Double> {
         return try {
             producer.metrics()
@@ -299,6 +338,29 @@ class KafkaStreamCommandPublisher(
         } catch (_: Exception) {
             emptyMap()
         }
+    }
+}
+
+private class AcceptedSourceFrontierTracker(private val partition: Int) {
+    private val accepted = AtomicLong(0L)
+    private val firstOffsetInclusive = AtomicLong(Long.MAX_VALUE)
+    private val lastOffsetExclusive = AtomicLong(0L)
+
+    fun record(offset: Long) {
+        require(offset >= 0L) { "Kafka offset must be non-negative: $offset" }
+        firstOffsetInclusive.accumulateAndGet(offset, ::minOf)
+        lastOffsetExclusive.accumulateAndGet(offset + 1L, ::maxOf)
+        accepted.incrementAndGet()
+    }
+
+    fun snapshot(): AcceptedSourceFrontier {
+        val first = firstOffsetInclusive.get()
+        return AcceptedSourceFrontier(
+            partition = partition,
+            accepted = accepted.get(),
+            firstOffsetInclusive = first.takeUnless { it == Long.MAX_VALUE } ?: 0L,
+            lastOffsetExclusive = lastOffsetExclusive.get()
+        )
     }
 }
 
@@ -471,7 +533,8 @@ class KafkaVenueEventBatchSource(
     private val groupId: String = RuntimeEnv.string("VENUE_EVENT_MATERIALIZER_GROUP_ID", "reef-venue-event-batch-materializer"),
     private val clientId: String = RuntimeEnv.string("VENUE_EVENT_MATERIALIZER_KAFKA_CLIENT_ID", "reef-platform-runtime-venue-event-materializer")
 ) : VenueEventBatchSource {
-    private val ackedOffsets = mutableMapOf<TopicPartition, java.util.TreeSet<Long>>()
+    private val unacknowledgedVisibleOffsets = mutableMapOf<TopicPartition, java.util.TreeSet<Long>>()
+    private val observedPollOffsets = mutableMapOf<TopicPartition, Long>()
     private val nextCommitOffsets = mutableMapOf<TopicPartition, Long>()
     private val rewindOffsets = mutableMapOf<TopicPartition, Long>()
     private val pendingRecords = ArrayDeque<ConsumerRecord<String, String>>()
@@ -490,7 +553,20 @@ class KafkaVenueEventBatchSource(
             rewindOffsets.clear()
 
             if (pendingRecords.isEmpty()) {
-                pendingRecords.addAll(consumer.poll(timeout).records(topic))
+                val records = consumer.poll(timeout)
+                records.partitions().forEach { topicPartition ->
+                    val current = ensureNextCommitOffset(topicPartition)
+                    val visibleOffsets = unacknowledgedVisibleOffsets
+                        .getOrPut(topicPartition) { sortedSetOf<Long>() }
+                    records.records(topicPartition)
+                        .map(ConsumerRecord<String, String>::offset)
+                        .filterTo(visibleOffsets) { offset -> offset >= current }
+                    observedPollOffsets[topicPartition] = maxOf(
+                        observedPollOffsets[topicPartition] ?: current,
+                        consumer.position(topicPartition)
+                    )
+                }
+                pendingRecords.addAll(records.records(topic))
             }
             val deliveryCount = minOf(batchSize, pendingRecords.size)
             return buildList(deliveryCount) {
@@ -517,14 +593,19 @@ class KafkaVenueEventBatchSource(
         }
     }
 
-    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>) {
+    override fun ackBatch(deliveries: List<VenueEventBatchDelivery>): VenueEventBatchAckResult {
         val kafkaDeliveries = deliveries.map { delivery ->
             require(delivery is KafkaVenueEventBatchDelivery) {
                 "Kafka venue-event source received a non-Kafka delivery"
             }
             delivery
         }
-        recordAcks(kafkaDeliveries.map { it.topicPartition to it.offset })
+        val committedFrontiers = recordAcks(kafkaDeliveries.map { it.topicPartition to it.offset })
+        return VenueEventBatchAckResult(
+            kafkaDeliveries
+                .filter { delivery -> delivery.offset < committedFrontiers.getValue(delivery.topicPartition) }
+                .map { delivery -> delivery.streamSequence }
+        )
     }
 
     private fun openConsumer(): KafkaConsumer<String, String> {
@@ -563,36 +644,42 @@ class KafkaVenueEventBatchSource(
         recordAcks(listOf(topicPartition to offset))
     }
 
-    private fun recordAcks(offsets: List<Pair<TopicPartition, Long>>) {
-        synchronized(this) {
+    private fun recordAcks(offsets: List<Pair<TopicPartition, Long>>): Map<TopicPartition, Long> {
+        return synchronized(this) {
+            val touchedPartitions = offsets.map { it.first }.distinct()
             offsets.forEach { (topicPartition, offset) ->
                 val next = ensureNextCommitOffset(topicPartition)
                 if (offset >= next) {
-                    ackedOffsets.getOrPut(topicPartition) { sortedSetOf<Long>() }.add(offset)
+                    unacknowledgedVisibleOffsets
+                        .getOrPut(topicPartition) { sortedSetOf<Long>() }
+                        .remove(offset)
                 }
             }
-            val commitOffsets = offsets.map { it.first }.distinct().mapNotNull { topicPartition ->
+            val commitOffsets = touchedPartitions.mapNotNull { topicPartition ->
                 val current = ensureNextCommitOffset(topicPartition)
-                val acked = ackedOffsets.getOrPut(topicPartition) { sortedSetOf<Long>() }
-                var next = current
-                while (acked.contains(next)) next += 1
+                val next = kafkaVisibleCommitCandidate(
+                    currentCommittedOffset = current,
+                    observedPollOffset = observedPollOffsets[topicPartition] ?: current,
+                    unacknowledgedVisibleOffsets = unacknowledgedVisibleOffsets[topicPartition].orEmpty()
+                )
                 if (next > current) topicPartition to next else null
             }.toMap()
-            if (commitOffsets.isEmpty()) return
-
-            try {
-                consumer.commitSync(commitOffsets.mapValues { OffsetAndMetadata(it.value) })
-            } catch (ex: Exception) {
-                commitOffsets.forEach { (topicPartition, _) ->
-                    val current = ensureNextCommitOffset(topicPartition)
-                    rewindOffsets[topicPartition] = minOf(rewindOffsets[topicPartition] ?: current, current)
+            if (commitOffsets.isNotEmpty()) {
+                try {
+                    consumer.commitSync(commitOffsets.mapValues { OffsetAndMetadata(it.value) })
+                } catch (ex: Exception) {
+                    commitOffsets.forEach { (topicPartition, _) ->
+                        val current = ensureNextCommitOffset(topicPartition)
+                        rewindOffsets[topicPartition] = minOf(rewindOffsets[topicPartition] ?: current, current)
+                    }
+                    throw ex
                 }
-                throw ex
+                commitOffsets.forEach { (topicPartition, next) ->
+                    nextCommitOffsets[topicPartition] = next
+                    unacknowledgedVisibleOffsets[topicPartition]?.headSet(next)?.clear()
+                }
             }
-            commitOffsets.forEach { (topicPartition, next) ->
-                nextCommitOffsets[topicPartition] = next
-                ackedOffsets[topicPartition]?.headSet(next)?.clear()
-            }
+            touchedPartitions.associateWith(::ensureNextCommitOffset)
         }
     }
 
@@ -611,7 +698,8 @@ class KafkaVenueEventBatchSource(
 
     private fun clearPartitionState(partitions: Collection<TopicPartition>) {
         partitions.forEach { topicPartition ->
-            ackedOffsets.remove(topicPartition)
+            unacknowledgedVisibleOffsets.remove(topicPartition)
+            observedPollOffsets.remove(topicPartition)
             nextCommitOffsets.remove(topicPartition)
             rewindOffsets.remove(topicPartition)
             pendingRecords.removeIf { record ->
@@ -624,6 +712,21 @@ class KafkaVenueEventBatchSource(
         val prefix = RuntimeEnv.string("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.venue.events.v1").trim('.')
         return "$prefix.${partitionToken(partition)}.VenueEventBatch"
     }
+}
+
+internal fun kafkaVisibleCommitCandidate(
+    currentCommittedOffset: Long,
+    observedPollOffset: Long,
+    unacknowledgedVisibleOffsets: Collection<Long>
+): Long {
+    require(currentCommittedOffset >= 0L) { "Kafka committed offset must be non-negative" }
+    require(observedPollOffset >= currentCommittedOffset) {
+        "Kafka observed poll offset $observedPollOffset precedes committed offset $currentCommittedOffset"
+    }
+    require(unacknowledgedVisibleOffsets.all { it in currentCommittedOffset until observedPollOffset }) {
+        "Kafka visible offsets must be within the observed uncommitted poll interval"
+    }
+    return unacknowledgedVisibleOffsets.minOrNull() ?: observedPollOffset
 }
 
 internal fun kafkaVenueEventConsumerProperties(
@@ -688,7 +791,7 @@ private class KafkaVenueEventBatchDelivery(
     }
 }
 
-private fun kafkaStreamSequence(partition: Int, offset: Long): Long {
+internal fun kafkaStreamSequence(partition: Int, offset: Long): Long {
     val logicalOffset = offset + 1L
     require(partition >= 0) { "Kafka partition must be non-negative: $partition" }
     require(logicalOffset in 1L..KAFKA_OFFSET_SEQUENCE_MASK) {
