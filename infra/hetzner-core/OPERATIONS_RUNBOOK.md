@@ -289,12 +289,11 @@ use disposable DigitalOcean workers. Never use this permanent host as a
 benchmark target.
 
 `runtime/0069_logged_projection_dirty_queues.sql` rewrites two UNLOGGED
-projection queues under exclusive locks. The `Application Service Deploy`
-workflow fails before sending migrations while the `backbone-production`
-environment variable `REEF_RUNTIME_0069_ROLLOUT_COMPLETE` is unset. Do not set
-it until the migration ledger and both LOGGED relations are verified on the
-target. The host migration runner also rejects automatic application of a
-pending 0069, even if an opt-in flag reaches the forced SSH command.
+projection queues under exclusive locks. It is applied by the Reef run-plane
+migration runner on disposable workers. The backbone migration runner skips
+0069 during normal application deploys, even if an opt-in flag reaches the
+forced SSH command. Backbone service deploys remain independent of this
+optional conversion.
 
 Before applying 0069, use the disposable-worker rehearsal evidence and compare
 its queue sizes with the current deployment target. Rehearse again on an
@@ -351,10 +350,8 @@ both `relpersistence` values are `p`, the ledger row exists, and runtime health
 and projection progress recover. This is a forward-only durability change:
 older application images work with LOGGED queues, so an image rollback does
 not require a schema downgrade. Keep the queues LOGGED after rollback;
-restoring UNLOGGED would reintroduce crash-loss risk. Then set
-`REEF_RUNTIME_0069_ROLLOUT_COMPLETE=true` in the GitHub
-`backbone-production` environment and rerun `Application Service Deploy` for
-the intended master SHA. This releases the workflow gate for later deployments.
+restoring UNLOGGED would reintroduce crash-loss risk. Later backbone application
+deploys skip the already-applied migration through the checksum ledger.
 
 ## Bootstrap Order
 

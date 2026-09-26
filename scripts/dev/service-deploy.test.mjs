@@ -234,11 +234,11 @@ try {
     dirtyQueueFixture.bin,
     { REEF_APPLY_RUNTIME_0069: "1" },
   );
-  assert.notEqual(automatic.status, 0);
-  assert.match(automatic.stderr, /runtime\/0069 requires an explicit quiesced operator rollout/);
+  assert.equal(automatic.status, 0, `${automatic.stdout}\n${automatic.stderr}`);
+  assert.match(automatic.stdout, /skip runtime\/0069_logged_projection_dirty_queues\.sql/);
   const automaticLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
   assert.match(automaticLog, /compose exec -T postgres psql/);
-  assert.doesNotMatch(automaticLog, /compose up .*platform-runtime/);
+  assert.match(automaticLog, /compose up .*platform-runtime/);
   const automaticSql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
   assert.doesNotMatch(automaticSql, /ALTER TABLE runtime\..* SET LOGGED/);
 
@@ -382,60 +382,7 @@ const imageWorkflow = await readFile(
   join(repoRoot, ".github/workflows/container-images.yml"),
   "utf8",
 );
-const gateBlock = workflow
-  .split("      - name: Gate runtime 0069 rollout\n")[1]
-  ?.split("      - name: Package forward migrations\n")[0];
-assert.ok(gateBlock);
-assert.match(gateBlock, /vars\.REEF_RUNTIME_0069_ROLLOUT_COMPLETE/);
-const gateScript = gateBlock
-  .split("        run: |\n")[1]
-  ?.split("\n")
-  .map((line) => line.replace(/^ {10}/, ""))
-  .join("\n");
-assert.ok(gateScript);
-const gateRoot = await mkdtemp(join(tmpdir(), "reef-runtime-0069-gate-"));
-try {
-  const git = (...args) => {
-    const result = spawnSync("git", args, { cwd: gateRoot, encoding: "utf8" });
-    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    return result.stdout.trim();
-  };
-  git("init", "-q");
-  git("config", "user.name", "Reef Test");
-  git("config", "user.email", "test@reef.invalid");
-  git("config", "commit.gpgsign", "false");
-  git("commit", "--allow-empty", "-q", "-m", "before runtime 0069");
-  const beforeMigration = git("rev-parse", "HEAD");
-  const runGate = (complete, targetSha) => spawnSync("bash", ["-c", gateScript], {
-    cwd: gateRoot,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      RUNTIME_0069_ROLLOUT_COMPLETE: complete,
-      TARGET_SHA: targetSha,
-    },
-  });
-  assert.equal(runGate("", beforeMigration).status, 0);
-  const migrationDir = join(gateRoot, "scripts", "dev", "db", "migrations", "runtime");
-  await mkdir(migrationDir, { recursive: true });
-  const migrationPath = join(migrationDir, "0069_logged_projection_dirty_queues.sql");
-  await writeFile(migrationPath, "SELECT 1;\n");
-  git("add", "scripts/dev/db/migrations/runtime/0069_logged_projection_dirty_queues.sql");
-  git("commit", "-q", "-m", "add runtime 0069");
-  const withMigration = git("rev-parse", "HEAD");
-  const pending = runGate("", withMigration);
-  assert.notEqual(pending.status, 0);
-  assert.match(pending.stderr, /quiesced operator rollout/);
-  assert.equal(runGate("true", withMigration).status, 0);
-  await rm(migrationPath);
-  git("add", "-u");
-  git("commit", "-q", "-m", "remove runtime 0069 file");
-  const afterRemoval = git("rev-parse", "HEAD");
-  assert.notEqual(runGate("", afterRemoval).status, 0);
-  assert.equal(runGate("", beforeMigration).status, 0);
-} finally {
-  await rm(gateRoot, { recursive: true, force: true });
-}
+assert.doesNotMatch(workflow, /Gate runtime 0069 rollout|REEF_RUNTIME_0069_ROLLOUT_COMPLETE/);
 assert.match(workflow, /workflows:\s*\n\s*- Container Images/);
 assert.match(workflow, /git merge-base --is-ancestor "\$TARGET_SHA" origin\/master/);
 assert.match(workflow, /tailscale\/github-action@[a-f0-9]{40} # v4/);

@@ -70,21 +70,6 @@ jobs:
           git fetch --no-tags origin master:refs/remotes/origin/master
           git merge-base --is-ancestor "$TARGET_SHA" origin/master
 
-      - name: Gate runtime 0069 rollout
-        env:
-          RUNTIME_0069_ROLLOUT_COMPLETE: ${{ vars.REEF_RUNTIME_0069_ROLLOUT_COMPLETE }}
-          TARGET_SHA: ${{ steps.target.outputs.sha }}
-        run: |
-          set -euo pipefail
-          # Keep later commits gated even if the migration file is removed;
-          # commits before 0069 remain deployable for rollback.
-          migration_path=scripts/dev/db/migrations/runtime/0069_logged_projection_dirty_queues.sql
-          if [ -n "$(git log -1 --format=%H "$TARGET_SHA" -- "$migration_path")" ] &&
-             [ "$RUNTIME_0069_ROLLOUT_COMPLETE" != "true" ]; then
-            echo "runtime/0069 requires a quiesced operator rollout before application service deployment" >&2
-            exit 1
-          fi
-
       - name: Package forward migrations
         run: |
           set -euo pipefail

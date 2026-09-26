@@ -125,8 +125,8 @@ for domain in "${domains[@]}"; do
 
     if [[ "$migration_id" == "runtime/0069_logged_projection_dirty_queues.sql" ]]; then
       if [[ "${REEF_AUTOMATED_DEPLOY:-0}" == "1" || "${REEF_APPLY_RUNTIME_0069:-0}" != "1" ]]; then
-        echo "runtime/0069 requires an explicit quiesced operator rollout; automatic migration is blocked" >&2
-        exit 1
+        echo "skip $migration_id (backbone conversion requires separate operator opt-in)"
+        continue
       fi
       # Include other Compose projects on this host; a fresh host with no
       # runtime containers requires a separate explicit bootstrap opt-in.
