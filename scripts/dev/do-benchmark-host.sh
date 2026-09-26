@@ -80,6 +80,7 @@ optional:
   REEF_DO_MAX_PROJECTION_DB_RETRIES=0
   REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS=1
   REEF_DO_PROJECTION_STAGE=full|command-status|timeline
+  REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1 (materializer-projection only)
   REEF_DO_IMAGE_MODE=dockerhub|source
   REEF_DO_STAGE_LOG_TAIL=80
 
@@ -161,6 +162,7 @@ cmd_plan_goal() {
   printf '  max_projection_db_deadlocks=%s\n' "${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-none}"
   printf '  max_projection_db_retries=%s\n' "${REEF_DO_MAX_PROJECTION_DB_RETRIES:-none}"
   printf '  projection_stage=%s\n' "${REEF_DO_PROJECTION_STAGE:-full}"
+  printf '  postmatch_shadow_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
   printf '  stream_ack_projector_2_partitions=%s\n' "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-none}"
@@ -206,6 +208,10 @@ cmd_start() {
 }
 
 cmd_run() {
+  if [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ] && [ "$(benchmark_profile)" != "materializer-projection" ]; then
+    echo "post-match shadow diagnostic requires materializer-projection profile" >&2
+    return 2
+  fi
   provision_stack
   sync_repo
   local run_id
@@ -462,6 +468,7 @@ remote_run_benchmark() {
     MARKET_DATA_PROJECTOR_3_ENABLED="${MARKET_DATA_PROJECTOR_3_ENABLED:-}" \
     REEF_DO_MAX_PROJECTION_DB_RETRIES="${REEF_DO_MAX_PROJECTION_DB_RETRIES:-}" \
     REEF_DO_PROJECTION_STAGE="${REEF_DO_PROJECTION_STAGE:-}" \
+    REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC="${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" \
     PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED="${PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED:-false}" \
     DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-}" <<'REMOTE'
 set -euo pipefail
@@ -582,8 +589,23 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-${REEF_DO_MAX_PROJECTION_DB_RETRIES:-0}}"
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS:-60000}"
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS:-1000}"
+    if [ "$REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC" = "1" ]; then
+      export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}postmatch"
+      export POSTMATCH_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
+      export POSTMATCH_SHADOW_WORKERS_ENABLED=true
+      export REEF_POSTMATCH_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+      export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,postmatch-postgres"
+      export DEV_STRESS_DB_SCHEMAS="${DEV_STRESS_DB_SCHEMAS:-runtime,boundary,command_log,postmatch}"
+      postmatch_partitions="$STREAM_ACK_PROJECTOR_0_PARTITIONS,$STREAM_ACK_PROJECTOR_1_PARTITIONS,$STREAM_ACK_PROJECTOR_2_PARTITIONS,$STREAM_ACK_PROJECTOR_3_PARTITIONS"
+    fi
   fi
-  run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer
+  stress_status=0
+  run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer || stress_status=$?
+  if [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ]; then
+    run_stage postmatch-shadow-check node scripts/dev/postmatch-shadow-check.mjs \
+      "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/postmatch-shadow-check.json" 120 || stress_status=$?
+  fi
+  if [ "$stress_status" -ne 0 ]; then exit "$stress_status"; fi
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   arena_report="$artifact_dir/arena-local-tick-run.json"
   arena_summary="$artifact_dir/arena-local-tick-run.summary.json"
@@ -665,9 +687,9 @@ artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
 log_dir="$artifact_dir/logs"
 mkdir -p "$log_dir"
 cd "$REMOTE_DIR"
-docker compose -f compose.base.yml -f compose.local.yml ps > "$log_dir/docker-compose-ps.txt" 2>&1 || true
+docker compose -f compose.base.yml -f compose.local.yml --profile '*' ps > "$log_dir/docker-compose-ps.txt" 2>&1 || true
 docker stats --no-stream > "$log_dir/docker-stats.txt" 2>&1 || true
-docker compose -f compose.base.yml -f compose.local.yml logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 || true
+docker compose -f compose.base.yml -f compose.local.yml --profile '*' logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 || true
 free -h > "$log_dir/free.txt" 2>&1 || true
 df -h > "$log_dir/df.txt" 2>&1 || true
 uptime > "$log_dir/uptime.txt" 2>&1 || true

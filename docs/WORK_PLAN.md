@@ -43,6 +43,12 @@ public routes: exact response parity, source-lag validation, and bounded work
 for aged participant histories remain cutover gates. The audit and settlement
 consumers remain separate architecture workstreams.
 
+[#382](https://github.com/dills122/reef/pull/382) landed that read slice.
+Next: an opt-in disposable-droplet shakedown of live and market shadow workers,
+checking closed-cohort source membership and both frontiers on the generated
+benchmark stream. This is a diagnostic before audit/settlement cutover; record
+any executed run in the throughput ledger with its exact scope.
+
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents

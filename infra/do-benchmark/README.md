@@ -53,6 +53,33 @@ smoke Compose stack and volumes before starting measured stress. This keeps the
 benchmark's Kafka topics, ownership leases, databases, and counters isolated
 from the preflight proof.
 
+### Post-match shadow shakedown
+
+After live and market workers are available, use an opt-in diagnostic on a
+disposable droplet. This runs the existing `materializer-projection` fixture
+with the isolated `postmatch-postgres` service and binds shadow workers to the
+benchmark's generated event stream. The smoke stack is still reset first.
+
+```bash
+REEF_DO_CONFIRM_DESTROYABLE=1 \
+REEF_DO_BENCHMARK_PROFILE=materializer-projection \
+REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1 \
+REEF_DO_SIZE=c-16 \
+REEF_DO_STRESS_RATES=2500 \
+REEF_DO_STRESS_DURATION=60s \
+scripts/dev/do-benchmark-host.sh run-destroy
+```
+
+The remote run writes `postmatch-shadow-check.json` beside the stress report,
+including source generation, per-partition source/live/market frontiers, and
+SHA-256 of the complete sorted canonical-to-live receipt membership. Missing
+partitions, stale generation, lag, empty source, and membership differences
+fail the diagnostic. Stress failure and shadow failure are both retained in
+the fetched artifacts; `run-destroy` removes the droplet even when either
+stage fails. This is closed-cohort wiring and replay evidence, not a 10k/s
+capacity result or complete business-row parity. The integrated capacity gate
+follows audit/settlement ownership and route cutover.
+
 Goal-driven sizing is opt-in. Without a goal or target, the table above remains
 the default. Use `plan-goal` before provisioning to see the resolved DO size,
 rates, worker count, duration, and report gates:
