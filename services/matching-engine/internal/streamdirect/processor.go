@@ -69,6 +69,7 @@ type Processor struct {
 	publisher EventBatchPublisher
 	config    ProcessorConfig
 	stats     *Stats
+	now       func() time.Time
 }
 
 type ProcessorConfig struct {
@@ -134,6 +135,8 @@ type VenueEventBatch struct {
 	LastSequence    uint64               `json:"lastSequence"`
 	CommandCount    int                  `json:"commandCount"`
 	CreatedAt       string               `json:"createdAt"`
+	WorkFinishedAt  string               `json:"workFinishedAt,omitempty"`
+	TimingChecksum  string               `json:"timingChecksum,omitempty"`
 	PayloadChecksum string               `json:"payloadChecksum"`
 	ChecksumAlgo    string               `json:"payloadChecksumAlgorithm,omitempty"`
 	Outcomes        []CommandOutcomeFact `json:"outcomes"`
@@ -178,6 +181,7 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 		publisher: publisher,
 		config:    config,
 		stats:     stats,
+		now:       time.Now,
 	}
 }
 
@@ -247,7 +251,7 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	if len(deliveries) == 0 {
 		return 0, nil
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := p.now().UTC().Format(time.RFC3339Nano)
 	p.stats.Fetched.Add(uint64(len(deliveries)))
 	p.stats.LastFetchedAt.Store(now)
 	p.stats.LastFetchedSequence.Store(maxDeliverySequence(deliveries))
@@ -413,23 +417,25 @@ func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt strin
 		return VenueEventBatch{}, ackable, rollback, nil
 	}
 	batch := VenueEventBatch{
-		BatchID:       fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
-		ShardID:       p.config.ShardID,
-		Partition:     p.config.Partition,
-		CommandStream: p.config.CommandStream,
-		EventStream:   p.config.EventStreamName,
-		FirstSequence: firstSeq,
-		LastSequence:  lastSeq,
-		CommandCount:  len(outcomes),
-		CreatedAt:     createdAt,
-		ChecksumAlgo:  venueEventBatchChecksumAlgorithm,
-		Outcomes:      outcomes,
+		BatchID:        fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
+		ShardID:        p.config.ShardID,
+		Partition:      p.config.Partition,
+		CommandStream:  p.config.CommandStream,
+		EventStream:    p.config.EventStreamName,
+		FirstSequence:  firstSeq,
+		LastSequence:   lastSeq,
+		CommandCount:   len(outcomes),
+		CreatedAt:      createdAt,
+		WorkFinishedAt: p.now().UTC().Format(time.RFC3339Nano),
+		ChecksumAlgo:   venueEventBatchChecksumAlgorithm,
+		Outcomes:       outcomes,
 	}
 	checksum, err := venueEventBatchChecksum(batch)
 	if err != nil {
 		return VenueEventBatch{}, ackable, rollback, err
 	}
 	batch.PayloadChecksum = checksum
+	batch.TimingChecksum = venueEventBatchTimingChecksum(batch)
 	if recordStats {
 		p.stats.Processed.Add(uint64(len(outcomes)))
 	}

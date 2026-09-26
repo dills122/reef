@@ -4,6 +4,8 @@ These documents define how Reef should be built as the repository grows into the
 
 ## Documents
 
+- [Throughput Baselines](../THROUGHPUT_BASELINES.md): mandatory first read for throughput work; authoritative scoped evidence, historical attempts, corrections and recording rules
+
 - [Onboarding](../ONBOARDING.md): canonical clean-machine prerequisites,
   dependency bootstrap, first successful local smoke, work-area setup, hosted
   access boundaries, and troubleshooting

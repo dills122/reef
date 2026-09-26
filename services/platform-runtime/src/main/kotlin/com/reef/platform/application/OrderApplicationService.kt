@@ -338,6 +338,9 @@ class OrderApplicationService(
         }
     }
 
+    fun committedProjectionFrontier(projectionName: String, partitions: List<Int>) =
+        runtimePersistence.committedProjectionFrontier(projectionName, partitions)
+
     fun projectionStatus(
         projectionName: String,
         partitions: List<Int> = emptyList(),
@@ -345,6 +348,18 @@ class OrderApplicationService(
     ): ProjectionStatus {
         return runtimePersistence.projectionStatus(projectionName, partitions, source)
     }
+
+    fun projectionStatusWithoutCount(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus = runtimePersistence.projectionStatusWithoutCount(projectionName, partitions, source)
+
+    fun projectionLag(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ) = runtimePersistence.projectionLag(projectionName, partitions, source)
 
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return HotPathMetrics.time("runtime.persistence.materializeVenueEventBatch") {
@@ -772,6 +787,11 @@ class OrderApplicationService(
 
     fun projectOrderLifecycleState(batchSize: Int) = runtimePersistence.projectOrderLifecycleState(batchSize)
 
+    fun projectionDirtyQueueStats() = runtimePersistence.projectionDirtyQueueStats()
+    fun projectionDirtyQueueMarkerStats() = runtimePersistence.projectionDirtyQueueMarkerStats()
+    fun projectionLagUpTo(projectionName: String, partitions: List<Int>, source: String, threshold: Long) =
+        runtimePersistence.projectionLagUpTo(projectionName, partitions, source, threshold)
+
     fun orderLifecycleState(orderId: String) = runtimePersistence.orderLifecycleState(orderId)
 
     fun refreshMarketDataSnapshots(
@@ -782,8 +802,9 @@ class OrderApplicationService(
     fun projectMarketDataSnapshots(
         projectionName: String = "market-data-top-of-book",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes",
-        batchSize: Int = 500
-    ) = runtimePersistence.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize)
+        batchSize: Int = 500,
+        projectLifecycleFirst: Boolean = true
+    ) = runtimePersistence.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize, projectLifecycleFirst)
 
     fun marketDataSnapshot(
         instrumentId: String,

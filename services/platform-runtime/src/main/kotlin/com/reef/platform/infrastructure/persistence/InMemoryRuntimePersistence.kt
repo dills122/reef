@@ -26,6 +26,7 @@ import java.time.Instant
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val lock = Any()
+    private val databaseGeneration = java.util.UUID.randomUUID().toString()
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
     private val venueEventBatches = linkedMapOf<String, VenueEventBatchFact>()
     private val commandOutcomes = linkedMapOf<String, CanonicalCommandOutcome>()
@@ -630,6 +631,26 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         }
     }
 
+    override fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier = synchronized(lock) {
+        val rows = projectionWatermarks[projectionName].orEmpty()
+            .filterKeys { partitions.isEmpty() || it in partitions }
+            .map { (partition, sequence) -> CommittedProjectionWatermark(partition, sequence, "") }
+        CommittedProjectionFrontier(projectionName, partitions.toList(), rows.sortedBy { it.partitionId }, databaseGeneration)
+    }
+
+    override fun projectionDirtyQueueStats(): ProjectionDirtyQueueStats {
+        synchronized(lock) {
+            return ProjectionDirtyQueueStats(
+                orderLifecyclePending = orderLifecycleDirty.size.toLong(),
+                orderLifecycleOldestDirtiedAt = "",
+                marketDataPending = marketDataSnapshotDirty.size.toLong(),
+                marketDataOldestDirtiedAt = "",
+                databaseSnapshotAt = Instant.now().toString(),
+                databaseGeneration = databaseGeneration
+            )
+        }
+    }
+
     override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         synchronized(lock) {
         val canonicalOutcomes = canonicalOutcomes(batch)
@@ -889,11 +910,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun projectMarketDataSnapshots(
         projectionName: String,
         sourceProjectionName: String,
-        batchSize: Int
+        batchSize: Int,
+        projectLifecycleFirst: Boolean
     ): Long {
         synchronized(lock) {
         if (batchSize <= 0) return 0
-        projectOrderLifecycleState(batchSize)
+        if (projectLifecycleFirst) projectOrderLifecycleState(batchSize)
         val batch = marketDataSnapshotDirty.take(batchSize)
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }

@@ -62,9 +62,30 @@ data class StreamCommandHealthSnapshot(
     val publishLaneSnapshots: List<StreamCommandPublishLaneSnapshot> = emptyList(),
     val publishAckLastMs: Long = 0L,
     val publishAckMaxMs: Long = 0L,
+    val sourceTopicFrontiers: List<SourceTopicFrontier> = emptyList(),
+    val acceptedSourceFrontiers: List<AcceptedSourceFrontier> = emptyList(),
     val producerMetrics: Map<String, Double> = emptyMap(),
     val checkedAt: Instant = Instant.now(),
     val error: String = ""
+)
+
+/**
+ * Durable Kafka source membership observed by the intake producer.
+ *
+ * Offsets follow Kafka's native contract: the lower bound is inclusive and
+ * the frontier is exclusive. Comparing the accepted count with the offset
+ * span lets the benchmark reject a cohort that contains interleaved records.
+ */
+data class AcceptedSourceFrontier(
+    val partition: Int,
+    val accepted: Long,
+    val firstOffsetInclusive: Long,
+    val lastOffsetExclusive: Long
+)
+
+data class SourceTopicFrontier(
+    val partition: Int,
+    val lastOffsetExclusive: Long
 )
 
 data class StreamCommandPublishLaneSnapshot(

@@ -176,6 +176,54 @@ Default pass gates:
 
 Default report gates validate measured stress reports, expected rates, no unexpected `5xx`, no unallowed failures, profile-specific worker/direct/materializer health, and telemetry probes. Set `REEF_DO_MAX_P95_MS` or `REEF_DO_MAX_P99_MS` directly, or set `REEF_DO_TARGET_P95_MS` / `REEF_DO_TARGET_P99_MS` when using goal mode, to make tail-latency targets fail the report check. The check prints a normalized evidence summary for attempted, accepted, direct-acked, materialized, projected, lag, p95, and p99, and writes `do-benchmark-evidence-summary.json` into the fetched artifact directory. Embedded load-tester trace checks are diagnostic for submit-only stream-ack stress runs because not every accepted submit produces a projected runtime event; set `REEF_DO_REQUIRE_TRACE_CHECKS=1` when running a profile where every sampled command is expected to have trace events.
 
+Optional sustained downstream freshness gate (postprocessing only):
+
+```bash
+REEF_DO_REPORT_PROFILE=materializer-projection \
+REEF_DO_REQUIRED_RATES=5000 \
+REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS=1 \
+node scripts/dev/do-benchmark-check.mjs /path/to/fetched/artifacts
+```
+
+The same flag is displayed by host `plan-goal` and forwarded by `check`/run
+report validation. It defaults off and does not change provisioning, runner
+settings, or the Task 1 instrumentation-overhead A/B comparison. Enable it for
+sustained freshness acceptance after measurement authority is established.
+
+Each complete command-weighted `sourceToCanonical`, `sourceToLifecycle`, and
+`sourceToMarketData` observation bound must satisfy fixed p95 ≤5000 ms,
+p99 ≤10000 ms, and maximum ≤30000 ms. No argument or environment setting
+can relax these limits. The gate also requires exact authority labels and all
+upstream/downstream authority checks, accepted-count reconciliation, complete
+residence counts, valid ordered percentiles, ≥99% scheduled-demand completion
+with zero drops, explicit empty final dirty queues, idle maintainers, and zero
+canonical lag. Planned `config.Duration` (nanoseconds) and observed
+`durationSeconds` must each cover at least 300 seconds; valid `startedAt` and
+`finishedAt` timestamps must agree with observed duration within 2 ms (timestamp
+truncation tolerance). Short or inconsistent runs fail even with fresh final
+state. Target rate remains controlled by existing rate/minimum-throughput gates.
+Current baseline requires exactly one enabled lifecycle maintainer and one enabled
+market maintainer; a different topology requires an explicit validation plan. Missing/null/malformed evidence fails. Results appear under
+`sustainedDownstreamFreshness` in `do-benchmark-evidence-summary.json`.
+Market status `sourceProjectionName` must also match actual canonical projector
+`projectionName` and both downstream covering markers' source names. Standalone
+`venue-event-materializer-stress.mjs` preserves an explicit canonical name; absent
+one, it uses Compose's existing `runtime-normalized-submit` namespace and defaults
+an unset market source to that name. Full-projection preflight rejects explicit
+mismatches, including per-instance lifecycle/market maintainers. It never renames
+existing watermark namespaces. Standard `do-benchmark-host.sh` already aligns both
+names; no host/runtime default change is needed.
+
+Prior standalone/custom profiles could combine canonical `runtime-normalized-submit`
+with market source `runtime-normalized-venue-outcomes`. Captured local A/B v3
+instrumented sample 1 has exactly that status mismatch while both covering markers
+name `runtime-normalized-submit`; the new binding check rejects it. Earlier cohort
+counts/coverage do not prove those public snapshot freshness metadata were valid.
+Correct profile binding and collect new read evidence; do not relabel old reports.
+
+These conservative sampled observation bounds are separate from HTTP latency;
+this gate alone does not prove capacity headroom or crash/rebuild equivalence.
+
 Optional hardening gates:
 
 - `REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS=<count>` fails materializer
@@ -189,3 +237,8 @@ durable and clean through `6.49k` accepted/materialized rps, but still showed
 15/16 active direct-stream partitions and roughly `4x` positive-partition skew.
 Use the gates when the goal is partition-spread hardening, not just throughput
 or latency proof.
+
+Benchmark evidence must live in persistent host storage (for example,
+`/home/reefbench/benchmarks/`), including private raw reports and effective config.
+Do not use `/tmp` for artifacts needed after reboot or resize. Before either,
+verify persistent copies and hashes; aggregate exports do not replace raw evidence.

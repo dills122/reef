@@ -103,6 +103,59 @@ class PostgresProjectionBatchClaimIntegrationTest {
     }
 
     @Test
+    fun cleanupSkipsLockedExpiredClaimsAndCleansOtherEligibleClaims() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        assertCleanupSkipsLockedClaims(dataSource)
+    }
+
+    @Test
+    fun compatBootstrapPreservesSkipLockedCleanup() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { ProjectionBatchClaimBootstrap.install(it, PostgresRuntimeSqlNames()) }
+        }
+        assertCleanupSkipsLockedClaims(dataSource)
+    }
+
+    private fun assertCleanupSkipsLockedClaims(dataSource: DataSource) {
+        val locked = fixture("cleanup-locked")
+        val available = fixture("cleanup-available")
+        val deadline = databaseNow(dataSource).plusMillis(100)
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            for (item in listOf(locked, available)) {
+                assertTrue(claim(conn, item, deadline, retryHorizonMs = 100).first)
+                upsertWatermark(conn, item.projectionName, item.candidate.partitionId, item.candidate.streamSequence + 1)
+                complete(conn, item.identity, 1)
+            }
+            conn.commit()
+        }
+        waitUntilDatabaseAfter(dataSource, deadline.plusMillis(100))
+
+        dataSource.connection.use { holder ->
+            holder.autoCommit = false
+            holder.prepareStatement("SELECT batch_identity FROM runtime.projection_batch_claims WHERE batch_identity = ? FOR UPDATE").use { ps ->
+                ps.setString(1, locked.identity)
+                ps.executeQuery().use { rs -> assertTrue(rs.next()) }
+            }
+            dataSource.connection.use { cleaner ->
+                cleaner.createStatement().use { statement ->
+                    statement.execute("SET statement_timeout = '1s'")
+                    statement.executeQuery("SELECT runtime.runtime_cleanup_projection_batch_claims(1000)").use { rs ->
+                        assertTrue(rs.next())
+                        assertTrue(rs.getLong(1) >= 1)
+                    }
+                }
+            }
+            assertEquals(1, countClaims(dataSource, locked.projectionName))
+            assertEquals(0, countClaims(dataSource, available.projectionName))
+            holder.rollback()
+        }
+        cleanup(dataSource)
+        assertEquals(0, countClaims(dataSource, locked.projectionName))
+    }
+
+    @Test
     fun cleanupRetainsAuthorityUntilEveryStaleSelectorDeadlineHasExpired() {
         val dataSource = migratedDataSourceOrNull() ?: return
         val fixture = fixture("staggered-cleanup")

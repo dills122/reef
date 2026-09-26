@@ -4,7 +4,10 @@ import https from "node:https";
 import { composePsqlArgs } from "./lib/compose-psql.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
-import { assertStableProjectionReplaySnapshot } from "./lib/projection-replay-proof.mjs";
+import {
+  assertClaimGuardedProjectionReplay,
+  assertStableProjectionReplaySnapshot,
+} from "./lib/projection-replay-proof.mjs";
 
 loadDotEnv();
 
@@ -385,10 +388,11 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
  * The venue-event-batch projector (STREAM_ACK_PROJECTOR_ENABLED=true) is already
  * running continuously against this stack. This rewinds the live projection
  * watermark for this command's partition below its stream_sequence, so the
- * running projector background loop naturally re-processes the same canonical
- * command outcome it already projected, then asserts the stable DB/API read
- * snapshot is unchanged, the projected rows are still singular, and the
- * watermark re-advances past the outcome.
+ * claim-guarded projection function then attempts the exact replay. A retained
+ * completed claim must make that replay a zero-effect operation while the
+ * watermark remains rewound. The harness restores the watermark after proving
+ * that contract, then asserts the stable DB/API read snapshot is unchanged and
+ * the projected rows are still singular.
  */
 async function assertProjectionReplayIdempotent(outcome) {
   const partition = Number(outcome.partition_id);
@@ -406,29 +410,63 @@ async function assertProjectionReplayIdempotent(outcome) {
       AND partition_id = ${partition}
   `);
 
-  const started = Date.now();
-  let last = "";
-  while (Date.now() - started < materializerTimeoutMs) {
-    const watermarkRows = await queryProjectionRows(`
-      SELECT last_partition_seq
-      FROM runtime.projection_watermarks
-      WHERE projection_name = '${sqlLiteral(projectionName)}'
-        AND partition_id = ${partition}
-    `, ["last_partition_seq"]);
-    if (watermarkRows.length === 1 && Number(watermarkRows[0].last_partition_seq) >= streamSequence) {
-      break;
-    }
-    last = `watermark not yet re-advanced past ${streamSequence}: ${JSON.stringify(watermarkRows)}`;
-    await sleep(materializerPollMs);
-  }
-  if (Date.now() - started >= materializerTimeoutMs) {
-    throw new Error(`timeout waiting for projector to replay rewound watermark (${last})`);
-  }
+  const replayRows = await queryProjectionRows(`
+    SELECT runtime.runtime_project_canonical_command_outcomes(
+      '${sqlLiteral(projectionName)}',
+      1000,
+      ARRAY[${partition}]::INTEGER[],
+      TRUE,
+      '${sqlLiteral(env("MATCHING_ENGINE_EVENT_STREAM"))}'
+    ) AS projected_rows
+  `, ["projected_rows"]);
+  const projectedRows = Number(replayRows[0]?.projected_rows ?? Number.NaN);
+  const watermarkRows = await queryProjectionRows(`
+    SELECT last_partition_seq
+    FROM runtime.projection_watermarks
+    WHERE projection_name = '${sqlLiteral(projectionName)}'
+      AND partition_id = ${partition}
+  `, ["last_partition_seq"]);
+  const claimRows = await queryProjectionRows(`
+    SELECT claim.status, claim.candidate_count, claim.result_count, frontier.max_stream_sequence
+    FROM runtime.projection_batch_claims claim
+    JOIN runtime.projection_batch_claim_frontiers frontier
+      ON frontier.batch_identity = claim.batch_identity
+    WHERE claim.projection_name = '${sqlLiteral(projectionName)}'
+      AND claim.event_stream = '${sqlLiteral(env("MATCHING_ENGINE_EVENT_STREAM"))}'
+      AND claim.projection_stage = 'full'
+      AND frontier.partition_id = ${partition}
+      AND frontier.max_stream_sequence = ${streamSequence}
+  `, ["status", "candidate_count", "result_count", "max_stream_sequence"]);
+
+  assertClaimGuardedProjectionReplay({
+    projectedRows,
+    partition,
+    streamSequence,
+    watermarkRows,
+    claimRows,
+  });
+
+  await runProjectionPsql(`
+    UPDATE runtime.projection_watermarks
+    SET last_partition_seq = GREATEST(last_partition_seq, ${streamSequence}), last_error = ''
+    WHERE projection_name = '${sqlLiteral(projectionName)}'
+      AND partition_id = ${partition}
+  `);
 
   const after = await readProjectionReplaySnapshot(outcome);
   assertStableProjectionReplaySnapshot(before, after);
   assertSingleRowSnapshot(outcome.command_id, after);
-  return { commandId: outcome.command_id, partition, streamSequence, before, after };
+  return {
+    commandId: outcome.command_id,
+    partition,
+    streamSequence,
+    projectedRows,
+    claimStatus: claimRows[0].status,
+    claimCandidateCount: Number(claimRows[0].candidate_count),
+    claimResultCount: Number(claimRows[0].result_count),
+    before,
+    after,
+  };
 }
 
 async function readProjectionReplaySnapshot(outcome) {

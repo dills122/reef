@@ -1,5 +1,7 @@
 # Reef Performance Learnings
 
+Required starting point: [Throughput Baselines](THROUGHPUT_BASELINES.md). Read the scoped historical evidence and failed attempts before throughput work or claims.
+
 ## Purpose
 
 Capture practical speed and impact lessons so performance stays a design constraint during normal delivery, not a late-stage recovery effort.
@@ -26,6 +28,54 @@ current checker, while `5k` fails downstream lifecycle/market drain despite
 exact canonical counts. See the [audit record](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
 Earlier dated short-run interpretations below remain historical evidence;
 they do not replace this checkpoint or the [work board](./WORK_PLAN.md#work-board).
+
+## Projection Measurement and State Equivalence (September 24, 2026)
+
+Hosted three-sample-per-arm instrumentation comparison passed the frozen 1%
+overhead gate for its recorded configuration. Subsequent checks found a market
+source-projection namespace mismatch; that comparison does not establish fresh
+public market metadata. Corrected configuration still requires hosted validation.
+
+Isolated lifecycle SQL drained the same 123,683 dirty orders at roughly
+7.2k–12.3k dirty orders/s across three samples. Those units differ from the
+150,000 source commands, and restored-state variability prevents selecting the
+fastest sample as capacity. Full source-fact hashes stayed unchanged.
+
+Full-rebuild comparison then rejected 23,339 lifecycle business rows. Cancelled
+order examples had text remaining quantity zero but nonzero numeric remaining
+quantity. An empty dirty queue and exact row counts therefore do not prove
+projection correctness. Compare complete business rows, including numeric shadow
+columns, excluding only nonsemantic refresh timestamps. Fix and revalidate state
+equivalence before accepting capacity evidence or tuning the worker.
+
+Additive migration0051 corrects terminal numeric remainder and matches full
+rebuild's zero-quantity status rule. Hosted repair of all 23,339 affected rows,
+three corrected lifecycle SQL samples, three restored market samples, and three
+unchanged-worker samples passed full-business-state reference comparisons.
+Corrected lifecycle SQL measured 11.4k–13.0k dirty orders/s; the worker retained
+its250ms delay after productive batches and measured roughly1.62k dirty orders/s
+including startup. These are isolated work-unit rates, not source command rates.
+Normal authenticated public reads also matched verified DB state after enabling
+PostgreSQL persistence on the API outside the timed benchmark profile.
+
+Restore identical state and planner statistics for repeated capacity comparisons.
+Rollback-only rebuild checks preserve logical rows but can leave physical dead
+tuples; run them after timing and restore before the next repetition. Retain
+lock-refused reference attempts instead of interpreting them as equality passes.
+
+Sustained full-projection baseline remains 2.5k/5m. Raw evidence, failed checks,
+and current work are recorded in the
+[measurement validation report](./research/PROJECTION_MEASUREMENT_VALIDATION_2026-09-24.md).
+
+## Projection SQL remediation and materializer limit (September 25, 2026)
+
+C38 cut projection `submit_results` sequential scans from C37's 2,584 to 43,
+yet canonical materialization reached only 7,420.80/s against 9,992.81/s
+accepted intake. Do not infer end-to-end capacity from a large scan reduction
+in one downstream database. Keep the sequence/replay correctness repairs;
+target the primary canonical batch commit and index write cost next. C38's
+timed gate failed, while postdrain sequence and business-state checks passed.
+See the [C38 ledger entry](THROUGHPUT_BASELINES.md#c38--reviewed-sql-remediation-on-clean-c28-topology-timed-fail).
 
 ## Local Transactional Materializer Soak and Workload-Shape Correction (July 19, 2026)
 
@@ -835,3 +885,9 @@ Targeted audit of `services/matching-engine` for correctness/scaling issues, wit
 - Work plan: [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - Performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
 - Historical stress baseline: [`docs/archive/DEV_STRESS_BASELINE_2026-05-23.md`](./archive/DEV_STRESS_BASELINE_2026-05-23.md)
+
+## Dirty projection correctness under concurrent producers (2026-09-24)
+
+A fully acknowledged149976-command online cohort drained both queues yet differed from full normalized-state rebuild:382/123675lifecycle rows and39/64market snapshots. Aggregate drift covered fill/remaining quantities, status and last-event time; market top prices/quantities differed. Prior quiescent isolated-capacity equality did not cover this interleaving. Empty queues and source watermarks alone cannot prove correct derived state. Raw failed preflight originally lived at `/tmp/reef-crash-c3-pins-v2`; it was lost during September24 resize reboot. Selected aggregates and hashes survive locally (see THROUGHPUT_BASELINES.md evidence-retention incident). No crash was injected in that preflight and no throughput promotion followed.
+
+Investigation identified producer `ON CONFLICT DO NOTHING` invalidation coalescing racing with consumer lock/read/delete. Correctness work must serialize conflicting invalidations and ensure source reads use a snapshot acquired after dirty-row claims. PostgreSQL16 [function volatility](https://www.postgresql.org/docs/16/xfunc-volatility.html) gives VOLATILE functions a fresh snapshot per executed query; [Read Committed semantics](https://www.postgresql.org/docs/16/transaction-iso.html#XACT-READ-COMMITTED) allow locking queries to return a newly committed row version even when their original snapshot predates that version. Therefore producer conflict updates alone are insufficient justification for a fix; separate claim/read and deterministic regressions are required. Verification remains in progress.

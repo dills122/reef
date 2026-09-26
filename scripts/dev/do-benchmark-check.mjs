@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { buildDownstreamFreshnessGate } from "./lib/downstream-freshness.mjs";
 import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 
 const target = process.argv[2];
@@ -29,6 +30,11 @@ const maxArenaFinalCompletionLagMs = parseOptionalNonNegativeNumber(process.env.
 const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
 const requirePgStatIo = process.env.REEF_DO_REQUIRE_PG_STAT_IO === "1";
 const requirePgStatStatements = process.env.REEF_DO_REQUIRE_PG_STAT_STATEMENTS === "1";
+const requireSustainedDownstreamFreshness = process.env.REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS === "1";
+if (requireSustainedDownstreamFreshness && reportProfile !== "materializer-projection") {
+  failures.push("REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS requires materializer-projection profile");
+}
+const requireProjectionCohortAuthority = process.env.REEF_DO_REQUIRE_PROJECTION_COHORT_AUTHORITY === "1";
 const requiredOrderLifecycleMaintainers = parseOptionalNonNegativeInteger(
   "REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS",
   process.env.REEF_DO_REQUIRED_ORDER_LIFECYCLE_MAINTAINERS,
@@ -76,7 +82,7 @@ for (const rate of requiredRates) {
 }
 
 validateTelemetry(target);
-if ((reportProfile === "materializer" || reportProfile === "materializer-projection") && requireDbDiagnostics) {
+if ((reportProfile === "materializer" || reportProfile === "materializer-projection") && (requireDbDiagnostics || maxProjectionDbDeadlocks !== undefined)) {
   validateMaterializerDbDiagnostics(target);
 }
 
@@ -84,7 +90,13 @@ finish();
 
 function validateReport(path, report) {
   const label = `${path} rate=${reportRatePerSecond(report) ?? "unknown"}`;
+  const sustainedDownstreamFreshness = requireSustainedDownstreamFreshness ? buildDownstreamFreshnessGate(report) : null;
+  if (sustainedDownstreamFreshness && !sustainedDownstreamFreshness.pass) {
+    const failed = Object.entries(sustainedDownstreamFreshness.checks).filter(([, pass]) => pass !== true).map(([name]) => name);
+    failures.push(`${label}: sustained downstream freshness failed: ${failed.join(", ")}`);
+  }
   evidenceRows.push({
+    ...(sustainedDownstreamFreshness ? { sustainedDownstreamFreshness } : {}),
     path,
     rate: reportRatePerSecond(report) ?? 0,
     evidence: canonicalEvidenceSummary(report),
@@ -232,6 +244,11 @@ function validateMaterializerProjectionReport(label, report) {
     return;
   }
 
+  if (requireProjectionCohortAuthority) {
+    validateProjectionCohortAuthority(label, "upstream source", report.upstreamSourceCohort);
+    validateProjectionCohortAuthority(label, "downstream projection", report.downstreamProjectionCohort);
+  }
+
   const projectorDelta = report.streamAckProjector?.delta;
   if (!projectorDelta) {
     failures.push(`${label}: missing streamAckProjector.delta`);
@@ -241,8 +258,10 @@ function validateMaterializerProjectionReport(label, report) {
   checkZero(label, "streamAckProjector.delta.failedDelta", projectorDelta.failedDelta);
   checkZero(label, "streamAckProjector.delta.retryExhaustedDelta", projectorDelta.retryExhaustedDelta);
   if (maxProjectionDbRetries !== undefined) {
-    const retryDelta = Number(projectorDelta.retryDelta ?? 0);
-    if (retryDelta > maxProjectionDbRetries) {
+    const retryDelta = projectorDelta.retryDelta;
+    if (!Number.isSafeInteger(retryDelta) || retryDelta < 0) {
+      failures.push(`${label}: streamAckProjector.delta.retryDelta must be a non-negative safe integer`);
+    } else if (retryDelta > maxProjectionDbRetries) {
       failures.push(
         `${label}: streamAckProjector.delta.retryDelta ${formatNumber(retryDelta)} > required ${formatNumber(maxProjectionDbRetries)}`,
       );
@@ -270,6 +289,15 @@ function validateMaterializerProjectionReport(label, report) {
     );
   }
   checkProjectorHealth(label, report.streamAckProjector?.before, report.streamAckProjector?.after);
+}
+
+function validateProjectionCohortAuthority(label, cohortLabel, cohort) {
+  if (cohort?.pass === true && (cohortLabel !== "downstream projection" || cohort?.cohortResidence?.pass === true)) return;
+  const failedChecks = Object.entries(cohort?.checks ?? {})
+    .filter(([, value]) => value !== true)
+    .map(([name]) => name);
+  const details = failedChecks.length > 0 ? `; failed checks: ${failedChecks.join(", ")}` : "";
+  failures.push(`${label}: ${cohortLabel} cohort is not authoritative${details}`);
 }
 
 function validateArenaArtifacts(jsonFiles) {
@@ -521,8 +549,10 @@ function validateProjectionDbDiagnostics(summary, dir) {
     return;
   }
 
-  const deadlocks = Number(projectionPostgres?.database?.deadlocks ?? 0);
-  if (maxProjectionDbDeadlocks !== undefined && deadlocks > maxProjectionDbDeadlocks) {
+  const deadlocks = projectionPostgres?.database?.deadlocks;
+  if (maxProjectionDbDeadlocks !== undefined && (!Number.isSafeInteger(deadlocks) || deadlocks < 0)) {
+    failures.push("projection-postgres database.deadlocks must be a non-negative safe integer");
+  } else if (maxProjectionDbDeadlocks !== undefined && deadlocks > maxProjectionDbDeadlocks) {
     failures.push(
       `projection-postgres deadlocks ${formatNumber(deadlocks)} > required ${formatNumber(maxProjectionDbDeadlocks)}`,
     );

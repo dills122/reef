@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
@@ -10,39 +11,82 @@ class OrderLifecycleProjectionWorker(
     private val api: PlatformApi,
     private val pollIntervalMs: Long = 250L,
     private val batchSize: Int = 500,
-    private val workerName: String = "reef-order-lifecycle-projector"
+    private val workerName: String = "reef-order-lifecycle-projector",
+    private val instrumentationEnabled: Boolean = RuntimeEnv.bool("PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED", false)
 ) {
-    private val running = AtomicBoolean(false)
-    private var workerThread: Thread? = null
+    internal var waitForNextPoll: (Long) -> Unit = Thread::sleep
+
+    private class Run {
+        val cancelled = AtomicBoolean(false)
+        lateinit var thread: Thread
+    }
+
+    private val lifecycle = Any()
+    private var activeRun: Run? = null
+    private var restartRequested = false
 
     fun start() {
-        if (!running.compareAndSet(false, true)) return
-        workerThread = thread(name = workerName, isDaemon = true) {
-            while (running.get()) {
-                processOnce()
-                try {
-                    Thread.sleep(pollIntervalMs)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    running.set(false)
-                }
+        synchronized(lifecycle) {
+            val current = activeRun
+            if (current == null) {
+                launchRun()
+            } else if (current.cancelled.get()) {
+                restartRequested = true
             }
         }
     }
 
     fun stop() {
-        running.set(false)
-        workerThread?.interrupt()
+        val stopped = synchronized(lifecycle) {
+            restartRequested = false
+            activeRun?.also { it.cancelled.set(true) }
+        }
+        stopped?.thread?.interrupt()
+    }
+
+    // Called with lifecycle held; publish before starting so stop always sees the run.
+    private fun launchRun() {
+        val run = Run()
+        run.thread = thread(start = false, name = workerName, isDaemon = true) {
+            try {
+                while (!run.cancelled.get() && !Thread.currentThread().isInterrupted) {
+                    val processed = processOnce()
+                    if (run.cancelled.get() || Thread.currentThread().isInterrupted) break
+                    if (processed <= 0) waitForNextPoll(pollIntervalMs)
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } finally {
+                synchronized(lifecycle) {
+                    if (activeRun === run) {
+                        activeRun = null
+                        if (restartRequested) {
+                            restartRequested = false
+                            launchRun()
+                        }
+                    }
+                }
+            }
+        }
+        activeRun = run
+        run.thread.start()
     }
 
     fun processOnce(): Long {
         return try {
             HotPathMetrics.time("orderLifecycleProjector.project") {
-                api.projectOrderLifecycleStateCount(batchSize)
+                DownstreamProjectionCallerMetrics.record(
+                    stage = DownstreamProjectionStage.OrderLifecycle,
+                    caller = "order-lifecycle-projector",
+                    enabled = instrumentationEnabled
+                ) {
+                    api.projectOrderLifecycleStateCount(batchSize)
+                }
             }.also { processed ->
                 OrderLifecycleProjectionMetrics.recordProcessed(processed)
             }
         } catch (ex: Exception) {
+            if (ex is InterruptedException) Thread.currentThread().interrupt()
             OrderLifecycleProjectionMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
             0
         }

@@ -55,8 +55,8 @@ import com.reef.platform.application.settlement.TradeSettlementObligationMateria
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 import com.reef.platform.infrastructure.persistence.ProjectionStage
-import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
 import com.sun.net.httpserver.HttpExchange
@@ -403,10 +403,14 @@ class PlatformHttpServer(
     private val marketDataProjectorBatchSize: Int =
         RuntimeEnv.int("MARKET_DATA_PROJECTOR_BATCH_SIZE", 500, min = 1),
     private val orderLifecycleProjectorEnabled: Boolean = RuntimeEnv.bool("ORDER_LIFECYCLE_PROJECTOR_ENABLED", false),
+    private val downstreamProjectionInstrumentationEnabled: Boolean =
+        RuntimeEnv.bool("PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED", false),
     private val orderLifecycleProjectorPollMs: Long =
         RuntimeEnv.long("ORDER_LIFECYCLE_PROJECTOR_POLL_MS", 250L, min = 1L),
     private val orderLifecycleProjectorBatchSize: Int =
         RuntimeEnv.int("ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE", 500, min = 1),
+    private val orderLifecycleProjectorWorkers: Int =
+        RuntimeEnv.int("ORDER_LIFECYCLE_PROJECTOR_WORKERS", 1, min = 1),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -514,6 +518,7 @@ class PlatformHttpServer(
         orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
         orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
         orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+        orderLifecycleProjectorWorkers = orderLifecycleProjectorWorkers,
         venueEventMaterializerEnabled = venueEventMaterializerEnabled,
         venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
         venueEventMaterializerPollMs = venueEventMaterializerPollMs,
@@ -557,7 +562,9 @@ class PlatformHttpServer(
             marketDataProjectorEnabled = marketDataProjectorEnabled,
             orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
             orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+            orderLifecycleProjectorWorkers = orderLifecycleProjectorWorkers,
             orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
+            downstreamProjectionInstrumentationEnabled = downstreamProjectionInstrumentationEnabled,
             streamAckProjectorEnabled = streamAckProjectorEnabled,
             streamAckProjectionName = streamAckProjectionName,
             streamAckProjectionSource = streamAckProjectionSource,
@@ -3407,15 +3414,15 @@ class PlatformHttpServer(
         } else {
             emptyList()
         }
-        val projectionStatusProvider: (() -> ProjectionStatus?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
-            { api.projectionStatus(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue) }
+        val projectionLagProvider: (() -> ProjectionLag?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
+            { api.projectionLagUpTo(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue, streamCommandMaxProjectorLag) }
         } else {
             null
         }
-        if (workerSources.isEmpty() && projectionStatusProvider == null) {
+        if (workerSources.isEmpty() && projectionLagProvider == null) {
             return null
         }
-        return StreamCommandDrainBackpressureSampler(workerSources, projectionStatusProvider)
+        return StreamCommandDrainBackpressureSampler(workerSources, projectionLagProvider)
     }
 
     private fun streamCommandBackpressureWorkerDurableNames(): List<String> {

@@ -43,6 +43,17 @@ Language and surface-specific steering:
 
 `docs/steering/README.md` additionally curates `docs/ONBOARDING.md`, `docs/CURRENT_STATUS.md`, `docs/API_SURFACE_POLICY.md`, `docs/POST_MATCH_STANDARDS.md`, and `docs/PERFORMANCE_LIBRARY_INVESTIGATION.md` — check that list too.
 
+## Throughput Evidence — Required First Read
+
+Before any throughput-related investigation, tuning, benchmark, plan, or status
+claim, read `docs/THROUGHPUT_BASELINES.md`, its relevant original results and
+failed attempts, `docs/PERFORMANCE_LEARNINGS.md`, and the active scaling plan.
+Cite the proven baseline and explain configuration/code/measurement differences.
+Reuse established profiles; prioritize measured bottleneck fixes over new tooling.
+Record every run and preserve failures. Never silently rewrite historical claims,
+conflate pipeline stages, or report a conservative bound as actual latency.
+Follow the ledger's evidence and correction rules; these are repository policy.
+
 ## Architecture Boundaries
 
 Primary areas:

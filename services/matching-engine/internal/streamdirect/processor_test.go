@@ -141,6 +141,72 @@ func TestProcessorPublishesEventBatchBeforeAck(t *testing.T) {
 	}
 }
 
+func TestProcessorPublishesChecksumBoundWorkFinishedTimeAfterBatchConstruction(t *testing.T) {
+	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 11, map[string]string{
+		"commandId":     "cmd-work-finished",
+		"occurredAt":    "2026-08-24T12:00:00Z",
+		"orderId":       "ord-work-finished",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	service := app.NewService()
+	publisher := &fakePublisher{}
+	processor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{delivery}}, publisher, ProcessorConfig{
+		ShardID:         "engine-test",
+		Partition:       0,
+		BatchSize:       10,
+		FetchTimeout:    time.Millisecond,
+		EventStreamName: "REEF_VENUE_EVENTS",
+	})
+	fetchedAt := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	workFinishedAt := fetchedAt.Add(25 * time.Millisecond)
+	clockCalls := 0
+	processor.now = func() time.Time {
+		clockCalls++
+		if clockCalls == 1 {
+			return fetchedAt
+		}
+		if _, ok := service.OrderState("ord-work-finished"); !ok {
+			t.Fatal("work-finished time was captured before batch processing mutated engine state")
+		}
+		return workFinishedAt
+	}
+
+	if _, err := processor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	batch := publisher.batches[0]
+	if batch.CreatedAt != fetchedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("unexpected createdAt %q", batch.CreatedAt)
+	}
+	if batch.WorkFinishedAt != workFinishedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("unexpected workFinishedAt %q", batch.WorkFinishedAt)
+	}
+	checksum := batch.PayloadChecksum
+	timingChecksum := batch.TimingChecksum
+	if timingChecksum != venueEventBatchTimingChecksum(batch) {
+		t.Fatal("timing checksum mismatch")
+	}
+	batch.WorkFinishedAt = workFinishedAt.Add(time.Second).Format(time.RFC3339Nano)
+	mutatedChecksum, err := venueEventBatchChecksum(batch)
+	if err != nil {
+		t.Fatalf("checksum mutated batch: %v", err)
+	}
+	if mutatedChecksum != checksum {
+		t.Fatal("workFinishedAt must not change retry identity")
+	}
+	if timingChecksum == venueEventBatchTimingChecksum(batch) {
+		t.Fatal("timing mutation must change timing proof")
+	}
+}
+
 func TestProcessorCommitsKafkaBatchAtomically(t *testing.T) {
 	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 12, map[string]string{
 		"commandId":     "cmd-atomic",

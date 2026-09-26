@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import { composePsqlArgs } from "./lib/compose-psql.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
@@ -522,22 +523,10 @@ function parsePsqlRows(output, columns) {
 }
 
 async function runPsql(service, sql) {
-  return runCapture("docker", [
-    "compose",
-    "exec",
-    "-T",
-    service,
-    "psql",
-    "-U",
-    env("DEV_VENUE_EVENT_CRASH_GATE_DB_USER", "reef"),
-    "-d",
-    env("DEV_VENUE_EVENT_CRASH_GATE_DB_NAME", "reef"),
-    "-At",
-    "-F",
-    "\t",
-    "-c",
-    sql,
-  ]);
+  return runCapture("docker", composePsqlArgs(service, sql, process.env, {
+    user: env("DEV_VENUE_EVENT_CRASH_GATE_DB_USER", "reef"),
+    database: env("DEV_VENUE_EVENT_CRASH_GATE_DB_NAME", "reef"),
+  }));
 }
 
 async function dockerCompose(args) {
