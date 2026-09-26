@@ -981,10 +981,10 @@ private class FakeEngineGateway(
     }
 
     override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
-        return result
+        return result.copy(accepted = result.accepted?.let { it.copy(eventId = "${it.eventId}-${command.commandId}") })
     }
 
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
-        return result
+        return result.copy(accepted = result.accepted?.let { it.copy(eventId = "${it.eventId}-${command.commandId}") })
     }
 }

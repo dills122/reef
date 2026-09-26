@@ -4726,12 +4726,67 @@ class PostgresRuntimePersistence(
 
     override fun saveEvents(events: List<RuntimeEvent>) {
         if (events.isEmpty()) return
+        require(events.map { it.eventId }.toSet().size == events.size) { "duplicate runtime event ID in batch" }
         projectionConnection().use { conn ->
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
+                conn.prepareStatement("SELECT pg_advisory_xact_lock(198765432, hashtext(?))").use { ps ->
+                    events.map { it.traceId }.distinct().sorted().forEach { traceId ->
+                        ps.setString(1, traceId)
+                        ps.executeQuery().close()
+                    }
+                }
+                val existingIds = mutableSetOf<String>()
+                conn.prepareStatement(
+                    """
+                    SELECT ROW(
+                      stored.event_type, stored.order_id, stored.trace_id, stored.causation_id,
+                      stored.correlation_id, stored.actor_id, stored.producer, stored.schema_version,
+                      stored.occurred_at, stored.modify_quantity_units, stored.modify_limit_price,
+                      COALESCE(stored.payload_sha256, sha256(COALESCE(payloads.payload_json, stored.payload_json)::text::bytea))
+                    ) IS NOT DISTINCT FROM ROW(
+                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, sha256((?::jsonb)::text::bytea)
+                    ) AND COALESCE(payloads.payload_json, stored.payload_json) = ?::jsonb AS identical
+                    FROM ${names.runtimeEvents} stored
+                    LEFT JOIN ${names.runtimeEventPayloads} payloads ON payloads.event_id = stored.event_id
+                    WHERE stored.event_id = ?
+                    """.trimIndent()
+                ).use { ps ->
+                    events.forEach { event ->
+                        val modifyFacts = event.modifyFacts()
+                        val payload = event.payloadJson.ifBlank { "{}" }
+                        ps.setString(1, event.eventType)
+                        ps.setString(2, event.orderId)
+                        ps.setString(3, event.traceId)
+                        ps.setString(4, event.causationId)
+                        ps.setString(5, event.correlationId)
+                        ps.setString(6, event.actorId)
+                        ps.setString(7, event.producer)
+                        ps.setString(8, event.schemaVersion)
+                        ps.setString(9, event.occurredAt)
+                        ps.setString(10, modifyFacts.quantityUnits)
+                        ps.setString(11, modifyFacts.limitPrice)
+                        ps.setString(12, payload)
+                        ps.setString(13, payload)
+                        ps.setString(14, event.eventId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) {
+                                if (!rs.getBoolean("identical")) {
+                                    throw SQLException("runtime event replay conflict for existing event_id ${event.eventId}", "23505")
+                                }
+                                existingIds.add(event.eventId)
+                            }
+                        }
+                    }
+                }
+                val newEvents = events.filterNot { it.eventId in existingIds }
+                if (newEvents.isEmpty()) {
+                    conn.commit()
+                    return
+                }
                 val startByTrace = mutableMapOf<String, Long>()
-                events.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
+                newEvents.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
                     conn.prepareStatement(
                         """
                         INSERT INTO ${names.runtimeTraceSequences} AS trace_sequence(trace_id, next_sequence)
@@ -4753,7 +4808,7 @@ class PostgresRuntimePersistence(
                 val nextByTrace = startByTrace.toMutableMap()
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEvents}(
+                    INSERT INTO ${names.runtimeEvents} AS stored(
                       event_id,
                       event_type,
                       order_id,
@@ -4767,13 +4822,30 @@ class PostgresRuntimePersistence(
                       payload_json,
                       occurred_at,
                       modify_quantity_units,
-                      modify_limit_price
+                      modify_limit_price,
+                      payload_sha256
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?)
-                    ON CONFLICT (event_id) DO NOTHING
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?, sha256((?::jsonb)::text::bytea))
+                    ON CONFLICT (event_id) DO UPDATE
+                      SET event_id = runtime.runtime_reject_event_replay_conflict(EXCLUDED.event_id)
+                      WHERE ROW(
+                        stored.event_type, stored.order_id, stored.trace_id, stored.causation_id,
+                        stored.correlation_id, stored.actor_id, stored.producer, stored.schema_version,
+                        stored.sequence_number, stored.occurred_at, stored.modify_quantity_units,
+                        stored.modify_limit_price,
+                        COALESCE(stored.payload_sha256, sha256(COALESCE(
+                          (SELECT payload_json FROM ${names.runtimeEventPayloads} WHERE event_id = stored.event_id),
+                          stored.payload_json
+                        )::text::bytea))
+                      ) IS DISTINCT FROM ROW(
+                        EXCLUDED.event_type, EXCLUDED.order_id, EXCLUDED.trace_id, EXCLUDED.causation_id,
+                        EXCLUDED.correlation_id, EXCLUDED.actor_id, EXCLUDED.producer, EXCLUDED.schema_version,
+                        EXCLUDED.sequence_number, EXCLUDED.occurred_at, EXCLUDED.modify_quantity_units,
+                        EXCLUDED.modify_limit_price, EXCLUDED.payload_sha256
+                      )
                     """.trimIndent()
                 ).use { ps ->
-                    events.forEach { event ->
+                    newEvents.forEach { event ->
                         val sequence = nextByTrace.getValue(event.traceId)
                         nextByTrace[event.traceId] = sequence + 1
                         val modifyFacts = event.modifyFacts()
@@ -4790,18 +4862,21 @@ class PostgresRuntimePersistence(
                         ps.setString(11, event.occurredAt)
                         ps.setString(12, modifyFacts.quantityUnits)
                         ps.setString(13, modifyFacts.limitPrice)
+                        ps.setString(14, event.payloadJson.ifBlank { "{}" })
                         ps.addBatch()
                     }
                     ps.executeBatch()
                 }
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEventPayloads}(event_id, payload_json)
+                    INSERT INTO ${names.runtimeEventPayloads} AS stored(event_id, payload_json)
                     VALUES (?, ?::jsonb)
-                    ON CONFLICT (event_id) DO NOTHING
+                    ON CONFLICT (event_id) DO UPDATE
+                      SET event_id = runtime.runtime_reject_event_replay_conflict(EXCLUDED.event_id)
+                      WHERE stored.payload_json IS DISTINCT FROM EXCLUDED.payload_json
                     """.trimIndent()
                 ).use { ps ->
-                    events.forEach { event ->
+                    newEvents.forEach { event ->
                         val payload = event.payloadJson.ifBlank { "{}" }
                         if (payload == "{}") return@forEach
                         ps.setString(1, event.eventId)

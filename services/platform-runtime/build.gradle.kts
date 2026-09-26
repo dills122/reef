@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm") version "2.4.10"
+    kotlin("jvm") version "2.4.20"
     application
     jacoco
 }
@@ -19,7 +19,7 @@ dependencies {
     implementation("io.grpc:grpc-netty-shaded:1.84.0")
     implementation("io.grpc:grpc-protobuf:1.84.0")
     implementation("io.grpc:grpc-stub:1.84.0")
-    implementation("io.nats:jnats:2.26.2")
+    implementation("io.nats:jnats:2.26.3")
     implementation("org.apache.kafka:kafka-clients:4.3.1")
     implementation("com.google.protobuf:protobuf-java:4.36.1")
     testImplementation(kotlin("test"))

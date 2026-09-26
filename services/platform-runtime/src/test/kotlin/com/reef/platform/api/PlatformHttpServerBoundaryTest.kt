@@ -31,6 +31,7 @@ import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
@@ -1109,6 +1110,53 @@ class PlatformHttpServerBoundaryTest {
                 assertEquals(401, denied.status, path)
                 assertContains(denied.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
                 assertTrue(allowed.status == 200 || allowed.status == 404, path)
+            }
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun legacyTradeAndEventReadsApplyBoundedDefaultsAndMaximums() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveTrades((1..525).map { index ->
+            TradeCreated(
+                eventId = "trade-event-$index",
+                tradeId = "trade-$index",
+                executionId = "execution-$index",
+                buyOrderId = "buy-$index",
+                sellOrderId = "sell-$index",
+                instrumentId = "AAPL",
+                quantityUnits = "1",
+                price = "10",
+                currency = "USD",
+                occurredAt = "2026-09-25T00:00:00Z"
+            )
+        })
+        persistence.saveEvents((1..525).map { index ->
+            RuntimeEvent(
+                eventId = "event-$index",
+                eventType = "OrderAccepted",
+                orderId = "order-$index",
+                traceId = "trace-$index",
+                causationId = "command-$index",
+                correlationId = "correlation-$index",
+                producer = "test",
+                schemaVersion = "1",
+                occurredAt = "2026-09-25T00:00:00Z"
+            )
+        })
+        val server = testServerWithGateway(EchoOrderEngineGateway(), runtimePersistence = persistence)
+        try {
+            listOf("/trades" to "tradeId", "/events" to "eventId").forEach { (path, field) ->
+                val default = get(server.address.port, path, headers = apiReadHeaders())
+                val zero = get(server.address.port, "$path?limit=0", headers = apiReadHeaders())
+                val oversized = get(server.address.port, "$path?limit=9999", headers = apiReadHeaders())
+
+                assertEquals(200, default.status)
+                assertEquals(50, Regex("\\\"$field\\\"").findAll(default.body).count(), path)
+                assertEquals(50, Regex("\\\"$field\\\"").findAll(zero.body).count(), path)
+                assertEquals(500, Regex("\\\"$field\\\"").findAll(oversized.body).count(), path)
             }
         } finally {
             server.stop(0)

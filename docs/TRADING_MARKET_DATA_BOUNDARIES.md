@@ -209,10 +209,24 @@ lives in [`STOCK_DATA_SEEDING_PLAN.md`](./STOCK_DATA_SEEDING_PLAN.md).
 | `/api/v1/settlement/exceptions/{scenarioRunId}` | user/admin/test harness | settlement append-only fact store exception projection | projection-backed read | rebuildable queue over clearing rejections and settlement breaks | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
 | `/api/v1/settlement/proof/{scenarioRunId}` | user/admin/test harness | settlement append-only fact store + replayable ledger projection | rebuildable proof projection | rebuildable proof projection | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
 | `/api/v1/settlement/score/{scenarioRunId}` | user/admin/test harness | settlement append-only fact store + ledger/obligation projections | rebuildable scoring projection | rebuildable scoring projection | none beyond settlement fact persistence completeness | scenario settlement score | active |
-| `/orders`, `/trades`, `/events`, `/traces` legacy/internal surfaces | admin/test | runtime tables | direct runtime-table read | current local runtime state | varies by source | internal/admin | diagnostic |
+| `/orders`, `/trades`, `/events`, `/traces` legacy/internal surfaces | admin/test | runtime tables | direct runtime-table read; `/trades` and `/events` return 50 recent rows by default and cap `limit` at 500 | current local runtime state | varies by source | internal/admin | diagnostic |
 | venue-session-specific depth | bot/user | planned projected lifecycle facts with session key | not built | not available | not available | public market data | deferred |
 | account balances, holds, buying power | bot/user | settlement ledger projection (`/api/v1/settlement/ledger/{scenarioRunId}`) for scenario-scoped balances; broader per-account buying-power/hold enforcement remains planned | partially built | derived from durable ledger facts for scenario-scoped balances | none beyond settlement fact persistence completeness | participant/account scope | partial |
 | settlement obligations/allocation/confirmation/affirmation/clearing/novation/breaks/repairs | user/admin | settlement facts/projections (`/api/v1/settlement/facts`, `/api/v1/settlement/proof`, `/api/v1/settlement/obligations`, `/api/v1/settlement/exceptions`) | partial | derived from durable settlement facts | none beyond settlement fact persistence completeness | participant/admin | active for obligation, minimal instant-post-trade allocation/confirmation/affirmation/clearing/novation, ledger proof, and exception facts |
+
+Runtime event IDs are immutable across timeline projection and direct admin
+writes. Identical retries retain original event and legacy trace sequence;
+changed headers, typed facts, or JSON payloads fail with SQLSTATE `23505`.
+New hot event rows store a payload digest while full JSON stays in the side
+table. Existing rows without digest compare against their stored side payload
+when replayed, so migration does not rewrite historical event rows.
+Apply `runtime/0068_event_replay_conflicts.sql` before updated runtime writers;
+quiesce old direct event writers during cutover because their previous
+`ON CONFLICT DO NOTHING` path cannot enforce this rule.
+
+Generic `/trades` and `/events` reads are recent diagnostic windows, not
+whole-history exports. Instrument trade tape has its own sequence cursor;
+trace and order event routes provide scoped diagnostics.
 
 Read source definitions:
 
