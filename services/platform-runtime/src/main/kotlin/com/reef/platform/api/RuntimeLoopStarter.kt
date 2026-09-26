@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.defaultRuntimePersistence
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.persistence.ProjectionStage
 import java.time.Duration
 
@@ -73,6 +74,37 @@ internal class RuntimeLoopStarter(
         val partitions = projectorPartitions()
         if (partitions.isEmpty()) {
             System.err.println("canonical_projector_unavailable reason=no_partitions_configured")
+            return
+        }
+        if (RuntimeEnv.bool("STREAM_ACK_PROJECTION_SPLIT_POC", false)) {
+            check(streamAckProjectionSource == CanonicalProjectionSource.VenueEventBatch) {
+                "Projection split POC requires venue-event-batch source"
+            }
+            check(streamAckProjectionStage == ProjectionStage.Full) {
+                "Projection split POC requires full configured stage"
+            }
+            CanonicalProjectionWorker(
+                api = api,
+                projectionName = "$streamAckProjectionName-timeline",
+                projectionSource = streamAckProjectionSource,
+                eventStream = streamAckProjectionEventStream,
+                projectionStage = ProjectionStage.Timeline,
+                partitions = partitions,
+                batchSize = streamAckProjectorBatchSize,
+                pollIntervalMs = streamAckProjectorPollMs,
+                workerName = "reef-canonical-projector-$streamAckProjectionName-timeline"
+            ).start()
+            CanonicalProjectionWorker(
+                api = api,
+                projectionName = streamAckProjectionName,
+                projectionSource = streamAckProjectionSource,
+                eventStream = streamAckProjectionEventStream,
+                projectionStage = ProjectionStage.CommandStatus,
+                partitions = partitions,
+                batchSize = streamAckProjectorBatchSize,
+                pollIntervalMs = streamAckProjectorPollMs,
+                workerName = "reef-canonical-projector-$streamAckProjectionName-status"
+            ).start()
             return
         }
         CanonicalProjectionWorker(

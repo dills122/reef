@@ -114,6 +114,8 @@ class PostgresRuntimePersistence(
         RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L, lookup = envLookup)
     private val projectorDbRetryHorizonMs: Long =
         RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_HORIZON_MS", 60_000L, min = 1L, lookup = envLookup)
+    private val projectionSplitPocEnabled: Boolean =
+        RuntimeEnv.bool("STREAM_ACK_PROJECTION_SPLIT_POC", false, lookup = envLookup)
 
     @Volatile
     private var commandPayloadSideTableAvailableCache: Boolean? = null
@@ -2792,6 +2794,11 @@ class PostgresRuntimePersistence(
         val retryDeadline = projectionRetryDeadline()
         val candidates = HotPathMetrics.time("projector.venueEventBatch.canonicalRead") {
             val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
+            val timelineWatermarks = if (projectionSplitPocEnabled && projectionStage == ProjectionStage.CommandStatus) {
+                projectionWatermarkMap("$projectionName-timeline", ownedPartitions)
+            } else {
+                emptyMap()
+            }
             val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
             val includeCommandPayload = commandPayloadSideTableAvailable()
             ownedPartitions
@@ -2806,7 +2813,13 @@ class PostgresRuntimePersistence(
                             includeCommandPayload = includeCommandPayload,
                             eventStream = scopedEventStream
                         )
-                    ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
+                    ).let { contiguous ->
+                        if (projectionSplitPocEnabled && projectionStage == ProjectionStage.CommandStatus) {
+                            contiguous.takeWhile { it.partitionSequence <= (timelineWatermarks[partitionId] ?: 0L) }
+                        } else {
+                            contiguous
+                        }
+                    }.mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
                 }
                 .sortedWith(
                     compareBy<CommandProjectionCandidate> { it.partitionRow }

@@ -1212,3 +1212,25 @@ remote evidence files passed SHA256 verification under
 `artifacts/sustained-10k-20260925/index0066-six-materializers/run-10000-300s-c43/`.
 Droplet `603746089` was intentionally retained for follow-up testing, with a
 scheduled local-time cost cutoff before 21:00; destruction remains pending.
+
+## Projection split POC — local 100/s diagnostic, not 10k baseline
+
+September 25 local experiment on branch `codex/projection-split-poc`, with
+`STREAM_ACK_PROJECTION_SPLIT_POC=true`: four owners each held four of 16
+partitions; timeline and command-status were independently checkpointed, while
+only owner 0 ran lifecycle and market workers. Fresh isolated Compose project,
+100 offered/s for 60s. Source code and runtime configuration hashes, full
+report, stage vector and rollback reference are under
+`artifacts/projection-split-poc-20260925/local-100rps-60s/`.
+
+The corrected run offered, accepted, direct-acked, materialized and
+status-projected 5,998 commands (99.97/s). Both stage frontiers matched on all
+16 partitions, final lag was zero, and the authoritative downstream cohort
+checker passed every check. HTTP p95/p99 were 8.588/12.892ms; sampled
+source-to-lifecycle p95 and source-to-market p95 upper bounds were 2,058ms and
+3,000ms. Rollback-only rebuild exactly matched 4,963 lifecycle and 64 market
+rows. Earlier local attempts failed on a reused source DB, a legacy replay
+helper, double-counted stage metrics, and multiple downstream callers; those
+failures and corrections are recorded in the POC note. No single-stage local
+control or hosted run was completed. These figures neither extend the C4/H4
+full-projection baseline nor qualify sustained 10k/s.
