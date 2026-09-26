@@ -1,0 +1,37 @@
+name: OpenCodeReview pilot
+
+# pull_request_target loads this workflow and the OCR rule from the trusted base.
+# The pinned Action fetches PR head objects for review; do not execute PR files here.
+on:
+  pull_request_target:
+    branches: [master]
+    types: [labeled, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: reef-ocr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'ocr-pilot') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: alibaba/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # v1.12.9
+        with:
+          ocr_version: '1.12.9'
+          llm_url: https://openrouter.ai/api/v1
+          llm_auth_token: ${{ secrets.OCR_OPENROUTER_API_KEY }}
+          llm_model: openai/gpt-5.4-mini
+          llm_use_anthropic: 'false'
+          llm_protocol: openai
+          llm_extra_body: '{}'
+          effort: medium
+          max_tokens_budget: '500000'
+          incremental: 'true'
+          upload_artifacts: 'false'
