@@ -43,6 +43,9 @@ async function applySql(file) {
 }
 
 async function applyMigrations() {
+  // Exercise the versioned SQL schema directly on a disposable database;
+  // the Gradle test then starts runtime persistence in Validate mode. The
+  // migration runner's checksum/order behavior has its own focused tests.
   await applySql(path.join(repoRoot, "scripts/dev/db/init/001_create_domain_schemas.sql"));
   for (const domain of migrationDomains) {
     const directory = path.join(repoRoot, "scripts/dev/db/migrations", domain);

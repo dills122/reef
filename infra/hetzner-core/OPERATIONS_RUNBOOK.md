@@ -337,7 +337,10 @@ The runner gives 0069 a 2s lock-acquisition timeout and a 30s statement
 timeout. A timeout rolls back both conversions and leaves the old application
 images in place; keep writers stopped until the cause is inspected. Confirm
 both `relpersistence` values are `p`, the ledger row exists, and runtime health
-and projection progress recover. Then set
+and projection progress recover. This is a forward-only durability change:
+older application images work with LOGGED queues, so an image rollback does
+not require a schema downgrade. Keep the queues LOGGED after rollback;
+restoring UNLOGGED would reintroduce crash-loss risk. Then set
 `REEF_RUNTIME_0069_ROLLOUT_COMPLETE=true` in the GitHub
 `backbone-production` environment and rerun `Application Service Deploy` for
 the intended master SHA. This releases the workflow gate for later deployments.
