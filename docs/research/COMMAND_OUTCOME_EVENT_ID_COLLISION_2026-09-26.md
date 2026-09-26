@@ -20,6 +20,6 @@ Command outcome events now use `evt-command-outcome-<commandId>` when a command
 ID is present. The same command replays to the same ID; distinct accepted or
 rejected commands have distinct IDs even when they concern the same order.
 Legacy direct service calls without a command ID retain their prior IDs.
-Focused service and direct-stream tests cover repeated rejection and repeated
-accepted modification identities. A fresh hosted control is required before
+Focused service tests cover repeated rejection and repeated accepted
+modification identities. A fresh hosted control is required before
 any F02 or F04 capacity conclusion.
