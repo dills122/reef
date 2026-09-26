@@ -203,11 +203,11 @@ func NewService(options ...Option) *Service {
 }
 
 func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
-	return s.submitOrder(cmd, nil)
+	return withCommandOutcomeEventID(s.submitOrder(cmd, nil), cmd.CommandID)
 }
 
 func (s *Service) SubmitOrderInBatch(rollback *BatchRollback, cmd domain.SubmitOrder) domain.SubmitOrderResult {
-	return s.submitOrder(cmd, rollback)
+	return withCommandOutcomeEventID(s.submitOrder(cmd, rollback), cmd.CommandID)
 }
 
 func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) domain.SubmitOrderResult {
@@ -291,11 +291,11 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 }
 
 func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
-	return s.cancelOrder(cmd, nil)
+	return withCommandOutcomeEventID(s.cancelOrder(cmd, nil), cmd.CommandID)
 }
 
 func (s *Service) CancelOrderInBatch(rollback *BatchRollback, cmd domain.CancelOrder) domain.SubmitOrderResult {
-	return s.cancelOrder(cmd, rollback)
+	return withCommandOutcomeEventID(s.cancelOrder(cmd, rollback), cmd.CommandID)
 }
 
 func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) domain.SubmitOrderResult {
@@ -338,11 +338,28 @@ func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) d
 }
 
 func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
-	return s.modifyOrder(cmd, nil)
+	return withCommandOutcomeEventID(s.modifyOrder(cmd, nil), cmd.CommandID)
 }
 
 func (s *Service) ModifyOrderInBatch(rollback *BatchRollback, cmd domain.ModifyOrder) domain.SubmitOrderResult {
-	return s.modifyOrder(cmd, rollback)
+	return withCommandOutcomeEventID(s.modifyOrder(cmd, rollback), cmd.CommandID)
+}
+
+func withCommandOutcomeEventID(result domain.SubmitOrderResult, commandID string) domain.SubmitOrderResult {
+	if commandID == "" {
+		return result
+	}
+	// One accepted or rejected outcome belongs to each durable command. The
+	// command identity stays stable on replay and distinguishes repeated
+	// modifications or rejections of the same order in one projection batch.
+	eventID := "evt-command-outcome-" + commandID
+	if result.Accepted != nil {
+		result.Accepted.EventID = eventID
+	}
+	if result.Rejected != nil {
+		result.Rejected.EventID = eventID
+	}
+	return result
 }
 
 func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) domain.SubmitOrderResult {
