@@ -124,6 +124,20 @@ test("devUp starts Arena storage only when the Arena overlay is selected", async
   ]);
 });
 
+test("devUp starts isolated post-match storage only with its profile", async () => {
+  const calls = [];
+  const processEnv = {};
+  await devUp({
+    env: envFrom({ JS_RUNTIME: "node", DEV_COMPOSE_PROFILES: "postmatch" }),
+    processEnv,
+    log: () => {},
+    run: async (cmd, args) => calls.push([cmd, args]),
+  });
+
+  assert.equal(processEnv.COMPOSE_PROFILES, "postmatch");
+  assert.deepEqual(calls[0][1].slice(-4), [...databaseServices, "postmatch-postgres"]);
+});
+
 function envFrom(values) {
   return (name, fallback = "") => {
     const value = values[name];

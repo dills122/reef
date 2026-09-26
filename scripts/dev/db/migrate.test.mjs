@@ -115,6 +115,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0002_run_bot_performance_summaries.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "postmatch/0001_operational_effect_foundation.sql"));
 });
 
 test("venue event batch integrity migration removes duplicate index and rejects conflicts", async () => {
@@ -471,4 +472,13 @@ test("routes arena migrations only to arena database target", async () => {
       "arena/0010_arena_run_roster_binding.sql",
     ],
   );
+});
+
+test("routes post-match schema only to its isolated database target", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const primary = migrationsForTarget({ domains: ["runtime", "settlement"] }, migrations);
+  const postmatch = migrationsForTarget({ domains: ["postmatch"] }, migrations);
+
+  assert.ok(!primary.some((migration) => migration.domain === "postmatch"));
+  assert.deepEqual(postmatch.map((migration) => migration.id), ["postmatch/0001_operational_effect_foundation.sql"]);
 });

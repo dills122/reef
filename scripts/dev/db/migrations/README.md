@@ -10,6 +10,7 @@ Domain folders:
 - `command_log/`
 - `orchestration/`
 - `settlement/`
+- `postmatch/` (isolated operational PostgreSQL only)
 - `analytics/` (planned)
 
 Current implementation note:
@@ -17,6 +18,7 @@ Current implementation note:
 - those service-side bootstrap paths are transitional compatibility bridges, not the target ownership model
 - new durable schema work should land in these migration folders and should not add new root-level or search-path-dependent bootstrap tables
 - `make dev-up`, `make dev-reset`, and `make dev-db-migrate` apply migrations through Docker Compose Postgres and record checksums in `public.reef_schema_migrations`
+- `postmatch/` runs on local `postmatch-postgres` when the `postmatch` Compose profile is selected; existing primary, boundary, and projection targets never receive it. Nonlocal migration runners must opt in with `REEF_POSTMATCH_POSTGRES_MIGRATIONS=1` after a dedicated target exists.
 - clean-stack migration apply and live schema-placement tests are available; before removing service-side bootstrap, add CI coverage for the migration execution order
 
 Rules:

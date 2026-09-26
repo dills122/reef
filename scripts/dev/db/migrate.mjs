@@ -4,7 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { env, loadDotEnv } from "../lib/dev-utils.mjs";
-import { composeArgs } from "../lib/compose-utils.mjs";
+import { composeArgs, composeFiles } from "../lib/compose-utils.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -17,6 +17,7 @@ const domainOrder = [
   "command_log",
   "orchestration",
   "settlement",
+  "postmatch",
   "arena",
   "analytics",
   "stock_data",
@@ -177,6 +178,19 @@ function migrationTargets() {
       user: env("REEF_BOUNDARY_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
       dbName: env("REEF_BOUNDARY_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
       domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"],
+    });
+  }
+  const postmatchProfile = (env("COMPOSE_PROFILES", env("DEV_COMPOSE_PROFILES", "")))
+    .split(",").map((profile) => profile.trim()).includes("postmatch");
+  const localPostmatchDefault = composeFiles(process.env).includes("compose.local.yml") &&
+    env("REEF_MIGRATION_RUNNER", "compose") !== "kubectl" && postmatchProfile ? "1" : "0";
+  if (env("REEF_POSTMATCH_POSTGRES_MIGRATIONS", localPostmatchDefault) === "1") {
+    targets.push({
+      label: "postmatch",
+      service: env("REEF_POSTMATCH_POSTGRES_SERVICE", "postmatch-postgres"),
+      user: env("REEF_POSTMATCH_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
+      dbName: env("REEF_POSTMATCH_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+      domains: ["postmatch"],
     });
   }
   if (env("REEF_ARENA_POSTGRES_MIGRATIONS", "0") === "1") {
