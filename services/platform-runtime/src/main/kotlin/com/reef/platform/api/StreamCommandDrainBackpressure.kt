@@ -1,6 +1,6 @@
 package com.reef.platform.api
 
-import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 
 enum class StreamCommandDrainBackpressurePolicy(val configValue: String) {
     ControlRoomFresh("control-room-fresh"),
@@ -24,7 +24,8 @@ data class StreamCommandDrainBackpressureSnapshot(
     val workerSamples: Int,
     val workerErrors: List<String>,
     val projectorLag: Long,
-    val projectionName: String
+    val projectionName: String,
+    val projectorLagIsLowerBound: Boolean = false
 ) {
     fun backpressure(
         maxWorkerStreamLag: Long,
@@ -46,7 +47,7 @@ data class StreamCommandDrainBackpressureSnapshot(
             return BoundaryError(
                 429,
                 "STREAM_COMMAND_PROJECTOR_BACKPRESSURE",
-                "stream command intake rejected because projection lag is $projectorLag"
+                "stream command intake rejected because projection lag is ${if (projectorLagIsLowerBound) "at least " else ""}$projectorLag"
             )
         }
         return null
@@ -55,7 +56,7 @@ data class StreamCommandDrainBackpressureSnapshot(
 
 class StreamCommandDrainBackpressureSampler(
     private val workerSources: List<StreamCommandTelemetrySource>,
-    private val projectionStatusProvider: (() -> ProjectionStatus?)? = null
+    private val projectionLagProvider: (() -> ProjectionLag?)? = null
 ) {
     fun snapshot(): StreamCommandDrainBackpressureSnapshot {
         val workerSnapshots = workerSources.map { source ->
@@ -70,7 +71,7 @@ class StreamCommandDrainBackpressureSampler(
                 )
             }
         }
-        val projectionStatus = projectionStatusProvider?.invoke()
+        val projectionLag = projectionLagProvider?.invoke()
         return StreamCommandDrainBackpressureSnapshot(
             maxWorkerStreamLag = workerSnapshots
                 .filter { it.error.isBlank() }
@@ -79,8 +80,9 @@ class StreamCommandDrainBackpressureSampler(
             workerErrors = workerSnapshots.mapNotNull { snapshot ->
                 snapshot.error.ifBlank { null }
             },
-            projectorLag = projectionStatus?.lag ?: 0L,
-            projectionName = projectionStatus?.projectionName.orEmpty()
+            projectorLag = projectionLag?.lag ?: 0L,
+            projectionName = projectionLag?.projectionName.orEmpty(),
+            projectorLagIsLowerBound = projectionLag?.isLowerBound ?: false
         )
     }
 }

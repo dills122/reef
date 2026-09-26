@@ -403,9 +403,9 @@ private class ControlledAsyncPublisher : StreamCommandPublisher, AsyncStreamComm
     }
 
     override fun publishAsync(envelope: StreamCommandEnvelope): CompletableFuture<StreamPublishAck> {
-        received.incrementAndGet()
         val future = CompletableFuture<StreamPublishAck>()
         pending.add(future)
+        received.incrementAndGet()
         return future
     }
 

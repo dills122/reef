@@ -7,7 +7,7 @@ fix sequence for scaling read-model freshness toward the proven venue-core
 materializer baseline.
 
 The sustained August follow-up and current recommendation are recorded in
-[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
+[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./archive/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
 That spike supersedes the older assumption that a `5k/60s` pass was sufficient
 promotion evidence: `2.5k/5m` is green, while `5k/5m` accumulated about `758k`
 of projection watermark lag despite exact intake and canonical materialization.
@@ -16,7 +16,7 @@ September 4 artifact reconciliation also recovered August 21 instrumented
 one-maintainer remote short runs. `2.5k/60s` passes the current checker;
 `5k/60s` reaches exact stage counts and zero canonical-projector lag but fails
 downstream lifecycle/market-data drain checks. See the
-[status audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
+[status audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
 for counts, settings and checker requirements. The first remote topology
 comparison is complete; sustained `5k` promotion remains open.
 
@@ -27,7 +27,341 @@ canonical materialization remains the source of audit/replay truth. The work
 here is about making rebuildable projections keep up without putting their cost
 back on the hot command path.
 
-## Current Evidence
+## September 25 Canonical Batch Insert Diagnostic
+
+C39's clean 300-second 10k/s run materialized 7,770.56/s at the materializer
+collection, versus 7,420.80/s in C38, while its projector collection fell
+from 9,112.03/s to 7,885.88/s. Both failed the timed full-pipeline gate.
+Migration `0064` tests one narrower hypothesis: removing the normal-path
+`COUNT(DISTINCT commandId)` and second JSON/conflict comparison from canonical
+batch insertion may reduce primary materializer work. It retains the same
+header/outcome storage shape, so it cannot by itself remove the measured
+4.756GB outcome table and 0.968GB retained batch table cost.
+
+Use a fresh C38/C39-matched c-32 setup: 16 canonical owners, four
+materializers, four dedicated lifecycle workers plus the nested caller,
+300 seconds at 10k/s, and the same accepted fixture, DB settings, and
+diagnostics. Compare accepted, materialized, and projected rates only at their
+respective fixed collection points; also compare primary block reads, WAL,
+temp bytes, outcome/table size, projection retries, and postdrain replay and
+frontier checks. Treat this as a diagnostic, not a promotion, unless the frozen
+10k full-pipeline and 20% drain-margin gates pass. If the materializer remains
+below target or projector capacity regresses, prioritize a narrower canonical
+storage/write design and projection write contention over more count-query
+changes.
+
+C40 completed this diagnostic with 9,572.99/s materialized and 9,973.05/s
+projected at their separate collection points, both above C39 but below the
+frozen full-pipeline gate and 20% margin. Postdrain correctness passed. The
+next implementation slice should reduce duplicate retained batch/outcome
+payload and per-outcome write cost while retaining replay and audit facts; see
+the exact result in [`THROUGHPUT_BASELINES.md`](./THROUGHPUT_BASELINES.md#c40--fail-closed-single-pass-batch-insert-timed-fail).
+
+C41 then increased materializer consumers from four to six on the same code
+and fixture. The source cohort caught up exactly at 2,999,515, but the later
+projector collection retained 30,040 lag and downstream freshness failed.
+Prioritize a concrete projection SQL/write and dirty-queue contention change
+before another full-pipeline promotion run; retain canonical storage reduction
+as the following margin and aged-state target. Do not promote the six-consumer
+topology on source-only success.
+
+Migration `0065` is the next bounded projection treatment. C41 recorded
+275,082 lifecycle-dirty and 35,106 market-dirty updates, many non-HOT.
+Repeated marks now lock an existing queue row without rewriting it. Both queues
+are UNLOGGED, so this treatment targets tuple/index churn and contention, not
+direct projection WAL. Compare C42 against C41 with the same six materializers,
+16 projector owners, accepted fixture, database settings, 300-second load,
+and fixed stage-collection points. Capture queue update/HOT counters, projection
+lag and freshness, transaction waits, and the same postdrain replay and rebuild
+checks. Preserve artifacts and tear down the test droplet. Do not qualify the
+full pipeline unless the frozen checker and 20% drain-margin gates pass.
+
+C42 completed this treatment: repeated dirty updates fell to zero and
+postdrain replay/rebuild checks passed, but projector rate fell to 9,885.93/s
+with 34,201 lag, versus C41's 9,904.53/s and 30,040 lag at the same later
+collection point. The frozen full-pipeline gate failed. Move to the specific
+normalized projection write path and retained row/index volume; 16-owner
+topology and six-source-consumer configuration are not yet promotable.
+
+C43 removed the zero-scan broad `runtime_events` order/time index. The fresh
+C42-matched 10k/300s run kept read plans and postdrain business state correct,
+with about 2.8% lower projection WAL per accepted command, but projector rate
+was only 9,892.24/s with 26,029 lag; the frozen gate still failed. Retain this
+as index-write cleanup only. The next throughput slice must change the larger
+normalized projection row/index write shape, not remove another index on the
+assumption that unused scans imply a capacity gain.
+
+## Retry-Safe Projection Batch Authority
+
+Slice 1A landed the correctness boundary required before new measurement or
+tuning work:
+
+- `ProjectionBatchIdentityV1` hashes effect-changing configuration plus every
+  canonical candidate in actual processing order using a versioned,
+  length-prefixed binary encoding.
+- migration `runtime/0050_projection_batch_claims.sql` claims that identity in
+  the projection transaction before normalized rows, dirty markers, or
+  watermarks change. The migrated same-store path applies effects from the
+  exact claimed member set rather than selecting candidates again; concurrent
+  canonical materialization therefore cannot substitute a same-sized batch.
+  Both that path and the separated-store Kotlin transaction use the same
+  PostgreSQL claim contract.
+- rollback removes the claim and effects together. A retry after an ambiguous
+  commit reads the completed claim, skips every effect, and returns no newly
+  applied work to the outer worker counter. Claim completion and duplicate
+  validation require the stored result count to equal claimed membership.
+- each caller establishes an immutable database-clock retry deadline before
+  reading watermarks or candidates and must pass it before every attempt. The
+  deployment-wide retry horizon is stored with the claim. Completion retains
+  authority for a full additional horizon, and a completed duplicate may only
+  extend that retention through its own earlier-established deadline. This
+  covers staggered stale selectors without allowing cleanup to reuse the first
+  caller's shorter window. Cleanup additionally requires both retention expiry
+  and every participating projection watermark to be strictly beyond the
+  stored batch frontier; time alone cannot retire a claim.
+- the projector fault hook rolls staged rows and its in-progress claim back
+  before watermark advancement. Full-commit ambiguity is tested after claim,
+  effects, watermark, and completion commit atomically; the fixture consumes
+  the dirty marker before retry so an erroneous re-enqueue cannot coalesce and
+  hide a replay.
+- batch size, poll interval, benchmark attribution, and other scheduling knobs
+  are excluded from the identity. Projection name, event stream, stage, fill
+  semantics, and ordered canonical membership are included.
+
+This slice does not add benchmark residence telemetry, change scheduler
+behavior, tune SQL, or establish a new throughput claim. Those remain later
+gates in this plan.
+
+## Cohort And Upstream Timing Authority
+
+Slice 1B adds the upstream measurement boundary without changing projection
+work or scheduling:
+
+- the Kafka intake health snapshot exposes per-partition topic end offsets plus
+  the producer's cumulative accepted counts, first offsets, and exclusive
+  last-offset frontiers. Benchmark membership is the topic interval
+  `[before end, after end)`. Its bounds must equal the producer acknowledgement
+  bounds and its exact span must equal accepted acknowledgements; records from
+  another producer before, during, or after the measured publishes therefore
+  make the cohort non-exclusive rather than silently joining it;
+- Kafka composite stream sequences are decoded to partition plus native offset
+  before distance arithmetic. Offset and frontier values cross the JSON/Node
+  boundary as decimal strings and use exact integer arithmetic;
+- after semantic checksum and ordered membership validation, materializer
+  telemetry records checksum-guarded command-source frontiers and their exact
+  covered offset ranges, engine work-finished time, canonical database commit
+  observation, source-offset commit observation, and monotonic durations.
+  Exact covered ranges plus the observed-outcome delta prevent an interior
+  duplicate from cancelling an interior gap across batches or materializer
+  instances. Legacy unchecked batches remain readable but are counted
+  separately and cannot satisfy cohort authority;
+- materializer source lag is now the sum of per-partition exclusive-offset
+  distances. Source-commit telemetry counts only deliveries behind the actual
+  Kafka consumer-group commit frontier returned by the source. The report also
+  reconciles fetched and committed per-partition frontiers, so a canonical
+  commit followed by a partial or ambiguous source-offset commit fails closed;
+- stress reports join each accepted partition span to direct-engine
+  acknowledgements and checksum-guarded canonical membership. They also require
+  canonical and source commit observations, complete source-commit frontiers,
+  exact covered canonical membership, complete source-residence samples, and
+  zero clock-guard failures before `upstreamSourceCohort.pass` is true;
+- source residence uses the checksum-bound canonical batch `workFinishedAt`
+  captured after matching and batch construction, plus the materializer's
+  canonical-commit observation. `createdAt` remains the earlier batch-start
+  timestamp. Missing, negative, or unparseable wall-clock residence and
+  backward monotonic elapsed time are rejected from timing aggregates and
+  counted explicitly.
+
+This authority is necessary but not sufficient for Checkpoint A. September 23
+reconciliation recovered unmerged 1B/1C implementation and found correctness
+and measurement gaps through independent review. Corrections are in validation;
+no new performance claim supersedes the sustained baseline.
+
+### September measurement corrections (validation in progress)
+
+- Engine work-finished time has a separate SHA-256 timing binding over the
+  retry-stable semantic checksum and timestamp. Volatile timing never changes
+  canonical batch identity. Missing timing binding remains legacy-readable but
+  cannot establish timing authority; corrupt binding fails validation.
+- Optional materializer journals capture exact source membership and canonical
+  commit observations. Dedicated `/internal/venue-event-materializer/timing`
+  checkpoints avoid repeatedly serializing journal contents in periodic stats.
+  Journals are bounded to 250,000 source batches per process; overflow,
+  duplicates, invalid records, restart or missing membership fail the gate.
+- Every accepted command contributes to command-weighted source-to-canonical,
+  source-to-lifecycle/market, and canonical-to-lifecycle/market residence bounds.
+  Downstream observations are conservative sampled post-commit upper bounds,
+  not actual transaction commit timestamps. The old latest-batch subtraction
+  is explicitly a tail-drain observation and cannot establish cohort residence.
+- A/B evidence requires stable before/after effective Docker service/image,
+  environment, topology, resource and PostgreSQL-setting fingerprints. Only the
+  instrumentation switch is excluded. Missing counters/configuration evidence
+  fail closed. Matched clean state and isolated execution remain operator gates;
+  fingerprints do not prove data distribution or absence of host contention.
+- Prefix markers use committed watermark reads followed by one committed
+  dirty-queue snapshot; they avoid full fact counts and need not wait for newer
+  canonical lag or in-flight callers to disappear. Transaction-interleaving
+  tests establish this diagnostic proof; business projection SQL is unchanged.
+- PostgreSQL generation is bound to both reads, markers and cohort boundaries.
+  A database restart invalidates measurement; empty unlogged queues after a
+  crash do not establish recovery. Rebuild/replay validation remains required.
+- Caller metrics and journals both honor the optional instrumentation switch.
+  A first September control sample was discarded after review exposed always-on
+  caller counters; no matched comparison or Checkpoint A pass is claimed.
+- Historical 1C local passes predate these checks and are diagnostic only.
+  The frozen 1% perturbation limit and minimum three samples per arm remain.
+
+## Current gate reconciliation — 2026-09-24
+
+Corrected instrumentation A/Bv5 passed all12checks (maximum measured change
+0.507998%, below frozen1%); Task2 isolated measurements and CheckpointA were
+completed before capacity tuning. See `.planning/sustained-10k/task_plan.md` and
+[authoritative throughput ledger](THROUGHPUT_BASELINES.md). Earlier local A/B
+p95 failure remains valid historical evidence, not an active block on the
+already-authorized tuning workstream.
+
+Current work has implemented productive lifecycle scheduling and migrations
+0051–0061. Full sustained10k qualification remains open. Latest c16 eight-writer
+7.5k attempt failed canonical and lifecycle capacity; c32/16canonical/four-life
+10k is diagnostic. Existing freshness/headroom qualification assumes one lifecycle
+maintainer and cannot qualify this expanded topology unchanged. Independent
+review3of3 found no confirmed implementation defect; documentation reconciliation
+was the nonblocking finding. Latest local PostgreSQL suite:621 tests passed.
+
+Raw host `/tmp` benchmark evidence was lost at resize reboot; retained aggregates
+and hashes are explicitly limited evidence. New artifacts use persistent host
+storage. Current-image full-reference, freshness, recovery, warm/aged/read-load,
+and three >=20% headroom drains remain required before promotion.
+
+## Local SQL hot-path follow-up — 2026-09-25
+
+[Local SQL diagnostic](research/PROJECTION_SQL_HOT_PATH_LOCAL_2026-09-25.md)
+added a lag-only backpressure read so that sampling skips the exact
+`submit_results` count while public status retains it. A disposable PostgreSQL
+16.15 fixture confirmed lag parity, exposed the active status/fill statement's
+write-node costs, and reproduced an ordinary index-build write block. These
+local observations are diagnostic, not a sustained-throughput qualification.
+The targeted review's upgrade-repair gate remains: rebuild lifecycle and
+market projections on an existing upgraded target and compare full business
+state before promotion. Aged-target 0055/0058 DDL budget and a matched
+full-pipeline mixed-cohort SQL profile remain open.
+
+Follow-up count fix: market refresh/depth reads skip the unused exact
+`submit_results` count. Frequent projector status polls can request
+`includeProjectedCount=false`; benchmark boundary snapshots and default status
+retain exact counts. PostgreSQL lock and HTTP contract tests pass. C38's clean
+C28-topology run reduced projection `submit_results` sequential scans from
+2,584 to 43 versus C37, but materialization was 7,420.80/s and the timed
+10k gate still failed. Both stages caught up after the gate and the business
+reference passed. See [C38 evidence](THROUGHPUT_BASELINES.md#c38--reviewed-sql-remediation-on-clean-c28-topology-timed-fail).
+
+The [aged status/fill profile](research/PROJECTION_STATUS_FILL_AGED_PROFILE_2026-09-25.md)
+used a copy of C32's 13GB projection database. Five mixed writes all cost time;
+16 stage-only writers processed 240,000 synthetic outcomes at about 53k/s in
+the bounded probe. This does not reproduce C30's full-pipeline delay or qualify
+10k. No status/fill SQL change is supported yet. C37 and C38 full-pipeline
+diagnostics now place the remaining deficit first in canonical materialization.
+Migration `0062` consolidates overlapping canonical sequence indexes into one
+unique covering index without losing uniqueness or covering reads. On an aged
+target, prebuild the exact `idx_canonical_command_outcomes_partition_seq_next`
+definition concurrently before applying the transaction-wrapped migration;
+its five-second statement budget fails closed if a direct build is too slow.
+The accepted C28/C38 topology uses separate canonical and projection databases;
+its active Kotlin reader already limits candidates per owned partition. The
+single-store SQL selector remains unbounded, but changing it cannot address
+the measured C38 bottleneck. Migration `0063` now reuses the already-materialized
+outcome set for duplicate command-ID validation in canonical batch ingestion;
+the Kotlin compatibility function matches it. Local PostgreSQL tests cover
+normal insertion, replay, conflicting command IDs, duplicate IDs, count
+mismatch, and statement rollback. Independent review found no code blocker.
+The clean C39 C28-topology run measured `0062`+`0063` together against C38:
+canonical materialization rose from 7,420.80/s to 7,770.56/s at the same
+collection point, while projected progress fell from 9,112.03/s to 7,885.88/s.
+The frozen 10k gate failed; postdrain uniqueness, frontiers, dirty queues, and
+the rollback-only business rebuild passed. This is a combined treatment, not
+an isolated gain for either migration. The next implementation target is the
+canonical write shape: nearly 4.76GB of outcome table/index growth plus
+0.97GB of retained batch-payload growth and 5.83GB of primary temp writes in
+one run. Prototype a leaner retained-batch/outcome representation that keeps
+global command-ID replay rejection, exact batch checksum validation, and
+rebuildability. The projection-stage regression also needs its own fix before
+another full 10k qualification. See [C39 evidence](THROUGHPUT_BASELINES.md#c39--canonical-batch-sqlindex-treatment-on-clean-c38-topology-timed-fail).
+Aged-data preflight and safe unique-index rollout remain required before
+deploying `0062`.
+
+## Historical frozen measurement-before-tuning gates — August 2026
+
+The statuses and blocked instructions below describe that earlier checkpoint;
+the dated reconciliation above supersedes their execution status.
+
+The reviewed August 2026 plan freezes the following dependency order. It
+supersedes the older tuning-oriented priority log retained later in this file.
+
+1. **Slice 1A — always-on retry correctness.** Status: implemented. Keep the
+   canonical batch identity and claim guard enabled in every benchmark arm;
+   rollback, retry, and ambiguous commit must not repeat projection or dirty
+   enqueue effects. This slice contains no benchmark-report or scheduler
+   change.
+2. **Slice 1B — cohort and upstream timing authority.** Status: implementation reconciled; revised timing binding under validation.
+   Add the exclusive accepted-source frontier contract, materializer
+   membership/work-finished/commit-observed telemetry tied to the existing
+   checksum guard, durable-intake joins, canonical source-batch timing, exact
+   offset arithmetic, and clock guards. This slice contains no downstream
+   projection-function or scheduler change.
+3. **Slice 1C — downstream residence and gates.** Status: review corrections
+   under validation; previous A/B gate failed. Lifecycle/market marker identity,
+   source-time and covering-marker aggregates, post-commit observations,
+   per-stage and end-to-end reconciliation, a dedicated one-second diagnostic
+   sampler, fail-closed report/gate tests, and optional instrumentation are in
+   place. One provisional local `2.5k` sample is green. A clean-reset,
+   three-sample-per-arm A/B had effectively zero accepted/projected throughput
+   degradation but increased median p95 latency by `4.99%`, above the frozen
+   `1%` limit; it is therefore not green.
+4. **Task 2 — isolated downstream capacity benchmarks.** Status: blocked on
+   completion of all Task 1 slices. Measure lifecycle with exactly one caller
+   and market data with controlled repeated-redirty cycles; keep local results
+   directional rather than promotional.
+5. **Checkpoint A — attribution is trustworthy.** Status: blocked. It requires
+   an exclusive measured cohort, complete commit-observed residence
+   reconciliation, exact final zero/lag agreement, visible lifecycle caller
+   counts, frozen sustained-freshness thresholds, and an instrumentation A/B
+   within the documented `1%` perturbation limit.
+
+Dependencies are strict: Slice 1B depends on Slice 1A; Slice 1C depends on
+Slice 1B; Task 2 depends on all of Task 1; Checkpoint A depends on the resulting
+measurement and isolated-capacity evidence. None of Slices 1A-1C authorizes
+scheduler, batch-size, memory, index, SQL-shape, worker-count, pool, or paid
+tuning changes. No paid DigitalOcean matrix or tuning candidate may begin
+until Checkpoint A passes. Only then may Task 3 remove the lifecycle busy-path
+poll throttle and the subsequent one-lever-at-a-time capacity matrix proceed.
+
+## Historical August measurement evidence
+
+Provisional local Slice 1C validation on 2026-08-24 is intentionally not a
+promotion result: one `30s` sample at a `2.5k rps` target accepted,
+materialized, and projected `75,000` commands at `2,499.42/s`, with final lag,
+failures, and retries all `0` (p95 `22.05ms`, p99 `43.23ms`). The exclusive
+upstream cohort and post-commit downstream cohort both passed; lifecycle and
+market-data markers matched the exact 16-partition frontier, all dirty queues
+were drained, all callers were idle, diagnostic sampling had `32/32`
+successful samples with a `1,004ms` maximum gap, and source-to-downstream
+post-commit residence was `1,521ms` lifecycle / `1,574ms` market data. This
+proves the measurement path locally, but does not replace the matched
+three-sample instrumentation A/B or DigitalOcean Checkpoint A evidence.
+
+The subsequent clean-reset local instrumentation A/B used three `60s` samples
+per arm at the same `2.5k rps` / `256`-worker configuration. All six samples
+had exact accepted/materialized/projected reconciliation, authoritative
+upstream cohorts, zero final lag, failures, and retries; all three instrumented
+samples also had authoritative downstream cohorts and complete one-second
+sampling. Median accepted/projected throughput was `2,499.54/s` control versus
+`2,499.55/s` instrumented (no measured degradation). Median p95 was `40.37ms`
+control versus `42.39ms` instrumented (`4.99%` increase); median p99 improved
+from `133.03ms` to `117.79ms`. The A/B therefore fails the frozen `1%`
+perturbation gate on p95 latency. Checkpoint A and paid DigitalOcean tuning
+remain blocked pending an evidence-backed instrumentation-cost reduction or a
+pre-reviewed measurement-method revision; the limit must not be relaxed merely
+to promote this result.
 
 All runs below used the Redpanda/Kafka-compatible direct-stream plus
 venue-event-materializer path on a DigitalOcean c-16 worker.
@@ -289,8 +623,12 @@ Target the tables that dominate the patched `5k` run.
   canonical command outcomes and event batches.
   - Initial implementation is in place: `order_lifecycle_dirty` and
     `market_data_snapshot_dirty` are unlogged rebuildable queues, and hot
-    dirty-marking paths use `ON CONFLICT DO NOTHING` because an already-dirty
-    id already preserves the required recompute signal.
+    dirty-marking paths originally used `ON CONFLICT DO NOTHING`. Online
+    validation exposed lost invalidations when producers commit new facts while
+    a consumer deletes an existing marker. Migration0052 restores conflict
+    updates and separates locked claims from fresh-snapshot recomputation.
+    Correctness and capacity revalidation are required before promotion;
+    an already-dirty id alone does not preserve concurrent recompute signals.
 - Collapse insert/delete dirty-table churn by batching dirty ids in memory or
   unlogged staging before merge.
 - Avoid writing `runtime_events` for every freshness-critical read if the read
@@ -466,7 +804,12 @@ structural separation:
 - Revisit horizontal scale only with clear per-instance evidence. Scaling a
   write-amplified projector fleet can multiply the bottleneck.
 
-## Current Priority Order
+## Historical Evidence And Earlier Priority Log
+
+The numbered log below records how the July/August evidence was accumulated.
+It is not the current execution order and does not authorize tuning or remote
+runs ahead of the frozen Slice 1A -> Slice 1B -> Slice 1C -> Task 2 ->
+Checkpoint A sequence above.
 
 Implementation checkpoint: PR #341 (`29fb9993`) landed the evidence tooling
 and stage-configuration guard described below. August 21 remote short artifacts
@@ -514,7 +857,7 @@ the August sustained failure or justify an unchanged rerun.
    versus `2.15s` transform, `2.05s` canonical read, `1.59s` commit, and `0.20s`
    watermark time, with zero connection waiters. Treat this as attribution and
    workflow evidence, not portable capacity evidence. See
-   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](./research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
+   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](./archive/research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
    The named remote projection gate now also preloads
    `pg_stat_statements`, tracks nested PL/pgSQL statements, enables I/O and
    WAL-I/O timing, records the relevant settings, and requires pre/post
@@ -552,7 +895,7 @@ the August sustained failure or justify an unchanged rerun.
    evidence also identified repeated exact `submit_results` counts as a
    concrete scan source.
    See
-   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](./research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
+   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](./archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
 10. Add maintained depth/top-of-book projections.
 11. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL/temp
    work per projected outcome.

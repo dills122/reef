@@ -1,6 +1,6 @@
 package com.reef.platform.api
 
-import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.ProjectionLag
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -22,12 +22,10 @@ class StreamCommandDrainBackpressureTest {
     fun rejectsWhenProjectorLagReachesThreshold() {
         val snapshot = StreamCommandDrainBackpressureSampler(
             workerSources = emptyList(),
-            projectionStatusProvider = {
-                ProjectionStatus(
+            projectionLagProvider = {
+                ProjectionLag(
                     projectionName = "runtime-normalized-submit",
-                    projectedCount = 10,
-                    lag = 500,
-                    watermarks = emptyList()
+                    lag = 500
                 )
             }
         ).snapshot()
@@ -42,12 +40,10 @@ class StreamCommandDrainBackpressureTest {
     fun allowsProjectorLagWhenVenueCorePolicyIsConfigured() {
         val snapshot = StreamCommandDrainBackpressureSampler(
             workerSources = emptyList(),
-            projectionStatusProvider = {
-                ProjectionStatus(
+            projectionLagProvider = {
+                ProjectionLag(
                     projectionName = "runtime-normalized-submit",
-                    projectedCount = 10,
-                    lag = 500,
-                    watermarks = emptyList()
+                    lag = 500
                 )
             }
         ).snapshot()
@@ -105,12 +101,10 @@ class StreamCommandDrainBackpressureTest {
     fun allowsIntakeWhenDrainLagIsBelowThresholds() {
         val snapshot = StreamCommandDrainBackpressureSampler(
             workerSources = listOf(FixedStreamCommandTelemetrySource(streamLag = 25)),
-            projectionStatusProvider = {
-                ProjectionStatus(
+            projectionLagProvider = {
+                ProjectionLag(
                     projectionName = "runtime-normalized-submit",
-                    projectedCount = 10,
-                    lag = 50,
-                    watermarks = emptyList()
+                    lag = 50
                 )
             }
         ).snapshot()

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
-import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
+import { configureProjectionSourceNames, printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 import { selectPartitionSpreadInstruments } from "./lib/stream-partition-spread.mjs";
 
 const MATERIALIZER_STRESS_SESSION_ID = "venue-event-materializer-mixed-lifecycle-stress";
@@ -42,6 +42,7 @@ setDefault("STREAM_ACK_PARTITION_COUNT", "16");
 setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..15");
 setValue("STREAM_ACK_WORKER_ENABLED", "false");
 setDefault("STREAM_ACK_PROJECTOR_ENABLED", "false");
+configureProjectionSourceNames();
 setValue("MATCHING_ENGINE_DIRECT_STREAM_ENABLED", "true");
 setValue("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE", "500");

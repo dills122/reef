@@ -64,6 +64,24 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0047_venue_event_batch_integrity.sql",
       "runtime/0048_execution_liquidity_role.sql",
       "runtime/0049_execution_replay_conflicts.sql",
+      "runtime/0050_projection_batch_claims.sql",
+      "runtime/0051_lifecycle_terminal_numeric_parity.sql",
+      "runtime/0052_projection_dirty_serialization.sql",
+      "runtime/0053_market_data_indexed_top_of_book.sql",
+      "runtime/0054_projection_claim_cleanup_skip_locked.sql",
+      "runtime/0055_market_data_indexed_currency.sql",
+      "runtime/0056_lifecycle_parameter_sensitive_plans.sql",
+      "runtime/0057_market_data_idle_metadata.sql",
+      "runtime/0058_canonical_status_covering_index.sql",
+      "runtime/0059_trade_replay_and_parse.sql",
+      "runtime/0060_canonical_sequence_prefix_guard.sql",
+      "runtime/0061_canonical_sequence_uniqueness.sql",
+      "runtime/0062_consolidate_canonical_sequence_index.sql",
+      "runtime/0063_reuse_materialized_batch_outcomes.sql",
+      "runtime/0064_fail_closed_batch_outcome_insert.sql",
+      "runtime/0065_lock_only_projection_dirty_conflicts.sql",
+      "runtime/0066_drop_unused_order_event_time_index.sql",
+      "runtime/0068_event_replay_conflicts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -207,6 +225,46 @@ test("execution replay migration rejects conflicting immutable facts", async () 
   assert.match(migration.sql, /ON CONFLICT \(event_id\) DO UPDATE SET/);
   assert.match(migration.sql, /runtime\.executions\.liquidity_role/);
   assert.match(migration.sql, /IS DISTINCT FROM ROW/);
+});
+
+test("projection batch claim migration guards effects on both projection paths", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0050_projection_batch_claims.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE TABLE runtime\.projection_batch_claims/);
+  assert.match(migration.sql, /CREATE TABLE runtime\.projection_batch_claim_frontiers/);
+  assert.match(migration.sql, /runtime_projection_batch_identity_v1/);
+  assert.match(migration.sql, /runtime_claim_projection_batch_v1/);
+  assert.match(migration.sql, /runtime_complete_projection_batch_v1/);
+  assert.match(migration.sql, /runtime_cleanup_projection_batch_claims/);
+  assert.match(migration.sql, /claim\.retry_deadline_at < clock_timestamp\(\)/);
+  assert.match(migration.sql, /retry_horizon_ms BIGINT NOT NULL/);
+  assert.match(
+    migration.sql,
+    /retain_until = completion_time \+ \(retry_horizon_ms \* INTERVAL '1 millisecond'\)/,
+  );
+  assert.match(migration.sql, /p_retry_deadline_at <= clock_timestamp\(\)/);
+  assert.match(migration.sql, /result_count IS NULL OR result_count = candidate_count/);
+  assert.match(migration.sql, /p_result_count IS DISTINCT FROM expected_count/);
+  assert.match(migration.sql, /existing_claim\.result_count IS DISTINCT FROM existing_claim\.candidate_count/);
+  assert.match(migration.sql, /watermark\.last_partition_seq <= frontier\.max_stream_sequence/);
+  assert.match(migration.sql, /RENAME TO runtime_project_canonical_command_outcomes_unclaimed/);
+  assert.match(migration.sql, /runtime_project_canonical_command_outcome_members/);
+  assert.match(migration.sql, /p_retry_horizon_ms \* INTERVAL '1 millisecond'/);
+  const deadlineAssignment = migration.sql.indexOf("retry_deadline_at :=");
+  const candidateSelection = migration.sql.indexOf("WITH selected_partitions AS");
+  assert.ok(deadlineAssignment >= 0);
+  assert.ok(candidateSelection > deadlineAssignment);
+  assert.doesNotMatch(
+    migration.sql,
+    /projected_count := runtime\.runtime_project_canonical_command_outcomes_unclaimed/,
+  );
+  assert.match(
+    migration.sql,
+    /DROP FUNCTION runtime\.runtime_project_canonical_command_outcomes_unclaimed/,
+  );
+  assert.match(migration.sql, /IF NOT claim_is_new THEN\s+RETURN 0;/);
 });
 
 test("typed order migration adds native order facts", async () => {

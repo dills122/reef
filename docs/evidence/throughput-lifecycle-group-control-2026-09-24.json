@@ -1,0 +1,608 @@
+{
+  "id": "C23",
+  "hostArtifactDirectory": "/home/reefbench/benchmarks/reef-productive-lifecyclegroup-10000-300s-1",
+  "reportSha256": "f3df569dd6145eb1345f80a7647057362c2541940db5502109782bc19e071583",
+  "accepted": 2999954,
+  "failures": 0,
+  "projectionFreshness": {
+    "source": "venue-event-batch-projector",
+    "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+    "materialized": 2999954,
+    "projected": 2999954,
+    "materializedToProjectedGap": 0,
+    "lag": 0,
+    "projectedPerSecond": 9998.770245556312,
+    "caughtUp": true
+  },
+  "config": {
+    "Duration": 300000000000,
+    "RatePerSecond": 10000,
+    "Workers": 256
+  },
+  "sourceCohortPassed": true,
+  "reportAggregateKeys": [
+    "sessionId",
+    "startedAt",
+    "finishedAt",
+    "durationSeconds",
+    "config",
+    "throughputRps",
+    "acceptedBusinessOpsRps",
+    "throughput",
+    "totalRequests",
+    "totalSuccess",
+    "totalFailures",
+    "byAction",
+    "byProfile",
+    "byActor",
+    "byPersona",
+    "byStrategy",
+    "statusCodes",
+    "topErrors",
+    "rejectReasons",
+    "rejectTaxonomy",
+    "quality",
+    "latencyMs",
+    "traceChecks",
+    "loadSchedule",
+    "streamAckHealth",
+    "streamDirect",
+    "venueEventMaterializer",
+    "streamAckProjector",
+    "hotPathPhases",
+    "streamAckApiPhases",
+    "materializerTiming",
+    "runtimeConfigurationEvidence",
+    "stressRunMetadata",
+    "unitMetrics",
+    "projectionFreshness",
+    "partitionSkew",
+    "streamDirectPartitionSkew",
+    "projectionInstrumentation",
+    "upstreamSourceCohort",
+    "downstreamProjectionCohort",
+    "downstreamCoverageObservations",
+    "downstreamDiagnosticSampler"
+  ],
+  "streamAckProjectorDelta": {
+    "projectedDelta": 2999954,
+    "projectedRps": 9998.770245556312,
+    "failedDelta": 0,
+    "retryDelta": 0,
+    "retryExhaustedDelta": 0,
+    "lagDelta": 0,
+    "beforeLag": 0,
+    "afterLag": 0
+  },
+  "streamDirectDelta": {
+    "fetchedDelta": 2999954,
+    "processedDelta": 2999954,
+    "publishedDelta": 2999954,
+    "ackedDelta": 2999954,
+    "nackedDelta": 0,
+    "termedDelta": 0,
+    "failedDelta": 0,
+    "unsupportedDelta": 0,
+    "fetchedRps": 9998.770245556312,
+    "processedRps": 9998.770245556312,
+    "publishedRps": 9998.770245556312,
+    "ackedRps": 9998.770245556312,
+    "partitionDeltas": [
+      {
+        "partition": 0,
+        "shardId": "engine-0",
+        "fetchedDelta": 186975,
+        "processedDelta": 186975,
+        "publishedDelta": 186975,
+        "ackedDelta": 186975,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.1829110255995,
+        "processedRps": 623.1829110255995,
+        "publishedRps": 623.1829110255995,
+        "ackedRps": 623.1829110255995
+      },
+      {
+        "partition": 1,
+        "shardId": "engine-0",
+        "fetchedDelta": 187294,
+        "processedDelta": 187294,
+        "publishedDelta": 187294,
+        "ackedDelta": 187294,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.246129897733,
+        "processedRps": 624.246129897733,
+        "publishedRps": 624.246129897733,
+        "ackedRps": 624.246129897733
+      },
+      {
+        "partition": 2,
+        "shardId": "engine-0",
+        "fetchedDelta": 188068,
+        "processedDelta": 188068,
+        "publishedDelta": 188068,
+        "ackedDelta": 188068,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 626.8258521768282,
+        "processedRps": 626.8258521768282,
+        "publishedRps": 626.8258521768282,
+        "ackedRps": 626.8258521768282
+      },
+      {
+        "partition": 3,
+        "shardId": "engine-0",
+        "fetchedDelta": 187192,
+        "processedDelta": 187192,
+        "publishedDelta": 187192,
+        "ackedDelta": 187192,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.906166496612,
+        "processedRps": 623.906166496612,
+        "publishedRps": 623.906166496612,
+        "ackedRps": 623.906166496612
+      },
+      {
+        "partition": 4,
+        "shardId": "engine-0",
+        "fetchedDelta": 187854,
+        "processedDelta": 187854,
+        "publishedDelta": 187854,
+        "ackedDelta": 187854,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 626.1125956293781,
+        "processedRps": 626.1125956293781,
+        "publishedRps": 626.1125956293781,
+        "ackedRps": 626.1125956293781
+      },
+      {
+        "partition": 5,
+        "shardId": "engine-0",
+        "fetchedDelta": 187319,
+        "processedDelta": 187319,
+        "publishedDelta": 187319,
+        "ackedDelta": 187319,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.3294542607529,
+        "processedRps": 624.3294542607529,
+        "publishedRps": 624.3294542607529,
+        "ackedRps": 624.3294542607529
+      },
+      {
+        "partition": 6,
+        "shardId": "engine-0",
+        "fetchedDelta": 187529,
+        "processedDelta": 187529,
+        "publishedDelta": 187529,
+        "ackedDelta": 187529,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 625.0293789101198,
+        "processedRps": 625.0293789101198,
+        "publishedRps": 625.0293789101198,
+        "ackedRps": 625.0293789101198
+      },
+      {
+        "partition": 7,
+        "shardId": "engine-0",
+        "fetchedDelta": 187150,
+        "processedDelta": 187150,
+        "publishedDelta": 187150,
+        "ackedDelta": 187150,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.7661815667386,
+        "processedRps": 623.7661815667386,
+        "publishedRps": 623.7661815667386,
+        "ackedRps": 623.7661815667386
+      },
+      {
+        "partition": 8,
+        "shardId": "engine-0",
+        "fetchedDelta": 187031,
+        "processedDelta": 187031,
+        "publishedDelta": 187031,
+        "ackedDelta": 187031,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.369557598764,
+        "processedRps": 623.369557598764,
+        "publishedRps": 623.369557598764,
+        "ackedRps": 623.369557598764
+      },
+      {
+        "partition": 9,
+        "shardId": "engine-0",
+        "fetchedDelta": 187338,
+        "processedDelta": 187338,
+        "publishedDelta": 187338,
+        "ackedDelta": 187338,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.392780776648,
+        "processedRps": 624.392780776648,
+        "publishedRps": 624.392780776648,
+        "ackedRps": 624.392780776648
+      },
+      {
+        "partition": 10,
+        "shardId": "engine-0",
+        "fetchedDelta": 187647,
+        "processedDelta": 187647,
+        "publishedDelta": 187647,
+        "ackedDelta": 187647,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 625.4226699035736,
+        "processedRps": 625.4226699035736,
+        "publishedRps": 625.4226699035736,
+        "ackedRps": 625.4226699035736
+      },
+      {
+        "partition": 11,
+        "shardId": "engine-0",
+        "fetchedDelta": 187100,
+        "processedDelta": 187100,
+        "publishedDelta": 187100,
+        "ackedDelta": 187100,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 623.5995328406989,
+        "processedRps": 623.5995328406989,
+        "publishedRps": 623.5995328406989,
+        "ackedRps": 623.5995328406989
+      },
+      {
+        "partition": 12,
+        "shardId": "engine-0",
+        "fetchedDelta": 187593,
+        "processedDelta": 187593,
+        "publishedDelta": 187593,
+        "ackedDelta": 187593,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 625.2426892794507,
+        "processedRps": 625.2426892794507,
+        "publishedRps": 625.2426892794507,
+        "ackedRps": 625.2426892794507
+      },
+      {
+        "partition": 13,
+        "shardId": "engine-0",
+        "fetchedDelta": 187390,
+        "processedDelta": 187390,
+        "publishedDelta": 187390,
+        "ackedDelta": 187390,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 624.5660954517293,
+        "processedRps": 624.5660954517293,
+        "publishedRps": 624.5660954517293,
+        "ackedRps": 624.5660954517293
+      },
+      {
+        "partition": 14,
+        "shardId": "engine-0",
+        "fetchedDelta": 187884,
+        "processedDelta": 187884,
+        "publishedDelta": 187884,
+        "ackedDelta": 187884,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 626.212584865002,
+        "processedRps": 626.212584865002,
+        "publishedRps": 626.212584865002,
+        "ackedRps": 626.212584865002
+      },
+      {
+        "partition": 15,
+        "shardId": "engine-0",
+        "fetchedDelta": 188590,
+        "processedDelta": 188590,
+        "publishedDelta": 188590,
+        "ackedDelta": 188590,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 628.5656648766831,
+        "processedRps": 628.5656648766831,
+        "publishedRps": 628.5656648766831,
+        "ackedRps": 628.5656648766831
+      }
+    ]
+  },
+  "materializerDelta": {
+    "fetchedDelta": 36462,
+    "materializedDelta": 2999954,
+    "materializedBatchesDelta": 36462,
+    "failedDelta": 0,
+    "ackFailedDelta": 0,
+    "unsupportedDelta": 0,
+    "checksumValidatedBatchesDelta": 36462,
+    "legacyUncheckedBatchesDelta": 0,
+    "validatedMembershipOutcomesDelta": 2999954,
+    "canonicalCommitObservedBatchesDelta": 36462,
+    "sourceCommitObservedBatchesDelta": 36462,
+    "canonicalCommitElapsedNanosDelta": 854911318744,
+    "sourceCommitElapsedNanosDelta": 38579387770,
+    "sourceResidenceSamplesDelta": 36462,
+    "sourceResidenceElapsedMsDelta": 9363220,
+    "clockGuardFailuresDelta": 0,
+    "materializedRps": 9998.770245556312
+  },
+  "diagnosticsSha256": "33ebe1f40761c60cd8b1399c4de2d06a4e2850a9b562d9fcb1c6b6bc884f710a",
+  "databaseDiagnostics": {
+    "postgres": {
+      "xactCommit": 90348,
+      "xactRollback": 0,
+      "blocksRead": 519136,
+      "blocksHit": 68792669,
+      "tuplesReturned": 12284053,
+      "tuplesFetched": 10157956,
+      "tuplesInserted": 3531562,
+      "tuplesUpdated": 128,
+      "tuplesDeleted": 53,
+      "conflicts": 0,
+      "tempFiles": 22,
+      "tempBytes": 113230989,
+      "deadlocks": 0
+    },
+    "projection-postgres": {
+      "xactCommit": 150041,
+      "xactRollback": 0,
+      "blocksRead": 5185999,
+      "blocksHit": 479603155,
+      "tuplesReturned": 406201491,
+      "tuplesFetched": 38959215,
+      "tuplesInserted": 20258376,
+      "tuplesUpdated": 490642,
+      "tuplesDeleted": 2952747,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    },
+    "boundary-postgres": {
+      "xactCommit": 133,
+      "xactRollback": 0,
+      "blocksRead": 69,
+      "blocksHit": 17972,
+      "tuplesReturned": 21232,
+      "tuplesFetched": 9543,
+      "tuplesInserted": 35,
+      "tuplesUpdated": 145,
+      "tuplesDeleted": 1,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    }
+  },
+  "latencyMs": {
+    "min": 0.802588,
+    "p50": 9.389420000000001,
+    "p95": 56.68173,
+    "p99": 81.981,
+    "max": 357.845389
+  },
+  "throughput": {
+    "attemptedPerSecond": 9998.770245556312,
+    "acceptedPerSecond": 9998.770245556312
+  },
+  "totalRequests": 2999954,
+  "completion.json": {
+    "stage": "protocol",
+    "pass": false,
+    "originalExitCode": 1,
+    "cleanupExitCode": 0,
+    "cleanupPassed": true,
+    "exitCode": 1
+  },
+  "candidate-build.json": {
+    "runtimeImage": "sha256:a1f3ec30dfb89b844d1c7ae4094406c95c4550c00582fd2060d445dabcf82b4e",
+    "sourceManifestSha256": "6d2592ec236b56d13fadf0264552c162abdd5d7b7389184a7fea49ec74410040",
+    "buildTree": "/home/reefbench/reef-lifecycle-group",
+    "provenance": "Native bounded lifecycle-group image;1109 frozen files verified before build; separate tree preserves C22 reference fixture source. Includes compatibility cleanup fix.",
+    "runtimeBuildSourceManifestSha256": "6d2592ec236b56d13fadf0264552c162abdd5d7b7389184a7fea49ec74410040",
+    "sqlOnlyAdditions": [
+      "scripts/dev/db/migrations/runtime/0053_market_data_indexed_top_of_book.sql",
+      "scripts/dev/db/migrations/runtime/0054_projection_claim_cleanup_skip_locked.sql",
+      "scripts/dev/db/migrations/runtime/0055_market_data_indexed_currency.sql",
+      "scripts/dev/db/migrations/runtime/0056_lifecycle_parameter_sensitive_plans.sql",
+      "scripts/dev/db/migrations/runtime/0057_market_data_idle_metadata.sql",
+      "scripts/dev/db/migrations/runtime/0058_canonical_status_covering_index.sql"
+    ]
+  },
+  "schema-pin.json": {
+    "migrationId": "runtime/0058_canonical_status_covering_index.sql",
+    "migrationSha256": "beab30034c1e26ad9242a74989d9f9fd1fa2a76b7ad3dafda23ef68fe6d3a4c2",
+    "functionBodySha256": {
+      "runtime_persist_submit_outcome_status_stage": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+      "runtime_project_order_lifecycle_state": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+      "runtime_project_market_data_snapshots": "cedf4d3e65dc4355bd0a0892e4f213a07eabac1b00f426d9225e327d87a4db02",
+      "runtime_cleanup_projection_batch_claims": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab"
+    },
+    "volatility": "v",
+    "functionConfig": {
+      "runtime_project_order_lifecycle_state": [
+        "plan_cache_mode=force_custom_plan"
+      ]
+    }
+  },
+  "schema-after.json": {
+    "ledger": [
+      {
+        "migration_id": "runtime/0058_canonical_status_covering_index.sql",
+        "checksum_sha256": "beab30034c1e26ad9242a74989d9f9fd1fa2a76b7ad3dafda23ef68fe6d3a4c2"
+      }
+    ],
+    "functions": {
+      "runtime_persist_submit_outcome_status_stage": {
+        "sha256": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+        "volatility": "v",
+        "config": null
+      },
+      "runtime_project_order_lifecycle_state": {
+        "sha256": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+        "volatility": "v",
+        "config": [
+          "plan_cache_mode=force_custom_plan"
+        ]
+      },
+      "runtime_project_market_data_snapshots": {
+        "sha256": "cedf4d3e65dc4355bd0a0892e4f213a07eabac1b00f426d9225e327d87a4db02",
+        "volatility": "v",
+        "config": null
+      },
+      "runtime_cleanup_projection_batch_claims": {
+        "sha256": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab",
+        "volatility": "v",
+        "config": null
+      }
+    },
+    "canonicalStatusIndex": {
+      "keys": 2,
+      "attributes": 3,
+      "includesCommandType": true
+    }
+  },
+  "baseline-measurement.json": {
+    "kind": "current-build-300-second-baseline",
+    "configuredRate": 10000,
+    "accepted": 2999954,
+    "failures": 0,
+    "durationNanoseconds": 300000000000,
+    "projectionFreshness": {
+      "source": "venue-event-batch-projector",
+      "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+      "materialized": 2999954,
+      "projected": 2999954,
+      "materializedToProjectedGap": 0,
+      "lag": 0,
+      "projectedPerSecond": 9998.770245556312,
+      "caughtUp": true
+    },
+    "freshness": {
+      "schemaVersion": "reef.sustainedDownstreamFreshness.v1",
+      "authority": "source-membership-to-sampled-commit-upper-bound-v1",
+      "pass": false,
+      "limitsMs": {
+        "p95": 5000,
+        "p99": 10000,
+        "max": 30000
+      },
+      "minimumDurationSeconds": 300,
+      "durationToleranceMs": 2,
+      "checks": {
+        "upstreamAuthoritative": true,
+        "downstreamAuthoritative": false,
+        "completeCommandWeightedResidence": true,
+        "acceptedCountsReconciled": true,
+        "sustainedDurationComplete": true,
+        "scheduledDemandComplete": true,
+        "finalQueuesDrained": true,
+        "marketProjectionSourceBound": true,
+        "finalCallersIdle": true,
+        "finalCanonicalLagZero": true,
+        "sourceToCanonical": true,
+        "sourceToLifecycle": false,
+        "sourceToMarketData": false
+      },
+      "stages": {
+        "sourceToCanonical": {
+          "commandCount": "2999954",
+          "meanMs": 276.6963240103015,
+          "maxMs": 2806,
+          "p95Ms": 777,
+          "p99Ms": 1765
+        },
+        "sourceToLifecycle": {
+          "commandCount": "2999954",
+          "meanMs": 3254.3277126915946,
+          "maxMs": 8741,
+          "p95Ms": 5702,
+          "p99Ms": 7210
+        },
+        "sourceToMarketData": {
+          "commandCount": "2999954",
+          "meanMs": 4218.198297373893,
+          "maxMs": 9652,
+          "p95Ms": 6662,
+          "p99Ms": 7963
+        }
+      }
+    },
+    "promotion": false
+  },
+  "queueSamples": {
+    "count": 309,
+    "first": {
+      "sampledAt": "2026-09-24T20:42:36.504Z",
+      "queue": {
+        "orderLifecyclePending": 0,
+        "orderLifecycleOldestDirtiedAt": "",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T20:42:36.906746Z",
+        "databaseGeneration": "2026-09-24 20:40:03.188646+00"
+      },
+      "failed": 0
+    },
+    "last": {
+      "sampledAt": "2026-09-24T20:47:46.712Z",
+      "queue": {
+        "orderLifecyclePending": 0,
+        "orderLifecycleOldestDirtiedAt": "",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T20:47:46.727662Z",
+        "databaseGeneration": "2026-09-24 20:40:03.188646+00"
+      },
+      "failed": 0
+    },
+    "maxPending": 5609
+  },
+  "diagnosticSampler": {
+    "configuredIntervalMs": 1000,
+    "maxAllowedGapMs": 2000,
+    "sampleCount": 300,
+    "successfulSampleCount": 299,
+    "maxGapMs": 2003
+  },
+  "interpretation": "Control: new bounded lifecycle group4loops in one maintainer; allbatch500. Exact final counts2999954 and empty queues,zero failures/retries/deadlocks. Freshness p95 lifecycle5702ms/market6662ms fails5000ms; sampler299/300successful/maxgap2003ms also fails authority. Diagnostic only; finalcount includes drain. Full business reference deferred for capacity comparison."
+}

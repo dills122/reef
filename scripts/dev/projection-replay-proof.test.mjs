@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assertStableProjectionReplaySnapshot, stableStringify } from "./lib/projection-replay-proof.mjs";
+import {
+  assertClaimGuardedProjectionReplay,
+  assertStableProjectionReplaySnapshot,
+  stableStringify,
+} from "./lib/projection-replay-proof.mjs";
 
 test("stableStringify canonicalizes object key order", () => {
   assert.equal(stableStringify({ b: 1, a: { d: 2, c: 3 } }), '{"a":{"c":3,"d":2},"b":1}');
@@ -32,6 +36,52 @@ test("assertStableProjectionReplaySnapshot rejects API freshness drift", () => {
   assert.throws(
     () => assertStableProjectionReplaySnapshot(before, after),
     /projection replay changed stable read-model output/,
+  );
+});
+
+test("assertClaimGuardedProjectionReplay accepts an exact duplicate blocked by its completed claim", () => {
+  assert.doesNotThrow(() => assertClaimGuardedProjectionReplay({
+    projectedRows: 0,
+    partition: 2,
+    streamSequence: 562949953421313,
+    watermarkRows: [{ last_partition_seq: "0" }],
+    claimRows: [{
+      status: "completed",
+      candidate_count: "1",
+      result_count: "1",
+      max_stream_sequence: "562949953421313",
+    }],
+  }));
+});
+
+test("assertClaimGuardedProjectionReplay rejects a replay without an exact completed claim", () => {
+  assert.throws(
+    () => assertClaimGuardedProjectionReplay({
+      projectedRows: 0,
+      partition: 2,
+      streamSequence: 562949953421313,
+      watermarkRows: [{ last_partition_seq: "0" }],
+      claimRows: [],
+    }),
+    /completed projection batch claim/,
+  );
+});
+
+test("assertClaimGuardedProjectionReplay rejects duplicate effects", () => {
+  assert.throws(
+    () => assertClaimGuardedProjectionReplay({
+      projectedRows: 1,
+      partition: 2,
+      streamSequence: 562949953421313,
+      watermarkRows: [{ last_partition_seq: "562949953421313" }],
+      claimRows: [{
+        status: "completed",
+        candidate_count: "1",
+        result_count: "1",
+        max_stream_sequence: "562949953421313",
+      }],
+    }),
+    /projected 1 rows/,
   );
 });
 

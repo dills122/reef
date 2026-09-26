@@ -1,0 +1,126 @@
+{
+  "id": "C4",
+  "reportSha256": "43b434f140cb980280550246c58f573bf9e965bdee83dbe439acd18788366871",
+  "accepted": 749977,
+  "failures": 0,
+  "projectionFreshness": {
+    "source": "venue-event-batch-projector",
+    "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+    "materialized": 749977,
+    "projected": 749977,
+    "materializedToProjectedGap": 0,
+    "lag": 0,
+    "projectedPerSecond": 2499.9148116487227,
+    "caughtUp": true
+  },
+  "config": {
+    "Duration": 300000000000,
+    "RatePerSecond": 2500,
+    "Workers": 256
+  },
+  "completion": {
+    "stage": "protocol",
+    "pass": false,
+    "originalExitCode": 1,
+    "cleanupExitCode": 0,
+    "cleanupPassed": true,
+    "exitCode": 1
+  },
+  "measurement": {
+    "kind": "current-build-300-second-baseline",
+    "configuredRate": 2500,
+    "accepted": 749977,
+    "failures": 0,
+    "durationNanoseconds": 300000000000,
+    "projectionFreshness": {
+      "source": "venue-event-batch-projector",
+      "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+      "materialized": 749977,
+      "projected": 749977,
+      "materializedToProjectedGap": 0,
+      "lag": 0,
+      "projectedPerSecond": 2499.9148116487227,
+      "caughtUp": true
+    },
+    "freshness": {
+      "schemaVersion": "reef.sustainedDownstreamFreshness.v1",
+      "authority": "source-membership-to-sampled-commit-upper-bound-v1",
+      "pass": false,
+      "limitsMs": {
+        "p95": 5000,
+        "p99": 10000,
+        "max": 30000
+      },
+      "minimumDurationSeconds": 300,
+      "durationToleranceMs": 2,
+      "checks": {
+        "upstreamAuthoritative": true,
+        "downstreamAuthoritative": true,
+        "completeCommandWeightedResidence": true,
+        "acceptedCountsReconciled": true,
+        "sustainedDurationComplete": true,
+        "scheduledDemandComplete": true,
+        "finalQueuesDrained": true,
+        "marketProjectionSourceBound": true,
+        "finalCallersIdle": true,
+        "finalCanonicalLagZero": true,
+        "sourceToCanonical": true,
+        "sourceToLifecycle": false,
+        "sourceToMarketData": false
+      },
+      "stages": {
+        "sourceToCanonical": {
+          "commandCount": "749977",
+          "meanMs": 54.888968595036914,
+          "maxMs": 511,
+          "p95Ms": 136,
+          "p99Ms": 194
+        },
+        "sourceToLifecycle": {
+          "commandCount": "749977",
+          "meanMs": 45785.20724502218,
+          "maxMs": 129268,
+          "p95Ms": 97018,
+          "p99Ms": 116243
+        },
+        "sourceToMarketData": {
+          "commandCount": "749977",
+          "meanMs": 85495.99267044189,
+          "maxMs": 229001,
+          "p95Ms": 193325,
+          "p99Ms": 216568
+        }
+      }
+    },
+    "promotion": false
+  },
+  "marketMismatch": {
+    "pass": false,
+    "incrementalRows": "64",
+    "referenceRows": "64",
+    "missingFromReference": "32",
+    "extraInReference": "32",
+    "completeMismatchSet": true,
+    "changedFieldCounts": {
+      "lag": 32
+    }
+  },
+  "referenceStages": [
+    {
+      "stage": "lifecycle",
+      "pass": true,
+      "incrementalRows": "618151",
+      "referenceRows": "618151",
+      "missingFromReference": "0",
+      "extraInReference": "0"
+    },
+    {
+      "stage": "market",
+      "pass": false,
+      "incrementalRows": "64",
+      "referenceRows": "64",
+      "missingFromReference": "32",
+      "extraInReference": "32"
+    }
+  ]
+}

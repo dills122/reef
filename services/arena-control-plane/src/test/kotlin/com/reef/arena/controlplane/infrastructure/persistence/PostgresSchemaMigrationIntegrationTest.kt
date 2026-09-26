@@ -97,7 +97,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'runtime_events_occurred_at_idx',
                     'runtime_events_trace_seq_idx',
                     'idx_runtime_events_occurred_event',
-                    'runtime_events_order_occurred_idx'
+                    'runtime_events_order_occurred_idx',
+                    'idx_runtime_events_order_occurred_typed'
                   )
                 ORDER BY indexname
                 """.trimIndent()
@@ -119,7 +120,6 @@ class PostgresSchemaMigrationIntegrationTest {
                     'idx_runtime_events_trace_sequence',
                     'idx_runtime_events_order_trace_sequence',
                     'idx_runtime_events_occurred_typed',
-                    'idx_runtime_events_order_occurred_typed',
                     'idx_runtime_events_order_modified_lifecycle'
                   )
                 ORDER BY indexname
@@ -132,7 +132,6 @@ class PostgresSchemaMigrationIntegrationTest {
                         listOf(
                             "idx_runtime_events_occurred_typed",
                             "idx_runtime_events_order_modified_lifecycle",
-                            "idx_runtime_events_order_occurred_typed",
                             "idx_runtime_events_order_trace_sequence",
                             "idx_runtime_events_trace_sequence"
                         ),

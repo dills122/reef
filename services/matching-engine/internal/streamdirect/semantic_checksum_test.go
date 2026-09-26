@@ -80,3 +80,20 @@ func checksumTestBatch() VenueEventBatch {
 		},
 	}
 }
+
+func TestVenueEventBatchChecksumIgnoresRetryTiming(t *testing.T) {
+	batch := checksumTestBatch()
+	batch.WorkFinishedAt = "2026-09-24T00:00:00Z"
+	first, err := venueEventBatchChecksum(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch.WorkFinishedAt = "2026-09-24T00:00:01Z"
+	second, err := venueEventBatchChecksum(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("same semantic batch changes checksum on retry")
+	}
+}
