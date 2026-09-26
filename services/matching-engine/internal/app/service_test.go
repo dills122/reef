@@ -212,6 +212,53 @@ func TestSubmitOrderMatchesCrossingOrder(t *testing.T) {
 	}
 }
 
+func TestCommandResultsCarryChangedOrderStates(t *testing.T) {
+	service := NewService()
+	buy := service.SubmitOrder(domain.SubmitOrder{
+		CommandID: "submit-buy", OrderID: "state-buy", InstrumentID: "AAPL",
+		Side: domain.SideBuy, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
+	})
+	if buy.EffectVersion != 1 || len(buy.OrderStates) != 1 || buy.OrderStates[0].OrderID != "state-buy" {
+		t.Fatalf("accepted submit must carry its state: %#v", buy)
+	}
+	modify := service.ModifyOrder(domain.ModifyOrder{
+		CommandID: "modify-buy", OrderID: "state-buy", QuantityUnits: "120", LimitPrice: "150",
+	})
+	if len(modify.OrderStates) != 1 || modify.OrderStates[0].OriginalQuantity != "120" {
+		t.Fatalf("accepted modify must carry its new state: %#v", modify)
+	}
+	sell := service.SubmitOrder(domain.SubmitOrder{
+		CommandID: "submit-sell", OrderID: "state-sell", InstrumentID: "AAPL",
+		Side: domain.SideSell, QuantityUnits: "50", LimitPrice: "150", Currency: "USD",
+	})
+	if len(sell.Trades) != 1 || len(sell.OrderStates) != 2 ||
+		sell.OrderStates[0].OrderID != "state-sell" || sell.OrderStates[0].Status != domain.OrderStatusFilled ||
+		sell.OrderStates[1].OrderID != "state-buy" || sell.OrderStates[1].RemainingQuantity != "70" {
+		t.Fatalf("match must carry taker and resting maker states: %#v", sell)
+	}
+	cancel := service.CancelOrder(domain.CancelOrder{CommandID: "cancel-buy", OrderID: "state-buy"})
+	if len(cancel.OrderStates) != 1 || cancel.OrderStates[0].Status != domain.OrderStatusCancelled {
+		t.Fatalf("accepted cancel must carry terminal state: %#v", cancel)
+	}
+}
+
+func TestCancelOldestSelfTradeCarriesCancelledMakerState(t *testing.T) {
+	service := NewService(WithSelfTradePreventionMode(SelfTradePreventionCancelOldest))
+	service.SubmitOrder(domain.SubmitOrder{
+		CommandID: "stp-maker", OrderID: "stp-maker", InstrumentID: "AAPL", AccountID: "shared",
+		Side: domain.SideSell, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
+	})
+	result := service.SubmitOrder(domain.SubmitOrder{
+		CommandID: "stp-taker", OrderID: "stp-taker", InstrumentID: "AAPL", AccountID: "shared",
+		Side: domain.SideBuy, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
+	})
+	if result.Accepted == nil || len(result.Trades) != 0 || len(result.OrderStates) != 2 ||
+		result.OrderStates[0].OrderID != "stp-taker" ||
+		result.OrderStates[1].OrderID != "stp-maker" || result.OrderStates[1].Status != domain.OrderStatusCancelled {
+		t.Fatalf("cancel-oldest must carry the maker cancellation without a trade: %#v", result)
+	}
+}
+
 func TestSubmitOrderPartiallyFillsAndLeavesResidualLiquidity(t *testing.T) {
 	service := NewService()
 

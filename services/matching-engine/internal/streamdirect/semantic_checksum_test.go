@@ -1,10 +1,37 @@
 package streamdirect
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
+
+func TestCanonicalEffectsDoNotChangeDirectEngineResultJSON(t *testing.T) {
+	result := domain.SubmitOrderResult{
+		EffectVersion: 1,
+		Accepted:      &domain.OrderAccepted{EventID: "accepted", OrderID: "order-1"},
+		OrderStates:   []domain.OrderState{{OrderID: "order-1"}},
+	}
+	directJSON, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(directJSON) != `{"accepted":{"eventId":"accepted","orderId":"order-1","engineOrderId":"","occurredAt":""}}` {
+		t.Fatalf("direct engine response changed: %s", directJSON)
+	}
+	canonicalJSON, err := json.Marshal(canonicalOutcomeResult(result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var canonical map[string]json.RawMessage
+	if err := json.Unmarshal(canonicalJSON, &canonical); err != nil {
+		t.Fatal(err)
+	}
+	if string(canonical["effectVersion"]) != "1" || len(canonical["orderStates"]) == 0 || len(canonical["accepted"]) == 0 {
+		t.Fatalf("canonical outcome lost versioned effects: %s", canonicalJSON)
+	}
+}
 
 func TestVenueEventBatchChecksumCoversSemanticOutcomeAndIgnoresCreatedAt(t *testing.T) {
 	batch := checksumTestBatch()
@@ -23,9 +50,9 @@ func TestVenueEventBatchChecksumCoversSemanticOutcomeAndIgnoresCreatedAt(t *test
 	}
 
 	batch.Outcomes[0].Status = "rejected"
-	batch.Outcomes[0].Result = domain.SubmitOrderResult{
+	batch.Outcomes[0].Result = canonicalOutcomeResult(domain.SubmitOrderResult{
 		Rejected: &domain.OrderRejected{Code: "DUPLICATE_ORDER_ID", Reason: "duplicate"},
-	}
+	})
 	conflicting, err := venueEventBatchChecksum(batch)
 	if err != nil {
 		t.Fatalf("checksum with conflicting result failed: %v", err)
@@ -68,14 +95,14 @@ func checksumTestBatch() VenueEventBatch {
 				InstrumentID:   "AAPL",
 				OrderID:        "ord-1",
 				Status:         "accepted",
-				Result: domain.SubmitOrderResult{
+				Result: canonicalOutcomeResult(domain.SubmitOrderResult{
 					Accepted: &domain.OrderAccepted{
 						EventID:       "evt-1",
 						OrderID:       "ord-1",
 						EngineOrderID: "eng-1",
 						OccurredAt:    "2026-07-19T12:00:00Z",
 					},
-				},
+				}),
 			},
 		},
 	}

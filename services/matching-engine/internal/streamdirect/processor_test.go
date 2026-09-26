@@ -662,6 +662,14 @@ func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 		if outcome.InstrumentID != "STK001" || outcome.OrderID != "ord-life-1" {
 			t.Fatalf("unexpected routing fields on outcome %d: %#v", idx, outcome)
 		}
+		if outcome.Result.EffectVersion != 1 || len(outcome.Result.OrderStates) != 1 ||
+			outcome.Result.OrderStates[0].OrderID != "ord-life-1" {
+			t.Fatalf("durable outcome %d must carry versioned changed-order state: %#v", idx, outcome)
+		}
+	}
+	if batch.Outcomes[1].Result.OrderStates[0].OriginalQuantity != "120" ||
+		batch.Outcomes[2].Result.OrderStates[0].Status != domain.OrderStatusCancelled {
+		t.Fatalf("modify/cancel state did not survive the published batch: %#v", batch.Outcomes)
 	}
 	if submit.acked != 1 || modify.acked != 1 || cancel.acked != 1 {
 		t.Fatalf("expected all deliveries acked after publish, got submit=%d modify=%d cancel=%d", submit.acked, modify.acked, cancel.acked)
@@ -873,6 +881,9 @@ func TestProcessorPublishesFailedOutcomeForUnsupportedCommands(t *testing.T) {
 	if outcome.Status != "failed" || outcome.CommandID != "cmd-cancel-1" {
 		t.Fatalf("unexpected outcome for unsupported command: %#v", outcome)
 	}
+	if outcome.Result.EffectVersion != 1 {
+		t.Fatalf("expected versioned failed outcome, got %#v", outcome.Result)
+	}
 	if outcome.Result.Rejected == nil || outcome.Result.Rejected.Code != "UNSUPPORTED_COMMAND_TYPE" {
 		t.Fatalf("expected UNSUPPORTED_COMMAND_TYPE reject code, got %#v", outcome.Result.Rejected)
 	}
@@ -911,6 +922,9 @@ func TestProcessorPublishesFailedOutcomeForUndecodableCommand(t *testing.T) {
 	outcome := publisher.batches[0].Outcomes[0]
 	if outcome.Status != "failed" || outcome.CommandID != "cmd-poison-1" {
 		t.Fatalf("unexpected outcome for undecodable command: %#v", outcome)
+	}
+	if outcome.Result.EffectVersion != 1 {
+		t.Fatalf("expected versioned failed outcome, got %#v", outcome.Result)
 	}
 	if outcome.Result.Rejected == nil || outcome.Result.Rejected.Code != "POISON_COMMAND_DECODE_ERROR" {
 		t.Fatalf("expected POISON_COMMAND_DECODE_ERROR reject code, got %#v", outcome.Result.Rejected)
