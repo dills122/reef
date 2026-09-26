@@ -84,7 +84,11 @@ async function createFixture({ includeDirtyQueueMigration = false } = {}) {
   if (includeDirtyQueueMigration) {
     await writeFile(
       join(migrations, "runtime", "0069_logged_projection_dirty_queues.sql"),
-      "ALTER TABLE runtime.order_lifecycle_dirty SET LOGGED;\n",
+      [
+        "ALTER TABLE runtime.order_lifecycle_dirty SET LOGGED;",
+        "ALTER TABLE runtime.market_data_snapshot_dirty SET LOGGED;",
+        "",
+      ].join("\n"),
     );
   }
   await writeFile(
@@ -237,7 +241,10 @@ try {
   assert.notEqual(automatic.status, 0);
   assert.match(automatic.stderr, /runtime\/0069 requires an explicit quiesced operator rollout/);
   const automaticLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
+  assert.match(automaticLog, /compose exec -T postgres psql/);
   assert.doesNotMatch(automaticLog, /compose up .*platform-runtime/);
+  const automaticSql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
+  assert.doesNotMatch(automaticSql, /ALTER TABLE runtime\..* SET LOGGED/);
 
   const manualEnv = {
     ...process.env,
@@ -261,8 +268,12 @@ try {
   });
   assert.equal(quiesced.status, 0, `${quiesced.stdout}\n${quiesced.stderr}`);
   const sql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
+  const dockerLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
+  assert.match(dockerLog, /compose exec -T postgres psql -U postgres -d reef -v ON_ERROR_STOP=1 -X -q/);
   assert.match(sql, /SET LOCAL lock_timeout = '2s';/);
   assert.match(sql, /SET LOCAL statement_timeout = '30s';/);
+  assert.match(sql, /ALTER TABLE runtime\.order_lifecycle_dirty SET LOGGED/);
+  assert.match(sql, /ALTER TABLE runtime\.market_data_snapshot_dirty SET LOGGED/);
 } finally {
   await rm(dirtyQueueFixture.root, { recursive: true, force: true });
 }
