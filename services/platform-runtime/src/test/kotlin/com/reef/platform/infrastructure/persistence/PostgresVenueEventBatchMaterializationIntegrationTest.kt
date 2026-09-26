@@ -193,6 +193,14 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
 
         finalPersistence.rebuildOrderLifecycleState()
         assertEquals(incrementalOrder.copy(updatedAt = ""), finalPersistence.orderLifecycleState(pendingOrder)?.copy(updatedAt = ""))
+        finalDataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM runtime.market_data_snapshots WHERE projection_name = ? AND instrument_id = ?").use { ps ->
+                ps.setString(1, marketName)
+                ps.setString(2, "AAPL")
+                assertEquals(1, ps.executeUpdate())
+            }
+        }
+        assertEquals(null, finalPersistence.marketDataSnapshot("AAPL", marketName))
         finalPersistence.refreshMarketDataSnapshots(marketName, projectionName)
         assertEquals(incrementalMarket.copy(updatedAt = ""), finalPersistence.marketDataSnapshot("AAPL", marketName)?.copy(updatedAt = ""))
     }
