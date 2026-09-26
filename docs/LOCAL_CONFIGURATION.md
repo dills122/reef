@@ -18,9 +18,11 @@ specified in `.env.example` and `compose.base.yml`.
 This is the ordinary development/smoke topology. The measured durable direct
 stream topology uses Redpanda, matching-engine direct consumption, and canonical
 materializers; it must be started with its named profile and interpreted using
-[Local Run Profiles](LOCAL_RUN_PROFILES.md) and the
+[the measured run selector](LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need) and the
 [throughput ledger](THROUGHPUT_BASELINES.md). A `make dev-smoke` pass on the
-default stack is not evidence for that throughput topology.
+default stack is not evidence for that throughput topology. The selector gives
+the c-16, worker, partition, and projector shapes behind the best recorded
+venue-core and projection runs, plus the current named gate commands.
 
 ## Start, inspect, stop
 

@@ -10,6 +10,10 @@ use it for the complete prerequisites, work-area setup, troubleshooting, and
 optional infrastructure boundaries.
 For the accepted default stack, profiles, stop, and reset behavior, use the
 [local configuration guide](https://github.com/dills122/reef/blob/HEAD/docs/LOCAL_CONFIGURATION.md).
+For measured throughput configurations, use the
+[run selector](https://github.com/dills122/reef/blob/HEAD/docs/LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need);
+the ordinary local stack is a development and smoke setup, not a 10k benchmark
+profile.
 
 ## Core Local Stack
 
