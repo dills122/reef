@@ -143,9 +143,11 @@ type TradeCreated struct {
 }
 
 type SubmitOrderResult struct {
+	EffectVersion int                `json:"-"`
 	Accepted      *OrderAccepted     `json:"accepted,omitempty"`
 	Rejected      *OrderRejected     `json:"rejected,omitempty"`
 	AcceptedOrder *AcceptedOrderFact `json:"acceptedOrder,omitempty"`
+	OrderStates   []OrderState       `json:"-"`
 	Executions    []ExecutionCreated `json:"executions,omitempty"`
 	Trades        []TradeCreated     `json:"trades,omitempty"`
 }

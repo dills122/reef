@@ -1179,6 +1179,36 @@ Status: implementation under validation
   instrument row counts. Required benchmark health counters must be present and
   valid; missing counters never mean zero failures.
 
+### D-058: Versioned canonical effects for independent post-match consumers
+
+Status: accepted implementation direction; live cutover and capacity remain unqualified
+
+- Preserve Go's deterministic matching and the existing durable venue batch and
+  compact canonical command outcome as source authority. Matching emits a
+  versioned result with final changed-order facts for the incoming order and
+  every affected resting maker, including cancellation by self-trade prevention.
+  This adds no synchronous database write to matching or ingress.
+- Decode each outcome once into a deterministic ordered sequence: command
+  acceptance/rejection, paired maker/taker executions and trade per fill, then
+  changed-order final states. Identity is event stream, source partition,
+  stream sequence, and effect ordinal; source batch and command IDs are retained
+  for audit. Missing, conflicting, or unsupported source versions fail closed.
+- An accepted submit carries immutable order ownership. Other effects resolve
+  participant, account, run, and session by keyed canonical order identity;
+  missing ownership blocks live and settlement progress. Trade facts keep both
+  order IDs and immutable price, quantity, and currency.
+- Live, audit, and settlement own separate effect dedupe and contiguous source
+  checkpoints, committed with their own state changes in one transaction. A
+  consumer cannot skip a source gap, cross a semantic conflict, or claim a
+  combined response is current without causal coverage from required inputs.
+  Direct admin/protective audit events retain their separate durable authority.
+- Existing unversioned outcomes remain on the legacy projection path until a
+  proved backfill/cutover. The old projector stays a comparison and rollback
+  path; new consumers do not dual-write its effect tables. One integrated
+  droplet campaign follows parity and replacement of the old work.
+
+Contract and rollout: [`docs/work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-26.md`](./work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-26.md).
+
 ## 2026-09-24 — Serialize projection invalidations before claiming freshness
 
 Online synthetic C3 validation found382stale lifecycle rows and39market snapshots

@@ -100,9 +100,9 @@ func TestProcessorTimingRetryAfterDurablePublishLostResponsePreservesSemanticIde
 	}
 	conflicting := after
 	conflicting.Outcomes = append([]CommandOutcomeFact(nil), after.Outcomes...)
-	conflicting.Outcomes[0].Result = domain.SubmitOrderResult{
+	conflicting.Outcomes[0].Result = canonicalOutcomeResult(domain.SubmitOrderResult{
 		Rejected: &domain.OrderRejected{Code: "DUPLICATE_ORDER_ID", Reason: "corrupt retry result"},
-	}
+	})
 	checksum, err := venueEventBatchChecksum(conflicting)
 	if err != nil || checksum == after.PayloadChecksum {
 		t.Fatalf("changed actual result must still create semantic conflict: %s, %v", checksum, err)

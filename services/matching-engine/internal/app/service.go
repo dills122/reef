@@ -274,7 +274,8 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 	if rollback != nil {
 		rollback.trackCreatedOrder(book, record)
 	}
-	if accepted, rejection := s.applySelfTradePrevention(rollback, book, record, now); !accepted {
+	accepted, rejection, stpCancelled := s.applySelfTradePrevention(rollback, book, record, now)
+	if !accepted {
 		s.releaseOrder(record.OrderID)
 		return rejection
 	}
@@ -286,6 +287,7 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 	}
 
 	s.refreshOrderStatus(rollback, record)
+	s.appendChangedOrderStates(&result, record.OrderID, stpCancelled)
 
 	return result
 }
@@ -334,7 +336,9 @@ func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) d
 	record.LastUpdatedAt = now
 	s.trackTerminalOrder(rollback, record)
 
-	return acceptedResult("cancelled", cmd.OrderID, now)
+	result := acceptedResult("cancelled", cmd.OrderID, now)
+	s.appendChangedOrderStates(&result, cmd.OrderID, nil)
+	return result
 }
 
 func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
@@ -346,6 +350,7 @@ func (s *Service) ModifyOrderInBatch(rollback *BatchRollback, cmd domain.ModifyO
 }
 
 func withCommandOutcomeEventID(result domain.SubmitOrderResult, commandID string) domain.SubmitOrderResult {
+	result.EffectVersion = 1
 	if commandID == "" {
 		return result
 	}
@@ -411,12 +416,16 @@ func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) d
 	}
 
 	resetPriority := limitPrice != record.LimitPrice || quantityUnits > record.OriginalQuantity
+	var stpCancelled []string
 	if resetPriority {
 		proposed := *record
 		proposed.OriginalQuantity = quantityUnits
 		proposed.RemainingQuantity = quantityUnits - alreadyFilled
 		proposed.LimitPrice = limitPrice
-		if accepted, rejection := s.applySelfTradePrevention(rollback, book, &proposed, now); !accepted {
+		var accepted bool
+		var rejection domain.SubmitOrderResult
+		accepted, rejection, stpCancelled = s.applySelfTradePrevention(rollback, book, &proposed, now)
+		if !accepted {
 			return rejection
 		}
 	}
@@ -442,6 +451,7 @@ func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) d
 			book.book.Add(record.Side, incoming)
 		}
 	}
+	s.appendChangedOrderStates(&result, record.OrderID, stpCancelled)
 
 	return result
 }
@@ -578,6 +588,10 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 	book.mu.Lock()
 	defer book.mu.Unlock()
 
+	return orderStateFromRecord(record), true
+}
+
+func orderStateFromRecord(record *orderRecord) domain.OrderState {
 	return domain.OrderState{
 		OrderID:           record.OrderID,
 		InstrumentID:      record.InstrumentID,
@@ -588,7 +602,30 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 		LimitPrice:        strconv.FormatInt(record.LimitPrice, 10),
 		Currency:          record.Currency,
 		LastUpdatedAt:     record.LastUpdatedAt,
-	}, true
+	}
+}
+
+// Every changed order appears once in the command result. Trade executions
+// identify resting makers; STP supplies cancelled makers without executions.
+// Call only while the command's book lock is held.
+func (s *Service) appendChangedOrderStates(result *domain.SubmitOrderResult, orderID string, stpCancelled []string) {
+	seen := make(map[string]bool, 1+len(result.Executions)+len(stpCancelled))
+	appendState := func(id string) {
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		if record, ok := s.loadOrder(id); ok {
+			result.OrderStates = append(result.OrderStates, orderStateFromRecord(record))
+		}
+	}
+	appendState(orderID)
+	for _, execution := range result.Executions {
+		appendState(execution.OrderID)
+	}
+	for _, id := range stpCancelled {
+		appendState(id)
+	}
 }
 
 func (s *Service) Snapshot() Snapshot {
@@ -872,22 +909,24 @@ func (s *Service) validateMatchingProfile(orderID string, instrumentID string, o
 	return &result
 }
 
-func (s *Service) applySelfTradePrevention(rollback *BatchRollback, book *orderBook, incoming *orderRecord, occurredAt string) (bool, domain.SubmitOrderResult) {
+func (s *Service) applySelfTradePrevention(rollback *BatchRollback, book *orderBook, incoming *orderRecord, occurredAt string) (bool, domain.SubmitOrderResult, []string) {
 	matches := s.reachableSelfTradeRestingRecords(book, incoming)
 	if len(matches) == 0 {
-		return true, domain.SubmitOrderResult{}
+		return true, domain.SubmitOrderResult{}, nil
 	}
 	if s.selfTradePreventionMode() == SelfTradePreventionCancelOldest {
+		cancelled := make([]string, 0, len(matches))
 		for _, restingRecord := range matches {
 			s.removeRestingOrder(rollback, book, restingRecord)
 			restingRecord.RemainingQuantity = 0
 			restingRecord.Status = domain.OrderStatusCancelled
 			restingRecord.LastUpdatedAt = occurredAt
 			s.trackTerminalOrder(rollback, restingRecord)
+			cancelled = append(cancelled, restingRecord.OrderID)
 		}
-		return true, domain.SubmitOrderResult{}
+		return true, domain.SubmitOrderResult{}, cancelled
 	}
-	return false, rejectedResult("evt-reject-self-trade-"+incoming.OrderID, incoming.OrderID, "SELF_TRADE_PREVENTION", "order would trade with resting order from same participant or account", occurredAt)
+	return false, rejectedResult("evt-reject-self-trade-"+incoming.OrderID, incoming.OrderID, "SELF_TRADE_PREVENTION", "order would trade with resting order from same participant or account", occurredAt), nil
 }
 
 func (s *Service) selfTradePreventionMode() SelfTradePreventionMode {
