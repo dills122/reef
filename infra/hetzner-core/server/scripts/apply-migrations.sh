@@ -123,9 +123,28 @@ for domain in "${domains[@]}"; do
       continue
     fi
 
+    if [[ "$migration_id" == "runtime/0069_logged_projection_dirty_queues.sql" ]]; then
+      if [[ "${REEF_AUTOMATED_DEPLOY:-0}" == "1" || "${REEF_APPLY_RUNTIME_0069:-0}" != "1" ]]; then
+        echo "runtime/0069 requires an explicit quiesced operator rollout; automatic migration is blocked" >&2
+        exit 1
+      fi
+      runtime_container="$(docker compose ps -q platform-runtime)"
+      if [[ -n "$runtime_container" ]]; then
+        runtime_state="$(docker inspect -f '{{.State.Running}}' "$runtime_container")"
+        if [[ "$runtime_state" != "false" ]]; then
+          echo "runtime/0069 requires platform-runtime to be stopped before migration" >&2
+          exit 1
+        fi
+      fi
+    fi
+
     echo "apply $migration_id"
     {
       echo "BEGIN;"
+      if [[ "$migration_id" == "runtime/0069_logged_projection_dirty_queues.sql" ]]; then
+        echo "SET LOCAL lock_timeout = '2s';"
+        echo "SET LOCAL statement_timeout = '30s';"
+      fi
       cat "$file"
       echo
       echo "INSERT INTO public.reef_schema_migrations(migration_id, domain_name, filename, checksum_sha256)"

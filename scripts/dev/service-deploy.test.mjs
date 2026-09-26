@@ -33,6 +33,7 @@ function runDeploy(root, archive, bin, extraEnv = {}) {
       REEF_DEPLOY_HEALTH_ATTEMPTS: "2",
       REEF_DEPLOY_HEALTH_DELAY_SECONDS: "1",
       FAKE_DOCKER_LOG: join(root, "docker.log"),
+      FAKE_PSQL_INPUT_LOG: join(root, "psql-input.log"),
       FAKE_CURL_STATE: join(root, "curl.state"),
       ...extraEnv,
     },
@@ -51,6 +52,7 @@ async function runForcedDeploy(root, archive, bin, extraEnv = {}) {
       REEF_DEPLOY_HEALTH_ATTEMPTS: "2",
       REEF_DEPLOY_HEALTH_DELAY_SECONDS: "1",
       FAKE_DOCKER_LOG: join(root, "docker.log"),
+      FAKE_PSQL_INPUT_LOG: join(root, "psql-input.log"),
       FAKE_CURL_STATE: join(root, "curl.state"),
       SSH_ORIGINAL_COMMAND: `deploy ${gitSha}`,
       ...extraEnv,
@@ -58,7 +60,7 @@ async function runForcedDeploy(root, archive, bin, extraEnv = {}) {
   });
 }
 
-async function createFixture() {
+async function createFixture({ includeDirtyQueueMigration = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), "reef-service-deploy-test-"));
   const bin = join(root, "bin");
   const migrations = join(root, "migration-source", "migrations");
@@ -79,6 +81,12 @@ async function createFixture() {
     await mkdir(join(migrations, domain), { recursive: true });
     await writeFile(join(migrations, domain, "0001_test.sql"), "SELECT 1;\n");
   }
+  if (includeDirtyQueueMigration) {
+    await writeFile(
+      join(migrations, "runtime", "0069_logged_projection_dirty_queues.sql"),
+      "ALTER TABLE runtime.order_lifecycle_dirty SET LOGGED;\n",
+    );
+  }
   await writeFile(
     join(root, ".env"),
     [
@@ -97,13 +105,19 @@ printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
 if [[ "$*" == "compose --profile manual config --services" ]]; then
   printf '%s\\n' openbao matching-engine platform-runtime simulator
 elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" && "\${3:-}" == "-q" ]]; then
-  printf '%s-id\\n' "\${4}"
+  if [[ "\${4}" != "platform-runtime" || "\${FAKE_RUNTIME_RUNNING:-1}" == "1" ]]; then
+    printf '%s-id\\n' "\${4}"
+  fi
 elif [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
   printf '%s\\n' "\${FAKE_IMAGE_REVISION:-${gitSha}}"
 elif [[ "\${1:-}" == "inspect" ]]; then
   printf 'true\\n'
 fi
-cat >/dev/null || true
+if [[ "\${1:-}" == "compose" && "\${2:-}" == "exec" ]]; then
+  cat >> "$FAKE_PSQL_INPUT_LOG" || true
+else
+  cat >/dev/null || true
+fi
 `,
   );
   await writeFile(
@@ -199,6 +213,47 @@ try {
   await rm(forcedFixture.root, { recursive: true, force: true });
 }
 
+const dirtyQueueFixture = await createFixture({ includeDirtyQueueMigration: true });
+try {
+  const automatic = await runForcedDeploy(
+    dirtyQueueFixture.root,
+    dirtyQueueFixture.archive,
+    dirtyQueueFixture.bin,
+    { REEF_APPLY_RUNTIME_0069: "1" },
+  );
+  assert.notEqual(automatic.status, 0);
+  assert.match(automatic.stderr, /runtime\/0069 requires an explicit quiesced operator rollout/);
+  const automaticLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
+  assert.doesNotMatch(automaticLog, /compose up .*platform-runtime/);
+
+  const manualEnv = {
+    ...process.env,
+    PATH: `${dirtyQueueFixture.bin}:${process.env.PATH}`,
+    REEF_DEPLOY_DIR: dirtyQueueFixture.root,
+    REEF_MIGRATIONS_ROOT: join(dirtyQueueFixture.root, "migration-source", "migrations"),
+    REEF_APPLY_RUNTIME_0069: "1",
+    FAKE_DOCKER_LOG: join(dirtyQueueFixture.root, "docker.log"),
+    FAKE_PSQL_INPUT_LOG: join(dirtyQueueFixture.root, "psql-input.log"),
+  };
+  const active = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_RUNNING: "1" },
+  });
+  assert.notEqual(active.status, 0);
+  assert.match(active.stderr, /platform-runtime to be stopped/);
+
+  const quiesced = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_RUNNING: "0" },
+  });
+  assert.equal(quiesced.status, 0, `${quiesced.stdout}\n${quiesced.stderr}`);
+  const sql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
+  assert.match(sql, /SET LOCAL lock_timeout = '2s';/);
+  assert.match(sql, /SET LOCAL statement_timeout = '30s';/);
+} finally {
+  await rm(dirtyQueueFixture.root, { recursive: true, force: true });
+}
+
 const rollbackFixture = await createFixture();
 try {
   const before = await readFile(join(rollbackFixture.root, ".env"), "utf8");
@@ -282,9 +337,38 @@ const imageWorkflow = await readFile(
   join(repoRoot, ".github/workflows/container-images.yml"),
   "utf8",
 );
+const gateBlock = workflow
+  .split("      - name: Gate runtime 0069 rollout\n")[1]
+  ?.split("      - name: Package forward migrations\n")[0];
+assert.ok(gateBlock);
+assert.match(gateBlock, /vars\.REEF_RUNTIME_0069_ROLLOUT_COMPLETE/);
+const gateScript = gateBlock
+  .split("        run: |\n")[1]
+  ?.split("\n")
+  .map((line) => line.replace(/^ {10}/, ""))
+  .join("\n");
+assert.ok(gateScript);
+const gateRoot = await mkdtemp(join(tmpdir(), "reef-runtime-0069-gate-"));
+try {
+  const runGate = (complete) => spawnSync("bash", ["-c", gateScript], {
+    cwd: gateRoot,
+    encoding: "utf8",
+    env: { ...process.env, RUNTIME_0069_ROLLOUT_COMPLETE: complete },
+  });
+  assert.equal(runGate("").status, 0);
+  const migrationDir = join(gateRoot, "scripts", "dev", "db", "migrations", "runtime");
+  await mkdir(migrationDir, { recursive: true });
+  await writeFile(join(migrationDir, "0069_logged_projection_dirty_queues.sql"), "SELECT 1;\n");
+  const pending = runGate("");
+  assert.notEqual(pending.status, 0);
+  assert.match(pending.stderr, /quiesced operator rollout/);
+  assert.equal(runGate("true").status, 0);
+} finally {
+  await rm(gateRoot, { recursive: true, force: true });
+}
 assert.match(workflow, /workflows:\s*\n\s*- Container Images/);
 assert.match(workflow, /git merge-base --is-ancestor "\$TARGET_SHA" origin\/master/);
-assert.match(workflow, /tailscale\/github-action@v4/);
+assert.match(workflow, /tailscale\/github-action@[a-f0-9]{40} # v4/);
 assert.match(workflow, /"deploy \$TARGET_SHA" < "\$REEF_MIGRATION_ARCHIVE"/);
 assert.match(workflow, /find migrations -type f -name '\*\.sql' -print/);
 assert.match(workflow, /tar -czf "\$migration_archive" -T "\$migration_files"/);

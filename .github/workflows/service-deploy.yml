@@ -70,6 +70,17 @@ jobs:
           git fetch --no-tags origin master:refs/remotes/origin/master
           git merge-base --is-ancestor "$TARGET_SHA" origin/master
 
+      - name: Gate runtime 0069 rollout
+        env:
+          RUNTIME_0069_ROLLOUT_COMPLETE: ${{ vars.REEF_RUNTIME_0069_ROLLOUT_COMPLETE }}
+        run: |
+          set -euo pipefail
+          if [ -f scripts/dev/db/migrations/runtime/0069_logged_projection_dirty_queues.sql ] &&
+             [ "$RUNTIME_0069_ROLLOUT_COMPLETE" != "true" ]; then
+            echo "runtime/0069 requires a quiesced operator rollout before application service deployment" >&2
+            exit 1
+          fi
+
       - name: Package forward migrations
         run: |
           set -euo pipefail

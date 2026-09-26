@@ -281,6 +281,50 @@ Use the normal operator `deploy` flow instead when a change touches Compose
 topology, Caddy, the receiver, host packages, OpenBao configuration/version,
 database images, firewalling, or the deploy script itself.
 
+### Runtime 0069 dirty-queue conversion
+
+`runtime/0069_logged_projection_dirty_queues.sql` rewrites two UNLOGGED
+projection queues under exclusive locks. The `Application Service Deploy`
+workflow fails before sending migrations while the `backbone-production`
+environment variable `REEF_RUNTIME_0069_ROLLOUT_COMPLETE` is unset. Do not set
+it until the migration ledger and both LOGGED relations are verified on the
+target. The host migration runner also rejects automatic application of a
+pending 0069, even if an opt-in flag reaches the forced SSH command.
+
+Before applying 0069, rehearse the rewrite on a target-sized restored copy and
+record queue sizes, lock wait, rewrite wall time, and the allowed downtime
+window. The local aged-control conversion took 0.13s, but does not bound the
+target. Schedule an operator window with an application rollback plan. Sync the
+current host scripts with `make hetzner-core ARGS=deploy-automation-up` and
+stage the exact versioned migration at
+`/opt/reef/postgres/migrations/runtime/0069_logged_projection_dirty_queues.sql`.
+Confirm no other unexpected migrations are pending.
+
+On the target host, record sizes, stop runtime writers, then apply the staged
+migration through the checksum-ledger runner:
+
+```bash
+cd /opt/reef
+docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
+  -c "SELECT relname, relpersistence, pg_total_relation_size(oid) AS bytes FROM pg_class WHERE relnamespace = 'runtime'::regnamespace AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty') ORDER BY relname"
+docker compose stop simulator platform-runtime matching-engine
+time REEF_APPLY_RUNTIME_0069=1 ./scripts/apply-migrations.sh
+docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
+  -c "SELECT migration_id FROM public.reef_schema_migrations WHERE migration_id = 'runtime/0069_logged_projection_dirty_queues.sql'"
+docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
+  -c "SELECT relname, relpersistence FROM pg_class WHERE relnamespace = 'runtime'::regnamespace AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty') ORDER BY relname"
+docker compose up -d --no-deps matching-engine platform-runtime
+```
+
+The runner gives 0069 a 2s lock-acquisition timeout and a 30s statement
+timeout. A timeout rolls back both conversions and leaves the old application
+images in place; keep writers stopped until the cause is inspected. Confirm
+both `relpersistence` values are `p`, the ledger row exists, and runtime health
+and projection progress recover. Then set
+`REEF_RUNTIME_0069_ROLLOUT_COMPLETE=true` in the GitHub
+`backbone-production` environment and rerun `Application Service Deploy` for
+the intended master SHA. This releases the workflow gate for later deployments.
+
 ## Bootstrap Order
 
 Use this order for a clean rebuild or new permanent host.

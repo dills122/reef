@@ -183,6 +183,8 @@ mode="${1:-}"
 migration_archive="${REEF_MIGRATION_ARCHIVE:-}"
 
 if [[ "$mode" == "--ssh-command" ]]; then
+  # The automatic GitHub deploy must never opt in to the blocking 0069 rewrite.
+  export REEF_AUTOMATED_DEPLOY=1
   read -r -a original_command <<<"${SSH_ORIGINAL_COMMAND:-}"
   [[ "${#original_command[@]}" -eq 2 && "${original_command[0]}" == "deploy" ]] ||
     fail "the SSH deploy key only accepts: deploy <40-character-git-sha>"
