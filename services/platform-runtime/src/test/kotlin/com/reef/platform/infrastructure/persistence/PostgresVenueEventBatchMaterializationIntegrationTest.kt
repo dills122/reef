@@ -125,6 +125,84 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
     }
 
     @Test
+    fun splitPocStatusWaitsForCommittedTimelineAndReplaysEachStageOnce() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = { key -> if (key == "STREAM_ACK_PROJECTION_SPLIT_POC") "true" else null }
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-split-poc-$suffix"
+        val batch = submitVenueEventBatch(suffix, uniqueSequence(suffix))
+
+        insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes(
+            projectionName, 10, listOf(batch.partition), true, batch.eventStream, ProjectionStage.CommandStatus
+        ))
+        assertEquals(null, persistence.submitResult("submit-cmd-$suffix"))
+
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(
+            "$projectionName-timeline", 10, listOf(batch.partition), true, batch.eventStream, ProjectionStage.Timeline
+        ))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(
+            projectionName, 10, listOf(batch.partition), true, batch.eventStream, ProjectionStage.CommandStatus
+        ))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes(
+            "$projectionName-timeline", 10, listOf(batch.partition), true, batch.eventStream, ProjectionStage.Timeline
+        ))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes(
+            projectionName, 10, listOf(batch.partition), true, batch.eventStream, ProjectionStage.CommandStatus
+        ))
+
+        assertNotNull(persistence.submitResult("submit-cmd-$suffix"))
+        assertEquals(1, persistence.eventsForOrder("submit-order-$suffix").size)
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", projectionName))
+        assertEquals(1, countRows(dataSource, "runtime.projection_batch_claims", "$projectionName-timeline"))
+        assertEquals(0, persistence.projectionStatus(projectionName, listOf(batch.partition), "venue-event-batch").lag)
+        assertEquals(0, persistence.projectionStatus("$projectionName-timeline", listOf(batch.partition), "venue-event-batch").lag)
+    }
+
+    @Test
+    fun splitPocStatusStopsAtTimelinePrefixWithoutSkippingNextCommand() {
+        val dataSource = migratedDataSourceOrNull() ?: return
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            envLookup = { key -> if (key == "STREAM_ACK_PROJECTION_SPLIT_POC") "true" else null }
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-split-prefix-$suffix"
+        val sequence = uniqueSequence(suffix)
+        val first = submitVenueEventBatch("$suffix-first", sequence)
+        val second = submitVenueEventBatch("$suffix-second", sequence + 1).let { batch ->
+            batch.copy(
+                partition = first.partition,
+                outcomes = batch.outcomes.map { it.copy(streamSequence = sequence + 1) }
+            )
+        }
+        for (batch in listOf(first, second)) {
+            val label = batch.outcomes.single().commandId.removePrefix("submit-cmd-")
+            insertCommandPayload(dataSource, batch.outcomes.single().commandId, submitCommandPayload(label))
+            assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        }
+
+        fun project(stage: ProjectionStage, name: String, batchSize: Int) =
+            persistence.projectCanonicalCommandOutcomes(name, batchSize, listOf(first.partition), true, first.eventStream, stage)
+
+        assertEquals(1, project(ProjectionStage.Timeline, "$projectionName-timeline", 1))
+        assertEquals(1, project(ProjectionStage.CommandStatus, projectionName, 10))
+        assertEquals(0, project(ProjectionStage.CommandStatus, projectionName, 10))
+        assertEquals(null, persistence.submitResult(second.outcomes.single().commandId))
+        assertEquals(1, project(ProjectionStage.Timeline, "$projectionName-timeline", 1))
+        assertEquals(1, project(ProjectionStage.CommandStatus, projectionName, 10))
+        assertNotNull(persistence.submitResult(second.outcomes.single().commandId))
+        assertEquals(0, persistence.projectionStatus(projectionName, listOf(first.partition), "venue-event-batch").lag)
+        assertEquals(0, persistence.projectionStatus("$projectionName-timeline", listOf(first.partition), "venue-event-batch").lag)
+    }
+
+    @Test
     fun projectsExecutionsAndTradesCarriedInResultPayloadWhenMigratedPostgresIsAvailable() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return

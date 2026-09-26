@@ -58,7 +58,7 @@ class CanonicalProjectionWorker(
                 }
             }.also { projected ->
                 if (projected > 0) {
-                    CanonicalProjectionMetrics.recordProjected(projected)
+                    CanonicalProjectionMetrics.recordProjected(projected, projectionStage)
                 }
             }
         } catch (ex: Exception) {
@@ -100,6 +100,7 @@ data class CanonicalProjectionStats(
 
 object CanonicalProjectionMetrics {
     private val projected = AtomicLong(0)
+    private val timelineProjected = AtomicLong(0)
     private val batches = AtomicLong(0)
     private val lastBatchSize = AtomicLong(0)
     private val maxBatchSize = AtomicLong(0)
@@ -110,8 +111,9 @@ object CanonicalProjectionMetrics {
     @Volatile
     private var lastError: String = ""
 
-    fun recordProjected(count: Long) {
+    fun recordProjected(count: Long, stage: ProjectionStage = ProjectionStage.Full) {
         projected.addAndGet(count)
+        if (stage == ProjectionStage.Timeline) timelineProjected.addAndGet(count)
         batches.incrementAndGet()
         lastBatchSize.set(count)
         maxBatchSize.updateAndGet { current -> maxOf(current, count) }
@@ -142,8 +144,11 @@ object CanonicalProjectionMetrics {
         )
     }
 
+    fun timelineProjected(): Long = timelineProjected.get()
+
     fun resetForTests() {
         projected.set(0)
+        timelineProjected.set(0)
         batches.set(0)
         lastBatchSize.set(0)
         maxBatchSize.set(0)

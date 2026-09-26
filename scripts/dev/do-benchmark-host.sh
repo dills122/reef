@@ -161,6 +161,7 @@ cmd_plan_goal() {
   printf '  max_projection_db_deadlocks=%s\n' "${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-none}"
   printf '  max_projection_db_retries=%s\n' "${REEF_DO_MAX_PROJECTION_DB_RETRIES:-none}"
   printf '  projection_stage=%s\n' "${REEF_DO_PROJECTION_STAGE:-full}"
+  printf '  projection_split_poc=%s\n' "${STREAM_ACK_PROJECTION_SPLIT_POC:-false}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
   printf '  stream_ack_projector_2_partitions=%s\n' "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-none}"
@@ -351,6 +352,7 @@ remote_start_stack() {
   profile="$(benchmark_profile)"
   remote_script \
     REEF_BENCHMARK_PROFILE="$profile" \
+    STREAM_ACK_PROJECTION_SPLIT_POC="${STREAM_ACK_PROJECTION_SPLIT_POC:-false}" \
     PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED="${PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED:-false}" <<'REMOTE'
 set -euo pipefail
 cd "$REMOTE_DIR"
@@ -462,6 +464,7 @@ remote_run_benchmark() {
     MARKET_DATA_PROJECTOR_3_ENABLED="${MARKET_DATA_PROJECTOR_3_ENABLED:-}" \
     REEF_DO_MAX_PROJECTION_DB_RETRIES="${REEF_DO_MAX_PROJECTION_DB_RETRIES:-}" \
     REEF_DO_PROJECTION_STAGE="${REEF_DO_PROJECTION_STAGE:-}" \
+    STREAM_ACK_PROJECTION_SPLIT_POC="${STREAM_ACK_PROJECTION_SPLIT_POC:-false}" \
     PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED="${PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED:-false}" \
     DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-}" <<'REMOTE'
 set -euo pipefail
@@ -740,13 +743,19 @@ sync_repo() {
     -e "ssh -i $private_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$ROOT_DIR/.tmp-do-known-hosts" \
     --exclude ".env" \
     --exclude ".env.local" \
+    --exclude ".mcp.json" \
+    --exclude ".serena/" \
+    --exclude ".claude/" \
+    --exclude ".git/" \
+    --exclude "artifacts/" \
+    --exclude "node_modules/" \
+    --exclude ".terraform/" \
     --exclude ".gradle/" \
     --exclude "build/" \
     --exclude "out/" \
     --exclude "bin/" \
     --exclude "coverage/" \
-    --exclude "reports/do-benchmark/" \
-    --exclude "infra/do-benchmark/.terraform/" \
+    --exclude "reports/" \
     --exclude "infra/do-benchmark/terraform.tfstate" \
     --exclude "infra/do-benchmark/terraform.tfstate.backup" \
     "$ROOT_DIR/" "$user@$host:$REMOTE_DIR/"

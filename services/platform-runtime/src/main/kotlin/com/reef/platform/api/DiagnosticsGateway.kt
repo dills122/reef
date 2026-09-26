@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.persistence.ProjectionPersistenceRetryMetrics
 import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
@@ -66,6 +67,7 @@ internal class DiagnosticsGateway(
 ) {
     fun projectorStatusJson(includeProjectedCount: Boolean = true): String {
         val partitions = runtimeLoopStarter.projectorPartitions()
+        val splitPoc = RuntimeEnv.bool("STREAM_ACK_PROJECTION_SPLIT_POC", false)
         val status = if (includeProjectedCount) {
             api.projectionStatus(
                 projectionConfig.streamAckProjectionName,
@@ -80,6 +82,7 @@ internal class DiagnosticsGateway(
             )
         }
         val metrics = CanonicalProjectionMetrics.snapshot()
+        val timelineProjected = if (splitPoc) CanonicalProjectionMetrics.timelineProjected() else 0L
         val retryMetrics = ProjectionPersistenceRetryMetrics.snapshot()
         val fields = mutableListOf<Pair<String, Any?>>(
             "role" to runtimeRole.configValue,
@@ -89,14 +92,16 @@ internal class DiagnosticsGateway(
             "implementation" to "canonical-submit-projector",
             "source" to projectionConfig.streamAckProjectionSource.configValue,
             "eventStream" to projectionConfig.streamAckProjectionEventStream,
-            "projectionStage" to projectionConfig.streamAckProjectionStage.configValue,
+            "projectionStage" to if (splitPoc) ProjectionStage.CommandStatus.configValue else projectionConfig.streamAckProjectionStage.configValue,
+            "splitPoc" to splitPoc,
+            "workerMetricsScope" to if (splitPoc) "projected-status; other counters combined" else "configured-stage",
             "orderLifecycleProjectorEnabled" to projectionConfig.orderLifecycleProjectorEnabled,
             "marketDataProjectorEnabled" to projectionConfig.marketDataProjectorEnabled,
             "projectionName" to status.projectionName,
             "partitions" to partitions,
             "lag" to status.lag,
             "metrics" to mapOf(
-                "projected" to metrics.projected,
+                "projected" to metrics.projected - timelineProjected,
                 "batches" to metrics.batches,
                 "lastBatchSize" to metrics.lastBatchSize,
                 "maxBatchSize" to metrics.maxBatchSize,
@@ -123,6 +128,26 @@ internal class DiagnosticsGateway(
                 )
             }
         )
+        if (splitPoc) {
+            val timeline = api.projectionStatusWithoutCount(
+                "${projectionConfig.streamAckProjectionName}-timeline",
+                partitions,
+                projectionConfig.streamAckProjectionSource.configValue
+            )
+            fields += "timelineLag" to timeline.lag
+            fields += "timelineProjected" to timelineProjected
+            fields += "timelineWatermarks" to timeline.watermarks.map { watermark ->
+                mapOf(
+                    "projectionName" to watermark.projectionName,
+                    "partition" to watermark.partitionId,
+                    "lastPartitionSequence" to watermark.lastPartitionSequence,
+                    "canonicalMaxPartitionSequence" to watermark.canonicalMaxPartitionSequence,
+                    "lag" to watermark.lag,
+                    "updatedAt" to watermark.updatedAt,
+                    "lastError" to watermark.lastError
+                )
+            }
+        }
         if (includeProjectedCount) fields.add("projectedCount" to status.projectedCount)
         return JsonCodec.writeObject(*fields.toTypedArray())
     }
