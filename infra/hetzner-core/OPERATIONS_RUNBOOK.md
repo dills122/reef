@@ -300,7 +300,11 @@ stage the exact versioned migration at
 `/opt/reef/postgres/migrations/runtime/0069_logged_projection_dirty_queues.sql`.
 Confirm that 0069 is the only pending runtime migration; the command below
 refuses a broader migration window. Check for any out-of-band platform-runtime
-replicas or projection writers and stop them too.
+replicas or projection writers and stop them too. The runner checks every
+Compose-labeled platform-runtime container on the host and requires at least
+one stopped container for this existing-host upgrade. A brand-new host with no
+runtime container may set `REEF_RUNTIME_0069_FRESH_BOOTSTRAP=1` only after
+confirming no out-of-band writers; do not use that override for this upgrade.
 
 On the target host, record sizes, stop runtime writers, then apply the staged
 migration through the checksum-ledger runner:

@@ -128,7 +128,13 @@ for domain in "${domains[@]}"; do
         echo "runtime/0069 requires an explicit quiesced operator rollout; automatic migration is blocked" >&2
         exit 1
       fi
-      runtime_containers="$(docker compose ps -a -q platform-runtime)"
+      # Include other Compose projects on this host; a fresh host with no
+      # runtime containers requires a separate explicit bootstrap opt-in.
+      runtime_containers="$(docker ps -a --filter label=com.docker.compose.service=platform-runtime --format '{{.ID}}')"
+      if [[ -z "$runtime_containers" && "${REEF_RUNTIME_0069_FRESH_BOOTSTRAP:-0}" != "1" ]]; then
+        echo "runtime/0069 requires a stopped platform-runtime container or explicit fresh-bootstrap opt-in" >&2
+        exit 1
+      fi
       while IFS= read -r runtime_container; do
         [[ -n "$runtime_container" ]] || continue
         runtime_state="$(docker inspect -f '{{.State.Running}}' "$runtime_container" </dev/null)"
@@ -143,6 +149,7 @@ for domain in "${domains[@]}"; do
     {
       echo "BEGIN;"
       if [[ "$migration_id" == "runtime/0069_logged_projection_dirty_queues.sql" ]]; then
+        # SET LOCAL must stay inside this transaction and psql invocation.
         echo "SET LOCAL lock_timeout = '2s';"
         echo "SET LOCAL statement_timeout = '30s';"
       fi

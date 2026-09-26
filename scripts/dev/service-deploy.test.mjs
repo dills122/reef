@@ -108,13 +108,13 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
 if [[ "$*" == "compose --profile manual config --services" ]]; then
   printf '%s\\n' openbao matching-engine platform-runtime simulator
-elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" ]]; then
-  if [[ "$*" == *"platform-runtime"* && "$*" == *" -a -q "* ]]; then
+elif [[ "\${1:-}" == "ps" && "$*" == *"label=com.docker.compose.service=platform-runtime"* ]]; then
+  if [[ "\${FAKE_RUNTIME_CONTAINERS:-present}" != "empty" ]]; then
     echo runtime-stopped-id
     echo runtime-second-id
-  else
-    printf '%s-id\\n' "\${@: -1}"
   fi
+elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" ]]; then
+  printf '%s-id\\n' "\${@: -1}"
 elif [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
   printf '%s\\n' "\${FAKE_IMAGE_REVISION:-${gitSha}}"
 elif [[ "\${1:-}" == "inspect" ]]; then
@@ -262,6 +262,13 @@ try {
   assert.notEqual(active.status, 0, `${active.stdout}\n${active.stderr}`);
   assert.match(active.stderr, /platform-runtime to be stopped/);
 
+  const missingContainer = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_CONTAINERS: "empty" },
+  });
+  assert.notEqual(missingContainer.status, 0);
+  assert.match(missingContainer.stderr, /stopped platform-runtime container or explicit fresh-bootstrap opt-in/);
+
   const quiesced = spawnSync(migrationScript, [], {
     encoding: "utf8",
     env: { ...manualEnv, FAKE_RUNTIME_RUNNING: "0" },
@@ -270,10 +277,21 @@ try {
   const sql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
   const dockerLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
   assert.match(dockerLog, /compose exec -T postgres psql -U postgres -d reef -v ON_ERROR_STOP=1 -X -q/);
-  assert.match(sql, /SET LOCAL lock_timeout = '2s';/);
+  assert.match(dockerLog, /ps -a --filter label=com\.docker\.compose\.service=platform-runtime/);
+  assert.match(sql, /BEGIN;\nSET LOCAL lock_timeout = '2s';/);
   assert.match(sql, /SET LOCAL statement_timeout = '30s';/);
   assert.match(sql, /ALTER TABLE runtime\.order_lifecycle_dirty SET LOGGED/);
   assert.match(sql, /ALTER TABLE runtime\.market_data_snapshot_dirty SET LOGGED/);
+
+  const freshBootstrap = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: {
+      ...manualEnv,
+      FAKE_RUNTIME_CONTAINERS: "empty",
+      REEF_RUNTIME_0069_FRESH_BOOTSTRAP: "1",
+    },
+  });
+  assert.equal(freshBootstrap.status, 0, `${freshBootstrap.stdout}\n${freshBootstrap.stderr}`);
 } finally {
   await rm(dirtyQueueFixture.root, { recursive: true, force: true });
 }
@@ -374,19 +392,44 @@ const gateScript = gateBlock
 assert.ok(gateScript);
 const gateRoot = await mkdtemp(join(tmpdir(), "reef-runtime-0069-gate-"));
 try {
-  const runGate = (complete) => spawnSync("bash", ["-c", gateScript], {
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: gateRoot, encoding: "utf8" });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+  git("init", "-q");
+  git("config", "user.name", "Reef Test");
+  git("config", "user.email", "test@reef.invalid");
+  git("config", "commit.gpgsign", "false");
+  git("commit", "--allow-empty", "-q", "-m", "before runtime 0069");
+  const beforeMigration = git("rev-parse", "HEAD");
+  const runGate = (complete, targetSha) => spawnSync("bash", ["-c", gateScript], {
     cwd: gateRoot,
     encoding: "utf8",
-    env: { ...process.env, RUNTIME_0069_ROLLOUT_COMPLETE: complete },
+    env: {
+      ...process.env,
+      RUNTIME_0069_ROLLOUT_COMPLETE: complete,
+      TARGET_SHA: targetSha,
+    },
   });
-  assert.equal(runGate("").status, 0);
+  assert.equal(runGate("", beforeMigration).status, 0);
   const migrationDir = join(gateRoot, "scripts", "dev", "db", "migrations", "runtime");
   await mkdir(migrationDir, { recursive: true });
-  await writeFile(join(migrationDir, "0069_logged_projection_dirty_queues.sql"), "SELECT 1;\n");
-  const pending = runGate("");
+  const migrationPath = join(migrationDir, "0069_logged_projection_dirty_queues.sql");
+  await writeFile(migrationPath, "SELECT 1;\n");
+  git("add", "scripts/dev/db/migrations/runtime/0069_logged_projection_dirty_queues.sql");
+  git("commit", "-q", "-m", "add runtime 0069");
+  const withMigration = git("rev-parse", "HEAD");
+  const pending = runGate("", withMigration);
   assert.notEqual(pending.status, 0);
   assert.match(pending.stderr, /quiesced operator rollout/);
-  assert.equal(runGate("true").status, 0);
+  assert.equal(runGate("true", withMigration).status, 0);
+  await rm(migrationPath);
+  git("add", "-u");
+  git("commit", "-q", "-m", "remove runtime 0069 file");
+  const afterRemoval = git("rev-parse", "HEAD");
+  assert.notEqual(runGate("", afterRemoval).status, 0);
+  assert.equal(runGate("", beforeMigration).status, 0);
 } finally {
   await rm(gateRoot, { recursive: true, force: true });
 }
