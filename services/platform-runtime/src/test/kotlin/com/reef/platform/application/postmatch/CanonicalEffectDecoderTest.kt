@@ -35,6 +35,10 @@ class CanonicalEffectDecoderTest {
         val wrongOrder = JsonMapper.builder().build().readTree(matchedSubmit) as ObjectNode
         (wrongOrder.withArray("executions")[1] as ObjectNode).put("orderId", "wrong")
         assertFailsWith<IllegalArgumentException> { decoder.decode(source(wrongOrder.toString())) }
+
+        val missingSession = JsonMapper.builder().build().readTree(matchedSubmit) as ObjectNode
+        (missingSession.get("acceptedOrder") as ObjectNode).remove("venueSessionId")
+        assertFailsWith<IllegalArgumentException> { decoder.decode(source(missingSession.toString())) }
     }
 
     @Test
@@ -68,6 +72,18 @@ class CanonicalEffectDecoderTest {
         assertEquals(3, effects.size)
         assertIs<CanonicalEffect.Accepted>(effects[0].effect)
         assertEquals("maker", assertIs<CanonicalEffect.OrderStateChanged>(effects[2].effect).orderId)
+    }
+
+    @Test
+    fun acceptedSubmitPreservesOptionalClientAndRunIdentifiers() {
+        val payload = JsonMapper.builder().build().readTree(matchedSubmit) as ObjectNode
+        val identity = payload.get("acceptedOrder") as ObjectNode
+        identity.put("clientOrderId", "")
+        identity.put("runId", "")
+        val accepted = decoder.decode(source(payload.toString())).first().effect as CanonicalEffect.Accepted
+        assertEquals("", accepted.newOrder?.clientOrderId)
+        assertEquals("", accepted.newOrder?.runId)
+        assertEquals("session-1", accepted.newOrder?.venueSessionId)
     }
 
     private fun source(result: String, status: String = "accepted") = CanonicalOutcomeSource(

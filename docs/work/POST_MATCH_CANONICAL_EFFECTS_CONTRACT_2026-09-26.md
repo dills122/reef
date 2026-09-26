@@ -12,6 +12,8 @@ Each changed-order state is the final state **after that command**, including
 resting maker fills and self-trade-prevention cancellations. The engine emits
 these facts before publishing its durable venue batch; the command acceptance
 path gains no synchronous database write.
+Batch rollback defers terminal-order retention eviction until after these
+snapshots are captured and the durable publish succeeds.
 
 An effect is identified by `(eventStream, partitionId, streamSequence,
 effectOrdinal)`. Ordinals start at zero in each command outcome. The envelope
@@ -39,6 +41,8 @@ effects. Unknown versions, malformed fields, and conflicts fail closed.
 
 Accepted submits supply immutable order ID, venue session, instrument,
 participant, account, side, quantity, price, currency, and time in force.
+Client order ID and run ID retain the producer's optional empty-string values;
+the routed venue session is required. The decoder rejects a missing session.
 Modify, cancel, maker execution, and trade facts refer to those orders by ID.
 Consumers resolve missing ownership by keyed canonical order directory; they
 never scan all orders in a run. An unresolved maker/order or cross-partition

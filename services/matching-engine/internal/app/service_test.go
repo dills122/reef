@@ -243,12 +243,13 @@ func TestCommandResultsCarryChangedOrderStates(t *testing.T) {
 }
 
 func TestCancelOldestSelfTradeCarriesCancelledMakerState(t *testing.T) {
-	service := NewService(WithSelfTradePreventionMode(SelfTradePreventionCancelOldest))
+	service := NewService(WithSelfTradePreventionMode(SelfTradePreventionCancelOldest), WithTerminalOrderRetentionLimit(1))
 	service.SubmitOrder(domain.SubmitOrder{
 		CommandID: "stp-maker", OrderID: "stp-maker", InstrumentID: "AAPL", AccountID: "shared",
 		Side: domain.SideSell, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
 	})
-	result := service.SubmitOrder(domain.SubmitOrder{
+	rollback := service.BeginBatch([]BookScope{{InstrumentID: "AAPL"}})
+	result := service.SubmitOrderInBatch(rollback, domain.SubmitOrder{
 		CommandID: "stp-taker", OrderID: "stp-taker", InstrumentID: "AAPL", AccountID: "shared",
 		Side: domain.SideBuy, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
 	})
@@ -257,6 +258,7 @@ func TestCancelOldestSelfTradeCarriesCancelledMakerState(t *testing.T) {
 		result.OrderStates[1].OrderID != "stp-maker" || result.OrderStates[1].Status != domain.OrderStatusCancelled {
 		t.Fatalf("cancel-oldest must carry the maker cancellation without a trade: %#v", result)
 	}
+	rollback.Commit()
 }
 
 func TestSubmitOrderPartiallyFillsAndLeavesResidualLiquidity(t *testing.T) {
@@ -1214,6 +1216,11 @@ func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
 	})
 	if result.Accepted == nil || len(result.Trades) != 1 {
 		t.Fatalf("expected crossing command to mutate terminal state before rollback, got %#v", result)
+	}
+	if len(result.OrderStates) != 2 || result.OrderStates[0].OrderID != "ord-buy-failed-publish" ||
+		result.OrderStates[1].OrderID != "ord-sell-resting" ||
+		result.OrderStates[1].Status != domain.OrderStatusFilled {
+		t.Fatalf("durable batch must snapshot terminal maker before retention eviction: %#v", result.OrderStates)
 	}
 	if tracked := service.terminalRetention.trackedOrderIDs(); len(tracked) != 0 {
 		t.Fatalf("expected terminal retention to remain deferred before publication, got %+v", tracked)
