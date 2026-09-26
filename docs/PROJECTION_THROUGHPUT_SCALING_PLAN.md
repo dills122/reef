@@ -91,6 +91,11 @@ as index-write cleanup only. The next throughput slice must change the larger
 normalized projection row/index write shape, not remove another index on the
 assumption that unused scans imply a capacity gain.
 
+The [September 26 post-match architecture review](research/POST_MATCH_PROJECTION_ARCHITECTURE_REVIEW_2026-09-26.md)
+cross-checks the proposed incremental lifecycle and settlement paths against
+current source, C28–C43 evidence, and external implementation contracts. It is
+research guidance, not a new capacity result or approved architecture change.
+
 ## Retry-Safe Projection Batch Authority
 
 Slice 1A landed the correctness boundary required before new measurement or
