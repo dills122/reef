@@ -11,9 +11,9 @@ This sprint combines three previously separate concerns:
 - run cutoff, roster locking, and eligibility timing
 - bot persona and economic-policy calibration
 
-[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 was a hard prerequisite. Its evidence was promoted on 2026-07-19; see
-[`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+[`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
 The main invite-preview code slices and external-account admission/onboarding
 test are complete. The July 23 `noodle-invite-smoke` submission and subsequent
 fixes are recorded in
@@ -172,7 +172,7 @@ The separation prerequisite is complete and remains a release invariant:
   migrations, and routes.
 - Reef route-absence, Arena route-presence, Arena-storage failure isolation,
   matching-image equivalence, and P1 canonical equivalence are recorded in
-  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
 - The Go matching engine remains unaware of Arena game and scoring behavior;
   bots continue to use Reef's public venue boundary.
 
@@ -343,7 +343,7 @@ Tests:
 ## Workstream C: Separation Regression Gate
 
 Prerequisite evidence from
-[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md):
+[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md):
 
 - `make test-reef-core`
 - `make dev-up-reef` and `make dev-smoke-reef`

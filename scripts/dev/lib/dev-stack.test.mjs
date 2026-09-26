@@ -74,7 +74,7 @@ test("devReset wipes volumes, migrates, starts stack, and can run smoke", async 
 
   assert.equal(processEnv.DEV_WAIT_TIMEOUT_SECONDS, "15");
   assert.deepEqual(calls, [
-    ["docker", [...compose, "down", "--volumes", "--remove-orphans"]],
+    ["docker", [...compose, "--profile", "*", "down", "--volumes", "--remove-orphans"]],
     ["docker", [...compose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
     ["docker", [...compose, "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "300"]],
@@ -97,7 +97,7 @@ test("devReset skips smoke by default", async () => {
   });
 
   assert.deepEqual(calls, [
-    ["docker", [...compose, "down", "--volumes", "--remove-orphans"]],
+    ["docker", [...compose, "--profile", "*", "down", "--volumes", "--remove-orphans"]],
     ["docker", [...compose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
     ["docker", [...compose, "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "300"]],

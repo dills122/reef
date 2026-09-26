@@ -1,0 +1,36 @@
+{
+  "id": "C18",
+  "fixture": "/tmp/reef-productive-batch1000-7500-300s-1",
+  "originalIndex": {
+    "artifactSha256": "680851f162af9d6835c972be1f1188597a0d7a016e71e65206846456fe9ccda4",
+    "executionTimesMs": [
+      710.841,
+      946.15,
+      899.534,
+      705.749
+    ],
+    "equality": {
+      "oldRows": 16,
+      "newRows": 16,
+      "oldMinusNew": 0,
+      "newMinusOld": 0
+    }
+  },
+  "coveringIndex": {
+    "artifactSha256": "4f8003b90aa3881b69f12f508bab3035ea62c212527b6a65053d8daeeb59d76c",
+    "executionTimesMs": [
+      348.258,
+      170.211,
+      153.412,
+      398.034
+    ],
+    "equality": {
+      "oldRows": 16,
+      "newRows": 16,
+      "oldMinusNew": 0,
+      "newMinusOld": 0
+    },
+    "indexRolledBack": true
+  },
+  "capacityEvidence": false
+}

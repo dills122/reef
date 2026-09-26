@@ -1,0 +1,580 @@
+{
+  "id": "C10",
+  "hostArtifactDirectory": "/tmp/reef-productive-currency-5000-300s-1",
+  "reportSha256": "2e525b0ef64509fddd47d8d72427682a6d8d0f75fc45695f67c9148e92e4e435",
+  "accepted": 1499951,
+  "failures": 0,
+  "projectionFreshness": {
+    "source": "venue-event-batch-projector",
+    "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+    "materialized": 1499951,
+    "projected": 1499951,
+    "materializedToProjectedGap": 0,
+    "lag": 0,
+    "projectedPerSecond": 4999.751965835282,
+    "caughtUp": true
+  },
+  "config": {
+    "Duration": 300000000000,
+    "RatePerSecond": 5000,
+    "Workers": 256
+  },
+  "sourceCohortPassed": true,
+  "reportAggregateKeys": [
+    "sessionId",
+    "startedAt",
+    "finishedAt",
+    "durationSeconds",
+    "config",
+    "throughputRps",
+    "acceptedBusinessOpsRps",
+    "throughput",
+    "totalRequests",
+    "totalSuccess",
+    "totalFailures",
+    "byAction",
+    "byProfile",
+    "byActor",
+    "byPersona",
+    "byStrategy",
+    "statusCodes",
+    "topErrors",
+    "rejectReasons",
+    "rejectTaxonomy",
+    "quality",
+    "latencyMs",
+    "traceChecks",
+    "loadSchedule",
+    "streamAckHealth",
+    "streamDirect",
+    "venueEventMaterializer",
+    "streamAckProjector",
+    "hotPathPhases",
+    "streamAckApiPhases",
+    "materializerTiming",
+    "runtimeConfigurationEvidence",
+    "stressRunMetadata",
+    "unitMetrics",
+    "projectionFreshness",
+    "partitionSkew",
+    "streamDirectPartitionSkew",
+    "projectionInstrumentation",
+    "upstreamSourceCohort",
+    "downstreamProjectionCohort",
+    "downstreamCoverageObservations",
+    "downstreamDiagnosticSampler"
+  ],
+  "streamAckProjectorDelta": {
+    "projectedDelta": 1499951,
+    "projectedRps": 4999.751965835282,
+    "failedDelta": 0,
+    "retryDelta": 0,
+    "retryExhaustedDelta": 0,
+    "lagDelta": 0,
+    "beforeLag": 0,
+    "afterLag": 0
+  },
+  "streamDirectDelta": {
+    "fetchedDelta": 1499951,
+    "processedDelta": 1499951,
+    "publishedDelta": 1499951,
+    "ackedDelta": 1499951,
+    "nackedDelta": 0,
+    "termedDelta": 0,
+    "failedDelta": 0,
+    "unsupportedDelta": 0,
+    "fetchedRps": 4999.751965835282,
+    "processedRps": 4999.751965835282,
+    "publishedRps": 4999.751965835282,
+    "ackedRps": 4999.751965835282,
+    "partitionDeltas": [
+      {
+        "partition": 0,
+        "shardId": "engine-0",
+        "fetchedDelta": 93454,
+        "processedDelta": 93454,
+        "publishedDelta": 93454,
+        "ackedDelta": 93454,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 311.5080560732787,
+        "processedRps": 311.5080560732787,
+        "publishedRps": 311.5080560732787,
+        "ackedRps": 311.5080560732787
+      },
+      {
+        "partition": 1,
+        "shardId": "engine-0",
+        "fetchedDelta": 93677,
+        "processedDelta": 93677,
+        "publishedDelta": 93677,
+        "ackedDelta": 93677,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.25137681401037,
+        "processedRps": 312.25137681401037,
+        "publishedRps": 312.25137681401037,
+        "ackedRps": 312.25137681401037
+      },
+      {
+        "partition": 2,
+        "shardId": "engine-0",
+        "fetchedDelta": 93899,
+        "processedDelta": 93899,
+        "publishedDelta": 93899,
+        "ackedDelta": 93899,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.99136427787784,
+        "processedRps": 312.99136427787784,
+        "publishedRps": 312.99136427787784,
+        "ackedRps": 312.99136427787784
+      },
+      {
+        "partition": 3,
+        "shardId": "engine-0",
+        "fetchedDelta": 93687,
+        "processedDelta": 93687,
+        "publishedDelta": 93687,
+        "ackedDelta": 93687,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.2847095826531,
+        "processedRps": 312.2847095826531,
+        "publishedRps": 312.2847095826531,
+        "ackedRps": 312.2847095826531
+      },
+      {
+        "partition": 4,
+        "shardId": "engine-0",
+        "fetchedDelta": 93823,
+        "processedDelta": 93823,
+        "publishedDelta": 93823,
+        "ackedDelta": 93823,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.73803523619347,
+        "processedRps": 312.73803523619347,
+        "publishedRps": 312.73803523619347,
+        "ackedRps": 312.73803523619347
+      },
+      {
+        "partition": 5,
+        "shardId": "engine-0",
+        "fetchedDelta": 93940,
+        "processedDelta": 93940,
+        "publishedDelta": 93940,
+        "ackedDelta": 93940,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 313.1280286293128,
+        "processedRps": 313.1280286293128,
+        "publishedRps": 313.1280286293128,
+        "ackedRps": 313.1280286293128
+      },
+      {
+        "partition": 6,
+        "shardId": "engine-0",
+        "fetchedDelta": 93414,
+        "processedDelta": 93414,
+        "publishedDelta": 93414,
+        "ackedDelta": 93414,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 311.37472499870796,
+        "processedRps": 311.37472499870796,
+        "publishedRps": 311.37472499870796,
+        "ackedRps": 311.37472499870796
+      },
+      {
+        "partition": 7,
+        "shardId": "engine-0",
+        "fetchedDelta": 93598,
+        "processedDelta": 93598,
+        "publishedDelta": 93598,
+        "ackedDelta": 93598,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 311.9880479417332,
+        "processedRps": 311.9880479417332,
+        "publishedRps": 311.9880479417332,
+        "ackedRps": 311.9880479417332
+      },
+      {
+        "partition": 8,
+        "shardId": "engine-0",
+        "fetchedDelta": 93391,
+        "processedDelta": 93391,
+        "publishedDelta": 93391,
+        "ackedDelta": 93391,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 311.2980596308298,
+        "processedRps": 311.2980596308298,
+        "publishedRps": 311.2980596308298,
+        "ackedRps": 311.2980596308298
+      },
+      {
+        "partition": 9,
+        "shardId": "engine-0",
+        "fetchedDelta": 93804,
+        "processedDelta": 93804,
+        "publishedDelta": 93804,
+        "ackedDelta": 93804,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.6747029757724,
+        "processedRps": 312.6747029757724,
+        "publishedRps": 312.6747029757724,
+        "ackedRps": 312.6747029757724
+      },
+      {
+        "partition": 10,
+        "shardId": "engine-0",
+        "fetchedDelta": 94160,
+        "processedDelta": 94160,
+        "publishedDelta": 94160,
+        "ackedDelta": 94160,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 313.8613495394517,
+        "processedRps": 313.8613495394517,
+        "publishedRps": 313.8613495394517,
+        "ackedRps": 313.8613495394517
+      },
+      {
+        "partition": 11,
+        "shardId": "engine-0",
+        "fetchedDelta": 93279,
+        "processedDelta": 93279,
+        "publishedDelta": 93279,
+        "ackedDelta": 93279,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 310.9247326220318,
+        "processedRps": 310.9247326220318,
+        "publishedRps": 310.9247326220318,
+        "ackedRps": 310.9247326220318
+      },
+      {
+        "partition": 12,
+        "shardId": "engine-0",
+        "fetchedDelta": 93751,
+        "processedDelta": 93751,
+        "publishedDelta": 93751,
+        "ackedDelta": 93751,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.4980393019662,
+        "processedRps": 312.4980393019662,
+        "publishedRps": 312.4980393019662,
+        "ackedRps": 312.4980393019662
+      },
+      {
+        "partition": 13,
+        "shardId": "engine-0",
+        "fetchedDelta": 94171,
+        "processedDelta": 94171,
+        "publishedDelta": 94171,
+        "ackedDelta": 94171,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 313.89801558495867,
+        "processedRps": 313.89801558495867,
+        "publishedRps": 313.89801558495867,
+        "ackedRps": 313.89801558495867
+      },
+      {
+        "partition": 14,
+        "shardId": "engine-0",
+        "fetchedDelta": 93776,
+        "processedDelta": 93776,
+        "publishedDelta": 93776,
+        "ackedDelta": 93776,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 312.5813712235729,
+        "processedRps": 312.5813712235729,
+        "publishedRps": 312.5813712235729,
+        "ackedRps": 312.5813712235729
+      },
+      {
+        "partition": 15,
+        "shardId": "engine-0",
+        "fetchedDelta": 94127,
+        "processedDelta": 94127,
+        "publishedDelta": 94127,
+        "ackedDelta": 94127,
+        "nackedDelta": 0,
+        "termedDelta": 0,
+        "failedDelta": 0,
+        "unsupportedDelta": 0,
+        "fetchedRps": 313.7513514029309,
+        "processedRps": 313.7513514029309,
+        "publishedRps": 313.7513514029309,
+        "ackedRps": 313.7513514029309
+      }
+    ]
+  },
+  "materializerDelta": {
+    "fetchedDelta": 40738,
+    "materializedDelta": 1499951,
+    "materializedBatchesDelta": 40738,
+    "failedDelta": 0,
+    "ackFailedDelta": 0,
+    "unsupportedDelta": 0,
+    "checksumValidatedBatchesDelta": 40738,
+    "legacyUncheckedBatchesDelta": 0,
+    "validatedMembershipOutcomesDelta": 1499951,
+    "canonicalCommitObservedBatchesDelta": 40738,
+    "sourceCommitObservedBatchesDelta": 40738,
+    "canonicalCommitElapsedNanosDelta": 517555225252,
+    "sourceCommitElapsedNanosDelta": 48774827472,
+    "sourceResidenceSamplesDelta": 40738,
+    "sourceResidenceElapsedMsDelta": 3488625,
+    "clockGuardFailuresDelta": 0,
+    "materializedRps": 4999.751965835282
+  },
+  "diagnosticsSha256": "e551f46509ede03edfc540a4fdb562cdcb59793a16213448b648d99e8b602ca3",
+  "databaseDiagnostics": {
+    "postgres": {
+      "xactCommit": 96072,
+      "xactRollback": 0,
+      "blocksRead": 62436284,
+      "blocksHit": 40681110,
+      "tuplesReturned": 477304842,
+      "tuplesFetched": 2273324,
+      "tuplesInserted": 1810363,
+      "tuplesUpdated": 160,
+      "tuplesDeleted": 65,
+      "conflicts": 0,
+      "tempFiles": 12,
+      "tempBytes": 55472104,
+      "deadlocks": 0
+    },
+    "projection-postgres": {
+      "xactCommit": 42566,
+      "xactRollback": 0,
+      "blocksRead": 20434368,
+      "blocksHit": 165387876,
+      "tuplesReturned": 739300343,
+      "tuplesFetched": 6470166,
+      "tuplesInserted": 9419615,
+      "tuplesUpdated": 222392,
+      "tuplesDeleted": 765465,
+      "conflicts": 0,
+      "tempFiles": 5221,
+      "tempBytes": 31551795170,
+      "deadlocks": 0
+    },
+    "boundary-postgres": {
+      "xactCommit": 131,
+      "xactRollback": 0,
+      "blocksRead": 119,
+      "blocksHit": 17696,
+      "tuplesReturned": 21028,
+      "tuplesFetched": 9348,
+      "tuplesInserted": 35,
+      "tuplesUpdated": 145,
+      "tuplesDeleted": 1,
+      "conflicts": 0,
+      "tempFiles": 0,
+      "tempBytes": 0,
+      "deadlocks": 0
+    }
+  },
+  "latencyMs": {
+    "min": 0.832686,
+    "p50": 6.590112,
+    "p95": 44.15817,
+    "p99": 72.957608,
+    "max": 328.252028
+  },
+  "throughput": {
+    "attemptedPerSecond": 4999.751965835282,
+    "acceptedPerSecond": 4999.751965835282
+  },
+  "totalRequests": 1499951,
+  "completion.json": {
+    "stage": "protocol",
+    "pass": false,
+    "originalExitCode": 1,
+    "cleanupExitCode": 0,
+    "cleanupPassed": true,
+    "exitCode": 1
+  },
+  "candidate-build.json": {
+    "runtimeImage": "sha256:7c388343d839daad0c44a449fc5c15f914588dc89a3cd449e2d83dd1b111501c",
+    "sourceManifestSha256": "e9ed75bdd394fcfc9ce6a70f48ae34deaa4318b7946df1c3a3e04f82335969b6",
+    "buildTree": "/home/reefbench/reef-productive",
+    "provenance": "Native image built and source verified by parent; preparer performed no remote build.",
+    "runtimeBuildSourceManifestSha256": "b30badccab7b0a5e8e508cb547032cc511ae5080d1980531fbe20541044107c3",
+    "sqlOnlyAdditions": [
+      "scripts/dev/db/migrations/runtime/0053_market_data_indexed_top_of_book.sql",
+      "scripts/dev/db/migrations/runtime/0054_projection_claim_cleanup_skip_locked.sql",
+      "scripts/dev/db/migrations/runtime/0055_market_data_indexed_currency.sql"
+    ]
+  },
+  "schema-pin.json": {
+    "migrationId": "runtime/0055_market_data_indexed_currency.sql",
+    "migrationSha256": "4713266105f4d7d1c440e4cc1e8208ed3a1790cedde6cda8325fb89e06171b5e",
+    "functionBodySha256": {
+      "runtime_persist_submit_outcome_status_stage": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+      "runtime_project_order_lifecycle_state": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+      "runtime_project_market_data_snapshots": "ed38b7a99a5838eee3e55cf40a0d8b362d278aa136df7fdbaa2a2e738fbb4b6d",
+      "runtime_cleanup_projection_batch_claims": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab"
+    },
+    "volatility": "v"
+  },
+  "schema-after.json": {
+    "ledger": [
+      {
+        "migration_id": "runtime/0055_market_data_indexed_currency.sql",
+        "checksum_sha256": "4713266105f4d7d1c440e4cc1e8208ed3a1790cedde6cda8325fb89e06171b5e"
+      }
+    ],
+    "functions": {
+      "runtime_persist_submit_outcome_status_stage": {
+        "sha256": "db8dfa90365bbf9c1cec47cb7d76654adf0b37485c7b4e835d94419d319805a9",
+        "volatility": "v"
+      },
+      "runtime_project_order_lifecycle_state": {
+        "sha256": "0191c5a5665c515d1adb020081404dd2a48b5370dee037f945e699204030e67f",
+        "volatility": "v"
+      },
+      "runtime_project_market_data_snapshots": {
+        "sha256": "ed38b7a99a5838eee3e55cf40a0d8b362d278aa136df7fdbaa2a2e738fbb4b6d",
+        "volatility": "v"
+      },
+      "runtime_cleanup_projection_batch_claims": {
+        "sha256": "60b7cac9ac79da06aeeec660240b4dadd47c12c640a3f5be4c4806a51698dcab",
+        "volatility": "v"
+      }
+    }
+  },
+  "baseline-measurement.json": {
+    "kind": "current-build-300-second-baseline",
+    "configuredRate": 5000,
+    "accepted": 1499951,
+    "failures": 0,
+    "durationNanoseconds": 300000000000,
+    "projectionFreshness": {
+      "source": "venue-event-batch-projector",
+      "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+      "materialized": 1499951,
+      "projected": 1499951,
+      "materializedToProjectedGap": 0,
+      "lag": 0,
+      "projectedPerSecond": 4999.751965835282,
+      "caughtUp": true
+    },
+    "freshness": {
+      "schemaVersion": "reef.sustainedDownstreamFreshness.v1",
+      "authority": "source-membership-to-sampled-commit-upper-bound-v1",
+      "pass": false,
+      "limitsMs": {
+        "p95": 5000,
+        "p99": 10000,
+        "max": 30000
+      },
+      "minimumDurationSeconds": 300,
+      "durationToleranceMs": 2,
+      "checks": {
+        "upstreamAuthoritative": true,
+        "downstreamAuthoritative": false,
+        "completeCommandWeightedResidence": false,
+        "acceptedCountsReconciled": true,
+        "sustainedDurationComplete": true,
+        "scheduledDemandComplete": true,
+        "finalQueuesDrained": false,
+        "marketProjectionSourceBound": false,
+        "finalCallersIdle": false,
+        "finalCanonicalLagZero": true,
+        "sourceToCanonical": false,
+        "sourceToLifecycle": false,
+        "sourceToMarketData": false
+      },
+      "stages": {
+        "sourceToCanonical": null,
+        "sourceToLifecycle": null,
+        "sourceToMarketData": null
+      }
+    },
+    "promotion": false
+  },
+  "queueSamples": {
+    "count": 366,
+    "first": {
+      "sampledAt": "2026-09-24T17:17:57.354Z",
+      "queue": {
+        "orderLifecyclePending": 0,
+        "orderLifecycleOldestDirtiedAt": "",
+        "marketDataPending": 0,
+        "marketDataOldestDirtiedAt": "",
+        "databaseSnapshotAt": "2026-09-24T17:17:57.675940Z",
+        "databaseGeneration": "2026-09-24 17:16:31.16508+00"
+      },
+      "failed": 0
+    },
+    "last": {
+      "sampledAt": "2026-09-24T17:24:03.799Z",
+      "queue": {
+        "orderLifecyclePending": 514819,
+        "orderLifecycleOldestDirtiedAt": "2026-09-24 17:21:10.281485+00",
+        "marketDataPending": 32,
+        "marketDataOldestDirtiedAt": "2026-09-24 17:24:02.589088+00",
+        "databaseSnapshotAt": "2026-09-24T17:24:03.852579Z",
+        "databaseGeneration": "2026-09-24 17:16:31.16508+00"
+      },
+      "failed": 0
+    },
+    "maxPending": 607427
+  },
+  "C6": {
+    "artifactSha256": "a56e1577b5a026e0498282a96b0f940fb5ca3057515f7812ef8647b06b4efe57",
+    "executionTimesMs": [
+      514.305,
+      222.919,
+      219.995,
+      510.844
+    ],
+    "equality": {
+      "stage": "market-shaped-equality",
+      "currentRows": 64,
+      "instruments": 64,
+      "candidateRows": 64,
+      "candidateMinusCurrent": 0,
+      "currentMinusCandidate": 0
+    }
+  }
+}

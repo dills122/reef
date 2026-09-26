@@ -16,6 +16,33 @@ import kotlin.test.assertTrue
 
 class InMemoryRuntimePersistenceTest {
     @Test
+    fun eventReplayIsIdempotentAndChangedBatchIsAtomic() {
+        val persistence = InMemoryRuntimePersistence()
+        fun event(id: String, payload: String = "{}") = RuntimeEvent(
+            eventId = id,
+            eventType = "OrderAccepted",
+            orderId = "order-$id",
+            traceId = "trace-1",
+            causationId = "command-1",
+            correlationId = "correlation-1",
+            producer = "test",
+            schemaVersion = "1",
+            occurredAt = "2026-09-25T00:00:00Z",
+            payloadJson = payload
+        )
+
+        persistence.saveEvent(event("first"))
+        persistence.saveEvent(event("first"))
+        assertFailsWith<IllegalArgumentException> {
+            persistence.saveEvents(listOf(event("second"), event("first", """{"changed":true}""")))
+        }
+        persistence.saveEvent(event("third"))
+
+        assertEquals(listOf("first", "third"), persistence.eventsForTrace("trace-1").map { it.eventId })
+        assertEquals(listOf(1L, 2L), persistence.eventsForTrace("trace-1").map { it.sequenceNumber })
+    }
+
+    @Test
     fun storesAndQueriesAcceptedArtifacts() {
         val persistence = InMemoryRuntimePersistence()
         persistence.saveSubmitResult(

@@ -35,6 +35,8 @@ assert.match(short.stdout, /max_stream_direct_partition_skew=4/);
 assert.match(short.stdout, /require_db_diagnostics=1/);
 assert.match(short.stdout, /require_pg_stat_io=1/);
 assert.match(short.stdout, /require_pg_stat_statements=1/);
+assert.match(short.stdout, /projection_downstream_instrumentation_enabled=true/);
+assert.match(short.stdout, /require_projection_cohort_authority=1/);
 
 const soak5m = runGatePlan({ REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "soak-5m" });
 assert.equal(soak5m.status, 0, soak5m.stderr);
@@ -95,9 +97,17 @@ function runGatePlan(overrides) {
       REEF_DO_REQUIRE_DB_DIAGNOSTICS: "",
       REEF_DO_REQUIRE_PG_STAT_IO: "",
       REEF_DO_REQUIRE_PG_STAT_STATEMENTS: "",
+      PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED: "",
+      REEF_DO_REQUIRE_PROJECTION_COHORT_AUTHORITY: "",
+      REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS: "",
       REEF_DO_PROJECTION_FRESHNESS_GATE_TIER: "",
       ...overrides,
     },
     encoding: "utf8",
   });
 }
+
+assert.match(short.stdout, /require_sustained_downstream_freshness=0/, "sustained gate remains opt-in");
+const sustainedPlan = runGatePlan({ REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS: "1" });
+assert.equal(sustainedPlan.status, 0, sustainedPlan.stderr);
+assert.match(sustainedPlan.stdout, /require_sustained_downstream_freshness=1/);

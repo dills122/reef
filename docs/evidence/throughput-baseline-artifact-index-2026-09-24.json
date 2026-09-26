@@ -1,0 +1,83 @@
+{
+  "verifiedOn": "2026-09-24",
+  "authority": "Selected values and SHA256 from original local benchmark JSON; scope and interpretation in THROUGHPUT_BASELINES.md. Raw artifacts remain required for full reproduction.",
+  "artifacts": [
+    {
+      "run": "do-benchmark-20260712T143401Z",
+      "artifact": "reports/do-benchmark/do-benchmark-20260712T143401Z/venue-event-materializer-stress-rate-10000-workers-1024-sample-1.json",
+      "sha256": "b715afda9cbe3d1636c11f744ce40d6f57a597ca17afd87ba07388017897483e",
+      "ratePerSecond": 10000,
+      "durationNanoseconds": 300000000000,
+      "accepted": 3000001,
+      "failures": 0,
+      "projectionFreshness": null
+    },
+    {
+      "run": "do-benchmark-20260712T143401Z",
+      "artifact": "reports/do-benchmark/do-benchmark-20260712T143401Z/venue-event-materializer-stress-rate-10000-workers-1024-sample-2.json",
+      "sha256": "aa63827d5eeb2925b3069cb5f14e50cd0f968e8d3ef162f0223f08fcb5fd82aa",
+      "ratePerSecond": 10000,
+      "durationNanoseconds": 300000000000,
+      "accepted": 2999950,
+      "failures": 0,
+      "projectionFreshness": null
+    },
+    {
+      "run": "do-benchmark-20260820T220557Z",
+      "artifact": "reports/do-benchmark/do-benchmark-20260820T220557Z/venue-event-materializer-stress-rate-2500-workers-256.json",
+      "sha256": "51c920799d91ed0c10c1fc1af553b5cfa5e6fe3f6d5b6e97b9e473be56a86dbe",
+      "ratePerSecond": 2500,
+      "durationNanoseconds": 300000000000,
+      "accepted": 749976,
+      "failures": 0,
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 749976,
+        "projected": 749976,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 2499.9114087211224,
+        "caughtUp": true
+      }
+    },
+    {
+      "run": "do-benchmark-20260820T222945Z",
+      "artifact": "reports/do-benchmark/do-benchmark-20260820T222945Z/venue-event-materializer-stress-rate-5000-workers-256.json",
+      "sha256": "9411e2f7713f9bc1f5487485cc738e0151a0614ba0706eb00ed5c8bc9f21123c",
+      "ratePerSecond": 5000,
+      "durationNanoseconds": 300000000000,
+      "accepted": 1500002,
+      "failures": 0,
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 1500002,
+        "projected": 746047,
+        "materializedToProjectedGap": 753955,
+        "lag": 757955,
+        "projectedPerSecond": 2486.6919066512382,
+        "caughtUp": false
+      }
+    },
+    {
+      "run": "do-benchmark-20260821T204347Z",
+      "artifact": "reports/do-benchmark/do-benchmark-20260821T204347Z/venue-event-materializer-stress-rate-5000-workers-256.json",
+      "sha256": "e51d5e9babfb3394f54cb199b820353ac68bb6179170ead7c7047be9eef3244a",
+      "ratePerSecond": 5000,
+      "durationNanoseconds": 60000000000,
+      "accepted": 299959,
+      "failures": 0,
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 299959,
+        "projected": 299959,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 4998.5029175562095,
+        "caughtUp": true
+      }
+    }
+  ]
+}

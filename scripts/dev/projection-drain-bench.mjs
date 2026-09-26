@@ -22,7 +22,7 @@ if (projectorUrls.length === 0) throw new Error("DEV_PROJECTION_DRAIN_PROJECTOR_
 console.log(`measuring fixed projection backlog across ${projectorUrls.length} projector(s)`);
 console.log("  prerequisite: create the backlog with projector services stopped, then start only the projectors");
 
-const readiness = await sampleProjectors();
+const readiness = await sampleProjectors({ includeProjectedCount: true });
 const resetProbes = await Promise.all(
   projectorUrls.map((baseUrl, index) => requestJson({
     name: `streamAckProjector.${index}.hotPathReset`,
@@ -40,6 +40,7 @@ while (samples.at(-1).status.lag > 0 && Date.now() < deadline) {
 }
 
 const finishedAt = new Date().toISOString();
+const finalExact = await sampleProjectors({ includeProjectedCount: true });
 const report = buildProjectionDrainReport({
   startedAt,
   finishedAt,
@@ -49,9 +50,13 @@ const report = buildProjectionDrainReport({
 });
 report.prerequisite = "Backlog must be loaded with projectors stopped; no canonical intake may run during measurement.";
 report.readiness = readiness;
+report.finalExact = finalExact;
 report.hotPathResetProbes = resetProbes;
 if (!readiness.probes.status.every((probe) => probe.ok)) {
   report.failures.push("one or more projectors were unavailable before measurement");
+}
+if (!finalExact.probes.status.every((probe) => probe.ok)) {
+  report.failures.push("one or more exact final projector status probes failed");
 }
 if (!resetProbes.every((probe) => probe.ok)) {
   report.failures.push("one or more projector hot-path metric resets failed");
@@ -73,11 +78,11 @@ if (report.failures.length > 0) {
   process.exitCode = 1;
 }
 
-async function sampleProjectors() {
+async function sampleProjectors({ includeProjectedCount = false } = {}) {
   const sampledAt = new Date().toISOString();
   const status = await Promise.all(projectorUrls.map((baseUrl, index) => requestJson({
     name: `streamAckProjector.${index}.status`,
-    url: `${baseUrl}/internal/projector/status`,
+    url: `${baseUrl}/internal/projector/status${includeProjectedCount ? "" : "?includeProjectedCount=false"}`,
   })));
   const hotPath = await Promise.all(projectorUrls.map((baseUrl, index) => requestJson({
     name: `streamAckProjector.${index}.hotPath`,
@@ -109,7 +114,9 @@ function aggregateStatus(probes) {
   const watermarks = [...watermarksByPartition.values()];
   return {
     lag: watermarks.reduce((sum, watermark) => sum + Number(watermark.lag ?? 0), 0),
-    projectedCount: Math.max(0, ...successful.map((probe) => Number(probe.json.projectedCount ?? 0))),
+    projectedCount: successful.some((probe) => probe.json.projectedCount != null)
+      ? Math.max(0, ...successful.filter((probe) => probe.json.projectedCount != null).map((probe) => Number(probe.json.projectedCount)))
+      : null,
     metrics: {
       projected: successful.reduce((sum, probe) => sum + Number(probe.json.metrics?.projected ?? 0), 0),
       batches: successful.reduce((sum, probe) => sum + Number(probe.json.metrics?.batches ?? 0), 0),

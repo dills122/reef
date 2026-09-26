@@ -101,7 +101,7 @@ Migration target:
 This backlog is active work, not optional cleanup.
 
 Implementation checked against `cebbffc1` on 2026-09-04; detailed source/test
-evidence is in the [status audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+evidence is in the [status audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 
 1. Finish read/object authorization.
    - implemented/tested: current/history/fill order reads enforce participant

@@ -27,6 +27,7 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
+import java.sql.Timestamp
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -108,9 +109,11 @@ class PostgresRuntimePersistence(
     private val streamAckCanonicalQueryIndexesEnabled: Boolean =
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED", true)
     private val projectorDbRetryAttempts: Int =
-        RuntimeEnv.int("STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS", 3, min = 1)
+        RuntimeEnv.int("STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS", 3, min = 1, lookup = envLookup)
     private val projectorDbRetryBackoffMs: Long =
-        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L)
+        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS", 25L, min = 0L, lookup = envLookup)
+    private val projectorDbRetryHorizonMs: Long =
+        RuntimeEnv.long("STREAM_ACK_PROJECTOR_DB_RETRY_HORIZON_MS", 60_000L, min = 1L, lookup = envLookup)
 
     @Volatile
     private var commandPayloadSideTableAvailableCache: Boolean? = null
@@ -128,6 +131,16 @@ class PostgresRuntimePersistence(
         val outcome: CanonicalCommandOutcome,
         val commandPayloadJson: String = "{}",
         val partitionRow: Int = 0
+    )
+
+    private data class ProjectionBatchClaimResult(
+        val isNew: Boolean,
+        val storedResultCount: Long?
+    )
+
+    private data class ClaimedProjectionTransactionResult(
+        val resultCount: Long,
+        val appliedNow: Boolean
     )
 
     private companion object {
@@ -545,13 +558,6 @@ class PostgresRuntimePersistence(
                     """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_typed
                     ON ${names.runtimeEvents}(occurred_at_ts DESC, event_id_uuid DESC)
-                    WHERE occurred_at_ts IS NOT NULL
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_runtime_events_order_occurred_typed
-                    ON ${names.runtimeEvents}(order_id, occurred_at_ts DESC, event_id_uuid DESC)
                     WHERE occurred_at_ts IS NOT NULL
                     """.trimIndent()
                 )
@@ -998,6 +1004,7 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
+                ProjectionBatchClaimBootstrap.install(stmt, names)
                 stmt.execute(
                     """
                     CREATE OR REPLACE FUNCTION ${names.validateReferenceDataFunction}(
@@ -1226,17 +1233,18 @@ class PostgresRuntimePersistence(
                         RETURN 0;
                       END IF;
 
-                      WITH outcomes AS MATERIALIZED (
-                        SELECT outcome
-                        FROM jsonb_array_elements(
-                          CASE
-                            WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
-                            ELSE '[]'::jsonb
-                          END
-                        ) AS outcome
-                      ),
-                      inserted AS (
-                        INSERT INTO ${names.canonicalCommandOutcomes}(
+                      v_outcome_count := jsonb_array_length(
+                        CASE
+                          WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
+                          ELSE '[]'::jsonb
+                        END
+                      );
+
+                      IF v_outcome_count <> COALESCE((p_batch->>'commandCount')::BIGINT, 0) THEN
+                        RAISE EXCEPTION 'venue event batch command count mismatch for eventStream %, batchId %', v_event_stream, v_batch_id;
+                      END IF;
+
+                      INSERT INTO ${names.canonicalCommandOutcomes}(
                           command_id,
                           batch_id,
                           shard_id,
@@ -1252,8 +1260,8 @@ class PostgresRuntimePersistence(
                           result_status,
                           reject_code,
                           result_payload
-                        )
-                        SELECT
+                      )
+                      SELECT
                           outcome->>'commandId',
                           v_batch_id,
                           COALESCE(p_batch->>'shardId', ''),
@@ -1269,45 +1277,16 @@ class PostgresRuntimePersistence(
                           COALESCE(outcome->>'status', ''),
                           COALESCE(outcome->>'rejectCode', outcome#>>'{result,rejected,code}', ''),
                           COALESCE(outcome->'result', '{}'::jsonb)
-                        FROM outcomes
-                        ON CONFLICT (command_id) DO NOTHING
-                        RETURNING 1
-                      )
-                      SELECT
-                        (SELECT COUNT(*) FROM outcomes),
-                        (SELECT COUNT(*) FROM inserted)
-                        INTO v_outcome_count, inserted_count;
+                      FROM jsonb_array_elements(
+                        CASE
+                          WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
+                          ELSE '[]'::jsonb
+                        END
+                      ) AS outcome
+                      ON CONFLICT (command_id) DO NOTHING;
 
-                      IF v_outcome_count <> COALESCE((p_batch->>'commandCount')::BIGINT, 0) THEN
-                        RAISE EXCEPTION 'venue event batch command count mismatch for eventStream %, batchId %', v_event_stream, v_batch_id;
-                      END IF;
-
-                      IF v_outcome_count <> (
-                        SELECT COUNT(DISTINCT outcome->>'commandId')
-                        FROM jsonb_array_elements(p_batch->'outcomes') AS source(outcome)
-                      ) THEN
-                        RAISE EXCEPTION 'duplicate commandId in venue event batch for eventStream %, batchId %', v_event_stream, v_batch_id;
-                      END IF;
-
-                      IF inserted_count <> v_outcome_count AND EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p_batch->'outcomes') AS source(outcome)
-                        JOIN ${names.canonicalCommandOutcomes} existing
-                          ON existing.command_id = source.outcome->>'commandId'
-                        WHERE existing.batch_id IS DISTINCT FROM v_batch_id
-                           OR existing.shard_id IS DISTINCT FROM COALESCE(p_batch->>'shardId', '')
-                           OR existing.partition_id IS DISTINCT FROM COALESCE((p_batch->>'partition')::INTEGER, -1)
-                           OR existing.command_stream IS DISTINCT FROM COALESCE(p_batch->>'commandStream', '')
-                           OR existing.event_stream IS DISTINCT FROM v_event_stream
-                           OR existing.stream_sequence IS DISTINCT FROM COALESCE((source.outcome->>'streamSequence')::BIGINT, 0)
-                           OR existing.command_type IS DISTINCT FROM COALESCE(source.outcome->>'commandType', '')
-                           OR existing.payload_hash IS DISTINCT FROM COALESCE(source.outcome->>'payloadHash', '')
-                           OR existing.instrument_id IS DISTINCT FROM COALESCE(source.outcome->>'instrumentId', '')
-                           OR existing.order_id IS DISTINCT FROM COALESCE(source.outcome->>'orderId', '')
-                           OR existing.result_status IS DISTINCT FROM COALESCE(source.outcome->>'status', '')
-                           OR existing.reject_code IS DISTINCT FROM COALESCE(source.outcome->>'rejectCode', source.outcome#>>'{result,rejected,code}', '')
-                           OR existing.result_payload IS DISTINCT FROM COALESCE(source.outcome->'result', '{}'::jsonb)
-                      ) THEN
+                      GET DIAGNOSTICS inserted_count = ROW_COUNT;
+                      IF inserted_count <> v_outcome_count THEN
                         RAISE EXCEPTION 'canonical command outcome conflict for eventStream %, batchId %', v_event_stream, v_batch_id;
                       END IF;
 
@@ -1418,7 +1397,7 @@ class PostgresRuntimePersistence(
                         ON CONFLICT (event_id) DO NOTHING;
                       END IF;
 
-                      INSERT INTO ${names.orderLifecycleDirty}(order_id)
+                      INSERT INTO ${names.orderLifecycleDirty} AS dirty(order_id)
                       SELECT DISTINCT order_id FROM (
                         SELECT p_result_order_id AS order_id
                         WHERE COALESCE(p_result_order_id, '') <> ''
@@ -1430,7 +1409,8 @@ class PostgresRuntimePersistence(
                         SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
                       ) dirty_ids
                       WHERE COALESCE(order_id, '') <> ''
-                      ON CONFLICT (order_id) DO NOTHING;
+                      ORDER BY order_id
+                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at;
 
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
@@ -1947,9 +1927,10 @@ class PostgresRuntimePersistence(
                     $$;
                     """.trimIndent()
                 )
-                stmt.execute(
-                    """
-                    CREATE OR REPLACE FUNCTION ${names.projectCanonicalCommandOutcomesFunction}(
+                if (!migratedProjectionBatchClaimWrapperAvailable(conn)) {
+                    stmt.execute(
+                        """
+                        CREATE OR REPLACE FUNCTION ${names.projectCanonicalCommandOutcomesFunction}(
                       p_projection_name TEXT,
                       p_batch_size INTEGER,
                       p_partitions INTEGER[] DEFAULT NULL,
@@ -2163,8 +2144,9 @@ class PostgresRuntimePersistence(
                       RAISE;
                     END;
                     $$;
-                    """.trimIndent()
-                )
+                        """.trimIndent()
+                    )
+                }
             }
         }
         if (bootstrapMode == PostgresBootstrapMode.Validate && projectionStoreSeparated()) {
@@ -2728,14 +2710,14 @@ class PostgresRuntimePersistence(
         projectionStage: ProjectionStage
     ): Long {
         if (batchSize <= 0) return 0
-        if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full) {
+        if (projectionStoreSeparated() || projectionStage != ProjectionStage.Full || bootstrapMode == PostgresBootstrapMode.Compat) {
             return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills, eventStream, projectionStage)
         }
         return HotPathMetrics.time("projector.venueEventBatch.projectionSql") {
             canonicalConnection().use { conn ->
                 conn.prepareStatement(
                     """
-                    SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?, ?)
+                    SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?, ?, ?)
                     """.trimIndent()
                 ).use { ps ->
                     ps.setString(1, projectionName)
@@ -2743,6 +2725,7 @@ class PostgresRuntimePersistence(
                     ps.setArray(3, conn.createArrayOf("integer", partitions.toTypedArray()))
                     ps.setBoolean(4, includeFills)
                     ps.setString(5, eventStream.trim().ifBlank { null })
+                    ps.setLong(6, projectorDbRetryHorizonMs)
                     ps.executeQuery().use { rs ->
                         rs.next()
                         rs.getLong(1)
@@ -2786,7 +2769,7 @@ class PostgresRuntimePersistence(
             HotPathMetrics.time("projector.canonicalSubmit.projectionSql") {
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
             }
-            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            maybeFailAfterProjectorRowsBeforeWatermark()
             HotPathMetrics.time("projector.canonicalSubmit.watermark") {
                 updateProjectionWatermarks(conn, projectionName, candidates)
             }
@@ -2806,6 +2789,7 @@ class PostgresRuntimePersistence(
         val scopedEventStream = eventStream.trim()
         val ownedPartitions = ownedCommandProjectionPartitions(partitions, scopedEventStream)
         if (ownedPartitions.isEmpty()) return 0
+        val retryDeadline = projectionRetryDeadline()
         val candidates = HotPathMetrics.time("projector.venueEventBatch.canonicalRead") {
             val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
             val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
@@ -2833,7 +2817,51 @@ class PostgresRuntimePersistence(
         }
         if (candidates.isEmpty()) return 0
 
-        return executeProjectionTransactionWithRetry(projectionName, "projector.venueEventBatch") { conn ->
+        val identityCandidates = candidates.map { candidate ->
+            ProjectionBatchIdentityCandidate(
+                partitionId = candidate.partitionId,
+                streamSequence = candidate.partitionSequence,
+                commandId = candidate.outcome.commandId,
+                canonicalBatchId = candidate.outcome.batchId,
+                commandType = candidate.outcome.commandType,
+                payloadHash = candidate.outcome.payloadHash
+            )
+        }
+        val batchIdentity = ProjectionBatchIdentityV1.digest(
+            projectionName = projectionName,
+            eventStream = scopedEventStream,
+            projectionStage = projectionStage,
+            includeFills = includeFills,
+            candidates = identityCandidates
+        )
+        val identityCandidatesJson = projectionBatchIdentityCandidatesJson(identityCandidates)
+
+        val transactionResult = executeClaimedProjectionTransactionWithRetry(
+            projectionName = projectionName,
+            metricPrefix = "projector.venueEventBatch",
+            retryDeadline = retryDeadline
+        ) { conn ->
+            cleanupProjectionBatchClaims(conn)
+            val claim = claimProjectionBatch(
+                conn = conn,
+                batchIdentity = batchIdentity,
+                projectionName = projectionName,
+                eventStream = scopedEventStream,
+                projectionStage = projectionStage,
+                includeFills = includeFills,
+                identityCandidatesJson = identityCandidatesJson,
+                retryDeadline = retryDeadline,
+                retryHorizonMs = projectorDbRetryHorizonMs
+            )
+            if (!claim.isNew) {
+                return@executeClaimedProjectionTransactionWithRetry ClaimedProjectionTransactionResult(
+                    resultCount = checkNotNull(claim.storedResultCount) {
+                        "Completed projection batch claim must contain its stored result"
+                    },
+                    appliedNow = false
+                )
+            }
+
             val payloadJson = HotPathMetrics.time("projector.venueEventBatch.transform") {
                 candidates.toJsonArray {
                     it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject()
@@ -2842,7 +2870,7 @@ class PostgresRuntimePersistence(
             HotPathMetrics.time("projector.venueEventBatch.projectionSql") {
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size, projectionStage)
             }
-            maybeFailAfterProjectorRowsBeforeWatermark(conn)
+            maybeFailAfterProjectorRowsBeforeWatermark()
             HotPathMetrics.time("projector.venueEventBatch.watermark") {
                 updateProjectionWatermarks(
                     conn,
@@ -2856,15 +2884,129 @@ class PostgresRuntimePersistence(
                     }
                 )
             }
-            candidates.size.toLong()
+            val resultCount = candidates.size.toLong()
+            completeProjectionBatch(conn, batchIdentity, resultCount)
+            ClaimedProjectionTransactionResult(resultCount = resultCount, appliedNow = true)
+        }
+        return if (transactionResult.appliedNow) transactionResult.resultCount else 0L
+    }
+
+    private fun projectionBatchIdentityCandidatesJson(candidates: List<ProjectionBatchIdentityCandidate>): String {
+        return JsonCodec.writeArray(
+            candidates.map { candidate ->
+                mapOf(
+                    "partitionId" to candidate.partitionId,
+                    "streamSequence" to candidate.streamSequence,
+                    "commandId" to candidate.commandId,
+                    "canonicalBatchId" to candidate.canonicalBatchId,
+                    "commandType" to candidate.commandType,
+                    "payloadHash" to candidate.payloadHash
+                )
+            }
+        )
+    }
+
+    private fun projectionRetryDeadline(): Instant {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                "SELECT clock_timestamp() + (? * INTERVAL '1 millisecond')"
+            ).use { ps ->
+                ps.setLong(1, projectorDbRetryHorizonMs)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getTimestamp(1).toInstant()
+                }
+            }
         }
     }
 
-    private fun executeProjectionTransactionWithRetry(
+    private fun assertProjectionRetryWithinHorizon(conn: Connection, retryDeadline: Instant) {
+        conn.prepareStatement("SELECT clock_timestamp() <= ?").use { ps ->
+            ps.setTimestamp(1, Timestamp.from(retryDeadline))
+            ps.executeQuery().use { rs ->
+                rs.next()
+                check(rs.getBoolean(1)) {
+                    "Projection retry horizon expired before batch authority could be re-established"
+                }
+            }
+        }
+    }
+
+    private fun cleanupProjectionBatchClaims(conn: Connection) {
+        conn.prepareStatement("SELECT ${names.cleanupProjectionBatchClaimsFunction}(1000)").use { ps ->
+            ps.executeQuery().use { rs -> rs.next() }
+        }
+    }
+
+    private fun claimProjectionBatch(
+        conn: Connection,
+        batchIdentity: String,
+        projectionName: String,
+        eventStream: String,
+        projectionStage: ProjectionStage,
+        includeFills: Boolean,
+        identityCandidatesJson: String,
+        retryDeadline: Instant,
+        retryHorizonMs: Long
+    ): ProjectionBatchClaimResult {
+        conn.prepareStatement(
+            """
+            SELECT is_new, stored_result_count
+            FROM ${names.claimProjectionBatchV1Function}(?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, batchIdentity)
+            ps.setString(2, projectionName)
+            ps.setString(3, eventStream)
+            ps.setString(4, projectionStage.configValue)
+            ps.setBoolean(5, includeFills)
+            ps.setString(6, identityCandidatesJson)
+            ps.setTimestamp(7, Timestamp.from(retryDeadline))
+            ps.setLong(8, retryHorizonMs)
+            ps.executeQuery().use { rs ->
+                check(rs.next()) { "Projection batch claim did not return a result" }
+                val storedResult = rs.getLong("stored_result_count").let { value ->
+                    if (rs.wasNull()) null else value
+                }
+                return ProjectionBatchClaimResult(
+                    isNew = rs.getBoolean("is_new"),
+                    storedResultCount = storedResult
+                )
+            }
+        }
+    }
+
+    private fun completeProjectionBatch(conn: Connection, batchIdentity: String, resultCount: Long) {
+        conn.prepareStatement(
+            "SELECT ${names.completeProjectionBatchV1Function}(?, ?)"
+        ).use { ps ->
+            ps.setString(1, batchIdentity)
+            ps.setLong(2, resultCount)
+            ps.executeQuery().use { rs ->
+                check(rs.next() && rs.getLong(1) == resultCount) {
+                    "Completed projection batch count did not match the applied result"
+                }
+            }
+        }
+    }
+
+    private fun executeClaimedProjectionTransactionWithRetry(
         projectionName: String,
         metricPrefix: String,
-        operation: (Connection) -> Long
-    ): Long {
+        retryDeadline: Instant,
+        operation: (Connection) -> ClaimedProjectionTransactionResult
+    ): ClaimedProjectionTransactionResult {
+        return executeProjectionTransactionWithRetry(projectionName, metricPrefix) { conn ->
+            assertProjectionRetryWithinHorizon(conn, retryDeadline)
+            operation(conn)
+        }
+    }
+
+    private fun <T> executeProjectionTransactionWithRetry(
+        projectionName: String,
+        metricPrefix: String,
+        operation: (Connection) -> T
+    ): T {
         var attempt = 1
         while (true) {
             projectionConnection().use { conn ->
@@ -2936,15 +3078,14 @@ class PostgresRuntimePersistence(
         return if (state.isNullOrBlank()) message else "SQLSTATE $state: $message"
     }
 
-    private fun maybeFailAfterProjectorRowsBeforeWatermark(conn: Connection) {
+    private fun maybeFailAfterProjectorRowsBeforeWatermark() {
         if (!RuntimeEnv.bool("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", false, envLookup)) return
         val internalMode = RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local", envLookup)
         require(internalMode == "enabled") {
             "STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE requires PLATFORM_INTERNAL_HTTP_MODE=enabled"
         }
         if (!projectorRowsBeforeWatermarkFailureInjected.compareAndSet(false, true)) return
-        conn.commit()
-        error("injected projector failure after read-model rows before watermark")
+        error("injected projector rollback after read-model rows before watermark")
     }
 
     private fun ownedProjectionPartitions(partitions: List<Int>): List<Int> {
@@ -3280,9 +3421,86 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus {
+    override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus =
+        projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = true)
+
+    override fun projectionStatusWithoutCount(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus =
+        projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = false)
+
+    override fun projectionLag(projectionName: String, partitions: List<Int>, source: String): ProjectionLag {
+        val status = projectionStatusInternal(projectionName, partitions, source, includeProjectedCount = false)
+        return ProjectionLag(status.projectionName, status.lag)
+    }
+
+    override fun projectionLagUpTo(
+        projectionName: String,
+        partitions: List<Int>,
+        source: String,
+        threshold: Long
+    ): ProjectionLag {
+        if (threshold <= 0L) return projectionLag(projectionName, partitions, source)
+        // Read watermark first. New canonical commits between stores can only make this
+        // conservative; they cannot hide backlog behind a newer watermark.
+        val watermarks = projectionWatermarkRows(projectionName, partitions)
+        val watermarkPartitions = watermarks.keys.filter { it >= 0 }.sorted()
+        val watermarkSequences = watermarkPartitions.map { watermarks.getValue(it).lastPartitionSequence }
+        canonicalConnection().use { conn ->
+            val canonicalRowsSql = canonicalProjectionRowsSql(source)
+            conn.prepareStatement(
+                """
+                WITH RECURSIVE watermark_partitions AS (
+                  SELECT * FROM unnest(?::INTEGER[], ?::BIGINT[]) AS watermark(partition_id, last_partition_seq)
+                ),
+                canonical_rows AS NOT MATERIALIZED ($canonicalRowsSql),
+                discovered(partition_id) AS (
+                  SELECT MIN(partition_id) FROM canonical_rows WHERE cardinality(?::INTEGER[]) = 0
+                  UNION ALL
+                  SELECT (SELECT MIN(canonical.partition_id) FROM canonical_rows canonical
+                          WHERE canonical.partition_id > previous.partition_id)
+                  FROM discovered previous WHERE previous.partition_id IS NOT NULL
+                ),
+                partition_ids AS (
+                  SELECT partition_id FROM discovered WHERE partition_id IS NOT NULL
+                  UNION
+                  SELECT unnest(?::INTEGER[])
+                )
+                SELECT LEAST(COALESCE(SUM(backlog.lag), 0), ?::BIGINT) AS lag
+                FROM partition_ids ids
+                LEFT JOIN watermark_partitions watermark ON watermark.partition_id = ids.partition_id
+                CROSS JOIN LATERAL (
+                  SELECT COUNT(*) AS lag FROM (
+                    SELECT 1 FROM canonical_rows canonical
+                    WHERE canonical.partition_id = ids.partition_id
+                      AND canonical.partition_seq > COALESCE(watermark.last_partition_seq, 0)
+                    LIMIT ?
+                  ) bounded
+                ) backlog
+                """.trimIndent()
+            ).use { ps ->
+                ps.setArray(1, conn.createArrayOf("integer", watermarkPartitions.toTypedArray()))
+                ps.setArray(2, conn.createArrayOf("bigint", watermarkSequences.toTypedArray()))
+                val requested = conn.createArrayOf("integer", partitions.toTypedArray())
+                ps.setArray(3, requested)
+                ps.setArray(4, requested)
+                ps.setLong(5, threshold)
+                ps.setLong(6, threshold)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    val boundedLag = rs.getLong("lag").coerceAtMost(threshold)
+                    return ProjectionLag(projectionName, boundedLag, isLowerBound = boundedLag >= threshold)
+                }
+            }
+        }
+    }
+
+    private fun projectionStatusInternal(
+        projectionName: String,
+        partitions: List<Int>,
+        source: String,
+        includeProjectedCount: Boolean
+    ): ProjectionStatus {
         if (projectionStoreSeparated()) {
-            return projectionStatusAcrossStores(projectionName, partitions, source)
+            return projectionStatusAcrossStores(projectionName, partitions, source, includeProjectedCount)
         }
         canonicalConnection().use { conn ->
             val canonicalRowsSql = canonicalProjectionRowsSql(source)
@@ -3380,13 +3598,15 @@ class PostgresRuntimePersistence(
                     rows
                 }
             }
-            val projectedCount = conn.prepareStatement(
-                "SELECT COUNT(*) FROM ${names.submitResults}"
-            ).use { ps ->
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getLong(1)
+            val projectedCount = if (includeProjectedCount) {
+                conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getLong(1)
+                    }
                 }
+            } else {
+                0L
             }
             return ProjectionStatus(
                 projectionName = projectionName,
@@ -3397,18 +3617,113 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun projectionStatusAcrossStores(
+    override fun committedProjectionFrontier(projectionName: String, partitions: List<Int>): CommittedProjectionFrontier {
+        // One committed projection-store snapshot; no canonical history or submit-result count.
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT pg_postmaster_start_time()::TEXT AS database_generation,
+                       watermark.partition_id, watermark.last_partition_seq, watermark.last_error
+                FROM (SELECT 1) singleton
+                LEFT JOIN ${names.projectionWatermarks} watermark
+                  ON watermark.projection_name = ?
+                  AND (cardinality(?::INTEGER[]) = 0 OR watermark.partition_id = ANY(?::INTEGER[])
+                       OR watermark.partition_id = -1)
+                ORDER BY watermark.partition_id
+                """.trimIndent()
+            ).use { ps ->
+                val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
+                ps.setString(1, projectionName)
+                ps.setArray(2, partitionArray)
+                ps.setArray(3, partitionArray)
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<CommittedProjectionWatermark>()
+                    var generation = ""
+                    while (rs.next()) {
+                        generation = rs.getString("database_generation")
+                        if (rs.getObject("partition_id") != null) {
+                            rows.add(CommittedProjectionWatermark(rs.getInt("partition_id"), rs.getLong("last_partition_seq"), rs.getString("last_error")))
+                        }
+                    }
+                    return CommittedProjectionFrontier(projectionName, partitions.toList(), rows, generation)
+                }
+            }
+        }
+    }
+
+    override fun projectionDirtyQueueStats(): ProjectionDirtyQueueStats {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM ${names.orderLifecycleDirty}) AS order_lifecycle_pending,
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.orderLifecycleDirty}), '') AS order_lifecycle_oldest_dirtied_at,
+                  (SELECT COUNT(*) FROM ${names.marketDataSnapshotDirty}) AS market_data_pending,
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.marketDataSnapshotDirty}), '') AS market_data_oldest_dirtied_at,
+                  to_char(
+                    clock_timestamp() AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                  ) AS database_snapshot_at,
+                  pg_postmaster_start_time()::TEXT AS database_generation
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return ProjectionDirtyQueueStats(
+                        orderLifecyclePending = rs.getLong("order_lifecycle_pending"),
+                        orderLifecycleOldestDirtiedAt = rs.getString("order_lifecycle_oldest_dirtied_at"),
+                        marketDataPending = rs.getLong("market_data_pending"),
+                        marketDataOldestDirtiedAt = rs.getString("market_data_oldest_dirtied_at"),
+                        databaseSnapshotAt = rs.getString("database_snapshot_at"),
+                        databaseGeneration = rs.getString("database_generation")
+                    )
+                }
+            }
+        }
+    }
+
+    override fun projectionDirtyQueueMarkerStats(): ProjectionDirtyQueueStats {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.orderLifecycleDirty}), '') AS order_lifecycle_oldest_dirtied_at,
+                  COALESCE((SELECT MIN(dirtied_at)::TEXT FROM ${names.marketDataSnapshotDirty}), '') AS market_data_oldest_dirtied_at,
+                  to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS database_snapshot_at,
+                  pg_postmaster_start_time()::TEXT AS database_generation
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    val lifecycleOldest = rs.getString("order_lifecycle_oldest_dirtied_at")
+                    val marketOldest = rs.getString("market_data_oldest_dirtied_at")
+                    // MIN is null exactly when its NOT NULL dirtied_at queue is empty.
+                    // These are occupancy sentinels for coverage, never exposed as exact counts.
+                    return ProjectionDirtyQueueStats(
+                        orderLifecyclePending = if (lifecycleOldest.isEmpty()) 0 else 1,
+                        orderLifecycleOldestDirtiedAt = lifecycleOldest,
+                        marketDataPending = if (marketOldest.isEmpty()) 0 else 1,
+                        marketDataOldestDirtiedAt = marketOldest,
+                        databaseSnapshotAt = rs.getString("database_snapshot_at"),
+                        databaseGeneration = rs.getString("database_generation")
+                    )
+                }
+            }
+        }
+    }
+
+    private fun projectionStatusWatermarks(
         projectionName: String,
         partitions: List<Int>,
         source: String
-    ): ProjectionStatus {
+    ): List<ProjectionWatermark> {
         val watermarkRows = projectionWatermarkRows(projectionName, partitions)
         val canonicalStatsByPartition = canonicalPartitionStats(partitions, watermarkRows, source)
         val partitionIds = (partitions + canonicalStatsByPartition.keys + watermarkRows.keys)
             .filter { it >= 0 }
             .distinct()
             .sorted()
-        val watermarks = partitionIds.map { partitionId ->
+        return partitionIds.map { partitionId ->
             val watermark = watermarkRows[partitionId]
             val canonicalStats = canonicalStatsByPartition[partitionId]
             val projected = watermark?.lastPartitionSequence ?: 0L
@@ -3422,13 +3737,26 @@ class PostgresRuntimePersistence(
                 lastError = watermark?.lastError.orEmpty()
             )
         } + watermarkRows.values.filter { it.partitionId == -1 }
-        val projectedCount = projectionConnection().use { conn ->
-            conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getLong(1)
+    }
+
+    private fun projectionStatusAcrossStores(
+        projectionName: String,
+        partitions: List<Int>,
+        source: String,
+        includeProjectedCount: Boolean
+    ): ProjectionStatus {
+        val watermarks = projectionStatusWatermarks(projectionName, partitions, source)
+        val projectedCount = if (includeProjectedCount) {
+            projectionConnection().use { conn ->
+                conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
+                    ps.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getLong(1)
+                    }
                 }
             }
+        } else {
+            0L
         }
         return ProjectionStatus(
             projectionName = projectionName,
@@ -3832,7 +4160,9 @@ class PostgresRuntimePersistence(
         // See marketDataDepthSnapshot: order_lifecycle_state is already kept
         // current by the incremental OrderLifecycleProjectionWorker, so a
         // synchronous full-venue rebuild here is redundant.
-        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceStatus = projectionStatusInternal(
+            sourceProjectionName, emptyList(), "venue-event-batch", includeProjectedCount = false
+        )
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }
             .maxOfOrNull { it.lastPartitionSequence } ?: 0L
@@ -3955,12 +4285,14 @@ class PostgresRuntimePersistence(
     override fun projectMarketDataSnapshots(
         projectionName: String,
         sourceProjectionName: String,
-        batchSize: Int
+        batchSize: Int,
+        projectLifecycleFirst: Boolean
     ): Long {
         if (batchSize <= 0) return 0
-        projectOrderLifecycleState(batchSize)
-        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
-        val lastPartitionSequence = sourceStatus.watermarks
+        if (projectLifecycleFirst) projectOrderLifecycleState(batchSize)
+        // Market metadata needs the source frontier and lag, not a global result count.
+        val sourceWatermarks = projectionStatusWatermarks(sourceProjectionName, emptyList(), "venue-event-batch")
+        val lastPartitionSequence = sourceWatermarks
             .filter { it.partitionId >= 0 }
             .maxOfOrNull { it.lastPartitionSequence } ?: 0L
         projectionConnection().use { conn ->
@@ -3972,7 +4304,7 @@ class PostgresRuntimePersistence(
                 ps.setString(1, projectionName)
                 ps.setString(2, sourceProjectionName)
                 ps.setLong(3, lastPartitionSequence)
-                ps.setLong(4, sourceStatus.lag)
+                ps.setLong(4, sourceWatermarks.sumOf { it.lag })
                 ps.setInt(5, batchSize)
                 ps.executeQuery().use { rs ->
                     rs.next()
@@ -4034,7 +4366,9 @@ class PostgresRuntimePersistence(
         // every depth-book read paid for a full DELETE+rebuild across every
         // order/execution/event in the system. Callers that need a forced
         // full rebuild use the dedicated rebuildOrderLifecycleState route.
-        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceStatus = projectionStatusInternal(
+            sourceProjectionName, emptyList(), "venue-event-batch", includeProjectedCount = false
+        )
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }
             .maxOfOrNull { it.lastPartitionSequence } ?: 0L
@@ -4124,24 +4458,34 @@ class PostgresRuntimePersistence(
             val watermarkSequences = watermarkPartitions.map { watermarks.getValue(it).lastPartitionSequence }
             conn.prepareStatement(
                 """
-                WITH watermark_partitions AS (
+                WITH RECURSIVE watermark_partitions AS (
                   SELECT *
                   FROM unnest(?::INTEGER[], ?::BIGINT[]) AS watermark(partition_id, last_partition_seq)
                 ),
-                canonical_rows AS (
+                canonical_rows AS NOT MATERIALIZED (
                   $canonicalRowsSql
+                ),
+                partition_ids(partition_id) AS (
+                  SELECT MIN(partition_id) FROM canonical_rows
+                  UNION ALL
+                  SELECT (
+                    SELECT MIN(canonical.partition_id) FROM canonical_rows canonical
+                    WHERE canonical.partition_id > previous.partition_id
+                  )
+                  FROM partition_ids previous
+                  WHERE previous.partition_id IS NOT NULL
                 )
                 SELECT
-                  canonical.partition_id,
-                  MAX(canonical.partition_seq) AS canonical_max_partition_seq,
-                  COUNT(*) FILTER (
-                    WHERE canonical.partition_seq > COALESCE(watermark_partitions.last_partition_seq, 0)
-                  ) AS lag
-                FROM canonical_rows canonical
-                LEFT JOIN watermark_partitions
-                  ON watermark_partitions.partition_id = canonical.partition_id
-                WHERE cardinality(?::INTEGER[]) = 0 OR canonical.partition_id = ANY(?::INTEGER[])
-                GROUP BY canonical.partition_id
+                  partition_ids.partition_id,
+                  (SELECT MAX(canonical.partition_seq) FROM canonical_rows canonical
+                   WHERE canonical.partition_id = partition_ids.partition_id) AS canonical_max_partition_seq,
+                  (SELECT COUNT(*) FROM canonical_rows canonical
+                   WHERE canonical.partition_id = partition_ids.partition_id
+                     AND canonical.partition_seq > COALESCE(watermark_partitions.last_partition_seq, 0)) AS lag
+                FROM partition_ids
+                LEFT JOIN watermark_partitions ON watermark_partitions.partition_id = partition_ids.partition_id
+                WHERE partition_ids.partition_id IS NOT NULL
+                  AND (cardinality(?::INTEGER[]) = 0 OR partition_ids.partition_id = ANY(?::INTEGER[]))
                 """.trimIndent()
             ).use { ps ->
                 val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
@@ -4320,7 +4664,29 @@ class PostgresRuntimePersistence(
                 """
                 INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (event_id) DO NOTHING
+                ON CONFLICT (event_id) DO UPDATE SET
+                  event_id = ${names.rejectTradeReplayConflictFunction}(EXCLUDED.event_id)
+                WHERE ROW(
+                  ${names.trades}.trade_id,
+                  ${names.trades}.execution_id,
+                  ${names.trades}.buy_order_id,
+                  ${names.trades}.sell_order_id,
+                  ${names.trades}.instrument_id,
+                  ${names.trades}.quantity_units,
+                  ${names.trades}.price,
+                  ${names.trades}.currency,
+                  ${names.trades}.occurred_at
+                ) IS DISTINCT FROM ROW(
+                  EXCLUDED.trade_id,
+                  EXCLUDED.execution_id,
+                  EXCLUDED.buy_order_id,
+                  EXCLUDED.sell_order_id,
+                  EXCLUDED.instrument_id,
+                  EXCLUDED.quantity_units,
+                  EXCLUDED.price,
+                  EXCLUDED.currency,
+                  EXCLUDED.occurred_at
+                )
                 """.trimIndent()
             ).use { ps ->
                 trades.forEach { trade ->
@@ -4347,12 +4713,67 @@ class PostgresRuntimePersistence(
 
     override fun saveEvents(events: List<RuntimeEvent>) {
         if (events.isEmpty()) return
+        require(events.map { it.eventId }.toSet().size == events.size) { "duplicate runtime event ID in batch" }
         projectionConnection().use { conn ->
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
+                conn.prepareStatement("SELECT pg_advisory_xact_lock(198765432, hashtext(?))").use { ps ->
+                    events.map { it.traceId }.distinct().sorted().forEach { traceId ->
+                        ps.setString(1, traceId)
+                        ps.executeQuery().close()
+                    }
+                }
+                val existingIds = mutableSetOf<String>()
+                conn.prepareStatement(
+                    """
+                    SELECT ROW(
+                      stored.event_type, stored.order_id, stored.trace_id, stored.causation_id,
+                      stored.correlation_id, stored.actor_id, stored.producer, stored.schema_version,
+                      stored.occurred_at, stored.modify_quantity_units, stored.modify_limit_price,
+                      COALESCE(stored.payload_sha256, sha256(COALESCE(payloads.payload_json, stored.payload_json)::text::bytea))
+                    ) IS NOT DISTINCT FROM ROW(
+                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, sha256((?::jsonb)::text::bytea)
+                    ) AND COALESCE(payloads.payload_json, stored.payload_json) = ?::jsonb AS identical
+                    FROM ${names.runtimeEvents} stored
+                    LEFT JOIN ${names.runtimeEventPayloads} payloads ON payloads.event_id = stored.event_id
+                    WHERE stored.event_id = ?
+                    """.trimIndent()
+                ).use { ps ->
+                    events.forEach { event ->
+                        val modifyFacts = event.modifyFacts()
+                        val payload = event.payloadJson.ifBlank { "{}" }
+                        ps.setString(1, event.eventType)
+                        ps.setString(2, event.orderId)
+                        ps.setString(3, event.traceId)
+                        ps.setString(4, event.causationId)
+                        ps.setString(5, event.correlationId)
+                        ps.setString(6, event.actorId)
+                        ps.setString(7, event.producer)
+                        ps.setString(8, event.schemaVersion)
+                        ps.setString(9, event.occurredAt)
+                        ps.setString(10, modifyFacts.quantityUnits)
+                        ps.setString(11, modifyFacts.limitPrice)
+                        ps.setString(12, payload)
+                        ps.setString(13, payload)
+                        ps.setString(14, event.eventId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) {
+                                if (!rs.getBoolean("identical")) {
+                                    throw SQLException("runtime event replay conflict for existing event_id ${event.eventId}", "23505")
+                                }
+                                existingIds.add(event.eventId)
+                            }
+                        }
+                    }
+                }
+                val newEvents = events.filterNot { it.eventId in existingIds }
+                if (newEvents.isEmpty()) {
+                    conn.commit()
+                    return
+                }
                 val startByTrace = mutableMapOf<String, Long>()
-                events.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
+                newEvents.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
                     conn.prepareStatement(
                         """
                         INSERT INTO ${names.runtimeTraceSequences} AS trace_sequence(trace_id, next_sequence)
@@ -4374,7 +4795,7 @@ class PostgresRuntimePersistence(
                 val nextByTrace = startByTrace.toMutableMap()
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEvents}(
+                    INSERT INTO ${names.runtimeEvents} AS stored(
                       event_id,
                       event_type,
                       order_id,
@@ -4388,13 +4809,30 @@ class PostgresRuntimePersistence(
                       payload_json,
                       occurred_at,
                       modify_quantity_units,
-                      modify_limit_price
+                      modify_limit_price,
+                      payload_sha256
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?)
-                    ON CONFLICT (event_id) DO NOTHING
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?, sha256((?::jsonb)::text::bytea))
+                    ON CONFLICT (event_id) DO UPDATE
+                      SET event_id = runtime.runtime_reject_event_replay_conflict(EXCLUDED.event_id)
+                      WHERE ROW(
+                        stored.event_type, stored.order_id, stored.trace_id, stored.causation_id,
+                        stored.correlation_id, stored.actor_id, stored.producer, stored.schema_version,
+                        stored.sequence_number, stored.occurred_at, stored.modify_quantity_units,
+                        stored.modify_limit_price,
+                        COALESCE(stored.payload_sha256, sha256(COALESCE(
+                          (SELECT payload_json FROM ${names.runtimeEventPayloads} WHERE event_id = stored.event_id),
+                          stored.payload_json
+                        )::text::bytea))
+                      ) IS DISTINCT FROM ROW(
+                        EXCLUDED.event_type, EXCLUDED.order_id, EXCLUDED.trace_id, EXCLUDED.causation_id,
+                        EXCLUDED.correlation_id, EXCLUDED.actor_id, EXCLUDED.producer, EXCLUDED.schema_version,
+                        EXCLUDED.sequence_number, EXCLUDED.occurred_at, EXCLUDED.modify_quantity_units,
+                        EXCLUDED.modify_limit_price, EXCLUDED.payload_sha256
+                      )
                     """.trimIndent()
                 ).use { ps ->
-                    events.forEach { event ->
+                    newEvents.forEach { event ->
                         val sequence = nextByTrace.getValue(event.traceId)
                         nextByTrace[event.traceId] = sequence + 1
                         val modifyFacts = event.modifyFacts()
@@ -4411,18 +4849,21 @@ class PostgresRuntimePersistence(
                         ps.setString(11, event.occurredAt)
                         ps.setString(12, modifyFacts.quantityUnits)
                         ps.setString(13, modifyFacts.limitPrice)
+                        ps.setString(14, event.payloadJson.ifBlank { "{}" })
                         ps.addBatch()
                     }
                     ps.executeBatch()
                 }
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEventPayloads}(event_id, payload_json)
+                    INSERT INTO ${names.runtimeEventPayloads} AS stored(event_id, payload_json)
                     VALUES (?, ?::jsonb)
-                    ON CONFLICT (event_id) DO NOTHING
+                    ON CONFLICT (event_id) DO UPDATE
+                      SET event_id = runtime.runtime_reject_event_replay_conflict(EXCLUDED.event_id)
+                      WHERE stored.payload_json IS DISTINCT FROM EXCLUDED.payload_json
                     """.trimIndent()
                 ).use { ps ->
-                    events.forEach { event ->
+                    newEvents.forEach { event ->
                         val payload = event.payloadJson.ifBlank { "{}" }
                         if (payload == "{}") return@forEach
                         ps.setString(1, event.eventId)
@@ -5109,6 +5550,19 @@ class PostgresRuntimePersistence(
     }
 
     private fun projectionStoreSeparated(): Boolean = projectionDataSource !== dataSource
+
+    private fun migratedProjectionBatchClaimWrapperAvailable(conn: Connection): Boolean {
+        conn.prepareStatement("SELECT to_regprocedure(?) IS NOT NULL").use { ps ->
+            ps.setString(
+                1,
+                "${names.runtimeSchemaName}.runtime_project_canonical_command_outcomes(text,integer,integer[],boolean,text,bigint)"
+            )
+            ps.executeQuery().use { rs ->
+                rs.next()
+                return rs.getBoolean(1)
+            }
+        }
+    }
 
     private fun connection(): Connection = canonicalConnection()
 

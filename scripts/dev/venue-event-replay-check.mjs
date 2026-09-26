@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { composePsqlArgs } from "./lib/compose-psql.mjs";
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
@@ -312,20 +313,13 @@ function assertZero(failures, report, key, label) {
 }
 
 async function runRuntimePsql(sql) {
-  return await runCapture("docker", [
-    "compose",
-    "exec",
-    "-T",
-    "postgres",
-    "psql",
-    "-U",
-    env("DEV_VENUE_EVENT_REPLAY_CHECK_DB_USER", "reef"),
-    "-d",
-    env("DEV_VENUE_EVENT_REPLAY_CHECK_DB_NAME", "reef"),
-    "-At",
-    "-c",
-    sql,
-  ]);
+  return await runCapture(
+    "docker",
+    composePsqlArgs("postgres", sql, process.env, {
+      user: env("DEV_VENUE_EVENT_REPLAY_CHECK_DB_USER", "reef"),
+      database: env("DEV_VENUE_EVENT_REPLAY_CHECK_DB_NAME", "reef"),
+    }),
+  );
 }
 
 function runCapture(cmd, args) {
