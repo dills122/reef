@@ -159,15 +159,21 @@ const ocrPilot = await readWorkflow("open-code-review-pilot.yml");
 const ocrRule = JSON.parse(await readFile(new URL("../../.opencodereview/rule.json", import.meta.url), "utf8"));
 assert.match(ocrPilot, /on:\n  pull_request_target:\n    branches: \[master\]\n    types: \[labeled, synchronize, reopened, ready_for_review\]/);
 assert.match(ocrPilot, /^permissions: \{\}$/m);
-assert.match(ocrPilot, /if: \$\{\{ !github\.event\.pull_request\.draft && contains\(github\.event\.pull_request\.labels\.\*\.name, 'ocr-pilot'\) \}\}/);
+assert.match(ocrPilot, /if: \$\{\{ !github\.event\.pull_request\.draft && contains\(github\.event\.pull_request\.labels\.\*\.name, 'ocr-pilot'\) && \(github\.event\.action != 'labeled' \|\| github\.event\.label\.name == 'ocr-pilot'\) \}\}/);
 assert.match(ocrPilot, /    permissions:\n      contents: read\n      pull-requests: write/);
+assert.match(ocrPilot, /    timeout-minutes: 45/);
 assert.equal((ocrPilot.match(/^      - uses:/gm) ?? []).length, 1, "pilot must run only the pinned review Action");
 assert.doesNotMatch(ocrPilot, /^      - (?:name:|run:)/gm, "pilot must not execute PR code");
 assert.match(ocrPilot, /alibaba\/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d/);
 assert.match(ocrPilot, /ocr_version: '1\.12\.9'/);
+assert.match(ocrPilot, /review_concurrency: '2'/);
 assert.match(ocrPilot, /llm_auth_token: \$\{\{ secrets\.OCR_OPENROUTER_API_KEY \}\}/);
 assert.match(ocrPilot, /upload_artifacts: 'false'/);
-assert.deepEqual(ocrRule, { exclude: ["docs/**", "reports/**"], rules: [] });
+assert.deepEqual(ocrRule, {
+  include: ["services/**/*_test.go", "services/**/src/test/**/*.kt"],
+  exclude: ["docs/**", "reports/**"],
+  rules: [],
+});
 
 const excludedByPilot = (path) => ocrRule.exclude.some((pattern) =>
   path.startsWith(pattern.slice(0, -2))
