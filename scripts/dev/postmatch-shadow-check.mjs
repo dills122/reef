@@ -8,6 +8,10 @@ const compose = ["compose", "-f", "compose.base.yml", "-f", "compose.local.yml",
 
 export function assess(source, target, partitions, generation) {
   const failures = [];
+  const assigned = new Set(partitions);
+  for (const partition of source.keys()) {
+    if (!assigned.has(partition)) failures.push(`source partition ${partition} is not assigned to a shadow worker`);
+  }
   const rows = partitions.map((partition) => {
     const origin = (BigInt(partition) << 48n).toString();
     const sourceRow = source.get(partition) ?? { count: "0", sequence: origin };
@@ -41,15 +45,14 @@ function query(service, sql) {
   return result.stdout.trim() ? result.stdout.trim().split("\n").map((line) => line.split("\t")) : [];
 }
 
-function readSource(stream, partitions) {
-  const ids = partitions.join(",");
+function readSource(stream) {
   const quoted = sqlLiteral(stream);
   const generationRows = query("postgres", "SELECT generation::text FROM runtime.postmatch_source_generation WHERE singleton = TRUE");
   if (generationRows.length !== 1) throw new Error("source generation missing");
   const generation = generationRows[0][0];
   const source = new Map(query("postgres", `SELECT partition_id, count(*)::text, max(stream_sequence)::text
-    FROM runtime.canonical_command_outcomes WHERE event_stream = ${quoted} AND partition_id IN (${ids})
-    GROUP BY partition_id`).map(([partition, count, sequence]) => [Number(partition), { count, sequence }]));
+    FROM runtime.canonical_command_outcomes WHERE event_stream = ${quoted}
+    GROUP BY partition_id ORDER BY partition_id`).map(([partition, count, sequence]) => [Number(partition), { count, sequence }]));
   return { generation, source };
 }
 
@@ -91,7 +94,7 @@ async function main() {
   const report = { schemaVersion: "reef.postmatchShadowDiagnostic.v1", eventStream: stream,
     partitions, checkedAt: null, status: "fail", failures: [] };
   try {
-    const { generation, source } = readSource(stream, partitions);
+    const { generation, source } = readSource(stream);
     report.generation = generation;
     const deadline = Date.now() + waitSeconds * 1000;
     do {
@@ -122,9 +125,12 @@ async function main() {
           report.sourceMembership.bytes !== report.sourceMembershipAfter.bytes) {
         report.failures.push("canonical source membership changed during closed-cohort check");
       }
-      const after = readSource(stream, partitions);
-      if (after.generation !== generation ||
-          JSON.stringify([...after.source]) !== JSON.stringify([...source])) {
+      const after = readSource(stream);
+      if (after.generation !== generation || after.source.size !== source.size ||
+          [...source].some(([partition, row]) => {
+            const latest = after.source.get(partition);
+            return latest?.count !== row.count || latest?.sequence !== row.sequence;
+          })) {
         report.failures.push("canonical source changed during closed-cohort check");
       }
     }
