@@ -8,6 +8,9 @@ and primary external sources listed below. Decision question: which post-match
 work should become incremental or independently owned before Reef attempts to
 qualify sustained 10k commands/s through all required reads?
 
+Proposed PR reconciliation and delivery sequence:
+[post-match scaling implementation plan](../work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md).
+
 ## Executive decision
 
 Trial an **ordered, incremental order-state maintainer in the existing
