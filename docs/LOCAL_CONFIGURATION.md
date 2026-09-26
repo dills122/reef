@@ -38,8 +38,13 @@ make dev-down
 `dev-up` starts datastores, applies forward-only migrations, then builds and
 waits for service health. `dev-down` stops containers and preserves volumes.
 Set `DEV_COMPOSE_PROFILES=postmatch` to start isolated operational Postgres and
-apply its schema. The post-match database is schema-only until its consumers
-are enabled; existing live routes and materializers use their current stores.
+apply its schema. Set `POSTMATCH_SHADOW_WORKERS_ENABLED=true` and an explicit
+`POSTMATCH_EVENT_STREAM` to run the isolated live and market consumers on
+projector instances. Each instance uses its existing
+`STREAM_ACK_PROJECTOR_PARTITIONS` assignment unless
+`POSTMATCH_WORKER_PARTITIONS` overrides it. Keep the profile enabled while
+running these workers. Existing live routes and materializers use their
+current stores; the new consumers write shadow state only.
 Use the same overlay or profile on teardown that was used at startup; Arena has
 `make dev-down-arena`. For a clean local database, `make dev-reset` removes
 local Compose volumes, reapplies migrations, and starts the stack; run

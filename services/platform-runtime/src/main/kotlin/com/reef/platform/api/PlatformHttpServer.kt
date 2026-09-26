@@ -1247,6 +1247,12 @@ class PlatformHttpServer(
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             runtimeLoopStarter.startCanonicalProjector()
         }
+        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_SHADOW_WORKERS_ENABLED", false)) {
+            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
+                "post-match shadow workers require stream-ack command processing"
+            }
+            PostMatchRuntimeWorkers.fromEnv().start()
+        }
         if (runtimeLoopStarter.venueEventMaterializerShouldStart()) {
             runtimeLoopStarter.startVenueEventMaterializer()
         }

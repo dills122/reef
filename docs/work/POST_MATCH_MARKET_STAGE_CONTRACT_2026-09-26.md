@@ -18,7 +18,8 @@ The independent market maintainer locks its own frontier, takes exactly the
 next committed change window, aggregates deltas by run/session/instrument/currency/
 side/price, and updates only those price levels. It refreshes snapshots with
 indexed best-bid and best-ask lookups for affected books. Price levels and
-frontier commit in one transaction. Gaps, negative levels, source-generation
+frontier commit in one transaction. A new frontier starts at the partition's
+encoded canonical origin (`partitionId << 48`). Gaps, negative levels, source-generation
 changes, and change-count mismatches fail closed. Replay sees no next window
 after committed progress. No current API route reads these tables yet.
 

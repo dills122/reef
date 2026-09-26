@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalOutcomeSource
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import com.reef.platform.application.postmatch.CanonicalSourceCoverageVerifier
 import java.util.UUID
 import javax.sql.DataSource
@@ -100,6 +101,45 @@ class PostMatchMarketMaintainerIntegrationTest {
             }
         } finally {
             clean(dataSource, stream, generation, "unused-$token", consumer)
+        }
+    }
+
+    @Test
+    fun nonzeroPartitionStartsAtEncodedOrigin() {
+        val dataSource = testDataSource() ?: return
+        val token = UUID.randomUUID().toString()
+        val stream = "market-test-$token"
+        val generation = "generation-$token"
+        val origin = CanonicalStreamPosition.origin(1)
+        try {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(
+                    """INSERT INTO postmatch.live_market_change_windows(
+                       event_stream, source_generation, partition_id, from_exclusive_sequence,
+                       through_inclusive_sequence, source_digest, change_count) VALUES (?, ?, 1, ?, ?, ?, 0)"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, generation)
+                    statement.setLong(3, origin)
+                    statement.setLong(4, origin + 1)
+                    statement.setString(5, "a".repeat(64))
+                    statement.executeUpdate()
+                }
+            }
+            val maintainer = PostMatchMarketMaintainer(dataSource)
+            assertEquals(MarketAdvanceResult.APPLIED, maintainer.applyNext(stream, 1, generation))
+            assertEquals(MarketAdvanceResult.NO_WORK, maintainer.applyNext(stream, 1, generation))
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(
+                    "SELECT last_stream_sequence FROM postmatch.consumer_frontiers WHERE consumer_name = ? AND event_stream = ? AND partition_id = 1"
+                ).use { statement ->
+                    statement.setString(1, PostMatchMarketMaintainer.CONSUMER_NAME)
+                    statement.setString(2, stream)
+                    statement.executeQuery().use { rows -> check(rows.next()); assertEquals(origin + 1, rows.getLong(1)) }
+                }
+            }
+        } finally {
+            clean(dataSource, stream, generation, "unused-$token", PostMatchMarketMaintainer.CONSUMER_NAME)
         }
     }
 

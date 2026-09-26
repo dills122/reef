@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalOutcomeSource
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import com.reef.platform.application.postmatch.CanonicalSourceCoverageVerifier
 import java.util.UUID
 import kotlin.test.Test
@@ -165,6 +166,24 @@ class PostMatchOperationalStoreIntegrationTest {
                     statement.executeQuery().use { rows ->
                         check(rows.next())
                         assertEquals(1L, rows.getLong(1))
+                    }
+                }
+            }
+            val partitionOrigin = CanonicalStreamPosition.origin(1)
+            val partitionFirst = first.copy(partitionId = 1, streamSequence = partitionOrigin + 1)
+            val partitionWindow = verifier.verify(consumer, stream, 1, generation,
+                partitionOrigin, partitionOrigin + 1, listOf(partitionFirst))
+            assertEquals(PostMatchApplyResult.APPLIED, store.apply(partitionWindow) { _, _ -> })
+            assertEquals(PostMatchApplyResult.DUPLICATE, store.apply(partitionWindow) { _, _ -> error("duplicate partition applied effects") })
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(
+                    "SELECT last_stream_sequence FROM postmatch.consumer_frontiers WHERE consumer_name = ? AND event_stream = ? AND partition_id = 1"
+                ).use { statement ->
+                    statement.setString(1, consumer)
+                    statement.setString(2, stream)
+                    statement.executeQuery().use { rows ->
+                        check(rows.next())
+                        assertEquals(partitionOrigin + 1, rows.getLong(1))
                     }
                 }
             }
