@@ -123,9 +123,36 @@ for domain in "${domains[@]}"; do
       continue
     fi
 
+    if [[ "$migration_id" == "runtime/0069_logged_projection_dirty_queues.sql" ]]; then
+      if [[ "${REEF_AUTOMATED_DEPLOY:-0}" == "1" || "${REEF_APPLY_RUNTIME_0069:-0}" != "1" ]]; then
+        echo "skip $migration_id (backbone conversion requires separate operator opt-in)"
+        continue
+      fi
+      # Include other Compose projects on this host; a fresh host with no
+      # runtime containers requires a separate explicit bootstrap opt-in.
+      runtime_containers="$(docker ps -a --filter label=com.docker.compose.service=platform-runtime --format '{{.ID}}')"
+      if [[ -z "$runtime_containers" && "${REEF_RUNTIME_0069_FRESH_BOOTSTRAP:-0}" != "1" ]]; then
+        echo "runtime/0069 requires a stopped platform-runtime container or explicit fresh-bootstrap opt-in" >&2
+        exit 1
+      fi
+      while IFS= read -r runtime_container; do
+        [[ -n "$runtime_container" ]] || continue
+        runtime_state="$(docker inspect -f '{{.State.Status}}' "$runtime_container" </dev/null)"
+        if [[ "$runtime_state" != "exited" && "$runtime_state" != "created" ]]; then
+          echo "runtime/0069 requires platform-runtime to be stopped before migration" >&2
+          exit 1
+        fi
+      done <<<"$runtime_containers"
+    fi
+
     echo "apply $migration_id"
     {
       echo "BEGIN;"
+      if [[ "$migration_id" == "runtime/0069_logged_projection_dirty_queues.sql" ]]; then
+        # SET LOCAL must stay inside this transaction and psql invocation.
+        echo "SET LOCAL lock_timeout = '2s';"
+        echo "SET LOCAL statement_timeout = '30s';"
+      fi
       cat "$file"
       echo
       echo "INSERT INTO public.reef_schema_migrations(migration_id, domain_name, filename, checksum_sha256)"

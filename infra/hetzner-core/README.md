@@ -366,6 +366,10 @@ health gate restores the previous image pins and recreates the two previous
 application containers. Applied forward migrations are not rolled back, so
 new migrations must remain compatible with the previously running
 application version.
+Runtime migration 0069 targets Reef projection durability on the disposable
+run plane. The backbone migration runner skips it during unattended deploys;
+use the [quiesced conversion runbook](./OPERATIONS_RUNBOOK.md#runtime-0069-dirty-queue-conversion)
+only if the lightweight backbone runtime needs that conversion separately.
 
 One-time setup is documented in
 [`TAILSCALE_ACCESS.md`](./TAILSCALE_ACCESS.md#github-actions-deployment-access)

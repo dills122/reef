@@ -48,7 +48,7 @@ import kotlin.test.assertTrue
 
 class PostgresSchemaMigrationIntegrationTest {
     @Test
-    fun projectionDirtyQueuesAreUnloggedAfterMigration() {
+    fun projectionDirtyQueuesAreLoggedAfterMigration() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
         val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
@@ -70,8 +70,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     }
                     assertEquals(
                         listOf(
-                            "market_data_snapshot_dirty:u",
-                            "order_lifecycle_dirty:u"
+                            "market_data_snapshot_dirty:p",
+                            "order_lifecycle_dirty:p"
                         ),
                         rows
                     )

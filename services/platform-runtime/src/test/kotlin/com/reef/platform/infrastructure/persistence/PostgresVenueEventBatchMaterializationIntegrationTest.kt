@@ -3,6 +3,7 @@ package com.reef.platform.infrastructure.persistence
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
 import java.sql.Connection
+import java.sql.DriverManager
 import java.sql.SQLException
 import java.sql.Timestamp
 import java.util.concurrent.CountDownLatch
@@ -122,6 +123,125 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         val status = persistence.projectionStatus(projectionName, listOf(batch.partition), source = "venue-event-batch")
         assertEquals(0, status.lag)
         assertEquals(sequence, status.watermarks.single().lastPartitionSequence)
+    }
+
+    @Test
+    fun retainsDirtyWorkAcrossUncleanPostgresRestart() {
+        val container = System.getenv("REEF_F02_CRASH_TEST_CONTAINER") ?: return
+        require(container.startsWith("reef-f02-crash-")) { "crash test requires a disposable container" }
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: error("missing crash-test JDBC URL")
+        val port = System.getenv("REEF_F02_CRASH_TEST_PORT") ?: error("missing disposable PostgreSQL port")
+        require(jdbcUrl.startsWith("jdbc:postgresql://127.0.0.1:$port/")) {
+            "crash test requires the disposable PostgreSQL connection"
+        }
+        val dataSource = migratedDataSourceOrNull() ?: error("missing crash-test database credentials")
+        val persistence = PostgresRuntimePersistence(dataSource = dataSource, bootstrapMode = PostgresBootstrapMode.Validate)
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-normalized-f02-$suffix"
+        val marketName = "market-f02-$suffix"
+        val first = submitVenueEventBatch("$suffix-first", uniqueSequence("$suffix-first"))
+        val second = submitVenueEventBatch("$suffix-second", uniqueSequence("$suffix-second"))
+
+        insertCommandPayload(dataSource, first.outcomes.single().commandId, submitCommandPayload("$suffix-first"))
+        assertEquals(1, persistence.materializeVenueEventBatch(first))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(first.partition)))
+        assertEquals(1, persistence.projectOrderLifecycleState(10))
+        assertEquals(1, countRows(dataSource, "runtime.market_data_snapshot_dirty", "AAPL", "instrument_id"))
+
+        insertCommandPayload(dataSource, second.outcomes.single().commandId, submitCommandPayload("$suffix-second"))
+        assertEquals(1, persistence.materializeVenueEventBatch(second))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(second.partition)))
+        val pendingOrder = second.outcomes.single().orderId
+        assertEquals(1, countRows(dataSource, "runtime.order_lifecycle_dirty", pendingOrder, "order_id"))
+        assertEquals(null, persistence.orderLifecycleState(pendingOrder))
+
+        restartDisposableCrashTestPostgres(container, jdbcUrl)
+
+        val restartedDataSource = RuntimeDataSources.dataSource(
+            jdbcUrl,
+            System.getenv("RUNTIME_POSTGRES_USER_TEST"),
+            System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST"),
+            "f02-restarted-$suffix"
+        )
+        val restarted = PostgresRuntimePersistence(
+            dataSource = restartedDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        assertNotNull(restarted.canonicalCommandOutcome(second.outcomes.single().commandId))
+        assertEquals(0, restarted.projectionStatus(projectionName, listOf(first.partition, second.partition), "venue-event-batch").lag)
+        assertEquals(1, countRows(restartedDataSource, "runtime.order_lifecycle_dirty", pendingOrder, "order_id"))
+        assertEquals(1, countRows(restartedDataSource, "runtime.market_data_snapshot_dirty", "AAPL", "instrument_id"))
+        assertEquals(1, restarted.projectOrderLifecycleState(10))
+        assertEquals(0, countRows(restartedDataSource, "runtime.order_lifecycle_dirty", pendingOrder, "order_id"))
+        val incrementalOrder = assertNotNull(restarted.orderLifecycleState(pendingOrder))
+
+        restartDisposableCrashTestPostgres(container, jdbcUrl)
+        val finalDataSource = RuntimeDataSources.dataSource(
+            jdbcUrl,
+            System.getenv("RUNTIME_POSTGRES_USER_TEST"),
+            System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST"),
+            "f02-final-$suffix"
+        )
+        val finalPersistence = PostgresRuntimePersistence(
+            dataSource = finalDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        assertEquals(1, countRows(finalDataSource, "runtime.market_data_snapshot_dirty", "AAPL", "instrument_id"))
+        assertEquals(1, finalPersistence.projectMarketDataSnapshots(marketName, projectionName, 10, false))
+        assertEquals(0, countRows(finalDataSource, "runtime.market_data_snapshot_dirty", "AAPL", "instrument_id"))
+        val incrementalMarket = assertNotNull(finalPersistence.marketDataSnapshot("AAPL", marketName))
+
+        finalPersistence.rebuildOrderLifecycleState()
+        assertEquals(incrementalOrder.copy(updatedAt = ""), finalPersistence.orderLifecycleState(pendingOrder)?.copy(updatedAt = ""))
+        finalDataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM runtime.market_data_snapshots WHERE projection_name = ? AND instrument_id = ?").use { ps ->
+                ps.setString(1, marketName)
+                ps.setString(2, "AAPL")
+                assertEquals(1, ps.executeUpdate())
+            }
+        }
+        assertEquals(null, finalPersistence.marketDataSnapshot("AAPL", marketName))
+        finalPersistence.refreshMarketDataSnapshots(marketName, projectionName)
+        assertEquals(incrementalMarket.copy(updatedAt = ""), finalPersistence.marketDataSnapshot("AAPL", marketName)?.copy(updatedAt = ""))
+    }
+
+    private fun restartDisposableCrashTestPostgres(container: String, jdbcUrl: String) {
+        runCrashTestDocker("kill", "--signal", "SIGKILL", container)
+        runCrashTestDocker("start", container)
+        var lastConnectionError = ""
+        for (attempt in 0 until 100) {
+            if (runCrashTestDocker("exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "reef", "-d", "reef", failOnError = false) == 0) {
+                try {
+                    DriverManager.getConnection(
+                        jdbcUrl,
+                        System.getenv("RUNTIME_POSTGRES_USER_TEST"),
+                        System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST")
+                    ).use { connection ->
+                        connection.createStatement().use { statement -> statement.execute("SELECT 1") }
+                    }
+                    return
+                } catch (ex: SQLException) {
+                    lastConnectionError = ex.message ?: ex::class.simpleName.orEmpty()
+                }
+            }
+            Thread.sleep(100)
+        }
+        error("disposable PostgreSQL did not recover after SIGKILL: $lastConnectionError")
+    }
+
+    private fun runCrashTestDocker(vararg arguments: String, failOnError: Boolean = true): Int {
+        val process = ProcessBuilder(listOf("docker") + arguments)
+            .redirectErrorStream(true)
+            .start()
+        val completed = process.waitFor(30, TimeUnit.SECONDS)
+        if (!completed) {
+            process.destroyForcibly()
+            error("timed out waiting for disposable Docker test command")
+        }
+        if (failOnError && process.exitValue() != 0) {
+            error("disposable Docker test command failed: ${process.inputStream.bufferedReader().readText()}")
+        }
+        return process.exitValue()
     }
 
     @Test

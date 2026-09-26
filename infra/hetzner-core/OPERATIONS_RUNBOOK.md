@@ -281,6 +281,78 @@ Use the normal operator `deploy` flow instead when a change touches Compose
 topology, Caddy, the receiver, host packages, OpenBao configuration/version,
 database images, firewalling, or the deploy script itself.
 
+### Runtime 0069 dirty-queue conversion
+
+This section applies only to the lightweight backbone runtime and its existing
+database. Full Reef simulation runs and workload-sized migration rehearsals
+use disposable DigitalOcean workers. Never use this permanent host as a
+benchmark target.
+
+`runtime/0069_logged_projection_dirty_queues.sql` rewrites two UNLOGGED
+projection queues under exclusive locks. It is applied by the Reef run-plane
+migration runner on disposable workers. The backbone migration runner skips
+0069 during normal application deploys, even if an opt-in flag reaches the
+forced SSH command. Backbone service deploys remain independent of this
+optional conversion.
+
+Before applying 0069, use the disposable-worker rehearsal evidence and compare
+its queue sizes with the current deployment target. Rehearse again on an
+isolated worker if the target is larger. The September 26 `sfo3` `c-32`
+same-schema synthetic rehearsal exceeded the aged run-plane queue sizes:
+159,678,464B order and 999,424B market. A held reader hit the 2s lock
+timeout; the quiesced rewrite committed in 2.542s. This single run is not an
+upper bound. Record current queue sizes and schedule an operator window with
+an application rollback plan. Sync the
+current host scripts with `make hetzner-core ARGS=deploy-automation-up` and
+stage the exact versioned migration at
+`/opt/reef/postgres/migrations/runtime/0069_logged_projection_dirty_queues.sql`.
+Confirm that 0069 is the only pending runtime migration; the command below
+refuses a broader migration window. Check for any out-of-band platform-runtime
+replicas or projection writers and stop them too. The runner checks every
+Compose-labeled platform-runtime container on the host and requires at least
+one stopped container for this existing-host upgrade. A brand-new host with no
+runtime container may set `REEF_RUNTIME_0069_FRESH_BOOTSTRAP=1` only after
+confirming no out-of-band writers; do not use that override for this upgrade.
+The runner checks this host only; before applying the migration, the operator
+must confirm that no other host or Compose project is writing to this database.
+
+On the target host, record sizes, stop runtime writers, then apply the staged
+migration through the checksum-ledger runner:
+
+```bash
+set -euo pipefail
+cd /opt/reef
+pending_runtime="$(
+  comm -23 \
+    <(find postgres/migrations/runtime -maxdepth 1 -type f -name '[0-9][0-9][0-9][0-9]_*.sql' -printf 'runtime/%f\n' | LC_ALL=C sort) \
+    <(docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 -t -A -c "SELECT migration_id FROM public.reef_schema_migrations WHERE domain_name = 'runtime'" | LC_ALL=C sort)
+)"
+test "$pending_runtime" = 'runtime/0069_logged_projection_dirty_queues.sql'
+docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
+  -c "SELECT relname, relpersistence, pg_total_relation_size(oid) AS bytes FROM pg_class WHERE relnamespace = 'runtime'::regnamespace AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty') ORDER BY relname"
+simulator_was_running="$(docker compose --profile manual ps --status running --services simulator)"
+docker compose --profile manual stop simulator platform-runtime matching-engine
+time REEF_MIGRATION_DOMAINS=runtime REEF_APPLY_RUNTIME_0069=1 ./scripts/apply-migrations.sh
+docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
+  -c "SELECT migration_id FROM public.reef_schema_migrations WHERE migration_id = 'runtime/0069_logged_projection_dirty_queues.sql'"
+docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
+  -c "SELECT relname, relpersistence FROM pg_class WHERE relnamespace = 'runtime'::regnamespace AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty') ORDER BY relname"
+docker compose up -d --no-deps matching-engine platform-runtime
+if [ "$simulator_was_running" = simulator ]; then
+  docker compose --profile manual up -d --no-deps simulator
+fi
+```
+
+The runner gives 0069 a 2s lock-acquisition timeout and a 30s statement
+timeout. A timeout rolls back both conversions and leaves the old application
+images in place; keep writers stopped until the cause is inspected. Confirm
+both `relpersistence` values are `p`, the ledger row exists, and runtime health
+and projection progress recover. This is a forward-only durability change:
+older application images work with LOGGED queues, so an image rollback does
+not require a schema downgrade. Keep the queues LOGGED after rollback;
+restoring UNLOGGED would reintroduce crash-loss risk. Later backbone application
+deploys skip the already-applied migration through the checksum ledger.
+
 ## Bootstrap Order
 
 Use this order for a clean rebuild or new permanent host.

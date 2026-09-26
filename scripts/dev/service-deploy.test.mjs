@@ -33,6 +33,7 @@ function runDeploy(root, archive, bin, extraEnv = {}) {
       REEF_DEPLOY_HEALTH_ATTEMPTS: "2",
       REEF_DEPLOY_HEALTH_DELAY_SECONDS: "1",
       FAKE_DOCKER_LOG: join(root, "docker.log"),
+      FAKE_PSQL_INPUT_LOG: join(root, "psql-input.log"),
       FAKE_CURL_STATE: join(root, "curl.state"),
       ...extraEnv,
     },
@@ -51,6 +52,7 @@ async function runForcedDeploy(root, archive, bin, extraEnv = {}) {
       REEF_DEPLOY_HEALTH_ATTEMPTS: "2",
       REEF_DEPLOY_HEALTH_DELAY_SECONDS: "1",
       FAKE_DOCKER_LOG: join(root, "docker.log"),
+      FAKE_PSQL_INPUT_LOG: join(root, "psql-input.log"),
       FAKE_CURL_STATE: join(root, "curl.state"),
       SSH_ORIGINAL_COMMAND: `deploy ${gitSha}`,
       ...extraEnv,
@@ -58,7 +60,7 @@ async function runForcedDeploy(root, archive, bin, extraEnv = {}) {
   });
 }
 
-async function createFixture() {
+async function createFixture({ includeDirtyQueueMigration = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), "reef-service-deploy-test-"));
   const bin = join(root, "bin");
   const migrations = join(root, "migration-source", "migrations");
@@ -79,6 +81,16 @@ async function createFixture() {
     await mkdir(join(migrations, domain), { recursive: true });
     await writeFile(join(migrations, domain, "0001_test.sql"), "SELECT 1;\n");
   }
+  if (includeDirtyQueueMigration) {
+    await writeFile(
+      join(migrations, "runtime", "0069_logged_projection_dirty_queues.sql"),
+      [
+        "ALTER TABLE runtime.order_lifecycle_dirty SET LOGGED;",
+        "ALTER TABLE runtime.market_data_snapshot_dirty SET LOGGED;",
+        "",
+      ].join("\n"),
+    );
+  }
   await writeFile(
     join(root, ".env"),
     [
@@ -96,14 +108,29 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
 if [[ "$*" == "compose --profile manual config --services" ]]; then
   printf '%s\\n' openbao matching-engine platform-runtime simulator
-elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" && "\${3:-}" == "-q" ]]; then
-  printf '%s-id\\n' "\${4}"
+elif [[ "\${1:-}" == "ps" && "$*" == *"label=com.docker.compose.service=platform-runtime"* ]]; then
+  if [[ "\${FAKE_RUNTIME_CONTAINERS:-present}" != "empty" ]]; then
+    echo runtime-stopped-id
+    echo runtime-second-id
+  fi
+elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" ]]; then
+  printf '%s-id\\n' "\${@: -1}"
 elif [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
   printf '%s\\n' "\${FAKE_IMAGE_REVISION:-${gitSha}}"
 elif [[ "\${1:-}" == "inspect" ]]; then
-  printf 'true\\n'
+  if [[ "$*" == *"runtime-stopped-id"* ]]; then
+    printf 'exited\\n'
+  elif [[ "$*" == *"runtime-second-id"* ]]; then
+    printf '%s\\n' "\${FAKE_RUNTIME_SECOND_STATUS:-running}"
+  else
+    printf 'true\\n'
+  fi
 fi
-cat >/dev/null || true
+if [[ "\${1:-}" == "compose" && "\${2:-}" == "exec" ]]; then
+  cat >> "$FAKE_PSQL_INPUT_LOG" || true
+else
+  cat >/dev/null || true
+fi
 `,
   );
   await writeFile(
@@ -199,6 +226,79 @@ try {
   await rm(forcedFixture.root, { recursive: true, force: true });
 }
 
+const dirtyQueueFixture = await createFixture({ includeDirtyQueueMigration: true });
+try {
+  const automatic = await runForcedDeploy(
+    dirtyQueueFixture.root,
+    dirtyQueueFixture.archive,
+    dirtyQueueFixture.bin,
+    { REEF_APPLY_RUNTIME_0069: "1" },
+  );
+  assert.equal(automatic.status, 0, `${automatic.stdout}\n${automatic.stderr}`);
+  assert.match(automatic.stdout, /skip runtime\/0069_logged_projection_dirty_queues\.sql/);
+  const automaticLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
+  assert.match(automaticLog, /compose exec -T postgres psql/);
+  assert.match(automaticLog, /compose up .*platform-runtime/);
+  const automaticSql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
+  assert.doesNotMatch(automaticSql, /ALTER TABLE runtime\..* SET LOGGED/);
+
+  const manualEnv = {
+    ...process.env,
+    PATH: `${dirtyQueueFixture.bin}:${process.env.PATH}`,
+    REEF_DEPLOY_DIR: dirtyQueueFixture.root,
+    REEF_MIGRATIONS_ROOT: join(dirtyQueueFixture.root, "migration-source", "migrations"),
+    REEF_APPLY_RUNTIME_0069: "1",
+    FAKE_DOCKER_LOG: join(dirtyQueueFixture.root, "docker.log"),
+    FAKE_PSQL_INPUT_LOG: join(dirtyQueueFixture.root, "psql-input.log"),
+  };
+  const active = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_SECOND_STATUS: "running" },
+  });
+  assert.notEqual(active.status, 0, `${active.stdout}\n${active.stderr}`);
+  assert.match(active.stderr, /platform-runtime to be stopped/);
+
+  const restarting = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_SECOND_STATUS: "restarting" },
+  });
+  assert.notEqual(restarting.status, 0, `${restarting.stdout}\n${restarting.stderr}`);
+  assert.match(restarting.stderr, /platform-runtime to be stopped/);
+
+  const missingContainer = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_CONTAINERS: "empty" },
+  });
+  assert.notEqual(missingContainer.status, 0);
+  assert.match(missingContainer.stderr, /stopped platform-runtime container or explicit fresh-bootstrap opt-in/);
+
+  const quiesced = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_SECOND_STATUS: "exited" },
+  });
+  assert.equal(quiesced.status, 0, `${quiesced.stdout}\n${quiesced.stderr}`);
+  const sql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");
+  const dockerLog = await readFile(join(dirtyQueueFixture.root, "docker.log"), "utf8");
+  assert.match(dockerLog, /compose exec -T postgres psql -U postgres -d reef -v ON_ERROR_STOP=1 -X -q/);
+  assert.match(dockerLog, /ps -a --filter label=com\.docker\.compose\.service=platform-runtime/);
+  assert.match(sql, /BEGIN;\nSET LOCAL lock_timeout = '2s';/);
+  assert.match(sql, /SET LOCAL statement_timeout = '30s';/);
+  assert.match(sql, /ALTER TABLE runtime\.order_lifecycle_dirty SET LOGGED/);
+  assert.match(sql, /ALTER TABLE runtime\.market_data_snapshot_dirty SET LOGGED/);
+
+  const freshBootstrap = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: {
+      ...manualEnv,
+      FAKE_RUNTIME_CONTAINERS: "empty",
+      REEF_RUNTIME_0069_FRESH_BOOTSTRAP: "1",
+    },
+  });
+  assert.equal(freshBootstrap.status, 0, `${freshBootstrap.stdout}\n${freshBootstrap.stderr}`);
+} finally {
+  await rm(dirtyQueueFixture.root, { recursive: true, force: true });
+}
+
 const rollbackFixture = await createFixture();
 try {
   const before = await readFile(join(rollbackFixture.root, ".env"), "utf8");
@@ -282,9 +382,10 @@ const imageWorkflow = await readFile(
   join(repoRoot, ".github/workflows/container-images.yml"),
   "utf8",
 );
+assert.doesNotMatch(workflow, /Gate runtime 0069 rollout|REEF_RUNTIME_0069_ROLLOUT_COMPLETE/);
 assert.match(workflow, /workflows:\s*\n\s*- Container Images/);
 assert.match(workflow, /git merge-base --is-ancestor "\$TARGET_SHA" origin\/master/);
-assert.match(workflow, /tailscale\/github-action@v4/);
+assert.match(workflow, /tailscale\/github-action@[a-f0-9]{40} # v4/);
 assert.match(workflow, /"deploy \$TARGET_SHA" < "\$REEF_MIGRATION_ARCHIVE"/);
 assert.match(workflow, /find migrations -type f -name '\*\.sql' -print/);
 assert.match(workflow, /tar -czf "\$migration_archive" -T "\$migration_files"/);
