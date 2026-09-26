@@ -1266,3 +1266,6 @@ verification under `artifacts/projection-dirty-f02-20260926/hosted-control/`
 and `artifacts/projection-dirty-f02-20260926/hosted-treatment/`. Further
 interpretation and crash/DDL limits are in
 [F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
+Disposable droplet `603811601` and firewall
+`0e3d8cf7-d244-4546-a6db-8310a7f8b7c0` were destroyed after local evidence
+verification; both provider lookups returned 404 and OpenTofu state was empty.

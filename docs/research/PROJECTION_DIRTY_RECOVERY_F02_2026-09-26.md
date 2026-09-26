@@ -150,6 +150,10 @@ are concerning but cannot be assigned to queue logging from one sequential
 pair; neither arm qualified the 5s downstream freshness gate or independent
 20% drain headroom.
 
+After evidence verification, disposable droplet `603811601` and firewall
+`0e3d8cf7-d244-4546-a6db-8310a7f8b7c0` were destroyed. Both provider
+lookups returned 404 and OpenTofu state was empty.
+
 On the aged control database after writers stopped and both queues drained,
 `ALTER TABLE ... SET LOGGED` for both tables took 0.13s wall time. Their
 pre-conversion relation sizes were 127,041,536B and 335,872B. This does not
