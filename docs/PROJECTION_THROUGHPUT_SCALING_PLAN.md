@@ -1,5 +1,9 @@
 # Projection Throughput Scaling Plan
 
+September 26 execution direction: [build the post-match architecture](work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md)
+as a cohesive change. The historical diagnostics and gates below remain
+evidence; small SQL/index percentage changes are no longer the delivery loop.
+
 ## Purpose
 
 Record the July 2026 DigitalOcean projection bottleneck evidence and define the

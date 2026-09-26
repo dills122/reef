@@ -8,10 +8,12 @@ and primary external sources listed below. Decision question: which post-match
 work should become incremental or independently owned before Reef attempts to
 qualify sustained 10k commands/s through all required reads?
 
-Proposed PR reconciliation and delivery sequence:
-[post-match scaling implementation plan](../work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md).
+Implementation sequencing below was superseded on September 26 by the user's
+direction to build the full post-match architecture now. Findings and source
+checks remain evidence; the current delivery map is the
+[post-match rearchitecture execution plan](../work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md).
 
-## Executive decision
+## Research conclusion before execution direction changed
 
 Trial an **ordered, incremental order-state maintainer in the existing
 Kotlin/PostgreSQL projection boundary**. Derive explicit effects for every

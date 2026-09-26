@@ -1,144 +1,152 @@
-# Post-match scaling implementation plan — 2026-09-26
+# Post-match rearchitecture execution plan — 2026-09-26
 
-Status: proposed task breakdown, not an accepted ADR, release claim, or parallel
-execution board. [WORK_PLAN](../WORK_PLAN.md) remains the status owner. Scope:
-qualify sustained 10k commands/s through required live reads while preserving
-durable acceptance, deterministic matching, canonical replay, audit completeness,
-and atomic accounting. Design basis:
+Status: user-directed implementation direction. Supersedes the earlier
+one-lever-at-a-time capacity plan in this file. This is the proposed delivery
+map, not a capacity claim. [WORK_PLAN](../WORK_PLAN.md) remains the execution
+status owner. Evidence and constraints:
 [architecture review](../research/POST_MATCH_PROJECTION_ARCHITECTURE_REVIEW_2026-09-26.md),
-[structural seam decision](../research/PROJECTION_STRUCTURAL_SEAM_DECISION_2026-09-25.md),
-[throughput ledger](../THROUGHPUT_BASELINES.md), [D-055](../DECISIONS.md#d-055-retry-safe-canonical-projection-batch-claims),
-and [issues #360](https://github.com/dills122/reef/issues/360) and
-[#367](https://github.com/dills122/reef/issues/367).
+[structural seam analysis](../research/PROJECTION_STRUCTURAL_SEAM_DECISION_2026-09-25.md),
+[throughput ledger](../THROUGHPUT_BASELINES.md),
+[D-055](../DECISIONS.md#d-055-retry-safe-canonical-projection-batch-claims),
+and [projection issue #360](https://github.com/dills122/reef/issues/360).
 
-## Open-PR reconciliation before a new benchmark baseline
+## Decision and target
 
-Snapshot from GitHub on September 26. Recheck before merge; status can change.
+Build a new post-match dataflow now. Preserve durable ingress acknowledgement,
+deterministic Go matching, durable venue-event batches, and compact canonical
+PostgreSQL facts. Replace the broad normalized projection dependency chain with
+three independently checkpointed consumers of versioned canonical effects:
 
-| PR | Disposition | Required gate |
+| Owner | Input and state | Required output |
 | --- | --- | --- |
-| [#371 — command outcome event IDs](https://github.com/dills122/reef/pull/371), draft | Finish review and land first. It fixes collisions that caused the initial F02 control to stop projecting after 1,021 commands. | Verify same-command replay stability, distinct reject/modify IDs, old recorded event compatibility, and consumers of opaque IDs. Go tests and CI pass on its current head; retain cross-path integration proof. |
-| [#372 — LOGGED dirty queues](https://github.com/dills122/reef/pull/372), draft | Land after #371, as a correctness/recovery slice. Keep #367 F02 open for public-read readiness and target rollout proof. | Fix current `postgres-schema-placement` CI failure: `projectionDirtyQueuesAreUnloggedAfterMigration` still expects the old storage class. Re-run full CI, crash/reference test, and migration-lock window on target topology. Record its measured +1.595 GB/+9.04% projection WAL and failed downstream freshness; no 10k claim. |
-| [#364 — bounded canonical SQL selector](https://github.com/dills122/reef/pull/364) | Resolve merge conflict and rebase independently. Treat as bounded backlog/query improvement, not the structural 10k fix. | Reconfirm which topology invokes this SQL selector: accepted separate-store projection uses a Kotlin per-partition limit. Preserve gap/duplicate/legacy tests; C45 cloud run was intake-CPU-limited and cannot establish full-pipeline benefit. Do not block lifecycle work on a new cloud run for this PR. |
-| [#369 — staged projection worker POC](https://github.com/dills122/reef/pull/369) | Do not merge runtime split as the next architecture. Preserve hosted no-go evidence in repository, then close or reduce to evidence-only changes. | Control passed final counts; split left 4,752 timed projector lag and no authoritative downstream cohort. Resolve six open automated review threads, including candidate/watermark concerns, before any future use of its code. |
+| Live trading | Ordered canonical order and execution effects for both maker and taker orders; dedicated operational PostgreSQL store | Compact current order state, own executions/trades, instrument/session market state, live read API and eventual feed |
+| Audit/history | Canonical venue effects plus existing direct admin/protective event authority; existing projection PostgreSQL store | Complete ordered timeline and historical query API, with its own checkpoint |
+| Post-trade | Canonical trade effects; dedicated settlement fact-store configuration already supported by runtime | Bounded obligations, workflow facts, atomic ledger/settlement transitions, accounting read API |
 
-Merged [#368](https://github.com/dills122/reef/pull/368) already provides
-settlement insert verification, event replay hardening, and bounded public
-history reads. Keep its remaining fault and aged-read gates under #367.
+Canonical effects are derived deterministically from retained canonical batches
+and outcomes. The decoder is one versioned contract used by all consumers; do
+not add a new synchronous ingress write. Every consumer commits its own effects
+and contiguous progress atomically. A slow audit or settlement consumer must
+be visible as lag/failure, without holding up correct own-order state. Full
+system qualification still requires every mandatory stage to keep up.
 
-## Dependency order and focused slices
+The existing full projector is migration reference and rollback path. New
+consumers use isolated tables and checkpoints; they never dual-write the old
+effect tables. After parity and route cutover, stop old full projection work
+during capacity measurement. Physical resource increase is reported explicitly:
+target hosted profile gives operational state its own PostgreSQL instance,
+retains the current projection instance for audit, and uses the already
+supported separate settlement connection for accounting facts.
 
-### Gate 0 — settle correctness baseline
+## Existing PRs: clear the launch path, not the architecture
 
-1. Merge reviewed #371, then fix/review #372 and perform its planned migration
-   with projection writers stopped. Decide #364 separately; preserve #369's
-   no-go report without activating split mode. Freeze new baseline only after
-   exact image, migration set, Compose configuration, and CI are known.
-2. Add/finish F01/F03 ambiguous-commit and concurrent semantic-conflict tests;
-   prove that no changed immutable fact is acknowledged or silently skipped.
-   Prove crash/restart lifecycle and market rows, queue state, and public
-   freshness/readiness against full rebuild. Completion of #372 alone does not
-   close these gates.
+Snapshot from September 26; recheck status before action.
 
-**Checkpoint:** clean CI, exact replay/business reference, failure tests, and
-known migration/rollback path. No throughput promotion yet.
+| PR | Action |
+| --- | --- |
+| [#371 event IDs](https://github.com/dills122/reef/pull/371) | Finish review and land first. The collision broke current projection under repeated rejection/modify outcomes and invalidates a clean new baseline. Check replay identity and consumers of opaque IDs. |
+| [#372 dirty queues](https://github.com/dills122/reef/pull/372) | Fix obsolete UNLOGGED schema assertion causing current CI failure; review and land after #371. Treat logged queues as crash safety for the legacy path, with its measured +9.04% projection WAL. Keep remaining public-read readiness and rollout checks under [#367](https://github.com/dills122/reef/issues/367). |
+| [#364 bounded SQL selector](https://github.com/dills122/reef/pull/364) | Resolve conflict independently if its same-store/backlog query remains useful. Its C45 cloud run was inconclusive; accepted separate-store projection already limits candidates in Kotlin. Do not wait for another selector benchmark before building new flow. |
+| [#369 worker split POC](https://github.com/dills122/reef/pull/369) | Retain no-go report and evidence. Do not merge its runtime split as foundation: matched treatment left 4,752 timed projector lag and no authoritative downstream cohort, and review threads remain open. |
 
-### Gate 1 — locate full-pipeline residence
+Merged [#368](https://github.com/dills122/reef/pull/368) supplies event replay,
+settlement insert verification, and bounded public history responses. Keep its
+fault follow-ups in #367 without turning them into a prerequisite to writing
+the new dataflow.
 
-3. Run one fresh, no-profiler C43-shaped control on the settled image: 10k
-   offered commands/s for 300s, 64 instruments, recorded materializer/projector
-   topology, concurrent reads, fixed observer cadence, and fresh volumes.
-   Record accepted/direct-acked/materialized/projected source membership and
-   timestamped stage collection. Measure canonical commit, projector SQL/claim,
-   lifecycle, market, queue age, PostgreSQL waits/locks/WAL, pool occupancy,
-   CPU/I/O, and actual API visibility for the same command cohort.
-4. Validate instrumentation perturbation and checker authority with known-bad
-   gap, stale-generation, and missing-stage fixtures. Classify elapsed time as
-   execution, queueing/lock/I/O wait, or observation delay. Use this attribution
-   to choose a single capacity treatment. If lifecycle is minor and normalized
-   writes dominate, prioritize a safe write-reduction treatment before Gate 3.
+## Build sequence: cohesive architecture, focused PRs
 
-**Checkpoint:** causal bottleneck hypothesis with a frozen matched control;
-retain run and corrections in the throughput ledger. No stage-only or postdrain
-count is called a 10k pass.
+### Wave 1 — common effect contract and storage ownership
 
-### Gate 2 — ordered operational-effect contract
+1. Write ADR and versioned canonical-effect contract. Include source batch,
+   partition/sequence, effect ordinal, schema version, venue/session/instrument,
+   command/event identity, all affected order IDs, and exact trade/execution
+   facts. Carry immutable participant/account/currency data needed for bounded
+   settlement; where old outcomes lack it, use a keyed canonical order
+   directory rather than a run-wide order scan. Define deterministic order,
+   gaps, semantic conflict, and replay rules. Prove maker-side effects and any
+   cross-partition dependencies. Preserve direct admin/protective audit-event
+   provenance as a second durable source.
+2. Implement one pure decoder and golden/replay fixtures shared by live, audit,
+and settlement consumers. Add isolated operational schema, stage claims,
+frontiers, effect dedupe, and causal coverage tokens. Configure dedicated
+operational and settlement stores for the target hosted profile while keeping
+local Compose usable.
 
-5. Specify versioned effect identity from canonical batch/partition/sequence
-   and ordinal; define submit, reject, modify, cancel, and every maker/taker
-   fill transition. Record affected order IDs, source membership, venue/session,
-   payload version, dedupe rule, and per-order causal coverage. Test whether
-   matching-lane ordering suffices for all touched orders across partitions.
-   This contract and read-freshness semantics require an ADR before cutover.
-6. Implement pure effect derivation plus state-transition tests against the
-   existing full rebuild. Include multi-fill resting makers, terminal numeric
-   quantities, duplicate delivery, changed-event conflicts, ownership changes,
-   missing sequence, and old payload versions. No production route change.
+Exit: source-to-effect equivalence, D-055-style atomic progress, versioned
+replay and migration contracts. This is an architecture foundation, not a
+throughput tuning experiment.
 
-**Checkpoint:** every business field and trace/execution identity matches the
-reference; gaps and semantic conflicts stop progress.
+### Wave 2 — replace operational recomputation
 
-### Gate 3 — shadow state, then a true work-replacement treatment
+3. Implement live projector: apply exact transitions in source order to compact
+per-order state, including resting makers. Persist each execution/trade fact
+needed by private live reads; coalesce final state writes within a batch.
+Current state no longer queries historical timeline or sums all executions.
+4. Implement market maintainer from committed live effects. Maintain
+instrument/session price-level state and snapshots incrementally; define
+snapshot sequence, gap/restart behavior, visibility of hidden orders, and
+bounded slow-client policy for a later feed. Route existing live REST reads
+only after exact field and authorization parity, with an as-of/coverage token
+for combined responses.
 
-7. Add isolated versioned shadow state/claim/frontier. Effects, compact state,
-   and contiguous progress commit atomically; a duplicate completed claim is a
-   no-op. Shadow has one writer per effect set and cannot write the existing
-   lifecycle table. Backfill from canonical authority, verify aged/skewed
-   reference parity, and rehearse restart/ambiguous commit and rollback.
-8. Run the shadow for correctness only. Then conduct a *separate* capacity
-   treatment that stops the superseded lifecycle history recomputation for the
-   candidate path. Compare against Gate 1's matched control, not against the
-   dual-running shadow. Track hot-maker row locks, WAL/rows, and both order and
-   market freshness while intake continues.
+Exit: full lifecycle and market business parity on normal, hot-maker,
+multi-fill, cancellation, and aged fixtures; duplicate/ambiguous-commit and
+crash recovery; route-by-route rollback. Shadow parity is correctness work,
+not a capacity score.
 
-**Checkpoint:** exact state/replay parity, no new synchronous ingress work, no
-unbounded backlog, and measured full-pipeline improvement. If hot-row
-contention or write amplification offsets the gain, stop this treatment and
-use Gate 1 attribution to choose another lever.
+### Wave 3 — independent audit and bounded post-trade
 
-### Gate 4 — cutover and conditional follow-ons
+5. Give venue audit/history its own claim/frontier and write schedule. Preserve
+all venue and direct admin/protective events, trace order, payload retention,
+and mixed route semantics. Existing projection PostgreSQL remains direct-event
+authority until any source migration has its own lossless cutover. Audit may lag
+live state, but lag and missing source are explicit and fail full-system gate.
+6. Rewrite trade-to-settlement as bounded transitions: consume canonical trade
+effects, create idempotent obligation, advance policy-versioned workflow, and
+post complete cash/security ledger legs plus checkpoint atomically. Read only
+affected trade, obligation, and accounts. Keep full-run reconstruction as
+offline reconciliation, not online append validation. Preserve realistic and
+instant simulation profiles through the same commands and state machine.
 
-9. Route own-order reads to the new state only with a proved causal coverage
-   token and existing authorization/freshness behavior. Preserve old read path
-   until its frontier can catch up for rollback. Market snapshots must be based
-   on committed operational state; test skewed books before adding a separate
-   price-level accumulator or stream. Keep full audit/timeline reads intact.
-10. Reconsider independent audit checkpointing only if full-pipeline results
-    show audit representation delaying live state after historical dependency
-    removal. Account for direct admin/protective events, exact mixed ordering,
-    two-stage total WAL/backlog, retention, and read consistency. Test in
-    isolated shadows before any physical database move. Consider Kafka Streams
-    or incremental SQL only after an input-authority and external-sink recovery
-    contract is proved and the one-store approach lacks headroom.
+These two workstreams can proceed alongside live implementation after Wave 1's
+contract is fixed. They need their own focused tests, not separate 10k tuning
+campaigns. Settle the resource/account partitioning contract before any
+cross-instrument ledger sharding.
 
-**Checkpoint:** route-by-route parity, rollback drill, and no claim that an
-operational-only pass qualifies full audit/history.
+### Wave 4 — one integrated cutover and capacity campaign
 
-### Separate post-trade workstream
+7. Compare all new stages with old reference on a closed cohort; backfill from
+canonical facts and direct-event authority, rehearse crash, source gaps,
+ambiguous commits, retention failure, and rollback. Switch route adapters by
+ownership with explicit freshness metadata. Stop the old full projector in
+the treatment image.
+8. Run one fresh, matched full-pipeline control/treatment campaign, then the
+required warm/aged and skewed qualification. Measure accepted/direct-acked/
+materialized, live/order/market/audit/settlement progress, actual same-cohort
+API visibility, WAL/rows, locks, CPU/I/O, and backlog slope. Include hot
+resting orders, dominant instruments, hot accounts across instruments,
+concurrent reads, and settlement-enabled trade mix. Compare hardware and
+storage budgets explicitly; added database instances are capacity resources.
 
-11. Replace online whole-run settlement discovery/validation with a durable
-    trade/obligation cursor and bounded reads of affected trade, orders,
-    obligations, and accounts. Append immutable facts plus complete debit/credit
-    accounting and progress atomically. Keep full-run rebuild as reconciliation,
-    and preserve realistic and instant profiles under the same state machine.
-12. Benchmark trades/s and facts/ledger entries per trade at 1k, 10k, and aged
-    histories. Include hot accounts across instruments, failed legs, retries,
-    repairs, netting windows, and concurrent projection/API load. Then decide
-    whether settlement needs independent physical resources. Do not shard
-    accounting by instrument without a cross-account invariant proof.
+Success: sustained 10k accepted commands/s for the frozen 300s workload with
+no upward mandatory-stage backlog, exact business/replay/audit/accounting
+results, command-weighted lifecycle/market freshness p95 at most 5s, p99 at
+most 10s, max at most 30s, crash recovery, and established three-run
+stopped-source drain headroom of at least 20%. Drain alone is not in-load
+reserve. Also state trades/s and accounting facts/s; command rate cannot
+stand in for settlement capacity.
 
-**Checkpoint:** exact accounting/replay parity, bounded per-transition work,
-and independently stated obligation and settlement freshness.
+## Execution rules that keep this fast
 
-## Final promotion and stopping rule
-
-The final *combined* image must sustain the frozen 10k/300s workload without
-growing required-stage backlog and meet conservative command-weighted source to
-canonical/lifecycle/market freshness (p95 at most 5s, p99 at most 10s, max at
-most 30s), exact source cohort and business reference, zero unexplained
-retries/deadlocks, and clean crash/replay. Keep the established three separate
-stopped-source fixed-backlog drains at at least 20% measured rate headroom;
-also prove in-load freshness, because drain alone is insufficient. Repeat with
-warm/aged state, hot-maker and hot-account skew, concurrent reads, and target
-migration/rollback. Only then update the promoted baseline. A failed gate
-changes the next treatment, not its threshold.
+- Pause new performance micro-optimizations and unrelated venue feature work
+  while these architecture waves run. Keep safety/CI fixes moving.
+- Focused correctness tests accompany each contract or behavior PR. Do not run
+  a cloud A/B after every SQL/index tweak; use one integrated capacity campaign
+  after old work is actually replaced.
+- If final run misses, inspect stage-level attribution and change a material
+  architecture lever: effect fanout, batch/write shape, ownership/partitioning,
+  or physical resource placement. Preserve failed evidence and frozen gate.
+- Public behavior, event/storage contracts, migration, operational runbook,
+  and rollback documentation change with their code. Never acknowledge
+  acceptance before durable ingress acknowledgement.
