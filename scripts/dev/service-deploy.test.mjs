@@ -119,13 +119,9 @@ elif [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
   printf '%s\\n' "\${FAKE_IMAGE_REVISION:-${gitSha}}"
 elif [[ "\${1:-}" == "inspect" ]]; then
   if [[ "$*" == *"runtime-stopped-id"* ]]; then
-    printf 'false\\n'
+    printf 'exited\\n'
   elif [[ "$*" == *"runtime-second-id"* ]]; then
-    if [[ "\${FAKE_RUNTIME_RUNNING:-1}" == "1" ]]; then
-      printf 'true\\n'
-    else
-      printf 'false\\n'
-    fi
+    printf '%s\\n' "\${FAKE_RUNTIME_SECOND_STATUS:-running}"
   else
     printf 'true\\n'
   fi
@@ -257,10 +253,17 @@ try {
   };
   const active = spawnSync(migrationScript, [], {
     encoding: "utf8",
-    env: { ...manualEnv, FAKE_RUNTIME_RUNNING: "1" },
+    env: { ...manualEnv, FAKE_RUNTIME_SECOND_STATUS: "running" },
   });
   assert.notEqual(active.status, 0, `${active.stdout}\n${active.stderr}`);
   assert.match(active.stderr, /platform-runtime to be stopped/);
+
+  const restarting = spawnSync(migrationScript, [], {
+    encoding: "utf8",
+    env: { ...manualEnv, FAKE_RUNTIME_SECOND_STATUS: "restarting" },
+  });
+  assert.notEqual(restarting.status, 0, `${restarting.stdout}\n${restarting.stderr}`);
+  assert.match(restarting.stderr, /platform-runtime to be stopped/);
 
   const missingContainer = spawnSync(migrationScript, [], {
     encoding: "utf8",
@@ -271,7 +274,7 @@ try {
 
   const quiesced = spawnSync(migrationScript, [], {
     encoding: "utf8",
-    env: { ...manualEnv, FAKE_RUNTIME_RUNNING: "0" },
+    env: { ...manualEnv, FAKE_RUNTIME_SECOND_STATUS: "exited" },
   });
   assert.equal(quiesced.status, 0, `${quiesced.stdout}\n${quiesced.stderr}`);
   const sql = await readFile(join(dirtyQueueFixture.root, "psql-input.log"), "utf8");

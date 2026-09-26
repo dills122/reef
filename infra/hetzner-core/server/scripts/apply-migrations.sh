@@ -137,8 +137,8 @@ for domain in "${domains[@]}"; do
       fi
       while IFS= read -r runtime_container; do
         [[ -n "$runtime_container" ]] || continue
-        runtime_state="$(docker inspect -f '{{.State.Running}}' "$runtime_container" </dev/null)"
-        if [[ "$runtime_state" != "false" ]]; then
+        runtime_state="$(docker inspect -f '{{.State.Status}}' "$runtime_container" </dev/null)"
+        if [[ "$runtime_state" != "exited" && "$runtime_state" != "created" ]]; then
           echo "runtime/0069 requires platform-runtime to be stopped before migration" >&2
           exit 1
         fi
