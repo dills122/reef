@@ -298,22 +298,35 @@ target. Schedule an operator window with an application rollback plan. Sync the
 current host scripts with `make hetzner-core ARGS=deploy-automation-up` and
 stage the exact versioned migration at
 `/opt/reef/postgres/migrations/runtime/0069_logged_projection_dirty_queues.sql`.
-Confirm no other unexpected migrations are pending.
+Confirm that 0069 is the only pending runtime migration; the command below
+refuses a broader migration window. Check for any out-of-band platform-runtime
+replicas or projection writers and stop them too.
 
 On the target host, record sizes, stop runtime writers, then apply the staged
 migration through the checksum-ledger runner:
 
 ```bash
+set -euo pipefail
 cd /opt/reef
+pending_runtime="$(
+  comm -23 \
+    <(find postgres/migrations/runtime -maxdepth 1 -type f -name '[0-9][0-9][0-9][0-9]_*.sql' -printf 'runtime/%f\n' | LC_ALL=C sort) \
+    <(docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 -t -A -c "SELECT migration_id FROM public.reef_schema_migrations WHERE domain_name = 'runtime'" | LC_ALL=C sort)
+)"
+test "$pending_runtime" = 'runtime/0069_logged_projection_dirty_queues.sql'
 docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
   -c "SELECT relname, relpersistence, pg_total_relation_size(oid) AS bytes FROM pg_class WHERE relnamespace = 'runtime'::regnamespace AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty') ORDER BY relname"
-docker compose stop simulator platform-runtime matching-engine
-time REEF_APPLY_RUNTIME_0069=1 ./scripts/apply-migrations.sh
+simulator_was_running="$(docker compose --profile manual ps --status running --services simulator)"
+docker compose --profile manual stop simulator platform-runtime matching-engine
+time REEF_MIGRATION_DOMAINS=runtime REEF_APPLY_RUNTIME_0069=1 ./scripts/apply-migrations.sh
 docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
   -c "SELECT migration_id FROM public.reef_schema_migrations WHERE migration_id = 'runtime/0069_logged_projection_dirty_queues.sql'"
 docker compose exec -T postgres psql -X -U postgres -d reef -v ON_ERROR_STOP=1 \
   -c "SELECT relname, relpersistence FROM pg_class WHERE relnamespace = 'runtime'::regnamespace AND relname IN ('order_lifecycle_dirty', 'market_data_snapshot_dirty') ORDER BY relname"
 docker compose up -d --no-deps matching-engine platform-runtime
+if [ "$simulator_was_running" = simulator ]; then
+  docker compose --profile manual up -d --no-deps simulator
+fi
 ```
 
 The runner gives 0069 a 2s lock-acquisition timeout and a 30s statement

@@ -104,14 +104,27 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
 if [[ "$*" == "compose --profile manual config --services" ]]; then
   printf '%s\\n' openbao matching-engine platform-runtime simulator
-elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" && "\${3:-}" == "-q" ]]; then
-  if [[ "\${4}" != "platform-runtime" || "\${FAKE_RUNTIME_RUNNING:-1}" == "1" ]]; then
-    printf '%s-id\\n' "\${4}"
+elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" ]]; then
+  if [[ "$*" == *"platform-runtime"* && "$*" == *" -a -q "* ]]; then
+    echo runtime-stopped-id
+    echo runtime-second-id
+  else
+    printf '%s-id\\n' "\${@: -1}"
   fi
 elif [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
   printf '%s\\n' "\${FAKE_IMAGE_REVISION:-${gitSha}}"
 elif [[ "\${1:-}" == "inspect" ]]; then
-  printf 'true\\n'
+  if [[ "$*" == *"runtime-stopped-id"* ]]; then
+    printf 'false\\n'
+  elif [[ "$*" == *"runtime-second-id"* ]]; then
+    if [[ "\${FAKE_RUNTIME_RUNNING:-1}" == "1" ]]; then
+      printf 'true\\n'
+    else
+      printf 'false\\n'
+    fi
+  else
+    printf 'true\\n'
+  fi
 fi
 if [[ "\${1:-}" == "compose" && "\${2:-}" == "exec" ]]; then
   cat >> "$FAKE_PSQL_INPUT_LOG" || true
@@ -239,7 +252,7 @@ try {
     encoding: "utf8",
     env: { ...manualEnv, FAKE_RUNTIME_RUNNING: "1" },
   });
-  assert.notEqual(active.status, 0);
+  assert.notEqual(active.status, 0, `${active.stdout}\n${active.stderr}`);
   assert.match(active.stderr, /platform-runtime to be stopped/);
 
   const quiesced = spawnSync(migrationScript, [], {

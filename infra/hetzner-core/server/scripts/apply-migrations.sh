@@ -128,14 +128,15 @@ for domain in "${domains[@]}"; do
         echo "runtime/0069 requires an explicit quiesced operator rollout; automatic migration is blocked" >&2
         exit 1
       fi
-      runtime_container="$(docker compose ps -q platform-runtime)"
-      if [[ -n "$runtime_container" ]]; then
-        runtime_state="$(docker inspect -f '{{.State.Running}}' "$runtime_container")"
+      runtime_containers="$(docker compose ps -a -q platform-runtime)"
+      while IFS= read -r runtime_container; do
+        [[ -n "$runtime_container" ]] || continue
+        runtime_state="$(docker inspect -f '{{.State.Running}}' "$runtime_container" </dev/null)"
         if [[ "$runtime_state" != "false" ]]; then
           echo "runtime/0069 requires platform-runtime to be stopped before migration" >&2
           exit 1
         fi
-      fi
+      done <<<"$runtime_containers"
     fi
 
     echo "apply $migration_id"
