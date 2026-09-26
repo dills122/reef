@@ -60,10 +60,10 @@ self-service intake.
 
 ## Learn More
 
-- `docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md` — promoted standalone Reef and explicit Arena-overlay evidence
+- `docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md` — recorded standalone Reef and explicit Arena-overlay evidence
 - `docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md` — active fork admission, run cutoffs, policy, and recorded E2E campaign
 - `docs/BOT_ARENA_RELEASE_READINESS.md` — current launch call, blockers, and go/no-go gates
-- `docs/BOT_ARENA_PLAN.md` and `docs/BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md` — full product concept, rollout phases, and latest local gate evidence
+- `docs/BOT_ARENA_PLAN.md` — full product concept; dated soak evidence is in `docs/archive/BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md`
 - `docs/BOT_SDK_DESIGN.md` — SDK contract detail
 - [How The Game Works](../how-the-game-works/) — architecture/pipeline detail on this site
 - [How To Play](../how-to-play/) — player-facing walkthrough

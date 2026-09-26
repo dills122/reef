@@ -11,7 +11,7 @@ Primary plan:
 - [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](../COMMAND_LOG_PARTITIONING_PLAN.md)
-- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](../DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](DIGITALOCEAN_STRESS_TEST_PLAN.md)
 
 Architecture checkpoint:
 - D-041 and D-043 supersede the older generic JetStream-worker ladder for the active venue-core path: Kafka-compatible durable command ingress, matching-engine direct partition consumption, durable `VenueEventBatch` publication, then asynchronous Postgres materialization.

@@ -268,7 +268,7 @@ The load tester supports config-driven persona sessions (named actors, strategie
 
 Planning/spec:
 - [`docs/SIMULATOR_PERSONA_CONFIG.md`](../../docs/SIMULATOR_PERSONA_CONFIG.md)
-- [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](../../docs/SIMULATOR_UPGRADE_BACKLOG.md)
+- [`docs/archive/SIMULATOR_UPGRADE_BACKLOG.md`](../../docs/archive/SIMULATOR_UPGRADE_BACKLOG.md)
 
 Example session file:
 - [`packages/scenario-definitions/persona-session.example.yaml`](../../packages/scenario-definitions/persona-session.example.yaml)

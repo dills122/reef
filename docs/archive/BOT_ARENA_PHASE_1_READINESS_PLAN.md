@@ -15,9 +15,9 @@ Status note (updated 2026-07-18): this file is historical Phase 1 planning. The
 local gates described here landed, and later work added the hosted admin app,
 public leaderboard read, identity/ownership stores, same-repository submission
 pipeline, OpenBao provisioning, and registry sync. Current execution lives in
-[`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder); external submission
+[`WORK_PLAN.md`](../WORK_PLAN.md#active-execution-ladder); external submission
 status lives in
-[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md). Do not
+[`BOT_ARENA_RELEASE_READINESS.md`](../BOT_ARENA_RELEASE_READINESS.md). Do not
 use the non-goals or recommended work order below as current implementation
 claims.
 
@@ -383,7 +383,7 @@ policy-compliance score, not a competitive trading-performance score.
 Current scoring/reporting assumptions:
 
 - The current score/report follow-up plan is tracked in
-  [`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](./BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
+  [`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](../BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
 - Public competitive scoring ranks only score-eligible competitor bots. House
   and NPC bots remain diagnostics-only unless a future mode explicitly changes
   that behavior.

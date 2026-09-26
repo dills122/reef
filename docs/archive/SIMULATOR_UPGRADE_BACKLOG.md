@@ -11,7 +11,7 @@ active execution ladder. Stress now has fail-closed success/accounting gates
 and valid-intent metric selection; those differ from the older campaign-level
 quality/capacity promotion described below. Bounded-state workload code exists
 on the unmerged `codex/throughput-state-shape-control` branch. Use the
-[work board](./WORK_PLAN.md#work-board) before scheduling new implementation.
+[work board](../WORK_PLAN.md#work-board) before scheduling new implementation.
 The May/July results below retain their original workload/provider context.
 
 Implemented:
@@ -34,7 +34,7 @@ Implemented:
 - worker sweep + recommendation artifact generation
 - strict-lifecycle min-live-order gating and adaptive recovery guardrails
 - initial runtime system tuning pass (indexes + runtime/db concurrency defaults)
-- quality-lane + capacity-lane throughput campaign automation and baseline publication (`make dev-throughput-campaign` / `scripts/dev/throughput-campaign.mjs`, plus `make dev-throughput-compare`; baselines archived in [`THROUGHPUT_CAMPAIGN_BASELINE_2026-05-23.md`](./archive/THROUGHPUT_CAMPAIGN_BASELINE_2026-05-23.md) and [`THROUGHPUT_CAMPAIGN_CLEAN_STACK_ENVELOPE_2026-05-23.md`](./archive/THROUGHPUT_CAMPAIGN_CLEAN_STACK_ENVELOPE_2026-05-23.md))
+- quality-lane + capacity-lane throughput campaign automation and baseline publication (`make dev-throughput-campaign` / `scripts/dev/throughput-campaign.mjs`, plus `make dev-throughput-compare`; baselines archived in [`THROUGHPUT_CAMPAIGN_BASELINE_2026-05-23.md`](./THROUGHPUT_CAMPAIGN_BASELINE_2026-05-23.md) and [`THROUGHPUT_CAMPAIGN_CLEAN_STACK_ENVELOPE_2026-05-23.md`](./THROUGHPUT_CAMPAIGN_CLEAN_STACK_ENVELOPE_2026-05-23.md))
 - configurable circuit-breaker framework for junk-traffic throttling/blocking (reject-rate command circuit breaker with global/per-route toggles, `GET /internal/boundary/abuse/stats` telemetry, and long-soak trip validation; see "Next Effort: Abuse-Control Circuit Breakers" below for full delivered scope and evidence)
 
 Still pending for the next wave:
@@ -112,7 +112,7 @@ Finding:
 - optional stochastic mode (non-deterministic jitter) for long soak tests
 
 Primary plan:
-- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 
 ## Learnings and Pitfalls
 
@@ -222,7 +222,7 @@ Indicators favoring stabilization/refactor mode:
 
 ## Latest Locked Run (2026-05-27)
 
-- reference doc: [`docs/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md`](./archive/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md)
+- reference doc: [`docs/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md`](./THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md)
 - scenario: `capacity-baseline`, `5m`, `rate=5000`, `workers=512`, clean reset before run
 - post-tuning result:
   - throughput: `2694.15 rps`
@@ -269,8 +269,8 @@ Indicators favoring stabilization/refactor mode:
 - implemented reject-rate breaker with global/per-feature toggles and route scoping
 - exposed runtime breaker telemetry snapshot endpoint: `GET /internal/boundary/abuse/stats`
 - completed short non-tripping overhead A/B run:
-  - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./archive/ABUSE_BREAKER_COMPARISON_2026-05-27.md)
+  - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./ABUSE_BREAKER_COMPARISON_2026-05-27.md)
 - completed intentional-trip campaign lane with breaker counters captured per lane artifact:
-  - reference: [`docs/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md`](./archive/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md)
+  - reference: [`docs/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md`](./ABUSE_BREAKER_TRIP_LANE_2026-05-27.md)
 - completed long-soak intentional-trip validation with release-cycle evidence (`releases > 0`):
-  - reference: [`docs/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md`](./archive/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md)
+  - reference: [`docs/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md`](./ABUSE_BREAKER_LONG_SOAK_2026-05-27.md)

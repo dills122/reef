@@ -5,8 +5,8 @@ and original checklists, not a live board of unfinished tasks. Local gates and
 the July 14 hosted `15m` score-v1 run have passed; later July 21 local evidence
 also verifies roster-bound three-policy reconciliation. Initial external
 onboarding is complete. Remaining corrected-policy multi-seed/hosted-game
-evidence is tracked in [`WORK_PLAN.md`](./WORK_PLAN.md#work-board) and
-[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
+evidence is tracked in [`WORK_PLAN.md`](../WORK_PLAN.md#work-board) and
+[`BOT_ARENA_RELEASE_READINESS.md`](../BOT_ARENA_RELEASE_READINESS.md).
 Unchecked historical items below require reconciliation before scheduling;
 they do not establish missing implementations.
 
@@ -15,7 +15,7 @@ they do not establish missing implementations.
 Prove Reef can run a bot arena simulation with a healthy market throughout and
 a successful simulation data export.
 
-Scope note (2026-07-09): this is the Bot Arena simulation gate checklist. It refines the Bot Arena item in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder); it is not a second repo-wide execution ladder.
+Scope note (2026-07-09): this is the Bot Arena simulation gate checklist. It refines the Bot Arena item in [`WORK_PLAN.md`](../WORK_PLAN.md#active-execution-ladder); it is not a second repo-wide execution ladder.
 
 The near-term hardening path is local-first: use local 3-5 minute live runs to
 shake out arena behavior, health metrics, projection/readback gaps, and artifact
@@ -116,7 +116,7 @@ source of execution evidence.
 
 The next-run operator checklist, report-shape contract, score-v1 direction, and
 tuning matrix live in
-[`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](./BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
+[`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](../BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
 
 The first multi-instrument mode should declare:
 

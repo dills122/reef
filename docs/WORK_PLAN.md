@@ -2,8 +2,10 @@
 
 ## Purpose
 
-This is Reef's single active execution ladder. It stays short and links to the
-documents that own detailed contracts, evidence, and sprint tasking.
+This is Reef's single repository execution ladder. It links to the documents
+that own detailed contracts, evidence, and sprint tasking. Its September 4
+alignment is a checkpoint, not a live claim about later branches or runs;
+check source and newer evidence before reporting any item as current.
 
 Read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) first for the implementation
 snapshot and verified performance claims.
@@ -12,7 +14,7 @@ Last aligned: 2026-09-04 against `master` at `cebbffc1`; hosted release gates
 were not re-run during this documentation check.
 
 Source/test/artifact reconciliation:
-[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
@@ -71,7 +73,7 @@ and readiness remain independent.
   readback plus replay/checksum evidence.
 - Reef/Arena artifact, route, persistence, Compose, failure-isolation, and P1
   equivalence gates are promoted in
-  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
 - Fork admission, SHA-bound maintainer approval, and external-account
   onboarding are complete through the July 23 `noodle-invite-smoke` test and
   follow-up fixes. The completion record lives in
@@ -113,7 +115,7 @@ describes the remaining task, not whether the whole subsystem exists.
 | CI, onboarding, mutation/protobuf hardening | Delivered; regression maintenance | Preserve gates; do not reopen initial implementation. |
 
 Evidence and source/test mapping:
-[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Supplemental UI and simulator backlogs are candidate catalogs, not competing
 priority ladders; reconcile individual candidates before scheduling them.
 

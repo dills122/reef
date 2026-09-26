@@ -25,7 +25,7 @@ The recorded sustained projection baseline is `2.5k/5m`; August `5k/5m`
 failed freshness. Recovered August 21 one-maintainer remote short evidence
 already exercises nested statement/I/O instrumentation: `2.5k` passes the
 current checker, while `5k` fails downstream lifecycle/market drain despite
-exact canonical counts. See the [audit record](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
+exact canonical counts. See the [audit record](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
 Earlier dated short-run interpretations below remain historical evidence;
 they do not replace this checkpoint or the [work board](./WORK_PLAN.md#work-board).
 
@@ -161,7 +161,7 @@ Immediate implications:
 2. Matching/business rejections for lifecycle modify/cancel commands must be counted as durable outcomes, not infrastructure failures.
 3. The next persistence risk is no longer synchronous hot-path Postgres writes; it is downstream projection completeness, freshness, replay/checksum coverage, and longer bounded soaks.
 
-Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
+Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./archive/PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 
 ## DigitalOcean Materializer 10k Gate (July 8, 2026)
 

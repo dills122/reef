@@ -5,7 +5,7 @@
 Checked the active work ladder against `master` at `cebbffc1`, merged history
 from July through September, current source/tests, available local report
 artifacts, and the existing state-shape branch. This is a dated evidence record;
-[`WORK_PLAN.md`](./WORK_PLAN.md) remains the execution ladder.
+[`WORK_PLAN.md`](../WORK_PLAN.md) remains the execution ladder.
 
 Implemented, tested, merged, hosted, and promoted are separate states. Missing
 local evidence means "not found in this audit", not proof that a run never
@@ -16,7 +16,7 @@ revalidated. Existing user edits were preserved.
 
 | Area / old planning implication | Actual implementation and evidence | Disposition / remaining work |
 | --- | --- | --- |
-| External bot admission/onboarding still pending | `noodle-ventures` smoke #307 and fixes #308/#310/#311/#313/#315/#316 merged July 22-23; project owner confirmed onboarding complete. [Completion record](./BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion). | **Stale; complete.** Preserve regression checks, remove initial onboarding from backlog. |
+| External bot admission/onboarding still pending | `noodle-ventures` smoke #307 and fixes #308/#310/#311/#313/#315/#316 merged July 22-23; project owner confirmed onboarding complete. [Completion record](../BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion). | **Stale; complete.** Preserve regression checks, remove initial onboarding from backlog. |
 | Cancel/modify ownership, deterministic rejection, protobuf compatibility still to build | #337 binds canonical mutation context, rejects malformed timestamps deterministically, and checks descriptors/generated source drift. Go regression suites passed during this audit session. | **Stale; merged.** Separate architecture-review sign-off was not found; code completion alone does not assert that sign-off. |
 | Order/command read authorization broadly unfinished | `PlatformHttpServerBoundaryTest` already covers participant order/current/history/fill denial, authenticated token scope, command client/participant mismatch, and missing identity. Both HTTP adapters use the boundary helpers. | **Partly stale.** Do not rebuild these checks. Settlement scenario-read visibility is the concrete unresolved family below. |
 | All `/api/v1` object reads have equivalent ownership enforcement | Settlement facts, obligations, ledger, exceptions, proof, and score routes call authentication/rate-limit checks, then query caller-selected `scenarioRunId`. The read gateway receives no caller principal and returns run-level data. | **Incomplete contract/enforcement.** Define run/participant/operator visibility, then enforce and test it in both adapters. This audit identifies the missing boundary; it does not assert a tested production exploit. |
@@ -33,17 +33,17 @@ revalidated. Existing user edits were preserved.
 
 Evidence paths:
 
-- [Boundary helpers](../services/platform-runtime/src/main/kotlin/com/reef/platform/api/ExternalApiBoundary.kt):
+- [Boundary helpers](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/ExternalApiBoundary.kt):
   `checkRead` authenticates/rate-limits; `checkParticipantRead` additionally
   applies participant scope.
-- [HTTP routing](../services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformHttpServer.kt):
+- [HTTP routing](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformHttpServer.kt):
   settlement legacy handlers and `settlementReadResponse` use the generic read
   check; order reads use participant scope; command reads use client/participant
   scope and fail when scope is unavailable.
-- [Settlement read gateway](../services/platform-runtime/src/main/kotlin/com/reef/platform/api/SettlementAdminGateway.kt):
+- [Settlement read gateway](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/SettlementAdminGateway.kt):
   `settlementFactsResponse`, ledger and other read methods accept a run ID,
   without principal scope. `scenarioRunId` selects data; it is not authorization.
-- [Existing boundary tests](../services/platform-runtime/src/test/kotlin/com/reef/platform/api/PlatformHttpServerBoundaryTest.kt)
+- [Existing boundary tests](../../services/platform-runtime/src/test/kotlin/com/reef/platform/api/PlatformHttpServerBoundaryTest.kt)
   prove substantial authorization already exists.
 
 Recommended next code slice: settle the visibility contract for the six

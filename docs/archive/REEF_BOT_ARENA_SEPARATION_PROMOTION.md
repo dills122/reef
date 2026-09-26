@@ -63,5 +63,5 @@ This promotion satisfies the separation prerequisite for the invite-preview
 sprint. It does not approve public submission or replace its fork-safe trusted
 provisioning, admission-window, external-account, hosted, backup/recovery, or
 security gates. Those remain governed by
-[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
-and [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
+[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
+and [`BOT_ARENA_RELEASE_READINESS.md`](../BOT_ARENA_RELEASE_READINESS.md).

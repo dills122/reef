@@ -8,6 +8,8 @@ The canonical, versioned source is the repository's
 [developer onboarding guide](https://github.com/dills122/reef/blob/HEAD/docs/ONBOARDING.md);
 use it for the complete prerequisites, work-area setup, troubleshooting, and
 optional infrastructure boundaries.
+For the accepted default stack, profiles, stop, and reset behavior, use the
+[local configuration guide](https://github.com/dills122/reef/blob/HEAD/docs/LOCAL_CONFIGURATION.md).
 
 ## Core Local Stack
 
@@ -19,6 +21,7 @@ cp .env.example .env
 make dev-doctor
 make dev-up
 make dev-smoke
+make dev-down
 ```
 
 The default local environment needs no cloud token, hosted database
