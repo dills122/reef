@@ -1,48 +1,50 @@
-# Reef Steering Index
+# Reef steering index
 
-These documents define how Reef should be built as the repository grows into the architecture described in the project overview and technical design.
+These are normative rules for the area being changed. Start at the
+[documentation map](../README.md) and read the relevant sections below. This
+index is not a request to load every linked file for every task.
 
-## Documents
+## Repository and architecture
 
-- [Throughput Baselines](../THROUGHPUT_BASELINES.md): mandatory first read for throughput work; authoritative scoped evidence, historical attempts, corrections and recording rules
+- [Scope and priorities](repository-scope-and-priorities.md) — correctness,
+  throughput, replay, audit, and safe-change priorities.
+- [Architecture](architecture.md) — service boundaries and persistence rules.
+- [Repository](repository.md) — layout, naming, scripting, and documentation.
+- [Engineering delivery policy](../ENGINEERING_DELIVERY_POLICY.md) — tests,
+  refactor triggers, and delivery gates.
+- [Decisions](../DECISIONS.md) — accepted direction and amendments.
 
-- [Onboarding](../ONBOARDING.md): canonical clean-machine prerequisites,
-  dependency bootstrap, first successful local smoke, work-area setup, hosted
-  access boundaries, and troubleshooting
-- [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
-- [Work Board And Plan](../WORK_PLAN.md#work-board): canonical remaining-work statuses and execution ladder
-- [September Implementation Audit](../IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md): source/test/run evidence separating delivered code, unmerged work, failed gates, and missing reports
-- [Bot Arena Release Readiness](../BOT_ARENA_RELEASE_READINESS.md): verified preview/public-submission matrix, blockers, launch gates, and current release call
-- [Bot Arena Invite Preview Sprint](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md): fork-safe admission, cutoff policy, policy calibration, and recorded E2E run plan after separation promotion
-- [Reef And Bot Arena Separation Promotion](../REEF_BOT_ARENA_SEPARATION_PROMOTION.md): recorded artifact, route, Compose, isolation, and P1 equivalence evidence
-- [Reef And Bot Arena Separation Sprint](../REEF_BOT_ARENA_SEPARATION_SPRINT.md): implemented artifact, dependency, route, persistence, Compose, and standalone Reef separation design record
-- [Documentation Cleanup Plan](../DOCUMENTATION_CLEANUP_PLAN.md): active vs historical document rules and archive cleanup queue
-- [Engineering Delivery Policy](../ENGINEERING_DELIVERY_POLICY.md): delivery mode matrix, refactor triggers, and non-negotiable feature-test requirements
-- [CI Operations](../CI_OPERATIONS.md): required merge gate, scheduled health ownership, Dependabot post-merge verification, and workflow maintenance rules
-- [Repository Scope And Priorities](./repository-scope-and-priorities.md): repo-level correctness, throughput, audit, replay, and safe-change priorities
-- [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules
-- [Data Platform](./data-platform.md): canonical persistence posture, datatype standards, write-path rules, retention, and data pitfalls
-- [Inter-Service Communication](./inter-service-communication.md): service transport, protobuf/gRPC direction, metadata/idempotency standards
-- [External API Boundary](./external-api-boundary.md): user-facing API architecture, versioning, auth/idempotency/rate-limit standards
-- [API Surface Policy](../API_SURFACE_POLICY.md): product-facing API families, internal-interface hardline, `/internal/*` exposure ban, and gateway requirements
-- [Repository](./repository.md): top-level folder conventions, naming, and documentation expectations
-- [Go](./go.md): matching engine and systems-side coding guidance
-- [Kotlin](./kotlin.md): platform runtime and workflow orchestration guidance
-- [Astro](./astro.md): docs and marketing site guidance
-- [Post-Match Standards](../POST_MATCH_STANDARDS.md): normative post-match roles, calendar/time config, observability, exception taxonomy, and ledger standards
-- [Post-Trade Lifecycle Sprint](../POST_TRADE_LIFECYCLE_SPRINT.md): implementation record and remaining hardening for allocation-through-novation facts, exception queue v1, and operator-visible lifecycle evidence
-- [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes
-- [Performance Library Investigation](../PERFORMANCE_LIBRARY_INVESTIGATION.md): runtime/Go library benchmark candidates and acceptance criteria
+For product framing or system-wide design changes, also read the relevant
+sections of [project overview](../../REEF_PROJECT_OVERVIEW.md) and
+[technical design](../../REEF_TECHNICAL_DESIGN.md).
 
-`AGENTS.md`'s "Contract-First Files" also treats [`API_BOUNDARY_STORAGE_DECISIONS.md`](../API_BOUNDARY_STORAGE_DECISIONS.md) and [`DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](../DATA_DOMAIN_SCHEMA_BLUEPRINT.md) as normative before implementation — check that list too.
+## By boundary or language
 
-## How To Use These
+- [Data platform](data-platform.md) and
+  [data-domain schema blueprint](../DATA_DOMAIN_SCHEMA_BLUEPRINT.md).
+- [Inter-service communication](inter-service-communication.md) and
+  [API boundary storage decisions](../API_BOUNDARY_STORAGE_DECISIONS.md).
+- [External API boundary](external-api-boundary.md) and
+  [API surface policy](../API_SURFACE_POLICY.md).
+- [Post-match standards](../POST_MATCH_STANDARDS.md).
+- [Go](go.md), [Kotlin](kotlin.md), and [Astro](astro.md) for their owner areas.
 
-When adding a new module or service:
+## Operations and evidence
 
-1. start with repository scope and architecture steering
-2. follow the relevant language/framework steering
-3. preserve domain boundaries even if implementation starts in a simplified form
-4. evaluate hot-path changes against correctness, replay, and throughput evidence
+- [Local configuration](../LOCAL_CONFIGURATION.md) and
+  [onboarding](../ONBOARDING.md) for setup and teardown.
+- [CI operations](../CI_OPERATIONS.md) for required gates and scheduled checks.
+- [Work plan](../WORK_PLAN.md) for the dated execution board;
+  [September 4 status](../CURRENT_STATUS.md) for the implementation snapshot.
+- [Throughput baselines](../THROUGHPUT_BASELINES.md) and
+  [performance learnings](../PERFORMANCE_LEARNINGS.md) before any throughput
+  work. Follow their original success/failure and active-plan links.
+- [Arena release readiness](../BOT_ARENA_RELEASE_READINESS.md) and
+  [invite-preview sprint](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md) for that release.
+- [Post-trade lifecycle sprint](../POST_TRADE_LIFECYCLE_SPRINT.md) for remaining
+  post-trade evidence and operator work.
 
-If a local optimization conflicts with the steering, prefer the steering unless there is a documented reason to deviate.
+Completed plans, dated audits, research, and benchmark records are indexed in
+[the archive](../archive/README.md). The
+[documentation lifecycle](../DOCUMENTATION_CLEANUP_PLAN.md) governs promotion
+and archival.

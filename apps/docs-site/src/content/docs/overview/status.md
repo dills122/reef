@@ -1,8 +1,8 @@
 ---
-title: Current Status
-description: What is actually built versus planned, as of the current implementation snapshot.
+title: September 4 Snapshot
+description: Built versus planned at the September 4 repository alignment.
 banner:
-  content: This page is the fastest-changing page on the site. It reflects a point-in-time snapshot, not a live status feed.
+  content: Aligned September 4, 2026. Check the work plan, source, and newer evidence before using this as current status.
 ---
 
 Reef is past skeleton stage. You can run the local stack, submit orders, drive scenarios, inspect command status, read market data, and follow the first settlement evidence path. The UI and full post-trade workflow are still early, so this page keeps the marketing honest: built means implemented; planned means target shape.
@@ -59,9 +59,10 @@ The first deterministic scenarios now have promoted target stories. P1 proves a 
 
 ## Learn More
 
-- `docs/CURRENT_STATUS.md` — the full, most current snapshot (source of truth for this page)
+- `docs/README.md` — current documentation entry points
+- `docs/CURRENT_STATUS.md` — full September 4 snapshot behind this page
 - `docs/BOT_ARENA_RELEASE_READINESS.md` — current external-submission release gate
-- `docs/REEF_BOT_ARENA_SEPARATION_PROMOTION.md` — promoted standalone Reef/Arena boundary evidence
+- `docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md` — recorded standalone Reef/Arena boundary evidence
 - `docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md` — active fork-preview and recorded-run work
 - `docs/DECISIONS.md` — accepted architecture decisions
 - `docs/WORK_PLAN.md` — active execution ladder

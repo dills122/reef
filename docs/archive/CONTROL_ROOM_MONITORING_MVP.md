@@ -73,7 +73,7 @@ open Control Room
 ## Run
 
 Choose the stack and stress flow from
-[`LOCAL_RUN_PROFILES.md`](./LOCAL_RUN_PROFILES.md) before starting the monitor.
+[`LOCAL_RUN_PROFILES.md`](../LOCAL_RUN_PROFILES.md) before starting the monitor.
 The Control Room is read-only; it should observe the profile being tested, not
 define which runtime roles are supposed to exist.
 

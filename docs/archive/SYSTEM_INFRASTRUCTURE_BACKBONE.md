@@ -11,7 +11,7 @@ analytics/meta state, narrow public admin routes, and backups.
 It is not the heavy simulation host. It is not the matching hot path.
 
 For the one-page map of the whole system, start with
-[`SYSTEM_OVERVIEW.md`](./SYSTEM_OVERVIEW.md).
+[`SYSTEM_OVERVIEW.md`](../SYSTEM_OVERVIEW.md).
 
 ## Which Layer Is This?
 
@@ -34,12 +34,12 @@ For the one-page map of the whole system, start with
 
 Primary source code lives in:
 
-- [`infra/README.md`](../infra/README.md)
-- [`infra/hetzner-core/`](../infra/hetzner-core/)
-- [`infra/hetzner-core/server/docker-compose.yml`](../infra/hetzner-core/server/docker-compose.yml)
-- [`infra/simulation-runner/README.md`](../infra/simulation-runner/README.md)
-- [`scripts/deploy/hetzner-core.mjs`](../scripts/deploy/hetzner-core.mjs)
-- [`scripts/dev/do-benchmark-host.sh`](../scripts/dev/do-benchmark-host.sh)
+- [`infra/README.md`](../../infra/README.md)
+- [`infra/hetzner-core/`](../../infra/hetzner-core)
+- [`infra/hetzner-core/server/docker-compose.yml`](../../infra/hetzner-core/server/docker-compose.yml)
+- [`infra/simulation-runner/README.md`](../../infra/simulation-runner/README.md)
+- [`scripts/deploy/hetzner-core.mjs`](../../scripts/deploy/hetzner-core.mjs)
+- [`scripts/dev/do-benchmark-host.sh`](../../scripts/dev/do-benchmark-host.sh)
 
 ## Deployment Split
 
@@ -445,7 +445,7 @@ make hetzner-core ARGS=deploy-receiver-up
 - Backup restore drills need to be run and documented before treating backups
   as proven.
 
-Control-plane hardening checklist: [`API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog).
+Control-plane hardening checklist: [`API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog`](../API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog).
 
 ## Operator Commands
 

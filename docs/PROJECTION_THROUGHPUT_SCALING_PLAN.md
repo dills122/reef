@@ -7,7 +7,7 @@ fix sequence for scaling read-model freshness toward the proven venue-core
 materializer baseline.
 
 The sustained August follow-up and current recommendation are recorded in
-[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
+[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./archive/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
 That spike supersedes the older assumption that a `5k/60s` pass was sufficient
 promotion evidence: `2.5k/5m` is green, while `5k/5m` accumulated about `758k`
 of projection watermark lag despite exact intake and canonical materialization.
@@ -16,7 +16,7 @@ September 4 artifact reconciliation also recovered August 21 instrumented
 one-maintainer remote short runs. `2.5k/60s` passes the current checker;
 `5k/60s` reaches exact stage counts and zero canonical-projector lag but fails
 downstream lifecycle/market-data drain checks. See the
-[status audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
+[status audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
 for counts, settings and checker requirements. The first remote topology
 comparison is complete; sustained `5k` promotion remains open.
 
@@ -857,7 +857,7 @@ the August sustained failure or justify an unchanged rerun.
    versus `2.15s` transform, `2.05s` canonical read, `1.59s` commit, and `0.20s`
    watermark time, with zero connection waiters. Treat this as attribution and
    workflow evidence, not portable capacity evidence. See
-   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](./research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
+   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](./archive/research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
    The named remote projection gate now also preloads
    `pg_stat_statements`, tracks nested PL/pgSQL statements, enables I/O and
    WAL-I/O timing, records the relevant settings, and requires pre/post
@@ -895,7 +895,7 @@ the August sustained failure or justify an unchanged rerun.
    evidence also identified repeated exact `submit_results` counts as a
    concrete scan source.
    See
-   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](./research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
+   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](./archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
 10. Add maintained depth/top-of-book projections.
 11. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL/temp
    work per projected outcome.

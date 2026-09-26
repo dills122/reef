@@ -23,13 +23,13 @@ backbone server. For that, see
 
 Use this together with:
 
-- [`SYSTEM_OVERVIEW.md`](./SYSTEM_OVERVIEW.md)
+- [`SYSTEM_OVERVIEW.md`](../SYSTEM_OVERVIEW.md)
 - [`SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
-- [`CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`CURRENT_STATUS.md`](../CURRENT_STATUS.md)
 - [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
 - [`PERSISTENCE_HOT_PATH_CONFIGURATION.md`](./PERSISTENCE_HOT_PATH_CONFIGURATION.md)
-- [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
-- [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`TRADING_MARKET_DATA_BOUNDARIES.md`](../TRADING_MARKET_DATA_BOUNDARIES.md)
+- [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 ## Backbone Shape
 
@@ -159,7 +159,7 @@ engine drain, canonical materialization, and projection visibility.
 | `redpanda` storage | `9092`, admin `19644` | Kafka-compatible command/event topics for direct engine consume and venue event batch materialization. Enabled by the `redpanda` compose profile. |
 
 Schema migrations are forward-only files under
-[`scripts/dev/db/migrations`](../scripts/dev/db/migrations). CI validates
+[`scripts/dev/db/migrations`](../../scripts/dev/db/migrations). CI validates
 deterministic migration discovery and schema placement.
 
 ## Command Lifecycles

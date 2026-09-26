@@ -1,7 +1,7 @@
 # Bot Arena Simulation Tuning Sprint
 
 Status: supporting July design/task catalog, superseded as an execution order
-by [`WORK_PLAN.md`](./WORK_PLAN.md#work-board). The September
+by [`WORK_PLAN.md`](../WORK_PLAN.md#work-board). The September
 [implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md) records
 completed admission/onboarding, roster/policy binding, local three-policy
 reconciliation, and hosted score-v1 evidence. Do not read the original

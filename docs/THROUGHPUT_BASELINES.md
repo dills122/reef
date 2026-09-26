@@ -61,10 +61,10 @@ Allbenchmarkcontainersstoppedaftercleanup; paidDropletstillallocatedforongoingwo
 | H6 | August20 local isolated100,002-outcome drain, single maintainer |Completed within10.383s of container start; conservative>=9,631.32outcomes/s; final queues empty |Upstream stopped; local fixed backlog, not concurrent remote sustained capacity. |
 | H7 | August21, `do-benchmark-20260821T204347Z`, single maintainer5k/60s |299,959 exact canonical stage counts; zero canonical lag |September audit fails downstream drain check: lifecycle/market lastProcessed500/32. |
 
-Sources: [current status](CURRENT_STATUS.md), [July materializer evidence](PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md),
+Sources: [current status](CURRENT_STATUS.md), [July materializer evidence](archive/PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md),
 [projection gate ladder](PROJECTION_THROUGHPUT_SCALING_PLAN.md#7-expand-the-remote-gate-ladder),
-[local maintainer experiment](research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md),
-[September audit](IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
+[local maintainer experiment](archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md),
+[September audit](archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
 Original H1/H4/H5/H7 report JSON inspected September24; selected exact values,
 relative artifact paths and SHA256 recorded in the
 [artifact index](evidence/throughput-baseline-artifact-index-2026-09-24.json).
@@ -258,7 +258,7 @@ plan-node aggregates retained locally under `artifacts/sustained-10k-20260924/`.
 
 Next one-variable experiment: projection shared_buffers128MB→2GB, same0055 SQL,
 image, workers and300s5k workload. This follows the bounded memory experiment in
-[August20 system overview](research/PROJECTION_THROUGHPUT_SYSTEM_OVERVIEW_2026-08-20.md#gate-2-bounded-configuration-matrix).
+[August20 system overview](archive/research/PROJECTION_THROUGHPUT_SYSTEM_OVERVIEW_2026-08-20.md#gate-2-bounded-configuration-matrix).
 Host has32GB RAM; observe actual memory and latency. Initial launcher assertion
 wrongly expected no explicit shared_buffers argument; it failed before traffic.
 Corrected to replace exactly `shared_buffers=128MB`, leaving all other command

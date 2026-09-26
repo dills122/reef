@@ -187,7 +187,7 @@ Summary:
 - scenarios should be deterministic, versioned, and replayable.
 
 Primary references:
-- [`docs/SIMULATION_TRAFFIC_PLAN.md`](./SIMULATION_TRAFFIC_PLAN.md)
+- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-013: Operational UI Target Style
@@ -215,7 +215,7 @@ Summary:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/SIMULATION_TRAFFIC_PLAN.md`](./SIMULATION_TRAFFIC_PLAN.md)
+- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
 
 ### D-015: Engine vs Service Extraction Criteria
 
@@ -296,7 +296,7 @@ Summary:
 
 Primary references:
 - [`docs/steering/architecture.md`](./steering/architecture.md)
-- [`docs/SIMULATION_TRAFFIC_PLAN.md`](./SIMULATION_TRAFFIC_PLAN.md)
+- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
 
 ### D-021: Baseline Performance Envelope Targets
 
@@ -324,7 +324,7 @@ Summary:
 - cross-stage objectives (order path, boundary, and post-match stages) should be tracked and refined as architecture matures.
 
 Primary references:
-- [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
+- [`docs/archive/SLO_BASELINES.md`](./archive/SLO_BASELINES.md)
 - [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-023: Single-Instance Capacity Objective
@@ -338,7 +338,7 @@ Summary:
 - superseded for the bot-arena scaling track by D-035, which raises the active target to `7500-10000` completed commands/sec with no accepted-command accounting gaps.
 
 Primary references:
-- [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
+- [`docs/archive/SLO_BASELINES.md`](./archive/SLO_BASELINES.md)
 
 ### D-024: Event Durability and Distribution Pattern
 
@@ -433,7 +433,7 @@ Summary:
 Primary references:
 - [`docs/PROJECT_PITCH.md`](./archive/PROJECT_PITCH.md)
 - [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
-- [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
+- [`docs/archive/SIMULATOR_UPGRADE_BACKLOG.md`](./archive/SIMULATOR_UPGRADE_BACKLOG.md)
 
 ### D-030: Runtime Event Schema Baseline And Outbox Timing
 
@@ -593,7 +593,7 @@ Summary:
 
 Primary references:
 - [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`docs/archive/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./archive/DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
 ### D-039: Redpanda Stream-Ack Provider Comparison
@@ -881,7 +881,7 @@ Status: accepted
 Implementation note (2026-09-04): the decision summary below preserves the
 accepted direction at the time. Current delivery status is in
 [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
-and the [implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+and the [implementation audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Order/command authorization, durable scoped partitioning, TLS/mesh client modes,
 standard engine gRPC health and role-aware configuration checks have landed;
 the remaining work is narrower than the original future-tense summary.
@@ -902,7 +902,7 @@ Primary references:
 - [`docs/INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
-- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 
 ### D-050: Settlement Instant-Post-Trade Profile
 
@@ -952,9 +952,9 @@ Summary:
 - PR feedback must classify failures as user-fixable or maintainer/platform-fixable. Platform failures should comment on the PR and tag the configured maintainer group.
 
 Primary references:
-- [`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 
 ### D-052: Bot Arena Admin UI And Public Leaderboard Surface
@@ -970,8 +970,8 @@ Summary:
 - The admin-only area reuses the existing GitHub OAuth session flow and `AdminIdentityService` role/trust-state model from D-051 for gating. It starts scoped to a single operator but uses the existing role model so access can expand without a new auth mechanism.
 
 Primary references:
-- [`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
-- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - [`docs/steering/astro.md`](./steering/astro.md)
 
@@ -1009,7 +1009,7 @@ Summary:
 - the matching-engine artifact and Reef canonical behavior are identical
   between Reef-only and Arena-enabled profiles for the same commit.
 - the separation sprint was implemented and promoted on 2026-07-19; see
-  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
   Invite-only fork admission implementation may proceed subject to its own
   release gates.
 - D-053 supersedes the parts of D-046 and D-052 that assumed Arena registry or
@@ -1018,7 +1018,7 @@ Summary:
   remains accepted.
 
 Primary references:
-- [`docs/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+- [`docs/archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 - [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md#product-boundary)
 - [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 - [`docs/steering/architecture.md`](./steering/architecture.md)
