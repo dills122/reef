@@ -18,6 +18,16 @@ Date: 2026-09-26. This is pilot operating evidence, not a standing review policy
   limit is the separate spend control. The 45-minute job timeout leaves time
   for OCR's default 15-minute task timeout (30 minutes at medium effort) and
   comment posting; it does not guarantee a large PR finishes.
+- A completed review records its head in the sticky summary. On a later push,
+  `checkpoint_range` reviews only changes since that head. Missing or untrusted
+  checkpoints, configuration or base changes, and non-ancestor force-pushes
+  cause a full review. Reopening or marking a PR ready also requests a full
+  review. Inline comments remain; the sticky summary describes only the latest
+  reviewed range.
+  The first run after enabling checkpoints must review the full PR to establish
+  its marker. A narrowed review can miss interactions with unchanged PR files,
+  so request a full review when that context matters. GitHub users with write
+  permission can edit the summary marker and are trusted by this mechanism.
 - The pinned Action prints its OCR JSON result and stderr into the Actions log
   even when `upload_artifacts` is false. Use PRs whose code and review output
   are acceptable in the repository's workflow logs.
@@ -46,14 +56,24 @@ reviewed 2 files, used 12,156 tokens, and posted no findings;
 reviewed 6 files, used 49,082 tokens, and posted 6 findings. Finding accuracy
 and billed cost have not been established from those logs.
 
+PR #372 produced six completed OCR runs on 2026-09-26: one when `ocr-pilot` was
+added, then five after successive pushes. Each run reviewed the full selected
+PR diff (7 files initially, then 9 after service tests were included), although
+the five pushes changed only 1–4 files each. Together the runs reported 855,104
+input tokens (598,784 cache reads) and 19,871 output tokens. At the
+[published GPT-5.4 mini rates](https://openrouter.ai/openai/gpt-5.4-mini),
+that implies roughly $0.33 at the listed standard rates; the OCR logs do not
+contain the billed amount. This repeated work motivates cross-push checkpoints.
+The 500,000-token budget applies to each run, not to the PR across runs.
+
 ## Deferred until more reviews
 
 - Keep `openai/gpt-5.4-mini` and `effort: medium`: the two runs completed, but
   their findings still need human validation before changing quality settings.
-- Keep full-range review on PR updates. `incremental: 'true'` avoids duplicate
-  inline comments, but does not avoid model work. OCR supports
-  `checkpoint_range` for narrower cross-push reviews; enable it only after
-  checking that full-range findings and repeat-push cost justify that tradeoff.
+- Keep `incremental: 'true'` to avoid duplicate inline comments. It does not
+  reduce model work; `checkpoint_range` now narrows later push reviews after a
+  complete, trusted run. Check its `range_summary` in the workflow log and use
+  `full_review: 'true'` temporarily when a full reread is needed.
 - Do not add project `rules` yet. A project rule takes precedence over OCR's
   built-in language rule for matching files; targeted prompts need their own
   quality check before replacing that baseline.

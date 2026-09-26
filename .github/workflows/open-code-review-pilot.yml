@@ -36,5 +36,7 @@ jobs:
           # OCR's token budget is checked between rounds, so bound in-flight groups.
           review_concurrency: '2'
           max_tokens_budget: '500000'
+          sticky_summary: 'true'
           incremental: 'true'
+          checkpoint_range: 'true'
           upload_artifacts: 'false'
