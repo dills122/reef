@@ -446,7 +446,7 @@ provider-neutral status/diagnostics, client-order cancel resolution, durable
 handoff/crash checks and the hosted `10k` materializer baseline have landed.
 In particular, `ModifyOrder` is no longer deferred from the supported path.
 Current remaining work is scoped in [`WORK_PLAN.md`](./WORK_PLAN.md#work-board)
-and the [implementation audit](./IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+and the [implementation audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 
 ### Now
 

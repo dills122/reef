@@ -494,8 +494,8 @@ End-to-end ownership rules:
 
 ## Source Anchors
 
-- Current status: [`CURRENT_STATUS.md`](./CURRENT_STATUS.md)
-- Active work plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
-- Decisions: [`DECISIONS.md`](./DECISIONS.md), especially D-036 through D-043
-- Local commands: [`DEV_ENV.md`](./DEV_ENV.md)
-- Throughput evidence: [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- Current status: [`CURRENT_STATUS.md`](../CURRENT_STATUS.md)
+- Active work plan: [`WORK_PLAN.md`](../WORK_PLAN.md)
+- Decisions: [`DECISIONS.md`](../DECISIONS.md), especially D-036 through D-043
+- Local commands: [`DEV_ENV.md`](../DEV_ENV.md)
+- Throughput evidence: [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)

@@ -30,7 +30,7 @@ Detailed artifacts:
 - decision-ready research spike:
   [`PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md)
 - historical and current scaling record:
-  [`../PROJECTION_THROUGHPUT_SCALING_PLAN.md`](../PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+  [`../PROJECTION_THROUGHPUT_SCALING_PLAN.md`](../../PROJECTION_THROUGHPUT_SCALING_PLAN.md)
 
 Implemented Gate 0 plan items:
 

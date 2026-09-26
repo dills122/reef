@@ -110,7 +110,7 @@ secrets or allowing an unreviewed submission to mutate hosted state. Full task
 ordering and acceptance criteria live in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
 Implementation proceeded after the product/artifact boundary in
-[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 was promoted. Admission, immutable roster/run binding, and policy-lock code is
 now implemented, and external-account admission/onboarding is complete. The
 remaining release work is the recorded-game and hosted evidence campaign.
@@ -149,7 +149,7 @@ codes, emergency-removal rules, and evidence envelope.
 
 ### Required For Invite-Only Fork Preview
 
-- Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
+- Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
 - the hosted backbone is rehearsed with the Arena-enabled image, Arena routes
   and storage readiness pass, and rollback to the last known-good Arena image is documented
 - branch protection requires `registry-diff-and-provision`; ordinary PRs receive a successful no-op result, while bot submissions remain pending until trusted admission/provisioning completes

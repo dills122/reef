@@ -8,9 +8,9 @@ verified through the completed external-account Noodle admission/onboarding
 test and July 22-23 fixes. Recorded-game requirements remain separate;
 open/self-service intake remains later.
 Track implementation in
-[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
+[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 and the release gates in
-[`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md).
+[`BOT_ARENA_RELEASE_READINESS.md`](../BOT_ARENA_RELEASE_READINESS.md).
 
 ## Purpose
 
@@ -508,7 +508,7 @@ admission, maintainer approval is SHA-bound, and only the trusted base-branch
 workflow can provision. Do not grant hosted credentials or OIDC permission to
 the workflow that executes submitted code. Initial onboarding is complete;
 remaining run-window/game evidence is tracked separately. Admission and run cutoffs are defined in
-[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
+[`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](../BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
 
 ### Existing Bot Update
 
@@ -818,5 +818,5 @@ and relevant object ids. Audit records must not contain secret values.
   owner-scoped `/bot-admin` surface and included in completed onboarding.
 - ~~Complete initial external-account admission/onboarding.~~ Done through
   Noodle smoke #307 and fixes #308/#310/#311/#313/#315/#316; see the
-  [completion record](./BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion).
+  [completion record](../BOT_ARENA_RELEASE_READINESS.md#admission-and-onboarding-completion).
   Remaining hosted run-eligibility/game evidence stays in the preview sprint.

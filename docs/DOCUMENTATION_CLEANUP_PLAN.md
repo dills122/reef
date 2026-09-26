@@ -1,88 +1,33 @@
-# Documentation Cleanup Plan
+# Documentation lifecycle
 
-## Purpose
+This is policy for keeping the active reading path small while preserving
+history. Start at [the documentation map](README.md).
 
-Keep current planning easy to scan while preserving historical evidence. Reef
-has valuable benchmark reports, sprint plans, audits, and design notes, but
-active work should not require reading every historical document.
+## Ownership
 
-## Document Classes
+| Kind | Owner | Rule |
+| --- | --- | --- |
+| Developer setup and accepted local configuration | `ONBOARDING.md`, `LOCAL_CONFIGURATION.md`, `.env.example`, Make/Compose/scripts | Update instructions with command or setup changes; verify against executable config. |
+| AI entry and repository rules | `AGENTS.md`, `AI_CONTEXT.md`, relevant steering | Keep first reads task-specific; point to owner docs instead of copying reports. |
+| Current execution | `WORK_PLAN.md` | One work board. Date every reconciliation; no parallel checklist becomes authoritative. |
+| Accepted decisions and contracts | `DECISIONS.md`, steering, `contracts/`, boundary docs | Preserve decisions and amendment/supersession links. |
+| Throughput evidence | `THROUGHPUT_BASELINES.md`, original artifacts, `PERFORMANCE_LEARNINGS.md` | Keep successful and failed attempts, exact stage/scope, and explicit corrections. |
+| Dated plans, audits, run reports, handoffs | `archive/` or temporary `.planning/` / `docs/work/` | Never infer unfinished work from an old checklist. Promote live tasking into `WORK_PLAN.md` before archiving. |
 
-### Active Operating Docs
+## Promotion and archive rules
 
-These shape current work:
+- A new active document names its owner, scope, and last verification date.
+  Entry indexes link it only when routine work needs it.
+- A completed or superseded plan moves to `archive/` with links repaired and
+  an archive-index entry. Preserve its original claims and failed results.
+- Before moving a document, check active links and extract any still-live
+  contract or task into its owner document. Do not delete benchmark, decision,
+  security, or replay evidence.
+- Dated status reports say what was checked and what was not. A new branch,
+  test result, or hosted observation needs a new dated correction; do not
+  silently revise history.
+- Documentation review checks relative links, setup commands against Make and
+  scripts, and any current claim against source, tests, and recorded evidence.
 
-- `CURRENT_STATUS.md`
-- `WORK_PLAN.md`
-- `BOT_ARENA_RELEASE_READINESS.md` while external bot intake is an active release goal
-- `BOT_ARENA_INVITE_PREVIEW_SPRINT.md` while the invite-only fork preview is active
-- `REEF_BOT_ARENA_SEPARATION_PROMOTION.md` as the current separation evidence;
-  `REEF_BOT_ARENA_SEPARATION_SPRINT.md` is an implemented design record
-- `DECISIONS.md`
-- steering docs under `docs/steering/`
-- current contract and boundary docs
-- current sprint/tasking docs linked from `WORK_PLAN.md`
-
-Rule: if a doc is active, `CURRENT_STATUS.md` or `WORK_PLAN.md` should say why.
-
-### Evidence Docs
-
-These prove or explain a claim:
-
-- benchmark reports
-- crash-gate reports
-- scenario assertion reports
-- dated hardening/audit results
-- migration inventories
-
-Rule: keep them near the active topic while they are frequently cited. Move
-them under `docs/archive/` once they are superseded and only needed as history.
-
-### Historical Planning Docs
-
-These describe past plans or superseded approaches:
-
-- old sprint plans
-- pre-D-041 throughput plans
-- obsolete baseline reports
-- design investigations that no longer drive current work
-
-Rule: move to `docs/archive/` and leave a short note in the archive index.
-
-## Cleanup Rules
-
-- Do not delete decision records, benchmark evidence, or security reports.
-- Prefer moving stale planning docs to `docs/archive/` over rewriting history.
-- Update links when a moved doc is still referenced by active docs.
-- Keep one active execution ladder in `WORK_PLAN.md`.
-- Keep `CURRENT_STATUS.md` short enough to orient work, not repeat every report.
-- Mark historical scope directly in old docs when moving them would break too
-  many links in one change.
-
-## Near-Term Cleanup Queue
-
-1. Moved in the 2026-07 cleanup pass:
-   - `ARCHITECTURE_THROUGHPUT_PLAN.md`
-   - `ARCHITECTURE_THROUGHPUT_TRACKER.md`
-   - `STREAM_ACK_ARCHITECTURE_PLAN.md`
-   - `THROUGHPUT_SCALING_WORK_PLAN.md`
-   - `SPRINT_CRITICAL_QUALITY_HARDENING.md`
-2. Move old sprint/baseline docs after any still-active tasking is extracted:
-   - dated Bot Arena and benchmark baselines that are no longer active gates
-3. Split Bot Arena docs into active product work versus historical evidence.
-4. Lifecycle V1 has landed. Keep its sprint doc active only for remaining
-   scenario evidence and bounded operator hardening; archive after that active
-   tasking moves to a successor, preserving the implementation record.
-
-September 4 alignment: `WORK_PLAN.md#work-board` is the repository status view;
-the dated implementation audit supplies evidence. Public status/Arena pages,
-auth/provisioning, throughput handoff, intake rollout and supplemental backlogs
-must defer to those current statuses. Preserve dated reports and accepted ADR
-history; use supersession notes instead of rewriting historical results.
-
-## Acceptance For A Cleanup PR
-
-- active docs still link cleanly
-- moved docs are listed in `docs/archive/README.md`
-- `WORK_PLAN.md` remains the active execution source
-- no benchmark, decision, or security evidence is deleted
+The prior cleanup queue is preserved as the
+[September 4 cleanup plan](archive/DOCUMENTATION_CLEANUP_PLAN_2026-09-04.md).

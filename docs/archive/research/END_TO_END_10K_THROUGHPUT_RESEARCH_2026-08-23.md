@@ -737,12 +737,12 @@ full end-to-end `10k/s` claim.
 
 Architecture, policy, and decisions:
 
-- [`REEF_PROJECT_OVERVIEW.md`](../../REEF_PROJECT_OVERVIEW.md)
-- [`REEF_TECHNICAL_DESIGN.md`](../../REEF_TECHNICAL_DESIGN.md)
-- [`docs/steering/architecture.md`](../steering/architecture.md)
-- [`docs/PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md)
-- [`docs/DECISIONS.md`](../DECISIONS.md)
-- [`docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md`](../PROJECTION_THROUGHPUT_SCALING_PLAN.md)
+- [`REEF_PROJECT_OVERVIEW.md`](../../../REEF_PROJECT_OVERVIEW.md)
+- [`REEF_TECHNICAL_DESIGN.md`](../../../REEF_TECHNICAL_DESIGN.md)
+- [`docs/steering/architecture.md`](../../steering/architecture.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](../../PERFORMANCE_LEARNINGS.md)
+- [`docs/DECISIONS.md`](../../DECISIONS.md)
+- [`docs/PROJECTION_THROUGHPUT_SCALING_PLAN.md`](../../PROJECTION_THROUGHPUT_SCALING_PLAN.md)
 
 Current projection dossiers:
 

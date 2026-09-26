@@ -40,7 +40,7 @@ Provide explicit baseline service-level objectives for early-stage architecture 
 Purpose:
 - establish an explicit scaling target for one runtime + one engine instance before horizontal scaling.
 
-Historical note: the tiered near/mid/stretch ladder below predates the durable-ingress and no-DB throughput work in [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md). Measured evidence there already sustains ~10,000 req/s materialized (durable canonical persistence, e.g. the July 4 venue-event batch materializer checkpoint and the July 6 stream-ack no-DB retention checkpoint) and ~15,000 req/s on the no-DB front-door/engine path (Netty hot-path accepted-async checkpoint), both well past the old "stretch" tier. The ladder is kept as historical scaling context, not a current target; use the planning anchor below for the live target.
+Historical note: the tiered near/mid/stretch ladder below predates the durable-ingress and no-DB throughput work in [`PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md). Measured evidence there already sustains ~10,000 req/s materialized (durable canonical persistence, e.g. the July 4 venue-event batch materializer checkpoint and the July 6 stream-ack no-DB retention checkpoint) and ~15,000 req/s on the no-DB front-door/engine path (Netty hot-path accepted-async checkpoint), both well past the old "stretch" tier. The ladder is kept as historical scaling context, not a current target; use the planning anchor below for the live target.
 
 Targets (historical, superseded — see note above):
 
