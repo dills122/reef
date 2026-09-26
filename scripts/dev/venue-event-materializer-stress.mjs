@@ -60,7 +60,7 @@ setDefault("VENUE_EVENT_MATERIALIZER_GROUP_ID", "reef-venue-event-materializer-s
 setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "1000");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
-setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer", "venue-event-materializer-scaled"]));
+setValue("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer", "venue-event-materializer-scaled"]));
 
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
 setDefault("DEV_STRESS_RUN_PROFILE", "materializer-soak");

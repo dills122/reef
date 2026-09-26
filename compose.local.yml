@@ -129,6 +129,7 @@ services:
     image: postgres:16-alpine
     container_name: reef-postmatch-postgres
     profiles: ["postmatch"]
+    command: ["postgres", "-c", "shared_preload_libraries=${REEF_POSTMATCH_PG_SHARED_PRELOAD_LIBRARIES:-}"]
     environment:
       POSTGRES_DB: reef
       POSTGRES_USER: reef
