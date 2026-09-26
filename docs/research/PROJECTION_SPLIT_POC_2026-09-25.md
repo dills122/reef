@@ -1,6 +1,6 @@
 # Projection split POC — 2026-09-25
 
-Status: disposable experiment; no production rollout or throughput claim.
+Status: disposable experiment complete; no production rollout or throughput qualification.
 
 ## Decision question
 
@@ -35,8 +35,25 @@ Trial changes worker scheduling and stage identities. Unless the hosted control 
 - After the corrected run, all 16 status and timeline partition frontiers matched with zero lag. Four owners reported status/timeline counts of 1,568/1,568, 1,458/1,458, 1,463/1,463 and 1,509/1,509. Source canonical outcomes contained 5,998 commands. Rollback-only full business reference passed: lifecycle 4,963 incremental/reference rows, market 64/64; zero missing or extra in both. The first reference attempt refused active runtime clients; after quiescing only isolated app containers, the identical rollback query passed. All raw files, generated overlay, logs, stage vector and reference are in local `artifacts/projection-split-poc-20260925/local-100rps-60s/` (gitignored by repository policy). Completed claim rows can expire on the retry horizon, so their later sum is not the processed count.
 - Isolated `reef_split_poc` Compose project and volumes were removed after evidence capture. Pre-existing primary/projection PostgreSQL containers and volumes were left untouched.
 
-## Hosted gate and inference
+## Hosted matched run — September 26 UTC
 
-The DigitalOcean harness was inspected and the split flag wired through remote startup. `plan-goal` resolved a c-16 diagnostic setup at 2,500/s for 60s, but the host state had no active outputs and its discovered SSH CIDR was `127.0.0.1/32`. A public-IP lookup through `api.ipify.org` was rejected by automatic approval review because that external service would receive this machine's public IP metadata. No indirect lookup or droplet provisioning was attempted. An approved SSH CIDR is required for a hosted run. No hosted result or matched control exists.
+The user approved the droplet and the direct public-IP lookup previously rejected by automatic review. The first c-32 create in `sfo2` failed with provider 422 (size unavailable); no resource was created there. One `nyc3` c-32/64 GB droplet then ran both arms. OpenTofu initially returned an empty public IPv4; a later provider refresh populated it. Node 22.22.1 and Bun 1.3.14 were pinned on the host. Both arms used source commit `ca029eb3`, the same runtime image `sha256:a8aea7fc59ffa7fde35f0b4abbb72ab53f6bc375233e286d58e0775df8124900`, matching image `sha256:48508e6dd6503a2fca5ae42bc0350bfd65fff3030a288c19bbacbdba828e3631`, spread fixture, six materializers, 16 one-partition projector owners, one lifecycle/market maintainer, 256 load workers, and 10,000 offered/s for 300 seconds. Fresh Compose volumes separated control and split arms. Generated overlay differences were only the intended split flag on extra services. Runtime configuration evidence was complete and stable within each arm, with the same host hash across arms.
 
-Local run proves narrow paired-stage correctness and a 100/s full-pipeline diagnostic on one machine. It does not establish improvement versus single-stage projection, 10k/s for 300s, C43 comparability, production readiness, cross-partition maker causality, or drain headroom. The split also reads canonical candidates independently in both stages and uses the same projection PostgreSQL instance; it can increase read and write contention at high load. Keep feature disabled outside this disposable experiment pending a matched hosted control/treatment and the qualification gate above.
+| Frozen full-pipeline measurement | Control, full stage | Split, timeline + status |
+| --- | ---: | ---: |
+| Offered / accepted / direct-acked / materialized | 2,999,499 each | 2,999,950 each |
+| HTTP p95 / p99 | 63.62 / 90.96ms | 78.50 / 110.24ms |
+| Status projected at projector snapshot | 2,999,499 | 2,996,698 |
+| Projector lag at its snapshot | 0 | 4,752 |
+| Materialized/projected gap at separately sampled snapshot | 0 | 3,252 |
+| Downstream cohort authority | Passed all 14 checks | Failed 6 checks |
+| Source-to-lifecycle / market p95 upper bounds | 28,433 / 31,909ms | Unavailable: cohort not authoritative |
+| Stress / frozen checker exit | 0 / 1 | 1 / 1 |
+
+The control checker failed sustained downstream freshness. Its first checker attempt also missed a diagnostics symlink; the original log was preserved, the symlink added, and the checker rerun with the pinned 10k gate settings. The final control checker fails only freshness. The split checker fails projected lag, materialized/projected gap, downstream cohort authority, and freshness. In the split arm, stage markers did not cover the frozen exclusive cohort and final dirty queues were not drained at that observation; no lifecycle or market latency estimate from that cohort is valid. The split arm also reported a later 16-owner direct status vector with 2,999,950 status and 2,999,950 timeline projections, matching partition frontiers, and zero lag. That later catchup does not change the frozen failure. Counts and lags in the table are separate collection snapshots, not one atomic database view.
+
+Both postdrain proofs passed contiguous source sequence and exact projection frontier checks. Control rollback-only reference matched 2,471,228 lifecycle rows and 64 market rows; split matched 2,471,664 lifecycle rows and 64 market rows. Projection WAL deltas at report collection were 17.20 GB control and 16.99 GB split, but split had outstanding work at its frozen snapshot, so these are not comparable completed-work costs. No CPU or I/O efficiency claim follows. The split did not improve sustained full-pipeline service or qualify at 10k/s. Stop at this no-go; three drain-headroom trials were not run.
+
+Compact evidence and raw-file hashes: `docs/evidence/projection-split-hosted-2026-09-25.json`. Full local, gitignored raw evidence: `artifacts/projection-split-poc-20260925/hosted-control/` (123 files) and `artifacts/projection-split-poc-20260925/hosted-split/` (119 files). Every transferred file matched a droplet-generated SHA256 manifest. Droplet `603796383` and firewall `81438a37-ba07-401f-905a-240825924cbb` were destroyed; provider GET returned 404 for both and OpenTofu had no outputs.
+
+Local and hosted runs support narrow stage correctness and eventual business parity. They do not support production rollout, strict in-load freshness, cross-partition maker causality, or drain headroom. This split reads canonical candidates in both stages on the same projection PostgreSQL instance; keep it disabled by default. Next work should follow the structural work-reduction option in the decision memo, with a new matched test before revisiting stage separation.

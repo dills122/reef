@@ -745,13 +745,17 @@ sync_repo() {
     --exclude ".env.local" \
     --exclude ".mcp.json" \
     --exclude ".serena/" \
+    --exclude ".claude/" \
+    --exclude ".git/" \
+    --exclude "artifacts/" \
+    --exclude "node_modules/" \
+    --exclude ".terraform/" \
     --exclude ".gradle/" \
     --exclude "build/" \
     --exclude "out/" \
     --exclude "bin/" \
     --exclude "coverage/" \
-    --exclude "reports/do-benchmark/" \
-    --exclude "infra/do-benchmark/.terraform/" \
+    --exclude "reports/" \
     --exclude "infra/do-benchmark/terraform.tfstate" \
     --exclude "infra/do-benchmark/terraform.tfstate.backup" \
     "$ROOT_DIR/" "$user@$host:$REMOTE_DIR/"

@@ -1231,6 +1231,42 @@ source-to-lifecycle p95 and source-to-market p95 upper bounds were 2,058ms and
 3,000ms. Rollback-only rebuild exactly matched 4,963 lifecycle and 64 market
 rows. Earlier local attempts failed on a reused source DB, a legacy replay
 helper, double-counted stage metrics, and multiple downstream callers; those
-failures and corrections are recorded in the POC note. No single-stage local
-control or hosted run was completed. These figures neither extend the C4/H4
+failures and corrections are recorded in the POC note. At that local checkpoint,
+no single-stage control or hosted run was completed; the hosted pair follows
+below. These figures neither extend the C4/H4
 full-projection baseline nor qualify sustained 10k/s.
+
+## Projection split POC — matched hosted 10k/300s, no-go
+
+September 26 UTC, one fresh `nyc3` c-32 droplet, source `ca029eb3`, pinned
+runtime/matching images, same 64-instrument spread fixture, six materializers,
+16 one-partition projector owners, one lifecycle/market maintainer, and 256
+load workers per arm. Fresh volumes separated full-stage control from paired
+timeline/status treatment; scheduled load was 10,000/s for 300s. Complete
+runtime configuration evidence had the same host hash and stable before/after
+fingerprints within each arm. See the [POC decision
+record](research/PROJECTION_SPLIT_POC_2026-09-25.md) and [compact evidence with
+raw report hashes](evidence/projection-split-hosted-2026-09-25.json).
+
+| Frozen stage snapshot | Full control | Split treatment |
+| --- | ---: | ---: |
+| Accepted/direct-acked/materialized | 2,999,499 | 2,999,950 |
+| HTTP p95/p99 | 63.62/90.96ms | 78.50/110.24ms |
+| Status projected at projector collection | 2,999,499 | 2,996,698 |
+| Projector lag at collection | 0 | 4,752 |
+| Downstream cohort authoritative | Yes | No |
+| Stress/checker exits | 0/1 | 1/1 |
+
+Control failed sustained lifecycle/market freshness (authoritative p95 upper
+bounds 28,433/31,909ms). Split failed projector lag, separately sampled
+materialized/projected gap of 3,252, and downstream cohort authority; its
+freshness percentiles are unavailable. A later direct vector and postdrain
+proved both split stage frontiers equal with zero lag. Rollback-only business
+rebuild exactly matched control 2,471,228 lifecycle/64 market rows and split
+2,471,664 lifecycle/64 market rows. Later equality does not qualify the timed
+run. Projection WAL snapshots were 17.20/16.99 GB, with split work still
+outstanding at its frozen checkpoint; do not infer savings. No stopped-source
+headroom trials were run after this no-go. All 123 control and 119 treatment
+raw files were SHA256-verified locally under `artifacts/projection-split-poc-20260925/`
+(gitignored). The droplet and firewall returned provider 404 after destruction;
+OpenTofu had no outputs.

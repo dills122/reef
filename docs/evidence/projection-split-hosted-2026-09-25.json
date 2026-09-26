@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "reef.projectionSplitHostedEvidence.v1",
+  "recordedAtUtc": "2026-09-26T03:57:35.834125+00:00",
+  "sourceCommit": "ca029eb37a196f0824e8955910a8d8fe4df1d1c1",
+  "fixtureSha256": "b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a",
+  "host": {
+    "provider": "DigitalOcean",
+    "region": "nyc3",
+    "size": "c-32",
+    "dropletId": "603796383",
+    "firewallId": "81438a37-ba07-401f-905a-240825924cbb",
+    "destroyed": true,
+    "providerDeleteStatus": 404
+  },
+  "load": {
+    "offeredPerSecond": 10000,
+    "durationSeconds": 300,
+    "loadWorkers": 256,
+    "materializers": 6,
+    "projectorOwners": 16
+  },
+  "measurementNote": "Frozen projector and source snapshots are collected at different instants; after-stress direct stage vectors and postdrain proof are later observations.",
+  "arms": {
+    "control": {
+      "artifactPath": "artifacts/projection-split-poc-20260925/hosted-control",
+      "reportSha256": "7ee8eec0a8b9982a9399d493e9b3672fe9e2ffb54fcfc163c4b95741ebf4cd5c",
+      "checkerSha256": "faf8c568a29b39ca08821bc2c24e1b1b3d63a1fdd589cb3589d52eff9682bcf9",
+      "stageVectorSha256": "675681385064b2e9683c74fa2ab708c53abc140f50cda1fc86a78e11ae207a8d",
+      "postdrainIntegritySha256": "7476eb3bbd69c465c52edee213183019fa34fa74fb4ecd65772ae21a4a98ed65",
+      "businessReferenceSha256": "963e60f8b7dff43a6ab0669828ead5eab768f3c488114214d608631517927877",
+      "evidenceManifestSha256": "8ec17f1123990fa69c2b30b6634e5dbd8c411914e4ea7ab2ea1388a981f0bbe1",
+      "offered": 2999499,
+      "accepted": 2999499,
+      "directAcked": 2999499,
+      "materialized": 2999499,
+      "httpP95Ms": 63.618919999999996,
+      "httpP99Ms": 90.956312,
+      "frozenStatusProjected": 2999499,
+      "frozenProjectionLag": 0,
+      "frozenMaterializedProjectedGap": 0,
+      "stressExit": 0,
+      "checkerExit": 1,
+      "cohortAuthoritative": true,
+      "cohortChecks": {
+        "databaseGenerationStable": true,
+        "completeCohortResidence": true,
+        "upstreamCohortAuthoritative": true,
+        "downstreamInstrumentationEnabled": true,
+        "coveringMarkersPresent": true,
+        "stageMarkerIdentityMatches": true,
+        "lifecycleMarkerCoversExclusiveCohort": true,
+        "marketDataMarkerCoversExclusiveCohort": true,
+        "finalQueuesDrained": true,
+        "postCommitObservationsComplete": true,
+        "callerTopologyVisibleAndIdle": true,
+        "clocksValid": true,
+        "diagnosticSamplerComplete": true,
+        "projectedCohortReconciled": true
+      },
+      "sourceToLifecycleP95Ms": 28433,
+      "sourceToMarketP95Ms": 31909,
+      "afterStressStatusProjected": 2999499,
+      "afterStressTimelineProjected": null,
+      "afterStressFrontiersEqual": null,
+      "postdrain": {
+        "countsPass": true,
+        "uniqueContiguousPass": true,
+        "projectionFrontierPass": true,
+        "timelineFrontierPass": true,
+        "queuesEmpty": true
+      },
+      "businessReferencePass": true,
+      "businessRows": [
+        {
+          "stage": "lifecycle",
+          "incrementalRows": "2471228",
+          "referenceRows": "2471228",
+          "pass": true
+        },
+        {
+          "stage": "market",
+          "incrementalRows": "64",
+          "referenceRows": "64",
+          "pass": true
+        }
+      ],
+      "projectionWalBytesAtReportSnapshot": 17197577590,
+      "hostHash": "45b13dbbb3a8dc2d5897ef731921dd712909d86437483ba3f245105df27fe712",
+      "runtimeImageSha256": "sha256:a8aea7fc59ffa7fde35f0b4abbb72ab53f6bc375233e286d58e0775df8124900",
+      "matchingImageSha256": "sha256:48508e6dd6503a2fca5ae42bc0350bfd65fff3030a288c19bbacbdba828e3631"
+    },
+    "split": {
+      "artifactPath": "artifacts/projection-split-poc-20260925/hosted-split",
+      "reportSha256": "3ec623d32f83b313af49587b9e24a9a11a4ac3c5c155d5d51f4875efaef25c02",
+      "checkerSha256": "1b8775674ecd5913979985cbdf8ed667ce7db50662d7ef8c929a167cc9312ed5",
+      "stageVectorSha256": "c9f4fe84e995d901f50af86f299291b86920a6d3a0fc0adc8c1a4db332a77da9",
+      "postdrainIntegritySha256": "b54d96ce62a204dee0d5be74cc8092b6b173fdd81a7e7777b73c24a6e2af3bdd",
+      "businessReferenceSha256": "52f9a77b2696b86dc3389ce102f618d9d50e67e9edd27afc5fe7436db6befc0c",
+      "evidenceManifestSha256": "b5ee845140ccf57c63688c7bfe8000f7f996d02cf8c4b76e0a3b9bd2b795c1d7",
+      "offered": 2999950,
+      "accepted": 2999950,
+      "directAcked": 2999950,
+      "materialized": 2999950,
+      "httpP95Ms": 78.503184,
+      "httpP99Ms": 110.23925,
+      "frozenStatusProjected": 2996698,
+      "frozenProjectionLag": 4752,
+      "frozenMaterializedProjectedGap": 3252,
+      "stressExit": 1,
+      "checkerExit": 1,
+      "cohortAuthoritative": false,
+      "cohortChecks": {
+        "databaseGenerationStable": true,
+        "completeCohortResidence": false,
+        "upstreamCohortAuthoritative": true,
+        "downstreamInstrumentationEnabled": true,
+        "coveringMarkersPresent": true,
+        "stageMarkerIdentityMatches": false,
+        "lifecycleMarkerCoversExclusiveCohort": false,
+        "marketDataMarkerCoversExclusiveCohort": false,
+        "finalQueuesDrained": false,
+        "postCommitObservationsComplete": true,
+        "callerTopologyVisibleAndIdle": true,
+        "clocksValid": true,
+        "diagnosticSamplerComplete": true,
+        "projectedCohortReconciled": false
+      },
+      "sourceToLifecycleP95Ms": null,
+      "sourceToMarketP95Ms": null,
+      "afterStressStatusProjected": 2999950,
+      "afterStressTimelineProjected": 2999950,
+      "afterStressFrontiersEqual": true,
+      "postdrain": {
+        "countsPass": true,
+        "uniqueContiguousPass": true,
+        "projectionFrontierPass": true,
+        "timelineFrontierPass": true,
+        "queuesEmpty": true
+      },
+      "businessReferencePass": true,
+      "businessRows": [
+        {
+          "stage": "lifecycle",
+          "incrementalRows": "2471664",
+          "referenceRows": "2471664",
+          "pass": true
+        },
+        {
+          "stage": "market",
+          "incrementalRows": "64",
+          "referenceRows": "64",
+          "pass": true
+        }
+      ],
+      "projectionWalBytesAtReportSnapshot": 16992011366,
+      "hostHash": "45b13dbbb3a8dc2d5897ef731921dd712909d86437483ba3f245105df27fe712",
+      "runtimeImageSha256": "sha256:a8aea7fc59ffa7fde35f0b4abbb72ab53f6bc375233e286d58e0775df8124900",
+      "matchingImageSha256": "sha256:48508e6dd6503a2fca5ae42bc0350bfd65fff3030a288c19bbacbdba828e3631"
+    }
+  }
+}
