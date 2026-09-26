@@ -62,6 +62,14 @@ function configureComposeProfiles(context) {
 
 async function startPostgres(context) {
   const services = ["postgres", "boundary-postgres", "projection-postgres"];
+  const selectedProfiles = (context.processEnv.COMPOSE_PROFILES ?? "")
+    .split(",")
+    .map((profile) => profile.trim())
+    .filter(Boolean);
+  if (composeFiles(context.processEnv).includes("compose.local.yml") &&
+      selectedProfiles.includes("postmatch")) {
+    services.push("postmatch-postgres");
+  }
   if (composeFiles(context.processEnv).includes("compose.arena.yml")) {
     services.push("arena-postgres");
   }
