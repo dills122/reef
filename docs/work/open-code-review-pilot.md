@@ -56,15 +56,27 @@ reviewed 2 files, used 12,156 tokens, and posted no findings;
 reviewed 6 files, used 49,082 tokens, and posted 6 findings. Finding accuracy
 and billed cost have not been established from those logs.
 
-PR #372 produced six completed OCR runs on 2026-09-26: one when `ocr-pilot` was
-added, then five after successive pushes. Each run reviewed the full selected
-PR diff (7 files initially, then 9 after service tests were included), although
-the five pushes changed only 1–4 files each. Together the runs reported 855,104
-input tokens (598,784 cache reads) and 19,871 output tokens. At the
+PR #372 produced seven completed OCR runs on 2026-09-26: one when `ocr-pilot`
+was added, then six after successive pushes. Each run reviewed the full selected
+PR diff (7 files initially, then 9 after service tests were included). Five
+pushes changed only 1–4 files each; the sixth brought newer master and OCR
+configuration into the branch. Together the runs reported 1,040,995 input
+tokens (754,432 cache reads) and 24,190 output tokens. At the
 [published GPT-5.4 mini rates](https://openrouter.ai/openai/gpt-5.4-mini),
-that implies roughly $0.33 at the listed standard rates; the OCR logs do not
-contain the billed amount. This repeated work motivates cross-push checkpoints.
+that implies roughly $0.38 at the listed standard rates; the OCR logs do not
+contain the billed amount. Ordinary small pushes motivate cross-push checkpoints;
+a base or OCR configuration change still forces a full review.
 The 500,000-token budget applies to each run, not to the PR across runs.
+
+| PR #372 run | Selected files | Estimated cents at listed standard rates |
+| --- | ---: | ---: |
+| [1](https://github.com/dills122/reef/actions/runs/36255449043) | 7 | 5.25 |
+| [2](https://github.com/dills122/reef/actions/runs/36255618439) | 7 | 4.28 |
+| [3](https://github.com/dills122/reef/actions/runs/36256363718) | 7 | 6.40 |
+| [4](https://github.com/dills122/reef/actions/runs/36256598943) | 7 | 4.30 |
+| [5](https://github.com/dills122/reef/actions/runs/36256716063) | 9 | 7.75 |
+| [6](https://github.com/dills122/reef/actions/runs/36256868197) | 9 | 4.68 |
+| [7](https://github.com/dills122/reef/actions/runs/36257383780) | 9 | 5.38 |
 
 ## Deferred until more reviews
 
