@@ -68,6 +68,16 @@ class PostMatchOperationalStoreIntegrationTest {
             assertFailsWith<IllegalArgumentException> {
                 reader.readVerifiedWindow("test-live", stream, 0, "test-generation", sequence - 1, sequence + 1)
             }
+            dataSource.connection.use { connection ->
+                connection.prepareStatement("DELETE FROM runtime.canonical_venue_event_batches WHERE event_stream = ? AND batch_id = ?").use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, batchId)
+                    statement.executeUpdate()
+                }
+            }
+            assertFailsWith<IllegalStateException> {
+                reader.readVerifiedWindow("test-live", stream, 0, "test-generation", sequence - 1, sequence)
+            }
         } finally {
             dataSource.connection.use { connection ->
                 connection.prepareStatement("DELETE FROM runtime.canonical_command_outcomes WHERE command_id = ?").use { statement ->

@@ -1,6 +1,7 @@
 package com.reef.platform.application.postmatch
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -31,7 +32,10 @@ class VerifiedCanonicalSourceWindow internal constructor(
 class CanonicalSourceCoverageVerifier(
     private val decoder: CanonicalEffectDecoder = CanonicalEffectDecoder()
 ) {
-    private val mapper = JsonMapper.builder().build()
+    private val mapper = JsonMapper.builder()
+        .enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY)
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+        .build()
 
     fun verify(
         consumerName: String,
@@ -68,7 +72,11 @@ class CanonicalSourceCoverageVerifier(
             }
             require(source.streamSequence == expectedSequence) { "source coverage has a gap or duplicate" }
             val effects = decoder.decode(source)
-            val canonicalResult = canonicalJson(mapper.readTree(source.resultPayloadJson))
+            val canonicalResult = try {
+                canonicalJson(mapper.readTree(source.resultPayloadJson))
+            } catch (error: Exception) {
+                throw IllegalArgumentException("invalid canonical result JSON", error)
+            }
             val resultDigest = hex(MessageDigest.getInstance("SHA-256").digest(canonicalResult.toByteArray(StandardCharsets.UTF_8)))
             listOf(
                 source.streamSequence.toString(), source.batchId, source.commandId,
@@ -88,6 +96,7 @@ class CanonicalSourceCoverageVerifier(
             "${mapper.writeValueAsString(key)}:${canonicalJson(value)}"
         }
         node.isArray -> node.joinToString(prefix = "[", postfix = "]") { canonicalJson(it) }
+        node.isNumber -> node.decimalValue().stripTrailingZeros().toPlainString()
         else -> mapper.writeValueAsString(node)
     }
 

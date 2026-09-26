@@ -47,6 +47,20 @@ class CanonicalSourceCoverageVerifierTest {
         }
     }
 
+    @Test
+    fun normalizesExactNumbersAndRejectsDuplicateJsonKeys() {
+        val first = outcome(1, """{"effectVersion":1,"measure":9007199254740993.00,"rejected":{"eventId":"r1","orderId":"o1","code":"R","reason":"bad","occurredAt":"t"}}""")
+        val equivalent = first.copy(resultPayloadJson = """{"rejected":{"occurredAt":"t","reason":"bad","code":"R","orderId":"o1","eventId":"r1"},"measure":9007199254740993e0,"effectVersion":1}""")
+        val a = verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(first))
+        val b = verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(equivalent))
+        assertEquals(a.outcomes.single().resultDigest, b.outcomes.single().resultDigest)
+
+        val duplicate = first.copy(resultPayloadJson = first.resultPayloadJson.replace("\"measure\":", "\"measure\":1,\"measure\":"))
+        assertFailsWith<IllegalArgumentException> {
+            verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(duplicate))
+        }
+    }
+
     private fun outcome(sequence: Long, result: String, status: String = "rejected") = CanonicalOutcomeSource(
         eventStream = "venue-commands",
         partitionId = 0,

@@ -26,9 +26,10 @@ class PostgresCanonicalOutcomeSourceReader(
                 SELECT outcome.event_stream, outcome.partition_id, outcome.stream_sequence,
                        outcome.batch_id, outcome.command_id, outcome.command_type,
                        outcome.payload_hash, outcome.instrument_id, outcome.order_id,
-                       outcome.result_status, outcome.result_payload::text
+                       outcome.result_status, outcome.result_payload::text,
+                       batch.batch_id IS NOT NULL AS has_retained_batch
                 FROM runtime.canonical_command_outcomes outcome
-                JOIN runtime.canonical_venue_event_batches batch
+                LEFT JOIN runtime.canonical_venue_event_batches batch
                   ON batch.event_stream = outcome.event_stream
                  AND batch.batch_id = outcome.batch_id
                  AND batch.partition_id = outcome.partition_id
@@ -45,6 +46,9 @@ class PostgresCanonicalOutcomeSourceReader(
                 statement.executeQuery().use { rows ->
                     buildList {
                         while (rows.next()) {
+                            check(rows.getBoolean(12)) {
+                                "canonical outcome has no matching retained batch membership"
+                            }
                             add(CanonicalOutcomeSource(
                                 eventStream = rows.getString(1), partitionId = rows.getInt(2),
                                 streamSequence = rows.getLong(3), batchId = rows.getString(4),
