@@ -1,5 +1,15 @@
 # Reef Work Plan
 
+## September 26 priority update
+
+User-directed priority: build the [post-match rearchitecture](work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md)
+before further throughput micro-tuning or unrelated venue feature expansion.
+Land the event-ID and dirty-queue safety fixes, then implement ordered
+canonical-effect consumers for live trading, audit/history, and bounded
+settlement. The September 4 execution ladder below remains its dated snapshot;
+track new implementation and promotion evidence through this plan, the linked
+work packet, and the throughput ledger.
+
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents

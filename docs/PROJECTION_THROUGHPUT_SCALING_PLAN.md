@@ -1,5 +1,9 @@
 # Projection Throughput Scaling Plan
 
+September 26 execution direction: [build the post-match architecture](work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md)
+as a cohesive change. The historical diagnostics and gates below remain
+evidence; small SQL/index percentage changes are no longer the delivery loop.
+
 ## Purpose
 
 Record the July 2026 DigitalOcean projection bottleneck evidence and define the
@@ -90,6 +94,11 @@ was only 9,892.24/s with 26,029 lag; the frozen gate still failed. Retain this
 as index-write cleanup only. The next throughput slice must change the larger
 normalized projection row/index write shape, not remove another index on the
 assumption that unused scans imply a capacity gain.
+
+The [September 26 post-match architecture review](research/POST_MATCH_PROJECTION_ARCHITECTURE_REVIEW_2026-09-26.md)
+cross-checks the proposed incremental lifecycle and settlement paths against
+current source, C28–C43 evidence, and external implementation contracts. It is
+research guidance, not a new capacity result or approved architecture change.
 
 ## Retry-Safe Projection Batch Authority
 
