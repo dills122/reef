@@ -135,7 +135,25 @@ test("devUp starts isolated post-match storage only with its profile", async () 
   });
 
   assert.equal(processEnv.COMPOSE_PROFILES, "postmatch");
-  assert.deepEqual(calls[0][1].slice(-4), [...databaseServices, "postmatch-postgres"]);
+  assert.deepEqual(calls[0], [
+    "docker",
+    [...compose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices, "postmatch-postgres"],
+  ]);
+});
+
+test("devUp recognizes post-match alongside other Compose profiles", async () => {
+  const calls = [];
+  await devUp({
+    env: envFrom({ JS_RUNTIME: "node", DEV_COMPOSE_PROFILES: "redis, postmatch" }),
+    processEnv: {},
+    log: () => {},
+    run: async (cmd, args) => calls.push([cmd, args]),
+  });
+
+  assert.deepEqual(calls[0], [
+    "docker",
+    [...compose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices, "postmatch-postgres"],
+  ]);
 });
 
 function envFrom(values) {
