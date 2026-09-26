@@ -106,14 +106,21 @@ async function main() {
       const columns = "partition_id, stream_sequence, batch_id, command_id";
       report.sourceMembership = await hashMembership("postgres", `SELECT ${columns}, payload_hash
         FROM runtime.canonical_command_outcomes WHERE event_stream = ${quoted} AND partition_id IN (${ids})
-        ORDER BY partition_id, stream_sequence`);
+        ORDER BY partition_id, stream_sequence, batch_id, command_id, payload_hash`);
       report.liveMembership = await hashMembership("postmatch-postgres", `SELECT ${columns}, command_payload_hash
         FROM postmatch.consumer_outcome_receipts WHERE consumer_name = 'live-v1' AND event_stream = ${quoted}
         AND source_generation = ${sqlLiteral(report.generation)} AND partition_id IN (${ids})
-        ORDER BY partition_id, stream_sequence`);
+        ORDER BY partition_id, stream_sequence, batch_id, command_id, command_payload_hash`);
+      report.sourceMembershipAfter = await hashMembership("postgres", `SELECT ${columns}, payload_hash
+        FROM runtime.canonical_command_outcomes WHERE event_stream = ${quoted} AND partition_id IN (${ids})
+        ORDER BY partition_id, stream_sequence, batch_id, command_id, payload_hash`);
       if (report.sourceMembership.sha256 !== report.liveMembership.sha256 ||
           report.sourceMembership.bytes !== report.liveMembership.bytes) {
         report.failures.push("live receipt membership differs from canonical source");
+      }
+      if (report.sourceMembership.sha256 !== report.sourceMembershipAfter.sha256 ||
+          report.sourceMembership.bytes !== report.sourceMembershipAfter.bytes) {
+        report.failures.push("canonical source membership changed during closed-cohort check");
       }
       const after = readSource(stream, partitions);
       if (after.generation !== generation ||
