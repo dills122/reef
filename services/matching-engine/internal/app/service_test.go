@@ -53,6 +53,26 @@ func TestSubmitOrderAcceptsAndRestsFirstOrder(t *testing.T) {
 	}
 }
 
+func TestCommandEventIDsAreUniqueAndDeterministic(t *testing.T) {
+	service := NewService()
+	first := service.CancelOrder(domain.CancelOrder{CommandID: "cmd-reject-1", OrderID: "missing-1"})
+	second := service.CancelOrder(domain.CancelOrder{CommandID: "cmd-reject-2", OrderID: "missing-2"})
+	replay := service.CancelOrder(domain.CancelOrder{CommandID: "cmd-reject-1", OrderID: "missing-1"})
+	if first.Rejected == nil || second.Rejected == nil || replay.Rejected == nil {
+		t.Fatalf("expected all missing-order cancels to reject")
+	}
+	if first.Rejected.EventID == second.Rejected.EventID || first.Rejected.EventID != replay.Rejected.EventID {
+		t.Fatalf("rejection event IDs must be unique by command and stable on replay: %q %q %q", first.Rejected.EventID, second.Rejected.EventID, replay.Rejected.EventID)
+	}
+
+	service.SubmitOrder(domain.SubmitOrder{CommandID: "cmd-submit", OrderID: "ord-modify", InstrumentID: "AAPL", Side: domain.SideBuy, QuantityUnits: "100", LimitPrice: "150000000000", Currency: "USD"})
+	modify1 := service.ModifyOrder(domain.ModifyOrder{CommandID: "cmd-modify-1", OrderID: "ord-modify", QuantityUnits: "110", LimitPrice: "150000000000"})
+	modify2 := service.ModifyOrder(domain.ModifyOrder{CommandID: "cmd-modify-2", OrderID: "ord-modify", QuantityUnits: "120", LimitPrice: "150000000000"})
+	if modify1.Accepted == nil || modify2.Accepted == nil || modify1.Accepted.EventID == modify2.Accepted.EventID {
+		t.Fatalf("accepted modifications need distinct event IDs: %#v %#v", modify1, modify2)
+	}
+}
+
 func TestServiceUsesCommandTimestampForGeneratedEvents(t *testing.T) {
 	service := NewService(WithClock(func() time.Time {
 		return time.Date(2026, 3, 14, 18, 30, 0, 0, time.UTC)
@@ -1048,7 +1068,7 @@ func TestMalformedOccurredAtRejectionIsDeterministic(t *testing.T) {
 	if *first.Rejected != *second.Rejected {
 		t.Fatalf("expected identical rejection facts, got %#v and %#v", first.Rejected, second.Rejected)
 	}
-	if first.Rejected.EventID != "evt-reject-invalid-occurred-at-cmd-invalid-occurred-at" {
+	if first.Rejected.EventID != "evt-command-outcome-cmd-invalid-occurred-at" {
 		t.Fatalf("unexpected deterministic event id: %s", first.Rejected.EventID)
 	}
 	if first.Rejected.OccurredAt != "1970-01-01T00:00:00Z" {
