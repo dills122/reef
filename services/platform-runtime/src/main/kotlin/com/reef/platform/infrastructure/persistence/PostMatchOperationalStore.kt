@@ -1,7 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalEffect
-import com.reef.platform.application.postmatch.CanonicalEffectEnvelope
 import com.reef.platform.application.postmatch.VerifiedCanonicalSourceWindow
 import java.sql.Connection
 import javax.sql.DataSource
@@ -12,7 +11,7 @@ enum class PostMatchApplyResult { APPLIED, DUPLICATE }
 class PostMatchOperationalStore(private val dataSource: DataSource) {
     fun apply(
         window: VerifiedCanonicalSourceWindow,
-        applyEffects: (Connection, List<CanonicalEffectEnvelope>) -> Unit
+        applyEffects: (Connection, VerifiedCanonicalSourceWindow) -> Unit
     ): PostMatchApplyResult = dataSource.connection.use { connection ->
         val previousAutoCommit = connection.autoCommit
         connection.autoCommit = false
@@ -23,7 +22,7 @@ class PostMatchOperationalStore(private val dataSource: DataSource) {
             val result = when {
                 frontier.lastSequence == window.fromExclusiveSequence -> {
                     insertOrderIdentities(connection, window)
-                    applyEffects(connection, window.outcomes.flatMap { it.effects })
+                    applyEffects(connection, window)
                     insertReceipts(connection, window)
                     insertCoverage(connection, window)
                     advanceFrontier(connection, window)

@@ -80,9 +80,11 @@ throughput tuning experiment.
 ### Wave 2 — replace operational recomputation
 
 3. Implement live projector: apply exact transitions in source order to compact
-per-order state, including resting makers. Persist each execution/trade fact
-needed by private live reads; coalesce final state writes within a batch.
-Current state no longer queries historical timeline or sums all executions.
+   per-order state, including resting makers. Persist each execution/trade fact
+   needed by private live reads; coalesce final state writes within a batch.
+   Advance filled quantity from each execution, including across windows;
+   a cancellation sets remaining quantity to zero without creating a fill.
+   Current state no longer queries historical timeline or sums all executions.
 4. Implement market maintainer from committed live effects. Maintain
 instrument/session price-level state and snapshots incrementally; define
 snapshot sequence, gap/restart behavior, visibility of hidden orders, and
