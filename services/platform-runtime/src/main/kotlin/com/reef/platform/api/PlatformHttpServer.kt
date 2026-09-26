@@ -1183,12 +1183,8 @@ class PlatformHttpServer(
             if (!allowApiV1Read(exchange, "/trades")) {
                 return@createContext
             }
-            val limit = queryLimit(exchange, 0)
-            if (limit > 0) {
-                adminSessionAuth.writeJson(exchange, 200, api.recentTrades(limit))
-                return@createContext
-            }
-            adminSessionAuth.writeJson(exchange, 200, api.trades())
+            val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
+            adminSessionAuth.writeJson(exchange, 200, api.recentTrades(limit))
         }
 
         server.createContext("/events") { exchange ->
@@ -1199,12 +1195,8 @@ class PlatformHttpServer(
             if (!allowApiV1Read(exchange, "/events")) {
                 return@createContext
             }
-            val limit = queryLimit(exchange, 0)
-            if (limit > 0) {
-                adminSessionAuth.writeJson(exchange, 200, api.recentEvents(limit))
-                return@createContext
-            }
-            adminSessionAuth.writeJson(exchange, 200, api.events())
+            val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
+            adminSessionAuth.writeJson(exchange, 200, api.recentEvents(limit))
         }
 
         server.createContext("/traces/") { exchange ->
