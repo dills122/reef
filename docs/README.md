@@ -12,9 +12,10 @@ does not make its old status or benchmark result current.
 3. [Contributing](../CONTRIBUTING.md) — change and verification workflow.
 4. [System overview](SYSTEM_OVERVIEW.md) — short architecture orientation.
 
-Use [DEV_ENV](DEV_ENV.md) for detailed runtime knobs and
-[Local Run Profiles](LOCAL_RUN_PROFILES.md) only when selecting a demo or
-measurement profile. Arena requires the explicit overlay; hosted operations
+Use [DEV_ENV](DEV_ENV.md) for detailed runtime knobs. For a benchmark, start at
+the [measured run selector](LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need):
+it names configurations behind recorded best runs and separates venue-core
+from full-projection results. Arena requires the explicit overlay; hosted operations
 have separate runbooks under [`infra/`](../infra/README.md).
 
 ## Change behavior or architecture

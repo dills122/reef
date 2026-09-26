@@ -4,6 +4,60 @@ This runbook names the local flows that are safe to use for demos, comparison
 runs, and materializer-backed throughput work. Use it to choose the right stack,
 monitor settings, and stress command before starting a run.
 
+## Measured configurations: choose by the stage you need
+
+These are **recorded run configurations**, not defaults for `.env` or a claim
+that every current revision will repeat the result. The [throughput
+ledger](THROUGHPUT_BASELINES.md) owns the verdicts; its [artifact
+index](evidence/throughput-baseline-artifact-index-2026-09-24.json) and the
+linked original reports own historical settings. A new run must record its
+source, image, host, workload, configuration, checker, and stage counts.
+
+| Goal and evidence | Required measured shape | What the result establishes |
+| --- | --- | --- |
+| **10k/s venue core + canonical materialization**: [C5](THROUGHPUT_BASELINES.md#c5--current10k-venue-core-baseline-two-samples), [H1](THROUGHPUT_BASELINES.md#established-historical-record) | DigitalOcean c-16; Redpanda direct command stream; 16 partitions; four venue-event materializers; 64 instruments; 1,024 load workers; 10k/s for two 300s samples. Canonical projection **off**. Use `materializer` gate. | C5 passed accepted/direct-acked/materialized accounting at 9,998.74 and 9,999.45/s with zero final gaps. H1 separately passed two 300s samples. Neither proves read-model or downstream freshness. |
+| **2.5k/s full projection, historical**: [H4](THROUGHPUT_BASELINES.md#established-historical-record) | DigitalOcean c-16; 64 instruments; 256 load workers; 2.5k/s for 300s; four canonical projectors, with lifecycle/market maintenance on **all four** in that August 20 topology. | 749,976 accepted/materialized/projected and zero final lag under the checks used then. This is the recorded sustained full-projection count baseline, not a current strict downstream freshness pass. |
+| **5k/s full projection, short only**: [H3](THROUGHPUT_BASELINES.md#established-historical-record) | DigitalOcean c-16; full projection at 5k/s for **60s**; inspect historical run `do-benchmark-20260717T134058Z` for its exact fixture. | 299,804 exact stage counts and zero final lag in one short run. The [300s H5 run](THROUGHPUT_BASELINES.md#established-historical-record) failed with a 753,955 projection count gap. Do not use the short pass as a sustained 5k configuration. |
+
+For **current 10k venue-core work**, use the named wrapper and its `soak-5m`
+tier. This selects the `materializer` profile, c-16, 1,024 workers, two 5m
+samples, partition-spread and zero-gap gates. The materializer path uses the
+Redpanda/direct-consumer configuration described in [Materializer Stack
+Knobs](#materializer-stack-knobs). The command below prints a plan; it does
+not provision a host:
+
+```bash
+REEF_DO_MATERIALIZER_10K_GATE_TIER=soak-5m make do-materializer-10k-gate
+```
+
+For **current full-projection work**, use the named freshness wrapper, starting
+at 2.5k/s. It selects `materializer-projection`, four canonical projector
+owners on partitions `0..15`, and **one designated lifecycle/market
+maintainer**. This differs from H4's four maintainers. The September 24
+[C4 baseline](THROUGHPUT_BASELINES.md#c4--current-five-minute-25k-projection-baseline)
+matched 749,977 stage counts with zero final lag, but failed 32 strict market
+`lag` reference fields and did not establish a precise downstream freshness
+SLO. Its accounting result is useful; a strict full-pipeline pass is not yet
+recorded. The wrapper's `soak-5m` plan currently reports
+`require_sustained_downstream_freshness=0`, so passing it alone cannot establish
+a sustained downstream latency SLO. Plan the current five-minute gate with:
+
+```bash
+REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=soak-5m make do-projection-freshness-gate
+```
+
+For either hosted gate, [the DigitalOcean runbook](../infra/do-benchmark/README.md)
+defines `run-destroy`, credentials, and teardown. The generic
+`make do-benchmark` defaults and local demo profiles do **not** select these
+measured shapes. The named wrappers follow current code and checks; an exact
+historical replay also needs the original run's source/image, fixture, Compose
+settings, and checker. No 10k/s full-projection configuration is qualified:
+the [C28 diagnostic](THROUGHPUT_BASELINES.md#c28--same-prefix-marker-timing-full-projection-10k-diagnostic)
+and [C37 reproduction](THROUGHPUT_BASELINES.md#c37--fresh-reproduction-of-best-10k-full-system-c28-setup-diagnostic-fail)
+failed downstream timing or freshness. Treat intake latency, canonical
+materialization, projection counts, and downstream visibility as separate
+measurements.
+
 ## Profile Matrix
 
 | Goal | Proper entrypoint | Expected runtime roles | Materializer? | Primary evidence |
