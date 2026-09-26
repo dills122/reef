@@ -29,6 +29,7 @@ async function waitForPostgres() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       await run("docker", ["exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "reef", "-d", "reef"]);
+      await run("docker", ["exec", "-i", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "reef", "-d", "reef"], { input: "SELECT 1;" });
       return;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 100));

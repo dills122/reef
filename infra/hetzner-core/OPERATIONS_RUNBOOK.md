@@ -305,6 +305,8 @@ Compose-labeled platform-runtime container on the host and requires at least
 one stopped container for this existing-host upgrade. A brand-new host with no
 runtime container may set `REEF_RUNTIME_0069_FRESH_BOOTSTRAP=1` only after
 confirming no out-of-band writers; do not use that override for this upgrade.
+The runner checks this host only; before applying the migration, the operator
+must confirm that no other host or Compose project is writing to this database.
 
 On the target host, record sizes, stop runtime writers, then apply the staged
 migration through the checksum-ledger runner:

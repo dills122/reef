@@ -208,7 +208,10 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
                         jdbcUrl,
                         System.getenv("RUNTIME_POSTGRES_USER_TEST"),
                         System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST")
-                    ).use { return }
+                    ).use { connection ->
+                        connection.createStatement().use { statement -> statement.execute("SELECT 1") }
+                    }
+                    return
                 } catch (ex: SQLException) {
                     lastConnectionError = ex.message ?: ex::class.simpleName.orEmpty()
                 }
