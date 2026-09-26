@@ -54,6 +54,12 @@ class CanonicalSourceCoverageVerifierTest {
         val a = verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(first))
         val b = verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(equivalent))
         assertEquals(a.outcomes.single().resultDigest, b.outcomes.single().resultDigest)
+        val largeExponent = first.copy(resultPayloadJson = first.resultPayloadJson.replace("9007199254740993.00", "1e1000"))
+        val equivalentExponent = first.copy(resultPayloadJson = first.resultPayloadJson.replace("9007199254740993.00", "10e999"))
+        assertEquals(
+            verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(largeExponent)).sourceDigest,
+            verifier.verify("live", "venue-commands", 0, "generation-1", 0, 1, listOf(equivalentExponent)).sourceDigest
+        )
 
         val duplicate = first.copy(resultPayloadJson = first.resultPayloadJson.replace("\"measure\":", "\"measure\":1,\"measure\":"))
         assertFailsWith<IllegalArgumentException> {

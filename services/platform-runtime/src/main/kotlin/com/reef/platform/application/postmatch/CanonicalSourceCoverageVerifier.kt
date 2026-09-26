@@ -96,7 +96,7 @@ class CanonicalSourceCoverageVerifier(
             "${mapper.writeValueAsString(key)}:${canonicalJson(value)}"
         }
         node.isArray -> node.joinToString(prefix = "[", postfix = "]") { canonicalJson(it) }
-        node.isNumber -> node.decimalValue().stripTrailingZeros().toPlainString()
+        node.isNumber -> node.decimalValue().stripTrailingZeros().toString()
         else -> mapper.writeValueAsString(node)
     }
 
