@@ -40,13 +40,30 @@ conflict-update behavior and still failed freshness. It does not price a
 current-image LOGGED migration or justify accepting silent crash loss.
 [Performance learnings](../PERFORMANCE_LEARNINGS.md).
 
+## Disposable database-level crash result
+
+On September 26, an isolated `postgres:16-alpine` container (image
+`sha256:c05eced0bdb41ea9b95a656472a6aa4d50cad0d8a2e33d14eb1c53fd6204f2ae`)
+held one durable order, frontier `42`, stale lifecycle/market rows, and one
+pending marker in each queue. Tables used Reef's queue names and the same
+`ALTER TABLE ... SET UNLOGGED` storage choice, but a minimal schema rather than
+full Reef migrations. After container `SIGKILL` and restart, order/frontier and
+stale derived rows survived; both queues were empty (`1|42|0|0|STALE|STALE`,
+`relpersistence=u`). After changing both queues to LOGGED, reseeding the same
+markers, and repeating `SIGKILL`/restart, both markers survived
+(`1|42|1|1|STALE|STALE`, `relpersistence=p`). The task-owned container and
+anonymous volume were removed.
+
+This proves the database storage failure and LOGGED survival in isolation.
+It does not prove Reef worker drain, public-read gating, exact business parity,
+or throughput impact.
+
 ## Next bounded experiment
 
-1. Reproduce F02 on an isolated disposable PostgreSQL fixture with the current
-   schema: commit normalized facts and dirty work, stop downstream consumers,
-   force an unclean database restart, and verify durable facts/frontiers survive
-   while queues clear and derived rows remain stale. Do not crash the normal
-   developer database. Capture public readiness and market metadata as well.
+1. Extend the crash fixture to the full Reef schema and runtime: commit
+   normalized facts and dirty work, stop downstream consumers, force an
+   unclean database restart, and capture public readiness and market metadata.
+   Do not crash the normal developer database.
 2. Trial LOGGED queues on that fixture first. Require pending work to survive
    crash, bounded workers to drain it, and lifecycle/market rows to match a
    rollback-only full rebuild. Repeat after a second crash during drain.
