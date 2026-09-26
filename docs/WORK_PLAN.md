@@ -32,11 +32,16 @@ price-level deltas and best-level snapshots under its own frontier. See the
 Runtime worker wiring, live read-route cutover, and capacity qualification
 still require source-origin proof, parity, and recovery evidence.
 
-Current implementation slice wires opt-in live and market shadow workers to
-the canonical runtime source and isolated post-match store. It records a stable
-source generation, uses each partition's encoded offset origin, and leaves
-public reads on the existing projection. PostgreSQL integration evidence and
-review are required before this slice lands.
+[#381](https://github.com/dills122/reef/pull/381) landed opt-in live and
+market shadow workers against the isolated post-match store. They use a stable
+source generation and each partition's encoded offset origin. Public reads
+still use the existing projection.
+
+The next read slice adds participant-scoped operational-store queries for own
+orders and fills, plus a same-snapshot live-frontier token. It does not switch
+public routes: exact response parity, source-lag validation, and bounded work
+for aged participant histories remain cutover gates. The audit and settlement
+consumers remain separate architecture workstreams.
 
 ## Purpose
 
