@@ -24,6 +24,13 @@ residual does not count that residual as a fill. Source coverage, facts, and
 frontier commit together. Market state, live read routes, and parity cutover
 remain separate follow-on changes.
 
+Market-state slice in progress: the live transaction records a bounded change
+window for each source window; an independent maintainer applies visible
+price-level deltas and best-level snapshots under its own frontier. See the
+[market stage contract](work/POST_MATCH_MARKET_STAGE_CONTRACT_2026-09-26.md).
+Live read-route cutover and capacity qualification still require parity and
+recovery evidence.
+
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents

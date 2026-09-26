@@ -86,7 +86,8 @@ throughput tuning experiment.
    a cancellation sets remaining quantity to zero without creating a fill.
    Current state no longer queries historical timeline or sums all executions.
 4. Implement market maintainer from committed live effects. Maintain
-instrument/session price-level state and snapshots incrementally; define
+   instrument/session price-level state and snapshots incrementally, using
+   durable zero-change windows so its frontier can lag live state independently; define
 snapshot sequence, gap/restart behavior, visibility of hidden orders, and
 bounded slow-client policy for a later feed. Route existing live REST reads
 only after exact field and authorization parity, with an as-of/coverage token
