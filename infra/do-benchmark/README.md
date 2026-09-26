@@ -25,6 +25,12 @@ run plane is still
 `infra/simulation-runner/`, which should eventually own its own OpenTofu and
 server Compose bundle.
 
+To select a **recorded best-run configuration**, start with the
+[measured run selector](../../docs/LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need).
+The generic c-8/384-worker defaults below do not reproduce the 10k/s
+venue-core baseline. The named gate wrappers later in this runbook set the
+relevant c-16 shape; projection has separate historical and current checks.
+
 For budget-safe simulation runs that should fetch artifacts, optionally push
 them to the always-on core, and destroy the worker by default, prefer
 `make simulation-run`. This lower-level harness remains the provider-specific

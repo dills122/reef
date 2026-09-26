@@ -83,6 +83,11 @@ with a short GitHub-facing entry point in [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 Normal local development does not require hosted credentials, Tailscale, or
 direct access to the production box.
 
+To reproduce or compare throughput work, choose a measured configuration from
+the [run selector](./docs/LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need).
+The 10k/s venue-core result and the historical full-projection results use
+different runtime roles and prove different pipeline stages.
+
 For Arena-owned work, use the explicit overlay:
 
 ```bash
