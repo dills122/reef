@@ -1,7 +1,8 @@
 # Projection dirty-queue crash recovery — F02 investigation
 
-Status: design investigation on `codex/projection-dirty-recovery`; no recovery
-implementation or throughput qualification. Tracks GitHub issue #367 F02.
+Status: LOGGED queue candidate passes disposable full-schema crash and rebuild
+proof. Migration lock and matched throughput qualification remain open. Tracks
+GitHub issue #367 F02.
 
 ## Verified failure boundary
 
@@ -58,16 +59,29 @@ This proves the database storage failure and LOGGED survival in isolation.
 It does not prove Reef worker drain, public-read gating, exact business parity,
 or throughput impact.
 
+## Full-schema crash regression — September 26
+
+`bun scripts/dev/projection-dirty-crash-test.mjs` creates a disposable
+`postgres:16-alpine` container and applies the full runtime, auth, admin, and
+command-log migrations. Its focused Kotlin test uses
+`PostgresRuntimePersistence` to commit canonical outcomes and frontiers, create
+one pending lifecycle marker and one pending market marker, then SIGKILL and
+restart PostgreSQL. After lifecycle drain, it repeats SIGKILL before market
+drain. Fresh connections validate surviving canonical data, frontiers, and
+markers; drained lifecycle and market business rows equal full rebuild results
+excluding only refresh timestamps. The runner removes its container and volume.
+
+RED on migrations through `0068`: after the first SIGKILL, committed canonical
+outcome survived but expected lifecycle marker count `1` was `0`.
+GREEN with `0069_logged_projection_dirty_queues.sql`: both crash boundaries,
+worker drains, and rebuild comparisons passed. This proves the tested
+persistence path, not public HTTP readiness or sustained capacity.
+
 ## Next bounded experiment
 
-1. Extend the crash fixture to the full Reef schema and runtime: commit
-   normalized facts and dirty work, stop downstream consumers, force an
-   unclean database restart, and capture public readiness and market metadata.
-   Do not crash the normal developer database.
-2. Trial LOGGED queues on that fixture first. Require pending work to survive
-   crash, bounded workers to drain it, and lifecycle/market rows to match a
-   rollback-only full rebuild. Repeat after a second crash during drain.
-3. Record migration lock behavior, WAL/rows/CPU and same-cohort freshness in a
+1. Record public readiness/market metadata after an unclean restart on a
+   disposable stack. Do not crash the normal developer database.
+2. Record migration lock behavior, WAL/rows/CPU and same-cohort freshness in a
    fresh matched full-pipeline control/treatment. If LOGGED queues consume
    unacceptable capacity, implement the UNLOGGED recovery protocol with a
    durable generation gate and repeat the same crash and load proofs.
