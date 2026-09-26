@@ -58,6 +58,17 @@ absence of a row does not itself prove a gap is safe. Consumers may lag each
 other; combined responses carry the required as-of coverage. Direct
 admin/protective events keep their own durable audit source and frontier.
 
+The first operational apply path reads bounded source ranges from retained
+canonical outcome and batch rows. It checks exact v1 membership at every
+position and records one receipt per outcome. The source window, keyed accepted
+order identities, consumer effects, coverage digest, and frontier are committed
+in one transaction in the isolated target store. Exact replay verifies stored
+coverage and receipts before skipping effects; changed payloads and overlapping
+windows fail closed. It only initializes a new frontier at sequence zero.
+Kafka offset holes and nonzero partition origins still require an authoritative
+source proof and bootstrap contract before those windows can advance. The
+strict reader currently stops there rather than treating missing rows as proof.
+
 ## Compatibility and promotion
 
 Unversioned historical batches stay on the legacy projector until an exact

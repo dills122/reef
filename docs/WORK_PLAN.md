@@ -10,6 +10,13 @@ settlement. The September 4 execution ladder below remains its dated snapshot;
 track new implementation and promotion evidence through this plan, the linked
 work packet, and the throughput ledger.
 
+September 26 implementation checkpoint: [#376](https://github.com/dills122/reef/pull/376)
+landed the versioned canonical effect producer and decoder;
+[#377](https://github.com/dills122/reef/pull/377) landed the opt-in isolated
+operational store schema. Current code slice adds exact source coverage and
+atomic consumer progress. Live and market consumers, audit and settlement
+ownership, route cutover, and the integrated capacity gate remain ahead.
+
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents
