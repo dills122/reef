@@ -105,16 +105,36 @@ Freeze post-trade profile assignments and definitions from run setup until
 intake and obligation frontiers catch up. Current mutable control-plane tables
 cannot prove historical policy before first observation; durable pre-trade
 binding or versioned history is required before public settlement cutover.
+After applying `settlement/0010` to the dedicated target, set
+`POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=true` on assigned projector instances
+only after deterministic cross-partition account contention has been specified
+and verified; current draft remains disabled. The worker consumes only committed
+obligations. Instant trades produce DvP attempts and balanced cash/security
+ledger entries or a typed break; realistic trades remain pending. Opening
+resources are summarized by account when resource positions change.
+Freeze resource setup before the shadow run; changing an opening for an
+already-touched account stops replay. This stage does not change public reads.
+`POSTMATCH_SETTLEMENT_TRANSITION_BATCH_SIZE` defaults to 100 source positions,
+`POSTMATCH_SETTLEMENT_TRANSITION_MAX_OBLIGATIONS` to 1000, and
+`POSTMATCH_SETTLEMENT_TRANSITION_POLL_MS` to 50. An oversized window shrinks
+by source position; a single source position over the obligation cap fails.
+See the [transition contract](work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md).
 
 For an existing **dedicated shadow settlement target** with pre-`0009`
-receipts, rebootstrap only the canonical shadow tables after stopping both
-settlement workers. Confirm the connection points to that dedicated target;
+receipts, apply through `settlement/0010`, then rebootstrap only the canonical
+shadow tables after stopping all three settlement workers. Confirm the connection points to that dedicated target;
 leave legacy settlement facts and the runtime canonical source untouched.
 Run this transaction on the settlement target:
 
 ```sql
 BEGIN;
 TRUNCATE TABLE
+  settlement.canonical_transition_ledger_entries,
+  settlement.canonical_transition_attempts,
+  settlement.canonical_account_checkpoints,
+  settlement.canonical_account_state,
+  settlement.canonical_transition_coverage,
+  settlement.canonical_transition_frontiers,
   settlement.canonical_settlement_obligations,
   settlement.canonical_obligation_coverage,
   settlement.canonical_obligation_frontiers,
@@ -137,7 +157,8 @@ WHERE trade_count IS NULL OR trade_digest IS NULL;
 ```
 
 Keep profile assignments frozen from run setup. Enable the obligation worker only after
-those checks. This rebootstrap is for local or disposable shadow targets;
+those checks, then enable the transition worker after its obligation frontier
+catches up. This rebootstrap is for local or disposable shadow targets;
 public settlement promotion needs its separate cutover plan.
 Use the same overlay or profile on teardown that was used at startup; Arena has
 `make dev-down-arena`. For a clean local database, `make dev-reset` removes

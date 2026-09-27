@@ -52,7 +52,7 @@ class SettlementBoundedObligationStore(private val dataSource: DataSource) {
         }
     }
 
-    private fun readTrades(
+    internal fun readTrades(
         connection: Connection, eventStream: String, partitionId: Int, sourceGeneration: String,
         from: Long, through: Long, limit: Int
     ): List<SettlementIntakeTrade> = connection.prepareStatement(

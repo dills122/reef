@@ -1,10 +1,16 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.PostMatchSettlementObligationWorker
+import com.reef.platform.api.PostMatchSettlementTransitionWorker
 import com.reef.platform.application.settlement.PostTradeProfileSelection
 import com.reef.platform.application.settlement.PostTradeProfileSelectionSource
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -31,6 +37,474 @@ class SettlementBoundedObligationStoreIntegrationTest {
     }
 
     @Test
+    fun boundedTransitionPostsDvpAndFailsClosedOnOpeningDrift() {
+        val (_, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-test-$token"
+        val generation = "generation-$token"
+        val run = "run-$token"
+        val session = "session-$token"
+        try {
+            seed(target, stream, generation, run, session)
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """INSERT INTO settlement.resource_positions(
+                         resource_position_id, scenario_run_id, correlation_id, causation_id,
+                         participant_id, account_id, asset_type, asset_id, quantity, occurred_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())"""
+                ).use { statement ->
+                    listOf(
+                        listOf("buyer-0-$stream", "buyer-account-0-$stream", "CASH", "USD", "200"),
+                        listOf("seller-0-$stream", "seller-account-0-$stream", "SECURITY", "AAPL", "2")
+                    ).forEachIndexed { index, position ->
+                        statement.setString(1, "position-$index-$token")
+                        statement.setString(2, run)
+                        statement.setString(3, "correlation-$token")
+                        statement.setString(4, "causation-$token")
+                        position.forEachIndexed { offset, value -> statement.setString(offset + 5, value) }
+                        statement.addBatch()
+                    }
+                    assertEquals(2, statement.executeBatch().size)
+                }
+            }
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligation = SettlementBoundedObligationStore(target)
+            val obligationWindow = requireNotNull(obligation.readNextWindow(stream, 0, generation,
+                maxSourcePositions = 3))
+            assertEquals(PostMatchApplyResult.APPLIED,
+                obligation.apply(obligationWindow, mapOf(SettlementPolicyKey(run, session) to policy)))
+            val transition = SettlementBoundedTransitionStore(target)
+            val window = requireNotNull(transition.readNextWindow(stream, 0, generation,
+                maxSourcePositions = 3))
+            assertEquals(1, window.obligations.size)
+            assertEquals(PostMatchApplyResult.APPLIED, transition.apply(window))
+            assertEquals(PostMatchApplyResult.DUPLICATE, transition.apply(window))
+            assertEquals(null, transition.readNextWindow(stream, 0, generation))
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_account_state SET ledger_delta = 0
+                       WHERE event_stream = ? AND participant_id = ? AND asset_type = 'CASH'"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, "buyer-0-$stream")
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_account_state SET ledger_delta = -200
+                       WHERE event_stream = ? AND participant_id = ? AND asset_type = 'CASH'"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, "buyer-0-$stream")
+                    assertEquals(1, statement.executeUpdate())
+                }
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_obligation_coverage SET trade_digest = 'corrupt'
+                       WHERE event_stream = ?"""
+                ).use { statement -> statement.setString(1, stream); assertEquals(1, statement.executeUpdate()) }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_obligation_coverage SET trade_digest = ?
+                       WHERE event_stream = ?"""
+                ).use { statement ->
+                    statement.setString(1, obligationWindow.tradeDigest)
+                    statement.setString(2, stream)
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_transition_ledger_entries SET quantity = 199
+                       WHERE event_stream = ? AND entry_kind = 'BUYER_CASH_DEBIT'"""
+                ).use { statement -> statement.setString(1, stream); assertEquals(1, statement.executeUpdate()) }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_transition_ledger_entries SET quantity = 200
+                       WHERE event_stream = ? AND entry_kind = 'BUYER_CASH_DEBIT'"""
+                ).use { statement -> statement.setString(1, stream); assertEquals(1, statement.executeUpdate()) }
+            }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """SELECT status FROM settlement.canonical_settlement_obligations
+                       WHERE event_stream = ?"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeQuery().use { rows -> check(rows.next()); assertEquals("SETTLED", rows.getString(1)) }
+                }
+                connection.prepareStatement(
+                    """SELECT COUNT(*), SUM(CASE WHEN direction = 'DEBIT' AND asset_type = 'CASH'
+                         THEN quantity ELSE 0 END), SUM(CASE WHEN direction = 'CREDIT' AND asset_type = 'CASH'
+                         THEN quantity ELSE 0 END), SUM(CASE WHEN direction = 'DEBIT' AND asset_type = 'SECURITY'
+                         THEN quantity ELSE 0 END), SUM(CASE WHEN direction = 'CREDIT' AND asset_type = 'SECURITY'
+                         THEN quantity ELSE 0 END)
+                       FROM settlement.canonical_transition_ledger_entries WHERE event_stream = ?"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeQuery().use { rows ->
+                        check(rows.next())
+                        assertEquals(4, rows.getInt(1))
+                        assertEquals("200", rows.getBigDecimal(2).toPlainString())
+                        assertEquals("200", rows.getBigDecimal(3).toPlainString())
+                        assertEquals("2", rows.getBigDecimal(4).toPlainString())
+                        assertEquals("2", rows.getBigDecimal(5).toPlainString())
+                    }
+                }
+                connection.prepareStatement(
+                    """INSERT INTO settlement.resource_positions(
+                         resource_position_id, scenario_run_id, correlation_id, causation_id,
+                         participant_id, account_id, asset_type, asset_id, quantity, occurred_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 'CASH', 'USD', '1', now())"""
+                ).use { statement ->
+                    statement.setString(1, "position-drift-$token")
+                    statement.setString(2, run)
+                    statement.setString(3, "correlation-$token")
+                    statement.setString(4, "causation-$token")
+                    statement.setString(5, "buyer-0-$stream")
+                    statement.setString(6, "buyer-account-0-$stream")
+                    statement.executeUpdate()
+                }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    "DELETE FROM settlement.resource_positions WHERE resource_position_id = ?"
+                ).use { statement ->
+                    statement.setString(1, "position-drift-$token")
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
+            assertEquals(PostMatchApplyResult.DUPLICATE, transition.apply(window))
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    "UPDATE settlement.resource_positions SET quantity = '100' WHERE resource_position_id = ?"
+                ).use { statement ->
+                    statement.setString(1, "position-0-$token")
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+        } finally {
+            cleanTarget(target, stream)
+            target.connection.use { connection ->
+                connection.prepareStatement("DELETE FROM settlement.resource_positions WHERE scenario_run_id = ?")
+                    .use { it.setString(1, run); it.executeUpdate() }
+                connection.prepareStatement("DELETE FROM settlement.canonical_resource_openings WHERE run_id = ?")
+                    .use { it.setString(1, run); it.executeUpdate() }
+            }
+        }
+    }
+
+    @Test
+    fun boundedTransitionOpensBreakWithoutLedgerOnInsufficientCash() {
+        val (_, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-break-$token"
+        val generation = "generation-$token"
+        val run = "run-$token"
+        val session = "session-$token"
+        try {
+            seed(target, stream, generation, run, session)
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """INSERT INTO settlement.resource_positions(
+                         resource_position_id, scenario_run_id, correlation_id, causation_id,
+                         participant_id, account_id, asset_type, asset_id, quantity, occurred_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 'CASH', 'USD', '199', now())"""
+                ).use { statement ->
+                    statement.setString(1, "position-$token")
+                    statement.setString(2, run)
+                    statement.setString(3, "correlation-$token")
+                    statement.setString(4, "causation-$token")
+                    statement.setString(5, "buyer-0-$stream")
+                    statement.setString(6, "buyer-account-0-$stream")
+                    statement.executeUpdate()
+                }
+            }
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligation = SettlementBoundedObligationStore(target)
+            assertEquals(PostMatchApplyResult.APPLIED,
+                obligation.apply(requireNotNull(obligation.readNextWindow(stream, 0, generation,
+                    maxSourcePositions = 3)), mapOf(SettlementPolicyKey(run, session) to policy)))
+            val transition = SettlementBoundedTransitionStore(target)
+            val empty = requireNotNull(transition.readNextWindow(stream, 0, generation,
+                maxSourcePositions = 1))
+            assertEquals(0, empty.obligations.size)
+            assertEquals(PostMatchApplyResult.APPLIED, transition.apply(empty))
+            val trade = requireNotNull(transition.readNextWindow(stream, 0, generation,
+                maxSourcePositions = 1))
+            assertEquals(PostMatchApplyResult.APPLIED, transition.apply(trade))
+            assertEquals(PostMatchApplyResult.DUPLICATE, transition.apply(trade))
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """SELECT o.status, a.outcome, a.break_reason,
+                              (SELECT COUNT(*) FROM settlement.canonical_transition_ledger_entries l
+                               WHERE l.event_stream = o.event_stream AND l.trade_id = o.trade_id)
+                       FROM settlement.canonical_settlement_obligations o
+                       JOIN settlement.canonical_transition_attempts a
+                         ON a.event_stream = o.event_stream AND a.source_generation = o.source_generation
+                        AND a.trade_id = o.trade_id
+                       WHERE o.event_stream = ?"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeQuery().use { rows ->
+                        check(rows.next())
+                        assertEquals("BREAK", rows.getString(1))
+                        assertEquals("BREAK", rows.getString(2))
+                        assertEquals("CASH_LEG_FAILED", rows.getString(3))
+                        assertEquals(0, rows.getInt(4))
+                    }
+                }
+            }
+        } finally {
+            cleanTarget(target, stream)
+            target.connection.use { connection ->
+                connection.prepareStatement("DELETE FROM settlement.resource_positions WHERE scenario_run_id = ?")
+                    .use { it.setString(1, run); it.executeUpdate() }
+                connection.prepareStatement("DELETE FROM settlement.canonical_resource_openings WHERE run_id = ?")
+                    .use { it.setString(1, run); it.executeUpdate() }
+            }
+        }
+    }
+
+    @Test
+    fun boundedTransitionSerializesSharedAccountsAcrossPartitions() {
+        val (_, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-partitions-$token"
+        val generation = "generation-$token"
+        val run = "run-$token"
+        val session = "session-$token"
+        val accountKey = "shared-$token"
+        try {
+            for (partition in 0..3) seed(target, stream, generation, run, session,
+                partitionId = partition, accountKey = accountKey, reverseRoles = partition % 2 == 1)
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """INSERT INTO settlement.resource_positions(
+                         resource_position_id, scenario_run_id, correlation_id, causation_id,
+                         participant_id, account_id, asset_type, asset_id, quantity, occurred_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())"""
+                ).use { statement ->
+                    listOf(
+                        listOf("buyer-0-$accountKey", "buyer-account-0-$accountKey", "CASH", "USD", "400"),
+                        listOf("seller-0-$accountKey", "seller-account-0-$accountKey", "CASH", "USD", "400"),
+                        listOf("buyer-0-$accountKey", "buyer-account-0-$accountKey", "SECURITY", "AAPL", "4"),
+                        listOf("seller-0-$accountKey", "seller-account-0-$accountKey", "SECURITY", "AAPL", "4")
+                    ).forEachIndexed { index, position ->
+                        statement.setString(1, "position-$index-$token")
+                        statement.setString(2, run)
+                        statement.setString(3, "correlation-$token")
+                        statement.setString(4, "causation-$token")
+                        position.forEachIndexed { offset, value -> statement.setString(offset + 5, value) }
+                        statement.addBatch()
+                    }
+                    statement.executeBatch()
+                }
+            }
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligation = SettlementBoundedObligationStore(target)
+            for (partition in 0..3) {
+                val window = requireNotNull(obligation.readNextWindow(stream, partition, generation,
+                    maxSourcePositions = 3))
+                assertEquals(PostMatchApplyResult.APPLIED,
+                    obligation.apply(window, mapOf(SettlementPolicyKey(run, session) to policy)))
+            }
+            val transition = SettlementBoundedTransitionStore(target)
+            val windows = (0..3).map { partition ->
+                requireNotNull(transition.readNextWindow(stream, partition, generation,
+                    maxSourcePositions = 3))
+            }
+            val ready = CountDownLatch(4)
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(4)
+            try {
+                val tasks = windows.map { window -> executor.submit<PostMatchApplyResult> {
+                    ready.countDown()
+                    check(start.await(10, TimeUnit.SECONDS))
+                    transition.apply(window)
+                } }
+                check(ready.await(10, TimeUnit.SECONDS))
+                start.countDown()
+                assertEquals(List(4) { PostMatchApplyResult.APPLIED },
+                    tasks.map { it.get(20, TimeUnit.SECONDS) })
+            } finally {
+                start.countDown()
+                executor.shutdownNow()
+            }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """SELECT COUNT(*) FROM settlement.canonical_transition_ledger_entries
+                       WHERE event_stream = ?"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeQuery().use { rows -> check(rows.next()); assertEquals(16, rows.getInt(1)) }
+                }
+                connection.prepareStatement(
+                    """SELECT ledger_delta FROM settlement.canonical_account_state
+                       WHERE event_stream = ? AND run_id = ? AND participant_id = ?
+                         AND account_id = ? AND asset_type = 'CASH' AND asset_id = 'USD'"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, run)
+                    statement.setString(3, "buyer-0-$accountKey")
+                    statement.setString(4, "buyer-account-0-$accountKey")
+                    statement.executeQuery().use { rows ->
+                        check(rows.next()); assertEquals("0", rows.getBigDecimal(1).toPlainString())
+                    }
+                }
+            }
+            val firstCheckpointPartition = target.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_account_checkpoints
+                       SET before_delta = before_delta + 1, after_delta = after_delta + 1
+                       WHERE event_stream = ? AND run_id = ? AND participant_id = ?
+                         AND account_id = ? AND asset_type = 'CASH' AND asset_id = 'USD'
+                         AND account_version = 1 RETURNING partition_id"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, run)
+                    statement.setString(3, "buyer-0-$accountKey")
+                    statement.setString(4, "buyer-account-0-$accountKey")
+                    statement.executeQuery().use { rows ->
+                        check(rows.next()); rows.getInt(1).also { check(!rows.next()) }
+                    }
+                }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(windows[firstCheckpointPartition]) }
+        } finally {
+            cleanTarget(target, stream)
+            target.connection.use { connection ->
+                connection.prepareStatement("DELETE FROM settlement.resource_positions WHERE scenario_run_id = ?")
+                    .use { it.setString(1, run); it.executeUpdate() }
+                connection.prepareStatement("DELETE FROM settlement.canonical_resource_openings WHERE run_id = ?")
+                    .use { it.setString(1, run); it.executeUpdate() }
+            }
+        }
+    }
+
+    @Test
+    fun transitionFailureAfterLedgerInsertRollsBackAllFactsAndProgress() {
+        val (_, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-rollback-$token"
+        val generation = "generation-$token"
+        val run = "run-$token"
+        val session = "session-$token"
+        try {
+            seed(target, stream, generation, run, session)
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligations = SettlementBoundedObligationStore(target)
+            assertEquals(PostMatchApplyResult.APPLIED, obligations.apply(
+                requireNotNull(obligations.readNextWindow(stream, 0, generation, maxSourcePositions = 3)),
+                mapOf(SettlementPolicyKey(run, session) to policy)))
+            val transition = SettlementBoundedTransitionStore(target) { error("injected after ledger insert") }
+            val window = requireNotNull(transition.readNextWindow(stream, 0, generation,
+                maxSourcePositions = 3))
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+            target.connection.use { connection ->
+                listOf("canonical_transition_frontiers", "canonical_transition_coverage",
+                    "canonical_transition_attempts", "canonical_transition_ledger_entries",
+                    "canonical_account_state", "canonical_account_checkpoints").forEach { table ->
+                    connection.prepareStatement(
+                        "SELECT COUNT(*) FROM settlement.$table WHERE event_stream = ?"
+                    ).use { statement ->
+                        statement.setString(1, stream)
+                        statement.executeQuery().use { rows ->
+                            check(rows.next()); assertEquals(0, rows.getInt(1), table)
+                        }
+                    }
+                }
+                connection.prepareStatement(
+                    "SELECT status FROM settlement.canonical_settlement_obligations WHERE event_stream = ?"
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeQuery().use { rows ->
+                        check(rows.next()); assertEquals("PENDING", rows.getString(1))
+                    }
+                }
+            }
+            assertEquals(PostMatchApplyResult.APPLIED, SettlementBoundedTransitionStore(target).apply(window))
+        } finally { cleanTarget(target, stream) }
+    }
+
+    @Test
+    fun documentedShadowRebootstrapClearsCheckpointsBeforeSameGenerationReplay() {
+        val (_, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-rebootstrap-$token"
+        val generation = "generation-$token"
+        val run = "run-$token"
+        val session = "session-$token"
+        val policy = SettlementPolicySnapshot(
+            PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                PostTradeProfileSelectionSource.HardDefault),
+            "T+0", "gross-or-microbatch", "near-instant-finality"
+        )
+        fun runTransition() {
+            seed(target, stream, generation, run, session)
+            val obligations = SettlementBoundedObligationStore(target)
+            assertEquals(PostMatchApplyResult.APPLIED, obligations.apply(
+                requireNotNull(obligations.readNextWindow(stream, 0, generation, maxSourcePositions = 3)),
+                mapOf(SettlementPolicyKey(run, session) to policy)))
+            val transition = SettlementBoundedTransitionStore(target)
+            assertEquals(PostMatchApplyResult.APPLIED, transition.apply(
+                requireNotNull(transition.readNextWindow(stream, 0, generation, maxSourcePositions = 3))))
+        }
+        try {
+            runTransition()
+            val guide = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
+                .map { it.resolve("docs/LOCAL_CONFIGURATION.md") }
+                .first(Files::exists)
+            val transaction = Files.readString(guide)
+                .substringAfter("Run this transaction on the settlement target:\n\n```sql\n")
+                .substringBefore("\n```")
+            check(transaction.startsWith("BEGIN;") && transaction.trimEnd().endsWith("COMMIT;"))
+            val tables = Regex("settlement\\.[a-z_]+")
+                .findAll(transaction).map { it.value }.toList()
+            check("settlement.canonical_account_checkpoints" in tables)
+            target.connection.use { connection ->
+                val oldAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    tables.forEach { table ->
+                        connection.prepareStatement("DELETE FROM $table WHERE event_stream = ?").use { statement ->
+                            statement.setString(1, stream)
+                            statement.executeUpdate()
+                        }
+                    }
+                    connection.commit()
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally { connection.autoCommit = oldAutoCommit }
+            }
+            runTransition()
+        } finally { cleanTarget(target, stream) }
+    }
+
+    @Test
     fun workerShrinksTradeFanoutAndKeepsAdvancingEmptyRanges() {
         val (source, target) = databasesOrSkip()
         val token = UUID.randomUUID().toString()
@@ -48,6 +522,36 @@ class SettlementBoundedObligationStoreIntegrationTest {
             assertEquals(PostMatchSettlementObligationWorker.Progress(1, true), worker.processOnceProgress())
             assertEquals(PostMatchSettlementObligationWorker.Progress(1, true), worker.processOnceProgress())
             assertEquals(PostMatchSettlementObligationWorker.Progress(0, false), worker.processOnceProgress())
+        } finally { cleanTarget(target, stream) }
+    }
+
+    @Test
+    fun transitionWorkerShrinksFanoutAndAdvancesEmptyRanges() {
+        val (source, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-worker-$token"
+        val generation = PostMatchSourceCatalog(source).generation()
+        val run = "run-$token"
+        val session = "session-$token"
+        try {
+            seed(target, stream, generation, run, session, tradeCount = 2, spreadTrades = true)
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligation = SettlementBoundedObligationStore(target)
+            assertEquals(PostMatchApplyResult.APPLIED,
+                obligation.apply(requireNotNull(obligation.readNextWindow(stream, 0, generation,
+                    maxSourcePositions = 3)), mapOf(SettlementPolicyKey(run, session) to policy)))
+            val worker = PostMatchSettlementTransitionWorker(
+                PostMatchSourceCatalog(source), SettlementBoundedTransitionStore(target),
+                stream, listOf(0), batchSize = 3, maxObligations = 1, pollMs = 50
+            )
+            assertEquals(PostMatchSettlementTransitionWorker.Progress(0, true), worker.processOnceProgress())
+            assertEquals(PostMatchSettlementTransitionWorker.Progress(1, true), worker.processOnceProgress())
+            assertEquals(PostMatchSettlementTransitionWorker.Progress(1, true), worker.processOnceProgress())
+            assertEquals(PostMatchSettlementTransitionWorker.Progress(0, false), worker.processOnceProgress())
         } finally { cleanTarget(target, stream) }
     }
 
@@ -252,19 +756,31 @@ class SettlementBoundedObligationStoreIntegrationTest {
     }
 
     private fun seed(target: javax.sql.DataSource, stream: String, generation: String, run: String,
-        session: String, tradeCount: Int = 1, spreadTrades: Boolean = false) {
+        session: String, tradeCount: Int = 1, spreadTrades: Boolean = false,
+        partitionId: Int = 0, accountKey: String = stream, reverseRoles: Boolean = false) {
+        val origin = com.reef.platform.application.postmatch.CanonicalStreamPosition.origin(partitionId)
+        val tradeKey = if (partitionId == 0) stream else "$stream-p$partitionId"
+        fun buyerParticipant(ordinal: Int) = "${if (reverseRoles) "seller" else "buyer"}-$ordinal-$accountKey"
+        fun sellerParticipant(ordinal: Int) = "${if (reverseRoles) "buyer" else "seller"}-$ordinal-$accountKey"
+        fun buyerAccount(ordinal: Int) = "${if (reverseRoles) "seller" else "buyer"}-account-$ordinal-$accountKey"
+        fun sellerAccount(ordinal: Int) = "${if (reverseRoles) "buyer" else "seller"}-account-$ordinal-$accountKey"
         target.connection.use { connection ->
             connection.prepareStatement(
                 """INSERT INTO settlement.canonical_intake_frontiers(event_stream, partition_id,
-                   source_generation, last_stream_sequence) VALUES (?, 0, ?, 3)"""
-            ).use { statement -> statement.setString(1, stream); statement.setString(2, generation); statement.executeUpdate() }
+                   source_generation, last_stream_sequence) VALUES (?, ?, ?, ?)"""
+            ).use { statement ->
+                statement.setString(1, stream); statement.setInt(2, partitionId)
+                statement.setString(3, generation); statement.setLong(4, origin + 3)
+                statement.executeUpdate()
+            }
             connection.prepareStatement(
                 """INSERT INTO settlement.canonical_intake_coverage(event_stream, partition_id,
                    source_generation, from_exclusive_sequence, through_inclusive_sequence,
-                   source_member_count, source_digest) VALUES (?, 0, ?, 0, 3, 3, ?)"""
+                   source_member_count, source_digest) VALUES (?, ?, ?, ?, ?, 3, ?)"""
             ).use { statement ->
-                statement.setString(1, stream); statement.setString(2, generation)
-                statement.setString(3, "source-$stream")
+                statement.setString(1, stream); statement.setInt(2, partitionId)
+                statement.setString(3, generation); statement.setLong(4, origin)
+                statement.setLong(5, origin + 3); statement.setString(6, "source-$tradeKey")
                 statement.executeUpdate()
             }
             connection.prepareStatement(
@@ -272,34 +788,35 @@ class SettlementBoundedObligationStoreIntegrationTest {
                    stream_sequence, effect_ordinal, event_id, trade_id, execution_id, run_id, venue_session_id,
                    buy_order_id, sell_order_id, buyer_participant_id, seller_participant_id,
                    buyer_account_id, seller_account_id, instrument_id, quantity_units, price, currency, occurred_at_text)
-                   VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AAPL', '2', '100', 'USD',
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AAPL', '2', '100', 'USD',
                    '2026-09-27T00:00:00Z')"""
             ).use { statement ->
                 repeat(tradeCount) { ordinal ->
                     statement.setString(1, stream); statement.setString(2, generation)
-                    statement.setLong(3, if (spreadTrades) (ordinal + 2).toLong() else 2L)
-                    statement.setInt(4, ordinal); statement.setString(5, "event-$ordinal-$stream")
-                    statement.setString(6, "trade-$ordinal-$stream"); statement.setString(7, "execution-$ordinal-$stream")
-                    statement.setString(8, run); statement.setString(9, session)
-                    statement.setString(10, "buy-$ordinal-$stream"); statement.setString(11, "sell-$ordinal-$stream")
-                    statement.setString(12, "buyer-$ordinal-$stream"); statement.setString(13, "seller-$ordinal-$stream")
-                    statement.setString(14, "buyer-account-$ordinal-$stream")
-                    statement.setString(15, "seller-account-$ordinal-$stream")
+                    statement.setInt(3, partitionId)
+                    statement.setLong(4, origin + if (spreadTrades) (ordinal + 2).toLong() else 2L)
+                    statement.setInt(5, ordinal); statement.setString(6, "event-$ordinal-$tradeKey")
+                    statement.setString(7, "trade-$ordinal-$tradeKey"); statement.setString(8, "execution-$ordinal-$tradeKey")
+                    statement.setString(9, run); statement.setString(10, session)
+                    statement.setString(11, "buy-$ordinal-$tradeKey"); statement.setString(12, "sell-$ordinal-$tradeKey")
+                    statement.setString(13, buyerParticipant(ordinal)); statement.setString(14, sellerParticipant(ordinal))
+                    statement.setString(15, buyerAccount(ordinal))
+                    statement.setString(16, sellerAccount(ordinal))
                     statement.addBatch()
                 }
                 statement.executeBatch()
             }
             val intakeTrades = (0 until tradeCount).map { ordinal -> SettlementIntakeTrade(
-                streamSequence = if (spreadTrades) (ordinal + 2).toLong() else 2L,
+                streamSequence = origin + if (spreadTrades) (ordinal + 2).toLong() else 2L,
                 effectOrdinal = ordinal,
-                tradeId = "trade-$ordinal-$stream", eventId = "event-$ordinal-$stream",
-                executionId = "execution-$ordinal-$stream",
-                buyOrderId = "buy-$ordinal-$stream", sellOrderId = "sell-$ordinal-$stream",
+                tradeId = "trade-$ordinal-$tradeKey", eventId = "event-$ordinal-$tradeKey",
+                executionId = "execution-$ordinal-$tradeKey",
+                buyOrderId = "buy-$ordinal-$tradeKey", sellOrderId = "sell-$ordinal-$tradeKey",
                 runId = run, venueSessionId = session,
-                buyerParticipantId = "buyer-$ordinal-$stream",
-                sellerParticipantId = "seller-$ordinal-$stream",
-                buyerAccountId = "buyer-account-$ordinal-$stream",
-                sellerAccountId = "seller-account-$ordinal-$stream",
+                buyerParticipantId = buyerParticipant(ordinal),
+                sellerParticipantId = sellerParticipant(ordinal),
+                buyerAccountId = buyerAccount(ordinal),
+                sellerAccountId = sellerAccount(ordinal),
                 instrumentId = "AAPL", quantityUnits = "2", price = "100", currency = "USD",
                 occurredAt = "2026-09-27T00:00:00Z"
             ) }
@@ -307,17 +824,18 @@ class SettlementBoundedObligationStoreIntegrationTest {
                 """INSERT INTO settlement.canonical_intake_receipts(event_stream, source_generation,
                    partition_id, stream_sequence, batch_id, command_id, command_payload_hash,
                    result_digest, effect_count, trade_count, trade_digest)
-                   VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { statement ->
-                (1L..3L).forEach { sequence ->
+                (origin + 1..origin + 3).forEach { sequence ->
                     val members = intakeTrades.filter { it.streamSequence == sequence }
                     statement.setString(1, stream); statement.setString(2, generation)
-                    statement.setLong(3, sequence); statement.setString(4, "batch-$sequence")
-                    statement.setString(5, "command-$sequence")
-                    statement.setString(6, "payload-$sequence")
-                    statement.setString(7, "result-$sequence")
-                    statement.setInt(8, members.size); statement.setInt(9, members.size)
-                    statement.setString(10, SettlementIntakeManifest.digest(members))
+                    statement.setInt(3, partitionId)
+                    statement.setLong(4, sequence); statement.setString(5, "batch-$sequence")
+                    statement.setString(6, "command-$sequence")
+                    statement.setString(7, "payload-$sequence")
+                    statement.setString(8, "result-$sequence")
+                    statement.setInt(9, members.size); statement.setInt(10, members.size)
+                    statement.setString(11, SettlementIntakeManifest.digest(members))
                     statement.addBatch()
                 }
                 statement.executeBatch()
@@ -327,7 +845,9 @@ class SettlementBoundedObligationStoreIntegrationTest {
 
     private fun cleanTarget(target: javax.sql.DataSource, stream: String) {
         target.connection.use { connection ->
-            listOf("canonical_settlement_obligations", "canonical_obligation_coverage",
+            listOf("canonical_account_checkpoints", "canonical_transition_ledger_entries", "canonical_transition_attempts",
+                "canonical_account_state", "canonical_transition_coverage", "canonical_transition_frontiers",
+                "canonical_settlement_obligations", "canonical_obligation_coverage",
                 "canonical_policy_bindings", "canonical_obligation_frontiers", "canonical_trade_intake",
                 "canonical_intake_receipts", "canonical_intake_coverage",
                 "canonical_intake_frontiers").forEach { table ->
