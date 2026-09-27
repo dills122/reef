@@ -17,15 +17,17 @@ internal class PostMatchSettlementTransitionWorker(
     private val partitions: List<Int>,
     private val batchSize: Int,
     private val maxObligations: Int,
-    private val pollMs: Long
+    private val pollMs: Long,
+    private val workerCount: Int = minOf(partitions.size, 4)
 ) {
     private val running = AtomicBoolean(false)
+    private val workerThreads = mutableListOf<Thread>()
     internal data class Progress(val obligations: Int, val advanced: Boolean)
 
     init {
         require(eventStream.isNotBlank() && partitions.isNotEmpty() && partitions.distinct().size == partitions.size)
         require(partitions.all { it in 0..32767 } && batchSize in 1..5000 &&
-            maxObligations in 1..20_000 && pollMs > 0)
+            maxObligations in 1..20_000 && pollMs > 0 && workerCount in 1..32)
     }
 
     fun processOnce(): Int = processOnceProgress().obligations
@@ -37,65 +39,93 @@ internal class PostMatchSettlementTransitionWorker(
     }
 
     private fun processPartition(partition: Int, generation: String): Progress {
+        fun execute(): Progress {
+            check(catalog.generation() == generation) { "settlement source generation changed before execution" }
+            val window = store.readNextAdmittedWindow(eventStream, partition, generation)
+                ?: return Progress(0, false)
+            check(catalog.generation() == generation) { "settlement source generation changed during execution" }
+            return if (store.apply(window) == PostMatchApplyResult.APPLIED)
+                Progress(window.obligations.size, true) else Progress(0, false)
+        }
+        val firstExecution = execute()
         var positions = batchSize
+        var admitted = false
         while (true) {
-            check(catalog.generation() == generation) { "settlement source generation changed before transition read" }
+            check(catalog.generation() == generation) { "settlement source generation changed before admission read" }
             val window = try {
-                store.readNextWindow(eventStream, partition, generation, positions, maxObligations)
+                store.readNextAdmissionWindow(eventStream, partition, generation, positions, maxObligations)
             } catch (error: SettlementTransitionWindowTooLarge) {
                 if (positions == 1) throw error
                 positions = maxOf(1, positions / 2)
                 continue
-            } ?: return Progress(0, false)
-            check(catalog.generation() == generation) { "settlement source generation changed during transition" }
-            return if (store.apply(window) == PostMatchApplyResult.APPLIED)
-                Progress(window.obligations.size, true) else Progress(0, false)
+            }
+            if (window != null) {
+                check(catalog.generation() == generation) { "settlement source generation changed during admission" }
+                admitted = store.admit(window) == PostMatchApplyResult.APPLIED
+            }
+            break
         }
+        val nextExecution = if (firstExecution.advanced) Progress(0, false) else execute()
+        return Progress(firstExecution.obligations + nextExecution.obligations,
+            firstExecution.advanced || nextExecution.advanced || admitted)
     }
 
+    @Synchronized
     fun start() {
-        if (!running.compareAndSet(false, true)) return
-        thread(name = "reef-postmatch-settlement-transition", isDaemon = true) {
-            var sourceFailure = ""
-            val failures = mutableMapOf<Int, String>()
-            val retryAfter = mutableMapOf<Int, Long>()
-            while (running.get()) {
-                val generation = try {
-                    catalog.generation().also {
-                        if (sourceFailure.isNotEmpty()) System.err.println("postmatch_transition_recovered source=true")
-                        sourceFailure = ""
-                    }
-                } catch (error: Exception) {
-                    val failure = error.message ?: error::class.simpleName ?: "unknown"
-                    if (failure != sourceFailure) System.err.println("postmatch_transition_failed source=true reason=$failure")
-                    sourceFailure = failure
-                    Thread.sleep(maxOf(pollMs, 1000L))
-                    continue
-                }
-                var advanced = false
-                partitions.forEach { partition ->
-                    if (System.currentTimeMillis() < (retryAfter[partition] ?: 0L)) return@forEach
-                    try {
-                        advanced = processPartition(partition, generation).advanced || advanced
-                        if (failures.remove(partition) != null) {
-                            System.err.println("postmatch_transition_recovered partition=$partition")
+        if (running.get()) return
+        check(workerThreads.none { it.isAlive }) { "settlement transition workers have not stopped" }
+        running.set(true)
+        workerThreads.clear()
+        val activeWorkers = minOf(workerCount, partitions.size)
+        repeat(activeWorkers) { workerIndex ->
+            val assigned = partitions.filterIndexed { index, _ -> index % activeWorkers == workerIndex }
+            workerThreads += thread(name = "reef-postmatch-settlement-transition-$workerIndex", isDaemon = true) {
+                var sourceFailure = ""
+                val failures = mutableMapOf<Int, String>()
+                val retryAfter = mutableMapOf<Int, Long>()
+                while (running.get()) {
+                    val generation = try {
+                        catalog.generation().also {
+                            if (sourceFailure.isNotEmpty()) System.err.println("postmatch_transition_recovered source=true")
+                            sourceFailure = ""
                         }
-                        retryAfter.remove(partition)
                     } catch (error: Exception) {
                         val failure = error.message ?: error::class.simpleName ?: "unknown"
-                        if (failure != failures[partition]) {
-                            System.err.println("postmatch_transition_failed partition=$partition reason=$failure")
-                            failures[partition] = failure
-                        }
-                        retryAfter[partition] = System.currentTimeMillis() + maxOf(pollMs, 1000L)
+                        if (failure != sourceFailure) System.err.println("postmatch_transition_failed source=true reason=$failure")
+                        sourceFailure = failure
+                        Thread.sleep(maxOf(pollMs, 1000L))
+                        continue
                     }
+                    var advanced = false
+                    assigned.forEach { partition ->
+                        if (System.currentTimeMillis() < (retryAfter[partition] ?: 0L)) return@forEach
+                        try {
+                            advanced = processPartition(partition, generation).advanced || advanced
+                            if (failures.remove(partition) != null) {
+                                System.err.println("postmatch_transition_recovered partition=$partition")
+                            }
+                            retryAfter.remove(partition)
+                        } catch (error: Exception) {
+                            val failure = error.message ?: error::class.simpleName ?: "unknown"
+                            if (failure != failures[partition]) {
+                                System.err.println("postmatch_transition_failed partition=$partition reason=$failure")
+                                failures[partition] = failure
+                            }
+                            retryAfter[partition] = System.currentTimeMillis() + maxOf(pollMs, 1000L)
+                        }
+                    }
+                    if (!advanced) Thread.sleep(pollMs)
                 }
-                if (!advanced) Thread.sleep(pollMs)
             }
         }
     }
 
-    fun stop() { running.set(false) }
+    @Synchronized
+    fun stop() {
+        running.set(false)
+        workerThreads.forEach { it.join(minOf(maxOf(pollMs, 1000L) + 500L, 5000L)) }
+        workerThreads.removeAll { !it.isAlive }
+    }
 
     companion object {
         fun fromEnv(): PostMatchSettlementTransitionWorker {
@@ -125,7 +155,8 @@ internal class PostMatchSettlementTransitionWorker(
                 PostMatchSourceCatalog(source), SettlementBoundedTransitionStore(target), stream, partitions,
                 RuntimeEnv.int("POSTMATCH_SETTLEMENT_TRANSITION_BATCH_SIZE", 100, min = 1),
                 RuntimeEnv.int("POSTMATCH_SETTLEMENT_TRANSITION_MAX_OBLIGATIONS", 1000, min = 1),
-                RuntimeEnv.long("POSTMATCH_SETTLEMENT_TRANSITION_POLL_MS", 50, min = 1)
+                RuntimeEnv.long("POSTMATCH_SETTLEMENT_TRANSITION_POLL_MS", 50, min = 1),
+                RuntimeEnv.int("POSTMATCH_SETTLEMENT_TRANSITION_WORKERS", minOf(partitions.size, 4), min = 1)
             )
         }
     }

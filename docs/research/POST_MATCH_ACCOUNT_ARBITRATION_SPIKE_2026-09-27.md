@@ -1,7 +1,8 @@
 # Post-match account arbitration spike — 2026-09-27
 
-Status: recommendation for project-owner decision. This is research, not an
-accepted ADR or permission to enable the shadow transition worker.
+Status: retained-fact replay recommendation accepted by project owner on
+2026-09-27 as [D-059](../DECISIONS.md#d-059-durable-settlement-admission-order-for-scarce-accounts).
+This spike is research, not permission to enable the shadow worker or claim capacity.
 
 ## Decision question
 
@@ -19,7 +20,7 @@ disabled and has no PR.
 Review retained matching and settlement facts, source ordering, and comparable
 ledger implementations. No production, backbone, public-read, droplet, or
 capacity change is authorized by this spike. Stop at a decision-ready design;
-change the governing contract and code only after the owner chooses.
+change the governing contract and code after the owner chooses.
 
 Criteria: deterministic replay; same-lane matching order; atomic four-leg
 DvP; failure/retry and source gaps; bounded per-account work; no matching
@@ -62,7 +63,7 @@ explicit trade and contention mix. Venue-core 10k does not qualify settlement.
 Right-column conclusions are Reef inferences; those systems do not implement
 Reef's exact four-leg cash/security workflow.
 
-## Replay contract requiring owner decision
+## Replay contract and accepted choice
 
 Two meanings of deterministic rebuild differ materially:
 
@@ -90,7 +91,7 @@ ledger legs still need atomic recording and exact replay verification.
 | Keep per-partition windows and sorted account locks | Avoids double spend; scheduler still chooses winner. Serializable isolation changes retries, not the fixed winner. | Reject. |
 | Sort `(occurredAt, partitionId, sequence, ordinal)` | Stable key, but an open idle partition or source gap can later provide an earlier key. Needs upstream barriers/watermarks or ingress sequence. | Reject with current source; likely adds instant-mode latency. |
 | Durable global log, strictly serial settlement | Replays exactly with retained log; simple gap/failure proof. | Correct fallback; serial ledger commits may cap throughput. |
-| **Durable global log, account-aware parallel settlement** | Rank fixes every conflict. Each trade waits for all earlier ranks sharing an account. Four legs and completion commit atomically. | **Recommend**, conditional on retained-fact replay contract. |
+| **Durable global log, account-aware parallel settlement** | Rank fixes every conflict. Each admitted window waits for earlier conflicting windows. Four legs and completion commit atomically. | **Accepted**, with retained-fact replay contract. |
 | Account lanes without one shared rank | Multi-account DvP queues can disagree about relative trade order; cycle handling reintroduces scheduler choice. | Reject. |
 | Record only first-run outcome | Same-generation reads possible, but no independently checkable decision order or exact rebuild contract. | Reject. |
 
@@ -101,12 +102,12 @@ ledger legs still need atomic recording and exact replay verification.
 1. Intake validates exact canonical source membership, ownership, and
    per-partition contiguous coverage. Matching acceptance gains no synchronous
    database write.
-2. Separate admission transaction takes a bounded, verified obligation batch.
-   A transactional global counter row assigns contiguous ranks in that batch's
-   source order. The transaction inserts immutable `(rank, source identity,
-   source digest, policy version, account-set digest)` facts and account queue
-   references, then advances admission frontier with coverage evidence. Counter,
-   facts, references, and frontier commit together; rollback leaves no gap.
+2. Separate admission transaction takes a bounded, verified obligation window.
+   A transactional global counter row assigns one rank per window; trades
+   within that window retain source order. The transaction inserts immutable `(rank, source identity,
+   source digest, policy version, account-set digest)` facts and immutable
+   account membership, then advances admission frontier with coverage evidence.
+   Counter, facts, membership, and frontier commit together; rollback leaves no gap.
    Duplicate source identity must have identical rank and digest. `nextval`
    cannot establish this proof.
 3. A higher rank cannot commit before a lower rank. Admission checks its
@@ -116,21 +117,22 @@ ledger legs still need atomic recording and exact replay verification.
 
 ### Execution
 
-4. Rank `r` is eligible only if no lower unfinished rank shares any of its
-   four exact account keys. Trades on disjoint accounts may execute concurrently,
-   even within one source partition. Admission already preserves source order;
-   per-partition execution coverage advances only through contiguous completed
-   positions, without blocking independent execution.
-5. Worker locks eligible trade and accounts in stable order and rechecks
+4. Window rank `r` is eligible only if no lower unfinished rank shares any of
+   its exact account keys or precedes it on the same source partition.
+   Disjoint windows on different partitions may execute concurrently. This
+   window granularity preserves the existing bounded ledger transaction and
+   contiguous execution frontier. It is a throughput tradeoff to measure;
+   disjoint trades in one window execute together rather than concurrently.
+5. Worker locks eligible window and accounts in stable order and rechecks
    eligibility and digests. Decision, four cash/security legs on success,
    obligation status, account delta/checkpoints, and completion proof commit
    in one transaction. Crash before commit leaves pending work; crash after
    commit yields exact duplicate result. Source gap/conflict stops progress.
-6. Account queue references advance only after completion. No `SKIP LOCKED` shortcut
+6. Completion proofs release dependent windows. No `SKIP LOCKED` shortcut
    may jump over a lower rank sharing a dependency. Bounded claim queries and
    indexes are an implementation gate.
 
-For each account, completed trades form a prefix of admitted rank order, so
+For each account, completed windows form a prefix of admitted rank order, so
 each balance check sees exactly that prefix. Disjoint accounts
 commute. By induction over rank, the same admission log, fixed opening
 positions, and policy yield the same outcomes, postings, and checkpoints
@@ -165,8 +167,8 @@ merge candidate as written.
 1. Update canonical effects/settlement contract, accepted decision, schema,
    worker topology, replay/restore semantics together. Retain original source
    identity in admission facts.
-2. Implement batched transactional admission and bounded account queues.
-   Replace per-partition `applyNew` scheduling with eligible-rank claims;
+2. Implement batched transactional admission and bounded account dependencies.
+   Gate per-partition `applyNew` on predecessor completion;
    preserve atomic four-leg DvP and checkpoint proof.
 3. Local PostgreSQL tests: 200 cash/two 200 trades across partitions; opposite
    worker schedules against the *same imported admission log*; disjoint trades
@@ -184,11 +186,11 @@ merge candidate as written.
    replay correctness, and recovery. A failing result drives measured redesign
    before cutover.
 
-## Owner decision requested
+## Owner decision
 
-**Recommend retained-fact replay and durable admission order with account-aware
-parallel execution.** Confirm the immutable admission order is canonical
-post-trade data retained and imported for deterministic replay. If matching
-facts alone must reproduce the winner, this recommendation cannot satisfy it;
-design a provable global order upstream or a barrier/watermark contract and
-revisit instant settlement latency.
+**Accepted: retained-fact replay and durable admission order with account-aware
+parallel execution.** The immutable admission order is canonical post-trade
+data retained and imported for deterministic replay. Matching-only fresh
+admission is a new arbitration history. Window-level rank is the first
+implementation granularity; qualification must measure its lane serialization
+and hot-account skew before any public-read cutover.

@@ -1,22 +1,39 @@
 # Bounded settlement transition — 2026-09-27
 
-Status: draft shadow implementation. Independent review found that scarce
-accounts shared across source partitions can settle in different orders on
-rebuild. Do not enable this worker for a shadow cohort until deterministic
-contention authority is designed and verified. This contract does not approve
-public settlement reads or establish 10k/s capacity.
+Status: accepted arbitration design; shadow implementation under local
+verification and independent review. This contract does not approve public
+settlement reads or establish 10k/s capacity. See [D-059](../DECISIONS.md#d-059-durable-settlement-admission-order-for-scarce-accounts)
+and the [research spike](../research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md).
 
 ## Input and progress
 
-Consume only obligations committed by the bounded obligation stage. Give the
-transition its own `(event_stream, partition_id)` frontier and source generation.
-Read a bounded contiguous source interval, verify every overlapping obligation
-coverage digest against its bounded intake interval and the underlying intake
-manifest, and advance transition coverage, workflow
-facts, account state, ledger facts, and frontier in one settlement transaction.
-Empty source intervals advance progress. A replay compares all committed facts
-and balances without posting another leg. A gap, generation change, policy
-drift, or ambiguous partial state stops progress.
+Consume only obligations committed by the bounded obligation stage. Admission
+reads a bounded contiguous source interval, verifies obligation coverage and
+the underlying intake manifest, then assigns one durable global rank to the
+window. Trades inside that window retain source sequence/effect order. A
+transactional counter, immutable admission record, dependency and keyed
+account-membership rows, and per-partition admission frontier commit together. Empty
+windows also get a rank so source coverage remains explicit. A failed
+transaction leaves no rank or frontier gap. Matching acceptance gains no
+synchronous database write.
+
+Execution has a separate `(event_stream, partition_id)` frontier. It may apply
+an admitted window only after every earlier admitted window that touches one
+of its account keys, or precedes it on the same source partition, has a
+committed completion proof. It rechecks source and admission digests, then
+advances transition coverage, workflow facts, account state, ledger facts,
+completion proof, and execution frontier in one settlement transaction.
+Disjoint windows on different partitions may execute concurrently. Replay
+compares committed facts and balances without posting again. Gap, generation
+change, dependency corruption, policy drift, or partial state stops progress.
+
+Deterministic replay includes the retained admission log. A rebuilt target
+must import/retain that log and rank order; fresh admission from matching
+facts alone is a new arbitration history and can choose a different scarce
+account winner. Admission facts and immutable account membership need backup
+and audit retention. The latest prior rank for each account is found by an
+indexed lookup over that membership, so no mutable account-tail pointer must
+survive restore.
 
 ## Account ownership and concurrency
 
@@ -26,8 +43,8 @@ the shadow key so a rebuild cannot reuse another generation's balance. Opening
 resources come from explicit resource-position facts and are summarized by key
 on insert, update, and delete, outside the matching command path. The transition
 seeds and locks only affected account keys, in a stable global key order across
-partitions. Stable lock-key order prevents some deadlocks but does not define
-which partition's trade decides first for a scarce shared account. A separate
+partitions. Admission dependencies, rather than lock arrival, define which
+window decides first for a scarce shared account. A separate
 post-lock read checks the latest committed account
 checkpoint against cached balance and source opening. Each changed balance gets
 a versioned checkpoint with its before/after delta and digest of that window's
@@ -63,6 +80,7 @@ proof is established. The source control-plane timing gap described in the
 also blocks public cutover. Local tests must cover same-account trades on
 different source partitions, replay, empty intervals, insufficient resources,
 cash and security conservation, crash rollback, changed resource or policy
-inputs, and opposing shared-account contention. The later disposable-droplet campaign measures settlement trades/s,
+inputs, opposing shared-account contention, and disjoint parallel execution.
+The later disposable-droplet campaign measures settlement trades/s,
 ledger facts/s, account contention, frontier lag, and in-load visibility with
 all mandatory stages enabled.

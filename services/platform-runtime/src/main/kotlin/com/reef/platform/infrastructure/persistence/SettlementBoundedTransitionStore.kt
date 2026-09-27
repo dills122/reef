@@ -100,6 +100,18 @@ class SettlementBoundedTransitionStore(
     fun readNextWindow(
         eventStream: String, partitionId: Int, sourceGeneration: String,
         maxSourcePositions: Int = 100, maxObligations: Int = 1000
+    ): SettlementTransitionWindow? = readWindow(eventStream, partitionId, sourceGeneration,
+        maxSourcePositions, maxObligations, "canonical_transition_frontiers")
+
+    fun readNextAdmissionWindow(
+        eventStream: String, partitionId: Int, sourceGeneration: String,
+        maxSourcePositions: Int = 100, maxObligations: Int = 1000
+    ): SettlementTransitionWindow? = readWindow(eventStream, partitionId, sourceGeneration,
+        maxSourcePositions, maxObligations, "canonical_transition_admission_frontiers")
+
+    private fun readWindow(
+        eventStream: String, partitionId: Int, sourceGeneration: String,
+        maxSourcePositions: Int, maxObligations: Int, frontierTable: String
     ): SettlementTransitionWindow? {
         require(eventStream.isNotBlank() && sourceGeneration.isNotBlank() && partitionId in 0..32767)
         require(maxSourcePositions in 1..5000 && maxObligations in 1..20_000)
@@ -107,7 +119,7 @@ class SettlementBoundedTransitionStore(
             val upstream = frontier(connection, "canonical_obligation_frontiers", eventStream, partitionId)
                 ?: return@use null
             check(upstream.first == sourceGeneration) { "settlement obligation source generation changed" }
-            val own = frontier(connection, "canonical_transition_frontiers", eventStream, partitionId)
+            val own = frontier(connection, frontierTable, eventStream, partitionId)
             check(own == null || own.first == sourceGeneration) { "settlement transition source generation changed" }
             val origin = CanonicalStreamPosition.origin(partitionId)
             val from = own?.second ?: origin
@@ -120,6 +132,44 @@ class SettlementBoundedTransitionStore(
             verifySource(connection, eventStream, sourceGeneration, partitionId, from, through, obligations)
             SettlementTransitionWindow(eventStream, sourceGeneration, partitionId, from, through,
                 obligations, digest(obligations))
+        }
+    }
+
+    fun readNextAdmittedWindow(
+        eventStream: String, partitionId: Int, sourceGeneration: String
+    ): SettlementTransitionWindow? = dataSource.connection.use { connection ->
+        val completed = frontier(connection, "canonical_transition_frontiers", eventStream, partitionId)
+        check(completed == null || completed.first == sourceGeneration) {
+            "settlement transition source generation changed"
+        }
+        val from = completed?.second ?: CanonicalStreamPosition.origin(partitionId)
+        connection.prepareStatement(
+            """SELECT through_inclusive_sequence, obligation_count, obligation_digest
+               FROM settlement.canonical_transition_admissions
+               WHERE event_stream = ? AND source_generation = ? AND partition_id = ?
+                 AND from_exclusive_sequence = ?"""
+        ).use { statement ->
+            statement.setString(1, eventStream)
+            statement.setString(2, sourceGeneration)
+            statement.setInt(3, partitionId)
+            statement.setLong(4, from)
+            statement.executeQuery().use { rows ->
+                if (!rows.next()) return@use null
+                val through = rows.getLong(1)
+                val count = rows.getInt(2)
+                val savedDigest = rows.getString(3)
+                check(!rows.next() && count in 0..20_000 && through > from && through - from <= 5000) {
+                    "settlement admitted window is invalid"
+                }
+                val obligations = readObligations(connection, eventStream, partitionId, sourceGeneration,
+                    from, through, count + 1)
+                check(obligations.size == count && digest(obligations) == savedDigest) {
+                    "settlement admitted obligations changed"
+                }
+                verifySource(connection, eventStream, sourceGeneration, partitionId, from, through, obligations)
+                SettlementTransitionWindow(eventStream, sourceGeneration, partitionId, from, through,
+                    obligations, savedDigest)
+            }
         }
     }
 
@@ -288,7 +338,325 @@ class SettlementBoundedTransitionStore(
         return hash.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
-    fun apply(window: SettlementTransitionWindow): PostMatchApplyResult = dataSource.connection.use { connection ->
+    private fun openingDigest(connection: Connection, obligations: List<SettlementTransitionObligation>): String {
+        val runs = obligations.asSequence().filter { it.mode == "instant-post-trade" }
+            .map { it.runId }.distinct().sorted().toList()
+        val positioned = connection.prepareStatement(
+            "SELECT EXISTS (SELECT 1 FROM settlement.canonical_resource_openings WHERE run_id = ?)"
+        ).use { statement ->
+            runs.map { run ->
+                statement.setString(1, run)
+                run to statement.executeQuery().use { rows -> check(rows.next()); rows.getBoolean(1) }
+            }
+        }
+        val keys = accountKeys(obligations)
+        val openings: List<List<Any?>> = if (keys.isEmpty()) emptyList() else connection.prepareStatement(
+            """SELECT requested.run_id, requested.participant_id, requested.account_id,
+                      requested.asset_type, requested.asset_id, opening.quantity, opening.position_count
+               FROM jsonb_to_recordset(?::jsonb) AS requested(
+                 run_id text, participant_id text, account_id text, asset_type text, asset_id text)
+               LEFT JOIN settlement.canonical_resource_openings opening
+                 ON opening.run_id = requested.run_id AND opening.participant_id = requested.participant_id
+                AND opening.account_id = requested.account_id AND opening.asset_type = requested.asset_type
+                AND opening.asset_id = requested.asset_id
+               ORDER BY requested.run_id, requested.participant_id, requested.account_id,
+                        requested.asset_type, requested.asset_id"""
+        ).use { statement ->
+            statement.setString(1, accountKeyJson(keys))
+            statement.executeQuery().use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        val quantity = rows.getBigDecimal(6)?.stripTrailingZeros()?.toPlainString()
+                        val count = rows.getLong(7).let { if (rows.wasNull()) null else it }
+                        add(listOf(rows.getString(1), rows.getString(2), rows.getString(3),
+                            rows.getString(4), rows.getString(5), quantity, count))
+                    }
+                }
+            }
+        }
+        check(openings.size == keys.size) { "settlement admission opening key set is incomplete" }
+        return sha256(mapper.writeValueAsString(listOf(positioned, openings)))
+    }
+
+    /** Records a total post-trade order before any balance-dependent decision. */
+    fun admit(window: SettlementTransitionWindow): PostMatchApplyResult = dataSource.connection.use { connection ->
+        require(window.fromExclusiveSequence >= CanonicalStreamPosition.origin(window.partitionId) &&
+            window.throughInclusiveSequence > window.fromExclusiveSequence &&
+            window.throughInclusiveSequence - window.fromExclusiveSequence <= 5000)
+        check(digest(window.obligations) == window.obligationDigest) {
+            "settlement admission input digest changed"
+        }
+        val oldAutoCommit = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            connection.prepareStatement(
+                """INSERT INTO settlement.canonical_transition_admission_frontiers(
+                     event_stream, partition_id, source_generation, last_stream_sequence)
+                   VALUES (?, ?, ?, ?) ON CONFLICT (event_stream, partition_id) DO NOTHING"""
+            ).use { statement ->
+                statement.setString(1, window.eventStream)
+                statement.setInt(2, window.partitionId)
+                statement.setString(3, window.sourceGeneration)
+                statement.setLong(4, CanonicalStreamPosition.origin(window.partitionId))
+                statement.executeUpdate()
+            }
+            val frontier = connection.prepareStatement(
+                """SELECT source_generation, last_stream_sequence, last_rank
+                   FROM settlement.canonical_transition_admission_frontiers
+                   WHERE event_stream = ? AND partition_id = ? FOR UPDATE"""
+            ).use { statement ->
+                statement.setString(1, window.eventStream)
+                statement.setInt(2, window.partitionId)
+                statement.executeQuery().use { rows ->
+                    check(rows.next()) { "settlement admission frontier is absent" }
+                    val rank = rows.getLong(3).let { if (rows.wasNull()) null else it }
+                    Triple(rows.getString(1), rows.getLong(2), rank)
+                }
+            }
+            check(frontier.first == window.sourceGeneration) { "settlement admission source generation changed" }
+            val upstream = frontier(connection, "canonical_obligation_frontiers", window.eventStream, window.partitionId)
+                ?: error("settlement obligation frontier is absent")
+            check(upstream.first == window.sourceGeneration && upstream.second >= window.throughInclusiveSequence) {
+                "settlement admission exceeds committed obligations"
+            }
+            val current = readObligations(connection, window.eventStream, window.partitionId,
+                window.sourceGeneration, window.fromExclusiveSequence, window.throughInclusiveSequence,
+                window.obligations.size + 1)
+            check(current.size == window.obligations.size && digest(current) == window.obligationDigest) {
+                "settlement obligations changed before admission commit"
+            }
+            verifySource(connection, window.eventStream, window.sourceGeneration, window.partitionId,
+                window.fromExclusiveSequence, window.throughInclusiveSequence, current)
+            val accountKeys = accountKeys(current)
+            val accountJson = accountKeyJson(accountKeys)
+            val accountDigest = sha256(accountJson)
+            val openingDigest = openingDigest(connection, current)
+            val result = if (frontier.second == window.fromExclusiveSequence) {
+                check(current.all { it.status == "PENDING" }) { "settlement obligation already transitioned" }
+                connection.prepareStatement(
+                    """INSERT INTO settlement.canonical_transition_admission_counter(event_stream, source_generation)
+                       VALUES (?, ?) ON CONFLICT DO NOTHING"""
+                ).use { statement ->
+                    statement.setString(1, window.eventStream)
+                    statement.setString(2, window.sourceGeneration)
+                    statement.executeUpdate()
+                }
+                val rank = connection.prepareStatement(
+                    """UPDATE settlement.canonical_transition_admission_counter
+                       SET next_rank = next_rank + 1
+                       WHERE event_stream = ? AND source_generation = ?
+                       RETURNING next_rank - 1"""
+                ).use { statement ->
+                    statement.setString(1, window.eventStream)
+                    statement.setString(2, window.sourceGeneration)
+                    statement.executeQuery().use { rows ->
+                        check(rows.next()) { "settlement admission counter is absent" }
+                        rows.getLong(1).also { check(it > 0 && !rows.next()) }
+                    }
+                }
+                val predecessors = mutableSetOf<Long>()
+                frontier.third?.let(predecessors::add)
+                val priorAccounts: List<Pair<AccountKey, Long?>> = if (accountKeys.isEmpty()) emptyList()
+                    else connection.prepareStatement(
+                        """SELECT requested.run_id, requested.participant_id, requested.account_id,
+                                  requested.asset_type, requested.asset_id, prior.admission_rank
+                           FROM jsonb_to_recordset(?::jsonb) AS requested(
+                             run_id text, participant_id text, account_id text, asset_type text, asset_id text)
+                           LEFT JOIN LATERAL (
+                             SELECT admission_rank
+                             FROM settlement.canonical_transition_admission_accounts account
+                             WHERE account.event_stream = ? AND account.source_generation = ?
+                               AND account.run_id = requested.run_id
+                               AND account.participant_id = requested.participant_id
+                               AND account.account_id = requested.account_id
+                               AND account.asset_type = requested.asset_type
+                               AND account.asset_id = requested.asset_id
+                             ORDER BY admission_rank DESC LIMIT 1
+                           ) prior ON true
+                           ORDER BY requested.run_id, requested.participant_id, requested.account_id,
+                                    requested.asset_type, requested.asset_id"""
+                    ).use { statement ->
+                        statement.setString(1, accountJson)
+                        statement.setString(2, window.eventStream)
+                        statement.setString(3, window.sourceGeneration)
+                        statement.executeQuery().use { rows ->
+                            buildList {
+                                while (rows.next()) {
+                                    val key = AccountKey(rows.getString(1), rows.getString(2), rows.getString(3),
+                                        rows.getString(4), rows.getString(5))
+                                    val prior = rows.getLong(6).let { if (rows.wasNull()) null else it }
+                                    add(key to prior)
+                                }
+                            }
+                        }
+                    }
+                check(priorAccounts.map { it.first } == accountKeys) {
+                    "settlement admission account set is incomplete"
+                }
+                predecessors.addAll(priorAccounts.mapNotNull { it.second })
+                val dependencyDigest = sha256(predecessors.sorted().joinToString(","))
+                connection.prepareStatement(
+                    """INSERT INTO settlement.canonical_transition_admissions(
+                         event_stream, source_generation, admission_rank, partition_id,
+                         from_exclusive_sequence, through_inclusive_sequence,
+                         obligation_count, obligation_digest, account_set_digest,
+                         opening_digest, dependency_digest)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                ).use { statement ->
+                    statement.setString(1, window.eventStream)
+                    statement.setString(2, window.sourceGeneration)
+                    statement.setLong(3, rank)
+                    statement.setInt(4, window.partitionId)
+                    statement.setLong(5, window.fromExclusiveSequence)
+                    statement.setLong(6, window.throughInclusiveSequence)
+                    statement.setInt(7, current.size)
+                    statement.setString(8, window.obligationDigest)
+                    statement.setString(9, accountDigest)
+                    statement.setString(10, openingDigest)
+                    statement.setString(11, dependencyDigest)
+                    check(statement.executeUpdate() == 1)
+                }
+                connection.prepareStatement(
+                    """INSERT INTO settlement.canonical_transition_dependencies(
+                         event_stream, source_generation, admission_rank, predecessor_rank)
+                       VALUES (?, ?, ?, ?)"""
+                ).use { statement ->
+                    predecessors.sorted().forEach { predecessor ->
+                        check(predecessor < rank) { "settlement admission predecessor is out of order" }
+                        statement.setString(1, window.eventStream)
+                        statement.setString(2, window.sourceGeneration)
+                        statement.setLong(3, rank)
+                        statement.setLong(4, predecessor)
+                        statement.addBatch()
+                    }
+                    check(statement.executeBatch().size == predecessors.size)
+                }
+                connection.prepareStatement(
+                    """INSERT INTO settlement.canonical_transition_admission_accounts(
+                         event_stream, source_generation, admission_rank, run_id,
+                         participant_id, account_id, asset_type, asset_id, predecessor_rank)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                ).use { statement ->
+                    priorAccounts.forEach { (key, predecessor) ->
+                        statement.setString(1, window.eventStream)
+                        statement.setString(2, window.sourceGeneration)
+                        statement.setLong(3, rank)
+                        statement.setString(4, key.runId)
+                        statement.setString(5, key.participantId)
+                        statement.setString(6, key.accountId)
+                        statement.setString(7, key.assetType)
+                        statement.setString(8, key.assetId)
+                        if (predecessor == null) statement.setNull(9, java.sql.Types.BIGINT)
+                        else statement.setLong(9, predecessor)
+                        statement.addBatch()
+                    }
+                    check(statement.executeBatch().size == priorAccounts.size)
+                }
+                connection.prepareStatement(
+                    """UPDATE settlement.canonical_transition_admission_frontiers
+                       SET last_stream_sequence = ?, last_rank = ?
+                       WHERE event_stream = ? AND partition_id = ? AND source_generation = ?
+                         AND last_stream_sequence = ?"""
+                ).use { statement ->
+                    statement.setLong(1, window.throughInclusiveSequence)
+                    statement.setLong(2, rank)
+                    statement.setString(3, window.eventStream)
+                    statement.setInt(4, window.partitionId)
+                    statement.setString(5, window.sourceGeneration)
+                    statement.setLong(6, window.fromExclusiveSequence)
+                    check(statement.executeUpdate() == 1) { "settlement admission frontier changed" }
+                }
+                PostMatchApplyResult.APPLIED
+            } else {
+                check(window.throughInclusiveSequence <= frontier.second) {
+                    "settlement admission window overlaps or skips committed frontier"
+                }
+                check(admissionRank(connection, window, accountDigest, openingDigest) != null) {
+                    "settlement admission differs on replay"
+                }
+                PostMatchApplyResult.DUPLICATE
+            }
+            connection.commit()
+            result
+        } catch (error: Throwable) {
+            connection.rollback()
+            throw error
+        } finally {
+            connection.autoCommit = oldAutoCommit
+        }
+    }
+
+    private fun admissionRank(connection: Connection, window: SettlementTransitionWindow,
+                              accountDigest: String, openingDigest: String): Long? {
+        val saved = connection.prepareStatement(
+            """SELECT admission_rank, from_exclusive_sequence, obligation_count,
+                      obligation_digest, account_set_digest, opening_digest, dependency_digest
+               FROM settlement.canonical_transition_admissions
+               WHERE event_stream = ? AND source_generation = ? AND partition_id = ?
+                 AND through_inclusive_sequence = ?"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setInt(3, window.partitionId)
+            statement.setLong(4, window.throughInclusiveSequence)
+            statement.executeQuery().use { rows ->
+                if (!rows.next()) null else {
+                    val rank = rows.getLong(1)
+                    val valid = rows.getLong(2) == window.fromExclusiveSequence &&
+                        rows.getInt(3) == window.obligations.size &&
+                        rows.getString(4) == window.obligationDigest &&
+                        rows.getString(5) == accountDigest &&
+                        rows.getString(6) == openingDigest
+                    val dependencyDigest = rows.getString(7)
+                    check(valid && !rows.next()) { "settlement admission differs from source window" }
+                    rank to dependencyDigest
+                }
+            }
+        } ?: return null
+        val predecessors = connection.prepareStatement(
+            """SELECT predecessor_rank FROM settlement.canonical_transition_dependencies
+               WHERE event_stream = ? AND source_generation = ? AND admission_rank = ?
+               ORDER BY predecessor_rank"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setLong(3, saved.first)
+            statement.executeQuery().use { rows ->
+                buildList { while (rows.next()) add(rows.getLong(1)) }
+            }
+        }
+        check(saved.second == sha256(predecessors.joinToString(","))) {
+            "settlement admission dependencies differ on replay"
+        }
+        val accounts = connection.prepareStatement(
+            """SELECT run_id, participant_id, account_id, asset_type, asset_id, predecessor_rank
+               FROM settlement.canonical_transition_admission_accounts
+               WHERE event_stream = ? AND source_generation = ? AND admission_rank = ?
+               ORDER BY run_id, participant_id, account_id, asset_type, asset_id"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setLong(3, saved.first)
+            statement.executeQuery().use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        val key = AccountKey(rows.getString(1), rows.getString(2), rows.getString(3),
+                            rows.getString(4), rows.getString(5))
+                        val prior = rows.getLong(6).let { if (rows.wasNull()) null else it }
+                        add(key to prior)
+                    }
+                }
+            }
+        }
+        check(accounts.map { it.first } == accountKeys(window.obligations) &&
+            accounts.mapNotNull { it.second }.all { it in predecessors }) {
+            "settlement admission account membership differs on replay"
+        }
+        return saved.first
+    }
+
+    /** Returns null while an earlier admitted window touches the same account or partition. */
+    fun apply(window: SettlementTransitionWindow): PostMatchApplyResult? = dataSource.connection.use { connection ->
         require(window.fromExclusiveSequence >= CanonicalStreamPosition.origin(window.partitionId) &&
             window.throughInclusiveSequence > window.fromExclusiveSequence &&
             window.throughInclusiveSequence - window.fromExclusiveSequence <= 5000)
@@ -335,27 +703,50 @@ class SettlementBoundedTransitionStore(
             }
             verifySource(connection, window.eventStream, window.sourceGeneration, window.partitionId,
                 window.fromExclusiveSequence, window.throughInclusiveSequence, current)
+            val stableOpeningDigest = openingDigest(connection, current)
+            val rank = admissionRank(connection, window, sha256(accountKeyJson(accountKeys(current))),
+                stableOpeningDigest)
+                ?: error("settlement transition has no durable admission")
             val result = when {
                 frontier.second == window.fromExclusiveSequence -> {
                     check(current.all { it.status == "PENDING" }) { "settlement obligation already transitioned" }
-                    applyNew(connection, window, current)
-                    insertCoverage(connection, window)
-                    connection.prepareStatement(
-                        """UPDATE settlement.canonical_transition_frontiers
-                           SET last_stream_sequence = ?, updated_at = now()
-                           WHERE event_stream = ? AND partition_id = ? AND source_generation = ?
-                             AND last_stream_sequence = ?"""
-                    ).use { statement ->
-                        statement.setLong(1, window.throughInclusiveSequence)
-                        statement.setString(2, window.eventStream)
-                        statement.setInt(3, window.partitionId)
-                        statement.setString(4, window.sourceGeneration)
-                        statement.setLong(5, window.fromExclusiveSequence)
-                        check(statement.executeUpdate() == 1) { "settlement transition frontier changed" }
+                    if (!dependenciesComplete(connection, window, rank)) null else {
+                        applyNew(connection, window, current)
+                        check(openingDigest(connection, current) == stableOpeningDigest) {
+                            "settlement resource opening changed during transition"
+                        }
+                        insertCoverage(connection, window)
+                        connection.prepareStatement(
+                            """INSERT INTO settlement.canonical_transition_admission_completions(
+                                 event_stream, source_generation, admission_rank, obligation_digest)
+                               VALUES (?, ?, ?, ?)"""
+                        ).use { statement ->
+                            statement.setString(1, window.eventStream)
+                            statement.setString(2, window.sourceGeneration)
+                            statement.setLong(3, rank)
+                            statement.setString(4, window.obligationDigest)
+                            check(statement.executeUpdate() == 1)
+                        }
+                        connection.prepareStatement(
+                            """UPDATE settlement.canonical_transition_frontiers
+                               SET last_stream_sequence = ?, updated_at = now()
+                               WHERE event_stream = ? AND partition_id = ? AND source_generation = ?
+                                 AND last_stream_sequence = ?"""
+                        ).use { statement ->
+                            statement.setLong(1, window.throughInclusiveSequence)
+                            statement.setString(2, window.eventStream)
+                            statement.setInt(3, window.partitionId)
+                            statement.setString(4, window.sourceGeneration)
+                            statement.setLong(5, window.fromExclusiveSequence)
+                            check(statement.executeUpdate() == 1) { "settlement transition frontier changed" }
+                        }
+                        PostMatchApplyResult.APPLIED
                     }
-                    PostMatchApplyResult.APPLIED
                 }
                 window.throughInclusiveSequence <= frontier.second -> {
+                    check(completionExists(connection, window, rank)) {
+                        "settlement admission completion is missing on replay"
+                    }
                     seedAndLockAccounts(connection, window, accountKeys(current), seed = false)
                     verifyReplay(connection, window, current)
                     PostMatchApplyResult.DUPLICATE
@@ -371,6 +762,48 @@ class SettlementBoundedTransitionStore(
             connection.autoCommit = oldAutoCommit
         }
     }
+
+    private fun dependenciesComplete(connection: Connection, window: SettlementTransitionWindow, rank: Long): Boolean =
+        connection.prepareStatement(
+            """SELECT COUNT(*) FILTER (WHERE completion.admission_rank IS NULL),
+                      COUNT(*) FILTER (WHERE completion.admission_rank IS NOT NULL
+                                         AND completion.obligation_digest <> prior.obligation_digest)
+               FROM settlement.canonical_transition_dependencies dependency
+               JOIN settlement.canonical_transition_admissions prior
+                 ON prior.event_stream = dependency.event_stream
+                AND prior.source_generation = dependency.source_generation
+                AND prior.admission_rank = dependency.predecessor_rank
+               LEFT JOIN settlement.canonical_transition_admission_completions completion
+                 ON completion.event_stream = dependency.event_stream
+                AND completion.source_generation = dependency.source_generation
+                AND completion.admission_rank = dependency.predecessor_rank
+               WHERE dependency.event_stream = ? AND dependency.source_generation = ?
+                 AND dependency.admission_rank = ?"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setLong(3, rank)
+            statement.executeQuery().use { rows ->
+                check(rows.next())
+                val missing = rows.getLong(1)
+                val corrupt = rows.getLong(2)
+                check(corrupt == 0L) { "settlement predecessor completion differs from admission" }
+                missing == 0L
+            }
+        }
+
+    private fun completionExists(connection: Connection, window: SettlementTransitionWindow, rank: Long): Boolean =
+        connection.prepareStatement(
+            """SELECT obligation_digest FROM settlement.canonical_transition_admission_completions
+               WHERE event_stream = ? AND source_generation = ? AND admission_rank = ?"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setLong(3, rank)
+            statement.executeQuery().use { rows ->
+                rows.next() && rows.getString(1) == window.obligationDigest && !rows.next()
+            }
+        }
 
     private fun accountKeys(obligations: List<SettlementTransitionObligation>): List<AccountKey> =
         obligations.asSequence().filter { it.mode == "instant-post-trade" }.flatMap { o ->

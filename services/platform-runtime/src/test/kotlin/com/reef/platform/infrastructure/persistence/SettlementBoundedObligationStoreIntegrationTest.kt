@@ -81,6 +81,25 @@ class SettlementBoundedObligationStoreIntegrationTest {
             val window = requireNotNull(transition.readNextWindow(stream, 0, generation,
                 maxSourcePositions = 3))
             assertEquals(1, window.obligations.size)
+            assertEquals(PostMatchApplyResult.APPLIED, transition.admit(window))
+            assertEquals(PostMatchApplyResult.DUPLICATE, transition.admit(window))
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    "UPDATE settlement.resource_positions SET quantity = '199' WHERE resource_position_id = ?"
+                ).use { statement ->
+                    statement.setString(1, "position-0-$token")
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
+            assertFailsWith<IllegalStateException> { transition.apply(window) }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    "UPDATE settlement.resource_positions SET quantity = '200' WHERE resource_position_id = ?"
+                ).use { statement ->
+                    statement.setString(1, "position-0-$token")
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
             assertEquals(PostMatchApplyResult.APPLIED, transition.apply(window))
             assertEquals(PostMatchApplyResult.DUPLICATE, transition.apply(window))
             assertEquals(null, transition.readNextWindow(stream, 0, generation))
@@ -243,9 +262,11 @@ class SettlementBoundedObligationStoreIntegrationTest {
             val empty = requireNotNull(transition.readNextWindow(stream, 0, generation,
                 maxSourcePositions = 1))
             assertEquals(0, empty.obligations.size)
+            assertEquals(PostMatchApplyResult.APPLIED, transition.admit(empty))
             assertEquals(PostMatchApplyResult.APPLIED, transition.apply(empty))
             val trade = requireNotNull(transition.readNextWindow(stream, 0, generation,
                 maxSourcePositions = 1))
+            assertEquals(PostMatchApplyResult.APPLIED, transition.admit(trade))
             assertEquals(PostMatchApplyResult.APPLIED, transition.apply(trade))
             assertEquals(PostMatchApplyResult.DUPLICATE, transition.apply(trade))
             target.connection.use { connection ->
@@ -332,6 +353,9 @@ class SettlementBoundedObligationStoreIntegrationTest {
                 requireNotNull(transition.readNextWindow(stream, partition, generation,
                     maxSourcePositions = 3))
             }
+            windows.forEach { window ->
+                assertEquals(PostMatchApplyResult.APPLIED, transition.admit(window))
+            }
             val ready = CountDownLatch(4)
             val start = CountDownLatch(1)
             val executor = Executors.newFixedThreadPool(4)
@@ -339,7 +363,13 @@ class SettlementBoundedObligationStoreIntegrationTest {
                 val tasks = windows.map { window -> executor.submit<PostMatchApplyResult> {
                     ready.countDown()
                     check(start.await(10, TimeUnit.SECONDS))
-                    transition.apply(window)
+                    var result: PostMatchApplyResult? = null
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+                    while (result == null && System.nanoTime() < deadline) {
+                        result = transition.apply(window)
+                        if (result == null) Thread.sleep(5)
+                    }
+                    checkNotNull(result) { "settlement admission dependency did not complete" }
                 } }
                 check(ready.await(10, TimeUnit.SECONDS))
                 start.countDown()
@@ -401,6 +431,251 @@ class SettlementBoundedObligationStoreIntegrationTest {
     }
 
     @Test
+    fun retainedAdmissionRankFixesScarceAccountWinnerAcrossWorkerSchedules() {
+        val (_, target) = databasesOrSkip()
+        for (winner in 0..1) {
+            val token = UUID.randomUUID().toString()
+            val stream = "transition-scarce-$token"
+            val generation = "generation-$token"
+            val run = "run-$token"
+            val session = "session-$token"
+            val accountKey = "shared-$token"
+            val loser = 1 - winner
+            try {
+                for (partition in 0..1) seed(target, stream, generation, run, session,
+                    partitionId = partition, accountKey = accountKey)
+                target.connection.use { connection ->
+                    connection.prepareStatement(
+                        """INSERT INTO settlement.resource_positions(
+                             resource_position_id, scenario_run_id, correlation_id, causation_id,
+                             participant_id, account_id, asset_type, asset_id, quantity, occurred_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())"""
+                    ).use { statement ->
+                        listOf(
+                            listOf("buyer-0-$accountKey", "buyer-account-0-$accountKey", "CASH", "USD", "200"),
+                            listOf("seller-0-$accountKey", "seller-account-0-$accountKey", "SECURITY", "AAPL", "2")
+                        ).forEachIndexed { index, position ->
+                            statement.setString(1, "position-$index-$token")
+                            statement.setString(2, run)
+                            statement.setString(3, "correlation-$token")
+                            statement.setString(4, "causation-$token")
+                            position.forEachIndexed { offset, value -> statement.setString(offset + 5, value) }
+                            statement.addBatch()
+                        }
+                        assertEquals(2, statement.executeBatch().size)
+                    }
+                }
+                val policy = SettlementPolicySnapshot(
+                    PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                        PostTradeProfileSelectionSource.HardDefault),
+                    "T+0", "gross-or-microbatch", "near-instant-finality"
+                )
+                val obligations = SettlementBoundedObligationStore(target)
+                for (partition in 0..1) assertEquals(PostMatchApplyResult.APPLIED,
+                    obligations.apply(requireNotNull(obligations.readNextWindow(stream, partition, generation,
+                        maxSourcePositions = 3)), mapOf(SettlementPolicyKey(run, session) to policy)))
+                val transition = SettlementBoundedTransitionStore(target)
+                val windows = (0..1).map { partition ->
+                    requireNotNull(transition.readNextAdmissionWindow(stream, partition, generation,
+                        maxSourcePositions = 3))
+                }
+                assertEquals(PostMatchApplyResult.APPLIED, transition.admit(windows[winner]))
+                assertEquals(PostMatchApplyResult.APPLIED, transition.admit(windows[loser]))
+                fun executeAndCheck() {
+                    assertEquals(null, transition.apply(windows[loser]))
+                    assertEquals(PostMatchApplyResult.APPLIED, transition.apply(windows[winner]))
+                    target.connection.use { connection ->
+                        connection.prepareStatement(
+                            """UPDATE settlement.canonical_transition_admission_completions
+                               SET obligation_digest = ?
+                               WHERE event_stream = ? AND source_generation = ? AND admission_rank = 1"""
+                        ).use { statement ->
+                            statement.setString(1, "corrupt")
+                            statement.setString(2, stream)
+                            statement.setString(3, generation)
+                            assertEquals(1, statement.executeUpdate())
+                            statement.setString(1, windows[winner].obligationDigest)
+                            assertFailsWith<IllegalStateException> { transition.apply(windows[loser]) }
+                            assertEquals(1, statement.executeUpdate())
+                        }
+                    }
+                    assertEquals(PostMatchApplyResult.APPLIED, transition.apply(windows[loser]))
+                    target.connection.use { connection ->
+                        connection.prepareStatement(
+                            """SELECT partition_id, outcome FROM settlement.canonical_transition_attempts
+                               WHERE event_stream = ? AND source_generation = ?"""
+                        ).use { statement ->
+                            statement.setString(1, stream)
+                            statement.setString(2, generation)
+                            statement.executeQuery().use { rows ->
+                                val outcomes = buildMap { while (rows.next()) put(rows.getInt(1), rows.getString(2)) }
+                                assertEquals(mapOf(winner to "SETTLED", loser to "BREAK"), outcomes)
+                            }
+                        }
+                    }
+                }
+                executeAndCheck()
+                target.connection.use { connection ->
+                    connection.prepareStatement(
+                        """DELETE FROM settlement.canonical_transition_dependencies
+                           WHERE event_stream = ? AND source_generation = ? AND admission_rank = 2"""
+                    ).use { statement ->
+                        statement.setString(1, stream)
+                        statement.setString(2, generation)
+                        assertEquals(1, statement.executeUpdate())
+                    }
+                }
+                assertFailsWith<IllegalStateException> { transition.apply(windows[loser]) }
+                target.connection.use { connection ->
+                    connection.prepareStatement(
+                        """INSERT INTO settlement.canonical_transition_dependencies(
+                             event_stream, source_generation, admission_rank, predecessor_rank)
+                           VALUES (?, ?, 2, 1)"""
+                    ).use { statement ->
+                        statement.setString(1, stream)
+                        statement.setString(2, generation)
+                        assertEquals(1, statement.executeUpdate())
+                    }
+                }
+                target.connection.use { connection ->
+                    listOf("canonical_transition_admission_completions", "canonical_transition_ledger_entries",
+                        "canonical_transition_attempts", "canonical_account_checkpoints", "canonical_account_state",
+                        "canonical_transition_coverage", "canonical_transition_frontiers").forEach { table ->
+                        connection.prepareStatement("DELETE FROM settlement.$table WHERE event_stream = ?").use { statement ->
+                            statement.setString(1, stream)
+                            statement.executeUpdate()
+                        }
+                    }
+                    connection.prepareStatement(
+                        "UPDATE settlement.canonical_settlement_obligations SET status = 'PENDING' WHERE event_stream = ?"
+                    ).use { statement -> statement.setString(1, stream); assertEquals(2, statement.executeUpdate()) }
+                }
+                windows.forEach { assertEquals(PostMatchApplyResult.DUPLICATE, transition.admit(it)) }
+                executeAndCheck()
+            } finally {
+                cleanTarget(target, stream)
+                target.connection.use { connection ->
+                    connection.prepareStatement("DELETE FROM settlement.resource_positions WHERE scenario_run_id = ?")
+                        .use { it.setString(1, run); it.executeUpdate() }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun disjointAdmittedWindowsCanCommitWhileEarlierRankIsInFlight() {
+        val (_, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-disjoint-$token"
+        val generation = "generation-$token"
+        val run = "run-$token"
+        val session = "session-$token"
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            seed(target, stream, generation, run, session, partitionId = 0, accountKey = "account-a-$token")
+            seed(target, stream, generation, run, session, partitionId = 1, accountKey = "account-b-$token")
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligations = SettlementBoundedObligationStore(target)
+            for (partition in 0..1) assertEquals(PostMatchApplyResult.APPLIED,
+                obligations.apply(requireNotNull(obligations.readNextWindow(stream, partition, generation,
+                    maxSourcePositions = 3)), mapOf(SettlementPolicyKey(run, session) to policy)))
+            val transition = SettlementBoundedTransitionStore(target)
+            val windows = (0..1).map { partition ->
+                requireNotNull(transition.readNextAdmissionWindow(stream, partition, generation,
+                    maxSourcePositions = 3))
+            }
+            windows.forEach { assertEquals(PostMatchApplyResult.APPLIED, transition.admit(it)) }
+            val blockedStore = SettlementBoundedTransitionStore(target) {
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+            }
+            val first = executor.submit<PostMatchApplyResult?> { blockedStore.apply(windows[0]) }
+            check(entered.await(10, TimeUnit.SECONDS))
+            val second = executor.submit<PostMatchApplyResult?> { transition.apply(windows[1]) }
+            assertEquals(PostMatchApplyResult.APPLIED, second.get(5, TimeUnit.SECONDS))
+            release.countDown()
+            assertEquals(PostMatchApplyResult.APPLIED, first.get(10, TimeUnit.SECONDS))
+        } finally {
+            release.countDown()
+            executor.shutdownNow()
+            cleanTarget(target, stream)
+        }
+    }
+
+    @Test
+    fun transitionWorkerRunsDisjointAssignedPartitionsInParallel() {
+        val (source, target) = databasesOrSkip()
+        val token = UUID.randomUUID().toString()
+        val stream = "transition-workers-parallel-$token"
+        val generation = PostMatchSourceCatalog(source).generation()
+        val run = "run-$token"
+        val session = "session-$token"
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val store = SettlementBoundedTransitionStore(target) {
+            when (Thread.currentThread().name.substringAfterLast('-')) {
+                "0" -> {
+                    entered.countDown()
+                    check(release.await(10, TimeUnit.SECONDS))
+                }
+                "1" -> check(entered.await(10, TimeUnit.SECONDS))
+            }
+        }
+        val worker = PostMatchSettlementTransitionWorker(PostMatchSourceCatalog(source), store,
+            stream, listOf(0, 1), batchSize = 3, maxObligations = 1000, pollMs = 10, workerCount = 2)
+        try {
+            seed(target, stream, generation, run, session, partitionId = 0, accountKey = "account-a-$token")
+            seed(target, stream, generation, run, session, partitionId = 1, accountKey = "account-b-$token")
+            val policy = SettlementPolicySnapshot(
+                PostTradeProfileSelection("instant-post-trade-v1", 1, "instant-post-trade",
+                    PostTradeProfileSelectionSource.HardDefault),
+                "T+0", "gross-or-microbatch", "near-instant-finality"
+            )
+            val obligations = SettlementBoundedObligationStore(target)
+            for (partition in 0..1) assertEquals(PostMatchApplyResult.APPLIED,
+                obligations.apply(requireNotNull(obligations.readNextWindow(stream, partition, generation,
+                    maxSourcePositions = 3)), mapOf(SettlementPolicyKey(run, session) to policy)))
+            for (partition in 0..1) assertEquals(PostMatchApplyResult.APPLIED,
+                store.admit(requireNotNull(store.readNextAdmissionWindow(stream, partition, generation,
+                    maxSourcePositions = 3))))
+            worker.start()
+            check(entered.await(10, TimeUnit.SECONDS))
+            fun waitForCompletion(rank: Long) {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                while (System.nanoTime() < deadline) {
+                    val completed = target.connection.use { connection ->
+                        connection.prepareStatement(
+                            """SELECT COUNT(*) FROM settlement.canonical_transition_admission_completions
+                               WHERE event_stream = ? AND source_generation = ? AND admission_rank = ?"""
+                        ).use { statement ->
+                            statement.setString(1, stream)
+                            statement.setString(2, generation)
+                            statement.setLong(3, rank)
+                            statement.executeQuery().use { rows -> check(rows.next()); rows.getInt(1) == 1 }
+                        }
+                    }
+                    if (completed) return
+                    Thread.sleep(10)
+                }
+                error("settlement worker did not complete admission rank $rank")
+            }
+            waitForCompletion(2)
+            release.countDown()
+            waitForCompletion(1)
+        } finally {
+            release.countDown()
+            worker.stop()
+            cleanTarget(target, stream)
+        }
+    }
+
+    @Test
     fun transitionFailureAfterLedgerInsertRollsBackAllFactsAndProgress() {
         val (_, target) = databasesOrSkip()
         val token = UUID.randomUUID().toString()
@@ -422,6 +697,7 @@ class SettlementBoundedObligationStoreIntegrationTest {
             val transition = SettlementBoundedTransitionStore(target) { error("injected after ledger insert") }
             val window = requireNotNull(transition.readNextWindow(stream, 0, generation,
                 maxSourcePositions = 3))
+            assertEquals(PostMatchApplyResult.APPLIED, transition.admit(window))
             assertFailsWith<IllegalStateException> { transition.apply(window) }
             target.connection.use { connection ->
                 listOf("canonical_transition_frontiers", "canonical_transition_coverage",
@@ -462,18 +738,19 @@ class SettlementBoundedObligationStoreIntegrationTest {
                 PostTradeProfileSelectionSource.HardDefault),
             "T+0", "gross-or-microbatch", "near-instant-finality"
         )
-        fun runTransition() {
+        fun runTransition(expectedAdmission: PostMatchApplyResult) {
             seed(target, stream, generation, run, session)
             val obligations = SettlementBoundedObligationStore(target)
             assertEquals(PostMatchApplyResult.APPLIED, obligations.apply(
                 requireNotNull(obligations.readNextWindow(stream, 0, generation, maxSourcePositions = 3)),
                 mapOf(SettlementPolicyKey(run, session) to policy)))
             val transition = SettlementBoundedTransitionStore(target)
-            assertEquals(PostMatchApplyResult.APPLIED, transition.apply(
-                requireNotNull(transition.readNextWindow(stream, 0, generation, maxSourcePositions = 3))))
+            val window = requireNotNull(transition.readNextWindow(stream, 0, generation, maxSourcePositions = 3))
+            assertEquals(expectedAdmission, transition.admit(window))
+            assertEquals(PostMatchApplyResult.APPLIED, transition.apply(window))
         }
         try {
-            runTransition()
+            runTransition(PostMatchApplyResult.APPLIED)
             val guide = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
                 .map { it.resolve("docs/LOCAL_CONFIGURATION.md") }
                 .first(Files::exists)
@@ -500,7 +777,7 @@ class SettlementBoundedObligationStoreIntegrationTest {
                     throw error
                 } finally { connection.autoCommit = oldAutoCommit }
             }
-            runTransition()
+            runTransition(PostMatchApplyResult.DUPLICATE)
         } finally { cleanTarget(target, stream) }
     }
 
@@ -845,8 +1122,12 @@ class SettlementBoundedObligationStoreIntegrationTest {
 
     private fun cleanTarget(target: javax.sql.DataSource, stream: String) {
         target.connection.use { connection ->
-            listOf("canonical_account_checkpoints", "canonical_transition_ledger_entries", "canonical_transition_attempts",
+            listOf("canonical_transition_admission_completions", "canonical_account_checkpoints",
+                "canonical_transition_ledger_entries", "canonical_transition_attempts",
                 "canonical_account_state", "canonical_transition_coverage", "canonical_transition_frontiers",
+                "canonical_transition_dependencies", "canonical_transition_admission_accounts",
+                "canonical_transition_admissions", "canonical_transition_admission_frontiers",
+                "canonical_transition_admission_counter",
                 "canonical_settlement_obligations", "canonical_obligation_coverage",
                 "canonical_policy_bindings", "canonical_obligation_frontiers", "canonical_trade_intake",
                 "canonical_intake_receipts", "canonical_intake_coverage",

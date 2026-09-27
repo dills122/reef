@@ -124,6 +124,12 @@ store. Keep this intake opt-in and outside public settlement reads. Next make
 policy selection and affected-account state available to a bounded transition
 transaction, then write obligation/workflow/ledger facts with its checkpoint.
 The intake frontier alone is not settlement completion or capacity evidence.
+For scarce accounts shared across source partitions, [D-059](../DECISIONS.md#d-059-durable-settlement-admission-order-for-scarce-accounts)
+now requires durable, globally ranked settlement admission before balance
+decisions. Execute bounded windows after their account and partition
+predecessors complete; retain/import admission facts for deterministic replay.
+Matching-only readmission is a new arbitration history. Measure admission
+serialization and hot-account skew in the integrated campaign.
 
 These two workstreams can proceed alongside live implementation after Wave 1's
 contract is fixed. They need their own focused tests, not separate 10k tuning
