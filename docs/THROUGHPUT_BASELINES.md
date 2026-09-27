@@ -1286,3 +1286,50 @@ hash and result record are under ignored local
 `artifacts/projection-dirty-f02-20260926/droplet-rehearsal-20260926/`;
 interpretation and the excluded backbone setup attempts are in the
 [F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
+
+## PM-S1 — post-match shadow-worker shakedown
+
+September 27, harness launched from local checkout `24edc510` (merged #383
+and #384), opt-in `REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1` on the
+`materializer-projection` fixture. The first provisioning attempt requested
+`sfo2` `c-16` and DigitalOcean returned 422, "Size is not available in
+this region." Operator checks found empty OpenTofu state and no matching
+provider droplet. This is a setup failure, not a workload result.
+
+The retry ran `do-benchmark-20260927T000053Z` on a fresh `sfo3` `c-16`
+(16 vCPU, 32 GiB), 256 load workers, 16 source partitions, four canonical
+projectors, one existing lifecycle/market maintainer, and the isolated
+post-match PostgreSQL with opt-in live and market shadow workers. Source was
+synced and built on the host; smoke passed, then its Compose volumes were
+reset before the measured `2500/s × 60s` strict-lifecycle workload. No
+latency target or sustained-downstream freshness gate was configured.
+
+| Stage / observer | Result |
+| --- | --- |
+| HTTP and canonical pipeline | 149,976 attempted, accepted, direct-acked, materialized, and projected; 0 failures, final projector lag 0; 2,498.46 accepted/s over 60.027s. |
+| Intake latency | p95 180.62ms, p99 418.35ms; recorded, not pass-gated. |
+| Post-match shadow check after source stopped | PASS after 26s: all 16 active source partitions assigned; 149,976 canonical source rows; live and market frontiers equal each partition's source maximum; stable source generation; complete sorted source/live receipt membership SHA-256 equal before and after (`ee42a6f09ffc965858ad05b0d05e46097bb5042b2c856dd0cc39bfdfeb834865`). |
+| Existing downstream cohort observer | Non-authoritative: instrumentation disabled, covering markers absent, no command-weighted in-load lifecycle/market latency. |
+
+The standard fetched-report gates and shadow checker both exited 0. This
+proves closed-cohort shadow wiring and final catch-up for this short fixture,
+not market business-row parity, audit or settlement correctness, in-load
+post-match latency, sustained 5k, or integrated 10k capacity. C4's
+`2500/s × 300s` full-projection accounting baseline and C43's failed
+`10000/s × 300s` full-pipeline gate use different code, workload duration,
+topology, and observers; this run is not a causal comparison to either.
+Complete [shadow result](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/postmatch-shadow-check.json),
+[byte-exact compressed stress report](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/venue-event-materializer-stress-rate-2500-workers-256.json.gz),
+[gate summary](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/do-benchmark-evidence-summary.json),
+and [SHA-256 manifest of all 84 fetched files](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/raw-report-manifest.sha256)
+are preserved. Full original logs and database diagnostics remain locally under
+ignored `reports/do-benchmark/do-benchmark-20260927T000053Z/`.
+The harness reported successful destruction of droplet `603968676` and
+firewall `a2d6c8fb-df0c-4f75-8731-809aaba201f6`; operator checks found
+empty OpenTofu state and no provider droplet with that name. Host source
+revision and provision/teardown logs were not captured in the versioned
+artifacts, so those lifecycle claims remain operator observations. Future
+hosted runs should save sanitized source revision and resource lifecycle
+evidence. Next: finish
+audit/settlement ownership and route parity, then run the integrated matched
+capacity campaign in the post-match implementation plan.
