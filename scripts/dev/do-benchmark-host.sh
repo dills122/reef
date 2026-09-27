@@ -82,6 +82,7 @@ optional:
   REEF_DO_PROJECTION_STAGE=full|command-status|timeline
   REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1 (materializer-projection only)
   REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC=1 (requires post-match shadow diagnostic)
+  REEF_DO_MATCHED_TOPOLOGY=1 (six materializers, sixteen projector owners; materializer-projection only)
   REEF_DO_IMAGE_MODE=dockerhub|source
   REEF_DO_STAGE_LOG_TAIL=80
 
@@ -165,6 +166,7 @@ cmd_plan_goal() {
   printf '  projection_stage=%s\n' "${REEF_DO_PROJECTION_STAGE:-full}"
   printf '  postmatch_shadow_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}"
   printf '  postmatch_settlement_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}"
+  printf '  matched_topology=%s\n' "${REEF_DO_MATCHED_TOPOLOGY:-0}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
   printf '  stream_ack_projector_2_partitions=%s\n' "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-none}"
@@ -216,6 +218,10 @@ cmd_run() {
   fi
   if [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ] && [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" != "1" ]; then
     echo "post-match settlement diagnostic requires post-match shadow diagnostic" >&2
+    return 2
+  fi
+  if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ] && [ "$(benchmark_profile)" != "materializer-projection" ]; then
+    echo "matched topology requires materializer-projection profile" >&2
     return 2
   fi
   provision_stack
@@ -476,6 +482,7 @@ remote_run_benchmark() {
     REEF_DO_PROJECTION_STAGE="${REEF_DO_PROJECTION_STAGE:-}" \
     REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC="${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" \
     REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC="${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" \
+    REEF_DO_MATCHED_TOPOLOGY="${REEF_DO_MATCHED_TOPOLOGY:-0}" \
     PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED="${PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED:-false}" \
     DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-}" <<'REMOTE'
 set -euo pipefail
@@ -562,6 +569,26 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
 
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
   run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
+  if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
+    export REEF_COMPOSE_FILES=compose.base.yml,compose.local.yml,compose.benchmark-scale.yml
+    export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}benchmark-scale,postmatch"
+    export PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED=true
+    export POSTMATCH_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
+    export REEF_POSTMATCH_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+    export REEF_SETTLEMENT_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+    export REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1
+    export SETTLEMENT_POSTGRES_JDBC_URL=jdbc:postgresql://settlement-postgres:5432/reef
+    export SETTLEMENT_POSTGRES_USER=reef
+    export SETTLEMENT_POSTGRES_PASSWORD=reef
+    export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,postmatch-postgres,settlement-postgres"
+    export DEV_STRESS_DB_SCHEMAS="${DEV_STRESS_DB_SCHEMAS:-runtime,boundary,command_log,postmatch,settlement}"
+    export STREAM_ACK_PROJECTOR_0_PARTITIONS=0
+    export STREAM_ACK_PROJECTOR_1_PARTITIONS=1
+    export STREAM_ACK_PROJECTOR_2_PARTITIONS=2
+    export STREAM_ACK_PROJECTOR_3_PARTITIONS=3
+    export DEV_STRESS_VENUE_EVENT_MATERIALIZER_URLS="http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093,http://127.0.0.1:8094,http://127.0.0.1:18099,http://127.0.0.1:18108"
+    export DEV_STRESS_STREAM_ACK_PROJECTOR_URLS="http://127.0.0.1:8084,http://127.0.0.1:8085,http://127.0.0.1:8088,http://127.0.0.1:8089,http://127.0.0.1:18095,http://127.0.0.1:18096,http://127.0.0.1:18097,http://127.0.0.1:18098,http://127.0.0.1:18100,http://127.0.0.1:18101,http://127.0.0.1:18102,http://127.0.0.1:18103,http://127.0.0.1:18104,http://127.0.0.1:18105,http://127.0.0.1:18106,http://127.0.0.1:18107"
+  fi
   if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
     export STREAM_ACK_PROJECTOR_ENABLED=true
     export STREAM_ACK_PROJECTION_SOURCE=venue-event-batch
@@ -597,30 +624,50 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS:-60000}"
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS:-1000}"
     if [ "$REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC" = "1" ]; then
-      export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}postmatch"
+      export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}postmatch,postmatch-workers"
       export POSTMATCH_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
       export POSTMATCH_SHADOW_WORKERS_ENABLED=true
-      export REEF_POSTMATCH_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
-      export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,postmatch-postgres"
-      export DEV_STRESS_DB_SCHEMAS="${DEV_STRESS_DB_SCHEMAS:-runtime,boundary,command_log,postmatch}"
-      postmatch_partitions="$STREAM_ACK_PROJECTOR_0_PARTITIONS,$STREAM_ACK_PROJECTOR_1_PARTITIONS,$STREAM_ACK_PROJECTOR_2_PARTITIONS,$STREAM_ACK_PROJECTOR_3_PARTITIONS"
+      if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
+        export POSTMATCH_WORKER_0_PARTITIONS=0,1,2,3
+        export POSTMATCH_WORKER_1_PARTITIONS=4,5,6,7
+        export POSTMATCH_WORKER_2_PARTITIONS=8,9,10,11
+        export POSTMATCH_WORKER_3_PARTITIONS=12,13,14,15
+      else
+        export POSTMATCH_WORKER_0_PARTITIONS="$STREAM_ACK_PROJECTOR_0_PARTITIONS"
+        export POSTMATCH_WORKER_1_PARTITIONS="$STREAM_ACK_PROJECTOR_1_PARTITIONS"
+        export POSTMATCH_WORKER_2_PARTITIONS="$STREAM_ACK_PROJECTOR_2_PARTITIONS"
+        export POSTMATCH_WORKER_3_PARTITIONS="$STREAM_ACK_PROJECTOR_3_PARTITIONS"
+      fi
+      if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" != "1" ]; then
+        export REEF_POSTMATCH_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+        export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,postmatch-postgres"
+        export DEV_STRESS_DB_SCHEMAS="${DEV_STRESS_DB_SCHEMAS:-runtime,boundary,command_log,postmatch}"
+      fi
+      postmatch_partitions="$POSTMATCH_WORKER_0_PARTITIONS,$POSTMATCH_WORKER_1_PARTITIONS,$POSTMATCH_WORKER_2_PARTITIONS,$POSTMATCH_WORKER_3_PARTITIONS"
       if [ "$REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC" = "1" ]; then
-        export SETTLEMENT_POSTGRES_JDBC_URL=jdbc:postgresql://settlement-postgres:5432/reef
-        export SETTLEMENT_POSTGRES_USER=reef
-        export SETTLEMENT_POSTGRES_PASSWORD=reef
-        export REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1
-        export REEF_SETTLEMENT_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+        if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" != "1" ]; then
+          export SETTLEMENT_POSTGRES_JDBC_URL=jdbc:postgresql://settlement-postgres:5432/reef
+          export SETTLEMENT_POSTGRES_USER=reef
+          export SETTLEMENT_POSTGRES_PASSWORD=reef
+          export REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1
+          export REEF_SETTLEMENT_PG_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+          export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,settlement-postgres"
+          export DEV_STRESS_DB_SCHEMAS="$DEV_STRESS_DB_SCHEMAS,settlement"
+        fi
         export POST_TRADE_PROFILE=instant-post-trade-v1
         export POSTMATCH_SETTLEMENT_INTAKE_ENABLED=true
         export POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=true
         export POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=true
-        export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,settlement-postgres"
-        export DEV_STRESS_DB_SCHEMAS="$DEV_STRESS_DB_SCHEMAS,settlement"
       fi
     fi
   fi
   stress_status=0
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer || stress_status=$?
+  if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
+    run_stage postmatch-stage-check node scripts/dev/postmatch-stage-check.mjs \
+      "$artifact_dir/postmatch-stage-samples.jsonl" "$artifact_dir/postmatch-stage-summary.json" \
+      true || stress_status=$?
+  fi
   measured_report_available=0
   if compgen -G "$artifact_dir/venue-event-materializer-stress-rate-*.json" >/dev/null; then
     measured_report_available=1
@@ -635,6 +682,8 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then
     run_stage settlement-shadow-check node scripts/dev/settlement-shadow-check.mjs \
       "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/settlement-shadow-check.json" 300 || stress_status=$?
+    run_stage settlement-dependency-graph-check node scripts/dev/settlement-dependency-graph-check.mjs \
+      "$POSTMATCH_EVENT_STREAM" "$artifact_dir/settlement-dependency-graph.json" || stress_status=$?
   fi
   if [ "$stress_status" -ne 0 ]; then exit "$stress_status"; fi
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
@@ -718,9 +767,15 @@ artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
 log_dir="$artifact_dir/logs"
 mkdir -p "$log_dir"
 cd "$REMOTE_DIR"
-docker compose -f compose.base.yml -f compose.local.yml --profile '*' ps > "$log_dir/docker-compose-ps.txt" 2>&1 || true
+docker compose -f compose.base.yml -f compose.local.yml -f compose.benchmark-scale.yml --profile '*' ps > "$log_dir/docker-compose-ps.txt" 2>&1 || true
 docker stats --no-stream > "$log_dir/docker-stats.txt" 2>&1 || true
-docker compose -f compose.base.yml -f compose.local.yml --profile '*' logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 || true
+docker compose -f compose.base.yml -f compose.local.yml -f compose.benchmark-scale.yml --profile '*' logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 || true
+for worker in 0 1 2 3; do
+  docker compose -f compose.base.yml -f compose.local.yml --profile postmatch-workers logs --no-color --timestamps \
+    "platform-postmatch-settlement-$worker" > "$log_dir/postmatch-settlement-$worker.log" 2>&1 || true
+  docker compose -f compose.base.yml -f compose.local.yml --profile postmatch-workers logs --no-color --timestamps \
+    "platform-postmatch-live-$worker" > "$log_dir/postmatch-live-$worker.log" 2>&1 || true
+done
 free -h > "$log_dir/free.txt" 2>&1 || true
 df -h > "$log_dir/df.txt" 2>&1 || true
 uptime > "$log_dir/uptime.txt" 2>&1 || true

@@ -83,3 +83,23 @@ each factor contributes; whether the host's shared I/O/CPU budget or legacy
 projection load dominates; exact in-load trade rate and outcome distribution.
 No batching speedup, architecture regression magnitude, or settlement capacity
 claim is established by PM-S2.
+
+### Follow-up implementation, pending hosted comparison
+
+The follow-up branch adds dedicated `postmatch` runtime processes, separates
+live and settlement loops from command-status projectors, and gates costly
+execution proof on durable predecessor readiness. It also records in-load
+readiness/admission/execution counts and time and checks canonical source trade
+membership against intake and obligations. The disposable benchmark has a
+`REEF_DO_MATCHED_TOPOLOGY=1` mode with six materializers and sixteen unique
+projector owners for both control and treatment. Both arms start the same
+isolated databases and run the same 15-second sampler. It records exact
+incremental canonical trade counts and approximate settlement insert rates
+from PostgreSQL table statistics, gating missing samples, regressing counts,
+and observer query time above 2% for settlement or 10% total. Final SQL checks
+give exact closed-cohort settlement counts. Worker logs expose
+counter SQL call time and blocked-head age. A stopped-source graph check records
+longest retained admission dependency chain. SQL call time includes any lock
+wait but does not isolate exact wait duration. These are implementation and
+local-test results until the hosted pair and checker evidence are recorded;
+they do not revise PM-S2's failed gate or establish a 10k capacity result.

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Closed-cohort settlement consistency check; canonical source trade membership
-// is not independently decoded here.
+// Closed-cohort settlement consistency check, including canonical source trade membership.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -77,6 +76,30 @@ export function attemptMismatchSql(stream, generation) {
          a.partition_id, a.stream_sequence) IS DISTINCT FROM
         (o.status, o.run_id, o.post_trade_profile_id, o.post_trade_policy_version,
          o.partition_id, o.stream_sequence))`;
+}
+
+export function sourceTradeMembershipSql(stream, partitions) {
+  return `SELECT outcome.partition_id, outcome.stream_sequence,
+      ((trade.ordinality - 1) * 3 + 3)::integer AS effect_ordinal,
+      trade.value->>'tradeId' AS trade_id
+    FROM runtime.canonical_command_outcomes outcome
+    CROSS JOIN LATERAL jsonb_array_elements(outcome.result_payload::jsonb->'trades')
+      WITH ORDINALITY AS trade(value, ordinality)
+    WHERE outcome.event_stream = ${literal(stream)}
+      AND outcome.partition_id IN (${partitions.join(",")})
+      AND outcome.result_status = 'accepted'
+    ORDER BY outcome.partition_id, outcome.stream_sequence, effect_ordinal, trade_id`;
+}
+
+export function compareTradeMembership(source, intake, obligation) {
+  const failures = [];
+  if (source.sha256 !== intake.sha256 || source.bytes !== intake.bytes) {
+    failures.push("settlement intake trade membership differs from canonical source");
+  }
+  if (intake.sha256 !== obligation.sha256 || intake.bytes !== obligation.bytes) {
+    failures.push("intake trade and obligation membership differ");
+  }
+  return failures;
 }
 
 function settlementSnapshot(stream, generation, partitions) {
@@ -202,13 +225,17 @@ async function main() {
     if (report.failures.length === 0) {
       const where = `event_stream = ${literal(stream)} AND source_generation = ${literal(initial.generation)}`;
       const columns = "partition_id, stream_sequence, effect_ordinal, trade_id";
+      report.sourceTradeMembership = await membershipHash("postgres", sourceTradeMembershipSql(stream, partitions));
       report.intakeMembership = await membershipHash("settlement-postgres", `SELECT ${columns}
         FROM settlement.canonical_trade_intake WHERE ${where} ORDER BY ${columns}`);
       report.obligationMembership = await membershipHash("settlement-postgres", `SELECT ${columns}
         FROM settlement.canonical_settlement_obligations WHERE ${where} ORDER BY ${columns}`);
-      if (report.intakeMembership.sha256 !== report.obligationMembership.sha256 ||
-          report.intakeMembership.bytes !== report.obligationMembership.bytes) {
-        report.failures.push("intake trade and obligation membership differ");
+      report.failures.push(...compareTradeMembership(report.sourceTradeMembership,
+        report.intakeMembership, report.obligationMembership));
+      report.sourceTradeMembershipAfter = await membershipHash("postgres", sourceTradeMembershipSql(stream, partitions));
+      if (report.sourceTradeMembership.sha256 !== report.sourceTradeMembershipAfter.sha256 ||
+          report.sourceTradeMembership.bytes !== report.sourceTradeMembershipAfter.bytes) {
+        report.failures.push("canonical source trade membership changed during settlement check");
       }
       const latest = sourceSnapshot(stream);
       if (latest.generation !== initial.generation || latest.partitions.size !== initial.partitions.size ||
@@ -217,6 +244,7 @@ async function main() {
             return after?.count !== row.count || after?.sequence !== row.sequence;
           })) report.failures.push("canonical source changed during settlement check");
     }
+    report.sourceTradeMembershipVerified = report.failures.length === 0;
     report.status = report.failures.length ? "fail" : "pass";
   } catch (error) {
     report.failures.push(error.message);

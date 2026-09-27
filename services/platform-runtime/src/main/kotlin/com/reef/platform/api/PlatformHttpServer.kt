@@ -1227,7 +1227,7 @@ class PlatformHttpServer(
     }
 
     internal fun startRuntimeLoops() {
-        if (runtimeRole.backgroundWorkersEnabled && asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+        if (runtimeRole.commandWorkersEnabled && asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val queue = capturedCommandQueue
             if (queue == null) {
                 System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
@@ -1244,37 +1244,37 @@ class PlatformHttpServer(
                 }
             }
         }
-        if (runtimeRole.backgroundWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
+        if (runtimeRole.commandWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             runtimeLoopStarter.startStreamCommandWorkers()
         }
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             runtimeLoopStarter.startCanonicalProjector()
         }
-        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_SHADOW_WORKERS_ENABLED", false)) {
+        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SHADOW_WORKERS_ENABLED", false)) {
             check(commandProcessingMode == CommandProcessingMode.StreamAck) {
                 "post-match shadow workers require stream-ack command processing"
             }
             PostMatchRuntimeWorkers.fromEnv().start()
         }
-        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_AUDIT_SHADOW_ENABLED", false)) {
+        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_AUDIT_SHADOW_ENABLED", false)) {
             check(commandProcessingMode == CommandProcessingMode.StreamAck) {
                 "post-match audit worker requires stream-ack command processing"
             }
             PostMatchAuditWorker.fromEnv().start()
         }
-        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_INTAKE_ENABLED", false)) {
+        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_INTAKE_ENABLED", false)) {
             check(commandProcessingMode == CommandProcessingMode.StreamAck) {
                 "post-match settlement intake requires stream-ack command processing"
             }
             PostMatchSettlementIntakeWorker.fromEnv().start()
         }
-        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED", false)) {
+        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED", false)) {
             check(commandProcessingMode == CommandProcessingMode.StreamAck) {
                 "post-match settlement obligations require stream-ack command processing"
             }
             PostMatchSettlementObligationWorker.fromEnv().start()
         }
-        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_TRANSITION_ENABLED", false)) {
+        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_TRANSITION_ENABLED", false)) {
             check(commandProcessingMode == CommandProcessingMode.StreamAck) {
                 "post-match settlement transition requires stream-ack command processing"
             }
@@ -1347,7 +1347,7 @@ class PlatformHttpServer(
                 "reason" to if (!enabled || ready) "" else reason
             )
         }
-        val streamWorkerRequired = runtimeRole.backgroundWorkersEnabled &&
+        val streamWorkerRequired = runtimeRole.commandWorkersEnabled &&
             streamCommandWorkerEnabled &&
             commandProcessingMode == CommandProcessingMode.StreamAck
         val streamWorkerReady = streamCommandIntakeStore != null &&

@@ -89,11 +89,9 @@ openings in the isolated settlement store before load so settled DvP trades
 exercise ledger writes; unexpected breaks fail the checker.
 The checker requires nonempty trade intake, equal source/intake/obligation/
 admission/execution frontiers on every active partition, exact trade identity
-membership between intake and obligations, completed admission ranks,
+membership from canonical source through intake and obligations, completed admission ranks,
 attempt outcomes matching obligations, and four obligation-matched ledger legs
-for each settled trade. It does not independently decode canonical source trade
-membership; `sourceTradeMembershipVerified` is false even when this diagnostic
-passes. It writes `settlement-shadow-check.json` beside the live/market shadow
+for each settled trade. It writes `settlement-shadow-check.json` beside the live/market shadow
 report. Run the source image when testing a branch that changes the harness or
 workers.
 
@@ -118,11 +116,36 @@ scripts/dev/do-benchmark-host.sh run-destroy
 This is a **targeted post-trade stage diagnostic**, not the integrated 10k/s
 qualification: legacy lifecycle/market projection work is limited by the
 `command-status` stage, public settlement reads remain on the legacy path,
-and the checker proves final source-position catch-up and settlement-internal
-consistency rather than exact source-trade parity, in-load freshness, or drain
-headroom. Record accepted commands/s and trades/s separately.
+and the checker proves final source-position catch-up, exact source-trade
+membership, and settlement-internal consistency rather than public-route
+parity, in-load freshness, or drain headroom. Record accepted commands/s and
+trades/s separately.
 The later matched 300-second full-pipeline campaign enables every mandatory
 consumer and public route after parity and cutover.
+
+For the PM-S2 correction, run a **matched control/treatment pair on one disposable
+`sfo3` `c-32`** using `REEF_DO_MATCHED_TOPOLOGY=1`, `materializer-projection`,
+10k/s, 384 workers, 300 seconds, and the same source commit, fixture, DB settings,
+observer, and host. Matched mode starts six materializers and sixteen unique
+canonical projector owners. Control leaves both post-match diagnostics off;
+treatment sets both to `1`, adding dedicated live and settlement JVMs. Both
+arms run the isolated databases. Run each arm through the normal smoke reset on fresh
+volumes; retain both run IDs and raw artifacts before destroying the droplet.
+Both arms start the same isolated PostgreSQL services and use the same
+15-second source and settlement observer. In-load settlement rates use cheap,
+approximate `pg_stat_user_tables.n_tup_ins` counters on fresh single-cohort
+volumes; final SQL checks supply exact cohort counts. The observer gate requires
+settlement query time below 2% and total query time below 10% of each interval.
+The treatment writes `postmatch-stage-samples.jsonl`, a load-window-aligned
+`postmatch-stage-summary.json`, `settlement-dependency-graph.json`, exact
+closed-cohort checkers, and dedicated per-worker logs. The control writes the
+same source and empty-settlement stage samples. Stage checks fail if samples
+are missing, counts regress, or observer query time exceeds those limits.
+Counter call time includes SQL work and possible row-lock wait, not exact wait
+duration. Compare accepted, materialized, projected, source trades, each
+settlement stage, downstream qualified freshness, WAL/CPU/I/O, blocked-head
+age, and dependency chain depth. A passing pair attributes incremental cost;
+it does not qualify final public cutover or prove 10k settlement capacity.
 
 Goal-driven sizing is opt-in. Without a goal or target, the table above remains
 the default. Use `plan-goal` before provisioning to see the resolved DO size,

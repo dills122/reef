@@ -69,8 +69,10 @@ The September 27 [PM-S2 disposable diagnostic](THROUGHPUT_BASELINES.md#pm-s2--bo
 ran the combined shadow path at 10k/s for 300s. Ingress/direct ack held;
 canonical, legacy command-status projection, and post-trade transition did
 not keep up, so no integrated or settlement capacity claim is promoted.
-Next: preserve D-059's durable order while batching rank admission and
-coalescing ordered execution before another 10k run.
+Next: preserve D-059's durable order, isolate post-match processes from legacy
+projectors, restore the six-materializer/sixteen-projector benchmark topology,
+and measure blocked versus executing settlement work in a matched disposable
+control/treatment pair. Select batching only after dominant cost is measured.
 Durable pre-trade policy authority, repair/retry parity, public read parity,
 audit inclusion, and integrated cutover remain ahead.
 
