@@ -111,9 +111,10 @@ internal class PostMatchSettlementIntakeWorker(
             }
             val sourceUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "")
             val targetUrl = RuntimeEnv.string("SETTLEMENT_POSTGRES_JDBC_URL", "")
-            require(sourceUrl.isNotBlank() && targetUrl.isNotBlank() && sourceUrl != targetUrl) {
-                "settlement intake requires distinct canonical source and settlement PostgreSQL"
+            require(sourceUrl.isNotBlank() && targetUrl.isNotBlank()) {
+                "settlement intake requires canonical source and settlement PostgreSQL URLs"
             }
+            require(sourceUrl != targetUrl) { "settlement intake requires distinct source and settlement PostgreSQL URLs" }
             val sourceUser = RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef")
             val sourcePassword = RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef")
             val source = RuntimeDataSources.dataSource(sourceUrl, sourceUser, sourcePassword, "settlement-intake-source")

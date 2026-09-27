@@ -61,12 +61,14 @@ class PostgresCanonicalOutcomeSourceReader(
         val bounded = maxResultBytes != Long.MAX_VALUE
         val oldAutoCommit = connection.autoCommit
         val oldIsolation = connection.transactionIsolation
-        if (bounded) {
-            check(oldAutoCommit) { "bounded canonical source read requires an idle connection" }
-            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
-            connection.autoCommit = false
-        }
+        var transactionStarted = false
         try {
+            if (bounded) {
+                check(oldAutoCommit) { "bounded canonical source read requires an idle connection" }
+                connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+                connection.autoCommit = false
+                transactionStarted = true
+            }
             fun bindWindow(statement: PreparedStatement, rowLimit: Int) {
                 statement.setInt(1, partitionId)
                 statement.setLong(2, fromExclusiveSequence)
@@ -104,12 +106,15 @@ class PostgresCanonicalOutcomeSourceReader(
                     count
                 }
             } else limit
+            val payloadProjection = if (bounded) {
+                "outcome.result_payload::text, octet_length(outcome.result_payload::text)"
+            } else "outcome.result_payload::text"
             val sources = if (readLimit == 0) emptyList() else connection.prepareStatement(
                 """
                 SELECT outcome.event_stream, outcome.partition_id, outcome.stream_sequence,
                        outcome.batch_id, outcome.command_id, outcome.command_type,
                        outcome.payload_hash, outcome.instrument_id, outcome.order_id,
-                       outcome.result_status, outcome.result_payload::text,
+                       outcome.result_status, $payloadProjection,
                        batch.batch_id IS NOT NULL AS has_retained_batch
                 FROM runtime.canonical_command_outcomes outcome
                 LEFT JOIN runtime.canonical_venue_event_batches batch
@@ -128,9 +133,17 @@ class PostgresCanonicalOutcomeSourceReader(
                 bindWindow(statement, readLimit)
                 statement.executeQuery().use { rows ->
                     buildList {
+                        var totalResultBytes = 0L
                         while (rows.next()) {
-                            check(rows.getBoolean(12)) {
+                            check(rows.getBoolean(if (bounded) 13 else 12)) {
                                 "canonical outcome has no matching retained batch membership"
+                            }
+                            if (bounded) {
+                                val nextBytes = rows.getLong(12)
+                                check(nextBytes <= maxResultBytes - totalResultBytes) {
+                                    "canonical result payload exceeds configured bound"
+                                }
+                                totalResultBytes += nextBytes
                             }
                             add(CanonicalOutcomeSource(
                                 eventStream = rows.getString(1), partitionId = rows.getInt(2),
@@ -144,15 +157,15 @@ class PostgresCanonicalOutcomeSourceReader(
                     }
                 }
             }
-            if (bounded) connection.commit()
+            if (transactionStarted) connection.commit()
             sources
         } catch (error: Throwable) {
-            if (bounded) connection.rollback()
+            if (transactionStarted) connection.rollback()
             throw error
         } finally {
             if (bounded) {
-                connection.autoCommit = oldAutoCommit
                 connection.transactionIsolation = oldIsolation
+                connection.autoCommit = oldAutoCommit
             }
         }
     }
