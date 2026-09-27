@@ -46,8 +46,8 @@ class SettlementCanonicalIntakeStore(
             check(generation == window.sourceGeneration) { "settlement source generation changed" }
             val result = when {
                 frontier == window.fromExclusiveSequence -> {
-                    applyEffects(connection, window)
-                    insertReceipts(connection, window)
+                    val trades = applyEffects(connection, window)
+                    insertReceipts(connection, window, trades)
                     insertCoverage(connection, window)
                     advanceFrontier(connection, window)
                     PostMatchApplyResult.APPLIED
@@ -117,7 +117,21 @@ class SettlementCanonicalIntakeStore(
         effect.position.partitionId, effect.position.streamSequence, effect.position.effectOrdinal
     )
 
-    private fun applyEffects(connection: Connection, window: VerifiedCanonicalSourceWindow) {
+    private fun intakeTrade(
+        effect: CanonicalEffectEnvelope, trade: CanonicalEffect.Trade, buyer: Owner, seller: Owner
+    ) = SettlementIntakeTrade(
+        streamSequence = effect.position.streamSequence, effectOrdinal = effect.position.effectOrdinal,
+        tradeId = trade.tradeId, eventId = trade.eventId,
+        executionId = trade.executionId, buyOrderId = trade.buyOrderId,
+        sellOrderId = trade.sellOrderId,
+        runId = buyer.runId.ifBlank { seller.runId }, venueSessionId = buyer.venueSessionId,
+        buyerParticipantId = buyer.participantId, sellerParticipantId = seller.participantId,
+        buyerAccountId = buyer.accountId, sellerAccountId = seller.accountId,
+        instrumentId = trade.instrumentId, quantityUnits = trade.quantityUnits,
+        price = trade.price, currency = trade.currency, occurredAt = trade.occurredAt
+    )
+
+    private fun applyEffects(connection: Connection, window: VerifiedCanonicalSourceWindow): List<SettlementIntakeTrade> {
         val effects = window.outcomes.flatMap { it.effects }
         val tradeEffects = effects.filter { it.effect is CanonicalEffect.Trade }
         val ids = tradeEffects.flatMap { effect ->
@@ -134,6 +148,7 @@ class SettlementCanonicalIntakeStore(
             }
         }
         insertOwners(connection, window, accepted)
+        val intakeTrades = mutableListOf<SettlementIntakeTrade>()
         connection.prepareStatement(
             """INSERT INTO settlement.canonical_trade_intake(
                  event_stream, source_generation, partition_id, stream_sequence, effect_ordinal,
@@ -172,6 +187,7 @@ class SettlementCanonicalIntakeStore(
                 check(trade.price.toBigDecimalOrNull()?.signum()?.let { it >= 0 } == true) {
                     "settlement trade price must be nonnegative numeric"
                 }
+                intakeTrades += intakeTrade(envelope, trade, buyer, seller)
                 statement.setString(1, window.eventStream)
                 statement.setString(2, window.sourceGeneration)
                 statement.setInt(3, envelope.position.partitionId)
@@ -197,6 +213,7 @@ class SettlementCanonicalIntakeStore(
             }
             statement.executeBatch()
         }
+        return intakeTrades
     }
 
     private fun loadOwners(connection: Connection, window: VerifiedCanonicalSourceWindow, ids: Set<String>): Map<String, Owner> {
@@ -256,12 +273,15 @@ class SettlementCanonicalIntakeStore(
         }
     }
 
-    private fun insertReceipts(connection: Connection, window: VerifiedCanonicalSourceWindow) {
+    private fun insertReceipts(
+        connection: Connection, window: VerifiedCanonicalSourceWindow, trades: List<SettlementIntakeTrade>
+    ) {
+        val tradesBySequence = trades.groupBy { it.streamSequence }
         connection.prepareStatement(
             """INSERT INTO settlement.canonical_intake_receipts(
                  event_stream, source_generation, partition_id, stream_sequence, batch_id,
-                 command_id, command_payload_hash, result_digest, effect_count
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                 command_id, command_payload_hash, result_digest, effect_count, trade_count, trade_digest
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         ).use { statement ->
             window.outcomes.forEach { outcome ->
                 statement.setString(1, window.eventStream)
@@ -273,6 +293,10 @@ class SettlementCanonicalIntakeStore(
                 statement.setString(7, outcome.source.payloadHash)
                 statement.setString(8, outcome.resultDigest)
                 statement.setInt(9, outcome.effects.size)
+                val members = tradesBySequence[outcome.source.streamSequence].orEmpty()
+                statement.setInt(10, members.size)
+                statement.setString(11, if (members.isEmpty()) SettlementIntakeManifest.emptyDigest
+                    else SettlementIntakeManifest.digest(members))
                 statement.addBatch()
             }
             statement.executeBatch()
@@ -364,6 +388,7 @@ class SettlementCanonicalIntakeStore(
             listOf(trade.buyOrderId, trade.sellOrderId)
         }.toSet()
         val tradeOwners = loadOwners(connection, window, tradeOwnerIds)
+        val replayTrades = mutableListOf<SettlementIntakeTrade>()
         connection.prepareStatement(
             """SELECT stream_sequence, effect_ordinal, trade_id, event_id, execution_id,
                       run_id, venue_session_id, buy_order_id, sell_order_id,
@@ -396,10 +421,13 @@ class SettlementCanonicalIntakeStore(
                         rows.getString(17) == trade.currency && rows.getString(18) == trade.occurredAt) {
                         "settlement replay trade conflict"
                     }
+                    replayTrades += intakeTrade(envelope, trade, buyer, seller)
                 }
                 check(!rows.next()) { "settlement replay has extra trades" }
             }
         }
+        SettlementIntakeManifest.verify(connection, window.eventStream, window.sourceGeneration,
+            window.partitionId, window.fromExclusiveSequence, window.throughInclusiveSequence, replayTrades)
     }
 
     companion object { const val CONSUMER = "settlement-intake-v1" }
