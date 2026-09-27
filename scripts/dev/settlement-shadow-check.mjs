@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Closed-cohort settlement proof for a disposable post-match benchmark host.
+// Closed-cohort settlement consistency check; canonical source trade membership
+// is not independently decoded here.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -63,6 +64,21 @@ export function ledgerMismatchSql(stream, generation) {
     ) bad`;
 }
 
+export function attemptMismatchSql(stream, generation) {
+  return `SELECT count(*)::text
+    FROM settlement.canonical_settlement_obligations o
+    LEFT JOIN settlement.canonical_transition_attempts a
+      ON a.event_stream = o.event_stream AND a.source_generation = o.source_generation
+     AND a.trade_id = o.trade_id AND a.attempt_number = 1
+    WHERE o.event_stream = ${literal(stream)}
+      AND o.source_generation = ${literal(generation)} AND o.status <> 'PENDING'
+      AND (a.trade_id IS NULL OR
+        (a.outcome, a.run_id, a.post_trade_profile_id, a.post_trade_policy_version,
+         a.partition_id, a.stream_sequence) IS DISTINCT FROM
+        (o.status, o.run_id, o.post_trade_profile_id, o.post_trade_policy_version,
+         o.partition_id, o.stream_sequence))`;
+}
+
 function settlementSnapshot(stream, generation, partitions) {
   const ids = partitions.join(",");
   const where = `event_stream = ${literal(stream)} AND source_generation = ${literal(generation)}`;
@@ -93,6 +109,8 @@ function settlementSnapshot(stream, generation, partitions) {
   if (BigInt(metrics.pending) === 0n && BigInt(metrics.obligations) > 0n) {
     const bad = query("settlement-postgres", ledgerMismatchSql(stream, generation));
     metrics.badLedgerLegs = bad[0]?.[0] ?? "unknown";
+    const badAttempts = query("settlement-postgres", attemptMismatchSql(stream, generation));
+    metrics.badAttemptOutcomes = badAttempts[0]?.[0] ?? "unknown";
   }
   return { stages, metrics };
 }
@@ -131,6 +149,9 @@ export function assess(source, target, partitions, generation) {
   if (n.nonInstant !== 0n) failures.push("settlement profile is not instant-post-trade");
   if (n.settled + n.breaks !== n.obligations) failures.push("settlement outcomes do not cover obligations");
   if (n.attempts !== n.settled + n.breaks) failures.push("transition attempts do not cover outcomes");
+  if (n.badAttemptOutcomes !== undefined && n.badAttemptOutcomes !== 0n) {
+    failures.push("transition attempts differ from obligation outcomes");
+  }
   if (n.admissions === 0n || n.admissions !== n.completions || n.maxAdmissionRank !== n.admissions) {
     failures.push("admission rank or completion count differs");
   }
@@ -166,7 +187,8 @@ async function main() {
   const waitSeconds = Number(waitText);
   if (!Number.isInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 600) throw new Error("invalid wait seconds");
   const report = { schemaVersion: "reef.settlementShadowDiagnostic.v1", eventStream: stream,
-    partitions, status: "fail", checkedAt: null, failures: [] };
+    partitions, sourceTradeMembershipVerified: false,
+    status: "fail", checkedAt: null, failures: [] };
   try {
     const initial = sourceSnapshot(stream);
     report.generation = initial.generation;

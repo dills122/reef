@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 
-import { assess, ledgerMismatchSql } from "./settlement-shadow-check.mjs";
+import { assess, attemptMismatchSql, ledgerMismatchSql } from "./settlement-shadow-check.mjs";
 
 const source = new Map([[0, { count: "3", sequence: "3" }],
   [1, { count: "2", sequence: "281474976710658" }]]);
@@ -14,7 +14,7 @@ const stages = new Map(["intake", "obligation", "admission", "execution"].flatMa
 const metrics = {
   intakeTrades: "2", obligations: "2", pending: "0", settled: "2", breaks: "0",
   nonInstant: "0", admissions: "2", maxAdmissionRank: "2", completions: "2",
-  attempts: "2", ledgerEntries: "8", badLedgerLegs: "0",
+  attempts: "2", ledgerEntries: "8", badLedgerLegs: "0", badAttemptOutcomes: "0",
 };
 
 test("complete ranked settlement passes only with trade and ledger proof", () => {
@@ -27,7 +27,8 @@ test("missing or stale transition and malformed ledger fail", () => {
   const incomplete = new Map(stages);
   incomplete.delete("execution:1");
   const result = assess(source, { stages: incomplete,
-    metrics: { ...metrics, pending: "1", completions: "1", ledgerEntries: "3", badLedgerLegs: "1" } },
+    metrics: { ...metrics, pending: "1", completions: "1", ledgerEntries: "3",
+      badLedgerLegs: "1", badAttemptOutcomes: "1" } },
   [0, 1], generation);
   assert.ok(result.failures.some((message) => message.includes("execution frontier missing")));
   assert.ok(result.failures.some((message) => message.includes("pending")));
@@ -52,7 +53,7 @@ test("break-only cohort cannot establish ledger path", () => {
   assert.ok(result.failures.some((message) => message.includes("no settled trades")));
 });
 
-test("PostgreSQL ledger proof rejects wrong owner, asset, direction, amount, and missing leg", {
+test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes", {
   skip: process.env.REEF_TEST_SETTLEMENT_SQL !== "1",
   timeout: 60_000,
 }, async () => {
@@ -85,13 +86,24 @@ test("PostgreSQL ledger proof rejects wrong owner, asset, direction, amount, and
         event_stream text, source_generation text, trade_id text, run_id text, status text,
         buyer_participant_id text, buyer_account_id text, seller_participant_id text,
         seller_account_id text, currency text, instrument_id text,
-        cash_amount numeric, quantity_units numeric);
+        cash_amount numeric, quantity_units numeric, post_trade_profile_id text DEFAULT 'instant',
+        post_trade_policy_version integer DEFAULT 1, partition_id integer DEFAULT 0,
+        stream_sequence bigint DEFAULT 1);
+      CREATE TABLE settlement.canonical_transition_attempts (
+        event_stream text, source_generation text, trade_id text, attempt_number integer,
+        outcome text, run_id text, post_trade_profile_id text, post_trade_policy_version integer,
+        partition_id integer, stream_sequence bigint);
       CREATE TABLE settlement.canonical_transition_ledger_entries (
         event_stream text, source_generation text, trade_id text, attempt_number integer,
         entry_kind text, run_id text, participant_id text, account_id text,
         asset_type text, asset_id text, direction text, quantity numeric);
-      INSERT INTO settlement.canonical_settlement_obligations VALUES
+      INSERT INTO settlement.canonical_settlement_obligations
+        (event_stream, source_generation, trade_id, run_id, status,
+         buyer_participant_id, buyer_account_id, seller_participant_id, seller_account_id,
+         currency, instrument_id, cash_amount, quantity_units) VALUES
         ('test', 'g1', 't1', 'r1', 'SETTLED', 'buyer', 'b1', 'seller', 's1', 'USD', 'ABC', 250, 5);
+      INSERT INTO settlement.canonical_transition_attempts VALUES
+        ('test', 'g1', 't1', 1, 'SETTLED', 'r1', 'instant', 1, 0, 1);
       INSERT INTO settlement.canonical_transition_ledger_entries VALUES
         ('test', 'g1', 't1', 1, 'BUYER_CASH_DEBIT', 'r1', 'buyer', 'b1', 'CASH', 'USD', 'DEBIT', 250),
         ('test', 'g1', 't1', 1, 'SELLER_CASH_CREDIT', 'r1', 'seller', 's1', 'CASH', 'USD', 'CREDIT', 250),
@@ -113,6 +125,12 @@ test("PostgreSQL ledger proof rejects wrong owner, asset, direction, amount, and
     }
     sql("DELETE FROM settlement.canonical_transition_ledger_entries WHERE entry_kind = 'BUYER_CASH_DEBIT'");
     assert.equal(check(), "1");
+    const checkAttempt = () => sql(attemptMismatchSql("test", "g1"));
+    assert.equal(checkAttempt(), "0");
+    sql("UPDATE settlement.canonical_transition_attempts SET outcome = 'BREAK'");
+    assert.equal(checkAttempt(), "1", "wrong attempt outcome must fail");
+    sql("DELETE FROM settlement.canonical_transition_attempts");
+    assert.equal(checkAttempt(), "1", "missing attempt must fail");
   } finally {
     spawnSync("docker", ["rm", "-f", name], { encoding: "utf8" });
   }

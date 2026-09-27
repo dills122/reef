@@ -89,10 +89,13 @@ openings in the isolated settlement store before load so settled DvP trades
 exercise ledger writes; unexpected breaks fail the checker.
 The checker requires nonempty trade intake, equal source/intake/obligation/
 admission/execution frontiers on every active partition, exact trade identity
-membership through obligations, completed admission ranks, and four balanced
-ledger legs for each settled trade. It writes `settlement-shadow-check.json`
-beside the live/market shadow report. Run the source image when testing a branch
-that changes the harness or workers.
+membership between intake and obligations, completed admission ranks,
+attempt outcomes matching obligations, and four obligation-matched ledger legs
+for each settled trade. It does not independently decode canonical source trade
+membership; `sourceTradeMembershipVerified` is false even when this diagnostic
+passes. It writes `settlement-shadow-check.json` beside the live/market shadow
+report. Run the source image when testing a branch that changes the harness or
+workers.
 
 ```bash
 REEF_DO_CONFIRM_DESTROYABLE=1 \
@@ -115,8 +118,9 @@ scripts/dev/do-benchmark-host.sh run-destroy
 This is a **targeted post-trade stage diagnostic**, not the integrated 10k/s
 qualification: legacy lifecycle/market projection work is limited by the
 `command-status` stage, public settlement reads remain on the legacy path,
-and the checker proves final closed-cohort catch-up rather than in-load
-freshness or drain headroom. Record accepted commands/s and trades/s separately.
+and the checker proves final source-position catch-up and settlement-internal
+consistency rather than exact source-trade parity, in-load freshness, or drain
+headroom. Record accepted commands/s and trades/s separately.
 The later matched 300-second full-pipeline campaign enables every mandatory
 consumer and public route after parity and cutover.
 
