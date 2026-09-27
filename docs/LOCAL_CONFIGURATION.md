@@ -45,6 +45,12 @@ projector instances. Each instance uses its existing
 `POSTMATCH_WORKER_PARTITIONS` overrides it. Keep the profile enabled while
 running these workers. Existing live routes and materializers use their
 current stores; the new consumers write shadow state only.
+Set `POSTMATCH_AUDIT_SHADOW_ENABLED=true` with `POSTMATCH_EVENT_STREAM` to run
+the independent canonical audit consumer in projection PostgreSQL. It uses the
+same partition assignment unless overridden, and writes retained outcomes,
+ordered effects, coverage, and its own frontier. Public history still reads
+the legacy mixed event store, including direct admin and protective events.
+The audit worker does not require the `postmatch` Compose profile.
 Use the same overlay or profile on teardown that was used at startup; Arena has
 `make dev-down-arena`. For a clean local database, `make dev-reset` removes
 local Compose volumes, reapplies migrations, and starts the stack; run

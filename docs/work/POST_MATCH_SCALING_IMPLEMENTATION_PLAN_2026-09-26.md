@@ -100,6 +100,12 @@ not a capacity score.
 
 ### Wave 3 — independent audit and bounded post-trade
 
+Audit foundation in progress: opt-in `audit-v1` consumes verified canonical
+windows into projection PostgreSQL `runtime.canonical_audit_*` with its own locked frontier, retained
+outcome payloads, ordered effects, and atomic coverage. Legacy mixed history
+routes remain authoritative for direct admin/protective events until trace and
+public-route parity is proven. This is a shadow write path, not audit cutover.
+
 5. Give venue audit/history its own claim/frontier and write schedule. Preserve
 all venue and direct admin/protective events, trace order, payload retention,
 and mixed route semantics. Existing projection PostgreSQL remains direct-event
