@@ -1,7 +1,8 @@
 # Bounded settlement transition — 2026-09-27
 
-Status: accepted arbitration design; shadow implementation under local
-verification and independent review. This contract does not approve public
+Status: accepted arbitration design; shadow implementation passed local
+restore/replay and platform-runtime checks after independent review findings.
+PR/OCR review and capacity qualification remain pending. This contract does not approve public
 settlement reads or establish 10k/s capacity. See [D-059](../DECISIONS.md#d-059-durable-settlement-admission-order-for-scarce-accounts)
 and the [research spike](../research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md).
 
@@ -34,6 +35,13 @@ account winner. Admission facts and immutable account membership need backup
 and audit retention. The latest prior rank for each account is found by an
 indexed lookup over that membership, so no mutable account-tail pointer must
 survive restore.
+Execution verifies each recorded account predecessor against the actual prior
+ranked membership and verifies the partition predecessor independently of the
+saved dependency digest. A missing admission row before the admission frontier
+raises an error. The separate-target integration test imports canonical intake,
+obligations, resource openings, admissions, account memberships, and dependency
+rows into a freshly migrated PostgreSQL database, then proves the same scarce
+account winner under the opposite execution attempt order.
 
 ## Account ownership and concurrency
 

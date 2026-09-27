@@ -62,11 +62,13 @@ trade intake and frontier on the settlement store. [#399](https://github.com/dil
 proposes opt-in bounded policy binding and pending obligations with their own
 frontier; it does not create ledger entries or settle trades. The dependent
 transition branch adds keyed account state, bounded instant workflow, DvP legs,
-ledger postings, and a separate transition frontier. Its final independent
-review found a blocking replay gap: scarce accounts shared across source
-partitions have schedule-dependent settlement outcomes. A durable deterministic
-contention order must be chosen and tested before this shadow worker is enabled
-or its branch is offered as ready to merge. Durable pre-trade policy authority,
+ledger postings, and a separate transition frontier. D-059 accepts a durable
+ranked admission log for shared-account contention; the shadow transition
+worker now records admission before balance-dependent execution. Independent
+review's recovery findings were addressed with ranked-history predecessor
+validation, visible admission-gap failure, and a separate-database import and
+replay integration test. PR/OCR review and disposable-droplet capacity evidence
+remain ahead. Durable pre-trade policy authority,
 repair/retry parity, public read parity, and integrated cutover remain ahead.
 Neither pending PR nor dependent branch is capacity evidence.
 

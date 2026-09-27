@@ -143,6 +143,13 @@ class SettlementBoundedTransitionStore(
             "settlement transition source generation changed"
         }
         val from = completed?.second ?: CanonicalStreamPosition.origin(partitionId)
+        val admitted = frontier(connection, "canonical_transition_admission_frontiers", eventStream, partitionId)
+        check(admitted == null || admitted.first == sourceGeneration) {
+            "settlement admission source generation changed"
+        }
+        check(admitted == null || admitted.second >= from) {
+            "settlement admission frontier trails completed transition"
+        }
         connection.prepareStatement(
             """SELECT through_inclusive_sequence, obligation_count, obligation_digest
                FROM settlement.canonical_transition_admissions
@@ -154,7 +161,12 @@ class SettlementBoundedTransitionStore(
             statement.setInt(3, partitionId)
             statement.setLong(4, from)
             statement.executeQuery().use { rows ->
-                if (!rows.next()) return@use null
+                if (!rows.next()) {
+                    check(admitted == null || admitted.second == from) {
+                        "settlement admitted window is missing before admission frontier"
+                    }
+                    return@use null
+                }
                 val through = rows.getLong(1)
                 val count = rows.getInt(2)
                 val savedDigest = rows.getString(3)
@@ -629,10 +641,27 @@ class SettlementBoundedTransitionStore(
             "settlement admission dependencies differ on replay"
         }
         val accounts = connection.prepareStatement(
-            """SELECT run_id, participant_id, account_id, asset_type, asset_id, predecessor_rank
-               FROM settlement.canonical_transition_admission_accounts
-               WHERE event_stream = ? AND source_generation = ? AND admission_rank = ?
-               ORDER BY run_id, participant_id, account_id, asset_type, asset_id"""
+            """SELECT current.run_id, current.participant_id, current.account_id,
+                      current.asset_type, current.asset_id, current.predecessor_rank,
+                      prior.admission_rank
+               FROM settlement.canonical_transition_admission_accounts current
+               LEFT JOIN LATERAL (
+                 SELECT previous.admission_rank
+                 FROM settlement.canonical_transition_admission_accounts previous
+                 WHERE previous.event_stream = current.event_stream
+                   AND previous.source_generation = current.source_generation
+                   AND previous.run_id = current.run_id
+                   AND previous.participant_id = current.participant_id
+                   AND previous.account_id = current.account_id
+                   AND previous.asset_type = current.asset_type
+                   AND previous.asset_id = current.asset_id
+                   AND previous.admission_rank < current.admission_rank
+                 ORDER BY previous.admission_rank DESC LIMIT 1
+               ) prior ON true
+               WHERE current.event_stream = ? AND current.source_generation = ?
+                 AND current.admission_rank = ?
+               ORDER BY current.run_id, current.participant_id, current.account_id,
+                        current.asset_type, current.asset_id"""
         ).use { statement ->
             statement.setString(1, window.eventStream)
             statement.setString(2, window.sourceGeneration)
@@ -642,15 +671,38 @@ class SettlementBoundedTransitionStore(
                     while (rows.next()) {
                         val key = AccountKey(rows.getString(1), rows.getString(2), rows.getString(3),
                             rows.getString(4), rows.getString(5))
-                        val prior = rows.getLong(6).let { if (rows.wasNull()) null else it }
-                        add(key to prior)
+                        val recorded = rows.getLong(6).let { if (rows.wasNull()) null else it }
+                        val actual = rows.getLong(7).let { if (rows.wasNull()) null else it }
+                        check(recorded == actual) {
+                            "settlement admission account predecessor differs from ranked history"
+                        }
+                        add(key to actual)
                     }
                 }
             }
         }
-        check(accounts.map { it.first } == accountKeys(window.obligations) &&
-            accounts.mapNotNull { it.second }.all { it in predecessors }) {
+        check(accounts.map { it.first } == accountKeys(window.obligations)) {
             "settlement admission account membership differs on replay"
+        }
+        val partitionPredecessor = if (window.fromExclusiveSequence ==
+            CanonicalStreamPosition.origin(window.partitionId)) null else connection.prepareStatement(
+            """SELECT admission_rank FROM settlement.canonical_transition_admissions
+               WHERE event_stream = ? AND source_generation = ? AND partition_id = ?
+                 AND through_inclusive_sequence = ?"""
+        ).use { statement ->
+            statement.setString(1, window.eventStream)
+            statement.setString(2, window.sourceGeneration)
+            statement.setInt(3, window.partitionId)
+            statement.setLong(4, window.fromExclusiveSequence)
+            statement.executeQuery().use { rows ->
+                check(rows.next()) { "settlement admission partition predecessor is missing" }
+                rows.getLong(1).also { check(!rows.next()) }
+            }
+        }
+        val expected = accounts.mapNotNull { it.second }.toMutableSet()
+        partitionPredecessor?.let(expected::add)
+        check(expected.sorted() == predecessors && expected.all { it < saved.first }) {
+            "settlement admission dependencies differ from ranked history"
         }
         return saved.first
     }

@@ -194,3 +194,17 @@ data retained and imported for deterministic replay. Matching-only fresh
 admission is a new arbitration history. Window-level rank is the first
 implementation granularity; qualification must measure its lane serialization
 and hot-account skew before any public-read cutover.
+
+## Local proof after independent review
+
+Review instance 4 found that same-database replay did not establish restore
+behavior and that a self-consistent imported dependency digest could omit a
+ranked predecessor. The transition now derives account and partition
+predecessors from ranked admissions, compares them to recorded membership and
+dependency rows, and fails on a missing admitted window before its frontier.
+An integration test creates a second disposable local PostgreSQL database,
+applies settlement migrations, imports canonical source/obligation and admission
+facts, and replays scarce-account windows in opposite attempt order. All 14
+focused settlement tests pass without skips; the full platform-runtime check
+passes 694 tests with zero failures and two unrelated skips. This establishes
+local functional restore/replay, not sustained settlement throughput.

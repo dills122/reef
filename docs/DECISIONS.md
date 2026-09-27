@@ -1211,7 +1211,8 @@ Contract and rollout: [`docs/work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-
 
 ### D-059: Durable settlement admission order for scarce accounts
 
-Status: accepted design on 2026-09-27; shadow implementation, independent review,
+Status: accepted design on 2026-09-27; shadow implementation and separate-target
+restore/replay verified locally after independent review findings. PR/OCR,
 public-read cutover, and capacity remain unqualified
 
 - Matching source facts provide a contiguous order within each partition, not
