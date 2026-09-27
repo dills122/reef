@@ -44,10 +44,14 @@ export function assessStageSamples(samples, requireSettlement, loadWindows = [])
     const row = { sampledAt: sample.sampledAt, sourceSeconds, settlementSeconds, duringLoad,
       observerDutyCycle: duty, targetObserverDutyCycle: targetDuty,
       sourceOutcomesPerSecond: Number(BigInt(sample.sourceOutcomes) - BigInt(before.sourceOutcomes)) / sourceSeconds };
-    if (sample.sourceTrades != null && before.sourceTrades != null) {
+    const hasSourceTrades = sample.sourceTrades != null && before.sourceTrades != null;
+    if ((sample.sourceTrades != null) !== (before.sourceTrades != null)) {
+      failures.push(`sample ${index} source trade count is inconsistent`);
+    }
+    if (hasSourceTrades) {
       row.sourceTradesPerSecond = Number(BigInt(sample.sourceTrades) - BigInt(before.sourceTrades)) / sourceSeconds;
     }
-    if (row.sourceOutcomesPerSecond < 0 || row.sourceTradesPerSecond < 0) {
+    if (row.sourceOutcomesPerSecond < 0 || (hasSourceTrades && row.sourceTradesPerSecond < 0)) {
       failures.push(`sample ${index} source count regressed`);
     }
     if (requireSettlement && sample.settlement && before.settlement) {

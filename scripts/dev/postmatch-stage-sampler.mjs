@@ -64,7 +64,7 @@ async function main() {
   if (!Number.isInteger(intervalMs) || intervalMs < 1000 || intervalMs > 60000) throw new Error("invalid sampler interval");
   let running = true;
   process.on("SIGTERM", () => { running = false; });
-  let previousOutcomes = 0n;
+  let previousOutcomes = null;
   let previousAt = 0;
   while (running) {
     const sampledAt = Date.now();
@@ -72,11 +72,13 @@ async function main() {
       const source = query("postgres", sourceStageSql());
       const sourceMeasuredAt = new Date().toISOString();
       const outcomes = BigInt(summarizeSourceRows(source.rows));
-      if (outcomes < previousOutcomes) throw new Error("canonical source outcome statistics regressed");
+      if (previousOutcomes != null && outcomes < previousOutcomes) {
+        throw new Error("canonical source outcome statistics regressed");
+      }
       const sample = { schemaVersion: "reef.postmatchStageSample.v2", eventStream: stream,
         sampledAt: new Date(sampledAt).toISOString(),
         intervalMs: previousAt ? sampledAt - previousAt : null, sourceQueryMs: source.durationMs,
-        sourceMeasuredAt, sourceOutcomesDelta: (outcomes - previousOutcomes).toString(),
+        sourceMeasuredAt, sourceOutcomesDelta: previousOutcomes == null ? null : (outcomes - previousOutcomes).toString(),
         sourceOutcomes: outcomes.toString(), sourceMeasure: "pg_stat_user_tables.n_tup_ins" };
       previousOutcomes = outcomes;
       if (settlementText === "true") {

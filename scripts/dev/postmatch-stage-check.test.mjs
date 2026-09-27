@@ -48,6 +48,18 @@ test("source sampler uses one cheap table statistic and permits missing in-load 
   assert.equal(report.rates[0].sourceOutcomesPerSecond, 10000);
 });
 
+test("stage check rejects one-sided trade counts but accepts absent v2 trade counts", () => {
+  const samples = [sample(0, 0, 0), sample(60000, 600000, 300000),
+    sample(120000, 1200000, 600000)];
+  delete samples[1].sourceTrades;
+  const inconsistent = assessStageSamples(samples, true);
+  assert.equal(inconsistent.status, "fail");
+  assert.ok(inconsistent.failures.some((failure) => failure.includes("trade count is inconsistent")));
+  delete samples[0].sourceTrades;
+  delete samples[2].sourceTrades;
+  assert.equal(assessStageSamples(samples, true).status, "pass");
+});
+
 test("observer duty gate applies to measured load intervals", () => {
   const samples = [sample(0, 0, 0, 3000), sample(60000, 600000, 300000, 3000),
     sample(120000, 1200000, 600000), sample(180000, 1800000, 900000),
