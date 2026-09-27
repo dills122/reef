@@ -144,6 +144,24 @@ services:
       timeout: 3s
       retries: 20
 
+  settlement-postgres:
+    image: postgres:16-alpine
+    container_name: reef-settlement-postgres
+    profiles: ["postmatch"]
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_SETTLEMENT_POSTGRES_HOST_PORT:-5437}:5432"
+    volumes:
+      - reef-settlement-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:8-alpine
     container_name: reef-redis
@@ -321,5 +339,6 @@ volumes:
   reef-boundary-postgres-data:
   reef-projection-postgres-data:
   reef-postmatch-postgres-data:
+  reef-settlement-postgres-data:
   reef-nats-data:
   reef-redpanda-data:
