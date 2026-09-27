@@ -80,6 +80,46 @@ stage fails. This is closed-cohort wiring and replay evidence, not a 10k/s
 capacity result or complete business-row parity. The integrated capacity gate
 follows audit/settlement ownership and route cutover.
 
+### Bounded settlement shadow diagnostic
+
+After the bounded transition PR, enable the separate settlement PostgreSQL
+store and all three settlement workers in the same disposable benchmark run.
+The fixed five-actor, 64-instrument fixture seeds generous cash and security
+openings in the isolated settlement store before load so settled DvP trades
+exercise ledger writes; unexpected breaks fail the checker.
+The checker requires nonempty trade intake, equal source/intake/obligation/
+admission/execution frontiers on every active partition, exact trade identity
+membership through obligations, completed admission ranks, and four balanced
+ledger legs for each settled trade. It writes `settlement-shadow-check.json`
+beside the live/market shadow report. Run the source image when testing a branch
+that changes the harness or workers.
+
+```bash
+REEF_DO_CONFIRM_DESTROYABLE=1 \
+REEF_DO_BENCHMARK_PROFILE=materializer-projection \
+REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1 \
+REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC=1 \
+REEF_DO_REGION=sfo3 \
+REEF_DO_SIZE=c-32 \
+REEF_DO_DROPLET_NAME=reef-postmatch-settlement-shakedown \
+REEF_DO_STRESS_RATES=10000 \
+REEF_DO_STRESS_WORKERS=384 \
+REEF_DO_STRESS_DURATION=300s \
+REEF_DO_IMAGE_MODE=source \
+REEF_DO_PROJECTION_STAGE=command-status \
+REEF_DO_MIN_ATTEMPTED_RPS=9900 \
+REEF_DO_MIN_ACCEPTED_RPS=9900 \
+scripts/dev/do-benchmark-host.sh run-destroy
+```
+
+This is a **targeted post-trade stage diagnostic**, not the integrated 10k/s
+qualification: legacy lifecycle/market projection work is limited by the
+`command-status` stage, public settlement reads remain on the legacy path,
+and the checker proves final closed-cohort catch-up rather than in-load
+freshness or drain headroom. Record accepted commands/s and trades/s separately.
+The later matched 300-second full-pipeline campaign enables every mandatory
+consumer and public route after parity and cutover.
+
 Goal-driven sizing is opt-in. Without a goal or target, the table above remains
 the default. Use `plan-goal` before provisioning to see the resolved DO size,
 rates, worker count, duration, and report gates:

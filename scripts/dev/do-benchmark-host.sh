@@ -81,6 +81,7 @@ optional:
   REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS=1
   REEF_DO_PROJECTION_STAGE=full|command-status|timeline
   REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1 (materializer-projection only)
+  REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC=1 (requires post-match shadow diagnostic)
   REEF_DO_IMAGE_MODE=dockerhub|source
   REEF_DO_STAGE_LOG_TAIL=80
 
@@ -163,6 +164,7 @@ cmd_plan_goal() {
   printf '  max_projection_db_retries=%s\n' "${REEF_DO_MAX_PROJECTION_DB_RETRIES:-none}"
   printf '  projection_stage=%s\n' "${REEF_DO_PROJECTION_STAGE:-full}"
   printf '  postmatch_shadow_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}"
+  printf '  postmatch_settlement_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
   printf '  stream_ack_projector_2_partitions=%s\n' "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-none}"
@@ -210,6 +212,10 @@ cmd_start() {
 cmd_run() {
   if [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ] && [ "$(benchmark_profile)" != "materializer-projection" ]; then
     echo "post-match shadow diagnostic requires materializer-projection profile" >&2
+    return 2
+  fi
+  if [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ] && [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" != "1" ]; then
+    echo "post-match settlement diagnostic requires post-match shadow diagnostic" >&2
     return 2
   fi
   provision_stack
@@ -469,6 +475,7 @@ remote_run_benchmark() {
     REEF_DO_MAX_PROJECTION_DB_RETRIES="${REEF_DO_MAX_PROJECTION_DB_RETRIES:-}" \
     REEF_DO_PROJECTION_STAGE="${REEF_DO_PROJECTION_STAGE:-}" \
     REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC="${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" \
+    REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC="${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" \
     PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED="${PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED:-false}" \
     DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-}" <<'REMOTE'
 set -euo pipefail
@@ -597,13 +604,32 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
       export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,postmatch-postgres"
       export DEV_STRESS_DB_SCHEMAS="${DEV_STRESS_DB_SCHEMAS:-runtime,boundary,command_log,postmatch}"
       postmatch_partitions="$STREAM_ACK_PROJECTOR_0_PARTITIONS,$STREAM_ACK_PROJECTOR_1_PARTITIONS,$STREAM_ACK_PROJECTOR_2_PARTITIONS,$STREAM_ACK_PROJECTOR_3_PARTITIONS"
+      if [ "$REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC" = "1" ]; then
+        export SETTLEMENT_POSTGRES_JDBC_URL=jdbc:postgresql://settlement-postgres:5432/reef
+        export SETTLEMENT_POSTGRES_USER=reef
+        export SETTLEMENT_POSTGRES_PASSWORD=reef
+        export REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1
+        export POST_TRADE_PROFILE=instant-post-trade-v1
+        export POSTMATCH_SETTLEMENT_INTAKE_ENABLED=true
+        export POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=true
+        export POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=true
+        export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,settlement-postgres"
+        export DEV_STRESS_DB_SCHEMAS="$DEV_STRESS_DB_SCHEMAS,settlement"
+      fi
     fi
   fi
   stress_status=0
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer || stress_status=$?
   if [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ]; then
+    postmatch_shadow_wait=120
+    if [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then postmatch_shadow_wait=300; fi
     run_stage postmatch-shadow-check node scripts/dev/postmatch-shadow-check.mjs \
-      "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/postmatch-shadow-check.json" 120 || stress_status=$?
+      "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/postmatch-shadow-check.json" \
+      "$postmatch_shadow_wait" || stress_status=$?
+  fi
+  if [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then
+    run_stage settlement-shadow-check node scripts/dev/settlement-shadow-check.mjs \
+      "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/settlement-shadow-check.json" 300 || stress_status=$?
   fi
   if [ "$stress_status" -ne 0 ]; then exit "$stress_status"; fi
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then

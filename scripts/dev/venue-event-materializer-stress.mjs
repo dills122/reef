@@ -114,6 +114,10 @@ validateStreamProfile("materializer-soak");
 printStreamProfileSummary("materializer-soak");
 
 await runStackUp("stream-ack");
+if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1") {
+  await run("node", ["scripts/dev/settlement-shadow-seed.mjs",
+    env("DEV_STRESS_SESSION_CONFIG"), env("DEV_STRESS_RUN_ID")]);
+}
 await stopIdleBackgroundServices();
 await import("./stress.mjs");
 
