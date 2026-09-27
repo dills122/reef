@@ -351,6 +351,8 @@ jobs:
           mkdir -p coverage/node-dev-tooling/v8
           node --test --experimental-test-coverage \
             scripts/dev/lib/dev-stack.test.mjs \
+            scripts/dev/settlement-shadow-check.test.mjs \
+            scripts/dev/venue-event-materializer-stress-config.test.mjs \
             scripts/dev/lib/dev-profiles.test.mjs \
             scripts/dev/lib/stress-success-guardrail.test.mjs \
             scripts/dev/ci-workflow-hardening.test.mjs \

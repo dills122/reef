@@ -69,6 +69,9 @@ async function startPostgres(context) {
   if (composeFiles(context.processEnv).includes("compose.local.yml") &&
       selectedProfiles.includes("postmatch")) {
     services.push("postmatch-postgres");
+    if (context.processEnv.REEF_SETTLEMENT_POSTGRES_MIGRATIONS === "1") {
+      services.push("settlement-postgres");
+    }
   }
   if (composeFiles(context.processEnv).includes("compose.arena.yml")) {
     services.push("arena-postgres");
