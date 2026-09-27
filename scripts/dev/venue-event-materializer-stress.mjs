@@ -11,6 +11,10 @@ const MATERIALIZER_STRESS_SESSION_ID = "venue-event-materializer-mixed-lifecycle
 const MATERIALIZER_STRESS_RUN_ID = "venue-event-materializer-mixed-lifecycle-stress";
 
 loadDotEnv();
+if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1" &&
+    env("REEF_SETTLEMENT_POSTGRES_MIGRATIONS", "0") !== "1") {
+  throw new Error("settlement diagnostic requires REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1");
+}
 
 // Inlines the stream-direct no-db setup (services/matching-engine consumes the durable command
 // stream directly, Postgres stays out of the matching hot path) instead of using the
