@@ -1399,6 +1399,22 @@ and settlement closed-cohort checkers; no final business/replay parity claim
 is made. The harness now recognizes individual measured reports so future
 failed-capacity runs still execute those checks.
 
+Forensic correction: PM-S2 is not a matched regression against C43/F02. Those
+full-pipeline runs used six materializers and sixteen projector owners; PM-S2
+used four of each. PM-S2 also ran live/market shadow and all settlement workers
+inside the four command-status projector JVMs via the projector-role startup
+gates, sharing the c-32 host with five PostgreSQL services. Separate post-match
+databases did not isolate CPU or host I/O. The post-run SQL snapshot contains
+20,852 admission-counter updates, 44,374 predecessor-completion checks and
+1,673 execution completion inserts. This supports counter contention and an
+execution scheduling/dependency bottleneck, but does not attribute the size of
+either cost or establish batching as the remedy. The in-load downstream sampler
+recorded 300 samples and zero qualified samples because lifecycle/market
+caller instrumentation was disabled; no downstream latency result is available.
+The [capacity recommendation](research/POST_MATCH_SETTLEMENT_CAPACITY_DECISION_2026-09-27.md)
+is suspended pending a matched deployment comparison and direct execution
+timing. PM-S2's ingress success remains valid; its post-trade 10k gate failed.
+
 [Original compressed load report](../artifacts/postmatch-settlement-20260927/attempt-2/venue-event-materializer-stress-rate-10000-workers-384.json.gz),
 [compressed stage log](../artifacts/postmatch-settlement-20260927/attempt-2/stage-make-dev-stress-venue-event-materializer.log.gz),
 [compressed settlement SQL statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-pg_stat_statements.csv.gz),
