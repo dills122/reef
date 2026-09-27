@@ -43,8 +43,27 @@ apply its schema. Set `POSTMATCH_SHADOW_WORKERS_ENABLED=true` and an explicit
 projector instances. Each instance uses its existing
 `STREAM_ACK_PROJECTOR_PARTITIONS` assignment unless
 `POSTMATCH_WORKER_PARTITIONS` overrides it. Keep the profile enabled while
-running these workers. Existing live routes and materializers use their
-current stores; the new consumers write shadow state only.
+running these workers. By default, existing live routes and materializers use
+their current stores; the new consumers write shadow state only.
+Set `POSTMATCH_LIVE_READS_ENABLED=true` on an API instance only after the
+isolated store has been migrated through `0005`, replayed for its current
+source generation, and checked against the legacy participant responses.
+Rebuild the isolated post-match database from canonical source after applying
+`0005`; existing frontiers prevent same-generation replay and old rows lack
+exact response text. API reads use `STREAM_ACK_PARTITION_COUNT` to check every
+canonical partition, not a projector instance's assignment. Indexed source
+heads are compared with target frontiers on every flagged read.
+Flagged reads require all live frontiers to equal current canonical source
+heads. A later relaxation needs a measured freshness budget and read-cost evidence.
+Before enabling the flag, compare complete legacy and live responses for open,
+filled, cancelled, modified, and aged participant histories; check query plans
+and read latency with many closed orders and fills. The route path and
+fail-closed gate do not constitute a capacity qualification.
+`/api/v1/orders/current`, `/api/v1/orders/history`, and `/api/v1/orders/fills`
+then read the isolated live store. Responses retain their participant fields
+and add `meta.asOf` with source generation, source heads, and all partition frontiers.
+Missing coverage, source lag, stale generations, or pre-replay rows return 503. Authorization
+still runs before these reads. The flag is off by default.
 Set `POSTMATCH_AUDIT_SHADOW_ENABLED=true` with `POSTMATCH_EVENT_STREAM` to run
 the independent canonical audit consumer in projection PostgreSQL. It uses the
 same partition assignment unless overridden, and writes retained outcomes,

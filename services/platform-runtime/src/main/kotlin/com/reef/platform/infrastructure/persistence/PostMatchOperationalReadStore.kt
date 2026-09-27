@@ -19,8 +19,8 @@ class PostMatchOperationalReadStore(private val dataSource: DataSource) {
         connection.prepareStatement(
             """
             SELECT directory.order_id, directory.instrument_id, directory.side,
-                   directory.quantity_units, state.remaining_quantity::TEXT AS remaining_quantity,
-                   state.limit_price::TEXT AS limit_price, state.status
+                   directory.quantity_units, state.remaining_quantity_text AS remaining_quantity,
+                   state.limit_price_text AS limit_price, state.status
             FROM postmatch.canonical_order_directory directory
             JOIN postmatch.live_order_state state
               ON state.event_stream = directory.event_stream
@@ -47,8 +47,12 @@ class PostMatchOperationalReadStore(private val dataSource: DataSource) {
                         instrumentId = rows.getString("instrument_id"),
                         side = rows.getString("side"),
                         quantityUnits = rows.getString("quantity_units"),
-                        remainingQuantityUnits = rows.getString("remaining_quantity"),
-                        limitPrice = rows.getString("limit_price"),
+                        remainingQuantityUnits = requireNotNull(rows.getString("remaining_quantity")) {
+                            "live order needs replay before participant reads"
+                        },
+                        limitPrice = requireNotNull(rows.getString("limit_price")) {
+                            "live order needs replay before participant reads"
+                        },
                         status = if (rows.getString("status") == "ACCEPTED") "OPEN" else rows.getString("status")
                     ))
                 }
@@ -66,9 +70,9 @@ class PostMatchOperationalReadStore(private val dataSource: DataSource) {
         connection.prepareStatement(
             """
             SELECT execution.execution_id, execution.order_id, execution.instrument_id,
-                   directory.side, execution.quantity_units::TEXT AS quantity_units,
-                   execution.execution_price::TEXT AS execution_price, execution.currency,
-                   execution.occurred_at, execution.liquidity_role
+                   directory.side, execution.quantity_units_text AS quantity_units,
+                   execution.execution_price_text AS execution_price, execution.currency,
+                   execution.occurred_at_text, execution.liquidity_role
             FROM postmatch.live_execution_facts execution
             JOIN postmatch.canonical_order_directory directory
               ON directory.event_stream = execution.event_stream
@@ -78,7 +82,7 @@ class PostMatchOperationalReadStore(private val dataSource: DataSource) {
               AND directory.participant_id = ?
               $instrumentFilter
               $runFilter
-            ORDER BY execution.occurred_at, execution.execution_id
+            ORDER BY execution.occurred_at, execution.occurred_at_text, execution.execution_id
             LIMIT ?
             """.trimIndent()
         ).use { statement ->
@@ -96,10 +100,16 @@ class PostMatchOperationalReadStore(private val dataSource: DataSource) {
                         orderId = rows.getString("order_id"),
                         instrumentId = rows.getString("instrument_id"),
                         side = rows.getString("side"),
-                        quantityUnits = rows.getString("quantity_units"),
-                        executionPrice = rows.getString("execution_price"),
+                        quantityUnits = requireNotNull(rows.getString("quantity_units")) {
+                            "live execution needs replay before participant reads"
+                        },
+                        executionPrice = requireNotNull(rows.getString("execution_price")) {
+                            "live execution needs replay before participant reads"
+                        },
                         currency = rows.getString("currency"),
-                        occurredAt = rows.getTimestamp("occurred_at").toInstant().toString(),
+                        occurredAt = requireNotNull(rows.getString("occurred_at_text")) {
+                            "live execution needs replay before participant reads"
+                        },
                         liquidityRole = rows.getString("liquidity_role")
                     ))
                 }

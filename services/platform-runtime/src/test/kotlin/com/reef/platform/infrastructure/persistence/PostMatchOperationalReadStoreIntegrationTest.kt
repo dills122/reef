@@ -1,7 +1,11 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.api.PlatformApi
+import com.reef.platform.api.PostMatchOwnReadGateway
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class PostMatchOperationalReadStoreIntegrationTest {
@@ -61,9 +65,10 @@ class PostMatchOperationalReadStoreIntegrationTest {
                         """INSERT INTO postmatch.live_order_state(
                              event_stream, source_generation, order_id, instrument_id, status,
                              original_quantity, remaining_quantity, filled_quantity, limit_price,
-                             currency, last_event_at, source_partition_id, source_stream_sequence, source_effect_ordinal)
+                             currency, last_event_at, source_partition_id, source_stream_sequence, source_effect_ordinal,
+                             remaining_quantity_text, limit_price_text)
                              VALUES (?, ?, ?, ?, ?, 10, ?, ?, 100.00, 'USD',
-                                     '2026-09-26T00:00:00Z', 0, ?, 0)"""
+                                     '2026-09-26T00:00:00Z', 0, ?, 0, ?, '100.00')"""
                     ).use { statement ->
                         statement.setString(1, stream)
                         statement.setString(2, generation)
@@ -81,6 +86,11 @@ class PostMatchOperationalReadStoreIntegrationTest {
                         })
                         statement.setInt(7, if (orderId == first) 0 else 2)
                         statement.setLong(8, index + 1L)
+                        statement.setString(9, when (orderId) {
+                            second -> "0"
+                            third -> "8"
+                            else -> "10"
+                        })
                         statement.executeUpdate()
                     }
                 }
@@ -89,9 +99,10 @@ class PostMatchOperationalReadStoreIntegrationTest {
                         """INSERT INTO postmatch.live_execution_facts(
                              event_stream, source_generation, execution_id, event_id, order_id,
                              instrument_id, quantity_units, execution_price, currency, liquidity_role,
-                             occurred_at, source_partition_id, source_stream_sequence, source_effect_ordinal)
+                             occurred_at, source_partition_id, source_stream_sequence, source_effect_ordinal,
+                             quantity_units_text, execution_price_text, occurred_at_text)
                              VALUES (?, ?, ?, ?, ?, ?, 2, 100.00, 'USD', 'TAKER',
-                                     '2026-09-26T00:01:00Z', 0, ?, 1)"""
+                                     '2026-09-26T00:01:00Z', 0, ?, 1, '2.0', '100.00', '2026-09-26T00:01:00.000Z')"""
                     ).use { statement ->
                         statement.setString(1, stream)
                         statement.setString(2, generation)
@@ -108,12 +119,52 @@ class PostMatchOperationalReadStoreIntegrationTest {
             val current = store.ordersForParticipant(stream, generation, participant, true, "", 50)
             assertEquals(listOf(first), current.rows.map { it.orderId })
             assertEquals("OPEN", current.rows.single().status)
+            assertEquals("10", current.rows.single().remainingQuantityUnits)
+            assertEquals("100.00", current.rows.single().limitPrice)
             assertEquals(mapOf(0 to 3L), current.frontiers)
             assertEquals(listOf(first, second), store.ordersForParticipant(stream, generation, participant, false, "", 50).rows.map { it.orderId })
             assertEquals(listOf(second), store.ordersForParticipant(stream, generation, participant, false, "MSFT", 1).rows.map { it.orderId })
             assertEquals(listOf("execution-$second"), store.executionsForParticipant(stream, generation, participant, "", "run-1", 50).rows.map { it.executionId })
+            val ownExecution = store.executionsForParticipant(stream, generation, participant, "", "run-1", 50).rows.single()
+            assertEquals("2.0", ownExecution.quantityUnits)
+            assertEquals("100.00", ownExecution.executionPrice)
+            assertEquals("2026-09-26T00:01:00.000Z", ownExecution.occurredAt)
             assertEquals(emptyList(), store.executionsForParticipant(stream, generation, participant, "", "other-run", 50).rows)
             assertEquals(emptyList(), store.ordersForParticipant(stream, "other-generation", participant, false, "", 50).rows)
+            val catalog = object : PostMatchReadSourceCatalog {
+                override fun generation() = generation
+                override fun partitionHeads(eventStream: String, partitionCount: Int) = mapOf(
+                    0 to 3L, 1 to CanonicalStreamPosition.origin(1)
+                )
+            }
+            val api = PlatformApi(postMatchOwnReads = PostMatchOwnReadGateway(catalog, store, stream, 2))
+            val orders = api.ownOrdersResult(participant, openOnly = true, limit = 50)
+            assertEquals(200, orders.status)
+            assertContains(orders.body, "\"source\":\"postmatch.live_order_state\"")
+            assertContains(orders.body, "\"sourceGeneration\":\"$generation\"")
+            assertContains(orders.body, "\"remainingQuantityUnits\":\"10\"")
+            assertContains(orders.body, "\"sourceHeadSequence\":3")
+            val fills = api.ownExecutionsResult(participant, runId = "run-1", limit = 50)
+            assertEquals(200, fills.status)
+            assertContains(fills.body, "2026-09-26T00:01:00.000Z")
+            val missingSourcePartition = object : PostMatchReadSourceCatalog {
+                override fun generation() = generation
+                override fun partitionHeads(eventStream: String, partitionCount: Int) = mapOf(
+                    0 to 3L, 1 to CanonicalStreamPosition.origin(1) + 1
+                )
+            }
+            val incomplete = PlatformApi(postMatchOwnReads = PostMatchOwnReadGateway(missingSourcePartition, store, stream, 2))
+                .ownOrdersResult(participant, openOnly = true, limit = 50)
+            assertEquals(503, incomplete.status)
+            assertContains(incomplete.body, "post-match live read unavailable")
+            val staleSource = object : PostMatchReadSourceCatalog {
+                override fun generation() = generation
+                override fun partitionHeads(eventStream: String, partitionCount: Int) = mapOf(
+                    0 to 4L, 1 to CanonicalStreamPosition.origin(1)
+                )
+            }
+            assertEquals(503, PlatformApi(postMatchOwnReads = PostMatchOwnReadGateway(staleSource, store, stream, 2))
+                .ownOrdersResult(participant, openOnly = true, limit = 50).status)
         } finally {
             source.connection.use { connection ->
                 listOf(
