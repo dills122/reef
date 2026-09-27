@@ -3,6 +3,8 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.application.postmatch.CanonicalOutcomeSource
 import com.reef.platform.application.postmatch.CanonicalSourceCoverageVerifier
 import com.reef.platform.application.postmatch.VerifiedCanonicalSourceWindow
+import java.sql.Connection
+import java.sql.PreparedStatement
 import javax.sql.DataSource
 
 /** Reads retained canonical membership from its source database, never the target store. */
@@ -58,19 +60,56 @@ class PostgresCanonicalOutcomeSourceReader(
     ): List<CanonicalOutcomeSource> = sourceDataSource.connection.use { connection ->
         val bounded = maxResultBytes != Long.MAX_VALUE
         val oldAutoCommit = connection.autoCommit
-        if (bounded) connection.autoCommit = false // pgjdbc needs a transaction to cursor-fetch one row at a time.
+        val oldIsolation = connection.transactionIsolation
+        if (bounded) {
+            check(oldAutoCommit) { "bounded canonical source read requires an idle connection" }
+            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+            connection.autoCommit = false
+        }
         try {
-            val payloadProjection = if (bounded) {
-                "CASE WHEN octet_length(outcome.result_payload::text) <= ?::bigint " +
-                    "THEN outcome.result_payload::text ELSE NULL END, " +
-                    "octet_length(outcome.result_payload::text)"
-            } else "outcome.result_payload::text"
-            val sources = connection.prepareStatement(
+            fun bindWindow(statement: PreparedStatement, rowLimit: Int) {
+                statement.setInt(1, partitionId)
+                statement.setLong(2, fromExclusiveSequence)
+                if (throughInclusiveSequence == null) statement.setNull(3, java.sql.Types.BIGINT)
+                else statement.setLong(3, throughInclusiveSequence)
+                statement.setBoolean(4, onlyMatchingStream)
+                statement.setString(5, eventStream)
+                statement.setInt(6, rowLimit)
+            }
+            // Select a byte-bounded prefix before transferring JSON. Both queries share one snapshot.
+            val readLimit = if (bounded) connection.prepareStatement(
+                """
+                SELECT octet_length(outcome.result_payload::text)
+                FROM runtime.canonical_command_outcomes outcome
+                WHERE outcome.partition_id = ? AND outcome.stream_sequence > ?
+                  AND outcome.stream_sequence <= COALESCE(?, 9223372036854775807)
+                  AND (?::boolean = FALSE OR outcome.event_stream = ?)
+                ORDER BY outcome.stream_sequence
+                LIMIT ?
+                """.trimIndent()
+            ).use { statement ->
+                bindWindow(statement, limit)
+                statement.executeQuery().use { rows ->
+                    var count = 0
+                    var totalBytes = 0L
+                    while (rows.next()) {
+                        val nextBytes = rows.getLong(1)
+                        check(nextBytes <= maxResultBytes || count > 0) {
+                            "single canonical result payload exceeds configured bound"
+                        }
+                        if (nextBytes > maxResultBytes - totalBytes) break
+                        totalBytes += nextBytes
+                        count++
+                    }
+                    count
+                }
+            } else limit
+            val sources = if (readLimit == 0) emptyList() else connection.prepareStatement(
                 """
                 SELECT outcome.event_stream, outcome.partition_id, outcome.stream_sequence,
                        outcome.batch_id, outcome.command_id, outcome.command_type,
                        outcome.payload_hash, outcome.instrument_id, outcome.order_id,
-                       outcome.result_status, $payloadProjection,
+                       outcome.result_status, outcome.result_payload::text,
                        batch.batch_id IS NOT NULL AS has_retained_batch
                 FROM runtime.canonical_command_outcomes outcome
                 LEFT JOIN runtime.canonical_venue_event_batches batch
@@ -85,32 +124,13 @@ class PostgresCanonicalOutcomeSourceReader(
                 LIMIT ?
                 """.trimIndent()
             ).use { statement ->
-                val firstWhere = if (bounded) 2 else 1
-                if (bounded) {
-                    statement.setLong(1, maxResultBytes)
-                    statement.fetchSize = 1
-                }
-                statement.setInt(firstWhere, partitionId)
-                statement.setLong(firstWhere + 1, fromExclusiveSequence)
-                if (throughInclusiveSequence == null) statement.setNull(firstWhere + 2, java.sql.Types.BIGINT)
-                else statement.setLong(firstWhere + 2, throughInclusiveSequence)
-                statement.setBoolean(firstWhere + 3, onlyMatchingStream)
-                statement.setString(firstWhere + 4, eventStream)
-                statement.setInt(firstWhere + 5, limit)
+                if (bounded) statement.fetchSize = minOf(readLimit, 100)
+                bindWindow(statement, readLimit)
                 statement.executeQuery().use { rows ->
                     buildList {
-                        var totalResultBytes = 0L
                         while (rows.next()) {
-                            check(rows.getBoolean(if (bounded) 13 else 12)) {
+                            check(rows.getBoolean(12)) {
                                 "canonical outcome has no matching retained batch membership"
-                            }
-                            if (bounded) {
-                                val nextBytes = rows.getLong(12)
-                                check(nextBytes <= maxResultBytes || isNotEmpty()) {
-                                    "single canonical result payload exceeds configured bound"
-                                }
-                                if (nextBytes > maxResultBytes - totalResultBytes) break
-                                totalResultBytes += nextBytes
                             }
                             add(CanonicalOutcomeSource(
                                 eventStream = rows.getString(1), partitionId = rows.getInt(2),
@@ -130,7 +150,10 @@ class PostgresCanonicalOutcomeSourceReader(
             if (bounded) connection.rollback()
             throw error
         } finally {
-            if (bounded) connection.autoCommit = oldAutoCommit
+            if (bounded) {
+                connection.autoCommit = oldAutoCommit
+                connection.transactionIsolation = oldIsolation
+            }
         }
     }
 }

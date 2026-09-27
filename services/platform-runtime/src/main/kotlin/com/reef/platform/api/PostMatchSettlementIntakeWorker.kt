@@ -110,9 +110,9 @@ internal class PostMatchSettlementIntakeWorker(
                 trimmed.toIntOrNull() ?: error("settlement intake requires numeric partitions: $part")
             }
             val sourceUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "")
-            val targetUrl = RuntimeEnv.string("SETTLEMENT_POSTGRES_JDBC_URL", "").ifBlank { sourceUrl }
-            require(sourceUrl.isNotBlank() && targetUrl.isNotBlank()) {
-                "settlement intake requires canonical source and settlement PostgreSQL"
+            val targetUrl = RuntimeEnv.string("SETTLEMENT_POSTGRES_JDBC_URL", "")
+            require(sourceUrl.isNotBlank() && targetUrl.isNotBlank() && sourceUrl != targetUrl) {
+                "settlement intake requires distinct canonical source and settlement PostgreSQL"
             }
             val sourceUser = RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef")
             val sourcePassword = RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef")

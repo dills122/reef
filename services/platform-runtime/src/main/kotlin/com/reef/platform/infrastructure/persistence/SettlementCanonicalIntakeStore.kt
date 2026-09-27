@@ -219,7 +219,9 @@ class SettlementCanonicalIntakeStore(
                             rows.getString(5), rows.getString(6), rows.getString(7), rows.getString(8),
                             rows.getInt(9), rows.getLong(10), rows.getInt(11)
                         )
-                        put(owner.orderId, owner)
+                        check(put(owner.orderId, owner) == null) {
+                            "settlement replay ownership conflict"
+                        }
                     }
                 }
             }
