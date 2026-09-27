@@ -1209,6 +1209,40 @@ Status: accepted implementation direction; live cutover and capacity remain unqu
 
 Contract and rollout: [`docs/work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-26.md`](./work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-26.md).
 
+### D-059: Durable settlement admission order for scarce accounts
+
+Status: accepted design on 2026-09-27; shadow implementation and separate-target
+restore/replay verified locally after independent review findings. PR/OCR,
+public-read cutover, and capacity remain unqualified
+
+- Matching source facts provide a contiguous order within each partition, not
+  a total order across partitions. Sorted account row locks serialize writes
+  but allow scheduler timing to choose which trade consumes scarce resources.
+- Before any balance-dependent settlement decision, a separate post-trade
+  admission transaction assigns a global rank to a bounded, source-verified
+  obligation window. Rank, source identity/digest, exact account-set digest,
+  dependency digest, dependencies, account memberships, and admission frontier
+  commit atomically.
+  Trades inside one window retain source order. Matching and durable ingress
+  acquire no synchronous database write from this decision.
+- A window waits for completion of its predecessor on each affected account
+  and source partition. Disjoint windows on different partitions can execute
+  in parallel. One settlement transaction commits each window's attempts,
+  balanced four-leg DvP postings or typed breaks, account checkpoints,
+  coverage, completion proof, and execution frontier.
+- Deterministic replay includes the retained canonical admission order.
+  Same-generation rebuilds preserve/import that log and verify exact source,
+  policy, account, and dependency digests. Matching-only readmission after
+  losing the order is a new arbitration history and may choose another scarce
+  account winner. It must never be presented as the same replay.
+- Shadow worker remains default-off. Local contention, replay, rollback, and
+  migration proofs plus independent review precede its PR. Full-pipeline
+  throughput qualification on a disposable droplet follows merge; no
+  venue-core result or local test qualifies settlement capacity or public reads.
+
+Research and contract: [`docs/research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md`](./research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md),
+[`docs/work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md`](./work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md).
+
 ## 2026-09-24 — Serialize projection invalidations before claiming freshness
 
 Online synthetic C3 validation found382stale lifecycle rows and39market snapshots

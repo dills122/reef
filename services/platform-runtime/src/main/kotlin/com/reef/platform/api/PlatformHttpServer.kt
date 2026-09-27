@@ -1274,6 +1274,12 @@ class PlatformHttpServer(
             }
             PostMatchSettlementObligationWorker.fromEnv().start()
         }
+        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_TRANSITION_ENABLED", false)) {
+            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
+                "post-match settlement transition requires stream-ack command processing"
+            }
+            PostMatchSettlementTransitionWorker.fromEnv().start()
+        }
         if (runtimeLoopStarter.venueEventMaterializerShouldStart()) {
             runtimeLoopStarter.startVenueEventMaterializer()
         }

@@ -58,11 +58,19 @@ audit owner and consumer. [#387](https://github.com/dills122/reef/pull/387)
 landed an opt-in participant live-read route with strict source/target parity;
 it remains disabled until rebuild, aged-query, and latency gates pass.
 [#388](https://github.com/dills122/reef/pull/388) landed separate canonical
-trade intake and frontier on the settlement store. The next local branch adds
-an opt-in bounded policy-binding and pending-obligation stage with its own
-frontier. It does not create ledger entries or settle trades. Durable pre-trade
-policy authority, bounded workflow/ledger transitions, public parity, and
-integrated cutover remain ahead.
+trade intake and frontier on the settlement store. [#399](https://github.com/dills122/reef/pull/399)
+proposes opt-in bounded policy binding and pending obligations with their own
+frontier; it does not create ledger entries or settle trades. The dependent
+transition branch adds keyed account state, bounded instant workflow, DvP legs,
+ledger postings, and a separate transition frontier. D-059 accepts a durable
+ranked admission log for shared-account contention; the shadow transition
+worker now records admission before balance-dependent execution. Independent
+review's recovery findings were addressed with ranked-history predecessor
+validation, visible admission-gap failure, and a separate-database import and
+replay integration test. PR/OCR review and disposable-droplet capacity evidence
+remain ahead. Durable pre-trade policy authority,
+repair/retry parity, public read parity, and integrated cutover remain ahead.
+Neither pending PR nor dependent branch is capacity evidence.
 
 ## Purpose
 
