@@ -69,8 +69,8 @@ The September 27 [PM-S2 disposable diagnostic](THROUGHPUT_BASELINES.md#pm-s2--bo
 ran the combined shadow path at 10k/s for 300s. Ingress/direct ack held;
 canonical, legacy command-status projection, and post-trade transition did
 not keep up, so no integrated or settlement capacity claim is promoted.
-Next: review the measured admission/transition bottleneck and design a
-different ordering and execution ownership model before another 10k run.
+Next: preserve D-059's durable order while batching rank admission and
+coalescing ordered execution before another 10k run.
 Durable pre-trade policy authority, repair/retry parity, public read parity,
 audit inclusion, and integrated cutover remain ahead.
 

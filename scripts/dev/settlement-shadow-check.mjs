@@ -36,6 +36,33 @@ function sourceSnapshot(stream) {
     [Number(partition), { count, sequence }])) };
 }
 
+export function ledgerMismatchSql(stream, generation) {
+  return `SELECT count(*)::text FROM (
+      SELECT 1 FROM settlement.canonical_settlement_obligations o
+      CROSS JOIN LATERAL (VALUES
+        ('BUYER_CASH_DEBIT', o.buyer_participant_id, o.buyer_account_id,
+         'CASH', o.currency, 'DEBIT', o.cash_amount),
+        ('SELLER_CASH_CREDIT', o.seller_participant_id, o.seller_account_id,
+         'CASH', o.currency, 'CREDIT', o.cash_amount),
+        ('SELLER_SECURITY_DEBIT', o.seller_participant_id, o.seller_account_id,
+         'SECURITY', o.instrument_id, 'DEBIT', o.quantity_units),
+        ('BUYER_SECURITY_CREDIT', o.buyer_participant_id, o.buyer_account_id,
+         'SECURITY', o.instrument_id, 'CREDIT', o.quantity_units)
+      ) expected(entry_kind, participant_id, account_id, asset_type, asset_id, direction, quantity)
+      LEFT JOIN settlement.canonical_transition_ledger_entries l
+        ON l.event_stream = o.event_stream AND l.source_generation = o.source_generation
+       AND l.trade_id = o.trade_id AND l.attempt_number = 1
+       AND l.entry_kind = expected.entry_kind
+      WHERE o.event_stream = ${literal(stream)}
+        AND o.source_generation = ${literal(generation)} AND o.status = 'SETTLED'
+        AND (l.entry_kind IS NULL OR
+          (l.run_id, l.participant_id, l.account_id, l.asset_type, l.asset_id,
+           l.direction, l.quantity) IS DISTINCT FROM
+          (o.run_id, expected.participant_id, expected.account_id,
+           expected.asset_type, expected.asset_id, expected.direction, expected.quantity))
+    ) bad`;
+}
+
 function settlementSnapshot(stream, generation, partitions) {
   const ids = partitions.join(",");
   const where = `event_stream = ${literal(stream)} AND source_generation = ${literal(generation)}`;
@@ -64,19 +91,8 @@ function settlementSnapshot(stream, generation, partitions) {
     "admissions", "maxAdmissionRank", "completions", "attempts", "ledgerEntries"];
   const metrics = Object.fromEntries(names.map((name, index) => [name, counts[0][index]]));
   if (BigInt(metrics.pending) === 0n && BigInt(metrics.obligations) > 0n) {
-    const bad = query("settlement-postgres", `SELECT count(*)::text FROM (
-      SELECT trade_id FROM settlement.canonical_transition_ledger_entries
-      WHERE ${where} GROUP BY trade_id HAVING count(*) <> 4
-        OR count(*) FILTER (WHERE entry_kind = 'BUYER_CASH_DEBIT') <> 1
-        OR count(*) FILTER (WHERE entry_kind = 'SELLER_CASH_CREDIT') <> 1
-        OR count(*) FILTER (WHERE entry_kind = 'SELLER_SECURITY_DEBIT') <> 1
-        OR count(*) FILTER (WHERE entry_kind = 'BUYER_SECURITY_CREDIT') <> 1
-        OR sum(quantity) FILTER (WHERE entry_kind = 'BUYER_CASH_DEBIT') <>
-           sum(quantity) FILTER (WHERE entry_kind = 'SELLER_CASH_CREDIT')
-        OR sum(quantity) FILTER (WHERE entry_kind = 'SELLER_SECURITY_DEBIT') <>
-           sum(quantity) FILTER (WHERE entry_kind = 'BUYER_SECURITY_CREDIT')
-    ) bad`);
-    metrics.badLedgerTrades = bad[0]?.[0] ?? "unknown";
+    const bad = query("settlement-postgres", ledgerMismatchSql(stream, generation));
+    metrics.badLedgerLegs = bad[0]?.[0] ?? "unknown";
   }
   return { stages, metrics };
 }
@@ -119,7 +135,7 @@ export function assess(source, target, partitions, generation) {
     failures.push("admission rank or completion count differs");
   }
   if (n.ledgerEntries !== n.settled * 4n) failures.push("settled trade ledger count is not four per trade");
-  if (n.badLedgerTrades !== undefined && n.badLedgerTrades !== 0n) failures.push("ledger trade legs are malformed");
+  if (n.badLedgerLegs !== undefined && n.badLedgerLegs !== 0n) failures.push("ledger legs differ from settled obligations");
   return { rows, metrics: target.metrics, failures };
 }
 
