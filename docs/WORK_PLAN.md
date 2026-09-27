@@ -56,10 +56,13 @@ September 27 continuation: [#385](https://github.com/dills122/reef/pull/385)
 and [#386](https://github.com/dills122/reef/pull/386) landed the independent
 audit owner and consumer. [#387](https://github.com/dills122/reef/pull/387)
 landed an opt-in participant live-read route with strict source/target parity;
-it remains disabled until rebuild, aged-query, and latency gates pass. The
-current settlement-intake branch adds a separate canonical trade intake and
-frontier on the settlement store. It does not yet create obligations or ledger
-entries; bounded policy workflow and integrated cutover remain ahead.
+it remains disabled until rebuild, aged-query, and latency gates pass.
+[#388](https://github.com/dills122/reef/pull/388) landed separate canonical
+trade intake and frontier on the settlement store. The next local branch adds
+an opt-in bounded policy-binding and pending-obligation stage with its own
+frontier. It does not create ledger entries or settle trades. Durable pre-trade
+policy authority, bounded workflow/ledger transitions, public parity, and
+integrated cutover remain ahead.
 
 ## Purpose
 

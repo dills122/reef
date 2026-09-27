@@ -115,6 +115,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0006_allocation_confirmation_affirmation_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0008_canonical_trade_intake.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "settlement/0009_bounded_obligation_policy.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0002_run_bot_performance_summaries.sql"));

@@ -34,6 +34,8 @@ class SettlementCanonicalIntakeStoreIntegrationTest {
             assertEquals(PostMatchApplyResult.APPLIED, store.apply(second))
             assertEquals(PostMatchApplyResult.DUPLICATE, store.apply(second))
             assertEquals(2L, store.lastCommittedSequence(stream, 0, generation))
+            assertEquals(1, SettlementBoundedObligationStore(dataSource())
+                .readNextWindow(stream, 0, generation, maxSourcePositions = 2)?.trades?.size)
             connection().use { connection ->
                 connection.prepareStatement(
                     """SELECT run_id, venue_session_id, buyer_participant_id, seller_participant_id,

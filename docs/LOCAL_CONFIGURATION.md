@@ -89,6 +89,56 @@ switch public settlement reads. `POSTMATCH_SETTLEMENT_BATCH_SIZE` and
 exceed the effect cap; a single oversized outcome fails closed. Keep
 the flag off until the bounded policy and ledger transition is wired and its
 parity gate passes.
+After applying `settlement/0009` to the dedicated target, set
+`POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=true` on assigned projector instances
+to shadow-project immutable policy bindings and pending obligations from the
+committed intake frontier. This stage has its own partition frontier and never
+marks a trade settled. `POSTMATCH_SETTLEMENT_OBLIGATION_BATCH_SIZE` defaults to
+500 source positions, `POSTMATCH_SETTLEMENT_OBLIGATION_MAX_TRADES` to 1000, and
+`POSTMATCH_SETTLEMENT_OBLIGATION_POLL_MS` to 50. Oversized trade windows shrink
+by source position; a single source position over the trade cap fails closed.
+Rebuild the isolated settlement intake from canonical source before enabling
+the obligation worker on a target with receipts written before `0009`: those
+receipts lack the trade manifest and fail closed. Intake and obligation
+frontiers must start from the same source generation.
+Freeze post-trade profile assignments and definitions from run setup until
+intake and obligation frontiers catch up. Current mutable control-plane tables
+cannot prove historical policy before first observation; durable pre-trade
+binding or versioned history is required before public settlement cutover.
+
+For an existing **dedicated shadow settlement target** with pre-`0009`
+receipts, rebootstrap only the canonical shadow tables after stopping both
+settlement workers. Confirm the connection points to that dedicated target;
+leave legacy settlement facts and the runtime canonical source untouched.
+Run this transaction on the settlement target:
+
+```sql
+BEGIN;
+TRUNCATE TABLE
+  settlement.canonical_settlement_obligations,
+  settlement.canonical_obligation_coverage,
+  settlement.canonical_obligation_frontiers,
+  settlement.canonical_policy_bindings,
+  settlement.canonical_trade_intake,
+  settlement.canonical_order_directory,
+  settlement.canonical_intake_receipts,
+  settlement.canonical_intake_coverage,
+  settlement.canonical_intake_frontiers;
+COMMIT;
+```
+
+Restart intake alone with the same `POSTMATCH_EVENT_STREAM` and assigned
+partitions. Wait until its frontiers reach the runtime canonical source heads;
+require zero from this query on the dedicated target:
+
+```sql
+SELECT COUNT(*) FROM settlement.canonical_intake_receipts
+WHERE trade_count IS NULL OR trade_digest IS NULL;
+```
+
+Keep profile assignments frozen from run setup. Enable the obligation worker only after
+those checks. This rebootstrap is for local or disposable shadow targets;
+public settlement promotion needs its separate cutover plan.
 Use the same overlay or profile on teardown that was used at startup; Arena has
 `make dev-down-arena`. For a clean local database, `make dev-reset` removes
 local Compose volumes, reapplies migrations, and starts the stack; run
