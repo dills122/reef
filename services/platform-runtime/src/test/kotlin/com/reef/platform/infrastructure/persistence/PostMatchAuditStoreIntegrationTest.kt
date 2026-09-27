@@ -96,6 +96,18 @@ class PostMatchAuditStoreIntegrationTest {
             assertEquals(5L, store.lastCommittedSequence(stream, 0, generation))
             dataSource.connection.use { connection ->
                 connection.prepareStatement(
+                    """SELECT COUNT(*) FROM runtime.canonical_audit_effects
+                       WHERE event_stream = ? AND source_generation = ? AND effect_type = 'CommandFailed'
+                         AND event_id IS NULL AND order_id IS NULL AND occurred_at IS NULL"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setString(2, generation)
+                    statement.executeQuery().use { rows ->
+                        rows.next()
+                        assertEquals(2L, rows.getLong(1))
+                    }
+                }
+                connection.prepareStatement(
                     """SELECT order_id, related_order_id, effect_ordinal FROM runtime.canonical_audit_effects
                        WHERE event_stream = ? AND source_generation = ? AND effect_type = 'Trade'"""
                 ).use { statement ->

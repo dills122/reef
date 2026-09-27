@@ -145,7 +145,7 @@ class PostMatchAuditStore(private val dataSource: DataSource) {
     }
 
     private data class EffectFact(
-        val eventId: String?, val type: String, val orderId: String, val occurredAt: String,
+        val eventId: String?, val type: String, val orderId: String?, val occurredAt: String?,
         val relatedOrderId: String = ""
     )
 
@@ -157,7 +157,7 @@ class PostMatchAuditStore(private val dataSource: DataSource) {
             else -> error("unsupported accepted audit command")
         }, effect.orderId, effect.occurredAt)
         is CanonicalEffect.Rejected -> EffectFact(effect.eventId, "OrderRejected", effect.orderId, effect.occurredAt)
-        is CanonicalEffect.Failed -> EffectFact(null, "CommandFailed", "", "")
+        is CanonicalEffect.Failed -> EffectFact(null, "CommandFailed", null, null)
         is CanonicalEffect.Execution -> EffectFact(effect.eventId, "Execution", effect.orderId, effect.occurredAt)
         is CanonicalEffect.Trade -> EffectFact(
             effect.eventId, "Trade", effect.buyOrderId, effect.occurredAt, effect.sellOrderId

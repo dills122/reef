@@ -38,6 +38,7 @@ internal class PostMatchAuditWorker(
         val window = reader.readNextWindow(
             PostMatchAuditStore.CONSUMER, eventStream, partition, generation, frontier, batchSize
         ) ?: return 0
+        check(catalog.generation() == generation) { "audit source generation changed during processing" }
         return if (store.apply(window) == PostMatchApplyResult.APPLIED) window.outcomes.size else 0
     }
 
@@ -91,6 +92,10 @@ internal class PostMatchAuditWorker(
             val partitionList = RuntimeEnv.string("POSTMATCH_WORKER_PARTITIONS",
                 RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", ""))
             require(partitionList.isNotBlank()) { "audit worker requires assigned partitions" }
+            val partitions = partitionList.split(',').map { part ->
+                part.trim().toIntOrNull() ?: error("audit worker requires numeric partitions: $part")
+            }
+            require(partitions.distinct().size == partitions.size) { "audit worker partitions must be unique" }
             val sourceUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "")
             val targetUrl = RuntimeEnv.string("RUNTIME_PROJECTION_POSTGRES_JDBC_URL", "")
             require(sourceUrl.isNotBlank() && targetUrl.isNotBlank()) {
@@ -108,7 +113,7 @@ internal class PostMatchAuditWorker(
             return PostMatchAuditWorker(
                 PostMatchSourceCatalog(source), PostgresCanonicalOutcomeSourceReader(source),
                 PostMatchAuditStore(target), stream,
-                partitionList.split(',').map { it.trim().toInt() },
+                partitions,
                 RuntimeEnv.int("POSTMATCH_AUDIT_BATCH_SIZE", 500, min = 1),
                 RuntimeEnv.long("POSTMATCH_AUDIT_POLL_MS", 50, min = 1)
             )

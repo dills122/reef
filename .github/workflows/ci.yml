@@ -192,8 +192,25 @@ jobs:
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Start canonical and audit test databases
+        working-directory: .
+        run: docker compose -f compose.base.yml -f compose.local.yml up -d postgres projection-postgres --wait --wait-timeout 120
+      - name: Apply canonical and audit migrations
+        working-directory: .
+        run: DEV_COMPOSE_FILES='compose.base.yml,compose.local.yml' JS_RUNTIME=node REEF_BOUNDARY_POSTGRES_MIGRATIONS=0 make dev-db-migrate
       - name: Run Kotlin tests with coverage
+        env:
+          RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
+          RUNTIME_POSTGRES_USER_TEST: reef
+          RUNTIME_POSTGRES_PASSWORD_TEST: reef
+          RUNTIME_PROJECTION_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5433/reef
+          RUNTIME_PROJECTION_POSTGRES_USER_TEST: reef
+          RUNTIME_PROJECTION_POSTGRES_PASSWORD_TEST: reef
         run: ./gradlew --no-daemon test jacocoTestReport jacocoTestCoverageVerification
+      - name: Stop canonical and audit test databases
+        if: always()
+        working-directory: .
+        run: docker compose -f compose.base.yml -f compose.local.yml down
       - name: Add coverage summary
         run: |
           csv="build/reports/jacoco/test/jacocoTestReport.csv"

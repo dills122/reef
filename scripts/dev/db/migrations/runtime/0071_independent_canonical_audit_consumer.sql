@@ -59,14 +59,18 @@ CREATE TABLE runtime.canonical_audit_effects (
   effect_ordinal INTEGER NOT NULL CHECK (effect_ordinal >= 0),
   event_id TEXT,
   effect_type TEXT NOT NULL,
-  order_id TEXT NOT NULL,
+  order_id TEXT,
   related_order_id TEXT NOT NULL DEFAULT '',
-  occurred_at TEXT NOT NULL,
+  occurred_at TEXT,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (event_stream, source_generation, partition_id, stream_sequence, effect_ordinal),
   FOREIGN KEY (event_stream, source_generation, partition_id, stream_sequence)
     REFERENCES runtime.canonical_audit_outcomes(event_stream, source_generation, partition_id, stream_sequence),
-  CHECK (event_stream <> '' AND source_generation <> '' AND effect_type <> '')
+  CHECK (event_stream <> '' AND source_generation <> '' AND effect_type <> ''),
+  CHECK (
+    (effect_type = 'CommandFailed' AND event_id IS NULL AND order_id IS NULL AND occurred_at IS NULL)
+    OR (effect_type <> 'CommandFailed' AND order_id IS NOT NULL AND occurred_at IS NOT NULL)
+  )
 );
 
 CREATE UNIQUE INDEX idx_canonical_audit_effect_event_id
