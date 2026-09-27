@@ -24,6 +24,7 @@ class PostMatchSourceCatalog(private val sourceDataSource: DataSource) : PostMat
     /** One indexed last-row lookup per canonical partition; avoids a historical GROUP BY scan. */
     override fun partitionHeads(eventStream: String, partitionCount: Int): Map<Int, Long> {
         require(eventStream.isNotBlank() && partitionCount in 1..32768)
+        // Match the worker's global partition cursor: a foreign stream is a coverage fault.
         return sourceDataSource.connection.use { connection ->
             connection.prepareStatement(
                 "SELECT partition_id FROM runtime.canonical_command_outcomes ORDER BY partition_id DESC LIMIT 1"

@@ -64,6 +64,7 @@ class PostMatchOwnReadGateway(
             }
             val frontier = committed ?: origin
             check(frontier in origin..head) { "live read frontier conflicts with canonical source" }
+            // Strict catch-up is the parity gate until an explicit freshness budget is proven.
             check(head == frontier) { "live read is behind canonical source" }
             frontier
         }

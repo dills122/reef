@@ -692,10 +692,10 @@ class PlatformApi(
         ownOrdersResult(participantId, openOnly, instrumentId, limit).body
 
     fun ownOrdersResult(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): ParticipantReadResult {
-        val boundedLimit = limit.coerceIn(0, 500)
+        val boundedLimit = if (limit <= 0) 50 else limit.coerceAtMost(500)
         val live = postMatchOwnReads
         if (live != null) return try {
-            val snapshot = live.ordersForParticipant(participantId, openOnly, instrumentId, boundedLimit.coerceAtLeast(1))
+            val snapshot = live.ordersForParticipant(participantId, openOnly, instrumentId, boundedLimit)
             ParticipantReadResult(200, JsonCodec.writeObject(
                 "participantId" to participantId,
                 "meta" to mapOf(
@@ -704,12 +704,13 @@ class PlatformApi(
                     "scope" to "participant",
                     "openOnly" to openOnly,
                     "instrumentId" to instrumentId,
-                    "limit" to boundedLimit.coerceAtLeast(1),
+                    "limit" to boundedLimit,
                     "asOf" to snapshot.asOf()
                 ),
                 "orders" to snapshot.rows.map { it.toMap() }
             ))
         } catch (error: Exception) {
+            // Once selected, the live source is authoritative; fallback would hide missing coverage.
             postMatchReadUnavailable("orders", error)
         }
         return ParticipantReadResult(200, JsonCodec.writeObject(
@@ -730,10 +731,10 @@ class PlatformApi(
         ownExecutionsResult(participantId, instrumentId, runId, limit).body
 
     fun ownExecutionsResult(participantId: String, instrumentId: String = "", runId: String = "", limit: Int = 0): ParticipantReadResult {
-        val boundedLimit = limit.coerceIn(0, 500)
+        val boundedLimit = if (limit <= 0) 50 else limit.coerceAtMost(500)
         val live = postMatchOwnReads
         if (live != null) return try {
-            val snapshot = live.executionsForParticipant(participantId, instrumentId, runId, boundedLimit.coerceAtLeast(1))
+            val snapshot = live.executionsForParticipant(participantId, instrumentId, runId, boundedLimit)
             ParticipantReadResult(200, JsonCodec.writeObject(
                 "participantId" to participantId,
                 "meta" to mapOf(
@@ -742,7 +743,7 @@ class PlatformApi(
                     "scope" to "participant",
                     "instrumentId" to instrumentId,
                     "runId" to runId,
-                    "limit" to boundedLimit.coerceAtLeast(1),
+                    "limit" to boundedLimit,
                     "asOf" to snapshot.asOf()
                 ),
                 "fills" to snapshot.rows.map { it.toMap() }
