@@ -1352,7 +1352,7 @@ First attempt `do-benchmark-20260927T192439Z` synced `3e71f767` and passed
 smoke/reset/migrations and opening seed, then stopped **before load**:
 settlement PostgreSQL lacked the `pg_stat_statements` preload required by the
 diagnostics collector. No throughput conclusion. The fix added its opt-in
-preload; [failure log](../artifacts/postmatch-settlement-20260927/attempt-1/stage-make-dev-stress-venue-event-materializer.log)
+preload; [compressed failure log](../artifacts/postmatch-settlement-20260927/attempt-1/stage-make-dev-stress-venue-event-materializer.log.gz)
 and [checksum manifest](../artifacts/postmatch-settlement-20260927/attempt-1/evidence.sha256)
 are retained. Droplet `604156104` and firewall
 `39e9053c-e4a5-4cb4-977b-e73e91eca29a` were destroyed; local OpenTofu state
@@ -1400,9 +1400,9 @@ is made. The harness now recognizes individual measured reports so future
 failed-capacity runs still execute those checks.
 
 [Original compressed load report](../artifacts/postmatch-settlement-20260927/attempt-2/venue-event-materializer-stress-rate-10000-workers-384.json.gz),
-[stage log](../artifacts/postmatch-settlement-20260927/attempt-2/stage-make-dev-stress-venue-event-materializer.log),
-[settlement SQL statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-pg_stat_statements.csv),
-[table statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-table-stats.csv),
+[compressed stage log](../artifacts/postmatch-settlement-20260927/attempt-2/stage-make-dev-stress-venue-event-materializer.log.gz),
+[compressed settlement SQL statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-pg_stat_statements.csv.gz),
+[compressed table statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-table-stats.csv.gz),
 [gate summary](../artifacts/postmatch-settlement-20260927/attempt-2/do-benchmark-evidence-summary.json),
 and [checksums](../artifacts/postmatch-settlement-20260927/attempt-2/evidence.sha256)
 are retained; full raw telemetry remains in the ignored local
