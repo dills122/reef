@@ -36,6 +36,10 @@ class PostMatchRuntimeWorkersIntegrationTest {
         )
         try {
             listOf(0, 1).forEach { partition -> insertRejectedSource(source, stream, token, partition) }
+            assertEquals(mapOf(
+                0 to 1L,
+                1 to CanonicalStreamPosition.origin(1) + 1
+            ), catalog.partitionHeads(stream, 2))
             assertEquals(0, worker.processMarketOnce())
             assertEquals(2, worker.processLiveOnce())
             assertEquals(0, worker.processLiveOnce())

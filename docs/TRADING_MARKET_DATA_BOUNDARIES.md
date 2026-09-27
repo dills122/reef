@@ -203,6 +203,14 @@ lives in [`STOCK_DATA_SEEDING_PLAN.md`](./STOCK_DATA_SEEDING_PLAN.md).
 | `/api/v1/orders/current` | bot/user | `runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
 | `/api/v1/orders/history` | bot/user | `runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
 | `/api/v1/orders/fills` | bot/user | `runtime.orders + runtime.executions` | durable participant read | durable execution rows scoped by participant order ownership, with optional `runId` filtering | none beyond execution persistence completeness | participant own orders | active |
+
+With `POSTMATCH_LIVE_READS_ENABLED=true`, these three participant endpoints use
+`postmatch.live_order_state` and `postmatch.live_execution_facts` instead. The
+response keeps existing order and fill fields; `meta.asOf` reports the source
+generation, source head, and live-consumer frontier for every canonical partition. The availability inventory
+reports this source switch and leaves cross-store lag unset. Missing coverage or
+unreplayed rows return 503. The flag is off by default; market-data endpoints
+continue to use the sources listed above.
 | `/api/v1/settlement/facts/{scenarioRunId}` | user/admin/test harness | `settlement append-only fact store` | durable fact read | durable fact rows | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
 | `/api/v1/settlement/obligations/{scenarioRunId}` | user/admin/test harness | settlement obligation projection over append-only facts | projection-backed read | derived from durable settlement facts | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
 | `/api/v1/settlement/ledger/{scenarioRunId}` | user/admin/test harness | append-only settlement ledger entry facts | projection-backed read | replayable participant/account/asset balances derived from ledger facts | none beyond settlement fact persistence completeness | scenario settlement evidence | active |

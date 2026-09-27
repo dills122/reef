@@ -489,5 +489,6 @@ test("routes post-match schema only to its isolated database target", async () =
     "postmatch/0002_live_order_execution_trade_state.sql",
     "postmatch/0003_market_change_windows.sql",
     "postmatch/0004_live_read_indexes.sql",
+    "postmatch/0005_live_read_response_text.sql",
   ]);
 });

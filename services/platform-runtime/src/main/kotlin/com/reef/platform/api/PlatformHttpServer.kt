@@ -1139,7 +1139,8 @@ class PlatformHttpServer(
             }
             val instrumentId = exchange.queryValue("instrumentId")
             val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
-            adminSessionAuth.writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
+            val result = api.ownOrdersResult(participantId, openOnly = true, instrumentId = instrumentId, limit = limit)
+            adminSessionAuth.writeJson(exchange, result.status, result.body)
         }
 
         server.createContext("/api/v1/orders/history") { exchange ->
@@ -1155,7 +1156,8 @@ class PlatformHttpServer(
             }
             val instrumentId = exchange.queryValue("instrumentId")
             val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
-            adminSessionAuth.writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
+            val result = api.ownOrdersResult(participantId, openOnly = false, instrumentId = instrumentId, limit = limit)
+            adminSessionAuth.writeJson(exchange, result.status, result.body)
         }
 
         server.createContext("/api/v1/orders/fills") { exchange ->
@@ -1172,7 +1174,8 @@ class PlatformHttpServer(
             val instrumentId = exchange.queryValue("instrumentId")
             val runId = exchange.queryValue("runId")
             val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
-            adminSessionAuth.writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, runId = runId, limit = limit))
+            val result = api.ownExecutionsResult(participantId, instrumentId = instrumentId, runId = runId, limit = limit)
+            adminSessionAuth.writeJson(exchange, result.status, result.body)
         }
 
         server.createContext("/trades") { exchange ->
@@ -1801,15 +1804,13 @@ class PlatformHttpServer(
                 boundary.toErrorJson(boundaryError, correlationId(request.headers))
             )
         }
-        return PlatformHotPathResponse(
-            status = 200,
-            body = api.ownOrders(
+        val result = api.ownOrdersResult(
                 participantId = participantId,
                 openOnly = openOnly,
                 instrumentId = queryValue(request.query, "instrumentId"),
                 limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
-        )
+        return PlatformHotPathResponse(result.status, result.body)
     }
 
     private fun readOrderFillsResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse {
@@ -1821,15 +1822,13 @@ class PlatformHttpServer(
                 boundary.toErrorJson(boundaryError, correlationId(request.headers))
             )
         }
-        return PlatformHotPathResponse(
-            status = 200,
-            body = api.ownExecutions(
+        val result = api.ownExecutionsResult(
                 participantId = participantId,
                 instrumentId = queryValue(request.query, "instrumentId"),
                 runId = queryValue(request.query, "runId"),
                 limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
-        )
+        return PlatformHotPathResponse(result.status, result.body)
     }
 
     internal fun handleHotPathRequestAsync(request: PlatformHotPathRequest): CompletableFuture<PlatformHotPathResponse?> {

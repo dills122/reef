@@ -31,13 +31,15 @@ import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import java.sql.SQLException
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 private const val MaxIntradayBarBuckets = 1_500L
 
 class PlatformApi(
-    private val orderService: OrderApplicationService = OrderApplicationService()
+    private val orderService: OrderApplicationService = OrderApplicationService(),
+    private val postMatchOwnReads: PostMatchOwnReadGateway? = PostMatchOwnReadGateway.fromEnvOrNull()
 ) {
     private val defaultProjectionSource = "venue-event-batch"
     private val defaultVenueProjectionName = "runtime-normalized-venue-outcomes"
@@ -209,7 +211,7 @@ class PlatformApi(
                     requiredQuery = listOf("interval", "start", "end"),
                     optionalQuery = emptyList()
                 ),
-                surfaceAvailability(
+                ownReadSurfaceAvailability(
                     name = "currentOrders",
                     endpoint = "/api/v1/orders/current",
                     source = "runtime.order_lifecycle_state",
@@ -217,9 +219,10 @@ class PlatformApi(
                     status = venueStatus,
                     scope = "participant-own-orders",
                     requiredQuery = listOf("participantId"),
-                    optionalQuery = listOf("instrumentId", "limit")
+                    optionalQuery = listOf("instrumentId", "limit"),
+                    liveSource = "postmatch.live_order_state"
                 ),
-                surfaceAvailability(
+                ownReadSurfaceAvailability(
                     name = "orderHistory",
                     endpoint = "/api/v1/orders/history",
                     source = "runtime.order_lifecycle_state",
@@ -227,9 +230,10 @@ class PlatformApi(
                     status = venueStatus,
                     scope = "participant-own-orders",
                     requiredQuery = listOf("participantId"),
-                    optionalQuery = listOf("instrumentId", "limit")
+                    optionalQuery = listOf("instrumentId", "limit"),
+                    liveSource = "postmatch.live_order_state"
                 ),
-                surfaceAvailability(
+                ownReadSurfaceAvailability(
                     name = "orderFills",
                     endpoint = "/api/v1/orders/fills",
                     source = "runtime.orders + runtime.executions",
@@ -237,7 +241,8 @@ class PlatformApi(
                     status = venueStatus,
                     scope = "participant-own-orders",
                     requiredQuery = listOf("participantId"),
-                    optionalQuery = listOf("instrumentId", "limit")
+                    optionalQuery = listOf("instrumentId", "runId", "limit"),
+                    liveSource = "postmatch.live_execution_facts"
                 ),
                 surfaceAvailability(
                     name = "settlementFacts",
@@ -681,9 +686,34 @@ class PlatformApi(
         }
     }
 
-    fun ownOrders(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): String {
-        val boundedLimit = limit.coerceIn(0, 500)
-        return JsonCodec.writeObject(
+    data class ParticipantReadResult(val status: Int, val body: String)
+
+    fun ownOrders(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): String =
+        ownOrdersResult(participantId, openOnly, instrumentId, limit).body
+
+    fun ownOrdersResult(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): ParticipantReadResult {
+        val boundedLimit = if (limit <= 0) 50 else limit.coerceAtMost(500)
+        val live = postMatchOwnReads
+        if (live != null) return try {
+            val snapshot = live.ordersForParticipant(participantId, openOnly, instrumentId, boundedLimit)
+            ParticipantReadResult(200, JsonCodec.writeObject(
+                "participantId" to participantId,
+                "meta" to mapOf(
+                    "source" to "postmatch.live_order_state",
+                    "freshness" to "committed live consumer snapshot",
+                    "scope" to "participant",
+                    "openOnly" to openOnly,
+                    "instrumentId" to instrumentId,
+                    "limit" to boundedLimit,
+                    "asOf" to snapshot.asOf()
+                ),
+                "orders" to snapshot.rows.map { it.toMap() }
+            ))
+        } catch (error: Exception) {
+            // Once selected, the live source is authoritative; fallback would hide missing coverage.
+            postMatchReadUnavailable("orders", error)
+        }
+        return ParticipantReadResult(200, JsonCodec.writeObject(
             "participantId" to participantId,
             "meta" to mapOf(
                 "source" to "runtime.order_lifecycle_state",
@@ -694,12 +724,34 @@ class PlatformApi(
                 "limit" to boundedLimit
             ),
             "orders" to orderService.ordersForParticipant(participantId, openOnly, instrumentId, boundedLimit).map { it.toMap() }
-        )
+        ))
     }
 
-    fun ownExecutions(participantId: String, instrumentId: String = "", runId: String = "", limit: Int = 0): String {
-        val boundedLimit = limit.coerceIn(0, 500)
-        return JsonCodec.writeObject(
+    fun ownExecutions(participantId: String, instrumentId: String = "", runId: String = "", limit: Int = 0): String =
+        ownExecutionsResult(participantId, instrumentId, runId, limit).body
+
+    fun ownExecutionsResult(participantId: String, instrumentId: String = "", runId: String = "", limit: Int = 0): ParticipantReadResult {
+        val boundedLimit = if (limit <= 0) 50 else limit.coerceAtMost(500)
+        val live = postMatchOwnReads
+        if (live != null) return try {
+            val snapshot = live.executionsForParticipant(participantId, instrumentId, runId, boundedLimit)
+            ParticipantReadResult(200, JsonCodec.writeObject(
+                "participantId" to participantId,
+                "meta" to mapOf(
+                    "source" to "postmatch.live_execution_facts",
+                    "freshness" to "committed live consumer snapshot",
+                    "scope" to "participant",
+                    "instrumentId" to instrumentId,
+                    "runId" to runId,
+                    "limit" to boundedLimit,
+                    "asOf" to snapshot.asOf()
+                ),
+                "fills" to snapshot.rows.map { it.toMap() }
+            ))
+        } catch (error: Exception) {
+            postMatchReadUnavailable("fills", error)
+        }
+        return ParticipantReadResult(200, JsonCodec.writeObject(
             "participantId" to participantId,
             "meta" to mapOf(
                 "source" to "runtime.orders + runtime.executions",
@@ -710,7 +762,7 @@ class PlatformApi(
                 "limit" to boundedLimit
             ),
             "fills" to orderService.executionsForParticipant(participantId, instrumentId, runId, boundedLimit).map { it.toMap() }
-        )
+        ))
     }
 
     private fun toJson(result: SubmitOrderResult): String {
@@ -912,6 +964,41 @@ class PlatformApi(
             ),
         "notes" to notes
     )
+
+    private fun ownReadSurfaceAvailability(
+        name: String, endpoint: String, source: String, freshness: String,
+        status: ProjectionStatus, scope: String, requiredQuery: List<String>,
+        optionalQuery: List<String>, liveSource: String
+    ): Map<String, Any?> {
+        if (postMatchOwnReads == null) return surfaceAvailability(
+            name, endpoint, source, freshness, status, scope, requiredQuery, optionalQuery
+        )
+        return mapOf(
+            "name" to name,
+            "endpoint" to endpoint,
+            "source" to liveSource,
+            "freshness" to "committed live consumer snapshot",
+            "scope" to scope,
+            "requiredQuery" to requiredQuery,
+            "optionalQuery" to optionalQuery,
+            "projectionName" to PostMatchRuntimeWorkers.LIVE_CONSUMER,
+            "lag" to null,
+            "lastPartitionSequence" to null,
+            "lastUpdatedAt" to "",
+            "notes" to "Each successful read carries its source generation and per-partition frontier in meta.asOf"
+        )
+    }
+
+    private fun postMatchReadUnavailable(route: String, error: Exception): ParticipantReadResult {
+        val cause = when (error) {
+            is SQLException -> "database"
+            is IllegalStateException -> "coverage-or-generation"
+            is IllegalArgumentException -> "replay-or-input"
+            else -> "internal"
+        }
+        System.err.println("postmatch_live_read_failed route=$route cause=$cause type=${error.javaClass.simpleName}")
+        return ParticipantReadResult(503, JsonCodec.writeObject("error" to "post-match live read unavailable"))
+    }
 
     private fun RuntimeEvent.toMap(): Map<String, Any> = mapOf(
         "eventId" to eventId,

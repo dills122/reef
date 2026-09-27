@@ -160,8 +160,9 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
             """INSERT INTO postmatch.live_execution_facts(
                event_stream, source_generation, execution_id, event_id, order_id, instrument_id,
                quantity_units, execution_price, currency, liquidity_role, occurred_at,
-               source_partition_id, source_stream_sequence, source_effect_ordinal)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+               source_partition_id, source_stream_sequence, source_effect_ordinal,
+               quantity_units_text, execution_price_text, occurred_at_text)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         ).use { statement ->
             effects.forEach { envelope ->
                 val effect = envelope.effect as CanonicalEffect.Execution
@@ -179,6 +180,9 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
                 statement.setInt(12, envelope.position.partitionId)
                 statement.setLong(13, envelope.position.streamSequence)
                 statement.setInt(14, envelope.position.effectOrdinal)
+                statement.setString(15, effect.quantityUnits)
+                statement.setString(16, effect.price)
+                statement.setString(17, effect.occurredAt)
                 statement.addBatch()
             }
             statement.executeBatch()
@@ -224,12 +228,15 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
             """INSERT INTO postmatch.live_order_state AS current_state(
                event_stream, source_generation, order_id, instrument_id, status, original_quantity,
                remaining_quantity, filled_quantity, limit_price, currency, last_event_at,
-               source_partition_id, source_stream_sequence, source_effect_ordinal)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               source_partition_id, source_stream_sequence, source_effect_ordinal,
+               remaining_quantity_text, limit_price_text)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT (event_stream, source_generation, order_id) DO UPDATE SET
                status = EXCLUDED.status, original_quantity = EXCLUDED.original_quantity,
                remaining_quantity = EXCLUDED.remaining_quantity, filled_quantity = EXCLUDED.filled_quantity,
                limit_price = EXCLUDED.limit_price, last_event_at = EXCLUDED.last_event_at,
+               remaining_quantity_text = EXCLUDED.remaining_quantity_text,
+               limit_price_text = EXCLUDED.limit_price_text,
                source_stream_sequence = EXCLUDED.source_stream_sequence,
                source_effect_ordinal = EXCLUDED.source_effect_ordinal, updated_at = clock_timestamp()
                WHERE current_state.source_partition_id = EXCLUDED.source_partition_id
@@ -267,6 +274,8 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
                 statement.setInt(12, envelope.position.partitionId)
                 statement.setLong(13, envelope.position.streamSequence)
                 statement.setInt(14, envelope.position.effectOrdinal)
+                statement.setString(15, effect.remainingQuantity)
+                statement.setString(16, effect.limitPrice)
                 statement.addBatch()
             }
             check(statement.executeBatch().all { it == 1 }) { "live order state position did not advance" }
