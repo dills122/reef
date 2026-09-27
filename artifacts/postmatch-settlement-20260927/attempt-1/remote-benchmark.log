@@ -1,0 +1,106 @@
+[2026-09-27T19:24:40+00:00] remote benchmark starting
+profile=materializer-projection
+run_id=do-benchmark-20260927T192439Z
+stream=REEF_COMMANDS_do_benchmark_20260927T192439Z
+subject_prefix=reef.do_benchmark.do_benchmark_20260927T192439Z
+durable_prefix=reef-stream-worker-do_benchmark_20260927T192439Z
+event_stream=REEF_EVENTS_do_benchmark_20260927T192439Z
+event_subject_prefix=reef.do_benchmark.do_benchmark_20260927T192439Z.events.v1
+rates=10000 workers=384 repeat_samples=1 duration=300s
+drain_backpressure_policy=venue-core
+image_mode=source
+[2026-09-27T19:24:40Z] stage: make-dev-smoke-venue-event-materializer (log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-make-dev-smoke-venue-event-materializer.log)
+[2026-09-27T19:30:08Z] stage complete: make-dev-smoke-venue-event-materializer duration_seconds=328
+[2026-09-27T19:30:08Z] stage: reset-after-materializer-smoke (log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-reset-after-materializer-smoke.log)
+[2026-09-27T19:30:10Z] stage complete: reset-after-materializer-smoke duration_seconds=2
+[2026-09-27T19:30:10Z] stage: make-dev-stress-venue-event-materializer (log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-make-dev-stress-venue-event-materializer.log)
+[2026-09-27T19:33:54Z] stage failed: make-dev-stress-venue-event-materializer status=2 duration_seconds=224 log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-make-dev-stress-venue-event-materializer.log
+[2026-09-27T19:33:54Z] tail: make-dev-stress-venue-event-materializer last 80 lines
+ Container reef-platform-projector-1 Starting 
+ Container reef-platform-worker-1 Starting 
+ Container reef-platform-materializer-2 Started 
+ Container reef-platform-materializer Started 
+ Container reef-platform-projector-2 Started 
+ Container reef-platform-projector-0 Started 
+ Container reef-platform-projector-3 Started 
+ Container reef-platform-worker-3 Started 
+ Container reef-platform-materializer-1 Started 
+ Container reef-platform-materializer-3 Started 
+ Container reef-platform-api Started 
+ Container reef-platform-worker-0 Started 
+ Container reef-platform-worker-2 Started 
+ Container reef-platform-projector-1 Started 
+ Container reef-platform-worker-1 Started 
+ Container reef-platform-materializer-1 Waiting 
+ Container reef-settlement-postgres Waiting 
+ Container reef-platform-worker-1 Waiting 
+ Container reef-platform-projector-2 Waiting 
+ Container reef-postmatch-postgres Waiting 
+ Container reef-platform-worker-0 Waiting 
+ Container reef-platform-worker-3 Waiting 
+ Container reef-platform-materializer-3 Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-platform-projector-1 Waiting 
+ Container reef-platform-materializer Waiting 
+ Container reef-platform-api Waiting 
+ Container reef-redpanda Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-nats Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-platform-materializer-2 Waiting 
+ Container reef-platform-projector-0 Waiting 
+ Container reef-platform-projector-3 Waiting 
+ Container reef-postgres Waiting 
+ Container reef-platform-worker-2 Waiting 
+ Container reef-postgres Healthy 
+ Container reef-postmatch-postgres Healthy 
+ Container reef-matching-engine Healthy 
+ Container reef-redpanda Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-settlement-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-platform-materializer-2 Healthy 
+ Container reef-platform-materializer Healthy 
+ Container reef-platform-projector-0 Healthy 
+ Container reef-platform-projector-2 Healthy 
+ Container reef-platform-projector-3 Healthy 
+ Container reef-platform-materializer-1 Healthy 
+ Container reef-platform-worker-3 Healthy 
+ Container reef-platform-materializer-3 Healthy 
+ Container reef-platform-worker-0 Healthy 
+ Container reef-platform-api Healthy 
+ Container reef-platform-worker-2 Healthy 
+ Container reef-platform-projector-1 Healthy 
+ Container reef-platform-worker-1 Healthy 
+Redpanda/Kafka stream REEF_COMMANDS_do_benchmark_20260927T192439Z will be created by the runtime producer if needed.
+seeded settlement openings: 5 actors, 64 instruments, 325 positions
+stopping idle background services before stress: platform-worker-0,platform-worker-1,platform-worker-2,platform-worker-3
+ Container reef-platform-worker-2 Stopping 
+ Container reef-platform-worker-3 Stopping 
+ Container reef-platform-worker-0 Stopping 
+ Container reef-platform-worker-1 Stopping 
+ Container reef-platform-worker-0 Stopped 
+ Container reef-platform-worker-3 Stopped 
+ Container reef-platform-worker-2 Stopped 
+ Container reef-platform-worker-1 Stopped 
+running stepped stress profile against http://127.0.0.1:8080 (mode=strict-lifecycle, profile=capacity-heavy)
+file:///home/reefbench/reef/scripts/dev/lib/db-diagnostics.mjs:37
+      throw new Error(`${service}: pg_stat_statements is not present in shared_preload_libraries`);
+            ^
+
+Error: settlement-postgres: pg_stat_statements is not present in shared_preload_libraries
+    at ensurePgStatStatements (file:///home/reefbench/reef/scripts/dev/lib/db-diagnostics.mjs:37:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async file:///home/reefbench/reef/scripts/dev/stress.mjs:186:5
+
+Node.js v18.19.1
+make: *** [Makefile:477: dev-stress-venue-event-materializer] Error 1
+[2026-09-27T19:33:54Z] stage: postmatch-shadow-check (log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-postmatch-shadow-check.log)
+Terminated
+[2026-09-27T19:34:22Z] stage failed: postmatch-shadow-check status=143 duration_seconds=28 log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-postmatch-shadow-check.log
+[2026-09-27T19:34:22Z] tail: postmatch-shadow-check last 80 lines
+[2026-09-27T19:34:22Z] stage: settlement-shadow-check (log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-settlement-shadow-check.log)
+Terminated
+[2026-09-27T19:34:38Z] stage failed: settlement-shadow-check status=143 duration_seconds=16 log=/tmp/reef-do-benchmark/do-benchmark-20260927T192439Z/logs/stage-settlement-shadow-check.log
+[2026-09-27T19:34:38Z] tail: settlement-shadow-check last 80 lines

@@ -1,0 +1,624 @@
+session:
+  name: venue-event-materializer-mixed-lifecycle-stress
+  scenarioRunId: venue-event-materializer-mixed-lifecycle-stress
+  seed: 727272
+  mode: strict-lifecycle
+
+runtime:
+  baseUrl: http://localhost:8080
+  duration: 180s
+  workers: 384
+  ratePerSecond: 1000
+  timeout: 5s
+  traceCheckLimit: 0
+
+market:
+  timezone: America/New_York
+  equities:
+    - symbol: STK001
+      instrumentId: STK001
+      startingPriceNanos: 101000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1010000000000
+      volatilityBps: 100
+      spreadBps: 5
+    - symbol: STK002
+      instrumentId: STK002
+      startingPriceNanos: 102000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1020000000000
+      volatilityBps: 110
+      spreadBps: 6
+    - symbol: STK003
+      instrumentId: STK003
+      startingPriceNanos: 103000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1030000000000
+      volatilityBps: 120
+      spreadBps: 7
+    - symbol: STK004
+      instrumentId: STK004
+      startingPriceNanos: 104000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1040000000000
+      volatilityBps: 130
+      spreadBps: 8
+    - symbol: STK005
+      instrumentId: STK005
+      startingPriceNanos: 105000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1050000000000
+      volatilityBps: 140
+      spreadBps: 4
+    - symbol: STK007
+      instrumentId: STK007
+      startingPriceNanos: 107000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1070000000000
+      volatilityBps: 160
+      spreadBps: 6
+    - symbol: STK008
+      instrumentId: STK008
+      startingPriceNanos: 108000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1080000000000
+      volatilityBps: 170
+      spreadBps: 7
+    - symbol: STK012
+      instrumentId: STK012
+      startingPriceNanos: 112000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1120000000000
+      volatilityBps: 90
+      spreadBps: 6
+    - symbol: STK014
+      instrumentId: STK014
+      startingPriceNanos: 114000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1140000000000
+      volatilityBps: 110
+      spreadBps: 8
+    - symbol: STK015
+      instrumentId: STK015
+      startingPriceNanos: 115000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1150000000000
+      volatilityBps: 120
+      spreadBps: 4
+    - symbol: STK017
+      instrumentId: STK017
+      startingPriceNanos: 117000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1170000000000
+      volatilityBps: 140
+      spreadBps: 6
+    - symbol: STK018
+      instrumentId: STK018
+      startingPriceNanos: 118000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1180000000000
+      volatilityBps: 150
+      spreadBps: 7
+    - symbol: STK019
+      instrumentId: STK019
+      startingPriceNanos: 119000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1190000000000
+      volatilityBps: 160
+      spreadBps: 8
+    - symbol: STK026
+      instrumentId: STK026
+      startingPriceNanos: 126000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1260000000000
+      volatilityBps: 110
+      spreadBps: 5
+    - symbol: STK031
+      instrumentId: STK031
+      startingPriceNanos: 131000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1310000000000
+      volatilityBps: 160
+      spreadBps: 5
+    - symbol: STK084
+      instrumentId: STK084
+      startingPriceNanos: 184000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1840000000000
+      volatilityBps: 90
+      spreadBps: 8
+    - symbol: STK085
+      instrumentId: STK085
+      startingPriceNanos: 185000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1850000000000
+      volatilityBps: 100
+      spreadBps: 4
+    - symbol: STK086
+      instrumentId: STK086
+      startingPriceNanos: 186000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1860000000000
+      volatilityBps: 110
+      spreadBps: 5
+    - symbol: STK087
+      instrumentId: STK087
+      startingPriceNanos: 187000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1870000000000
+      volatilityBps: 120
+      spreadBps: 6
+    - symbol: STK088
+      instrumentId: STK088
+      startingPriceNanos: 188000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1880000000000
+      volatilityBps: 130
+      spreadBps: 7
+    - symbol: STK089
+      instrumentId: STK089
+      startingPriceNanos: 189000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1890000000000
+      volatilityBps: 140
+      spreadBps: 8
+    - symbol: STK090
+      instrumentId: STK090
+      startingPriceNanos: 190000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1900000000000
+      volatilityBps: 150
+      spreadBps: 4
+    - symbol: STK093
+      instrumentId: STK093
+      startingPriceNanos: 193000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1930000000000
+      volatilityBps: 180
+      spreadBps: 7
+    - symbol: STK095
+      instrumentId: STK095
+      startingPriceNanos: 195000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1950000000000
+      volatilityBps: 200
+      spreadBps: 4
+    - symbol: STK096
+      instrumentId: STK096
+      startingPriceNanos: 196000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1960000000000
+      volatilityBps: 90
+      spreadBps: 5
+    - symbol: STK099
+      instrumentId: STK099
+      startingPriceNanos: 199000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 1990000000000
+      volatilityBps: 120
+      spreadBps: 8
+    - symbol: STK102
+      instrumentId: STK102
+      startingPriceNanos: 202000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2020000000000
+      volatilityBps: 150
+      spreadBps: 6
+    - symbol: STK103
+      instrumentId: STK103
+      startingPriceNanos: 203000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2030000000000
+      volatilityBps: 160
+      spreadBps: 7
+    - symbol: STK106
+      instrumentId: STK106
+      startingPriceNanos: 206000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2060000000000
+      volatilityBps: 190
+      spreadBps: 5
+    - symbol: STK115
+      instrumentId: STK115
+      startingPriceNanos: 215000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2150000000000
+      volatilityBps: 160
+      spreadBps: 4
+    - symbol: STK116
+      instrumentId: STK116
+      startingPriceNanos: 216000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2160000000000
+      volatilityBps: 170
+      spreadBps: 5
+    - symbol: STK131
+      instrumentId: STK131
+      startingPriceNanos: 231000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2310000000000
+      volatilityBps: 200
+      spreadBps: 5
+    - symbol: STK132
+      instrumentId: STK132
+      startingPriceNanos: 232000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2320000000000
+      volatilityBps: 90
+      spreadBps: 6
+    - symbol: STK133
+      instrumentId: STK133
+      startingPriceNanos: 233000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2330000000000
+      volatilityBps: 100
+      spreadBps: 7
+    - symbol: STK134
+      instrumentId: STK134
+      startingPriceNanos: 234000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2340000000000
+      volatilityBps: 110
+      spreadBps: 8
+    - symbol: STK135
+      instrumentId: STK135
+      startingPriceNanos: 235000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2350000000000
+      volatilityBps: 120
+      spreadBps: 4
+    - symbol: STK136
+      instrumentId: STK136
+      startingPriceNanos: 236000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2360000000000
+      volatilityBps: 130
+      spreadBps: 5
+    - symbol: STK137
+      instrumentId: STK137
+      startingPriceNanos: 237000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2370000000000
+      volatilityBps: 140
+      spreadBps: 6
+    - symbol: STK140
+      instrumentId: STK140
+      startingPriceNanos: 240000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2400000000000
+      volatilityBps: 170
+      spreadBps: 4
+    - symbol: STK142
+      instrumentId: STK142
+      startingPriceNanos: 242000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2420000000000
+      volatilityBps: 190
+      spreadBps: 6
+    - symbol: STK143
+      instrumentId: STK143
+      startingPriceNanos: 243000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2430000000000
+      volatilityBps: 200
+      spreadBps: 7
+    - symbol: STK145
+      instrumentId: STK145
+      startingPriceNanos: 245000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2450000000000
+      volatilityBps: 100
+      spreadBps: 4
+    - symbol: STK149
+      instrumentId: STK149
+      startingPriceNanos: 249000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2490000000000
+      volatilityBps: 140
+      spreadBps: 8
+    - symbol: STK150
+      instrumentId: STK150
+      startingPriceNanos: 250000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2500000000000
+      volatilityBps: 150
+      spreadBps: 4
+    - symbol: STK151
+      instrumentId: STK151
+      startingPriceNanos: 251000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2510000000000
+      volatilityBps: 160
+      spreadBps: 5
+    - symbol: STK152
+      instrumentId: STK152
+      startingPriceNanos: 252000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2520000000000
+      volatilityBps: 170
+      spreadBps: 6
+    - symbol: STK176
+      instrumentId: STK176
+      startingPriceNanos: 276000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2760000000000
+      volatilityBps: 170
+      spreadBps: 5
+    - symbol: STK177
+      instrumentId: STK177
+      startingPriceNanos: 277000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2770000000000
+      volatilityBps: 180
+      spreadBps: 6
+    - symbol: STK178
+      instrumentId: STK178
+      startingPriceNanos: 278000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2780000000000
+      volatilityBps: 190
+      spreadBps: 7
+    - symbol: STK179
+      instrumentId: STK179
+      startingPriceNanos: 279000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2790000000000
+      volatilityBps: 200
+      spreadBps: 8
+    - symbol: STK180
+      instrumentId: STK180
+      startingPriceNanos: 280000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2800000000000
+      volatilityBps: 90
+      spreadBps: 4
+    - symbol: STK181
+      instrumentId: STK181
+      startingPriceNanos: 281000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2810000000000
+      volatilityBps: 100
+      spreadBps: 5
+    - symbol: STK182
+      instrumentId: STK182
+      startingPriceNanos: 282000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2820000000000
+      volatilityBps: 110
+      spreadBps: 6
+    - symbol: STK183
+      instrumentId: STK183
+      startingPriceNanos: 283000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2830000000000
+      volatilityBps: 120
+      spreadBps: 7
+    - symbol: STK184
+      instrumentId: STK184
+      startingPriceNanos: 284000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2840000000000
+      volatilityBps: 130
+      spreadBps: 8
+    - symbol: STK188
+      instrumentId: STK188
+      startingPriceNanos: 288000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2880000000000
+      volatilityBps: 170
+      spreadBps: 7
+    - symbol: STK189
+      instrumentId: STK189
+      startingPriceNanos: 289000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2890000000000
+      volatilityBps: 180
+      spreadBps: 8
+    - symbol: STK190
+      instrumentId: STK190
+      startingPriceNanos: 290000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2900000000000
+      volatilityBps: 190
+      spreadBps: 4
+    - symbol: STK195
+      instrumentId: STK195
+      startingPriceNanos: 295000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 2950000000000
+      volatilityBps: 120
+      spreadBps: 4
+    - symbol: STK200
+      instrumentId: STK200
+      startingPriceNanos: 300000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 3000000000000
+      volatilityBps: 170
+      spreadBps: 4
+    - symbol: STK202
+      instrumentId: STK202
+      startingPriceNanos: 302000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 3020000000000
+      volatilityBps: 190
+      spreadBps: 6
+    - symbol: STK204
+      instrumentId: STK204
+      startingPriceNanos: 304000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 3040000000000
+      volatilityBps: 90
+      spreadBps: 8
+    - symbol: STK212
+      instrumentId: STK212
+      startingPriceNanos: 312000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 3120000000000
+      volatilityBps: 170
+      spreadBps: 6
+    - symbol: STK228
+      instrumentId: STK228
+      startingPriceNanos: 328000000000
+      priceTickNanos: 10000000
+      avgDailyVolume: 10000000
+      sharesOutstanding: 1000000000
+      marketCap: 3280000000000
+      volatilityBps: 90
+      spreadBps: 7
+
+actors:
+  - actorId: materializer-mm-01
+    actorType: market_maker
+    strategyId: two_sided_quote
+    weight: 20
+  - actorId: materializer-inst-01
+    actorType: institutional
+    strategyId: vwap_slice
+    weight: 20
+  - actorId: materializer-inst-02
+    actorType: institutional
+    strategyId: tactical_entry
+    weight: 20
+  - actorId: materializer-retail-01
+    actorType: retail
+    strategyId: dip_buyer
+    weight: 20
+  - actorId: materializer-retail-02
+    actorType: retail
+    strategyId: passive_limit
+    weight: 20
+
+mix:
+  actions:
+    submitPct: 68
+    modifyPct: 24
+    cancelPct: 8
+  sideBias:
+    buyPct: 50
+    sellPct: 50

@@ -1333,3 +1333,84 @@ hosted runs should save sanitized source revision and resource lifecycle
 evidence. Next: finish
 audit/settlement ownership and route parity, then run the integrated matched
 capacity campaign in the post-match implementation plan.
+
+## PM-S2 — bounded settlement 10k/300s stage diagnostic, FAILED
+
+September 27, two fresh disposable `sfo3` `c-32` attempts on branch
+`codex/postmatch-settlement-droplet`, after merged #400. This is the same
+64-instrument, five-actor strict-lifecycle fixture as the named materializer
+stress profile, with 384 load workers, 16 source partitions, four canonical
+materializers, four legacy command-status projectors, one configured
+lifecycle/market maintainer, isolated post-match and settlement PostgreSQL,
+and shadow live/market plus intake/obligation/admission/execution workers.
+The benchmark preseeded 325 cash/security openings for instant DvP. Audit
+shadow and public route cutover were off. This topology, code, workload age,
+and observer differ from C5 venue-core, C43/F02 full projection, and PM-S1;
+none is a matched control for this run.
+
+First attempt `do-benchmark-20260927T192439Z` synced `3e71f767` and passed
+smoke/reset/migrations and opening seed, then stopped **before load**:
+settlement PostgreSQL lacked the `pg_stat_statements` preload required by the
+diagnostics collector. No throughput conclusion. The fix added its opt-in
+preload; [failure log](../artifacts/postmatch-settlement-20260927/attempt-1/stage-make-dev-stress-venue-event-materializer.log)
+and [checksum manifest](../artifacts/postmatch-settlement-20260927/attempt-1/evidence.sha256)
+are retained. Droplet `604156104` and firewall
+`39e9053c-e4a5-4cb4-977b-e73e91eca29a` were destroyed; local OpenTofu state
+was empty afterward.
+
+Second attempt `do-benchmark-20260927T193902Z` synced committed source
+`0b335009`; smoke/reset and dedicated migrations through settlement `0011`
+passed. The load window was `19:48:38Z–19:53:38Z` (300.034s), fixture SHA-256
+`b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`.
+It ended with 2,999,943 attempted/accepted/direct-acked (9,998.69/s), zero
+HTTP failures, p95/p99 intake 73.43/115.26ms. Those are ingress facts only.
+The materializer reached 2,797,872 (gap 202,071; 9,325.20/s); legacy
+command-status projection reached 1,742,422 (gap 1,055,450 to materialized;
+5,807.42/s), with projector lag 1,261,521. The existing stress guardrails
+failed, including stopped-source drain. Neither canonical nor projection
+10k/s capacity was qualified on this combined topology.
+
+Read-only settlement frontier snapshots summed each of 16 contiguous source
+sequence positions relative to its partition origin. They are stage progress,
+not trade counts or per-record latency:
+
+| UTC sample | Relative to load | Intake | Obligation | Admission | Execution |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 19:52:24 | During load | 1,129,275 | 1,128,775 | 816,875 | 61,175 |
+| 19:53:47 | 9s after stop | 1,617,275 | 1,615,275 | 1,157,575 | 88,375 |
+| 19:55:08 | 90s after stop | 2,357,775 | 2,357,775 | 1,686,275 | 132,275 |
+
+At `19:56:02Z`, PostgreSQL table statistics reported about 1.27m trade
+intake/obligation inserts, 20,747 admission-window inserts, 71,539 attempt
+inserts, and 286,156 ledger-entry inserts. These statistics are approximate
+snapshots and do not prove exact trade membership, settlement outcome, or four
+balanced legs per trade. The global admission-counter UPDATE had 20,852 calls
+and 2.34m ms cumulative execution time (112.23ms/call); its conflict-tolerant
+INSERT had 20,857 calls and 1.46m ms cumulative time (69.89ms/call).
+Cumulative SQL time across sessions is not elapsed wall time. The post-run
+activity sample included ten active `transactionid` lock waits, while
+settlement and post-match PostgreSQL logged frequent WAL checkpoints.
+These observations support admission contention and high fact-store write
+cost as hypotheses, but do not isolate either as the sole cause of slow
+execution. Projector logs also contain temporary source-coverage misses that
+later recovered. Because the stress guardrail exited nonzero before the
+aggregate report was written, this harness revision skipped the post-match
+and settlement closed-cohort checkers; no final business/replay parity claim
+is made. The harness now recognizes individual measured reports so future
+failed-capacity runs still execute those checks.
+
+[Original compressed load report](../artifacts/postmatch-settlement-20260927/attempt-2/venue-event-materializer-stress-rate-10000-workers-384.json.gz),
+[stage log](../artifacts/postmatch-settlement-20260927/attempt-2/stage-make-dev-stress-venue-event-materializer.log),
+[settlement SQL statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-pg_stat_statements.csv),
+[table statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-table-stats.csv),
+[gate summary](../artifacts/postmatch-settlement-20260927/attempt-2/do-benchmark-evidence-summary.json),
+and [checksums](../artifacts/postmatch-settlement-20260927/attempt-2/evidence.sha256)
+are retained; full raw telemetry remains in the ignored local
+`reports/do-benchmark/do-benchmark-20260927T193902Z/`. The source commit is
+the local synced checkout; the remote artifact did not retain its own Git
+revision. Droplet `604158495` and firewall
+`1ea16e99-b8d8-4733-902f-0e05bc01e492` were destroyed; local OpenTofu
+state was empty afterward. Next work should change post-trade ordering and
+execution ownership, then measure the new dataflow with in-load trade and
+frontier telemetry. Repeating the same 10k fixture with small SQL tuning
+does not address the observed execution-stage shortfall.

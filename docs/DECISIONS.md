@@ -1211,9 +1211,11 @@ Contract and rollout: [`docs/work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-
 
 ### D-059: Durable settlement admission order for scarce accounts
 
-Status: accepted design on 2026-09-27; shadow implementation and separate-target
-restore/replay verified locally after independent review findings. PR/OCR,
-public-read cutover, and capacity remain unqualified
+Status: accepted design on 2026-09-27; shadow implementation landed in #400
+after separate-target restore/replay, independent, and OCR review. The PM-S2
+combined-path diagnostic failed its 10k/s gate. Public-read cutover and
+capacity remain unqualified; see the
+[capacity decision spike](./research/POST_MATCH_SETTLEMENT_CAPACITY_DECISION_2026-09-27.md).
 
 - Matching source facts provide a contiguous order within each partition, not
   a total order across partitions. Sorted account row locks serialize writes

@@ -621,14 +621,18 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   fi
   stress_status=0
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer || stress_status=$?
-  if [ -f "$DEV_STRESS_REPORT_OUT" ] && [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ]; then
+  measured_report_available=0
+  if compgen -G "$artifact_dir/venue-event-materializer-stress-rate-*.json" >/dev/null; then
+    measured_report_available=1
+  fi
+  if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ]; then
     postmatch_shadow_wait=120
     if [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then postmatch_shadow_wait=300; fi
     run_stage postmatch-shadow-check node scripts/dev/postmatch-shadow-check.mjs \
       "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/postmatch-shadow-check.json" \
       "$postmatch_shadow_wait" || stress_status=$?
   fi
-  if [ -f "$DEV_STRESS_REPORT_OUT" ] && [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then
+  if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then
     run_stage settlement-shadow-check node scripts/dev/settlement-shadow-check.mjs \
       "$POSTMATCH_EVENT_STREAM" "$postmatch_partitions" "$artifact_dir/settlement-shadow-check.json" 300 || stress_status=$?
   fi

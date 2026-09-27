@@ -59,18 +59,20 @@ landed an opt-in participant live-read route with strict source/target parity;
 it remains disabled until rebuild, aged-query, and latency gates pass.
 [#388](https://github.com/dills122/reef/pull/388) landed separate canonical
 trade intake and frontier on the settlement store. [#399](https://github.com/dills122/reef/pull/399)
-proposes opt-in bounded policy binding and pending obligations with their own
-frontier; it does not create ledger entries or settle trades. The dependent
-transition branch adds keyed account state, bounded instant workflow, DvP legs,
-ledger postings, and a separate transition frontier. D-059 accepts a durable
-ranked admission log for shared-account contention; the shadow transition
-worker now records admission before balance-dependent execution. Independent
-review's recovery findings were addressed with ranked-history predecessor
-validation, visible admission-gap failure, and a separate-database import and
-replay integration test. PR/OCR review and disposable-droplet capacity evidence
-remain ahead. Durable pre-trade policy authority,
-repair/retry parity, public read parity, and integrated cutover remain ahead.
-Neither pending PR nor dependent branch is capacity evidence.
+landed opt-in bounded policy binding and pending obligations with their own
+frontier. [#400](https://github.com/dills122/reef/pull/400) landed the shadow
+ranked admission, keyed account state, bounded instant workflow, DvP legs,
+ledger postings, and separate transition frontier. D-059's admission log
+preserves shared-account replay order; import and replay tests cover recovery.
+
+The September 27 [PM-S2 disposable diagnostic](THROUGHPUT_BASELINES.md#pm-s2--bounded-settlement-10k300s-stage-diagnostic-failed)
+ran the combined shadow path at 10k/s for 300s. Ingress/direct ack held;
+canonical, legacy command-status projection, and post-trade transition did
+not keep up, so no integrated or settlement capacity claim is promoted.
+Next: review the measured admission/transition bottleneck and design a
+different ordering and execution ownership model before another 10k run.
+Durable pre-trade policy authority, repair/retry parity, public read parity,
+audit inclusion, and integrated cutover remain ahead.
 
 ## Purpose
 

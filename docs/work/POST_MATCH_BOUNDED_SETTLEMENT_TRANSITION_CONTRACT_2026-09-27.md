@@ -1,8 +1,9 @@
 # Bounded settlement transition — 2026-09-27
 
-Status: accepted arbitration design; shadow implementation passed local
-restore/replay and platform-runtime checks after independent review findings.
-PR/OCR review and capacity qualification remain pending. This contract does not approve public
+Status: accepted arbitration design; shadow implementation landed in #400
+after local restore/replay, independent, and OCR review. The September 27
+[PM-S2 diagnostic](../THROUGHPUT_BASELINES.md#pm-s2--bounded-settlement-10k300s-stage-diagnostic-failed)
+failed the 10k/s combined-path gate. This contract does not approve public
 settlement reads or establish 10k/s capacity. See [D-059](../DECISIONS.md#d-059-durable-settlement-admission-order-for-scarce-accounts)
 and the [research spike](../research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md).
 
