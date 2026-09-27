@@ -1253,6 +1253,12 @@ class PlatformHttpServer(
             }
             PostMatchRuntimeWorkers.fromEnv().start()
         }
+        if (runtimeRole == PlatformRuntimeRole.Projector && RuntimeEnv.bool("POSTMATCH_AUDIT_SHADOW_ENABLED", false)) {
+            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
+                "post-match audit worker requires stream-ack command processing"
+            }
+            PostMatchAuditWorker.fromEnv().start()
+        }
         if (runtimeLoopStarter.venueEventMaterializerShouldStart()) {
             runtimeLoopStarter.startVenueEventMaterializer()
         }
