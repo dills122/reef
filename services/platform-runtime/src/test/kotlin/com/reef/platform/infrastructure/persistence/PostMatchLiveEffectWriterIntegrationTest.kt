@@ -225,8 +225,8 @@ class PostMatchLiveEffectWriterIntegrationTest {
          "acceptedAt":"2026-09-26T00:00:01Z"},
          "executions":[
            {"eventId":"exec-buy-event","executionId":"match-1-buy","orderId":"$taker","instrumentId":"AAPL","quantityUnits":"6.00","executionPrice":"100.00","currency":"USD","occurredAt":"2026-09-26T00:00:01.000Z","liquidityRole":"TAKER"},
-           {"eventId":"exec-sell-event","executionId":"match-1-sell","orderId":"$maker","instrumentId":"AAPL","quantityUnits":"6","executionPrice":"100","currency":"USD","occurredAt":"2026-09-26T00:00:01Z","liquidityRole":"MAKER"}],
-         "trades":[{"eventId":"trade-event","tradeId":"trade-1","executionId":"match-1","buyOrderId":"$taker","sellOrderId":"$maker","instrumentId":"AAPL","quantityUnits":"6","price":"100","currency":"USD","occurredAt":"2026-09-26T00:00:01Z"}],
+           {"eventId":"exec-sell-event","executionId":"match-1-sell","orderId":"$maker","instrumentId":"AAPL","quantityUnits":"6.00","executionPrice":"100.00","currency":"USD","occurredAt":"2026-09-26T00:00:01Z","liquidityRole":"MAKER"}],
+         "trades":[{"eventId":"trade-event","tradeId":"trade-1","executionId":"match-1","buyOrderId":"$taker","sellOrderId":"$maker","instrumentId":"AAPL","quantityUnits":"6.00","price":"100.00","currency":"USD","occurredAt":"2026-09-26T00:00:01Z"}],
          "orderStates":[
            {"orderId":"$taker","instrumentId":"AAPL","side":"BUY","status":"FILLED","originalQuantity":"6","remainingQuantity":"0","limitPrice":"100","currency":"USD","lastUpdatedAt":"2026-09-26T00:00:01Z"},
            {"orderId":"$maker","instrumentId":"AAPL","side":"SELL","status":"PARTIALLY_FILLED","originalQuantity":"10","remainingQuantity":"4","limitPrice":"100","currency":"USD","lastUpdatedAt":"2026-09-26T00:00:01Z"}]}
