@@ -69,7 +69,9 @@ CREATE TABLE runtime.canonical_audit_effects (
   CHECK (event_stream <> '' AND source_generation <> '' AND effect_type <> ''),
   CHECK (
     (effect_type = 'CommandFailed' AND event_id IS NULL AND order_id IS NULL AND occurred_at IS NULL)
-    OR (effect_type <> 'CommandFailed' AND order_id IS NOT NULL AND occurred_at IS NOT NULL)
+    OR (effect_type = 'OrderStateChanged' AND event_id IS NULL AND order_id IS NOT NULL AND occurred_at IS NOT NULL)
+    OR (effect_type NOT IN ('CommandFailed', 'OrderStateChanged')
+      AND event_id IS NOT NULL AND order_id IS NOT NULL AND occurred_at IS NOT NULL)
   )
 );
 

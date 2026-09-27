@@ -35,6 +35,7 @@ internal class PostMatchAuditWorker(
     private fun processPartition(partition: Int, generation: String): Int {
         val frontier = store.lastCommittedSequence(eventStream, partition, generation)
         check(frontier >= CanonicalStreamPosition.origin(partition)) { "audit frontier predates partition origin" }
+        check(catalog.generation() == generation) { "audit source generation changed before processing" }
         val window = reader.readNextWindow(
             PostMatchAuditStore.CONSUMER, eventStream, partition, generation, frontier, batchSize
         ) ?: return 0
@@ -93,7 +94,9 @@ internal class PostMatchAuditWorker(
                 RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", ""))
             require(partitionList.isNotBlank()) { "audit worker requires assigned partitions" }
             val partitions = partitionList.split(',').map { part ->
-                part.trim().toIntOrNull() ?: error("audit worker requires numeric partitions: $part")
+                val trimmed = part.trim()
+                require(trimmed.isNotEmpty()) { "audit worker requires non-empty partitions" }
+                trimmed.toIntOrNull() ?: error("audit worker requires numeric partitions: $part")
             }
             require(partitions.distinct().size == partitions.size) { "audit worker partitions must be unique" }
             val sourceUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "")
