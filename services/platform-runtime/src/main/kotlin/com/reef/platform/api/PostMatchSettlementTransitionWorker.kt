@@ -100,6 +100,7 @@ internal class PostMatchSettlementTransitionWorker(
                     return Progress(0, false)
                 }
                 SettlementExecutionReadiness.BLOCKED -> {
+                    // The earliest admitted window owns this partition until its predecessors complete.
                     blockedSince.putIfAbsent(partition, System.nanoTime())
                     readinessBlocked.incrementAndGet()
                     return Progress(0, false)

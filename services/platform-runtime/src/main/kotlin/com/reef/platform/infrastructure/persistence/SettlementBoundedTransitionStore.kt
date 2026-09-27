@@ -208,6 +208,7 @@ class SettlementBoundedTransitionStore(
         check(admitted == null || admitted.first == sourceGeneration) {
             "settlement admission source generation changed"
         }
+        // Mirror readNextAdmittedWindow: execution cannot skip an earlier admitted window.
         val from = completed?.second ?: CanonicalStreamPosition.origin(partitionId)
         check(admitted == null || admitted.second >= from) {
             "settlement admission frontier trails completed transition"

@@ -21,6 +21,7 @@ export function assessDependencyGraph(rows) {
   let maxDepth = 0;
   let deepestRank = null;
   let edgeCount = 0;
+  let seenPredecessors = new Set();
   function finish() {
     if (currentRank === null) return;
     depths.set(currentRank, currentDepth);
@@ -34,7 +35,13 @@ export function assessDependencyGraph(rows) {
       finish();
       currentRank = rank;
       currentDepth = 1;
+      seenPredecessors = new Set();
     }
+    if (seenPredecessors.has(predecessorText) ||
+        (seenPredecessors.size > 0 && (predecessorText === "" || seenPredecessors.has("")))) {
+      throw new Error(`duplicate or inconsistent dependency row for admission rank ${rank}`);
+    }
+    seenPredecessors.add(predecessorText);
     if (predecessorText) {
       const predecessor = BigInt(predecessorText);
       if (predecessor >= rank || !depths.has(predecessor)) {

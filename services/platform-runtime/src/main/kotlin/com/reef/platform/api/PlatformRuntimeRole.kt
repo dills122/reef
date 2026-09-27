@@ -11,6 +11,7 @@ enum class PlatformRuntimeRole(
     Worker("worker", publicHttpEnabled = false, commandWorkersEnabled = true),
     Projector("projector", publicHttpEnabled = false, commandWorkersEnabled = true),
     Materializer("materializer", publicHttpEnabled = false, commandWorkersEnabled = true),
+    // Reads committed canonical facts; it does not execute ingress commands.
     PostMatch("postmatch", publicHttpEnabled = false, commandWorkersEnabled = false);
 
     val postMatchWorkersEnabled: Boolean get() = this == PostMatch

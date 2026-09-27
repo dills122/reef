@@ -13,3 +13,9 @@ test("dependency graph rejects missing or forward predecessor", () => {
   assert.throws(() => assessDependencyGraph([["1", ""], ["3", "2"]]), /missing or not earlier/);
   assert.throws(() => assessDependencyGraph([["1", "2"]]), /missing or not earlier/);
 });
+
+test("dependency graph rejects duplicate and inconsistent rows", () => {
+  assert.throws(() => assessDependencyGraph([["1", ""], ["2", "1"], ["2", "1"]]), /duplicate or inconsistent/);
+  assert.throws(() => assessDependencyGraph([["1", ""], ["1", ""]]), /duplicate or inconsistent/);
+  assert.throws(() => assessDependencyGraph([["1", ""], ["2", ""], ["2", "1"]]), /duplicate or inconsistent/);
+});
