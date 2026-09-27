@@ -24,7 +24,7 @@ or change public routes from this paper.
 | --- | --- | --- |
 | Observation | [PM-S2](../THROUGHPUT_BASELINES.md#pm-s2--bounded-settlement-10k300s-stage-diagnostic-failed) accepted/direct-acked 2,999,943 commands in 300s, while canonical materialization and legacy command-status projection missed their stopped-source gates. Settlement intake/obligation/admission/execution frontiers split sharply; execution covered 61,175 source positions at 19:52:24 while admission covered 816,875. | Combined topology cannot qualify 10k. Fixing settlement alone will not promote the legacy pipeline. |
 | Observation | PM-S2 used four canonical materializers and four command-status projector owners. F02 used six and sixteen respectively. PM-S2 also enabled live, market, intake, obligation, admission, and execution workers inside those same four projector JVMs, on the same c-32 host as all five PostgreSQL services. The post-match databases were separate, but compute and host I/O were not. | F02/C43 are not a matched before/after architecture comparison. PM-S2's projection regression cannot be attributed to settlement design or solved by batching from this evidence. |
-| Observation | At the post-run SQL snapshot, there were 20,852 admission-counter updates and 1,673 execution completion inserts; dependency-completion query ran 44,374 times. The five-actor fixture shares cash accounts across 64 instruments. Execution reads and checks one admitted window per partition, then only proceeds when recorded predecessors complete. | An account dependency chain and repeated blocked-window checks are plausible execution bottlenecks. These aggregates do not reveal in-load rank critical path, useful execution time, or exact trades/s. Admission batching by itself has no demonstrated ability to close the execution gap. |
+| Observation | At the post-run SQL snapshot, there were 20,852 admission-counter updates and 1,673 execution completion inserts; dependency-completion query ran 44,374 times. The five-actor fixture shares cash accounts across 64 instruments. `SettlementBoundedTransitionStore.apply` re-reads obligations, verifies source/intake, computes opening/account/admission proofs, and starts a transaction *before* testing predecessor completion. The worker retries blocked partition heads. | Repeated proof work on blocked windows and account dependency chains are plausible execution bottlenecks. These aggregates do not reveal in-load rank critical path, useful execution time, or exact trades/s. Admission batching by itself has no demonstrated ability to close the execution gap. |
 | Observation | The downstream diagnostic sampler collected 300 in-load samples but zero *qualified* samples: the lifecycle and market probes were online, but caller instrumentation was disabled. Source coverage errors logged by live/intake workers later logged recovery; transition logged no failure. | This run cannot support a downstream latency claim. Recovered coverage misses deserve timing/retry instrumentation, but are not evidence of a permanent stall. |
 | Observation | At 19:56:02, settlement table statistics showed about 1.27m trade-intake inserts, 20,747 admission windows, 71,539 attempts and 286,156 ledger inserts. `pg_stat_statements` recorded 20,852 updates of the single admission-counter row, mean 112.23ms/call; the sampled activity had ten active transaction-ID lock waits. | Rank assignment is contended and each completed execution window carries high transaction overhead. Statistics are post-run aggregates, not per-trade latency or a controlled attribution. |
 | Observation | Settlement intake/obligation/receipt/order-directory tables together occupied roughly 7GB at the diagnostic snapshot. Both isolated post-trade PostgreSQL services logged frequent WAL checkpoints at default WAL sizing. | Write shape and database configuration both need an explicit budget in the next experiment. A WAL setting change alone cannot close the execution gap demonstrated by frontiers. |
@@ -56,6 +56,8 @@ with dedicated post-match workers enabled. If the treatment materially slows
 canonical or legacy projection, measure CPU, I/O, WAL, database waits, and
 per-stage write amplification before changing settlement logic. This pair
 attributes *incremental integrated cost*, not settlement's absolute capacity.
+The target Wave 4 design also stops the old full projector after parity and
+route cutover; PM-S2 still ran old and new paths together as shadow work.
 
 For settlement, add in-load counters/timings for source trades/s; admission
 windows/ranks/s and counter wait; ready versus blocked execution windows,
@@ -63,7 +65,8 @@ dependency depth and critical path; execution trades/s and transaction time;
 four-leg facts/s; WAL bytes/trade; and per-partition frontiers. Prove exact
 closed-cohort trade/ledger membership and stopped-source drain. Run the
 five-actor hot-account fixture and a more diverse account mix. A fixed-cohort
-local Docker replay/cost test can compare current per-window execution with
+local Docker replay/cost test can first test a cheap durable readiness gate
+before full proof work, then compare current per-window execution with
 coalescing *after* the blocked versus executing time is known. Only select
 batching if it removes a measured dominant cost while preserving rank/digest,
 balance, DvP, atomicity, and crash/replay proofs. Full-system qualification
