@@ -79,6 +79,14 @@ Opt-in shadow workers read indexed partition high-water marks, verify bounded
 windows against retained batch membership, and commit live state and market
 state under separate frontiers. They do not switch public reads.
 
+The opt-in settlement trade-intake worker applies the same verified windows to
+the settlement store. Its transaction records accepted-order ownership, exact
+trade facts, outcome receipts, coverage digest, and contiguous intake frontier.
+It rejects a trade whose maker or taker ownership is missing, arrives later in
+the same partition, or conflicts on run/session/instrument/currency. This
+frontier proves intake only; it does not yet attest to obligation or ledger
+completion. Public settlement reads remain on the legacy fact store.
+
 ## Compatibility and promotion
 
 Unversioned historical batches stay on the legacy projector until an exact

@@ -118,6 +118,13 @@ affected trade, obligation, and accounts. Keep full-run reconstruction as
 offline reconciliation, not online append validation. Preserve realistic and
 instant simulation profiles through the same commands and state machine.
 
+Implementation sequence: first persist replay-checked canonical trade intake,
+keyed immutable ownership, and contiguous source progress in the settlement
+store. Keep this intake opt-in and outside public settlement reads. Next make
+policy selection and affected-account state available to a bounded transition
+transaction, then write obligation/workflow/ledger facts with its checkpoint.
+The intake frontier alone is not settlement completion or capacity evidence.
+
 These two workstreams can proceed alongside live implementation after Wave 1's
 contract is fixed. They need their own focused tests, not separate 10k tuning
 campaigns. Settle the resource/account partitioning contract before any

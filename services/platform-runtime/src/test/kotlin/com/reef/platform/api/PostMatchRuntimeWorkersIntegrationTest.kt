@@ -11,10 +11,55 @@ import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /** Runs against both migrated PostgreSQL targets in schema-placement CI. */
 class PostMatchRuntimeWorkersIntegrationTest {
+    @Test
+    fun boundedReaderReturnsContiguousPayloadPrefixAndRejectsOversizedFirstResult() {
+        val sourceUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val source = RuntimeDataSources.dataSource(sourceUrl,
+            System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return,
+            System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return, "postmatch-bounded-reader-test")
+        val token = UUID.randomUUID().toString()
+        val stream = "postmatch-bounded-$token"
+        val reader = PostgresCanonicalOutcomeSourceReader(source)
+        val generation = PostMatchSourceCatalog(source).generation()
+        try {
+            insertRejectedSource(source, stream, token, 0, 1)
+            insertRejectedSource(source, stream, token, 0, 2)
+            insertRejectedSource(source, stream, token, 0, 3, "x".repeat(1024))
+            val sizes = source.connection.use { connection ->
+                connection.prepareStatement(
+                    """SELECT octet_length(result_payload::text) FROM runtime.canonical_command_outcomes
+                       WHERE event_stream = ? ORDER BY stream_sequence"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeQuery().use { rows ->
+                        buildList {
+                            while (rows.next()) add(rows.getLong(1))
+                        }
+                    }
+                }
+            }
+            assertEquals(3, sizes.size)
+            val origin = CanonicalStreamPosition.origin(0)
+            val firstTwo = reader.readNextWindow("bounded-test", stream, 0, generation, origin, 3,
+                sizes[0] + sizes[1]) ?: error("missing bounded source prefix")
+            assertEquals(listOf(origin + 1, origin + 2), firstTwo.outcomes.map { it.source.streamSequence })
+            val last = reader.readNextWindow("bounded-test", stream, 0, generation, origin + 2, 3,
+                sizes[2]) ?: error("missing final bounded source row")
+            assertEquals(listOf(origin + 3), last.outcomes.map { it.source.streamSequence })
+            val error = assertFailsWith<IllegalStateException> {
+                reader.readNextWindow("bounded-test", stream, 0, generation, origin, 3, sizes[0] - 1)
+            }
+            assertTrue(error.message.orEmpty().contains("single canonical result payload exceeds configured bound"))
+        } finally {
+            cleanSource(source, stream)
+        }
+    }
+
     @Test
     fun liveAndMarketWorkersAdvanceIndependentFrontiersAcrossEncodedPartitions() {
         val sourceUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
@@ -80,11 +125,12 @@ class PostMatchRuntimeWorkersIntegrationTest {
         }
     }
 
-    private fun insertRejectedSource(source: DataSource, stream: String, token: String, partition: Int) {
-        val sequence = CanonicalStreamPosition.origin(partition) + 1
-        val batch = "postmatch-batch-$token-$partition"
-        val command = "postmatch-command-$token-$partition"
-        val result = """{"effectVersion":1,"rejected":{"eventId":"reject-$token-$partition","orderId":"order-$token-$partition","code":"R","reason":"bad","occurredAt":"2026-09-26T00:00:00Z"}}"""
+    private fun insertRejectedSource(source: DataSource, stream: String, token: String, partition: Int,
+                                     offset: Long = 1, padding: String = "") {
+        val sequence = CanonicalStreamPosition.origin(partition) + offset
+        val batch = "postmatch-batch-$token-$partition-$offset"
+        val command = "postmatch-command-$token-$partition-$offset"
+        val result = """{"effectVersion":1,"padding":"$padding","rejected":{"eventId":"reject-$token-$partition-$offset","orderId":"order-$token-$partition-$offset","code":"R","reason":"bad","occurredAt":"2026-09-26T00:00:00Z"}}"""
         source.connection.use { connection ->
             connection.prepareStatement(
                 """INSERT INTO runtime.canonical_venue_event_batches(
@@ -99,7 +145,7 @@ class PostMatchRuntimeWorkersIntegrationTest {
                 statement.setString(3, stream)
                 statement.setLong(4, sequence)
                 statement.setLong(5, sequence)
-                statement.setString(6, "checksum-$token-$partition")
+                statement.setString(6, "checksum-$token-$partition-$offset")
                 statement.executeUpdate()
             }
             connection.prepareStatement(
@@ -115,8 +161,8 @@ class PostMatchRuntimeWorkersIntegrationTest {
                 statement.setInt(3, partition)
                 statement.setString(4, stream)
                 statement.setLong(5, sequence)
-                statement.setString(6, "hash-$token-$partition")
-                statement.setString(7, "order-$token-$partition")
+                statement.setString(6, "hash-$token-$partition-$offset")
+                statement.setString(7, "order-$token-$partition-$offset")
                 statement.setString(8, result)
                 statement.executeUpdate()
             }

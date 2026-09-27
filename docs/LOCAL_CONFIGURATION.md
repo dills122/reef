@@ -70,6 +70,25 @@ same partition assignment unless overridden, and writes retained outcomes,
 ordered effects, coverage, and its own frontier. Public history still reads
 the legacy mixed event store, including direct admin and protective events.
 The audit worker does not require the `postmatch` Compose profile.
+For controlled shadow validation, set `POSTMATCH_SETTLEMENT_INTAKE_ENABLED=true`
+with `POSTMATCH_EVENT_STREAM` on projector instances. The intake uses
+the assigned partitions and writes into the migrated `settlement` schema on
+`SETTLEMENT_POSTGRES_JDBC_URL`. Set this URL to a database distinct from runtime
+PostgreSQL; startup rejects a missing or identical URL.
+Apply `settlement/0008` on the actual settlement target before enabling it.
+For the local dedicated target, start the `postmatch` profile with
+`SETTLEMENT_POSTGRES_JDBC_URL=jdbc:postgresql://settlement-postgres:5432/reef`
+and run migrations with `REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1`. The schema
+placement CI job exercises this separate target.
+Intake records keyed ownership, exact trade facts, receipts, coverage, and its
+own frontier. It does not create obligations or ledger entries and does not
+switch public settlement reads. `POSTMATCH_SETTLEMENT_BATCH_SIZE` and
+`POSTMATCH_SETTLEMENT_POLL_MS` default to `500` and `50` respectively.
+`POSTMATCH_SETTLEMENT_MAX_RESULT_BYTES` defaults to 16 MiB and
+`POSTMATCH_SETTLEMENT_MAX_EFFECTS` to 20,000. The worker shrinks windows that
+exceed the effect cap; a single oversized outcome fails closed. Keep
+the flag off until the bounded policy and ledger transition is wired and its
+parity gate passes.
 Use the same overlay or profile on teardown that was used at startup; Arena has
 `make dev-down-arena`. For a clean local database, `make dev-reset` removes
 local Compose volumes, reapplies migrations, and starts the stack; run

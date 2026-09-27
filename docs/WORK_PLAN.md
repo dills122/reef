@@ -52,6 +52,15 @@ frontiers; see the [scoped run record](THROUGHPUT_BASELINES.md#pm-s1--post-match
 This did not measure in-load post-match freshness or qualify 10k/s. Continue
 audit/settlement ownership and live-route parity before integrated cutover.
 
+September 27 continuation: [#385](https://github.com/dills122/reef/pull/385)
+and [#386](https://github.com/dills122/reef/pull/386) landed the independent
+audit owner and consumer. [#387](https://github.com/dills122/reef/pull/387)
+landed an opt-in participant live-read route with strict source/target parity;
+it remains disabled until rebuild, aged-query, and latency gates pass. The
+current settlement-intake branch adds a separate canonical trade intake and
+frontier on the settlement store. It does not yet create obligations or ledger
+entries; bounded policy workflow and integrated cutover remain ahead.
+
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents
