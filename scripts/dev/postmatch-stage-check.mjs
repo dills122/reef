@@ -26,22 +26,27 @@ export function assessStageSamples(samples, requireSettlement, loadWindows = [])
       return;
     }
     const duty = ((sample.sourceQueryMs ?? 0) + (sample.settlementQueryMs ?? 0)) / (sourceSeconds * 1000);
-    maxObserverDutyCycle = Math.max(maxObserverDutyCycle, duty);
-    if (duty > 0.10) failures.push(`sample ${index} observer query duty cycle exceeds 10%`);
     const targetDuty = (sample.settlementQueryMs ?? 0) / (settlementSeconds * 1000);
-    maxTargetObserverDutyCycle = Math.max(maxTargetObserverDutyCycle, targetDuty);
-    if (requireSettlement && targetDuty > 0.02) {
-      failures.push(`sample ${index} settlement observer query duty cycle exceeds 2%`);
-    }
     const duringLoad = loadWindows.some(({ startedAt, finishedAt }) =>
       Date.parse(before.sourceMeasuredAt ?? before.sampledAt) >= Date.parse(startedAt) &&
       Date.parse(sample.sourceMeasuredAt ?? sample.sampledAt) <= Date.parse(finishedAt) &&
       (!requireSettlement ||
         Date.parse(before.settlementMeasuredAt ?? before.sampledAt) >= Date.parse(startedAt) &&
         Date.parse(sample.settlementMeasuredAt ?? sample.sampledAt) <= Date.parse(finishedAt)));
+    if (duringLoad) {
+      maxObserverDutyCycle = Math.max(maxObserverDutyCycle, duty);
+      maxTargetObserverDutyCycle = Math.max(maxTargetObserverDutyCycle, targetDuty);
+      if (duty > 0.10) failures.push(`sample ${index} observer query duty cycle exceeds 10%`);
+      if (requireSettlement && targetDuty > 0.02) {
+        failures.push(`sample ${index} settlement observer query duty cycle exceeds 2%`);
+      }
+    }
     const row = { sampledAt: sample.sampledAt, sourceSeconds, settlementSeconds, duringLoad,
-      sourceOutcomesPerSecond: Number(BigInt(sample.sourceOutcomes) - BigInt(before.sourceOutcomes)) / sourceSeconds,
-      sourceTradesPerSecond: Number(BigInt(sample.sourceTrades) - BigInt(before.sourceTrades)) / sourceSeconds };
+      observerDutyCycle: duty, targetObserverDutyCycle: targetDuty,
+      sourceOutcomesPerSecond: Number(BigInt(sample.sourceOutcomes) - BigInt(before.sourceOutcomes)) / sourceSeconds };
+    if (sample.sourceTrades != null && before.sourceTrades != null) {
+      row.sourceTradesPerSecond = Number(BigInt(sample.sourceTrades) - BigInt(before.sourceTrades)) / sourceSeconds;
+    }
     if (row.sourceOutcomesPerSecond < 0 || row.sourceTradesPerSecond < 0) {
       failures.push(`sample ${index} source count regressed`);
     }

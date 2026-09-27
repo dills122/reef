@@ -131,7 +131,7 @@ if (env("REEF_DO_MATCHED_TOPOLOGY", "0") === "1") {
     env("MATCHING_ENGINE_EVENT_STREAM"),
     join(env("DEV_STRESS_ARTIFACT_DIR"), "postmatch-stage-samples.jsonl"),
     "true",
-    "15000"],
+    "60000"],
   { stdio: "inherit", env: process.env });
   stageSamplerExit = new Promise((resolve) => stageSampler.once("exit", (code, signal) => resolve({ code, signal })));
 }

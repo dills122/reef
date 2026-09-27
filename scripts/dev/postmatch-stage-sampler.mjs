@@ -5,7 +5,6 @@ import { appendFileSync } from "node:fs";
 
 const compose = ["compose", "-f", "compose.base.yml", "-f", "compose.local.yml", "--profile", "postmatch"];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const literal = (value) => `'${value.replaceAll("'", "''")}'`;
 
 function query(service, sql) {
   const started = performance.now();
@@ -17,18 +16,12 @@ function query(service, sql) {
     durationMs: Math.round(performance.now() - started) };
 }
 
-export function sourceWindowSql(stream, cursors) {
-  const values = cursors.map(([partition, sequence]) => `(${partition}, ${sequence})`).join(",");
-  return `WITH cursor(partition_id, after_sequence) AS (VALUES ${values})
-    SELECT cursor.partition_id, count(outcome.stream_sequence)::text,
-      coalesce(max(outcome.stream_sequence), cursor.after_sequence)::text,
-      coalesce(sum(jsonb_array_length(coalesce(outcome.result_payload::jsonb->'trades', '[]'::jsonb))), 0)::text
-    FROM cursor LEFT JOIN LATERAL (
-      SELECT stream_sequence, result_payload FROM runtime.canonical_command_outcomes
-      WHERE event_stream = ${literal(stream)} AND partition_id = cursor.partition_id
-        AND stream_sequence > cursor.after_sequence
-    ) outcome ON TRUE
-    GROUP BY cursor.partition_id, cursor.after_sequence ORDER BY cursor.partition_id`;
+export function sourceStageSql() {
+  // Fresh benchmark volumes contain one source cohort. PostgreSQL's insert
+  // counter avoids scanning and decoding every canonical result during load.
+  return `SELECT coalesce(max(n_tup_ins), 0)::text, count(*)::text
+    FROM pg_stat_user_tables
+    WHERE schemaname = 'runtime' AND relname = 'canonical_command_outcomes'`;
 }
 
 export function settlementStageSql() {
@@ -53,51 +46,39 @@ export function settlementStageSql() {
          'canonical_transition_attempts', 'canonical_transition_ledger_entries'))::text`;
 }
 
-export function summarizeSourceRows(rows, cursors) {
-  if (rows.length !== cursors.length) throw new Error("source sample omitted a partition");
-  let outcomes = 0n;
-  let trades = 0n;
-  rows.forEach(([id, count, sequence, tradeCount], index) => {
-    if (Number(id) !== cursors[index][0]) throw new Error("source sample partition mismatch");
-    if (BigInt(sequence) < BigInt(cursors[index][1])) throw new Error("source sample sequence regressed");
-    cursors[index][1] = sequence;
-    outcomes += BigInt(count);
-    trades += BigInt(tradeCount);
-  });
-  return { outcomes: outcomes.toString(), trades: trades.toString() };
+export function summarizeSourceRows(rows) {
+  if (rows.length !== 1 || rows[0].length !== 2 || rows[0][1] !== "1") {
+    throw new Error("canonical source outcome statistics are unavailable");
+  }
+  const outcomes = BigInt(rows[0][0]);
+  if (outcomes < 0n) throw new Error("canonical source outcome statistics regressed");
+  return outcomes.toString();
 }
 
 async function main() {
-  const [stream, output, settlementText, intervalText = "10000", partitionText = "16"] = process.argv.slice(2);
+  const [stream, output, settlementText, intervalText = "60000"] = process.argv.slice(2);
   if (!/^[A-Za-z0-9_]+$/.test(stream ?? "") || !output || !["true", "false"].includes(settlementText)) {
-    throw new Error("usage: postmatch-stage-sampler.mjs EVENT_STREAM OUTPUT_JSONL true|false [INTERVAL_MS] [PARTITIONS]");
+    throw new Error("usage: postmatch-stage-sampler.mjs EVENT_STREAM OUTPUT_JSONL true|false [INTERVAL_MS]");
   }
   const intervalMs = Number(intervalText);
-  const partitionCount = Number(partitionText);
-  if (!Number.isInteger(intervalMs) || intervalMs < 1000 || intervalMs > 60000 ||
-      !Number.isInteger(partitionCount) || partitionCount < 1 || partitionCount > 64) {
-    throw new Error("invalid sampler interval or partition count");
-  }
+  if (!Number.isInteger(intervalMs) || intervalMs < 1000 || intervalMs > 60000) throw new Error("invalid sampler interval");
   let running = true;
   process.on("SIGTERM", () => { running = false; });
-  const cursors = Array.from({ length: partitionCount }, (_, id) => [id, (BigInt(id) << 48n).toString()]);
-  let totalOutcomes = 0n;
-  let totalTrades = 0n;
+  let previousOutcomes = 0n;
   let previousAt = 0;
   while (running) {
     const sampledAt = Date.now();
     try {
-      const source = query("postgres", sourceWindowSql(stream, cursors));
+      const source = query("postgres", sourceStageSql());
       const sourceMeasuredAt = new Date().toISOString();
-      const delta = summarizeSourceRows(source.rows, cursors);
-      totalOutcomes += BigInt(delta.outcomes);
-      totalTrades += BigInt(delta.trades);
-      const sample = { schemaVersion: "reef.postmatchStageSample.v1", sampledAt: new Date(sampledAt).toISOString(),
+      const outcomes = BigInt(summarizeSourceRows(source.rows));
+      if (outcomes < previousOutcomes) throw new Error("canonical source outcome statistics regressed");
+      const sample = { schemaVersion: "reef.postmatchStageSample.v2", eventStream: stream,
+        sampledAt: new Date(sampledAt).toISOString(),
         intervalMs: previousAt ? sampledAt - previousAt : null, sourceQueryMs: source.durationMs,
-        sourceMeasuredAt,
-        sourceOutcomesDelta: delta.outcomes, sourceTradesDelta: delta.trades,
-        sourceOutcomes: totalOutcomes.toString(), sourceTrades: totalTrades.toString(),
-        sourceHeads: Object.fromEntries(cursors.map(([id, sequence]) => [id, sequence])) };
+        sourceMeasuredAt, sourceOutcomesDelta: (outcomes - previousOutcomes).toString(),
+        sourceOutcomes: outcomes.toString(), sourceMeasure: "pg_stat_user_tables.n_tup_ins" };
+      previousOutcomes = outcomes;
       if (settlementText === "true") {
         const target = query("settlement-postgres", settlementStageSql());
         if (target.rows.length !== 1 || target.rows[0].length !== 9 || target.rows[0][8] !== "6") {
@@ -112,7 +93,7 @@ async function main() {
       appendFileSync(output, `${JSON.stringify(sample)}\n`);
       previousAt = sampledAt;
     } catch (error) {
-      appendFileSync(output, `${JSON.stringify({ schemaVersion: "reef.postmatchStageSample.v1",
+      appendFileSync(output, `${JSON.stringify({ schemaVersion: "reef.postmatchStageSample.v2",
         sampledAt: new Date().toISOString(), error: error.message })}\n`);
       throw error;
     }

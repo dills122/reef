@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 test("post-match workers run in dedicated processes with legacy projection disabled", () => {
@@ -66,4 +67,14 @@ test("matched benchmark topology has six materializers and sixteen distinct proj
     const name = index === 0 ? "platform-materializer" : `platform-materializer-${index}`;
     assert.equal(services[name].environment.PLATFORM_RUNTIME_ROLE, "materializer");
   }
+});
+
+test("matched benchmark resets prior volumes before smoke and again before measured load", () => {
+  const script = readFileSync(new URL("./do-benchmark-host.sh", import.meta.url), "utf8");
+  const before = script.indexOf("run_stage reset-before-matched-materializer-smoke");
+  const smoke = script.indexOf("run_stage make-dev-smoke-venue-event-materializer");
+  const after = script.indexOf("run_stage reset-after-materializer-smoke");
+  assert.ok(before > 0 && before < smoke && smoke < after);
+  assert.match(script.slice(before, smoke), /down --volumes --remove-orphans/);
+  assert.match(script.slice(after, after + 160), /down --volumes --remove-orphans/);
 });

@@ -1430,3 +1430,32 @@ state was empty afterward. Next work should change post-trade ordering and
 execution ownership, then measure the new dataflow with in-load trade and
 frontier telemetry. Repeating the same 10k fixture with small SQL tuning
 does not address the observed execution-stage shortfall.
+
+## PM-S3 attempt 1 — matched post-match comparison invalid
+
+September 27, source commit `eb6157aa`: one disposable `sfo3` `c-32`
+droplet, six materializers, sixteen projector owners, 384 load workers, and
+planned 10,000/s for 300 seconds in each arm. Control accepted 2,999,955
+commands (9,999.75/s) and eventually materialized and projected all of them.
+That is final catch-up, not proof of in-load post-trade freshness. The stage
+observer consumed up to 51.3% of a sample interval on source and settlement
+queries (8.0% on settlement alone), above its 10% and 2% limits. Thus the
+control's in-load stage attribution is invalid. Treatment failed during smoke
+before measured load: the previous arm's PostgreSQL volumes were still present,
+and reused stream sequences collided with `idx_canonical_command_outcomes_partition_seq`.
+No treatment throughput or post-match capacity result exists from this attempt.
+
+Correction: reset matched topology before each arm's smoke, use PostgreSQL
+table insert statistics for low-cost approximate in-load source outcome samples
+at 60-second intervals, and retain exact closed-cohort trade and settlement
+checks after load. Both arms still use one droplet and the same topology, load,
+and observer. Droplet `604190884` was destroyed; OpenTofu state was empty.
+[Control gate](../artifacts/postmatch-capacity-20260927/attempt-1/control-gate-summary.json),
+[stage summary](../artifacts/postmatch-capacity-20260927/attempt-1/control-stage-summary.json),
+[stage samples](../artifacts/postmatch-capacity-20260927/attempt-1/control-stage-samples.jsonl),
+[compressed load report](../artifacts/postmatch-capacity-20260927/attempt-1/control-load-report.json.gz),
+[treatment smoke log](../artifacts/postmatch-capacity-20260927/attempt-1/treatment-smoke.log.gz),
+[treatment Compose log](../artifacts/postmatch-capacity-20260927/attempt-1/treatment-compose.log.gz),
+and [checksums](../artifacts/postmatch-capacity-20260927/attempt-1/evidence.sha256)
+retain the failed comparison's evidence. Full raw artifacts remain in the
+ignored local `reports/do-benchmark/` directories for the two run IDs.

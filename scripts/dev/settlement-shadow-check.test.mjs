@@ -5,7 +5,7 @@ import test from "node:test";
 
 import { assess, attemptMismatchSql, compareTradeMembership, ledgerMismatchSql,
   sourceTradeMembershipSql } from "./settlement-shadow-check.mjs";
-import { settlementStageSql, sourceWindowSql, summarizeSourceRows } from "./postmatch-stage-sampler.mjs";
+import { settlementStageSql } from "./postmatch-stage-sampler.mjs";
 import { assessDependencyGraph, dependencyGraphSql } from "./settlement-dependency-graph-check.mjs";
 
 const source = new Map([[0, { count: "3", sequence: "3" }],
@@ -100,11 +100,6 @@ test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes
          '{"trades":[{"tradeId":"t1"},{"tradeId":"t2"}]}'::jsonb),
         ('test', 0, 2, 'accepted', '{"trades":[]}'::jsonb);`);
     assert.equal(sql(sourceTradeMembershipSql("test", [0])), "0|1|3|t1\n0|1|6|t2");
-    const cursor = [[0, "0"]];
-    assert.equal(sql(sourceWindowSql("test", cursor)), "0|2|2|2");
-    assert.deepEqual(summarizeSourceRows([["0", "2", "2", "2"]], cursor),
-      { outcomes: "2", trades: "2" });
-    assert.equal(sql(sourceWindowSql("test", cursor)), "0|0|2|0");
     sql(`CREATE SCHEMA settlement;
       CREATE TABLE settlement.canonical_trade_intake (trade_id text);
       CREATE TABLE settlement.canonical_transition_admission_completions (admission_rank bigint);

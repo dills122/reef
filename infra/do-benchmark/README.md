@@ -132,17 +132,18 @@ treatment sets both to `1`, adding dedicated live and settlement JVMs. Both
 arms run the isolated databases. Run each arm through the normal smoke reset on fresh
 volumes; retain both run IDs and raw artifacts before destroying the droplet.
 Both arms start the same isolated PostgreSQL services and use the same
-15-second source and settlement observer. In-load settlement rates use cheap,
-approximate `pg_stat_user_tables.n_tup_ins` counters on fresh single-cohort
-volumes; final SQL checks supply exact cohort counts. The observer gate requires
-settlement query time below 2% and total query time below 10% of each interval.
+60-second source and settlement observer. In-load canonical outcome and
+settlement rates use cheap, approximate `pg_stat_user_tables.n_tup_ins`
+counters on fresh single-cohort volumes; final SQL checks supply exact source
+trade membership and settlement counts. The observer gate requires settlement
+query time below 2% and total query time below 10% of each in-load interval.
 The treatment writes `postmatch-stage-samples.jsonl`, a load-window-aligned
 `postmatch-stage-summary.json`, `settlement-dependency-graph.json`, exact
 closed-cohort checkers, and dedicated per-worker logs. The control writes the
 same source and empty-settlement stage samples. Stage checks fail if samples
 are missing, counts regress, or observer query time exceeds those limits.
 Counter call time includes SQL work and possible row-lock wait, not exact wait
-duration. Compare accepted, materialized, projected, source trades, each
+duration. Compare accepted, materialized, projected, final source trades, each
 settlement stage, downstream qualified freshness, WAL/CPU/I/O, blocked-head
 age, and dependency chain depth. A passing pair attributes incremental cost;
 it does not qualify final public cutover or prove 10k settlement capacity.

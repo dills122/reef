@@ -93,13 +93,42 @@ readiness/admission/execution counts and time and checks canonical source trade
 membership against intake and obligations. The disposable benchmark has a
 `REEF_DO_MATCHED_TOPOLOGY=1` mode with six materializers and sixteen unique
 projector owners for both control and treatment. Both arms start the same
-isolated databases and run the same 15-second sampler. It records exact
-incremental canonical trade counts and approximate settlement insert rates
-from PostgreSQL table statistics, gating missing samples, regressing counts,
-and observer query time above 2% for settlement or 10% total. Final SQL checks
-give exact closed-cohort settlement counts. Worker logs expose
+isolated databases and run the same 60-second sampler. It records approximate
+canonical outcome and settlement insert rates from PostgreSQL table statistics
+on fresh single-cohort volumes, gating missing samples, regressing counts,
+and in-load observer query time above 2% for settlement or 10% total. Final
+SQL checks give exact closed-cohort trade membership and settlement counts.
+Worker logs expose
 counter SQL call time and blocked-head age. A stopped-source graph check records
 longest retained admission dependency chain. SQL call time includes any lock
 wait but does not isolate exact wait duration. These are implementation and
 local-test results until the hosted pair and checker evidence are recorded;
 they do not revise PM-S2's failed gate or establish a 10k capacity result.
+
+### First matched droplet attempt: invalid comparison
+
+The first `sfo3` `c-32` attempt used commit `eb6157aa`, 10k/s, 384 load workers,
+and 300 seconds per planned arm on disposable droplet `604190884`. The control
+(`postmatch-capacity-control-20260927T231810Z`) accepted 2,999,955 commands
+at 9,999.75/s. Its post-run report found all 2,999,955 direct-acked,
+materialized, and projected, with zero final lag. This is final catch-up,
+not qualified in-load freshness. The stage checker rejected its observer:
+maximum total query duty was 51.3% and settlement query duty 8.0%, against
+10% and 2% limits. The 15-second source query decoded trade JSON for every
+new canonical outcome, with cost growing across the cohort. The treatment
+(`postmatch-capacity-treatment-20260927T231810Z`) never reached measured load.
+Its preliminary smoke timed out waiting for a canonical outcome; PostgreSQL
+logged repeated `(partition_id, stream_sequence)` uniqueness violations.
+Control's stress stack remained on shared volumes, and the harness reset
+volumes only *after* the next arm's smoke. The droplet and firewall were
+destroyed after fetching logs. No architecture comparison or post-match
+capacity result follows from this attempt.
+
+The correction resets matched-run volumes before smoke and again before
+measured load. The source observer now reads the approximate PostgreSQL
+canonical-outcome insert counter on fresh single-cohort volumes every 60
+seconds; it does not decode trade JSON in-load. The settlement observer uses
+the same 60-second interval, and query duty is gated on intervals entirely
+inside the measured load. Exact source-to-intake trade membership remains a
+stopped-source proof. The corrected pair needs a new hosted run before any
+capacity or incremental-cost claim.

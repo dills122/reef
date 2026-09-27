@@ -567,6 +567,9 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
   fi
 
+  if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
+    run_stage reset-before-matched-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
+  fi
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
   run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
   if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then

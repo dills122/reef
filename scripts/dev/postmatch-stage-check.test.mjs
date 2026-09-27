@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assessStageSamples } from "./postmatch-stage-check.mjs";
+import { sourceStageSql, summarizeSourceRows } from "./postmatch-stage-sampler.mjs";
 
 const settlement = (value) => ({ intakeTrades: String(value), obligations: String(value),
   admissions: String(value), completions: String(value), attempts: String(value),
@@ -19,13 +20,42 @@ test("stage check derives comparable in-load rates", () => {
 });
 
 test("stage check fails missing target stages, regression, and intrusive observer", () => {
-  const samples = [sample(0, 0, 0), sample(10000, 100, 50), sample(20000, 90, 40, 3000)];
+  const samples = [sample(0, 0, 0), sample(10000, 100, 50),
+    sample(20000, 200, 100), sample(30000, 190, 90, 3000)];
   delete samples[1].settlement;
-  const report = assessStageSamples(samples, true);
+  const report = assessStageSamples(samples, true,
+    [{ startedAt: new Date(0).toISOString(), finishedAt: new Date(30000).toISOString() }]);
   assert.equal(report.status, "fail");
   assert.ok(report.failures.some((failure) => failure.includes("lacks settlement")));
   assert.ok(report.failures.some((failure) => failure.includes("regressed")));
   assert.ok(report.failures.some((failure) => failure.includes("duty cycle")));
+});
+
+test("source sampler uses one cheap table statistic and permits missing in-load trade rate", () => {
+  assert.match(sourceStageSql(), /pg_stat_user_tables/);
+  assert.doesNotMatch(sourceStageSql(), /result_payload|canonical_command_outcomes\s+WHERE/);
+  assert.equal(summarizeSourceRows([["200", "1"]]), "200");
+  assert.throws(() => summarizeSourceRows([["0", "0"]]), /unavailable/);
+  const samples = [0, 60000, 120000, 180000].map((time, index) => {
+    const row = sample(time, index * 600000, index * 300000, 100);
+    delete row.sourceTrades;
+    return row;
+  });
+  const report = assessStageSamples(samples, true,
+    [{ startedAt: new Date(0).toISOString(), finishedAt: new Date(180000).toISOString() }]);
+  assert.equal(report.status, "pass");
+  assert.equal(report.rates[0].sourceTradesPerSecond, undefined);
+  assert.equal(report.rates[0].sourceOutcomesPerSecond, 10000);
+});
+
+test("observer duty gate applies to measured load intervals", () => {
+  const samples = [sample(0, 0, 0, 3000), sample(60000, 600000, 300000, 3000),
+    sample(120000, 1200000, 600000), sample(180000, 1800000, 900000),
+    sample(240000, 2400000, 1200000)];
+  const report = assessStageSamples(samples, true,
+    [{ startedAt: new Date(60000).toISOString(), finishedAt: new Date(240000).toISOString() }]);
+  assert.equal(report.status, "pass");
+  assert.equal(report.inLoadIntervalCount, 3);
 });
 
 test("stage check requires three intervals entirely inside measured load window", () => {
