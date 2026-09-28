@@ -50,7 +50,7 @@ earlier failed experimental branch, not the current implementation plan.
 - This branch has no production-path change or cutover. The journal proof test
   and evidence, design contract, D-060, work-plan pointer, execution index and
   this handoff are the current package. Verify `git status` at resumption;
-  this handoff may be updated with a commit/PR after packaging.
+  the draft PR below is the delivery point for this kickoff package.
 - OpenRig was stopped at the user's request; its daemon is off and its
   generated repo scaffold was removed. Use the repository's
   `orchestrated-delivery` skill for any delegated work. An interrupted PMJ-01
@@ -157,8 +157,10 @@ architecture-doc update; no integrated implementation exists to test yet.
 ## Delivery Metadata
 
 - Date: 2026-09-28; base/checkpoint: local `origin/master` `646987cd`.
-- Branch: `codex/ledger-authority-redesign`; integration destination: a
-  reviewed PR from this branch. Commit, push and PR: not yet recorded here.
+- Branch: `codex/ledger-authority-redesign`; integration destination:
+  [draft PR #408](https://github.com/dills122/reef/pull/408). Resolve its
+  current head with `git log -1` after fetching; independent review and
+  integrated qualification remain outstanding.
 - Current package paths: `docs/DECISIONS.md`, `docs/README.md`,
   `docs/WORK_PLAN.md`, the contract and execution index above,
   `docs/research/evidence/settlement-journal-write-shape-2026-09-28.md`,
