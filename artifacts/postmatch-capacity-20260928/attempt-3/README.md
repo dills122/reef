@@ -69,3 +69,7 @@ samples/summary, measured-stage log, live four-DB wait/top-SQL snapshot, worker
 logs, failed setup log, aborted control log, and checksums. Raw recovered
 artifacts also remain under `/private/tmp/reef-settlement240-recovery/` on the
 local host.
+
+The three verbose JSON summaries are stored as `.json.gz` to keep the PR's
+code-review diff bounded. Use `gzip -dc <filename>.json.gz` to inspect them;
+compression is lossless and the checksums cover the compressed files.
