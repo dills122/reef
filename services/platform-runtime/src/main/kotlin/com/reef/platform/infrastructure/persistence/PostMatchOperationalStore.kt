@@ -31,20 +31,38 @@ class PostMatchOperationalStore(private val dataSource: DataSource) {
     fun apply(
         window: VerifiedCanonicalSourceWindow,
         applyEffects: (Connection, VerifiedCanonicalSourceWindow) -> Unit
+    ): PostMatchApplyResult = applyMeasured(window, applyEffects) { _, _ -> }
+
+    fun applyMeasured(
+        window: VerifiedCanonicalSourceWindow,
+        applyEffects: (Connection, VerifiedCanonicalSourceWindow) -> Unit,
+        onPhase: (String, Long) -> Unit
     ): PostMatchApplyResult = dataSource.connection.use { connection ->
         val previousAutoCommit = connection.autoCommit
         connection.autoCommit = false
         try {
+            var phaseStarted = System.nanoTime()
             initializeOriginIfEmpty(connection, window)
             val frontier = lockFrontier(connection, window)
+            onPhase("frontier_lock", System.nanoTime() - phaseStarted)
             check(frontier.sourceGeneration == window.sourceGeneration) { "post-match source generation changed" }
             val result = when {
                 frontier.lastSequence == window.fromExclusiveSequence -> {
+                    phaseStarted = System.nanoTime()
                     insertOrderIdentities(connection, window)
+                    onPhase("directory_write", System.nanoTime() - phaseStarted)
+                    phaseStarted = System.nanoTime()
                     applyEffects(connection, window)
+                    onPhase("effects", System.nanoTime() - phaseStarted)
+                    phaseStarted = System.nanoTime()
                     insertReceipts(connection, window)
+                    onPhase("receipts_write", System.nanoTime() - phaseStarted)
+                    phaseStarted = System.nanoTime()
                     insertCoverage(connection, window)
+                    onPhase("coverage_write", System.nanoTime() - phaseStarted)
+                    phaseStarted = System.nanoTime()
                     advanceFrontier(connection, window)
+                    onPhase("frontier_write", System.nanoTime() - phaseStarted)
                     PostMatchApplyResult.APPLIED
                 }
                 window.throughInclusiveSequence <= frontier.lastSequence -> {
@@ -53,7 +71,9 @@ class PostMatchOperationalStore(private val dataSource: DataSource) {
                 }
                 else -> error("post-match source window overlaps or skips committed frontier")
             }
+            phaseStarted = System.nanoTime()
             connection.commit()
+            onPhase("commit", System.nanoTime() - phaseStarted)
             result
         } catch (error: Throwable) {
             connection.rollback()

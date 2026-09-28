@@ -94,8 +94,9 @@ class PostMatchMarketMaintainerIntegrationTest {
                 PostMatchMarketMaintainer(dataSource).applyNext(stream, 0, generation)
             }
             dataSource.connection.use { connection ->
-                connection.prepareStatement("SELECT COUNT(*) FROM postmatch.consumer_frontiers WHERE consumer_name = ?").use { statement ->
+                connection.prepareStatement("SELECT COUNT(*) FROM postmatch.consumer_frontiers WHERE consumer_name = ? AND event_stream = ?").use { statement ->
                     statement.setString(1, consumer)
+                    statement.setString(2, stream)
                     statement.executeQuery().use { rows -> check(rows.next()); assertEquals(0L, rows.getLong(1)) }
                 }
             }
