@@ -11,7 +11,13 @@ import java.time.Instant
 
 /** Applies bounded live facts inside the same transaction as coverage and frontier progress. */
 class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = LiveEffectBatchPlanner()) {
-    fun apply(connection: Connection, window: VerifiedCanonicalSourceWindow) {
+    fun apply(connection: Connection, window: VerifiedCanonicalSourceWindow) =
+        applyMeasured(connection, window) { _, _ -> }
+
+    fun applyMeasured(
+        connection: Connection, window: VerifiedCanonicalSourceWindow, onPhase: (String, Long) -> Unit
+    ) {
+        var phaseStarted = System.nanoTime()
         val effects = window.outcomes.flatMap { it.effects }
         val plan = planner.plan(effects)
         val states = plan.finalOrderStates.associateBy { (it.effect as CanonicalEffect.OrderStateChanged).orderId }
@@ -23,13 +29,20 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
             referenced += trade.buyOrderId
             referenced += trade.sellOrderId
         }
+        onPhase("plan", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         if (referenced.isEmpty()) {
             recordMarketChanges(connection, window, emptyList())
+            onPhase("market_write", System.nanoTime() - phaseStarted)
             return
         }
         val identities = loadIdentities(connection, window, referenced)
+        onPhase("identity_read", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         check(identities.keys == referenced) { "live effects reference an order without canonical identity" }
         val prior = loadPriorStates(connection, window, states.keys)
+        onPhase("prior_read", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         val newOrders = effects.mapNotNull { (it.effect as? CanonicalEffect.Accepted)?.newOrder?.orderId }.toSet()
         check(states.keys.all { it in prior || it in newOrders }) { "live order state starts without an accepted submit" }
         check(plan.executions.all { (it.effect as CanonicalEffect.Execution).orderId in states }) {
@@ -79,10 +92,19 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
             }
             positive(trade.quantityUnits)
         }
+        onPhase("validate", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         insertExecutions(connection, window, plan.executions)
+        onPhase("execution_write", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         insertTrades(connection, window, plan.trades)
+        onPhase("trade_write", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         upsertStates(connection, window, plan.finalOrderStates, prior, filledThisWindow)
+        onPhase("state_write", System.nanoTime() - phaseStarted)
+        phaseStarted = System.nanoTime()
         recordMarketChanges(connection, window, marketChanges(plan.finalOrderStates, identities, prior))
+        onPhase("market_write", System.nanoTime() - phaseStarted)
     }
 
     private data class Identity(
@@ -230,7 +252,7 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
                remaining_quantity, filled_quantity, limit_price, currency, last_event_at,
                source_partition_id, source_stream_sequence, source_effect_ordinal,
                remaining_quantity_text, limit_price_text)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE true
                ON CONFLICT (event_stream, source_generation, order_id) DO UPDATE SET
                status = EXCLUDED.status, original_quantity = EXCLUDED.original_quantity,
                remaining_quantity = EXCLUDED.remaining_quantity, filled_quantity = EXCLUDED.filled_quantity,
@@ -355,7 +377,9 @@ class PostMatchLiveEffectWriter(private val planner: LiveEffectBatchPlanner = Li
                 statement.setInt(16, change.envelope.position.effectOrdinal)
                 statement.addBatch()
             }
-            check(statement.executeBatch().all { it == 1 }) { "live market change was not recorded" }
+            check(statement.executeBatch().all { it == 1 || it == java.sql.Statement.SUCCESS_NO_INFO }) {
+                "live market change was not recorded"
+            }
         }
     }
 

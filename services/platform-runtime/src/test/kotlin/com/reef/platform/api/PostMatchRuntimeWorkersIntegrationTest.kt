@@ -9,6 +9,7 @@ import com.reef.platform.infrastructure.persistence.PostMatchSourceCatalog
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.util.UUID
 import javax.sql.DataSource
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -77,7 +78,8 @@ class PostMatchRuntimeWorkersIntegrationTest {
         assertEquals(generation, catalog.generation())
         val worker = PostMatchRuntimeWorkers(
             catalog, PostgresCanonicalOutcomeSourceReader(source), PostMatchOperationalStore(target),
-            PostMatchLiveEffectWriter(), PostMatchMarketMaintainer(target), stream, listOf(0, 1), 1, 10
+            PostMatchLiveEffectWriter(), PostMatchMarketMaintainer(target), stream, listOf(0, 1), 1, 10,
+            liveTimingsEnabled = true
         )
         try {
             listOf(0, 1).forEach { partition -> insertRejectedSource(source, stream, token, partition) }
@@ -124,6 +126,121 @@ class PostMatchRuntimeWorkersIntegrationTest {
             cleanSource(source, stream)
         }
     }
+
+    @Test
+    fun blockedLivePartitionDoesNotStopOtherPartitionsWithBoundedWrites() {
+        val sourceUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val targetUrl = System.getenv("POSTMATCH_DB_URL_TEST") ?: return
+        val source = RuntimeDataSources.dataSource(sourceUrl,
+            System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return,
+            System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return, "postmatch-parallel-source-test")
+        val target = RuntimeDataSources.dataSource(targetUrl,
+            System.getenv("POSTMATCH_DB_USER_TEST") ?: return,
+            System.getenv("POSTMATCH_DB_PASSWORD_TEST") ?: return, "postmatch-parallel-target-test")
+        val token = UUID.randomUUID().toString()
+        val stream = "postmatch-parallel-$token"
+        val catalog = PostMatchSourceCatalog(source)
+        val generation = catalog.generation()
+        val worker = PostMatchRuntimeWorkers(
+            catalog, PostgresCanonicalOutcomeSourceReader(source), PostMatchOperationalStore(target),
+            PostMatchLiveEffectWriter(), PostMatchMarketMaintainer(target), stream, listOf(0, 1, 2, 3), 1, 10,
+            maxConcurrentLiveWrites = 2
+        )
+        val lock = target.connection
+        try {
+            listOf(0, 1, 2, 3).forEach { partition -> insertRejectedSource(source, stream, token, partition) }
+            target.connection.use { connection ->
+                connection.prepareStatement(
+                    """INSERT INTO postmatch.consumer_frontiers(
+                       consumer_name, event_stream, partition_id, source_generation, last_stream_sequence)
+                       VALUES (?, ?, ?, ?, ?)"""
+                ).use { statement ->
+                    listOf(0, 1, 2, 3).forEach { partition ->
+                        statement.setString(1, PostMatchRuntimeWorkers.LIVE_CONSUMER)
+                        statement.setString(2, stream)
+                        statement.setInt(3, partition)
+                        statement.setString(4, generation)
+                        statement.setLong(5, CanonicalStreamPosition.origin(partition))
+                        statement.addBatch()
+                    }
+                    statement.executeBatch()
+                }
+            }
+            lock.autoCommit = false
+            lock.prepareStatement(
+                """SELECT last_stream_sequence FROM postmatch.consumer_frontiers
+                   WHERE consumer_name = ? AND event_stream = ? AND partition_id = 0 FOR UPDATE"""
+            ).use { statement ->
+                statement.setString(1, PostMatchRuntimeWorkers.LIVE_CONSUMER)
+                statement.setString(2, stream)
+                statement.executeQuery().use { rows -> assertTrue(rows.next()) }
+            }
+            worker.start()
+            listOf(1, 2, 3).forEach { partition ->
+                assertTrue(awaitFrontier(target, stream, partition, CanonicalStreamPosition.origin(partition) + 1),
+                    "partition $partition stayed behind partition 0's blocked transaction")
+            }
+            assertEquals(CanonicalStreamPosition.origin(0), liveFrontier(target, stream, 0))
+            lock.commit()
+            assertTrue(awaitFrontier(target, stream, 0, CanonicalStreamPosition.origin(0) + 1))
+        } finally {
+            lock.rollback()
+            lock.close()
+            worker.stop()
+            cleanTarget(target, stream)
+            cleanSource(source, stream)
+        }
+    }
+
+    private fun awaitFrontier(target: DataSource, stream: String, partition: Int, expected: Long): Boolean {
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (System.nanoTime() < deadline) {
+            if (liveFrontier(target, stream, partition) == expected) return true
+            Thread.sleep(20)
+        }
+        return false
+    }
+
+    @Test
+    fun fixedFiveHundredOutcomeSourceReadTiming() {
+        assumeTrue(System.getenv("POSTMATCH_LIVE_BENCHMARK") == "1")
+        val sourceUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val source = RuntimeDataSources.dataSource(sourceUrl,
+            System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return,
+            System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return, "postmatch-source-read-benchmark")
+        val token = UUID.randomUUID().toString()
+        val stream = "postmatch-source-read-$token"
+        val generation = PostMatchSourceCatalog(source).generation()
+        try {
+            (1..500).forEach { offset ->
+                insertRejectedSource(source, stream, token, 0, offset.toLong(), "x".repeat(1024))
+            }
+            val reader = PostgresCanonicalOutcomeSourceReader(source)
+            val samples = (1..20).map {
+                val started = System.nanoTime()
+                val window = reader.readNextWindow("source-read-benchmark", stream, 0, generation, 0, 500)
+                assertEquals(500, window?.outcomes?.size)
+                (System.nanoTime() - started) / 1_000_000.0
+            }.sorted()
+            println("postmatch_live_source_read outcomes=500 padding_bytes_per_result=1024 samples=20 " +
+                "mean_ms=${samples.average()} p95_ms=${samples[18]}")
+        } finally {
+            cleanSource(source, stream)
+        }
+    }
+
+    private fun liveFrontier(target: DataSource, stream: String, partition: Int): Long? =
+        target.connection.use { connection ->
+            connection.prepareStatement(
+                """SELECT last_stream_sequence FROM postmatch.consumer_frontiers
+                   WHERE consumer_name = ? AND event_stream = ? AND partition_id = ?"""
+            ).use { statement ->
+                statement.setString(1, PostMatchRuntimeWorkers.LIVE_CONSUMER)
+                statement.setString(2, stream)
+                statement.setInt(3, partition)
+                statement.executeQuery().use { rows -> if (rows.next()) rows.getLong(1) else null }
+            }
+        }
 
     private fun insertRejectedSource(source: DataSource, stream: String, token: String, partition: Int,
                                      offset: Long = 1, padding: String = "") {

@@ -46,6 +46,18 @@ Legacy `platform-projector-0..3` instances never start post-match workers,
 even if a global worker flag is enabled. The `postmatch-workers` profile adds
 four live and four settlement JVMs, so budget host CPU, memory, and database
 connections for them. Keep both profiles enabled while running these workers.
+Each live JVM runs one loop per assigned partition. `POSTMATCH_LIVE_MAX_CONCURRENT_WRITES`
+defaults to two and bounds simultaneous live transactions with a fair permit queue;
+a blocked partition leaves capacity for another partition. It must be at least
+two when more than one partition is assigned and is capped at assignment count.
+`POSTMATCH_LIVE_REWRITE_BATCHED_INSERTS`
+defaults to `true` on the live writer pool to combine eligible JDBC fact and
+receipt batches; set it to `false` for a matched control. `POSTMATCH_LIVE_TIMINGS_ENABLED=true`
+emits one `postmatch_live_window` line per consumed window with source-read,
+permit-wait, plan, individual writer-phase, receipt, frontier, commit, and total
+target-transaction milliseconds.
+[Local 500-outcome comparison](evidence/POSTMATCH_LIVE_LOCAL_BATCH_2026-09-28.md)
+records exact facts, statement calls, timings, and limits.
 By default, existing live routes and materializers use
 their current stores; the new consumers write shadow state only.
 Set `POSTMATCH_LIVE_READS_ENABLED=true` on an API instance only after the
