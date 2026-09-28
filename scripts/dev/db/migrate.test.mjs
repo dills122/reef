@@ -493,5 +493,6 @@ test("routes post-match schema only to its isolated database target", async () =
     "postmatch/0004_live_read_indexes.sql",
     "postmatch/0005_live_read_response_text.sql",
     "postmatch/0006_matching_outcome_market_candidate.sql",
+    "postmatch/0007_settlement_control_log.sql",
   ]);
 });
