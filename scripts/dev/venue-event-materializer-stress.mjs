@@ -239,7 +239,8 @@ function configureCandidateReadProbe() {
     partitionCount: Number(env("STREAM_ACK_PARTITION_COUNT")) });
   const base = env("SETTLEMENT_CANDIDATE_CONTROL_RUNTIME_URL");
   const scope = new URLSearchParams({ partitionId: String(partitionId), runId,
-    venueSessionId: MATERIALIZER_STRESS_SESSION_ID, instrumentId, currency: "USD" });
+    venueSessionId: MATERIALIZER_STRESS_SESSION_ID, instrumentId, currency: "USD",
+    includeAge: "true" });
   const account = new URLSearchParams({ runId,
     participantId: "materializer-mm-01-participant", accountId: "materializer-mm-01-account",
     assetType: "CASH", assetId: "USD" });

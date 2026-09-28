@@ -97,6 +97,7 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | Later PMJ-01/02/03 default-off vertical candidate | Cold enrollment CLI 6 tests; source authority PostgreSQL 13 tests; Kafka attestor 5 tests; control acceptance 15 tests; three-database writer integration 3 tests; V2 finality/recovery integration 4 tests plus real worker reopen/tamper test; serial `compileKotlin` after integration | Focused suites reported zero failures/skips. Source enrollment requires cold 16-partition topic UUIDs; worker commits externally acknowledged DvP, covers broker-attested empty positions, snapshots V2 and verifies historical retained JSONB text on recovery. These are local test facts, not a live full-stack or sustained throughput pass. |
 | 2026-09-28 | Later PMJ-04/05 harness candidate | Candidate read/age/stage/cohort Node suites, control seed Node suite, migration runner and stack tests; local syntax checks | Default-off read routes expose as-of frontiers. Harness fixes one 10k/s × 300s matched sample, seeds immutable control facts, waits exact external finality, samples five reads and conservative market age, then checks retained-source cohort. No live candidate run, no qualified latency or capacity result. |
 | 2026-09-28 | PMJ-01/04 reviewer repair | Control log 8, worker unit 3, worker three-DB integration 1; financial read gateway 8 and separate settlement/finality DB integration 1; Node read/stage/age/cohort/seed suites 32 | Zero failures/skips in listed focused suites. Fresh future controls fail before acceptance; retained future policy advances source to its boundary. Financial projection excludes unacknowledged journal commit. Status requires admin auth. Stage gate samples every 10 seconds, requires all 16 market frontiers, non-growing in-load backlog and a sample within 15 seconds of load end. No live run or future-control cutover proof. |
+| 2026-09-28 | First hosted wiring attempt, `do-benchmark-20260928T235051Z`, commit `13286ee1`, `sfo3`/`c-32` | Raw fetched host logs in `reports/do-benchmark/do-benchmark-20260928T235051Z/`; no measured rate report | Intentionally stopped during pre-load smoke after review found market HTTP probes omitted age measurement. Generic report checker correctly failed missing 10k report. No load or throughput result; preserve this failed attempt. |
 
 The candidate harness currently defaults to provisional per-read response limits of
 p95 ≤ 250 ms and p99 ≤ 500 ms. These are explicit diagnostic thresholds, not a
@@ -106,6 +107,14 @@ and first trade identities. Broker trailing offsets, topic identity and full
 historical payload proof come from the separate writer/recovery path, and
 still need live fault evidence. Recovery currently re-verifies historical
 source windows on startup; its cost at the full cohort remains unmeasured.
+After the stopped wiring attempt, the market HTTP probe requests `includeAge=true`
+and fails on missing or excessive source-age upper bounds (p95 5 s, p99 10 s,
+maximum 30 s), alongside the projection-window commit-age check. The offline
+candidate artifact checker now requires all four candidate gate reports. This
+still does not establish exact market business-value or four-leg/account parity
+for a full hosted cohort. The current runner retains legacy lifecycle and
+market maintainers, so its result is a coexistence diagnostic rather than a
+cutover-topology capacity proof.
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:

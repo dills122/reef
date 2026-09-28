@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const quantile = (sorted, q) => sorted.length ? sorted[Math.ceil(sorted.length * q) - 1] : null;
 const PRIVATE_READS = new Set(["balance", "status"]);
+const MARKET_READS = new Set(["book", "depth", "tape"]);
+export const MARKET_AGE_GATES = { p95Ms: 5000, p99Ms: 10000, maxMs: 30000 };
 
 function probeHeaders(name, participantId, url) {
   const headers = { "X-Client-Id": "candidate-read-probe" };
@@ -49,6 +51,8 @@ export function summarizeSamples(samples, gates = null) {
       latencyP95Ms: quantile(latencies, 0.95),
       latencyP99Ms: quantile(latencies, 0.99),
       sourceAgeUpperBoundP95Ms: quantile(upperBounds, 0.95),
+      sourceAgeUpperBoundP99Ms: quantile(upperBounds, 0.99),
+      sourceAgeUpperBoundMaxMs: upperBounds.at(-1) ?? null,
       upperBoundSamples: upperBounds.length,
     }];
   }));
@@ -59,12 +63,17 @@ export function summarizeSamples(samples, gates = null) {
     const row = byName[name];
     return row && row.samples > 0 && row.failures === 0 &&
       (name !== "balance" && name !== "status" || row.valuesPresent > 0) &&
+      (!MARKET_READS.has(name) || row.upperBoundSamples >= Math.ceil(row.samples * 0.95) &&
+        row.sourceAgeUpperBoundP95Ms <= MARKET_AGE_GATES.p95Ms &&
+        row.sourceAgeUpperBoundP99Ms <= MARKET_AGE_GATES.p99Ms &&
+        row.sourceAgeUpperBoundMaxMs <= MARKET_AGE_GATES.maxMs) &&
       row.latencyP95Ms <= gates.latencyP95Ms && row.latencyP99Ms <= gates.latencyP99Ms;
   });
   return { byName, readGatePassed: Boolean(readGatePassed),
     readGateReason: !hasGates ? "numeric read gates not frozen" :
-      !readGatePassed ? "missing endpoint, read failure, or latency limit breach" : "passed",
-    ageGateAuthority: "separate source-to-visible window-commit measurements" };
+      !readGatePassed ? "missing endpoint, read failure, API age, or latency limit breach" : "passed",
+    marketAgeGates: MARKET_AGE_GATES,
+    ageGateAuthority: "API source-age upper bound plus separate projection window-commit measurements" };
 }
 
 export function parseArgs(argv) {
