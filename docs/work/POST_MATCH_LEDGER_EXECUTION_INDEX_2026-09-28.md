@@ -31,7 +31,7 @@ explicit decision; document them without compatibility dual-write.
 | PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference proof ready for user review; authority adapters remain for vertical proof |
 | PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Candidate core and focused proof in progress; external source/control proof open |
 | PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Bounded replay and snapshot proof; production external restore anchor and resumable tail remain gates |
-| PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Default-off financial and direct matching-outcome market/tape candidates implemented; target-state rebuild parity, public cutover and capacity proof open |
+| PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Default-off financial and direct matching-outcome market/tape candidates with bounded target replay; public cutover and capacity proof open |
 | PMJ-05 | Complete sustained correctness/capacity run for both sibling paths and measured decision | PMJ-03, PMJ-04 | Lead + bounded research/test worker | Waiting |
 | PMJ-06 | Independent architecture/code review and conditional breaking cutover plan | PMJ-05 pass | Independent reviewer; lead decides | Waiting |
 
@@ -71,6 +71,10 @@ Matching and pre-trade remain outside every item in this index.
   visible age limits before qualification. Measure book/depth/tape latency and
   freshness, settlement backlog, projection lag, shared source pressure and DB
   saturation in that same run. Either path falling behind fails cutover.
+  The active post-match scaling plan already freezes source-to-market freshness
+  at p95 <= 5s, p99 <= 10s and max <= 30s. Separate book/depth/tape API
+  response p95/p99 limits are still to be fixed before this run; HTTP intake
+  latency cannot stand in for those read limits.
 - PMJ-06: independent review, decision, updated contracts/tests/ADRs/operator
   docs and PR evidence. No production action is included.
 
@@ -85,7 +89,7 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | PMJ-03 bounded genesis replay proof | `SettlementJournalReplayProofIntegrationTest` and extended `SettlementJournalCandidateIntegrationTest` against disposable database | 2 focused PostgreSQL tests, 0 skipped/failures/errors. Reads retained JSONB text again, rejects changed source value, decodes controls, compares typed results/four effects and cumulative state, and pins head. Fixture callbacks do not establish production control or empty-range authority; no snapshot, writer activation or independent restore. |
 | 2026-09-28 | PMJ-04 default-off financial projection slice | `SettlementJournalProjectionIntegrationTest` against disposable PostgreSQL database; combined `*SettlementJournal*` Gradle suites | 2 focused tests, 0 skipped/failures/errors; combined 31 tests, 1 optional write-shape test skipped, 0 failures/errors. Separate generation checkpoints, atomic balance/status updates, break and funding retry, crash rollback, duplicate delivery, forged envelope rejection, and journal-frontier reads pass. Market-data/tape frontier, independent restore and sustained load remain open. |
 | 2026-09-28 | PMJ-03 snapshot and external-anchor read gate candidate | `SettlementJournalSnapshotProofIntegrationTest` against disposable PostgreSQL; `SettlementJournalExternalAnchorGateTest` | Snapshot: 3 focused tests, 0 skipped/failures/errors. Exact derived state, head/incarnation binding, atomic crash and tamper checks pass. Anchor gate: 2 unit tests pass, rejecting wrong or changing acknowledged frontiers. Snapshot verification still replays from genesis and rejects tail resume; no production external anchor backend or writer lease exists. |
-| 2026-09-28 | PMJ-04 direct matching-outcome market/tape candidate | `MatchingOutcomeMarketCandidateIntegrationTest` against disposable PostgreSQL; combined journal and market suites | 4 focused market tests pass. Serial combined run: 40 tests, 1 optional write-shape test skipped, 0 failures/errors. Direct source windows atomically advance independent market checkpoint, indexed depth and trade tape; malformed fill, rollback, old-source tamper and bounded restart verification fail closed. Target order/level/tape rows have not been independently rebuilt and compared; no public market read cutover or capacity claim. |
+| 2026-09-28 | PMJ-04 direct matching-outcome market/tape candidate and bounded target replay | `MatchingOutcomeMarketCandidateIntegrationTest` against disposable PostgreSQL; combined journal and market suites | 9 focused market tests pass. Serial combined run: 45 tests, 1 optional write-shape test skipped, 0 failures/errors. Direct source windows atomically advance independent market checkpoint, indexed depth and trade tape. Restart re-reads bounded retained source and rebuilds target rows in a rollback-only repeatable-read transaction; compares full order/level/tape/frontier state before internal reads or append. Tests cover malformed fill, rollback, source/target tamper, origin, read/append races and unrelated-partition progress. No public market read cutover or capacity claim. |
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
@@ -162,6 +166,21 @@ of or behind the external acknowledgement remains offline for explicit
 reconciliation. Snapshot state excludes historical source/result archives,
 and its bounded genesis comparison is a correctness proof, not fast restart.
 
+Production adapter design audit: the retained batch/outcome reader can prove
+contiguous nonempty source windows, including windows whose commands produce
+zero trades. It cannot prove a truly empty Kafka offset interval: a SQL absence
+query or MAX observed outcome could hide an unmaterialized visible record.
+Such a range needs a bounded broker-backed absence attestation tied to stable
+topic/partition offsets and source generation, and must fail closed when
+retention or visibility prevents verification. The existing source verifier
+canonicalizes JSON for its digest; settlement must additionally bind exact
+retained `result_payload::text` bytes and canonical identity. Mutable policy,
+opening and repair tables cannot serve as historical controls. A future
+append-only ordered post-match control log must become the primary acceptance
+point for resolved policy/opening/funding facts before production callbacks
+are enabled; merely copying mutable rows into the journal would not prove
+their original order or value.
+
 PMJ-03 focused command from `services/platform-runtime`, with disposable test
 database and `SETTLEMENT_POSTGRES_PASSWORD_TEST` set locally:
 
@@ -207,12 +226,19 @@ PMJ-04 direct market candidate and PMJ-03 combined command from
 SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_parity_20260928 SETTLEMENT_POSTGRES_USER_TEST=reef ./gradlew --no-daemon -Pkotlin.incremental=false test --tests '*SettlementJournal*' --tests '*MatchingOutcomeMarketCandidateIntegrationTest'
 ```
 
-Serial run: `BUILD SUCCESSFUL in 11s`; JUnit XML 40 tests, one optional
+Final serial run: `BUILD SUCCESSFUL in 10s`; JUnit XML 45 tests, one optional
 write-shape test skipped, zero failures/errors. One earlier combined run during
 concurrent Gradle builds failed with shared test class-loading errors; scoped
 runs and the serial rerun passed. Market candidate reads committed matching
-outcomes directly. Its bounded restart check authenticates retained source
-receipts, but does not prove target order, level or tape row equivalence.
+outcomes directly. Its bounded restart proof authenticates retained source
+receipts and compares reconstructed target rows. It reuses the same reducer,
+so this proves recovery equivalence, not independent reducer semantics. The
+proof uses a stable target snapshot without holding the production frontier
+row lock; a verified frontier token binds later read/append transactions, and
+per-key in-process locks avoid blocking unrelated partitions. Same-instance
+row tamper after a successful proof needs an explicit new proof or restart to
+be detected. Neither source/control production authority nor public read
+latency/freshness under sustained load is established.
 
 Each worker returns scoped status, files, exact commands/results, decisions,
 assumptions, limitations and next action. Lead verifies material claims in
