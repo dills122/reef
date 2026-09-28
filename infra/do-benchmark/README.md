@@ -137,6 +137,10 @@ settlement rates use cheap, approximate `pg_stat_user_tables.n_tup_ins`
 counters on fresh single-cohort volumes; final SQL checks supply exact source
 trade membership and settlement counts. The observer gate requires settlement
 query time below 2% and total query time below 10% of each in-load interval.
+Dedicated post-match JVMs cap each canonical-source connection pool at two
+connections by default (`POSTMATCH_SOURCE_DB_POOL_MAX`), so adding workers does
+not exhaust the source database's 200-connection benchmark limit. Target pools
+retain their separate limits. Record this setting in each matched run.
 The treatment writes `postmatch-stage-samples.jsonl`, a load-window-aligned
 `postmatch-stage-summary.json`, `settlement-dependency-graph.json`, exact
 closed-cohort checkers, and dedicated per-worker logs. The control writes the

@@ -31,6 +31,8 @@ test("post-match workers run in dedicated processes with legacy projection disab
     assert.equal(env.POSTMATCH_SHADOW_WORKERS_ENABLED, "true");
     assert.equal(env.POSTMATCH_AUDIT_SHADOW_ENABLED, "true");
     assert.equal(env.POSTMATCH_SETTLEMENT_TRANSITION_ENABLED, "false");
+    assert.equal(env.RUNTIME_DB_POOL_POSTMATCH_SOURCE_MAX, "2");
+    assert.equal(env.RUNTIME_DB_POOL_POSTMATCH_AUDIT_SOURCE_MAX, "2");
   }
   for (const name of settlementNames) {
     const env = services[name].environment;
@@ -41,6 +43,9 @@ test("post-match workers run in dedicated processes with legacy projection disab
     assert.equal(env.POSTMATCH_SETTLEMENT_INTAKE_ENABLED, "true");
     assert.equal(env.POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED, "true");
     assert.equal(env.POSTMATCH_SETTLEMENT_TRANSITION_ENABLED, "true");
+    assert.equal(env.RUNTIME_DB_POOL_SETTLEMENT_INTAKE_SOURCE_MAX, "2");
+    assert.equal(env.RUNTIME_DB_POOL_SETTLEMENT_POLICY_SOURCE_MAX, "2");
+    assert.equal(env.RUNTIME_DB_POOL_SETTLEMENT_TRANSITION_SOURCE_MAX, "2");
   }
   const all = [...liveNames, ...settlementNames].map(name => services[name].environment.POSTMATCH_WORKER_PARTITIONS);
   assert.deepEqual(all.slice(0, 4), ["0,1,2,3", "4,5,6,7", "8,9,10,11", "12,13,14,15"]);
