@@ -18,6 +18,19 @@ import kotlin.test.assertTrue
 /** Runs against both migrated PostgreSQL targets in schema-placement CI. */
 class PostMatchRuntimeWorkersIntegrationTest {
     @Test
+    fun liveWriterBatchFlagOverridesJdbcUrlWithoutDroppingOtherOptions() {
+        val base = "jdbc:postgresql://localhost:5436/reef"
+        assertEquals("$base?reWriteBatchedInserts=true",
+            PostMatchRuntimeWorkers.liveWriterJdbcUrl(base, true))
+        val configured = "$base?sslmode=require&reWriteBatchedInserts=false&ApplicationName=live"
+        assertEquals("$base?sslmode=require&ApplicationName=live&reWriteBatchedInserts=true",
+            PostMatchRuntimeWorkers.liveWriterJdbcUrl(configured, true))
+        val duplicated = "$base?reWriteBatchedInserts=true&sslmode=require&rewritebatchedinserts=false"
+        assertEquals("$base?sslmode=require&reWriteBatchedInserts=false",
+            PostMatchRuntimeWorkers.liveWriterJdbcUrl(duplicated, false))
+    }
+
+    @Test
     fun boundedReaderReturnsContiguousPayloadPrefixAndRejectsOversizedFirstResult() {
         val sourceUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val source = RuntimeDataSources.dataSource(sourceUrl,

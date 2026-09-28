@@ -52,7 +52,9 @@ a blocked partition leaves capacity for another partition. It must be at least
 two when more than one partition is assigned and is capped at assignment count.
 `POSTMATCH_LIVE_REWRITE_BATCHED_INSERTS`
 defaults to `true` on the live writer pool to combine eligible JDBC fact and
-receipt batches; set it to `false` for a matched control. `POSTMATCH_LIVE_TIMINGS_ENABLED=true`
+receipt batches; set it to `false` for a matched control. This flag replaces
+any `reWriteBatchedInserts` option already present in the worker's target JDBC
+URL. `POSTMATCH_LIVE_TIMINGS_ENABLED=true`
 emits one `postmatch_live_window` line per consumed window with source-read,
 permit-wait, plan, individual writer-phase, receipt, frontier, commit, and total
 target-transaction milliseconds.

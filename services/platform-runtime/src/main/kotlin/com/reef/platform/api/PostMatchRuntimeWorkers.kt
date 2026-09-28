@@ -146,6 +146,16 @@ internal class PostMatchRuntimeWorkers(
     }
 
     companion object {
+        internal fun liveWriterJdbcUrl(targetUrl: String, rewriteBatches: Boolean): String {
+            val base = targetUrl.substringBefore('?')
+            val options = targetUrl.substringAfter('?', "").split('&')
+                .filter { option ->
+                    option.isNotBlank() &&
+                        !option.substringBefore('=').equals("reWriteBatchedInserts", ignoreCase = true)
+                }
+            return "$base?" + (options + "reWriteBatchedInserts=$rewriteBatches").joinToString("&")
+        }
+
         const val LIVE_CONSUMER = "live-v1"
 
         fun fromEnv(): PostMatchRuntimeWorkers {
@@ -163,9 +173,7 @@ internal class PostMatchRuntimeWorkers(
             val targetPassword = RuntimeEnv.string("RUNTIME_POSTMATCH_POSTGRES_PASSWORD", sourcePassword)
             val source = RuntimeDataSources.dataSource(sourceUrl, sourceUser, sourcePassword, "postmatch-source")
             val rewriteBatches = RuntimeEnv.bool("POSTMATCH_LIVE_REWRITE_BATCHED_INSERTS", true)
-            val writerUrl = if (rewriteBatches && !targetUrl.contains("reWriteBatchedInserts=", ignoreCase = true)) {
-                targetUrl + (if ('?' in targetUrl) "&" else "?") + "reWriteBatchedInserts=true"
-            } else targetUrl
+            val writerUrl = liveWriterJdbcUrl(targetUrl, rewriteBatches)
             val target = RuntimeDataSources.dataSource(writerUrl, targetUser, targetPassword, "postmatch-operational")
             return PostMatchRuntimeWorkers(
                 PostMatchSourceCatalog(source), PostgresCanonicalOutcomeSourceReader(source),
