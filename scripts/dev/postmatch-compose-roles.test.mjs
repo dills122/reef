@@ -76,6 +76,8 @@ test("matched benchmark topology has six materializers and sixteen distinct proj
 
 test("matched benchmark resets prior volumes before smoke and again before measured load", () => {
   const script = readFileSync(new URL("./do-benchmark-host.sh", import.meta.url), "utf8");
+  assert.match(script, /REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS="\$\{REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS:-320\}"/);
+  assert.match(script, /export REEF_PG_MAX_CONNECTIONS="\$REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS"\s+run_stage reset-before-matched-materializer-smoke/);
   const before = script.indexOf("run_stage reset-before-matched-materializer-smoke");
   const smoke = script.indexOf("run_stage make-dev-smoke-venue-event-materializer");
   const after = script.indexOf("run_stage reset-after-materializer-smoke");

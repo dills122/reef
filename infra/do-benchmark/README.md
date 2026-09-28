@@ -138,9 +138,11 @@ counters on fresh single-cohort volumes; final SQL checks supply exact source
 trade membership and settlement counts. The observer gate requires settlement
 query time below 2% and total query time below 10% of each in-load interval.
 Dedicated post-match JVMs cap each canonical-source connection pool at two
-connections by default (`POSTMATCH_SOURCE_DB_POOL_MAX`), so adding workers does
-not exhaust the source database's 200-connection benchmark limit. Target pools
-retain their separate limits. Record this setting in each matched run.
+connections by default (`POSTMATCH_SOURCE_DB_POOL_MAX`). Matched runs set the
+source PostgreSQL limit to 320 connections in both arms
+(`REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS`) to leave headroom for the six
+materializers, sixteen projectors, post-match workers, seed, and observer.
+Target pools retain their separate limits. Record both settings in each run.
 The treatment writes `postmatch-stage-samples.jsonl`, a load-window-aligned
 `postmatch-stage-summary.json`, `settlement-dependency-graph.json`, exact
 closed-cohort checkers, and dedicated per-worker logs. The control writes the
