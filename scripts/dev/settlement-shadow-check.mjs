@@ -102,29 +102,42 @@ export function compareTradeMembership(source, intake, obligation) {
   return failures;
 }
 
-function settlementSnapshot(stream, generation, partitions) {
+function settlementFrontiers(stream, partitions) {
   const ids = partitions.join(",");
-  const where = `event_stream = ${literal(stream)} AND source_generation = ${literal(generation)}`;
   const stages = new Map();
-  for (const [stage, table] of frontiers) {
-    for (const [partition, rowGeneration, sequence] of query("settlement-postgres",
-      `SELECT partition_id, source_generation, last_stream_sequence::text
-       FROM settlement.${table} WHERE event_stream = ${literal(stream)} AND partition_id IN (${ids})`)) {
-      stages.set(`${stage}:${partition}`, { generation: rowGeneration, sequence });
-    }
+  const frontierRows = frontiers.map(([stage, table]) => `SELECT '${stage}' AS stage, partition_id,
+    source_generation, last_stream_sequence::text FROM settlement.${table}
+    WHERE event_stream = ${literal(stream)} AND partition_id IN (${ids})`).join(" UNION ALL ");
+  for (const [stage, partition, rowGeneration, sequence] of query("settlement-postgres", frontierRows)) {
+    stages.set(`${stage}:${partition}`, { generation: rowGeneration, sequence });
   }
-  const counts = query("settlement-postgres", `SELECT
+  return stages;
+}
+
+export function settlementCountsSql(stream, generation) {
+  const where = `event_stream = ${literal(stream)} AND source_generation = ${literal(generation)}`;
+  return `WITH obligation_counts AS (
+      SELECT count(*) AS total,
+        count(*) FILTER (WHERE status = 'PENDING') AS pending,
+        count(*) FILTER (WHERE status = 'SETTLED') AS settled,
+        count(*) FILTER (WHERE status = 'BREAK') AS breaks,
+        count(*) FILTER (WHERE post_trade_mode <> 'instant-post-trade') AS non_instant
+      FROM settlement.canonical_settlement_obligations WHERE ${where}
+    ), admission_counts AS (
+      SELECT count(*) AS total, coalesce(max(admission_rank), 0) AS max_rank
+      FROM settlement.canonical_transition_admissions WHERE ${where}
+    ) SELECT
     (SELECT count(*) FROM settlement.canonical_trade_intake WHERE ${where})::text,
-    (SELECT count(*) FROM settlement.canonical_settlement_obligations WHERE ${where})::text,
-    (SELECT count(*) FROM settlement.canonical_settlement_obligations WHERE ${where} AND status = 'PENDING')::text,
-    (SELECT count(*) FROM settlement.canonical_settlement_obligations WHERE ${where} AND status = 'SETTLED')::text,
-    (SELECT count(*) FROM settlement.canonical_settlement_obligations WHERE ${where} AND status = 'BREAK')::text,
-    (SELECT count(*) FROM settlement.canonical_settlement_obligations WHERE ${where} AND post_trade_mode <> 'instant-post-trade')::text,
-    (SELECT count(*) FROM settlement.canonical_transition_admissions WHERE ${where})::text,
-    (SELECT coalesce(max(admission_rank), 0) FROM settlement.canonical_transition_admissions WHERE ${where})::text,
+    o.total::text, o.pending::text, o.settled::text, o.breaks::text, o.non_instant::text,
+    a.total::text, a.max_rank::text,
     (SELECT count(*) FROM settlement.canonical_transition_admission_completions WHERE ${where})::text,
     (SELECT count(*) FROM settlement.canonical_transition_attempts WHERE ${where})::text,
-    (SELECT count(*) FROM settlement.canonical_transition_ledger_entries WHERE ${where})::text`);
+    (SELECT count(*) FROM settlement.canonical_transition_ledger_entries WHERE ${where})::text
+    FROM obligation_counts o CROSS JOIN admission_counts a`;
+}
+
+function settlementMetrics(stream, generation) {
+  const counts = query("settlement-postgres", settlementCountsSql(stream, generation));
   if (counts.length !== 1 || counts[0].length !== 11) throw new Error("settlement counts are incomplete");
   const names = ["intakeTrades", "obligations", "pending", "settled", "breaks", "nonInstant",
     "admissions", "maxAdmissionRank", "completions", "attempts", "ledgerEntries"];
@@ -135,10 +148,10 @@ function settlementSnapshot(stream, generation, partitions) {
     const badAttempts = query("settlement-postgres", attemptMismatchSql(stream, generation));
     metrics.badAttemptOutcomes = badAttempts[0]?.[0] ?? "unknown";
   }
-  return { stages, metrics };
+  return metrics;
 }
 
-export function assess(source, target, partitions, generation) {
+export function assessFrontiers(source, stages, partitions, generation) {
   const failures = [];
   const assigned = new Set(partitions);
   for (const partition of source.keys()) {
@@ -150,7 +163,7 @@ export function assess(source, target, partitions, generation) {
     const row = { partition, sourceCount: sourceRow.count, sourceSequence: sourceRow.sequence };
     if (sourceRow.count !== "0") {
       for (const [stage] of frontiers) {
-        const saved = target.stages.get(`${stage}:${partition}`);
+        const saved = stages.get(`${stage}:${partition}`);
         row[`${stage}Sequence`] = saved?.sequence ?? null;
         if (!saved) failures.push(`${stage} frontier missing for partition ${partition}`);
         else if (saved.generation !== generation) failures.push(`${stage} generation mismatch for partition ${partition}`);
@@ -162,6 +175,11 @@ export function assess(source, target, partitions, generation) {
     return row;
   });
   if (rows.every((row) => row.sourceCount === "0")) failures.push("source cohort is empty");
+  return { rows, failures };
+}
+
+export function assess(source, target, partitions, generation) {
+  const { rows, failures } = assessFrontiers(source, target.stages, partitions, generation);
   const n = Object.fromEntries(Object.entries(target.metrics).map(([key, value]) =>
     [key, value === "unknown" ? null : BigInt(value)]));
   if (n.intakeTrades === 0n) failures.push("settlement cohort contains no trades");
@@ -217,9 +235,16 @@ async function main() {
     report.generation = initial.generation;
     const deadline = Date.now() + waitSeconds * 1000;
     do {
-      Object.assign(report, assess(initial.partitions,
-        settlementSnapshot(stream, initial.generation, partitions), partitions, initial.generation));
-      if (report.failures.length === 0 || Date.now() >= deadline) break;
+      // Frontier reads stay bounded while the cohort drains; count and identity proofs run once.
+      const stages = settlementFrontiers(stream, partitions);
+      const readiness = assessFrontiers(initial.partitions, stages, partitions, initial.generation);
+      Object.assign(report, readiness);
+      if (readiness.failures.length === 0 || Date.now() >= deadline) {
+        Object.assign(report, assess(initial.partitions,
+          { stages, metrics: settlementMetrics(stream, initial.generation) },
+          partitions, initial.generation));
+        break;
+      }
       await new Promise((resolve) => setTimeout(resolve, 2000));
     } while (true);
     if (report.failures.length === 0) {

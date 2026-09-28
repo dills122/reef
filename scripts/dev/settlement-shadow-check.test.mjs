@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { assess, attemptMismatchSql, compareTradeMembership, ledgerMismatchSql,
+import { assess, assessFrontiers, attemptMismatchSql, compareTradeMembership, ledgerMismatchSql,
+  settlementCountsSql,
   sourceTradeMembershipSql } from "./settlement-shadow-check.mjs";
 import { settlementStageSql } from "./postmatch-stage-sampler.mjs";
 import { assessDependencyGraph, dependencyGraphSql } from "./settlement-dependency-graph-check.mjs";
@@ -24,6 +28,88 @@ test("complete ranked settlement passes only with trade and ledger proof", () =>
   const result = assess(source, { stages, metrics }, [0, 1], generation);
   assert.deepEqual(result.failures, []);
   assert.equal(result.rows[1].executionSequence, source.get(1).sequence);
+});
+
+test("frontier readiness rejects lag before exact metrics are available", () => {
+  const lagging = new Map(stages);
+  lagging.set("execution:1", { generation, sequence: "281474976710657" });
+  assert.match(assessFrontiers(source, lagging, [0, 1], generation).failures.join(" "),
+    /execution frontier differs from source/);
+  assert.deepEqual(assessFrontiers(source, stages, [0, 1], generation).failures, []);
+});
+
+test("CLI polls only frontiers while lagged, then runs exact proof once", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reef-settlement-check-"));
+  const docker = join(dir, "docker");
+  const calls = join(dir, "calls");
+  const polls = join(dir, "polls");
+  writeFileSync(docker, `#!/usr/bin/env node
+const fs = require("node:fs");
+const sql = process.argv.at(-1);
+const target = process.argv.includes("settlement-postgres");
+let kind;
+if (sql.startsWith("COPY (")) kind = "membership";
+else if (sql.includes("postmatch_source_generation")) kind = "generation";
+else if (sql.includes("GROUP BY partition_id")) kind = "source";
+else if (sql.includes("UNION ALL")) kind = "frontiers";
+else if (sql.includes("WITH obligation_counts")) kind = "counts";
+else if (sql.includes("CROSS JOIN LATERAL (VALUES")) kind = "ledger";
+else if (sql.includes("LEFT JOIN settlement.canonical_transition_attempts")) kind = "attempt";
+else process.exit(2);
+fs.appendFileSync(process.env.REEF_FAKE_CALLS, kind + "\\n");
+if (kind === "generation") process.stdout.write("gen\\n");
+if (kind === "source") process.stdout.write("0\\t2\\t2\\n");
+if (kind === "frontiers") {
+  const poll = fs.existsSync(process.env.REEF_FAKE_POLLS)
+    ? Number(fs.readFileSync(process.env.REEF_FAKE_POLLS, "utf8")) + 1 : 1;
+  fs.writeFileSync(process.env.REEF_FAKE_POLLS, String(poll));
+  for (const stage of ["intake", "obligation", "admission", "execution"]) {
+    if (stage === "execution" && (process.env.REEF_FAKE_STUCK === "1" ||
+      poll === 1 && process.env.REEF_FAKE_LAG === "1")) continue;
+    process.stdout.write(stage + "\\t0\\tgen\\t2\\n");
+  }
+}
+if (kind === "counts") process.stdout.write("1\\t1\\t0\\t1\\t0\\t0\\t1\\t1\\t1\\t1\\t4\\n");
+if (kind === "ledger") process.stdout.write(process.env.REEF_FAKE_BAD_LEDGER === "1" ? "1\\n" : "0\\n");
+if (kind === "attempt") process.stdout.write("0\\n");
+if (kind === "membership") process.stdout.write(target && process.env.REEF_FAKE_MISSING_TRADE === "1" &&
+  sql.includes("canonical_trade_intake") ? "" : "0,2,3,t1\\n");
+`);
+  chmodSync(docker, 0o755);
+  const run = (lag, badLedger, missingTrade = false, stuck = false) => {
+    writeFileSync(calls, "");
+    writeFileSync(polls, "0");
+    const output = join(dir, badLedger ? "bad-ledger.json" : missingTrade ? "bad-trade.json" :
+      stuck ? "stuck.json" : "pass.json");
+    const result = spawnSync(process.execPath,
+      ["scripts/dev/settlement-shadow-check.mjs", "REEF_EVENTS_TEST", "0", output, lag ? "3" : "0"],
+      { encoding: "utf8", env: { ...process.env, PATH: `${dir}:${process.env.PATH}`,
+        REEF_FAKE_CALLS: calls, REEF_FAKE_POLLS: polls,
+        REEF_FAKE_LAG: lag ? "1" : "0", REEF_FAKE_BAD_LEDGER: badLedger ? "1" : "0",
+        REEF_FAKE_MISSING_TRADE: missingTrade ? "1" : "0",
+        REEF_FAKE_STUCK: stuck ? "1" : "0" } });
+    return { result, report: JSON.parse(readFileSync(output, "utf8")),
+      calls: readFileSync(calls, "utf8").trim().split("\n") };
+  };
+  const pass = run(true, false);
+  assert.equal(pass.result.status, 0, pass.result.stderr);
+  assert.equal(pass.report.sourceTradeMembershipVerified, true);
+  assert.equal(pass.calls.filter((kind) => kind === "frontiers").length, 2);
+  assert.equal(pass.calls.filter((kind) => kind === "counts").length, 1);
+  assert.ok(pass.calls.indexOf("counts") > pass.calls.lastIndexOf("frontiers"));
+  assert.equal(pass.calls.filter((kind) => kind === "membership").length, 4);
+  const bad = run(false, true);
+  assert.equal(bad.result.status, 1);
+  assert.match(bad.report.failures.join(" "), /ledger legs differ/);
+  assert.equal(bad.calls.filter((kind) => kind === "counts").length, 1);
+  const missing = run(false, false, true);
+  assert.equal(missing.result.status, 1);
+  assert.match(missing.report.failures.join(" "), /intake trade membership differs/);
+  const stuck = run(false, false, false, true);
+  assert.equal(stuck.result.status, 1);
+  assert.match(stuck.report.failures.join(" "), /execution frontier missing/);
+  assert.equal(stuck.calls.filter((kind) => kind === "counts").length, 1);
+  assert.equal(stuck.calls.filter((kind) => kind === "membership").length, 0);
 });
 
 test("missing or stale transition and malformed ledger fail", () => {
@@ -101,8 +187,12 @@ test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes
         ('test', 0, 2, 'accepted', '{"trades":[]}'::jsonb);`);
     assert.equal(sql(sourceTradeMembershipSql("test", [0])), "0|1|3|t1\n0|1|6|t2");
     sql(`CREATE SCHEMA settlement;
-      CREATE TABLE settlement.canonical_trade_intake (trade_id text);
-      CREATE TABLE settlement.canonical_transition_admission_completions (admission_rank bigint);
+      CREATE TABLE settlement.canonical_trade_intake (
+        trade_id text, event_stream text, source_generation text);
+      INSERT INTO settlement.canonical_trade_intake VALUES ('t1', 'test', 'g1');
+      CREATE TABLE settlement.canonical_transition_admission_completions (
+        admission_rank bigint, event_stream text, source_generation text);
+      INSERT INTO settlement.canonical_transition_admission_completions VALUES (1, 'test', 'g1');
       CREATE TABLE settlement.canonical_transition_admissions (
         event_stream text, source_generation text, admission_rank bigint);
       CREATE TABLE settlement.canonical_transition_dependencies (
@@ -115,7 +205,9 @@ test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes
         event_stream text, source_generation text, trade_id text, run_id text, status text,
         buyer_participant_id text, buyer_account_id text, seller_participant_id text,
         seller_account_id text, currency text, instrument_id text,
-        cash_amount numeric, quantity_units numeric, post_trade_profile_id text DEFAULT 'instant',
+        cash_amount numeric, quantity_units numeric,
+        post_trade_mode text DEFAULT 'instant-post-trade',
+        post_trade_profile_id text DEFAULT 'instant',
         post_trade_policy_version integer DEFAULT 1, partition_id integer DEFAULT 0,
         stream_sequence bigint DEFAULT 1);
       CREATE TABLE settlement.canonical_transition_attempts (
@@ -138,6 +230,8 @@ test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes
         ('test', 'g1', 't1', 1, 'SELLER_CASH_CREDIT', 'r1', 'seller', 's1', 'CASH', 'USD', 'CREDIT', 250),
         ('test', 'g1', 't1', 1, 'SELLER_SECURITY_DEBIT', 'r1', 'seller', 's1', 'SECURITY', 'ABC', 'DEBIT', 5),
         ('test', 'g1', 't1', 1, 'BUYER_SECURITY_CREDIT', 'r1', 'buyer', 'b1', 'SECURITY', 'ABC', 'CREDIT', 5);`);
+    assert.deepEqual(sql(settlementCountsSql("test", "g1")).split("|"),
+      ["1", "1", "0", "1", "0", "0", "3", "3", "1", "1", "4"]);
     const edges = sql(dependencyGraphSql("test", "g1")).split("\n").map((row) => row.split("|"));
     assert.deepEqual(assessDependencyGraph(edges),
       { admissions: 3, edges: 2, maxDepth: 3, deepestAdmissionRank: "3" });
