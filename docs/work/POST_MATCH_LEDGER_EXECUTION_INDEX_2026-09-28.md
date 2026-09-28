@@ -30,7 +30,7 @@ explicit decision; document them without compatibility dual-write.
 | PMJ-00 | Record agreed authority, flow, failure and market-data cutover contract | None | Lead | Done in D-060 and settlement contract; not implementation |
 | PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference proof ready for user review; authority adapters remain for vertical proof |
 | PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Candidate core and focused proof in progress; external source/control proof open |
-| PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Waiting |
+| PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Recovery read and fault proof in progress; external restore anchor remains a gate |
 | PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Waiting |
 | PMJ-05 | Complete sustained correctness/capacity run for both sibling paths and measured decision | PMJ-03, PMJ-04 | Lead + bounded research/test worker | Waiting |
 | PMJ-06 | Independent architecture/code review and conditional breaking cutover plan | PMJ-05 pass | Independent reviewer; lead decides | Waiting |
@@ -81,6 +81,7 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | Pre-work journal write shape | Linked raw evidence and focused PostgreSQL test | 640-result append samples 28.53–31.39 ms in final warm run; not end-to-end |
 | 2026-09-28 | PMJ-01 reference and normalized-path parity | `ReferenceSettlementInterpreterTest` and `SettlementJournalReferenceParityIntegrationTest`; combined offline Gradle run against disposable `reef_journal_parity_20260928` settlement database | 9 reference tests and 1 PostgreSQL test; 0 skipped/failures/errors. Covers ordered scarce winners, full four-leg effects, breaks, explicit retry, empty ranges, duplicates, changed inputs and normalized-path parity for three small cohorts. Fixture proof callbacks do not authenticate source absence or control provenance. |
 | 2026-09-28 | PMJ-02 default-off core candidate, after authority-binding repair | `SettlementJournalControlCodecTest`, `SettlementJournalEvaluatorTest`, `SettlementJournalStoreIntegrationTest`, `SettlementJournalCandidateIntegrationTest`, plus PMJ-01 suites; combined offline Gradle run against disposable database | 29 tests, 0 skipped/failures/errors. Typed append, head fence, atomic rollback, duplicate/tampered-row rejection, ordered scarce winner, explicit retry and changed prepared-input rejection have focused coverage. Candidate reads retained JSONB outcomes through existing reader but uses fixture source/control proof callbacks. No projection, restore/replay, sibling market-data load, or throughput qualification yet. |
+| 2026-09-28 | PMJ-03 local recovery-read and failure-boundary slice | `SettlementJournalVerifiedReadIntegrationTest` and `SettlementJournalFailureBoundaryIntegrationTest`, combined with prior six suites against disposable database | 35 tests total, 0 skipped/failures/errors. Verified primary-snapshot read rejects local row/chain/head corruption; immutable envelope and checked replay copy reject post-read mutation. Rollback, lost-reply duplicate and same-incarnation fence boundaries pass. No source/control authenticity, evaluator replay, snapshot, independent restore or new-incarnation takeover is claimed. |
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
@@ -135,6 +136,28 @@ failures or errors. `bun test scripts/dev/db/migrate.test.mjs`: 26 pass,
 zero fail. Reviewer-confirmed PMJ-02 fixes include complete decoded-trade
 manifest consumption, exact prepared-input binding, durable duplicate-row
 verification and control sequence/step ordering.
+
+PMJ-03 authority audit (2026-09-28): existing source reader and verifier can
+authenticate contiguous retained outcomes, including an outcome range with
+zero trades; an empty SQL result is not an authenticated empty source-position
+range. Current runtime policy assignments and admin profiles are mutable, and
+resource openings are trigger-maintained from mutable positions. They do not
+provide an immutable, globally ordered policy/opening/funding control log.
+Recovery therefore keeps true empty-range and production control callbacks
+fail-closed until those authorities are supplied. A journal database restored
+behind acknowledged finality cannot fence itself: changed-incarnation takeover
+also requires a durable monotonic anchor outside that restore domain.
+
+PMJ-03 focused command from `services/platform-runtime`, with disposable test
+database and `SETTLEMENT_POSTGRES_PASSWORD_TEST` set locally:
+
+```sh
+SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_parity_20260928 SETTLEMENT_POSTGRES_USER_TEST=reef ./gradlew test --offline --console=plain --tests com.reef.platform.application.settlementjournal.ReferenceSettlementInterpreterTest --tests com.reef.platform.application.settlementjournal.SettlementJournalControlCodecTest --tests com.reef.platform.application.settlementjournal.SettlementJournalEvaluatorTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalReferenceParityIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalStoreIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalCandidateIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalVerifiedReadIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalFailureBoundaryIntegrationTest
+```
+
+Final local slice run: `BUILD SUCCESSFUL in 5s`; JUnit XML 35 tests, zero
+skipped, failures or errors. This is a storage/reply boundary proof, not
+financial-state replay or restore qualification.
 
 Each worker returns scoped status, files, exact commands/results, decisions,
 assumptions, limitations and next action. Lead verifies material claims in

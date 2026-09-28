@@ -11,6 +11,8 @@ import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
+import java.util.Base64
+import java.util.Collections
 import javax.sql.DataSource
 
 /** Manifest members are retained JSONB::text outcome digests, one per source sequence. */
@@ -109,6 +111,55 @@ data class SettlementJournalProposalPreview(
     val resultCount: Int
 )
 
+/** Immutable form of a retained control; its byte payload never escapes the verified envelope. */
+data class SettlementJournalVerifiedControl(
+    val stepIndex: Int,
+    val sequence: Long,
+    val id: String,
+    val kind: String,
+    val version: Int,
+    val payloadBase64: String,
+    val digest: String
+)
+
+/** One locally verified durable envelope; external source/control authority remains separate. */
+class SettlementJournalVerifiedBatch internal constructor(
+    proposal: SettlementJournalBatchProposal,
+    val proposalDigest: String,
+    val batchDigest: String
+) {
+    val eventStream: String = proposal.eventStream
+    val batchSequence: Long = proposal.expectedBatchSequence
+    val previousDigest: String = proposal.expectedPreviousDigest
+    val ownerEpoch: Long = proposal.ownerEpoch
+    val incarnationId: String = proposal.incarnationId
+    val sourceWindows: List<SettlementJournalSourceWindow> = immutableList(proposal.sourceWindows.map {
+        it.copy(members = immutableList(it.members))
+    })
+    val controls: List<SettlementJournalVerifiedControl> = immutableList(proposal.controls.map {
+        SettlementJournalVerifiedControl(it.stepIndex, it.sequence, it.id, it.kind, it.version,
+            Base64.getEncoder().encodeToString(it.payload), it.digest)
+    })
+    val results: List<SettlementJournalResult> = immutableList(proposal.results.map {
+        it.copy(openingControlIds = immutableList(it.openingControlIds),
+            fundingControlIds = immutableList(it.fundingControlIds))
+    })
+
+    internal fun proposalCopy(): SettlementJournalBatchProposal = SettlementJournalBatchProposal(
+        eventStream, batchSequence, previousDigest, ownerEpoch, incarnationId,
+        sourceWindows.map { it.copy(members = it.members.toList()) },
+        controls.map { SettlementJournalControl(it.stepIndex, it.sequence, it.id, it.kind,
+            it.version, Base64.getDecoder().decode(it.payloadBase64), it.digest) },
+        results.map { it.copy(openingControlIds = it.openingControlIds.toList(),
+            fundingControlIds = it.fundingControlIds.toList()) }
+    )
+
+    private companion object {
+        fun <T> immutableList(values: List<T>): List<T> =
+            Collections.unmodifiableList(ArrayList(values))
+    }
+}
+
 /**
  * Default-off append authority. Caller proves source/control inputs and evaluates tentative state;
  * only this durable receipt permits making tentative account state visible. Restore proof is PMJ-03.
@@ -141,6 +192,93 @@ class SettlementJournalStore(
 
     fun head(eventStream: String): SettlementJournalHead = dataSource.connection.use { connection ->
         readHead(connection, eventStream, false)
+    }
+
+    /** A separate mutable replay input, checked again against the verified envelope digest. */
+    fun replayProposalCopy(verified: SettlementJournalVerifiedBatch): SettlementJournalBatchProposal {
+        val copy = verified.proposalCopy()
+        val computed = preview(copy)
+        check(computed.proposalDigest == verified.proposalDigest &&
+            computed.batchDigest == verified.batchDigest) {
+            "verified journal envelope changed before replay"
+        }
+        return copy
+    }
+
+    /**
+     * Read one committed envelope from a stable primary snapshot. This verifies the complete
+     * stored row set and adjacent hash links, but does not authenticate external source facts.
+     */
+    fun readVerifiedBatch(eventStream: String, batchSequence: Long): SettlementJournalVerifiedBatch {
+        require(eventStream.isNotBlank() && batchSequence > 0)
+        return dataSource.connection.use { connection ->
+            val oldAutoCommit = connection.autoCommit
+            val oldIsolation = connection.transactionIsolation
+            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+            connection.autoCommit = false
+            try {
+                val head = readHead(connection, eventStream, false)
+                check(batchSequence < head.nextBatchSequence) { "journal batch is not committed" }
+                val header = committedBatch(connection, eventStream, batchSequence)
+                    ?: error("committed journal batch is missing")
+                val windows = readSourceWindows(connection, eventStream, batchSequence)
+                val controls = readControls(connection, eventStream, batchSequence)
+                val results = readResults(connection, eventStream, batchSequence)
+                check(windows.size == header.sourceWindowCount &&
+                    controls.size == header.controlCount && results.size == header.resultCount) {
+                    "committed journal batch member count changed"
+                }
+                val proposal = SettlementJournalBatchProposal(eventStream, batchSequence,
+                    header.previousDigest, header.ownerEpoch, header.incarnationId,
+                    windows, controls, results)
+                val encoded = encode(proposal)
+                val expectedBatchDigest = digest(listOf("reef.settlement.journal.batch.v1",
+                    header.previousDigest, batchSequence.toString(), encoded.proposalDigest))
+                check(header.proposalDigest == encoded.proposalDigest &&
+                    header.batchDigest == expectedBatchDigest) {
+                    "committed journal batch digest changed"
+                }
+                val predecessor = if (batchSequence == 1L) ORIGIN_DIGEST else
+                    committedBatch(connection, eventStream, batchSequence - 1)?.batchDigest
+                        ?: error("committed journal predecessor is missing")
+                check(header.previousDigest == predecessor) { "committed journal predecessor changed" }
+                if (batchSequence == head.nextBatchSequence - 1) {
+                    check(head.lastBatchDigest == header.batchDigest) {
+                        "committed journal head differs from final batch"
+                    }
+                    val finalControl = connection.prepareStatement(
+                        """SELECT control_sequence, prefix_digest
+                           FROM $schema.settlement_journal_controls WHERE event_stream = ?
+                           ORDER BY control_sequence DESC LIMIT 1"""
+                    ).use { statement ->
+                        statement.setString(1, eventStream)
+                        statement.executeQuery().use { rows ->
+                            if (rows.next()) rows.getLong(1) to rows.getString(2)
+                            else 0L to ORIGIN_DIGEST
+                        }
+                    }
+                    check(head.lastControlSequence == finalControl.first &&
+                        head.lastControlDigest == finalControl.second) {
+                        "committed journal control head changed"
+                    }
+                } else {
+                    val successor = committedBatch(connection, eventStream, batchSequence + 1)
+                        ?: error("committed journal successor is missing")
+                    check(successor.previousDigest == header.batchDigest) {
+                        "committed journal successor changed"
+                    }
+                }
+                verifyStoredMembers(connection, proposal, encoded)
+                connection.commit()
+                SettlementJournalVerifiedBatch(proposal, encoded.proposalDigest, header.batchDigest)
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = oldAutoCommit
+                connection.transactionIsolation = oldIsolation
+            }
+        }
     }
 
     /** Same-incarnation owner takeover. A changed incarnation requires PMJ-03 restore proof. */
@@ -492,6 +630,90 @@ class SettlementJournalStore(
                     rows.getInt(7), rows.getInt(8)).also { check(!rows.next()) }
             }
         }
+
+    private fun readSourceWindows(connection: Connection, stream: String,
+        sequence: Long): List<SettlementJournalSourceWindow> = connection.prepareStatement(
+        """SELECT window_index, step_index, source_generation, partition_id,
+                  from_exclusive_sequence, through_inclusive_sequence, coverage_proof_id,
+                  coverage_digest, member_count, member_manifest
+           FROM $schema.settlement_journal_source_windows
+           WHERE event_stream = ? AND batch_sequence = ? ORDER BY window_index"""
+    ).use { statement ->
+        statement.setString(1, stream); statement.setLong(2, sequence)
+        statement.executeQuery().use { rows ->
+            buildList {
+                while (rows.next()) {
+                    check(rows.getInt(1) == size) { "committed source window index changed" }
+                    val generation = rows.getString(3)
+                    val partition = rows.getInt(4)
+                    val from = rows.getLong(5)
+                    val through = rows.getLong(6)
+                    val members = decodeWindowMembers(rows.getBytes(10), generation, partition,
+                        from, through).map { (memberSequence, memberDigest) ->
+                        SettlementJournalSourceMember(memberSequence, memberDigest)
+                    }
+                    check(members.size == rows.getInt(9)) {
+                        "committed source window member count changed"
+                    }
+                    add(SettlementJournalSourceWindow(rows.getInt(2), generation, partition,
+                        from, through, rows.getString(7), rows.getString(8), members))
+                }
+            }
+        }
+    }
+
+    private fun readControls(connection: Connection, stream: String,
+        sequence: Long): List<SettlementJournalControl> = connection.prepareStatement(
+        """SELECT control_index, step_index, control_sequence, control_id, control_kind,
+                  control_version, payload, control_digest
+           FROM $schema.settlement_journal_controls
+           WHERE event_stream = ? AND batch_sequence = ? ORDER BY control_index"""
+    ).use { statement ->
+        statement.setString(1, stream); statement.setLong(2, sequence)
+        statement.executeQuery().use { rows ->
+            buildList {
+                while (rows.next()) {
+                    check(rows.getInt(1) == size) { "committed control index changed" }
+                    add(SettlementJournalControl(rows.getInt(2), rows.getLong(3),
+                        rows.getString(4), rows.getString(5), rows.getInt(6),
+                        rows.getBytes(7), rows.getString(8)))
+                }
+            }
+        }
+    }
+
+    private fun readResults(connection: Connection, stream: String,
+        sequence: Long): List<SettlementJournalResult> = connection.prepareStatement(
+        """SELECT result_index, decision_step_index, trade_id, attempt_number,
+                  source_generation, partition_id, stream_sequence, effect_ordinal,
+                  source_member_digest, event_id, run_id, venue_session_id,
+                  buyer_participant_id, buyer_account_id, seller_participant_id,
+                  seller_account_id, currency, instrument_id, cash_amount, quantity_units,
+                  occurred_at_text, policy_control_id, opening_control_ids,
+                  funding_control_ids, bound_control_digest, outcome, break_reason, workflow_facts
+           FROM $schema.settlement_journal_results
+           WHERE event_stream = ? AND batch_sequence = ? ORDER BY result_index"""
+    ).use { statement ->
+        statement.setString(1, stream); statement.setLong(2, sequence)
+        statement.executeQuery().use { rows ->
+            buildList {
+                while (rows.next()) {
+                    check(rows.getInt(1) == size) { "committed result index changed" }
+                    add(SettlementJournalResult(rows.getInt(2), rows.getString(3), rows.getInt(4),
+                        rows.getString(5), rows.getInt(6), rows.getLong(7), rows.getInt(8),
+                        rows.getString(9), rows.getString(10), rows.getString(11), rows.getString(12),
+                        rows.getString(13), rows.getString(14), rows.getString(15), rows.getString(16),
+                        rows.getString(17), rows.getString(18), rows.getBigDecimal(19),
+                        rows.getBigDecimal(20), Instant.parse(rows.getString(21)),
+                        rows.getString(22),
+                        (rows.getArray(23).array as Array<*>).map { it as String },
+                        (rows.getArray(24).array as Array<*>).map { it as String },
+                        rows.getString(25), rows.getString(26), rows.getString(27),
+                        rows.getString(28)))
+                }
+            }
+        }
+    }
 
     private fun validateSourceFrontiers(connection: Connection, proposal: SettlementJournalBatchProposal) {
         val seen = mutableMapOf<Int, Pair<String, Long>>()
