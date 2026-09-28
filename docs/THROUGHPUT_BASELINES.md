@@ -1497,3 +1497,52 @@ failure. A corrected treatment retry sets settlement `max_connections=240`.
 retains both load reports, gate/stage summaries, failed exact checks, graph,
 pool-two startup log, and checksums. Full raw artifacts remain in ignored
 local `reports/do-benchmark/` directories for the three run IDs.
+
+## PM-S3 attempt 3 — corrected settlement DB limit, treatment capacity FAILED
+
+September 28, same disposable `sfo3` `c-32` droplet (`604195292`). A new
+320-connection control was stopped during setup before traffic to reserve the
+remaining two-hour slot for treatment. Treatment with source PostgreSQL at 320
+and settlement PostgreSQL at its default 100 passed smoke but failed at
+settlement seed before traffic: `settlement-postgres` had 100/100 clients,
+while source had about 194/320. This identifies the seed failure's actual
+database, correcting the earlier source attribution.
+
+The corrected treatment
+`postmatch-capacity-treatment-settlement240-20260928T0139Z` used source 320,
+settlement 240, six materializers, sixteen projector owners, four dedicated
+live workers, four dedicated settlement workers, 384 load workers, fresh
+volumes, and a 10,000/s target for 300 seconds. Repeat smoke was skipped after
+the same code passed smoke in the immediately preceding setup. Settlement seed
+succeeded. It accepted and direct-acked 2,776,548 commands (9,254.07/s;
+p95 93.15 ms, p99 158.15 ms), below the 9,900/s gate. The load report's
+durable-canonical snapshot held 2,620,026 items, leaving a 156,522 gap;
+downstream cohort proof failed. This is a treatment capacity failure, not a
+matched 320/240 control comparison or final correctness result.
+
+Retained in-load stage samples passed the measurement gate: four intervals,
+maximum total observer duty 3.44% and settlement duty 1.80%. Approximate
+`pg_stat_user_tables.n_tup_ins` rates were 6,255–7,415 source outcomes/s,
+2,018–2,215 settlement intake trades/s, 39–41 admission windows/s, 2.1–2.6
+completion windows/s, and 76–96 transition attempts/s. By the last retained
+sample about three minutes after load, settlement insert statistics showed
+1,220,848 intake trades, 22,211 admissions, 1,300 completions, and 52,564
+attempts. These are not exact closed-cohort counts.
+
+Settlement PostgreSQL diagnostics put the shared admission-counter row first:
+22,465 `UPDATE` calls accumulated 3.41 million ms SQL execution time, and
+22,474 `INSERT ... ON CONFLICT DO NOTHING` calls accumulated 2.05 million ms.
+A live snapshot found ten tuple-lock waits and two transaction-ID waits.
+These are summed concurrent SQL times, not elapsed latency; they support
+counter-row contention as the admission bottleneck. Four worker log snapshots
+each showed about 4,800–4,950 admitted windows but only 285–293 applied
+windows, with roughly 77–80% of readiness checks blocked. This makes ordered
+execution and predecessor readiness a separate bottleneck; faster admission
+alone cannot close the gap. Source materialization
+and projection SQL also had large cumulative costs, so the full ingress-rate
+loss is not yet attributed. Exact post-match and settlement closed-cohort
+checks did not finish before the user-set droplet cutoff. Destruction was
+requested at two hours, completed after provider teardown, and OpenTofu state
+was empty. [Attempt 3 evidence](../artifacts/postmatch-capacity-20260928/attempt-3/)
+retains original reports and logs, DB diagnostics, stage samples, and an
+offline stage-check result.

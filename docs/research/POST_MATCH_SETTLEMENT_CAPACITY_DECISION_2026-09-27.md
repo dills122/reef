@@ -1,7 +1,9 @@
 # Settlement capacity after PM-S2 — 2026-09-27
 
-Status: **recommendation suspended after PM-S2 forensic review**. PM-S2 does
-not isolate a settlement algorithm limit or justify implementing batching next.
+Status: **PM-S2 recommendation suspended; PM-S3 evidence update below**. PM-S2
+does not isolate a settlement algorithm limit or justify implementing batching
+next. PM-S3 identifies admission contention and blocked execution but does not
+provide a matched integrated capacity comparison.
 No public-read, production, or accepted-decision change. Project owner owns
 any amendment to D-059.
 
@@ -132,3 +134,42 @@ the same 60-second interval, and query duty is gated on intervals entirely
 inside the measured load. Exact source-to-intake trade membership remains a
 stopped-source proof. The corrected pair needs a new hosted run before any
 capacity or incremental-cost claim.
+
+### PM-S3 corrected treatment: failure attribution, not capacity qualification
+
+[Attempt 3](../../artifacts/postmatch-capacity-20260928/attempt-3/) used
+source PostgreSQL `max_connections=320` and settlement PostgreSQL
+`max_connections=240`. The 100-connection settlement limit had blocked the
+preceding seed; the earlier source-database attribution was wrong. The
+corrected treatment completed a 300-second load at 9,254.07 accepted/direct
+acks per second against a 10,000/s target, below the 9,900/s gate. Its load
+report still had a 156,522 accepted-to-canonical materialization gap and
+failed downstream cohort proof. Exact post-match and settlement closed-cohort
+checks did not finish before the two-hour droplet cutoff. The planned
+320/240 control was stopped before traffic, so this run cannot quantify the
+incremental architecture cost.
+
+Four qualified in-load stage intervals establish that the observer was light
+enough for the specified measurement gate. Settlement SQL and a live wait
+snapshot identify repeated updates to one admission-counter row with tuple
+and transaction-ID lock waits. Each of four settlement workers logged about
+4,800–4,950 admitted windows but only 285–293 applied windows; roughly
+77–80% of readiness checks were blocked. Approximate table statistics also
+showed admission windows increasing around 39–41/s but completion windows
+around 2.1–2.6/s during the sampled intervals. These independent signals
+support **two** bottlenecks: contended global rank persistence and ordered
+execution stalled behind predecessors. They do not show that rank batching
+alone will restore capacity. Source materialization and projection SQL had
+large cumulative costs on the same host, and SQL times include concurrent
+waits; this run does not allocate the ingress loss among stages.
+
+Next design spike: retain D-059's durable rank and scarce-account ordering;
+reduce per-rank counter transactions **and** execute bounded consecutive
+dependent windows together after one readiness/proof pass, preserving
+rank-order balance decisions and atomic four-leg DvP, ledger, frontier, and
+replay facts. Use local Docker with a fixed cohort to compare current and
+candidate execution work, crash/replay, and exact membership. Then run a
+disposable matched 320/240 control and treatment with completed closed-cohort
+checks and enough time for drain. A separate diverse-account fixture must
+test whether the five-actor hot-account dependency chain is the main workload
+limit. Until those proofs, this is a design candidate, not a throughput claim.

@@ -1,0 +1,320 @@
+{
+  "generatedAt": "2026-09-28T01:55:46.252Z",
+  "invalidIntentCodes": [
+    "INVALID_STATE",
+    "NOT_FOUND",
+    "SELF_TRADE_PREVENTION",
+    "VALIDATION_ERROR"
+  ],
+  "sampleCount": 1,
+  "averages": {
+    "throughputRps": 9254.073157259707,
+    "acceptedBusinessOpsRps": 9254.073157259707,
+    "endToEndSuccessRatePct": 100,
+    "validIntentSuccessRatePct": 100,
+    "invalidIntentRatePct": 0,
+    "systemFailureRateProxyPct": 0,
+    "tracePassRatePct": 100,
+    "p95LatencyMs": 93.146501,
+    "p99LatencyMs": 158.145479
+  },
+  "evidenceAverages": {
+    "attempted": 2776548,
+    "accepted": 2776548,
+    "directAcked": 2776548,
+    "materialized": 2620026,
+    "projected": 2776548,
+    "lag": 0,
+    "p95LatencyMs": 93.146501,
+    "p99LatencyMs": 158.145479,
+    "rates": {
+      "attemptedPerSecond": 9254.073157259707,
+      "acceptedPerSecond": 9254.073157259707,
+      "directAckedPerSecond": 9254.073157259707,
+      "materializedPerSecond": 8732.394425712258,
+      "projectedPerSecond": 9254.073157259707
+    },
+    "gaps": {
+      "acceptedToDirectAcked": 0,
+      "acceptedToMaterialized": 156522,
+      "materializedToProjected": 0
+    }
+  },
+  "bestByThroughput": {
+    "path": "/tmp/reef-do-benchmark/postmatch-capacity-treatment-settlement240-20260928T0139Z/venue-event-materializer-stress-rate-10000-workers-384.json",
+    "rate": 10000,
+    "workers": 384,
+    "evidence": {
+      "attempted": 2776548,
+      "accepted": 2776548,
+      "directAcked": 2776548,
+      "materialized": 2620026,
+      "projected": 2776548,
+      "lag": 0,
+      "p95LatencyMs": 93.146501,
+      "p99LatencyMs": 158.145479,
+      "rates": {
+        "attemptedPerSecond": 9254.073157259707,
+        "acceptedPerSecond": 9254.073157259707,
+        "directAckedPerSecond": 9254.073157259707,
+        "materializedPerSecond": 8732.394425712258,
+        "projectedPerSecond": 9254.073157259707
+      },
+      "gaps": {
+        "acceptedToDirectAcked": 0,
+        "acceptedToMaterialized": 156522,
+        "materializedToProjected": 0
+      },
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 2620026,
+        "projected": 2776548,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 9254.073157259707,
+        "caughtUp": true
+      }
+    },
+    "throughputRps": 9254.073157259707,
+    "acceptedBusinessOpsRps": 9254.073157259707,
+    "endToEndSuccessRatePct": 100,
+    "validIntentSuccessRatePct": 100,
+    "invalidIntentRatePct": 0,
+    "systemFailureRateProxyPct": 0,
+    "streamAckClean": true,
+    "streamAckWorkerFailedDelta": 0,
+    "streamAckWorkerAckFailedDelta": 0,
+    "streamAckCompletionGap": 0,
+    "streamDirectClean": true,
+    "streamDirectFailedDelta": 0,
+    "streamDirectNackedDelta": 0,
+    "streamDirectCompletionGap": 0,
+    "tracePassRatePct": 100,
+    "p95LatencyMs": 93.146501,
+    "p99LatencyMs": 158.145479,
+    "rejectTaxonomy": []
+  },
+  "bestByAccepted": {
+    "path": "/tmp/reef-do-benchmark/postmatch-capacity-treatment-settlement240-20260928T0139Z/venue-event-materializer-stress-rate-10000-workers-384.json",
+    "rate": 10000,
+    "workers": 384,
+    "evidence": {
+      "attempted": 2776548,
+      "accepted": 2776548,
+      "directAcked": 2776548,
+      "materialized": 2620026,
+      "projected": 2776548,
+      "lag": 0,
+      "p95LatencyMs": 93.146501,
+      "p99LatencyMs": 158.145479,
+      "rates": {
+        "attemptedPerSecond": 9254.073157259707,
+        "acceptedPerSecond": 9254.073157259707,
+        "directAckedPerSecond": 9254.073157259707,
+        "materializedPerSecond": 8732.394425712258,
+        "projectedPerSecond": 9254.073157259707
+      },
+      "gaps": {
+        "acceptedToDirectAcked": 0,
+        "acceptedToMaterialized": 156522,
+        "materializedToProjected": 0
+      },
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 2620026,
+        "projected": 2776548,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 9254.073157259707,
+        "caughtUp": true
+      }
+    },
+    "throughputRps": 9254.073157259707,
+    "acceptedBusinessOpsRps": 9254.073157259707,
+    "endToEndSuccessRatePct": 100,
+    "validIntentSuccessRatePct": 100,
+    "invalidIntentRatePct": 0,
+    "systemFailureRateProxyPct": 0,
+    "streamAckClean": true,
+    "streamAckWorkerFailedDelta": 0,
+    "streamAckWorkerAckFailedDelta": 0,
+    "streamAckCompletionGap": 0,
+    "streamDirectClean": true,
+    "streamDirectFailedDelta": 0,
+    "streamDirectNackedDelta": 0,
+    "streamDirectCompletionGap": 0,
+    "tracePassRatePct": 100,
+    "p95LatencyMs": 93.146501,
+    "p99LatencyMs": 158.145479,
+    "rejectTaxonomy": []
+  },
+  "qualityCap90": {
+    "path": "/tmp/reef-do-benchmark/postmatch-capacity-treatment-settlement240-20260928T0139Z/venue-event-materializer-stress-rate-10000-workers-384.json",
+    "rate": 10000,
+    "workers": 384,
+    "evidence": {
+      "attempted": 2776548,
+      "accepted": 2776548,
+      "directAcked": 2776548,
+      "materialized": 2620026,
+      "projected": 2776548,
+      "lag": 0,
+      "p95LatencyMs": 93.146501,
+      "p99LatencyMs": 158.145479,
+      "rates": {
+        "attemptedPerSecond": 9254.073157259707,
+        "acceptedPerSecond": 9254.073157259707,
+        "directAckedPerSecond": 9254.073157259707,
+        "materializedPerSecond": 8732.394425712258,
+        "projectedPerSecond": 9254.073157259707
+      },
+      "gaps": {
+        "acceptedToDirectAcked": 0,
+        "acceptedToMaterialized": 156522,
+        "materializedToProjected": 0
+      },
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 2620026,
+        "projected": 2776548,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 9254.073157259707,
+        "caughtUp": true
+      }
+    },
+    "throughputRps": 9254.073157259707,
+    "acceptedBusinessOpsRps": 9254.073157259707,
+    "endToEndSuccessRatePct": 100,
+    "validIntentSuccessRatePct": 100,
+    "invalidIntentRatePct": 0,
+    "systemFailureRateProxyPct": 0,
+    "streamAckClean": true,
+    "streamAckWorkerFailedDelta": 0,
+    "streamAckWorkerAckFailedDelta": 0,
+    "streamAckCompletionGap": 0,
+    "streamDirectClean": true,
+    "streamDirectFailedDelta": 0,
+    "streamDirectNackedDelta": 0,
+    "streamDirectCompletionGap": 0,
+    "tracePassRatePct": 100,
+    "p95LatencyMs": 93.146501,
+    "p99LatencyMs": 158.145479,
+    "rejectTaxonomy": []
+  },
+  "qualityCap95": {
+    "path": "/tmp/reef-do-benchmark/postmatch-capacity-treatment-settlement240-20260928T0139Z/venue-event-materializer-stress-rate-10000-workers-384.json",
+    "rate": 10000,
+    "workers": 384,
+    "evidence": {
+      "attempted": 2776548,
+      "accepted": 2776548,
+      "directAcked": 2776548,
+      "materialized": 2620026,
+      "projected": 2776548,
+      "lag": 0,
+      "p95LatencyMs": 93.146501,
+      "p99LatencyMs": 158.145479,
+      "rates": {
+        "attemptedPerSecond": 9254.073157259707,
+        "acceptedPerSecond": 9254.073157259707,
+        "directAckedPerSecond": 9254.073157259707,
+        "materializedPerSecond": 8732.394425712258,
+        "projectedPerSecond": 9254.073157259707
+      },
+      "gaps": {
+        "acceptedToDirectAcked": 0,
+        "acceptedToMaterialized": 156522,
+        "materializedToProjected": 0
+      },
+      "projectionFreshness": {
+        "source": "venue-event-batch-projector",
+        "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+        "materialized": 2620026,
+        "projected": 2776548,
+        "materializedToProjectedGap": 0,
+        "lag": 0,
+        "projectedPerSecond": 9254.073157259707,
+        "caughtUp": true
+      }
+    },
+    "throughputRps": 9254.073157259707,
+    "acceptedBusinessOpsRps": 9254.073157259707,
+    "endToEndSuccessRatePct": 100,
+    "validIntentSuccessRatePct": 100,
+    "invalidIntentRatePct": 0,
+    "systemFailureRateProxyPct": 0,
+    "streamAckClean": true,
+    "streamAckWorkerFailedDelta": 0,
+    "streamAckWorkerAckFailedDelta": 0,
+    "streamAckCompletionGap": 0,
+    "streamDirectClean": true,
+    "streamDirectFailedDelta": 0,
+    "streamDirectNackedDelta": 0,
+    "streamDirectCompletionGap": 0,
+    "tracePassRatePct": 100,
+    "p95LatencyMs": 93.146501,
+    "p99LatencyMs": 158.145479,
+    "rejectTaxonomy": []
+  },
+  "samples": [
+    {
+      "path": "/tmp/reef-do-benchmark/postmatch-capacity-treatment-settlement240-20260928T0139Z/venue-event-materializer-stress-rate-10000-workers-384.json",
+      "rate": 10000,
+      "workers": 384,
+      "evidence": {
+        "attempted": 2776548,
+        "accepted": 2776548,
+        "directAcked": 2776548,
+        "materialized": 2620026,
+        "projected": 2776548,
+        "lag": 0,
+        "p95LatencyMs": 93.146501,
+        "p99LatencyMs": 158.145479,
+        "rates": {
+          "attemptedPerSecond": 9254.073157259707,
+          "acceptedPerSecond": 9254.073157259707,
+          "directAckedPerSecond": 9254.073157259707,
+          "materializedPerSecond": 8732.394425712258,
+          "projectedPerSecond": 9254.073157259707
+        },
+        "gaps": {
+          "acceptedToDirectAcked": 0,
+          "acceptedToMaterialized": 156522,
+          "materializedToProjected": 0
+        },
+        "projectionFreshness": {
+          "source": "venue-event-batch-projector",
+          "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+          "materialized": 2620026,
+          "projected": 2776548,
+          "materializedToProjectedGap": 0,
+          "lag": 0,
+          "projectedPerSecond": 9254.073157259707,
+          "caughtUp": true
+        }
+      },
+      "throughputRps": 9254.073157259707,
+      "acceptedBusinessOpsRps": 9254.073157259707,
+      "endToEndSuccessRatePct": 100,
+      "validIntentSuccessRatePct": 100,
+      "invalidIntentRatePct": 0,
+      "systemFailureRateProxyPct": 0,
+      "streamAckClean": true,
+      "streamAckWorkerFailedDelta": 0,
+      "streamAckWorkerAckFailedDelta": 0,
+      "streamAckCompletionGap": 0,
+      "streamDirectClean": true,
+      "streamDirectFailedDelta": 0,
+      "streamDirectNackedDelta": 0,
+      "streamDirectCompletionGap": 0,
+      "tracePassRatePct": 100,
+      "p95LatencyMs": 93.146501,
+      "p99LatencyMs": 158.145479,
+      "rejectTaxonomy": []
+    }
+  ]
+}
