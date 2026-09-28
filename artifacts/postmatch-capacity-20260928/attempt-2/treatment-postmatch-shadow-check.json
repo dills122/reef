@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "reef.postmatchShadowDiagnostic.v1",
+  "eventStream": "REEF_EVENTS_postmatch_capacity_treatment_20260927T235615Z",
+  "partitions": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "checkedAt": "2026-09-28T00:46:47.360Z",
+  "status": "fail",
+  "failures": [
+    "live frontier behind source for partition 0",
+    "market frontier behind source for partition 0",
+    "live frontier behind source for partition 1",
+    "market frontier behind source for partition 1",
+    "live frontier behind source for partition 2",
+    "market frontier behind source for partition 2",
+    "live frontier behind source for partition 3",
+    "market frontier behind source for partition 3",
+    "live frontier behind source for partition 4",
+    "market frontier behind source for partition 4",
+    "live frontier behind source for partition 5",
+    "market frontier behind source for partition 5",
+    "live frontier behind source for partition 6",
+    "market frontier behind source for partition 6",
+    "live frontier behind source for partition 7",
+    "market frontier behind source for partition 7",
+    "live frontier behind source for partition 8",
+    "market frontier behind source for partition 8",
+    "live frontier behind source for partition 9",
+    "market frontier behind source for partition 9",
+    "live frontier behind source for partition 10",
+    "market frontier behind source for partition 10",
+    "live frontier behind source for partition 11",
+    "market frontier behind source for partition 11",
+    "live frontier behind source for partition 12",
+    "market frontier behind source for partition 12",
+    "live frontier behind source for partition 13",
+    "market frontier behind source for partition 13",
+    "live frontier behind source for partition 14",
+    "market frontier behind source for partition 14",
+    "live frontier behind source for partition 15",
+    "market frontier behind source for partition 15"
+  ],
+  "generation": "e2018e4e-3e70-4de6-8764-f766657e2948",
+  "rows": [
+    {
+      "partition": 0,
+      "sourceCount": "170866",
+      "sourceSequence": "170866",
+      "liveSequence": "139537",
+      "marketSequence": "139537"
+    },
+    {
+      "partition": 1,
+      "sourceCount": "171466",
+      "sourceSequence": "281474976882122",
+      "liveSequence": "281474976849400",
+      "marketSequence": "281474976849400"
+    },
+    {
+      "partition": 2,
+      "sourceCount": "172133",
+      "sourceSequence": "562949953593445",
+      "liveSequence": "562949953560651",
+      "marketSequence": "562949953560651"
+    },
+    {
+      "partition": 3,
+      "sourceCount": "172326",
+      "sourceSequence": "844424930304294",
+      "liveSequence": "844424930271378",
+      "marketSequence": "844424930271378"
+    },
+    {
+      "partition": 4,
+      "sourceCount": "172181",
+      "sourceSequence": "1125899907014805",
+      "liveSequence": "1125899906979217",
+      "marketSequence": "1125899906979217"
+    },
+    {
+      "partition": 5,
+      "sourceCount": "172482",
+      "sourceSequence": "1407374883725762",
+      "liveSequence": "1407374883689989",
+      "marketSequence": "1407374883689989"
+    },
+    {
+      "partition": 6,
+      "sourceCount": "171696",
+      "sourceSequence": "1688849860435632",
+      "liveSequence": "1688849860400767",
+      "marketSequence": "1688849860400767"
+    },
+    {
+      "partition": 7,
+      "sourceCount": "171826",
+      "sourceSequence": "1970324837146418",
+      "liveSequence": "1970324837111537",
+      "marketSequence": "1970324837111537"
+    },
+    {
+      "partition": 8,
+      "sourceCount": "171354",
+      "sourceSequence": "2251799813856602",
+      "liveSequence": "2251799813829119",
+      "marketSequence": "2251799813829119"
+    },
+    {
+      "partition": 9,
+      "sourceCount": "171915",
+      "sourceSequence": "2533274790567819",
+      "liveSequence": "2533274790539936",
+      "marketSequence": "2533274790539936"
+    },
+    {
+      "partition": 10,
+      "sourceCount": "172357",
+      "sourceSequence": "2814749767278917",
+      "liveSequence": "2814749767250744",
+      "marketSequence": "2814749767250744"
+    },
+    {
+      "partition": 11,
+      "sourceCount": "171650",
+      "sourceSequence": "3096224743988866",
+      "liveSequence": "3096224743961466",
+      "marketSequence": "3096224743961466"
+    },
+    {
+      "partition": 12,
+      "sourceCount": "171944",
+      "sourceSequence": "3377699720699816",
+      "liveSequence": "3377699720666236",
+      "marketSequence": "3377699720666236"
+    },
+    {
+      "partition": 13,
+      "sourceCount": "172720",
+      "sourceSequence": "3659174697411248",
+      "liveSequence": "3659174697377111",
+      "marketSequence": "3659174697377111"
+    },
+    {
+      "partition": 14,
+      "sourceCount": "171705",
+      "sourceSequence": "3940649674120889",
+      "liveSequence": "3940649674087901",
+      "marketSequence": "3940649674087901"
+    },
+    {
+      "partition": 15,
+      "sourceCount": "171953",
+      "sourceSequence": "4222124650831793",
+      "liveSequence": "4222124650798143",
+      "marketSequence": "4222124650798143"
+    }
+  ]
+}
