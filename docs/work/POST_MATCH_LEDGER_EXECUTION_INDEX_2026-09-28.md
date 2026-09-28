@@ -28,7 +28,7 @@ explicit decision; document them without compatibility dual-write.
 | ID | Outcome | Depends on | Delivery unit / owner | Status |
 | --- | --- | --- | --- | --- |
 | PMJ-00 | Record agreed authority, flow, failure and market-data cutover contract | None | Lead | Done in D-060 and settlement contract; not implementation |
-| PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Ready |
+| PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference proof ready for user review; authority adapters remain for vertical proof |
 | PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Waiting |
 | PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Waiting |
 | PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Waiting |
@@ -79,6 +79,27 @@ Matching and pre-trade remain outside every item in this index.
 | Date | Item | Evidence | Result |
 | --- | --- | --- | --- |
 | 2026-09-28 | Pre-work journal write shape | Linked raw evidence and focused PostgreSQL test | 640-result append samples 28.53–31.39 ms in final warm run; not end-to-end |
+| 2026-09-28 | PMJ-01 reference and normalized-path parity | `ReferenceSettlementInterpreterTest` and `SettlementJournalReferenceParityIntegrationTest`; combined offline Gradle run against disposable `reef_journal_parity_20260928` settlement database | 9 reference tests and 1 PostgreSQL test; 0 skipped/failures/errors. Covers ordered scarce winners, full four-leg effects, breaks, explicit retry, empty ranges, duplicates, changed inputs and normalized-path parity for three small cohorts. Fixture proof callbacks do not authenticate source absence or control provenance. |
+
+Focused command from `services/platform-runtime`, with
+`SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
+
+```sh
+SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_parity_20260928 SETTLEMENT_POSTGRES_USER_TEST=reef ./gradlew test --offline --console=plain --tests com.reef.platform.application.settlementjournal.ReferenceSettlementInterpreterTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalReferenceParityIntegrationTest
+```
+
+Gradle: `BUILD SUCCESSFUL in 3s`. JUnit XML: reference `tests=9`, parity
+`tests=1`, both `skipped=0`, `failures=0`, `errors=0`.
+
+PMJ-01 binds source identity to the exact retained `result_payload::text` value
+read from PostgreSQL JSONB. Original matching transport bytes are not retained
+by the current source store. This is an explicit proof boundary, not a claim
+that original wire bytes can be recovered. Before PMJ-02 integrates the real
+source reader and control authority, decide whether retained JSONB text is the
+required byte identity, implement authentic empty-range and ordered-control
+proofs, and verify their restore behavior. The disposable parity database was
+created because the existing local settlement database has a migration 0009
+checksum mismatch; its migration history was not rewritten.
 
 Each worker returns scoped status, files, exact commands/results, decisions,
 assumptions, limitations and next action. Lead verifies material claims in

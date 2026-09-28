@@ -312,6 +312,29 @@ from the isolated journal write-shape proof.
 
 ## Implementation and proof sequence
 
+PMJ-01 reference checkpoint (2026-09-28): a pure, version-1 interpreter now
+models source windows, ordered policy/opening/funding controls, scarce-account
+arbitration, typed breaks, explicit funding retries, original workflow events
+and exact four-leg settled effects. Its fixed fixtures include a valid 640-trade
+hot cohort with eight winners and 632 outstanding breaks, plus empty coverage,
+duplicates, changed inputs and a classified rejection of the legacy
+unpositioned shortcut. A PostgreSQL parity test feeds identical small
+canonical outcomes through the existing intake, obligation and transition
+stores and through the interpreter; it compares attempt outcomes, workflow,
+legs and balances. Combined focused run: nine interpreter tests and one
+database test, zero skipped, failures or errors. This is a reference and
+normalized-path parity proof, not a journal append, recovery or capacity pass.
+
+The source store retains matching `result_payload` as JSONB; its reader exposes
+`result_payload::text`. PMJ-01 digests those exact retained UTF-8 text bytes
+with source identity. Original matching transport bytes are unavailable from
+that store. Fixture coverage and control verifiers only accept locally
+constructed evidence; production proof of empty source ranges and immutable
+control provenance remains required for the vertical path. Whether retained
+JSONB text satisfies the contract's “exact bytes” requirement must be settled
+before public cutover. No matching outcome format or Go matching change is
+included in this checkpoint.
+
 1. Write a versioned envelope contract and independent reference interpreter.
    Compare the current normalized path and journal candidate on identical
    source, policy, opening, hot/diverse/scarce, empty and break/retry cohorts.
