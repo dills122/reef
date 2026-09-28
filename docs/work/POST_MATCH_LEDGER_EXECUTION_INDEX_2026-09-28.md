@@ -93,12 +93,12 @@ Gradle: `BUILD SUCCESSFUL in 3s`. JUnit XML: reference `tests=9`, parity
 `tests=1`, both `skipped=0`, `failures=0`, `errors=0`.
 
 PMJ-01 binds source identity to the exact retained `result_payload::text` value
-read from PostgreSQL JSONB. Original matching transport bytes are not retained
-by the current source store. This is an explicit proof boundary, not a claim
-that original wire bytes can be recovered. Before PMJ-02 integrates the real
-source reader and control authority, decide whether retained JSONB text is the
-required byte identity, implement authentic empty-range and ordered-control
-proofs, and verify their restore behavior. The disposable parity database was
+read from PostgreSQL JSONB, plus canonical source fields. This retained UTF-8
+representation is the accepted settlement replay byte identity; original
+matching transport bytes are not required or recoverable from the current
+store. PMJ-03 must verify the same retained representation after restore and
+fail closed on changed text or missing members. Authentic empty-range and
+ordered-control proofs remain open. The disposable parity database was
 created because the existing local settlement database has a migration 0009
 checksum mismatch; its migration history was not rewritten.
 

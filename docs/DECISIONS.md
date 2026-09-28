@@ -1268,6 +1268,10 @@ capacity result.
   intermediate balances and audit history remain reconstructable; separate
   synchronous intake, admission, leg, checkpoint and read-model writes are
   not required as additional authorities in the replacement.
+- Source identity for settlement replay binds canonical source fields and the
+  exact UTF-8 bytes of retained PostgreSQL `result_payload::text`. Original
+  matching transport bytes are not part of this post-match replay contract;
+  changed retained text or missing source members fail closed.
 - Matching outcomes feed two independent sibling paths: market-data
   projection for book/depth/trade tape, and settlement journal for balances
   and settlement status. Neither waits for the other. Trade tape keeps an
