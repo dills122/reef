@@ -80,6 +80,7 @@ test("matched benchmark resets prior volumes before smoke and again before measu
   assert.match(script, /REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS="\$\{REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS:-240\}"/);
   assert.match(script, /export REEF_PG_MAX_CONNECTIONS="\$REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS"\s+export REEF_SETTLEMENT_PG_MAX_CONNECTIONS="\$REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS"\s+run_stage reset-before-matched-materializer-smoke/);
   assert.match(script, /if \[ "\$\{REEF_DO_MATCHED_SKIP_SMOKE:-0\}" != "1" \]; then\s+run_stage make-dev-smoke-venue-event-materializer/);
+  assert.match(script, /run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer\s+fi\s+run_stage reset-after-materializer-smoke/);
   const before = script.indexOf("run_stage reset-before-matched-materializer-smoke");
   const smoke = script.indexOf("run_stage make-dev-smoke-venue-event-materializer");
   const after = script.indexOf("run_stage reset-after-materializer-smoke");
