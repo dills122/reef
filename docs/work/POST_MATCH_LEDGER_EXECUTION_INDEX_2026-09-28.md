@@ -29,7 +29,7 @@ explicit decision; document them without compatibility dual-write.
 | --- | --- | --- | --- | --- |
 | PMJ-00 | Record agreed authority, flow, failure and market-data cutover contract | None | Lead | Done in D-060 and settlement contract; not implementation |
 | PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference proof ready for user review; authority adapters remain for vertical proof |
-| PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Waiting |
+| PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Candidate core and focused proof in progress; external source/control proof open |
 | PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Waiting |
 | PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Waiting |
 | PMJ-05 | Complete sustained correctness/capacity run for both sibling paths and measured decision | PMJ-03, PMJ-04 | Lead + bounded research/test worker | Waiting |
@@ -80,6 +80,7 @@ Matching and pre-trade remain outside every item in this index.
 | --- | --- | --- | --- |
 | 2026-09-28 | Pre-work journal write shape | Linked raw evidence and focused PostgreSQL test | 640-result append samples 28.53–31.39 ms in final warm run; not end-to-end |
 | 2026-09-28 | PMJ-01 reference and normalized-path parity | `ReferenceSettlementInterpreterTest` and `SettlementJournalReferenceParityIntegrationTest`; combined offline Gradle run against disposable `reef_journal_parity_20260928` settlement database | 9 reference tests and 1 PostgreSQL test; 0 skipped/failures/errors. Covers ordered scarce winners, full four-leg effects, breaks, explicit retry, empty ranges, duplicates, changed inputs and normalized-path parity for three small cohorts. Fixture proof callbacks do not authenticate source absence or control provenance. |
+| 2026-09-28 | PMJ-02 default-off core candidate, after authority-binding repair | `SettlementJournalControlCodecTest`, `SettlementJournalEvaluatorTest`, `SettlementJournalStoreIntegrationTest`, `SettlementJournalCandidateIntegrationTest`, plus PMJ-01 suites; combined offline Gradle run against disposable database | 29 tests, 0 skipped/failures/errors. Typed append, head fence, atomic rollback, duplicate/tampered-row rejection, ordered scarce winner, explicit retry and changed prepared-input rejection have focused coverage. Candidate reads retained JSONB outcomes through existing reader but uses fixture source/control proof callbacks. No projection, restore/replay, sibling market-data load, or throughput qualification yet. |
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
@@ -100,6 +101,40 @@ required byte identity, implement authentic empty-range and ordered-control
 proofs, and verify their restore behavior. The disposable parity database was
 created because the existing local settlement database has a migration 0009
 checksum mismatch; its migration history was not rewritten.
+
+PMJ-02 first diagnostic sample used a four-outcome/two-trade synthetic fixture,
+fresh test JVM and uncommitted code before prepared-input and duplicate-metadata
+binding repairs: source read 205.10 ms, evaluation 7.67 ms, proposal mapping
+8.68 ms, serialization 0.76 ms, head wait 1.72 ms, append/commit 24.64 ms;
+inclusive PostgreSQL WAL position advanced 11,824 bytes and journal indexes
+grew 106,496 bytes (initial page allocation). These are one cold fixture sample,
+not fixed-workload latency or capacity evidence. Raw output is retained in
+`SettlementJournalCandidateIntegrationTest` JUnit XML when
+`SETTLEMENT_JOURNAL_PROOF_BENCH=1`. The source/control proof callbacks and
+cross-system restore checks remain open; no cutover claim follows from this
+sample.
+
+Raw diagnostic line from the default-off branch worktree, with disposable
+`reef_journal_parity_20260928` database and
+`SETTLEMENT_JOURNAL_PROOF_BENCH=1` (`--rerun-tasks`, local test password supplied
+through environment):
+
+```text
+journal-candidate source_read_ns=205103833 evaluation_ns=7665084 mapping_ns=8684208 serialization_ns=759333 head_wait_ns=1721792 append_commit_ns=24637708 wal_bytes_inclusive=11824 index_bytes_delta=106496
+```
+
+Final focused command from `services/platform-runtime`, with disposable test
+database and `SETTLEMENT_POSTGRES_PASSWORD_TEST` set locally:
+
+```sh
+SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_parity_20260928 SETTLEMENT_POSTGRES_USER_TEST=reef ./gradlew test --offline --console=plain --tests com.reef.platform.application.settlementjournal.ReferenceSettlementInterpreterTest --tests com.reef.platform.application.settlementjournal.SettlementJournalControlCodecTest --tests com.reef.platform.application.settlementjournal.SettlementJournalEvaluatorTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalReferenceParityIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalStoreIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalCandidateIntegrationTest
+```
+
+Final run: `BUILD SUCCESSFUL in 4s`; JUnit XML 29 tests, zero skipped,
+failures or errors. `bun test scripts/dev/db/migrate.test.mjs`: 26 pass,
+zero fail. Reviewer-confirmed PMJ-02 fixes include complete decoded-trade
+manifest consumption, exact prepared-input binding, durable duplicate-row
+verification and control sequence/step ordering.
 
 Each worker returns scoped status, files, exact commands/results, decisions,
 assumptions, limitations and next action. Lead verifies material claims in
