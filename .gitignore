@@ -39,6 +39,7 @@ infra/hetzner-core/server/openbao/logs/
 .aider*
 .agents
 skills-lock.json
+.codebase-memory/
 
 
 artifacts
