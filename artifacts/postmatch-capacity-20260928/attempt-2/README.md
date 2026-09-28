@@ -1,0 +1,17 @@
+# PM-S3 attempt 2 — database connection ceilings
+
+One disposable `sfo3` `c-32` droplet (`604195292`). Both initial arms used six
+materializers, sixteen projector owners, 384 load workers, a 10,000/s target
+for 300 seconds, and source PostgreSQL `max_connections=200`.
+
+| Run | Result | Evidence |
+| --- | --- | --- |
+| `postmatch-capacity-control-20260927T235615Z` | 2,999,950 accepted and materialized; 9,999.67/s; stage observer passed | `control-*` |
+| `postmatch-capacity-treatment-20260927T235615Z` | 2,750,574 accepted; 2,589,916 materialized; stage sampler lost a database connection; stage and exact checks failed | `treatment-*` |
+| `postmatch-capacity-treatment-pool2-20260928T0047Z` | Two-connection dedicated source pools; settlement seed failed before traffic because settlement server had no free connection | `pool2-startup.log.gz` |
+
+`e9b907fc` set source PostgreSQL `max_connections=320` in both matched arms,
+but that treatment-only retry also failed at settlement seed. The seed's
+`psql` target and a 100-of-100 settlement connection count identified the
+actual ceiling. No post-match capacity claim follows from this attempt.
+`evidence.sha256` lists checksums for retained files.

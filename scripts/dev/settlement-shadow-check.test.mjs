@@ -3,7 +3,10 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 
-import { assess, attemptMismatchSql, ledgerMismatchSql } from "./settlement-shadow-check.mjs";
+import { assess, attemptMismatchSql, compareTradeMembership, ledgerMismatchSql,
+  sourceTradeMembershipSql } from "./settlement-shadow-check.mjs";
+import { settlementStageSql } from "./postmatch-stage-sampler.mjs";
+import { assessDependencyGraph, dependencyGraphSql } from "./settlement-dependency-graph-check.mjs";
 
 const source = new Map([[0, { count: "3", sequence: "3" }],
   [1, { count: "2", sequence: "281474976710658" }]]);
@@ -53,6 +56,13 @@ test("break-only cohort cannot establish ledger path", () => {
   assert.ok(result.failures.some((message) => message.includes("no settled trades")));
 });
 
+test("trade membership checks source, intake, and obligation identity", () => {
+  const same = { sha256: "abc", bytes: 42 };
+  assert.deepEqual(compareTradeMembership(same, same, same), []);
+  assert.match(compareTradeMembership(same, { sha256: "other", bytes: 42 }, same)[0], /canonical source/);
+  assert.match(compareTradeMembership(same, same, { sha256: "abc", bytes: 43 })[0], /obligation/);
+});
+
 test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes", {
   skip: process.env.REEF_TEST_SETTLEMENT_SQL !== "1",
   timeout: 60_000,
@@ -81,7 +91,26 @@ test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     assert.ok(ready, "disposable PostgreSQL did not become ready");
+    sql(`CREATE SCHEMA runtime;
+      CREATE TABLE runtime.canonical_command_outcomes (
+        event_stream text, partition_id integer, stream_sequence bigint,
+        result_status text, result_payload jsonb);
+      INSERT INTO runtime.canonical_command_outcomes VALUES
+        ('test', 0, 1, 'accepted',
+         '{"trades":[{"tradeId":"t1"},{"tradeId":"t2"}]}'::jsonb),
+        ('test', 0, 2, 'accepted', '{"trades":[]}'::jsonb);`);
+    assert.equal(sql(sourceTradeMembershipSql("test", [0])), "0|1|3|t1\n0|1|6|t2");
     sql(`CREATE SCHEMA settlement;
+      CREATE TABLE settlement.canonical_trade_intake (trade_id text);
+      CREATE TABLE settlement.canonical_transition_admission_completions (admission_rank bigint);
+      CREATE TABLE settlement.canonical_transition_admissions (
+        event_stream text, source_generation text, admission_rank bigint);
+      CREATE TABLE settlement.canonical_transition_dependencies (
+        event_stream text, source_generation text, admission_rank bigint, predecessor_rank bigint);
+      INSERT INTO settlement.canonical_transition_admissions VALUES
+        ('test', 'g1', 1), ('test', 'g1', 2), ('test', 'g1', 3);
+      INSERT INTO settlement.canonical_transition_dependencies VALUES
+        ('test', 'g1', 2, 1), ('test', 'g1', 3, 2);
       CREATE TABLE settlement.canonical_settlement_obligations (
         event_stream text, source_generation text, trade_id text, run_id text, status text,
         buyer_participant_id text, buyer_account_id text, seller_participant_id text,
@@ -109,6 +138,12 @@ test("PostgreSQL settlement proof rejects wrong ledger legs and attempt outcomes
         ('test', 'g1', 't1', 1, 'SELLER_CASH_CREDIT', 'r1', 'seller', 's1', 'CASH', 'USD', 'CREDIT', 250),
         ('test', 'g1', 't1', 1, 'SELLER_SECURITY_DEBIT', 'r1', 'seller', 's1', 'SECURITY', 'ABC', 'DEBIT', 5),
         ('test', 'g1', 't1', 1, 'BUYER_SECURITY_CREDIT', 'r1', 'buyer', 'b1', 'SECURITY', 'ABC', 'CREDIT', 5);`);
+    const edges = sql(dependencyGraphSql("test", "g1")).split("\n").map((row) => row.split("|"));
+    assert.deepEqual(assessDependencyGraph(edges),
+      { admissions: 3, edges: 2, maxDepth: 3, deepestAdmissionRank: "3" });
+    const stageStats = sql(settlementStageSql()).split("|");
+    assert.equal(stageStats.length, 9);
+    assert.equal(stageStats[8], "6");
     const check = () => sql(ledgerMismatchSql("test", "g1"));
     assert.equal(check(), "0");
     for (const [column, wrong, correct] of [

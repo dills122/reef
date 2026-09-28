@@ -1,7 +1,9 @@
 # Settlement capacity after PM-S2 — 2026-09-27
 
-Status: **recommendation suspended after PM-S2 forensic review**. PM-S2 does
-not isolate a settlement algorithm limit or justify implementing batching next.
+Status: **PM-S2 recommendation suspended; PM-S3 evidence update below**. PM-S2
+does not isolate a settlement algorithm limit or justify implementing batching
+next. PM-S3 identifies admission contention and blocked execution but does not
+provide a matched integrated capacity comparison.
 No public-read, production, or accepted-decision change. Project owner owns
 any amendment to D-059.
 
@@ -83,3 +85,91 @@ each factor contributes; whether the host's shared I/O/CPU budget or legacy
 projection load dominates; exact in-load trade rate and outcome distribution.
 No batching speedup, architecture regression magnitude, or settlement capacity
 claim is established by PM-S2.
+
+### Follow-up implementation, pending hosted comparison
+
+The follow-up branch adds dedicated `postmatch` runtime processes, separates
+live and settlement loops from command-status projectors, and gates costly
+execution proof on durable predecessor readiness. It also records in-load
+readiness/admission/execution counts and time and checks canonical source trade
+membership against intake and obligations. The disposable benchmark has a
+`REEF_DO_MATCHED_TOPOLOGY=1` mode with six materializers and sixteen unique
+projector owners for both control and treatment. Both arms start the same
+isolated databases and run the same 60-second sampler. It records approximate
+canonical outcome and settlement insert rates from PostgreSQL table statistics
+on fresh single-cohort volumes, gating missing samples, regressing counts,
+and in-load observer query time above 2% for settlement or 10% total. Final
+SQL checks give exact closed-cohort trade membership and settlement counts.
+Worker logs expose
+counter SQL call time and blocked-head age. A stopped-source graph check records
+longest retained admission dependency chain. SQL call time includes any lock
+wait but does not isolate exact wait duration. These are implementation and
+local-test results until the hosted pair and checker evidence are recorded;
+they do not revise PM-S2's failed gate or establish a 10k capacity result.
+
+### First matched droplet attempt: invalid comparison
+
+The first `sfo3` `c-32` attempt used commit `eb6157aa`, 10k/s, 384 load workers,
+and 300 seconds per planned arm on disposable droplet `604190884`. The control
+(`postmatch-capacity-control-20260927T231810Z`) accepted 2,999,955 commands
+at 9,999.75/s. Its post-run report found all 2,999,955 direct-acked,
+materialized, and projected, with zero final lag. This is final catch-up,
+not qualified in-load freshness. The stage checker rejected its observer:
+maximum total query duty was 51.3% and settlement query duty 8.0%, against
+10% and 2% limits. The 15-second source query decoded trade JSON for every
+new canonical outcome, with cost growing across the cohort. The treatment
+(`postmatch-capacity-treatment-20260927T231810Z`) never reached measured load.
+Its preliminary smoke timed out waiting for a canonical outcome; PostgreSQL
+logged repeated `(partition_id, stream_sequence)` uniqueness violations.
+Control's stress stack remained on shared volumes, and the harness reset
+volumes only *after* the next arm's smoke. The droplet and firewall were
+destroyed after fetching logs. No architecture comparison or post-match
+capacity result follows from this attempt.
+
+The correction resets matched-run volumes before smoke and again before
+measured load. The source observer now reads the approximate PostgreSQL
+canonical-outcome insert counter on fresh single-cohort volumes every 60
+seconds; it does not decode trade JSON in-load. The settlement observer uses
+the same 60-second interval, and query duty is gated on intervals entirely
+inside the measured load. Exact source-to-intake trade membership remains a
+stopped-source proof. The corrected pair needs a new hosted run before any
+capacity or incremental-cost claim.
+
+### PM-S3 corrected treatment: failure attribution, not capacity qualification
+
+[Attempt 3](../../artifacts/postmatch-capacity-20260928/attempt-3/) used
+source PostgreSQL `max_connections=320` and settlement PostgreSQL
+`max_connections=240`. The 100-connection settlement limit had blocked the
+preceding seed; the earlier source-database attribution was wrong. The
+corrected treatment completed a 300-second load at 9,254.07 accepted/direct
+acks per second against a 10,000/s target, below the 9,900/s gate. Its load
+report still had a 156,522 accepted-to-canonical materialization gap and
+failed downstream cohort proof. Exact post-match and settlement closed-cohort
+checks did not finish before the two-hour droplet cutoff. The planned
+320/240 control was stopped before traffic, so this run cannot quantify the
+incremental architecture cost.
+
+Four qualified in-load stage intervals establish that the observer was light
+enough for the specified measurement gate. Settlement SQL and a live wait
+snapshot identify repeated updates to one admission-counter row with tuple
+and transaction-ID lock waits. Each of four settlement workers logged about
+4,800–4,950 admitted windows but only 285–293 applied windows; roughly
+77–80% of readiness checks were blocked. Approximate table statistics also
+showed admission windows increasing around 39–41/s but completion windows
+around 2.1–2.6/s during the sampled intervals. These independent signals
+support **two** bottlenecks: contended global rank persistence and ordered
+execution stalled behind predecessors. They do not show that rank batching
+alone will restore capacity. Source materialization and projection SQL had
+large cumulative costs on the same host, and SQL times include concurrent
+waits; this run does not allocate the ingress loss among stages.
+
+Next design spike: retain D-059's durable rank and scarce-account ordering;
+reduce per-rank counter transactions **and** execute bounded consecutive
+dependent windows together after one readiness/proof pass, preserving
+rank-order balance decisions and atomic four-leg DvP, ledger, frontier, and
+replay facts. Use local Docker with a fixed cohort to compare current and
+candidate execution work, crash/replay, and exact membership. Then run a
+disposable matched 320/240 control and treatment with completed closed-cohort
+checks and enough time for drain. A separate diverse-account fixture must
+test whether the five-actor hot-account dependency chain is the main workload
+limit. Until those proofs, this is a design candidate, not a throughput claim.

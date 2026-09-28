@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { join } from "node:path";
 
 import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
@@ -123,7 +124,26 @@ if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1") {
     env("DEV_STRESS_SESSION_CONFIG"), env("DEV_STRESS_RUN_ID")]);
 }
 await stopIdleBackgroundServices();
-await import("./stress.mjs");
+let stageSampler;
+let stageSamplerExit;
+if (env("REEF_DO_MATCHED_TOPOLOGY", "0") === "1") {
+  stageSampler = spawn("node", ["scripts/dev/postmatch-stage-sampler.mjs",
+    env("MATCHING_ENGINE_EVENT_STREAM"),
+    join(env("DEV_STRESS_ARTIFACT_DIR"), "postmatch-stage-samples.jsonl"),
+    "true",
+    "60000"],
+  { stdio: "inherit", env: process.env });
+  stageSamplerExit = new Promise((resolve) => stageSampler.once("exit", (code, signal) => resolve({ code, signal })));
+}
+try {
+  await import("./stress.mjs");
+} finally {
+  if (stageSampler) {
+    stageSampler.kill("SIGTERM");
+    const result = await stageSamplerExit;
+    if (result.code !== 0) throw new Error(`post-match stage sampler failed: ${JSON.stringify(result)}`);
+  }
+}
 
 function appendProfiles(raw, additions) {
   const profiles = new Set(

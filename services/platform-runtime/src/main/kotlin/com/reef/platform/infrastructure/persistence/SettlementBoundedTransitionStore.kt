@@ -51,6 +51,16 @@ class SettlementTransitionWindow internal constructor(
 
 class SettlementTransitionWindowTooLarge : IllegalArgumentException("settlement transition obligation window exceeds configured bound")
 
+enum class SettlementExecutionReadiness { NONE, BLOCKED, READY }
+
+/** Diagnostic only: SQL call time includes counter row-lock wait and execution. */
+class SettlementAdmissionTiming {
+    var counterCallNanos: Long = 0
+        internal set
+    var predecessorCount: Int = 0
+        internal set
+}
+
 /** Shadow-only bounded settlement transition over committed obligations. */
 class SettlementBoundedTransitionStore(
     private val dataSource: DataSource,
@@ -183,6 +193,47 @@ class SettlementBoundedTransitionStore(
                     obligations, savedDigest)
             }
         }
+    }
+
+    /** Advisory gate: avoid replaying full source/account proofs until the durable predecessors complete. */
+    fun nextExecutionReadiness(
+        eventStream: String, partitionId: Int, sourceGeneration: String
+    ): SettlementExecutionReadiness = dataSource.connection.use { connection ->
+        require(eventStream.isNotBlank() && sourceGeneration.isNotBlank() && partitionId in 0..32767)
+        val completed = frontier(connection, "canonical_transition_frontiers", eventStream, partitionId)
+        check(completed == null || completed.first == sourceGeneration) {
+            "settlement transition source generation changed"
+        }
+        val admitted = frontier(connection, "canonical_transition_admission_frontiers", eventStream, partitionId)
+        check(admitted == null || admitted.first == sourceGeneration) {
+            "settlement admission source generation changed"
+        }
+        // Mirror readNextAdmittedWindow: execution cannot skip an earlier admitted window.
+        val from = completed?.second ?: CanonicalStreamPosition.origin(partitionId)
+        check(admitted == null || admitted.second >= from) {
+            "settlement admission frontier trails completed transition"
+        }
+        val rank = connection.prepareStatement(
+            """SELECT admission_rank FROM settlement.canonical_transition_admissions
+               WHERE event_stream = ? AND source_generation = ? AND partition_id = ?
+                 AND from_exclusive_sequence = ?"""
+        ).use { statement ->
+            statement.setString(1, eventStream)
+            statement.setString(2, sourceGeneration)
+            statement.setInt(3, partitionId)
+            statement.setLong(4, from)
+            statement.executeQuery().use { rows ->
+                if (!rows.next()) null else rows.getLong(1).also { check(!rows.next()) }
+            }
+        }
+        if (rank == null) {
+            check(admitted == null || admitted.second == from) {
+                "settlement admitted window is missing before admission frontier"
+            }
+            SettlementExecutionReadiness.NONE
+        } else if (dependenciesComplete(connection, eventStream, sourceGeneration, rank)) {
+            SettlementExecutionReadiness.READY
+        } else SettlementExecutionReadiness.BLOCKED
     }
 
     private fun frontier(connection: Connection, table: String, stream: String, partition: Int): Pair<String, Long>? =
@@ -391,7 +442,9 @@ class SettlementBoundedTransitionStore(
     }
 
     /** Records a total post-trade order before any balance-dependent decision. */
-    fun admit(window: SettlementTransitionWindow): PostMatchApplyResult = dataSource.connection.use { connection ->
+    fun admit(
+        window: SettlementTransitionWindow, timing: SettlementAdmissionTiming? = null
+    ): PostMatchApplyResult = dataSource.connection.use { connection ->
         require(window.fromExclusiveSequence >= CanonicalStreamPosition.origin(window.partitionId) &&
             window.throughInclusiveSequence > window.fromExclusiveSequence &&
             window.throughInclusiveSequence - window.fromExclusiveSequence <= 5000)
@@ -453,19 +506,22 @@ class SettlementBoundedTransitionStore(
                     statement.setString(2, window.sourceGeneration)
                     statement.executeUpdate()
                 }
-                val rank = connection.prepareStatement(
-                    """UPDATE settlement.canonical_transition_admission_counter
-                       SET next_rank = next_rank + 1
-                       WHERE event_stream = ? AND source_generation = ?
-                       RETURNING next_rank - 1"""
-                ).use { statement ->
-                    statement.setString(1, window.eventStream)
-                    statement.setString(2, window.sourceGeneration)
-                    statement.executeQuery().use { rows ->
-                        check(rows.next()) { "settlement admission counter is absent" }
-                        rows.getLong(1).also { check(it > 0 && !rows.next()) }
+                val counterStarted = System.nanoTime()
+                val rank = try {
+                    connection.prepareStatement(
+                        """UPDATE settlement.canonical_transition_admission_counter
+                           SET next_rank = next_rank + 1
+                           WHERE event_stream = ? AND source_generation = ?
+                           RETURNING next_rank - 1"""
+                    ).use { statement ->
+                        statement.setString(1, window.eventStream)
+                        statement.setString(2, window.sourceGeneration)
+                        statement.executeQuery().use { rows ->
+                            check(rows.next()) { "settlement admission counter is absent" }
+                            rows.getLong(1).also { check(it > 0 && !rows.next()) }
+                        }
                     }
-                }
+                } finally { timing?.counterCallNanos = System.nanoTime() - counterStarted }
                 val predecessors = mutableSetOf<Long>()
                 frontier.third?.let(predecessors::add)
                 val priorAccounts: List<Pair<AccountKey, Long?>> = if (accountKeys.isEmpty()) emptyList()
@@ -506,6 +562,7 @@ class SettlementBoundedTransitionStore(
                     "settlement admission account set is incomplete"
                 }
                 predecessors.addAll(priorAccounts.mapNotNull { it.second })
+                timing?.predecessorCount = predecessors.size
                 val dependencyDigest = sha256(predecessors.sorted().joinToString(","))
                 connection.prepareStatement(
                     """INSERT INTO settlement.canonical_transition_admissions(
@@ -762,7 +819,7 @@ class SettlementBoundedTransitionStore(
             val result = when {
                 frontier.second == window.fromExclusiveSequence -> {
                     check(current.all { it.status == "PENDING" }) { "settlement obligation already transitioned" }
-                    if (!dependenciesComplete(connection, window, rank)) null else {
+                    if (!dependenciesComplete(connection, window.eventStream, window.sourceGeneration, rank)) null else {
                         applyNew(connection, window, current)
                         check(openingDigest(connection, current) == stableOpeningDigest) {
                             "settlement resource opening changed during transition"
@@ -815,7 +872,7 @@ class SettlementBoundedTransitionStore(
         }
     }
 
-    private fun dependenciesComplete(connection: Connection, window: SettlementTransitionWindow, rank: Long): Boolean =
+    private fun dependenciesComplete(connection: Connection, eventStream: String, sourceGeneration: String, rank: Long): Boolean =
         connection.prepareStatement(
             """SELECT COUNT(*) FILTER (WHERE completion.admission_rank IS NULL),
                       COUNT(*) FILTER (WHERE completion.admission_rank IS NOT NULL
@@ -832,8 +889,8 @@ class SettlementBoundedTransitionStore(
                WHERE dependency.event_stream = ? AND dependency.source_generation = ?
                  AND dependency.admission_rank = ?"""
         ).use { statement ->
-            statement.setString(1, window.eventStream)
-            statement.setString(2, window.sourceGeneration)
+            statement.setString(1, eventStream)
+            statement.setString(2, sourceGeneration)
             statement.setLong(3, rank)
             statement.executeQuery().use { rows ->
                 check(rows.next())

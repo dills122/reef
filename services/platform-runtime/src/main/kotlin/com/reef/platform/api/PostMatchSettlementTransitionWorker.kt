@@ -5,8 +5,12 @@ import com.reef.platform.infrastructure.persistence.PostMatchApplyResult
 import com.reef.platform.infrastructure.persistence.PostMatchSourceCatalog
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.SettlementBoundedTransitionStore
+import com.reef.platform.infrastructure.persistence.SettlementAdmissionTiming
+import com.reef.platform.infrastructure.persistence.SettlementExecutionReadiness
 import com.reef.platform.infrastructure.persistence.SettlementTransitionWindowTooLarge
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 
 /** Default-off settlement transition over committed shadow obligations. */
@@ -23,6 +27,51 @@ internal class PostMatchSettlementTransitionWorker(
     private val running = AtomicBoolean(false)
     private val workerThreads = mutableListOf<Thread>()
     internal data class Progress(val obligations: Int, val advanced: Boolean)
+    internal data class Metrics(
+        val readinessChecks: Long, val readinessNone: Long, val readinessBlocked: Long,
+        val readinessReady: Long, val readinessNanos: Long, val admissionReads: Long,
+        val admissionReadNanos: Long, val admissionWrites: Long, val admissionWriteNanos: Long,
+        val executionReads: Long, val executionReadNanos: Long, val executionWrites: Long,
+        val executionWriteNanos: Long, val admittedWindows: Long, val appliedWindows: Long,
+        val appliedObligations: Long, val counterCallNanos: Long, val maxCounterCallNanos: Long,
+        val maxPredecessorCount: Long, val blockedPartitions: Int, val oldestBlockedMillis: Long
+    )
+    private val readinessChecks = AtomicLong()
+    private val readinessNone = AtomicLong()
+    private val readinessBlocked = AtomicLong()
+    private val readinessReady = AtomicLong()
+    private val readinessNanos = AtomicLong()
+    private val admissionReads = AtomicLong()
+    private val admissionReadNanos = AtomicLong()
+    private val admissionWrites = AtomicLong()
+    private val admissionWriteNanos = AtomicLong()
+    private val executionReads = AtomicLong()
+    private val executionReadNanos = AtomicLong()
+    private val executionWrites = AtomicLong()
+    private val executionWriteNanos = AtomicLong()
+    private val admittedWindows = AtomicLong()
+    private val appliedWindows = AtomicLong()
+    private val appliedObligations = AtomicLong()
+    private val counterCallNanos = AtomicLong()
+    private val maxCounterCallNanos = AtomicLong()
+    private val maxPredecessorCount = AtomicLong()
+    private val blockedSince = ConcurrentHashMap<Int, Long>()
+
+    internal fun metrics(): Metrics = Metrics(readinessChecks.get(), readinessNone.get(), readinessBlocked.get(),
+        readinessReady.get(), readinessNanos.get(), admissionReads.get(), admissionReadNanos.get(),
+        admissionWrites.get(), admissionWriteNanos.get(), executionReads.get(), executionReadNanos.get(),
+        executionWrites.get(), executionWriteNanos.get(), admittedWindows.get(), appliedWindows.get(),
+        appliedObligations.get(), counterCallNanos.get(), maxCounterCallNanos.get(),
+        maxPredecessorCount.get(), blockedSince.size,
+        blockedSince.values.maxOfOrNull { (System.nanoTime() - it) / 1_000_000L } ?: 0L)
+
+    private inline fun <T> timed(count: AtomicLong, nanos: AtomicLong, block: () -> T): T {
+        val started = System.nanoTime()
+        try { return block() } finally {
+            nanos.addAndGet(System.nanoTime() - started)
+            count.incrementAndGet()
+        }
+    }
 
     init {
         require(eventStream.isNotBlank() && partitions.isNotEmpty() && partitions.distinct().size == partitions.size)
@@ -41,11 +90,36 @@ internal class PostMatchSettlementTransitionWorker(
     private fun processPartition(partition: Int, generation: String): Progress {
         fun execute(): Progress {
             check(catalog.generation() == generation) { "settlement source generation changed before execution" }
-            val window = store.readNextAdmittedWindow(eventStream, partition, generation)
-                ?: return Progress(0, false)
+            val readiness = timed(readinessChecks, readinessNanos) {
+                store.nextExecutionReadiness(eventStream, partition, generation)
+            }
+            when (readiness) {
+                SettlementExecutionReadiness.NONE -> {
+                    blockedSince.remove(partition)
+                    readinessNone.incrementAndGet()
+                    return Progress(0, false)
+                }
+                SettlementExecutionReadiness.BLOCKED -> {
+                    // The earliest admitted window owns this partition until its predecessors complete.
+                    blockedSince.putIfAbsent(partition, System.nanoTime())
+                    readinessBlocked.incrementAndGet()
+                    return Progress(0, false)
+                }
+                SettlementExecutionReadiness.READY -> {
+                    blockedSince.remove(partition)
+                    readinessReady.incrementAndGet()
+                }
+            }
+            val window = timed(executionReads, executionReadNanos) {
+                store.readNextAdmittedWindow(eventStream, partition, generation)
+            }
+                ?: error("settlement ready admission disappeared before execution")
             check(catalog.generation() == generation) { "settlement source generation changed during execution" }
-            return if (store.apply(window) == PostMatchApplyResult.APPLIED)
-                Progress(window.obligations.size, true) else Progress(0, false)
+            return if (timed(executionWrites, executionWriteNanos) { store.apply(window) } == PostMatchApplyResult.APPLIED) {
+                appliedWindows.incrementAndGet()
+                appliedObligations.addAndGet(window.obligations.size.toLong())
+                Progress(window.obligations.size, true)
+            } else Progress(0, false)
         }
         val firstExecution = execute()
         var positions = batchSize
@@ -53,7 +127,9 @@ internal class PostMatchSettlementTransitionWorker(
         while (true) {
             check(catalog.generation() == generation) { "settlement source generation changed before admission read" }
             val window = try {
-                store.readNextAdmissionWindow(eventStream, partition, generation, positions, maxObligations)
+                timed(admissionReads, admissionReadNanos) {
+                    store.readNextAdmissionWindow(eventStream, partition, generation, positions, maxObligations)
+                }
             } catch (error: SettlementTransitionWindowTooLarge) {
                 if (positions == 1) throw error
                 positions = maxOf(1, positions / 2)
@@ -61,11 +137,23 @@ internal class PostMatchSettlementTransitionWorker(
             }
             if (window != null) {
                 check(catalog.generation() == generation) { "settlement source generation changed during admission" }
-                admitted = store.admit(window) == PostMatchApplyResult.APPLIED
+                val timing = SettlementAdmissionTiming()
+                try {
+                    admitted = timed(admissionWrites, admissionWriteNanos) {
+                        store.admit(window, timing)
+                    } == PostMatchApplyResult.APPLIED
+                } finally {
+                    if (timing.counterCallNanos > 0) {
+                        counterCallNanos.addAndGet(timing.counterCallNanos)
+                        maxCounterCallNanos.accumulateAndGet(timing.counterCallNanos) { current, next -> maxOf(current, next) }
+                    }
+                    maxPredecessorCount.accumulateAndGet(timing.predecessorCount.toLong()) { current, next -> maxOf(current, next) }
+                }
+                if (admitted) admittedWindows.incrementAndGet()
             }
             break
         }
-        val nextExecution = if (firstExecution.advanced) Progress(0, false) else execute()
+        val nextExecution = if (firstExecution.advanced || !admitted) Progress(0, false) else execute()
         return Progress(firstExecution.obligations + nextExecution.obligations,
             firstExecution.advanced || nextExecution.advanced || admitted)
     }
@@ -81,6 +169,7 @@ internal class PostMatchSettlementTransitionWorker(
             val assigned = partitions.filterIndexed { index, _ -> index % activeWorkers == workerIndex }
             workerThreads += thread(name = "reef-postmatch-settlement-transition-$workerIndex", isDaemon = true) {
                 var sourceFailure = ""
+                var nextMetricsLog = System.currentTimeMillis() + 10_000L
                 val failures = mutableMapOf<Int, String>()
                 val retryAfter = mutableMapOf<Int, Long>()
                 while (running.get()) {
@@ -113,6 +202,24 @@ internal class PostMatchSettlementTransitionWorker(
                             }
                             retryAfter[partition] = System.currentTimeMillis() + maxOf(pollMs, 1000L)
                         }
+                    }
+                    if (workerIndex == 0 && System.currentTimeMillis() >= nextMetricsLog) {
+                        val value = metrics()
+                        System.err.println("postmatch_transition_metrics sampledAt=${System.currentTimeMillis()} " +
+                            "readinessChecks=${value.readinessChecks} readinessNone=${value.readinessNone} " +
+                            "readinessBlocked=${value.readinessBlocked} readinessReady=${value.readinessReady} " +
+                            "readinessNanos=${value.readinessNanos} admissionReads=${value.admissionReads} " +
+                            "admissionReadNanos=${value.admissionReadNanos} admissionWrites=${value.admissionWrites} " +
+                            "admissionWriteNanos=${value.admissionWriteNanos} admittedWindows=${value.admittedWindows} " +
+                            "executionReads=${value.executionReads} executionReadNanos=${value.executionReadNanos} " +
+                            "executionWrites=${value.executionWrites} executionWriteNanos=${value.executionWriteNanos} " +
+                            "appliedWindows=${value.appliedWindows} appliedObligations=${value.appliedObligations} " +
+                            "counterCallNanos=${value.counterCallNanos} " +
+                            "maxCounterCallNanos=${value.maxCounterCallNanos} " +
+                            "maxPredecessorCount=${value.maxPredecessorCount} " +
+                            "blockedPartitions=${value.blockedPartitions} " +
+                            "oldestBlockedMillis=${value.oldestBlockedMillis}")
+                        nextMetricsLog = System.currentTimeMillis() + 10_000L
                     }
                     if (!advanced) Thread.sleep(pollMs)
                 }

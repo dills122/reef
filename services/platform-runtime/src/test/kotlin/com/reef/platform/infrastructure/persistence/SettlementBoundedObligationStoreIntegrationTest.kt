@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /** Exercises migrated runtime authority and dedicated settlement target. */
 class SettlementBoundedObligationStoreIntegrationTest {
@@ -482,11 +483,19 @@ class SettlementBoundedObligationStoreIntegrationTest {
                     requireNotNull(transition.readNextAdmissionWindow(stream, partition, generation,
                         maxSourcePositions = 3))
                 }
+                assertEquals(SettlementExecutionReadiness.NONE,
+                    transition.nextExecutionReadiness(stream, winner, generation))
                 assertEquals(PostMatchApplyResult.APPLIED, transition.admit(windows[winner]))
                 assertEquals(PostMatchApplyResult.APPLIED, transition.admit(windows[loser]))
+                assertEquals(SettlementExecutionReadiness.READY,
+                    transition.nextExecutionReadiness(stream, winner, generation))
+                assertEquals(SettlementExecutionReadiness.BLOCKED,
+                    transition.nextExecutionReadiness(stream, loser, generation))
                 fun executeAndCheck() {
                     assertEquals(null, transition.apply(windows[loser]))
                     assertEquals(PostMatchApplyResult.APPLIED, transition.apply(windows[winner]))
+                    assertEquals(SettlementExecutionReadiness.READY,
+                        transition.nextExecutionReadiness(stream, loser, generation))
                     target.connection.use { connection ->
                         connection.prepareStatement(
                             """UPDATE settlement.canonical_transition_admission_completions
@@ -1060,6 +1069,17 @@ class SettlementBoundedObligationStoreIntegrationTest {
             assertEquals(PostMatchSettlementTransitionWorker.Progress(1, true), worker.processOnceProgress())
             assertEquals(PostMatchSettlementTransitionWorker.Progress(1, true), worker.processOnceProgress())
             assertEquals(PostMatchSettlementTransitionWorker.Progress(0, false), worker.processOnceProgress())
+            val metrics = worker.metrics()
+            assertEquals(3, metrics.admittedWindows)
+            assertEquals(3, metrics.appliedWindows)
+            assertEquals(2, metrics.appliedObligations)
+            assertEquals(metrics.readinessChecks,
+                metrics.readinessNone + metrics.readinessBlocked + metrics.readinessReady)
+            assertEquals(metrics.readinessReady, metrics.executionReads)
+            assertEquals(metrics.appliedWindows, metrics.executionWrites)
+            assertTrue(metrics.counterCallNanos > 0)
+            assertTrue(metrics.maxCounterCallNanos > 0)
+            assertTrue(metrics.maxPredecessorCount >= 1)
         } finally { cleanTarget(target, stream) }
     }
 

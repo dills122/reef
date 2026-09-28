@@ -1430,3 +1430,119 @@ state was empty afterward. Next work should change post-trade ordering and
 execution ownership, then measure the new dataflow with in-load trade and
 frontier telemetry. Repeating the same 10k fixture with small SQL tuning
 does not address the observed execution-stage shortfall.
+
+## PM-S3 attempt 1 — matched post-match comparison invalid
+
+September 27, source commit `eb6157aa`: one disposable `sfo3` `c-32`
+droplet, six materializers, sixteen projector owners, 384 load workers, and
+planned 10,000/s for 300 seconds in each arm. Control accepted 2,999,955
+commands (9,999.75/s) and eventually materialized and projected all of them.
+That is final catch-up, not proof of in-load post-trade freshness. The stage
+observer consumed up to 51.3% of a sample interval on source and settlement
+queries (8.0% on settlement alone), above its 10% and 2% limits. Thus the
+control's in-load stage attribution is invalid. Treatment failed during smoke
+before measured load: the previous arm's PostgreSQL volumes were still present,
+and reused stream sequences collided with `idx_canonical_command_outcomes_partition_seq`.
+No treatment throughput or post-match capacity result exists from this attempt.
+
+Correction: reset matched topology before each arm's smoke, use PostgreSQL
+table insert statistics for low-cost approximate in-load source outcome samples
+at 60-second intervals, and retain exact closed-cohort trade and settlement
+checks after load. Both arms still use one droplet and the same topology, load,
+and observer. Droplet `604190884` was destroyed; OpenTofu state was empty.
+[Control gate](../artifacts/postmatch-capacity-20260927/attempt-1/control-gate-summary.json),
+[stage summary](../artifacts/postmatch-capacity-20260927/attempt-1/control-stage-summary.json),
+[stage samples](../artifacts/postmatch-capacity-20260927/attempt-1/control-stage-samples.jsonl),
+[compressed load report](../artifacts/postmatch-capacity-20260927/attempt-1/control-load-report.json.gz),
+[treatment smoke log](../artifacts/postmatch-capacity-20260927/attempt-1/treatment-smoke.log.gz),
+[treatment Compose log](../artifacts/postmatch-capacity-20260927/attempt-1/treatment-compose.log.gz),
+and [checksums](../artifacts/postmatch-capacity-20260927/attempt-1/evidence.sha256)
+retain the failed comparison's evidence. Full raw artifacts remain in the
+ignored local `reports/do-benchmark/` directories for the two run IDs.
+
+## PM-S3 attempt 2 — matched post-match comparison blocked by connection ceilings
+
+September 28, one disposable `sfo3` `c-32` droplet (`604195292`), 10,000/s
+for 300 seconds, 384 workers, six materializers, sixteen projector owners,
+source PostgreSQL `max_connections=200`, and settlement PostgreSQL's default
+100-connection limit. Control
+`postmatch-capacity-control-20260927T235615Z` accepted and eventually
+materialized/projected 2,999,950 commands (9,999.67/s), with final lag zero.
+Its stage observer passed: four in-load rate intervals, maximum total query
+duty 2.96% and settlement query duty 1.52%. This is a valid control under that
+configuration, not a post-match result.
+
+Treatment `postmatch-capacity-treatment-20260927T235615Z` accepted 2,750,574
+commands (9,166.54/s) and materialized 2,589,916 at the end of the load
+report, leaving 160,658 unmaterialized. The stage sampler received
+`FATAL: sorry, too many clients already`; stage telemetry had only
+two samples and no valid in-load intervals. Post-match and settlement exact
+shadow checks failed (32 and 19 failures respectively). The dependency graph
+had 27,622 admissions and maximum depth 27,617, a separate signal of serial
+account dependencies, but its incomplete run cannot establish sustained
+settlement throughput. The treatment failed; the pair does not isolate the
+post-match architecture effect because database connection limits were hit.
+
+After capping each dedicated post-match source pool at two connections in
+`3a053626`, treatment-only
+`postmatch-capacity-treatment-pool2-20260928T0047Z` again exhausted the
+100-connection settlement server during settlement seed, before measured
+traffic. The seed script executes `psql` inside `settlement-postgres`, which
+was initially misidentified as source PostgreSQL. A later treatment-only
+retry with source `max_connections=320` also failed at seed; container
+inspection showed settlement at exactly 100 clients, while source had about
+194 of 320. The source connection increase in `e9b907fc` did not fix this
+failure. A corrected treatment retry sets settlement `max_connections=240`.
+[Attempt 2 evidence](../artifacts/postmatch-capacity-20260928/attempt-2/)
+retains both load reports, gate/stage summaries, failed exact checks, graph,
+pool-two startup log, and checksums. Full raw artifacts remain in ignored
+local `reports/do-benchmark/` directories for the three run IDs.
+
+## PM-S3 attempt 3 — corrected settlement DB limit, treatment capacity FAILED
+
+September 28, same disposable `sfo3` `c-32` droplet (`604195292`). A new
+320-connection control was stopped during setup before traffic to reserve the
+remaining two-hour slot for treatment. Treatment with source PostgreSQL at 320
+and settlement PostgreSQL at its default 100 passed smoke but failed at
+settlement seed before traffic: `settlement-postgres` had 100/100 clients,
+while source had about 194/320. This identifies the seed failure's actual
+database, correcting the earlier source attribution.
+
+The corrected treatment
+`postmatch-capacity-treatment-settlement240-20260928T0139Z` used source 320,
+settlement 240, six materializers, sixteen projector owners, four dedicated
+live workers, four dedicated settlement workers, 384 load workers, fresh
+volumes, and a 10,000/s target for 300 seconds. Repeat smoke was skipped after
+the same code passed smoke in the immediately preceding setup. Settlement seed
+succeeded. It accepted and direct-acked 2,776,548 commands (9,254.07/s;
+p95 93.15 ms, p99 158.15 ms), below the 9,900/s gate. The load report's
+durable-canonical snapshot held 2,620,026 items, leaving a 156,522 gap;
+downstream cohort proof failed. This is a treatment capacity failure, not a
+matched 320/240 control comparison or final correctness result.
+
+Retained in-load stage samples passed the measurement gate: four intervals,
+maximum total observer duty 3.44% and settlement duty 1.80%. Approximate
+`pg_stat_user_tables.n_tup_ins` rates were 6,255–7,415 source outcomes/s,
+2,018–2,215 settlement intake trades/s, 39–41 admission windows/s, 2.1–2.6
+completion windows/s, and 76–96 transition attempts/s. By the last retained
+sample about three minutes after load, settlement insert statistics showed
+1,220,848 intake trades, 22,211 admissions, 1,300 completions, and 52,564
+attempts. These are not exact closed-cohort counts.
+
+Settlement PostgreSQL diagnostics put the shared admission-counter row first:
+22,465 `UPDATE` calls accumulated 3.41 million ms SQL execution time, and
+22,474 `INSERT ... ON CONFLICT DO NOTHING` calls accumulated 2.05 million ms.
+A live snapshot found ten tuple-lock waits and two transaction-ID waits.
+These are summed concurrent SQL times, not elapsed latency; they support
+counter-row contention as the admission bottleneck. Four worker log snapshots
+each showed about 4,800–4,950 admitted windows but only 285–293 applied
+windows, with roughly 77–80% of readiness checks blocked. This makes ordered
+execution and predecessor readiness a separate bottleneck; faster admission
+alone cannot close the gap. Source materialization
+and projection SQL also had large cumulative costs, so the full ingress-rate
+loss is not yet attributed. Exact post-match and settlement closed-cohort
+checks did not finish before the user-set droplet cutoff. Destruction was
+requested at two hours, completed after provider teardown, and OpenTofu state
+was empty. [Attempt 3 evidence](../artifacts/postmatch-capacity-20260928/attempt-3/)
+retains original reports and logs, DB diagnostics, stage samples, and an
+offline stage-check result.

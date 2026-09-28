@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-09-28T00:52:09.301Z",
+  "reports": [
+    {
+      "path": "/Users/dsteele/.codex/worktrees/postmatch-capacity-isolation/reef/reports/do-benchmark/postmatch-capacity-treatment-20260927T235615Z/venue-event-materializer-stress-rate-10000-workers-384.json",
+      "rate": 10000,
+      "evidence": {
+        "attempted": 2750574,
+        "accepted": 2750574,
+        "directAcked": 2750574,
+        "materialized": 2589916,
+        "projected": 2750574,
+        "lag": 0,
+        "p95LatencyMs": 93.855713,
+        "p99LatencyMs": 158.567678,
+        "rates": {
+          "attemptedPerSecond": 9166.541544124757,
+          "acceptedPerSecond": 9166.541544124757,
+          "directAckedPerSecond": 9166.541544124757,
+          "materializedPerSecond": 8631.133941422195,
+          "projectedPerSecond": 9166.541544124757
+        },
+        "gaps": {
+          "acceptedToDirectAcked": 0,
+          "acceptedToMaterialized": 160658,
+          "materializedToProjected": 0
+        },
+        "projectionFreshness": {
+          "source": "venue-event-batch-projector",
+          "freshnessModel": "async read-model projection from durable canonical venue-event materialization",
+          "materialized": 2589916,
+          "projected": 2750574,
+          "materializedToProjectedGap": 0,
+          "lag": 0,
+          "projectedPerSecond": 9166.541544124757,
+          "caughtUp": true
+        }
+      }
+    }
+  ]
+}

@@ -37,13 +37,16 @@ make dev-down
 
 `dev-up` starts datastores, applies forward-only migrations, then builds and
 waits for service health. `dev-down` stops containers and preserves volumes.
-Set `DEV_COMPOSE_PROFILES=postmatch` to start isolated operational Postgres and
-apply its schema. Set `POSTMATCH_SHADOW_WORKERS_ENABLED=true` and an explicit
-`POSTMATCH_EVENT_STREAM` to run the isolated live and market consumers on
-projector instances. Each instance uses its existing
-`STREAM_ACK_PROJECTOR_PARTITIONS` assignment unless
-`POSTMATCH_WORKER_PARTITIONS` overrides it. Keep the profile enabled while
-running these workers. By default, existing live routes and materializers use
+Set `DEV_COMPOSE_PROFILES=postmatch,postmatch-workers` to start isolated operational
+Postgres and dedicated post-match JVMs. Set `POSTMATCH_SHADOW_WORKERS_ENABLED=true`
+and an explicit `POSTMATCH_EVENT_STREAM` to run the isolated live and market
+consumers in `platform-postmatch-live-0..3`. Assign disjoint
+`POSTMATCH_WORKER_0..3_PARTITIONS` covering the canonical source partitions.
+Legacy `platform-projector-0..3` instances never start post-match workers,
+even if a global worker flag is enabled. The `postmatch-workers` profile adds
+four live and four settlement JVMs, so budget host CPU, memory, and database
+connections for them. Keep both profiles enabled while running these workers.
+By default, existing live routes and materializers use
 their current stores; the new consumers write shadow state only.
 Set `POSTMATCH_LIVE_READS_ENABLED=true` on an API instance only after the
 isolated store has been migrated through `0005`, replayed for its current
@@ -69,10 +72,12 @@ the independent canonical audit consumer in projection PostgreSQL. It uses the
 same partition assignment unless overridden, and writes retained outcomes,
 ordered effects, coverage, and its own frontier. Public history still reads
 the legacy mixed event store, including direct admin and protective events.
-The audit worker does not require the `postmatch` Compose profile.
+The audit worker uses the dedicated post-match role; its projection database
+does not require the `postmatch` PostgreSQL service, but its container requires
+the `postmatch-workers` profile.
 For controlled shadow validation, set `POSTMATCH_SETTLEMENT_INTAKE_ENABLED=true`
-with `POSTMATCH_EVENT_STREAM` on projector instances. The intake uses
-the assigned partitions and writes into the migrated `settlement` schema on
+with `POSTMATCH_EVENT_STREAM` on the dedicated `platform-postmatch-settlement-0..3`
+instances. Intake uses their assigned partitions and writes into the migrated `settlement` schema on
 `SETTLEMENT_POSTGRES_JDBC_URL`. Set this URL to a database distinct from runtime
 PostgreSQL; startup rejects a missing or identical URL.
 Apply `settlement/0008` on the actual settlement target before enabling it.
@@ -90,7 +95,7 @@ exceed the effect cap; a single oversized outcome fails closed. Keep
 the flag off until the bounded policy and ledger transition is wired and its
 parity gate passes.
 After applying `settlement/0009` to the dedicated target, set
-`POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=true` on assigned projector instances
+`POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=true` on assigned settlement instances
 to shadow-project immutable policy bindings and pending obligations from the
 committed intake frontier. This stage has its own partition frontier and never
 marks a trade settled. `POSTMATCH_SETTLEMENT_OBLIGATION_BATCH_SIZE` defaults to
@@ -106,7 +111,7 @@ intake and obligation frontiers catch up. Current mutable control-plane tables
 cannot prove historical policy before first observation; durable pre-trade
 binding or versioned history is required before public settlement cutover.
 After applying `settlement/0010` and `settlement/0011` to the dedicated target,
-set `POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=true` on assigned projector instances
+set `POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=true` on assigned settlement instances
 only after local admission, contention, crash, and replay checks pass; this
 shadow path remains default-off. The worker records a durable total admission
 order before balance decisions and consumes only committed obligations.
@@ -121,6 +126,14 @@ already-touched account stops replay. This stage does not change public reads.
 parallel partition loops by default; `POSTMATCH_SETTLEMENT_TRANSITION_WORKERS`
 sets a 1–32 bound, capped by assigned partition count at runtime. An oversized window shrinks
 by source position; a single source position over the obligation cap fails.
+The transition worker checks committed predecessor readiness before re-reading
+the admitted window and source/account proofs. Its transaction still checks the
+full proof and predecessor completions. Every ten seconds, each settlement JVM
+logs cumulative `postmatch_transition_metrics` counts and nanoseconds for
+readiness, admission, and execution, including blocked checks, oldest observed
+blocked head, applied trades, counter SQL call time, and predecessor fan-in.
+Counter call time includes SQL execution and possible row-lock wait; it is not
+an exact lock-wait duration.
 See the [transition contract](work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md).
 
 For an existing **dedicated shadow settlement target** with pre-`0009`
