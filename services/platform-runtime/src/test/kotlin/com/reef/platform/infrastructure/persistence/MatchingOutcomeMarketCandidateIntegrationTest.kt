@@ -1,10 +1,15 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalOutcomeSource
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import java.math.BigDecimal
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -218,11 +223,342 @@ class MatchingOutcomeMarketCandidateIntegrationTest {
         }
     }
 
+    @Test
+    fun rollbackOnlyReplayRejectsTargetOrderLevelAndTapeTamper() {
+        withDatabase { dataSource, schema, stream ->
+            insertSources(dataSource, listOf(
+                maker(stream, 1, "seller-1", "50"),
+                maker(stream, 2, "seller-2", "51"),
+                taker(stream, 3, "buyer-1", "seller-1")))
+            val market = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            repeat(3) {
+                assertEquals(MatchingMarketAdvance.APPLIED,
+                    market.advanceNext(stream, 0, "source-generation", "projection-a",
+                        maxOutcomes = 1))
+            }
+            market.verifyTargetReplay(stream, 0, "source-generation", "projection-a",
+                maxWindows = 3, maxSourceBytes = 100_000, maxRows = 100)
+            assertEquals(0L, proofFrontierCount(dataSource, schema, stream))
+            val restartedRead = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            assertEquals(listOf(BigDecimal("51")), restartedRead.readBook(stream, 0,
+                "projection-a", "source-generation", "run", "session", "AAPL", "USD",
+                requireCurrent = true).asks.map { it.price })
+            val expectedDigest = restartedRead.readBook(stream, 0, "projection-a",
+                "source-generation", "run", "session", "AAPL", "USD")
+                .frontier.lastWindowDigest!!
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(
+                    """UPDATE $schema.matching_market_candidate_frontiers
+                       SET last_window_digest = ? WHERE event_stream = ?
+                         AND projector_generation = 'projection-a'"""
+                ).use { statement ->
+                    statement.setString(1, "f".repeat(64))
+                    statement.setString(2, stream)
+                    assertEquals(1, statement.executeUpdate())
+                    assertFailsWith<IllegalStateException> {
+                        restartedRead.readBook(stream, 0, "projection-a", "source-generation",
+                            "run", "session", "AAPL", "USD")
+                    }
+                    statement.setString(1, expectedDigest)
+                    assertEquals(1, statement.executeUpdate())
+                }
+            }
+            restartedRead.readBook(stream, 0, "projection-a", "source-generation",
+                "run", "session", "AAPL", "USD", requireCurrent = true)
+            assertFailsWith<IllegalStateException> {
+                market.verifyTargetReplay(stream, 0, "source-generation", "projection-a",
+                    maxWindows = 2)
+            }
+            assertFailsWith<Exception> {
+                market.verifyTargetReplay(stream, 0, "source-generation", "projection-a",
+                    maxSourceBytes = 1)
+            }
+            assertFailsWith<IllegalStateException> {
+                market.verifyTargetReplay(stream, 0, "source-generation", "projection-a",
+                    maxRows = 1)
+            }
+            assertEquals(0L, proofFrontierCount(dataSource, schema, stream))
+
+            fun update(sql: String) {
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement(sql).use { statement ->
+                        statement.setString(1, stream)
+                        assertEquals(1, statement.executeUpdate())
+                    }
+                }
+            }
+            fun rejectsTarget() {
+                assertFailsWith<IllegalStateException> {
+                    market.verifyTargetReplay(stream, 0, "source-generation", "projection-a",
+                        maxWindows = 3, maxSourceBytes = 100_000, maxRows = 100)
+                }
+                assertEquals(0L, proofFrontierCount(dataSource, schema, stream))
+                val restarted = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+                assertFailsWith<IllegalStateException> {
+                    restarted.advanceNext(stream, 0, "source-generation", "projection-a")
+                }
+                assertEquals(0L, proofFrontierCount(dataSource, schema, stream))
+            }
+
+            update("""UPDATE $schema.matching_market_candidate_orders
+                SET status = 'CANCELLED', remaining_quantity = 0
+                WHERE event_stream = ? AND order_id = 'seller-2'""")
+            rejectsTarget()
+            update("""UPDATE $schema.matching_market_candidate_orders
+                SET status = 'ACCEPTED', remaining_quantity = 1
+                WHERE event_stream = ? AND order_id = 'seller-2'""")
+            market.verifyTargetReplay(stream, 0, "source-generation", "projection-a")
+
+            update("""UPDATE $schema.matching_market_candidate_levels
+                SET quantity = 2 WHERE event_stream = ? AND price = 51""")
+            rejectsTarget()
+            update("""UPDATE $schema.matching_market_candidate_levels
+                SET quantity = 1 WHERE event_stream = ? AND price = 51""")
+            market.verifyTargetReplay(stream, 0, "source-generation", "projection-a")
+
+            update("""UPDATE $schema.matching_market_candidate_tape
+                SET price = 49 WHERE event_stream = ? AND trade_id = 'trade-3'""")
+            rejectsTarget()
+            update("""UPDATE $schema.matching_market_candidate_tape
+                SET price = 50 WHERE event_stream = ? AND trade_id = 'trade-3'""")
+            market.verifyTargetReplay(stream, 0, "source-generation", "projection-a")
+            assertEquals(0L, proofFrontierCount(dataSource, schema, stream))
+        }
+    }
+
+    @Test
+    fun emptyOriginReplayRejectsInjectedRowsBeforeReadOrAdvance() {
+        withDatabase { dataSource, schema, stream ->
+            val market = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            market.initialize(stream, 0, "source-generation", "projection-a")
+            fun mutate(sql: String) {
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement(sql).use { statement ->
+                        statement.setString(1, stream)
+                        assertEquals(1, statement.executeUpdate())
+                    }
+                }
+            }
+            mutate("""INSERT INTO $schema.matching_market_candidate_orders
+                (event_stream, partition_id, projector_generation, order_id, run_id,
+                 venue_session_id, instrument_id, currency, side, order_type, status,
+                 original_quantity, remaining_quantity, filled_quantity, limit_price)
+                VALUES (?, 0, 'projection-a', 'injected', 'run', 'session', 'AAPL',
+                        'USD', 'SELL', 'LIMIT', 'ACCEPTED', 1, 1, 0, 50)""")
+            assertFailsWith<IllegalStateException> {
+                market.readBook(stream, 0, "projection-a", "source-generation",
+                    "run", "session", "AAPL", "USD")
+            }
+            mutate("""DELETE FROM $schema.matching_market_candidate_orders
+                WHERE event_stream = ? AND order_id = 'injected'""")
+            mutate("""INSERT INTO $schema.matching_market_candidate_levels
+                (event_stream, partition_id, projector_generation, run_id,
+                 venue_session_id, instrument_id, currency, side, price, quantity)
+                VALUES (?, 0, 'projection-a', 'run', 'session', 'AAPL',
+                        'USD', 'SELL', 50, 1)""")
+            assertFailsWith<IllegalStateException> {
+                market.advanceNext(stream, 0, "source-generation", "projection-a")
+            }
+            mutate("""DELETE FROM $schema.matching_market_candidate_levels
+                WHERE event_stream = ? AND price = 50""")
+            mutate("""INSERT INTO $schema.matching_market_candidate_tape
+                (event_stream, partition_id, projector_generation, run_id, venue_session_id,
+                 instrument_id, currency, trade_id, event_id, execution_id, quantity_units,
+                 price, occurred_at_text, source_generation, source_stream_sequence,
+                 source_effect_ordinal)
+                VALUES (?, 0, 'projection-a', 'run', 'session', 'AAPL', 'USD',
+                        'injected', 'event', 'execution', 1, 50, '2026-09-28T00:00:00Z',
+                        'source-generation', 1, 0)""")
+            assertFailsWith<IllegalStateException> {
+                market.readTape(stream, 0, "projection-a", "source-generation",
+                    "run", "session", "AAPL", "USD")
+            }
+            mutate("""DELETE FROM $schema.matching_market_candidate_tape
+                WHERE event_stream = ? AND trade_id = 'injected'""")
+            assertTrue(market.readBook(stream, 0, "projection-a", "source-generation",
+                "run", "session", "AAPL", "USD", requireCurrent = true).asks.isEmpty())
+            assertEquals(MatchingMarketAdvance.NO_WORK,
+                market.advanceNext(stream, 0, "source-generation", "projection-a"))
+            assertEquals(0L, proofFrontierCount(dataSource, schema, stream))
+        }
+    }
+
+    @Test
+    fun changedFrontierBetweenTrustAndReadOrAppendFailsClosed() {
+        withDatabase { dataSource, schema, stream ->
+            insertSources(dataSource, listOf(maker(stream, 1, "seller-1", "50")))
+            val primary = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                primary.advanceNext(stream, 0, "source-generation", "projection-a"))
+            val savedDigest = primary.readBook(stream, 0, "projection-a", "source-generation",
+                "run", "session", "AAPL", "USD").frontier.lastWindowDigest
+            fun setDigest(value: String?) {
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement(
+                        """UPDATE $schema.matching_market_candidate_frontiers
+                           SET last_window_digest = ? WHERE event_stream = ?
+                             AND projector_generation = 'projection-a'"""
+                    ).use { statement ->
+                        statement.setString(1, value)
+                        statement.setString(2, stream)
+                        assertEquals(1, statement.executeUpdate())
+                    }
+                }
+            }
+            val changed = "f".repeat(64)
+            val readRacer = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterTrustBeforeRead = { setDigest(changed) })
+            assertFailsWith<IllegalStateException> {
+                readRacer.readBook(stream, 0, "projection-a", "source-generation",
+                    "run", "session", "AAPL", "USD")
+            }
+            setDigest(savedDigest)
+            val vectorRacer = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterTrustBeforeRead = { setDigest(changed) })
+            assertFailsWith<IllegalStateException> {
+                vectorRacer.readVector(stream, "projection-a", mapOf(0 to "source-generation"))
+            }
+            setDigest(savedDigest)
+
+            insertSources(dataSource, listOf(maker(stream, 2, "seller-2", "51")))
+            val appendRacer = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterTrustBeforeApply = { setDigest(changed) })
+            assertFailsWith<IllegalStateException> {
+                appendRacer.advanceNext(stream, 0, "source-generation", "projection-a",
+                    maxOutcomes = 1)
+            }
+            setDigest(savedDigest)
+            val book = primary.readBook(stream, 0, "projection-a", "source-generation",
+                "run", "session", "AAPL", "USD", depth = 2)
+            assertEquals(1, book.frontier.projectedSequence)
+            assertEquals(listOf(BigDecimal("50")), book.asks.map { it.price })
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                primary.advanceNext(stream, 0, "source-generation", "projection-a",
+                    maxOutcomes = 1))
+            assertEquals(listOf(BigDecimal("50"), BigDecimal("51")),
+                primary.readBook(stream, 0, "projection-a", "source-generation",
+                    "run", "session", "AAPL", "USD", depth = 2).asks.map { it.price })
+        }
+    }
+
+    @Test
+    fun liveAppendProgressesDuringRecoveryProofWithoutServingStaleSnapshot() {
+        withDatabase { dataSource, schema, stream ->
+            insertSources(dataSource, listOf(maker(stream, 1, "seller-1", "50")))
+            val live = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                live.advanceNext(stream, 0, "source-generation", "projection-a"))
+            insertSources(dataSource, listOf(maker(stream, 2, "seller-2", "51")))
+
+            val snapshotPinned = CountDownLatch(1)
+            val releaseProof = CountDownLatch(1)
+            val recovering = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterProofSnapshotBeforeReplay = {
+                    snapshotPinned.countDown()
+                    check(releaseProof.await(10, TimeUnit.SECONDS)) {
+                        "market recovery proof test barrier timed out"
+                    }
+                })
+            val executor = Executors.newFixedThreadPool(2)
+            try {
+                val read = executor.submit<Throwable?> {
+                    runCatching {
+                        recovering.readBook(stream, 0, "projection-a", "source-generation",
+                            "run", "session", "AAPL", "USD")
+                    }.exceptionOrNull()
+                }
+                assertTrue(snapshotPinned.await(5, TimeUnit.SECONDS),
+                    "market recovery proof did not pin target snapshot")
+                val append = executor.submit<MatchingMarketAdvance> {
+                    live.advanceNext(stream, 0, "source-generation", "projection-a",
+                        maxOutcomes = 1)
+                }
+                // This must finish while proof transaction remains open.
+                assertEquals(MatchingMarketAdvance.APPLIED, append.get(5, TimeUnit.SECONDS))
+                releaseProof.countDown()
+                assertTrue(read.get(5, TimeUnit.SECONDS) is IllegalStateException)
+                assertEquals(listOf(BigDecimal("50"), BigDecimal("51")),
+                    recovering.readBook(stream, 0, "projection-a", "source-generation",
+                        "run", "session", "AAPL", "USD", depth = 2,
+                        requireCurrent = true).asks.map { it.price })
+            } finally {
+                releaseProof.countDown()
+                executor.shutdownNow()
+            }
+        }
+    }
+
+    @Test
+    fun pausedRecoveryProofDoesNotBlockUnrelatedPartitionOnSameInstance() {
+        withDatabase { dataSource, schema, stream ->
+            val secondOrigin = CanonicalStreamPosition.origin(1)
+            insertSources(dataSource, listOf(maker(stream, 1, "a-seller", "50"),
+                maker(stream, secondOrigin + 1, "b-seller-1", "60", partition = 1)))
+            val seeder = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                seeder.advanceNext(stream, 0, "source-generation", "projection-a"))
+
+            val pauseProof = AtomicBoolean(false)
+            val snapshotPinned = CountDownLatch(1)
+            val releaseProof = CountDownLatch(1)
+            val shared = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterProofSnapshotBeforeReplay = {
+                    if (pauseProof.get()) {
+                        snapshotPinned.countDown()
+                        check(releaseProof.await(10, TimeUnit.SECONDS)) {
+                            "market recovery proof test barrier timed out"
+                        }
+                    }
+                })
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                shared.advanceNext(stream, 1, "source-generation", "projection-a"))
+            insertSources(dataSource, listOf(maker(stream, secondOrigin + 2,
+                "b-seller-2", "61", partition = 1)))
+            pauseProof.set(true)
+            val executor = Executors.newFixedThreadPool(2)
+            try {
+                val recovering = executor.submit<MatchingMarketBook> {
+                    shared.readBook(stream, 0, "projection-a", "source-generation",
+                        "run", "session", "AAPL", "USD", requireCurrent = true)
+                }
+                assertTrue(snapshotPinned.await(5, TimeUnit.SECONDS),
+                    "market recovery proof did not pause for partition 0")
+                val unrelated = executor.submit<MatchingMarketBook> {
+                    assertEquals(MatchingMarketAdvance.APPLIED,
+                        shared.advanceNext(stream, 1, "source-generation", "projection-a",
+                            maxOutcomes = 1))
+                    shared.readBook(stream, 1, "projection-a", "source-generation",
+                        "run", "session", "AAPL", "USD", depth = 2,
+                        requireCurrent = true)
+                }
+                assertEquals(listOf(BigDecimal("60"), BigDecimal("61")),
+                    unrelated.get(5, TimeUnit.SECONDS).asks.map { it.price })
+                releaseProof.countDown()
+                assertEquals(listOf(BigDecimal("50")),
+                    recovering.get(5, TimeUnit.SECONDS).asks.map { it.price })
+            } finally {
+                releaseProof.countDown()
+                executor.shutdownNow()
+            }
+        }
+    }
+
+    private fun proofFrontierCount(dataSource: DataSource, schema: String, stream: String): Long =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """SELECT count(*) FROM $schema.matching_market_candidate_frontiers
+                   WHERE event_stream = ? AND projector_generation LIKE '__market_replay_proof__%'"""
+            ).use { statement ->
+                statement.setString(1, stream)
+                statement.executeQuery().use { rows -> rows.next(); rows.getLong(1) }
+            }
+        }
+
     private fun maker(stream: String, sequence: Long, order: String, price: String,
-        orderType: String = "LIMIT"):
+        orderType: String = "LIMIT", partition: Int = 0):
         CanonicalOutcomeSource {
         val payload = """{"effectVersion":1,"accepted":{"eventId":"accept-$sequence","orderId":"$order","occurredAt":"2026-09-28T00:00:00Z"},"acceptedOrder":${identity(order, "seller", "SELL", price, orderType)},"orderStates":[${state(order, "SELL", "ACCEPTED", "1", price)}]}"""
-        return source(stream, sequence, order, payload)
+        return source(stream, sequence, order, payload, partition)
     }
 
     private fun taker(stream: String, sequence: Long, buyer: String, sellerOrder: String):
@@ -241,8 +577,9 @@ class MatchingOutcomeMarketCandidateIntegrationTest {
     private fun state(order: String, side: String, status: String, remaining: String, price: String) =
         """{"orderId":"$order","instrumentId":"AAPL","side":"$side","status":"$status","originalQuantity":"1","remainingQuantity":"$remaining","limitPrice":"$price","currency":"USD","lastUpdatedAt":"2026-09-28T00:00:01Z"}"""
 
-    private fun source(stream: String, sequence: Long, order: String, payload: String) =
-        CanonicalOutcomeSource(stream, 0, sequence, "batch-$sequence", "command-$sequence",
+    private fun source(stream: String, sequence: Long, order: String, payload: String,
+        partition: Int = 0) =
+        CanonicalOutcomeSource(stream, partition, sequence, "batch-$sequence", "command-$sequence",
             "SubmitOrder", "hash-$sequence", "AAPL", order, "accepted", payload)
 
     private fun insertSources(dataSource: DataSource, sources: List<CanonicalOutcomeSource>) {

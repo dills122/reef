@@ -9,6 +9,8 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Connection
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.sql.DataSource
 
 enum class MatchingMarketAdvance { APPLIED, NO_WORK }
@@ -57,16 +59,24 @@ class MatchingOutcomeMarketCandidate(
     private val sourceReader: PostgresCanonicalOutcomeSourceReader =
         PostgresCanonicalOutcomeSourceReader(sourceDataSource),
     private val maxRecoveryWindows: Int = 10_000,
-    private val beforeCommit: () -> Unit = {}
+    private val maxRecoverySourceBytes: Long = 64_000_000,
+    private val maxRecoveryRows: Int = 200_000,
+    private val beforeCommit: () -> Unit = {},
+    private val afterTrustBeforeRead: () -> Unit = {},
+    private val afterTrustBeforeApply: () -> Unit = {},
+    private val afterProofSnapshotBeforeReplay: () -> Unit = {}
 ) {
     companion object { const val CONSUMER_NAME = "matching-market-candidate-v1" }
     init {
         require(schema.matches(Regex("[a-z][a-z0-9_]*")) &&
-            maxRecoveryWindows in 1..100_000)
+            maxRecoveryWindows in 1..100_000 &&
+            maxRecoverySourceBytes > 0 && maxRecoveryRows in 1..1_000_000)
     }
     private data class ProofKey(val stream: String, val partition: Int,
         val sourceGeneration: String, val projectorGeneration: String)
-    private val trustedSequence = mutableMapOf<ProofKey, Long>()
+    private data class TrustedFrontier(val sequence: Long, val digest: String?)
+    private val trustedFrontiers = ConcurrentHashMap<ProofKey, TrustedFrontier>()
+    private val recoveryLocks = ConcurrentHashMap<ProofKey, Any>()
 
     fun initialize(stream: String, partition: Int, sourceGeneration: String, projectorGeneration: String) {
         require(stream.isNotBlank() && partition >= 0 && sourceGeneration.isNotBlank() &&
@@ -95,41 +105,48 @@ class MatchingOutcomeMarketCandidate(
         require(maxOutcomes in 1..5000 && maxResultBytes > 0)
         initialize(stream, partition, sourceGeneration, projectorGeneration)
         val proofKey = ProofKey(stream, partition, sourceGeneration, projectorGeneration)
-        ensureRecoveredSourcePrefix(proofKey)
-        val start = targetDataSource.connection.use { connection ->
-            frontier(connection, stream, partition, projectorGeneration, false).sequence
-        }
+        val trusted = ensureRecoveredTargetReplay(proofKey)
         val window = sourceReader.readNextWindow(CONSUMER_NAME, stream, partition,
-            sourceGeneration, start, maxOutcomes, maxResultBytes) ?: return MatchingMarketAdvance.NO_WORK
-        applyVerified(projectorGeneration, window)
-        synchronized(trustedSequence) {
-            trustedSequence[proofKey] = maxOf(trustedSequence[proofKey] ?: start,
-                window.throughInclusiveSequence)
+            sourceGeneration, trusted.sequence, maxOutcomes, maxResultBytes)
+        if (window == null) {
+            val current = targetDataSource.connection.use { connection ->
+                frontier(connection, stream, partition, projectorGeneration, false)
+            }
+            check(current.sourceGeneration == sourceGeneration &&
+                TrustedFrontier(current.sequence, current.digest) == trusted) {
+                "market frontier changed after trust before no-work result"
+            }
+            return MatchingMarketAdvance.NO_WORK
         }
+        afterTrustBeforeApply()
+        applyVerified(projectorGeneration, window, trusted)
+        val committed = targetDataSource.connection.use { connection ->
+            frontier(connection, stream, partition, projectorGeneration, false)
+        }
+        check(committed.sourceGeneration == sourceGeneration &&
+            committed.sequence == window.throughInclusiveSequence &&
+            committed.digest == exactDigest(window)) {
+            "market committed frontier changed before trust update"
+        }
+        trustedFrontiers[proofKey] = TrustedFrontier(committed.sequence, committed.digest)
         return MatchingMarketAdvance.APPLIED
     }
 
-    private fun ensureRecoveredSourcePrefix(key: ProofKey) {
-        synchronized(trustedSequence) {
+    private fun ensureRecoveredTargetReplay(key: ProofKey): TrustedFrontier {
+        synchronized(recoveryLocks.computeIfAbsent(key) { Any() }) {
             val current = targetDataSource.connection.use { connection ->
                 frontier(connection, key.stream, key.partition, key.projectorGeneration, false)
             }
             check(current.sourceGeneration == key.sourceGeneration) {
                 "market source generation changed"
             }
-            if ((trustedSequence[key] ?: Long.MIN_VALUE) >= current.sequence) return
-            if (current.sequence > CanonicalStreamPosition.origin(key.partition)) {
-                verifySourcePrefix(key.stream, key.partition, key.sourceGeneration,
-                    key.projectorGeneration, maxRecoveryWindows)
-            }
-            val after = targetDataSource.connection.use { connection ->
-                frontier(connection, key.stream, key.partition, key.projectorGeneration, false)
-            }
-            check(after.sourceGeneration == key.sourceGeneration &&
-                after.sequence == current.sequence && after.digest == current.digest) {
-                "market frontier changed during recovery proof"
-            }
-            trustedSequence[key] = current.sequence
+            val observed = TrustedFrontier(current.sequence, current.digest)
+            if (trustedFrontiers[key] == observed) return observed
+            val proven = proveTargetReplay(key.stream, key.partition, key.sourceGeneration,
+                key.projectorGeneration, maxRecoveryWindows, maxRecoverySourceBytes,
+                maxRecoveryRows)
+            trustedFrontiers[key] = proven
+            return proven
         }
     }
 
@@ -237,6 +254,205 @@ class MatchingOutcomeMarketCandidate(
         }
     }
 
+    /**
+     * Startup proof of both retained source and projected target state. Replays a bounded
+     * pinned prefix through the same reducer in one rollback-only target transaction;
+     * even process death cannot leave a durable proof generation behind.
+     */
+    fun verifyTargetReplay(stream: String, partition: Int, sourceGeneration: String,
+        projectorGeneration: String, maxWindows: Int = maxRecoveryWindows,
+        maxSourceBytes: Long = maxRecoverySourceBytes,
+        maxRows: Int = maxRecoveryRows) {
+        proveTargetReplay(stream, partition, sourceGeneration, projectorGeneration,
+            maxWindows, maxSourceBytes, maxRows)
+    }
+
+    private fun proveTargetReplay(stream: String, partition: Int, sourceGeneration: String,
+        projectorGeneration: String, maxWindows: Int, maxSourceBytes: Long,
+        maxRows: Int): TrustedFrontier {
+        require(stream.isNotBlank() && partition >= 0 && sourceGeneration.isNotBlank() &&
+            projectorGeneration.isNotBlank() && maxWindows in 1..100_000 &&
+            maxSourceBytes > 0 && maxRows in 1..1_000_000)
+        val pinned = targetDataSource.connection.use { connection ->
+            val oldIsolation = connection.transactionIsolation
+            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+            connection.autoCommit = false
+            try {
+                val head = frontier(connection, stream, partition, projectorGeneration, false)
+                check(head.sourceGeneration == sourceGeneration) {
+                    "market replay source generation changed"
+                }
+                val windows = readReceipts(connection, stream, partition, projectorGeneration,
+                    head, maxWindows)
+                connection.commit()
+                PinnedReplay(head, windows)
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.transactionIsolation = oldIsolation
+            }
+        }
+        var usedBytes = 0L
+        val replay = pinned.windows.map { receipt ->
+            val remaining = maxSourceBytes - usedBytes
+            check(remaining > 0) { "market replay source byte bound exceeded" }
+            val width = receipt.through - receipt.from
+            check(width in 1..5000) { "market replay source window exceeds position bound" }
+            val retained = sourceReader.readNextWindow(CONSUMER_NAME, stream, partition,
+                sourceGeneration, receipt.from, width.toInt(), remaining)
+                ?: error("market replay source window is missing")
+            check(retained.throughInclusiveSequence == receipt.through &&
+                retained.sourceDigest == receipt.verifiedDigest &&
+                exactDigest(retained) == receipt.exactDigest) {
+                "market replay retained source differs from receipt"
+            }
+            retained.outcomes.forEach { outcome ->
+                val bytes = outcome.source.resultPayloadJson.toByteArray(StandardCharsets.UTF_8).size
+                check(bytes.toLong() <= maxSourceBytes - usedBytes) {
+                    "market replay source byte bound exceeded"
+                }
+                usedBytes += bytes
+            }
+            retained
+        }
+        val proofGeneration = "__market_replay_proof__${UUID.randomUUID()}"
+        targetDataSource.connection.use { connection ->
+            val oldIsolation = connection.transactionIsolation
+            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+            connection.autoCommit = false
+            try {
+                // A repeatable-read snapshot pins production state without blocking live appends.
+                val production = frontier(connection, stream, partition, projectorGeneration, false)
+                check(production == pinned.frontier) {
+                    "market replay frontier changed after source was pinned"
+                }
+                check(readReceipts(connection, stream, partition, projectorGeneration,
+                    production, maxWindows) == pinned.windows) {
+                    "market replay receipts changed after source was pinned"
+                }
+                afterProofSnapshotBeforeReplay()
+                connection.prepareStatement(
+                    """INSERT INTO $schema.matching_market_candidate_frontiers
+                       (event_stream, partition_id, projector_generation, source_generation,
+                        last_stream_sequence) VALUES (?, ?, ?, ?, ?)"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setInt(2, partition)
+                    statement.setString(3, proofGeneration)
+                    statement.setString(4, sourceGeneration)
+                    statement.setLong(5, CanonicalStreamPosition.origin(partition))
+                    check(statement.executeUpdate() == 1)
+                }
+                replay.forEach { applyVerifiedInTransaction(connection, proofGeneration, it) }
+                val proof = frontier(connection, stream, partition, proofGeneration, false)
+                check(proof.sourceGeneration == production.sourceGeneration &&
+                    proof.sequence == production.sequence && proof.digest == production.digest) {
+                    "market replay frontier differs from production"
+                }
+                compareTargetRows(connection, stream, partition, projectorGeneration,
+                    proofGeneration, maxRows)
+                return TrustedFrontier(production.sequence, production.digest)
+            } finally {
+                // Proof generation and every replayed row are intentionally never committed.
+                connection.rollback()
+                connection.transactionIsolation = oldIsolation
+            }
+        }
+    }
+
+    private data class PinnedReplay(val frontier: StoredFrontier,
+        val windows: List<SavedWindow>)
+
+    private fun readReceipts(connection: Connection, stream: String, partition: Int,
+        generation: String, head: StoredFrontier, maxWindows: Int): List<SavedWindow> {
+        val windows = connection.prepareStatement(
+            """SELECT from_exclusive_sequence, through_inclusive_sequence,
+                      source_generation, verified_source_digest, exact_source_digest
+               FROM $schema.matching_market_candidate_windows
+               WHERE event_stream = ? AND partition_id = ? AND projector_generation = ?
+               ORDER BY through_inclusive_sequence LIMIT ?"""
+        ).use { statement ->
+            statement.setString(1, stream)
+            statement.setInt(2, partition)
+            statement.setString(3, generation)
+            statement.setInt(4, maxWindows + 1)
+            statement.executeQuery().use { rows ->
+                buildList { while (rows.next()) add(SavedWindow(rows.getLong(1),
+                    rows.getLong(2), rows.getString(3), rows.getString(4),
+                    rows.getString(5), head.sequence, head.digest)) }
+            }
+        }
+        check(windows.size <= maxWindows) { "market replay window bound exceeded" }
+        var next = CanonicalStreamPosition.origin(partition)
+        windows.forEach { receipt ->
+            check(receipt.sourceGeneration == head.sourceGeneration &&
+                receipt.from == next && receipt.through > receipt.from &&
+                receipt.through - receipt.from <= 5000) {
+                "market replay receipts have a gap or changed generation"
+            }
+            next = receipt.through
+        }
+        check(next == head.sequence &&
+            (windows.lastOrNull()?.exactDigest == head.digest ||
+                windows.isEmpty() && head.digest == null)) {
+            "market replay receipts differ from frontier"
+        }
+        return windows
+    }
+
+    private fun compareTargetRows(connection: Connection, stream: String, partition: Int,
+        production: String, proof: String, maxRows: Int) {
+        data class Surface(val table: String, val columns: String, val orderBy: String)
+        val surfaces = listOf(
+            Surface("orders", "order_id, run_id, venue_session_id, instrument_id, currency, " +
+                "side, order_type, status, original_quantity, remaining_quantity, " +
+                "filled_quantity, limit_price", "order_id"),
+            Surface("levels", "run_id, venue_session_id, instrument_id, currency, side, " +
+                "price, quantity", "run_id, venue_session_id, instrument_id, currency, side, price"),
+            Surface("tape", "run_id, venue_session_id, instrument_id, currency, trade_id, " +
+                "event_id, execution_id, quantity_units, price, occurred_at_text, " +
+                "source_generation, source_stream_sequence, source_effect_ordinal",
+                "trade_id")
+        )
+        var productionRows = 0
+        var proofRows = 0
+        surfaces.forEach { surface ->
+            fun rows(generation: String, remaining: Int): List<List<Any?>> =
+                connection.prepareStatement(
+                    """SELECT ${surface.columns}
+                       FROM $schema.matching_market_candidate_${surface.table}
+                       WHERE event_stream = ? AND partition_id = ? AND projector_generation = ?
+                       ORDER BY ${surface.orderBy} LIMIT ?"""
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.setInt(2, partition)
+                    statement.setString(3, generation)
+                    statement.setInt(4, remaining + 1)
+                    statement.executeQuery().use { result ->
+                        val width = result.metaData.columnCount
+                        buildList {
+                            while (result.next()) add((1..width).map { column ->
+                                when (val value = result.getObject(column)) {
+                                    is BigDecimal -> value.stripTrailingZeros().toPlainString()
+                                    else -> value
+                                }
+                            })
+                        }
+                    }
+                }
+            val expected = rows(production, maxRows - productionRows)
+            productionRows += expected.size
+            check(productionRows <= maxRows) { "market replay target row bound exceeded" }
+            val actual = rows(proof, maxRows - proofRows)
+            proofRows += actual.size
+            check(proofRows <= maxRows) { "market replay proof row bound exceeded" }
+            check(expected == actual) {
+                "market replay ${surface.table} differs from production"
+            }
+        }
+    }
+
     fun readBook(stream: String, partition: Int, projectorGeneration: String,
         sourceGeneration: String, runId: String, venueSessionId: String,
         instrumentId: String, currency: String, depth: Int = 1,
@@ -258,6 +474,11 @@ class MatchingOutcomeMarketCandidate(
         sourceGenerations: Map<Int, String>, requireCurrent: Boolean = false): MatchingMarketVector {
         require(sourceGenerations.size in 1..32 && sourceGenerations.keys.all { it >= 0 } &&
             sourceGenerations.values.all(String::isNotBlank))
+        val trustedByPartition = sourceGenerations.mapValues { (partition, sourceGeneration) ->
+            ensureRecoveredTargetReplay(ProofKey(stream, partition, sourceGeneration,
+                projectorGeneration))
+        }
+        afterTrustBeforeRead()
         val observedByPartition = sourceGenerations.keys.associateWith { sourceLatest(stream, it) }
         return targetDataSource.connection.use { connection ->
             val oldIsolation = connection.transactionIsolation
@@ -268,6 +489,10 @@ class MatchingOutcomeMarketCandidate(
                     val current = frontier(connection, stream, partition, projectorGeneration, false)
                     check(current.sourceGeneration == sourceGeneration) {
                         "market source generation changed"
+                    }
+                    check(trustedByPartition.getValue(partition) ==
+                        TrustedFrontier(current.sequence, current.digest)) {
+                        "market frontier changed after read trust proof"
                     }
                     val observed = observedByPartition.getValue(partition)
                     val lag = observed - current.sequence
@@ -336,13 +561,31 @@ class MatchingOutcomeMarketCandidate(
         }
     }
 
-    private fun applyVerified(generation: String, window: VerifiedCanonicalSourceWindow) {
+    private fun applyVerified(generation: String, window: VerifiedCanonicalSourceWindow,
+        trusted: TrustedFrontier) {
         check(window.consumerName == CONSUMER_NAME && window.outcomes.isNotEmpty())
         targetDataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
-                val current = frontier(connection, window.eventStream, window.partitionId,
-                    generation, true)
+                applyVerifiedInTransaction(connection, generation, window, trusted)
+                beforeCommit()
+                connection.commit()
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            }
+        }
+    }
+
+    /** Reused by the committed projector and rollback-only independent replay. */
+    private fun applyVerifiedInTransaction(connection: Connection, generation: String,
+        window: VerifiedCanonicalSourceWindow, trusted: TrustedFrontier? = null) {
+        check(window.consumerName == CONSUMER_NAME && window.outcomes.isNotEmpty())
+        val current = frontier(connection, window.eventStream, window.partitionId,
+            generation, true)
+        if (trusted != null) check(trusted == TrustedFrontier(current.sequence, current.digest)) {
+            "market frontier changed after append trust proof"
+        }
                 check(current.sourceGeneration == window.sourceGeneration &&
                     current.sequence == window.fromExclusiveSequence) {
                     "market source frontier, generation or worker order changed"
@@ -487,13 +730,6 @@ class MatchingOutcomeMarketCandidate(
                     statement.setString(7, window.sourceGeneration)
                     check(statement.executeUpdate() == 1)
                 }
-                beforeCommit()
-                connection.commit()
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            }
-        }
     }
 
     private data class MarketOrder(val id: String, val runId: String, val session: String,
@@ -707,6 +943,9 @@ class MatchingOutcomeMarketCandidate(
         read: (Connection, MatchingMarketFrontier) -> T): T {
         require(stream.isNotBlank() && partition >= 0 && generation.isNotBlank() &&
             sourceGeneration.isNotBlank())
+        val trusted = ensureRecoveredTargetReplay(
+            ProofKey(stream, partition, sourceGeneration, generation))
+        afterTrustBeforeRead()
         val observed = sourceLatest(stream, partition)
         val result = targetDataSource.connection.use { connection ->
             val oldIsolation = connection.transactionIsolation
@@ -716,6 +955,9 @@ class MatchingOutcomeMarketCandidate(
                 val current = frontier(connection, stream, partition, generation, false)
                 check(current.sourceGeneration == sourceGeneration) {
                     "market source generation changed"
+                }
+                check(trusted == TrustedFrontier(current.sequence, current.digest)) {
+                    "market frontier changed after read trust proof"
                 }
                 val lag = observed - current.sequence
                 check(lag >= 0) { "market projection exceeds retained source" }
