@@ -31,7 +31,7 @@ explicit decision; document them without compatibility dual-write.
 | PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference proof ready for user review; authority adapters remain for vertical proof |
 | PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Candidate core and focused proof in progress; external source/control proof open |
 | PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Recovery read and fault proof in progress; external restore anchor remains a gate |
-| PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Waiting |
+| PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Default-off financial projection slice implemented and under review; market-data/tape frontier and capacity proof open |
 | PMJ-05 | Complete sustained correctness/capacity run for both sibling paths and measured decision | PMJ-03, PMJ-04 | Lead + bounded research/test worker | Waiting |
 | PMJ-06 | Independent architecture/code review and conditional breaking cutover plan | PMJ-05 pass | Independent reviewer; lead decides | Waiting |
 
@@ -83,6 +83,7 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | PMJ-02 default-off core candidate, after authority-binding repair | `SettlementJournalControlCodecTest`, `SettlementJournalEvaluatorTest`, `SettlementJournalStoreIntegrationTest`, `SettlementJournalCandidateIntegrationTest`, plus PMJ-01 suites; combined offline Gradle run against disposable database | 29 tests, 0 skipped/failures/errors. Typed append, head fence, atomic rollback, duplicate/tampered-row rejection, ordered scarce winner, explicit retry and changed prepared-input rejection have focused coverage. Candidate reads retained JSONB outcomes through existing reader but uses fixture source/control proof callbacks. No projection, restore/replay, sibling market-data load, or throughput qualification yet. |
 | 2026-09-28 | PMJ-03 local recovery-read and failure-boundary slice | `SettlementJournalVerifiedReadIntegrationTest` and `SettlementJournalFailureBoundaryIntegrationTest`, combined with prior six suites against disposable database | 35 tests total, 0 skipped/failures/errors. Verified primary-snapshot read rejects local row/chain/head corruption; immutable envelope and checked replay copy reject post-read mutation. Rollback, lost-reply duplicate and same-incarnation fence boundaries pass. No source/control authenticity, evaluator replay, snapshot, independent restore or new-incarnation takeover is claimed. |
 | 2026-09-28 | PMJ-03 bounded genesis replay proof | `SettlementJournalReplayProofIntegrationTest` and extended `SettlementJournalCandidateIntegrationTest` against disposable database | 2 focused PostgreSQL tests, 0 skipped/failures/errors. Reads retained JSONB text again, rejects changed source value, decodes controls, compares typed results/four effects and cumulative state, and pins head. Fixture callbacks do not establish production control or empty-range authority; no snapshot, writer activation or independent restore. |
+| 2026-09-28 | PMJ-04 default-off financial projection slice | `SettlementJournalProjectionIntegrationTest` against disposable PostgreSQL database; combined `*SettlementJournal*` Gradle suites | 2 focused tests, 0 skipped/failures/errors; combined 31 tests, 1 optional write-shape test skipped, 0 failures/errors. Separate generation checkpoints, atomic balance/status updates, break and funding retry, crash rollback, duplicate delivery, forged envelope rejection, and journal-frontier reads pass. Market-data/tape frontier, independent restore and sustained load remain open. |
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
@@ -171,6 +172,20 @@ Run: `BUILD SUCCESSFUL in 4s`; JUnit XML two tests, zero skipped, failures
 or errors. Replay re-evaluates from genesis for each batch, so work grows
 quadratically with batch count and is capped at 256 by default. It is a
 bounded proof, not the snapshot-plus-tail restart path.
+
+PMJ-04 financial projection command from `services/platform-runtime`, with
+same disposable database and `SETTLEMENT_POSTGRES_PASSWORD_TEST` set locally:
+
+```sh
+SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_parity_20260928 SETTLEMENT_POSTGRES_USER_TEST=reef ./gradlew test --tests '*SettlementJournal*'
+```
+
+Run: `BUILD SUCCESSFUL in 7s`; JUnit XML 31 tests, one optional
+write-shape test skipped, zero failures/errors. Projection rows are rebuildable
+from verified journal batches, and reads report projected and observed journal
+positions. A current-only read rejects lag. The projector does not lock the
+journal head during its transaction. This has not established sustained
+projection throughput or public-read cutover safety.
 
 Each worker returns scoped status, files, exact commands/results, decisions,
 assumptions, limitations and next action. Lead verifies material claims in
