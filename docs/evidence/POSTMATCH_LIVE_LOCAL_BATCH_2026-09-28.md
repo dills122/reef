@@ -95,17 +95,32 @@ its per-window p95 rises versus four because more windows overlap. No DB
 wait-event sampler ran, so the precise cause of the 16-writer slowdown remains
 unassigned. A later harness inspection found that the Hikari target pool may
 have grown from four to eight to sixteen connections during the timed arms.
-That startup cost can exaggerate the sixteen-writer slowdown. The harness now
-builds/verifies all windows and warms all configured pool connections before
-timing; a corrected rerun is required before treating the eight-writer peak as
-a stable tuning choice.
+That startup cost can exaggerate the sixteen-writer slowdown. Those earlier
+rewrite-on elapsed figures corresponded to roughly 8.4–8.7k outcomes/s at
+eight writers, including synthetic fixture setup; they do not measure only
+target apply.
 
-Eight writers gave best elapsed time in both local rewrite-on sweeps, about
-8.4–8.7k outcomes/s of target apply plus fixture setup. Sixteen writers
-regressed to about
-7.3k/s. That is below the integrated 10k target before source reads, market,
-settlement, or legacy projection. The 16-thread target latency rise did not
-appear primarily in commit; detailed PostgreSQL wait events were not captured.
+The corrected harness built and verified all windows, then warmed all 16
+configured Hikari connections before timing. One opt-in PostgreSQL run passed
+with zero skips or failures on 2026-09-28. It kept 16 windows, 8,000 outcomes,
+4,000 trades, and the same fact-count, coverage, and frontier checks:
+
+| Writers | Rewrite | Elapsed (ms) | Target mean / p95 (ms) | Commit mean / p95 (ms) |
+| ---: | --- | ---: | ---: | ---: |
+| 4 | off | 1,121.7 | 273.8 / 391.8 | 2.1 / 6.6 |
+| 4 | on | 776.7 | 187.2 / 234.4 | 2.7 / 6.8 |
+| 8 | off | 673.8 | 301.3 / 387.6 | 3.2 / 6.6 |
+| 8 | on | 569.0 | 268.6 / 369.7 | 3.5 / 12.5 |
+| 16 | off | 655.5 | 621.6 / 652.0 | 3.1 / 11.5 |
+| 16 | on | 788.4 | 706.8 / 778.8 | 3.7 / 10.7 |
+
+The corrected rewrite-on eight-writer arm completed about 14.1k outcomes/s
+of isolated target apply. Four and sixteen writers were slower in that arm.
+This single local sweep does not establish sustained or integrated 10k/s:
+source reads, market maintenance, settlement, legacy projection, and competing
+load were not included by the harness. The 16-thread target latency rise did
+not appear primarily in commit; detailed PostgreSQL wait events were not
+captured.
 The remaining 8,000 per-row mutable order-state upserts are an evident SQL-call
 floor, but the sweep alone does not assign all extra latency to that statement.
 The live worker now uses independent partition loops and a fair two-write
