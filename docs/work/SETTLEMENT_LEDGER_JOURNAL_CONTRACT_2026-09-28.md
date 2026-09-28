@@ -326,13 +326,13 @@ database test, zero skipped, failures or errors. This is a reference and
 normalized-path parity proof, not a journal append, recovery or capacity pass.
 
 The source store retains matching `result_payload` as JSONB; its reader exposes
-`result_payload::text`. PMJ-01 digests those exact retained UTF-8 text bytes
-with source identity. Original matching transport bytes are unavailable from
-that store. Fixture coverage and control verifiers only accept locally
-constructed evidence; production proof of empty source ranges and immutable
-control provenance remains required for the vertical path. Whether retained
-JSONB text satisfies the contract's “exact bytes” requirement must be settled
-before public cutover. No matching outcome format or Go matching change is
+`result_payload::text`. Settlement source identity binds canonical source
+fields and those exact retained UTF-8 text bytes. Original matching transport
+bytes are unavailable and are not required by this post-match replay contract.
+Changed retained text or missing source members fail closed. Fixture coverage
+and control verifiers only accept locally constructed evidence; production
+proof of empty source ranges and immutable control provenance remains required
+for the vertical path. No matching outcome format or Go matching change is
 included in this checkpoint.
 
 1. Write a versioned envelope contract and independent reference interpreter.
