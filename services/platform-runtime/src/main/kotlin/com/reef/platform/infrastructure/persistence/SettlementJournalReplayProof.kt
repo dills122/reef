@@ -33,6 +33,14 @@ import java.security.MessageDigest
 interface SettlementReplaySourceAuthority {
     fun readVerified(eventStream: String, window: SettlementJournalSourceWindow): VerifiedCanonicalSourceWindow
     fun verifyEmpty(eventStream: String, window: SettlementJournalSourceWindow): Boolean
+
+    /** Optional broker-authenticated trailing frontier. Absence of this capability proves nothing. */
+    fun stableEndSequence(eventStream: String, sourceGeneration: String,
+        partitionId: Int, fromExclusiveSequence: Long): Long? = null
+
+    /** Snapshot restore checks retained head and any broker-backed trailing empty coverage. */
+    fun verifyRecoveredFrontier(eventStream: String, sourceGeneration: String,
+        partitionId: Int, lastRetainedFrontier: Long, coveredFrontier: Long): Boolean = false
 }
 
 data class SettlementJournalReplayState(

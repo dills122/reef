@@ -38,7 +38,7 @@ class SettlementJournalEvaluatorTest {
         evaluator.confirm(proposal, receipt(proposal))
         assertEquals(expected.balances, evaluator.snapshot().balances)
         assertEquals(expected.outstanding, evaluator.snapshot().outstanding)
-        assertEquals(mapOf("trade-2" to 1, "trade-4" to 1), evaluator.snapshot().attempts)
+        assertEquals(mapOf("trade-4" to 1), evaluator.snapshot().attempts)
 
         assertFailsWith<IllegalStateException> {
             evaluator.prepare(listOf(SettlementPreparedInput.Trade(
@@ -77,6 +77,43 @@ class SettlementJournalEvaluatorTest {
         evaluator.confirm(retried, receipt(retried))
         assertEquals(after.balances, evaluator.snapshot().balances)
         assertTrue(evaluator.snapshot().outstanding.isEmpty())
+    }
+
+    @Test
+    fun verifiedCheckpointRestoresControlHashAndOutstandingRetryState() {
+        val fixture = fixture(1, sellerShares = "1", buyerCash = "0")
+        val before = oracle.evaluate(fixture.steps)
+        val funding = ReferenceFunding(controlSequence = fixture.controls.size + 1L,
+            controlId = "fund-after-restart", account = account("buyer-1", "CASH", "USD"),
+            amount = BigDecimal("50"), retryTradeIds = listOf("trade-2"))
+        val expected = oracle.evaluate(fixture.steps + ReferenceStep.Control(funding))
+        val original = evaluator()
+        val initial = original.prepare(prepared(fixture, before))
+        original.confirm(initial, receipt(initial))
+        val checkpoint = original.recoveryState()
+        assertFailsWith<IllegalArgumentException> {
+            SettlementJournalEvaluator.restoreVerified(checkpoint.copy(
+                orderedControls = checkpoint.orderedControls.dropLast(1) +
+                    checkpoint.orderedControls.first()), 8,
+                { _, _ -> true }, { _, _ -> true })
+        }
+        val recovered = SettlementJournalEvaluator.restoreVerified(checkpoint, 8,
+            { _, _ -> true }, { proposal, receipt ->
+                proposal.proposalDigest == receipt.storeProposalDigest &&
+                    receipt.committedHead.batchDigest == receipt.storeProposalDigest
+            })
+        assertEquals(checkpoint.head.batchSequence, recovered.snapshot().head.batchSequence)
+        assertEquals(checkpoint.head.batchDigest, recovered.snapshot().head.batchDigest)
+        assertEquals(8L, recovered.snapshot().head.ownerEpoch)
+        val input = SettlementPreparedInput.Control(0, funding,
+            expected.controlDigests.getValue(funding.controlId))
+        val uninterrupted = original.prepare(listOf(input))
+        val afterRestart = recovered.prepare(listOf(input))
+        assertEquals(uninterrupted.results, afterRestart.results)
+        assertParity(expected.results.drop(1), afterRestart.results)
+        recovered.confirm(afterRestart, receipt(afterRestart))
+        assertEquals(expected.balances, recovered.snapshot().balances)
+        assertTrue(recovered.snapshot().outstanding.isEmpty())
     }
 
     @Test

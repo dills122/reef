@@ -1,6 +1,7 @@
 # Post-match ledger execution index — 2026-09-28
 
-Status: active, first slice ready. Branch: `codex/ledger-authority-redesign`.
+Status: active, default-off vertical candidate under verification; no sustained 10k/s result.
+Branch: `codex/ledger-authority-redesign`.
 Integration destination: this branch, then a reviewed PR. Lead owns integration,
 proof reconciliation, and the final cutover recommendation.
 
@@ -28,18 +29,20 @@ explicit decision; document them without compatibility dual-write.
 | ID | Outcome | Depends on | Delivery unit / owner | Status |
 | --- | --- | --- | --- | --- |
 | PMJ-00 | Record agreed authority, flow, failure and market-data cutover contract | None | Lead | Done in D-060 and settlement contract; not implementation |
-| PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference proof ready for user review; authority adapters remain for vertical proof |
-| PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Candidate core and focused proof in progress; external source/control proof open |
-| PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | Bounded replay/snapshot, retained-outcome adapter and candidate ordered control log; true empty-range proof, live control routing, external restore anchor and resumable tail remain gates |
-| PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Default-off financial and direct matching-outcome market/tape candidates with bounded target replay; public cutover and capacity proof open |
-| PMJ-05 | Complete sustained correctness/capacity run for both sibling paths and measured decision | PMJ-03, PMJ-04 | Lead + bounded research/test worker | Harness audit complete; candidate worker/read probes and authority gates missing, so qualification has not started |
+| PMJ-01 | Exact versioned source and control inputs; independent reference interpreter and parity/fault fixtures | None | Internal worker; lead integrates, independent reviewer checks | Reference parity and retained JSONB identity tested; cold topic binding, ordered immutable control acceptance and broker absence candidates have focused tests. New future policy and retry repair acceptance is explicitly unsupported and rejected; full semantics and live stack proof open. |
+| PMJ-02 | Fenced, atomic typed journal append and ordered in-memory evaluator, default-off | PMJ-01 | Internal worker; lead integrates | Single writer, external acknowledgment and real DvP append pass focused PostgreSQL tests. Sustained throughput open. |
+| PMJ-03 | Snapshot/replay, ambiguous commit, takeover and independent-restore fault proof | PMJ-02 | Internal worker; lead integrates | V2 writer checkpoint, bounded tail/origin recovery and independent finality lease pass focused three-database tests, including real worker reopen and same-head JSONB tamper rejection. Full live fault campaign open. |
+| PMJ-04 | Rebuildable settlement projections, as-of reads, independent market-data checkpoint and explicit trade-tape freshness frontier | PMJ-02 | Internal worker; may run alongside PMJ-03 only with disjoint files | Default-off market/financial projection workers and candidate read routes/probe pass focused tests. Financial projector caps at external finality; reads reject missing/conflicting finality. Status diagnostic requires platform-admin authorization. Live freshness/read latency unmeasured; public cutover open. |
+| PMJ-05 | Complete sustained correctness/capacity run for both sibling paths and measured decision | PMJ-03, PMJ-04 | Lead + bounded research/test worker | Matched journal harness, control seed, age/read/stage/cohort checks built and locally tested; no full stack or 10k/s run yet. |
 | PMJ-06 | Independent architecture/code review and conditional breaking cutover plan | PMJ-05 pass | Independent reviewer; lead decides | Waiting |
 
 PMJ-01 through PMJ-04 do not authorize retiring the current settlement worker
 or public API cutover. PMJ-06 proposes adoption only if PMJ-05 passes; otherwise
 stop this PostgreSQL candidate and decide from the failing stage rather than
-micro-tuning. The lead will integrate incrementally and stop for a user review
-after PMJ-01 before authorizing PMJ-02.
+micro-tuning. The lead will integrate incrementally and record each proof gate.
+
+The user authorized continued default-off implementation and the full-path
+10k/s diagnostic. Production cutover remains a separate decision.
 
 The first real vertical proof must include both sibling consumers under load,
 even if PMJ-04 completes final market-data read contracts later. Do not call
@@ -91,6 +94,18 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | PMJ-03 snapshot and external-anchor read gate candidate | `SettlementJournalSnapshotProofIntegrationTest` against disposable PostgreSQL; `SettlementJournalExternalAnchorGateTest` | Snapshot: 3 focused tests, 0 skipped/failures/errors. Exact derived state, head/incarnation binding, atomic crash and tamper checks pass. Anchor gate: 2 unit tests pass, rejecting wrong or changing acknowledged frontiers. Snapshot verification still replays from genesis and rejects tail resume; no production external anchor backend or writer lease exists. |
 | 2026-09-28 | PMJ-04 direct matching-outcome market/tape candidate and bounded target replay | `MatchingOutcomeMarketCandidateIntegrationTest` against disposable PostgreSQL; combined journal and market suites | 9 focused market tests pass. Serial combined run: 45 tests, 1 optional write-shape test skipped, 0 failures/errors. Direct source windows atomically advance independent market checkpoint, indexed depth and trade tape. Restart re-reads bounded retained source and rebuilds target rows in a rollback-only repeatable-read transaction; compares full order/level/tape/frontier state before internal reads or append. Tests cover malformed fill, rollback, source/target tamper, origin, read/append races and unrelated-partition progress. No public market read cutover or capacity claim. |
 | 2026-09-28 | PMJ-03 retained-source and ordered-control authority candidates | `PostgresSettlementReplaySourceAuthorityIntegrationTest` and `SettlementControlLogStoreIntegrationTest` against disposable PostgreSQL; combined candidate suites | Source adapter: 5 tests including retained outcome→journal→replay composition and foreign-stream/gap/generation faults. Control log: 7 tests including typed policy/opening/funding, owner fence, rollback, bounded prefix/duplicates, corrupt rows and oversized payload rejection. Serial combined run: 57 tests, 1 optional skip, 0 failures/errors; migration runner 26 pass. True empty offsets, historical mutable controls, live write routing, external anchor and capacity remain unproved. |
+| 2026-09-28 | Later PMJ-01/02/03 default-off vertical candidate | Cold enrollment CLI 6 tests; source authority PostgreSQL 13 tests; Kafka attestor 5 tests; control acceptance 15 tests; three-database writer integration 3 tests; V2 finality/recovery integration 4 tests plus real worker reopen/tamper test; serial `compileKotlin` after integration | Focused suites reported zero failures/skips. Source enrollment requires cold 16-partition topic UUIDs; worker commits externally acknowledged DvP, covers broker-attested empty positions, snapshots V2 and verifies historical retained JSONB text on recovery. These are local test facts, not a live full-stack or sustained throughput pass. |
+| 2026-09-28 | Later PMJ-04/05 harness candidate | Candidate read/age/stage/cohort Node suites, control seed Node suite, migration runner and stack tests; local syntax checks | Default-off read routes expose as-of frontiers. Harness fixes one 10k/s × 300s matched sample, seeds immutable control facts, waits exact external finality, samples five reads and conservative market age, then checks retained-source cohort. No live candidate run, no qualified latency or capacity result. |
+| 2026-09-28 | PMJ-01/04 reviewer repair | Control log 8, worker unit 3, worker three-DB integration 1; financial read gateway 8 and separate settlement/finality DB integration 1; Node read/stage/age/cohort/seed suites 32 | Zero failures/skips in listed focused suites. Fresh future controls fail before acceptance; retained future policy advances source to its boundary. Financial projection excludes unacknowledged journal commit. Status requires admin auth. Stage gate samples every 10 seconds, requires all 16 market frontiers, non-growing in-load backlog and a sample within 15 seconds of load end. No live run or future-control cutover proof. |
+
+The candidate harness currently defaults to provisional per-read response limits of
+p95 ≤ 250 ms and p99 ≤ 500 ms. These are explicit diagnostic thresholds, not a
+measured result or an accepted cutover criterion; the user may replace them
+before qualification. The closed-cohort SQL check covers retained positions
+and first trade identities. Broker trailing offsets, topic identity and full
+historical payload proof come from the separate writer/recovery path, and
+still need live fault evidence. Recovery currently re-verifies historical
+source windows on startup; its cost at the full cohort remains unmeasured.
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
@@ -182,7 +197,8 @@ point for resolved policy/opening/funding facts before production callbacks
 are enabled; merely copying mutable rows into the journal would not prove
 their original order or value.
 
-PMJ-05 harness audit (2026-09-28): the fixed source fixture remains 64
+PMJ-05 pre-integration harness audit (2026-09-28; superseded by later ledger rows above):
+the fixed source fixture remains 64
 instruments, 16 partitions, seed `727272` and five actors. The existing hosted
 `materializer-projection` runner enables old shadow settlement workers and
 its stage sampler counts six legacy tables; none starts the journal, financial

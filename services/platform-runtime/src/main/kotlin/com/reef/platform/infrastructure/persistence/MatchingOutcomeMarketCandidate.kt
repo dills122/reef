@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Connection
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.sql.DataSource
@@ -64,7 +65,8 @@ class MatchingOutcomeMarketCandidate(
     private val beforeCommit: () -> Unit = {},
     private val afterTrustBeforeRead: () -> Unit = {},
     private val afterTrustBeforeApply: () -> Unit = {},
-    private val afterProofSnapshotBeforeReplay: () -> Unit = {}
+    private val afterProofSnapshotBeforeReplay: () -> Unit = {},
+    private val afterWindowVisible: (VerifiedCanonicalSourceWindow, Instant) -> Unit = { _, _ -> }
 ) {
     companion object { const val CONSUMER_NAME = "matching-market-candidate-v1" }
     init {
@@ -129,6 +131,7 @@ class MatchingOutcomeMarketCandidate(
             "market committed frontier changed before trust update"
         }
         trustedFrontiers[proofKey] = TrustedFrontier(committed.sequence, committed.digest)
+        afterWindowVisible(window, Instant.now())
         return MatchingMarketAdvance.APPLIED
     }
 

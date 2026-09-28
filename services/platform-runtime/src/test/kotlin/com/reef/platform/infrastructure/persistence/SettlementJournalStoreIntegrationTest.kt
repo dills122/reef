@@ -17,6 +17,37 @@ class SettlementJournalStoreIntegrationTest {
     private val zero = SettlementJournalStore.ORIGIN_DIGEST
 
     @Test
+    fun laterSourceCannotReuseSettledTradeIdOrCommitSecondTransfer() {
+        val dataSource = dataSourceOrSkip()
+        withMigratedSchema(dataSource) { schema ->
+            val stream = "journal-${UUID.randomUUID()}"
+            val store = SettlementJournalStore(dataSource, schema)
+            store.initialize(stream, 1, "incarnation-1")
+            val controls = listOf(control(0, 1, "policy", "POLICY"),
+                control(1, 2, "buyer-opening", "OPENING"),
+                control(2, 3, "seller-opening", "OPENING"))
+            val prefix = controls.fold(zero) { digest, member ->
+                SettlementJournalStore.controlPrefixDigest(digest, member)
+            }
+            val firstWindow = window(stream, 3, 0, 1, listOf(1L))
+            val firstResult = result(3, 1, 1, firstWindow.members.single().digest,
+                "SETTLED", null, prefix)
+            val first = store.append(SettlementJournalBatchProposal(stream, 1, zero, 1,
+                "incarnation-1", listOf(firstWindow), controls, listOf(firstResult)))
+            val nextWindow = window(stream, 0, 1, 2, listOf(2L))
+            val reused = result(0, 2, 1, nextWindow.members.single().digest,
+                "SETTLED", null, prefix).copy(tradeId = firstResult.tradeId)
+            assertFailsWith<Exception> {
+                store.append(SettlementJournalBatchProposal(stream, 2, first.batchDigest, 1,
+                    "incarnation-1", listOf(nextWindow), emptyList(), listOf(reused)))
+            }
+            assertEquals(2L, store.head(stream).nextBatchSequence)
+            assertEquals(1L, count(dataSource, schema, "settlement_journal_results", stream))
+            assertEquals(0L, count(dataSource, schema, "settlement_journal_batches", stream, 2))
+        }
+    }
+
+    @Test
     fun appendIsAtomicFencedRetrySafeAndCarriesEmptyCoverage() {
         val dataSource = dataSourceOrSkip()
         withMigratedSchema(dataSource) { schema ->

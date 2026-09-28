@@ -24,6 +24,59 @@ import kotlin.test.assertTrue
 
 class SettlementControlLogStoreIntegrationTest {
     @Test
+    fun freshAcceptanceOrdersPolicyOpeningFundingAndRejectsChangedRetry() {
+        val dataSource = dataSourceOrSkip()
+        withMigratedSchema(dataSource) { schema ->
+            val stream = "fresh-control-${UUID.randomUUID()}"
+            val partition = ReferenceStreamPartition(stream, "generation-fresh", 0)
+            val genesis = CanonicalStreamPosition.origin(0)
+            val store = SettlementControlLogStore(dataSource, schema)
+            store.initialize(stream, 1, "owner-1", "incarnation-1")
+            val adapter = SettlementControlAcceptanceAdapter(store, stream, "incarnation-1",
+                1, "owner-1", mapOf(partition to genesis))
+            val account = ReferenceAccountKey("run-fresh", "participant-1", "account-1", "CASH", "USD")
+            val policy = policy(0).copy(controlId = "policy-fresh", runId = "run-fresh",
+                effectiveAfterSourceFrontiers = mapOf(partition to genesis))
+            val opening = ReferenceOpening(controlSequence = 0, controlId = "opening-fresh",
+                account = account, amount = BigDecimal("100"))
+            val funding = ReferenceFunding(controlSequence = 0, controlId = "funding-fresh",
+                account = account, amount = BigDecimal("25"), retryTradeIds = emptyList())
+
+            assertEquals(1L, adapter.accept(policy).control.controlSequence)
+            assertEquals(2L, adapter.accept(opening).control.controlSequence)
+            assertEquals(3L, adapter.accept(funding).control.controlSequence)
+            assertTrue(adapter.accept(funding).duplicate)
+            assertFailsWith<IllegalStateException> {
+                adapter.accept(funding.copy(amount = BigDecimal("30")))
+            }
+            assertFailsWith<IllegalStateException> {
+                adapter.accept(opening.copy(controlId = "opening-other"))
+            }
+            assertFailsWith<IllegalStateException> {
+                adapter.accept(policy.copy(controlId = "policy-before-genesis",
+                    effectiveAfterSourceFrontiers = mapOf(partition to genesis - 1)))
+            }
+            assertFailsWith<IllegalStateException> {
+                adapter.accept(policy.copy(controlId = "policy-future",
+                    effectiveAfterSourceFrontiers = mapOf(partition to genesis + 1)))
+            }
+            assertFailsWith<IllegalStateException> {
+                adapter.accept(funding.copy(controlId = "funding-future-retry",
+                    retryTradeIds = listOf("trade-1")))
+            }
+            assertFailsWith<IllegalArgumentException> {
+                adapter.accept(opening.copy(controlId = "bad-asset",
+                    account = account.copy(assetType = "OTHER")))
+            }
+            assertEquals(4L, store.head(stream).nextControlSequence)
+            assertEquals(listOf(policy.copy(controlSequence = 1),
+                opening.copy(controlSequence = 2), funding.copy(controlSequence = 3)),
+                store.readVerifiedPrefix(stream, "incarnation-1").batches
+                    .flatMap { it.members }.map { it.decode() })
+        }
+    }
+
+    @Test
     fun controlPayloadAboveOneMebibyteCannotAdvanceHead() {
         val dataSource = dataSourceOrSkip()
         withMigratedSchema(dataSource) { schema ->

@@ -3,14 +3,28 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.application.settlementjournal.ReferenceControlProofVerifier
 
 /** Supplied by an authority outside the journal database restore domain. */
+data class SettlementJournalSnapshotAnchor(
+    val batchSequence: Long,
+    val batchDigest: String,
+    val stateVersion: Int,
+    val stateDigest: String
+)
+
 data class SettlementJournalFinalityAnchor(
     val eventStream: String,
     val incarnationId: String,
     val acknowledgedBatchSequence: Long,
     val acknowledgedBatchDigest: String,
     val controlSequence: Long,
-    val controlDigest: String
+    val controlDigest: String,
+    val sourceBindingDigest: String? = null,
+    val snapshot: SettlementJournalSnapshotAnchor? = null
 )
+
+/** Re-read from retained source binding, never from writer configuration or cached state. */
+fun interface SettlementSourceBindingDigestReader {
+    fun readDigest(eventStream: String): String?
+}
 
 /** Implementations must provide strongly consistent, durable monotonic acknowledgements and
  * non-reused incarnations from a failure domain independent of the journal database.
@@ -52,6 +66,21 @@ class SettlementJournalExternalAnchorGate(
             val head = state.head
             check(anchor.eventStream == eventStream && anchor.incarnationId.isNotBlank() &&
                 anchor.acknowledgedBatchSequence >= 0) { "external settlement finality anchor is invalid" }
+            anchor.sourceBindingDigest?.let { digest ->
+                check(digest.matches(Regex("[0-9a-f]{64}"))) {
+                    "external settlement source binding digest is invalid"
+                }
+            }
+            anchor.snapshot?.let { snapshot ->
+                check(snapshot.batchSequence in 1L..anchor.acknowledgedBatchSequence &&
+                    snapshot.batchDigest.matches(Regex("[0-9a-f]{64}")) &&
+                    snapshot.stateVersion > 0 &&
+                    snapshot.stateDigest.matches(Regex("[0-9a-f]{64}")) &&
+                    (snapshot.batchSequence != anchor.acknowledgedBatchSequence ||
+                        snapshot.batchDigest == anchor.acknowledgedBatchDigest)) {
+                    "external settlement snapshot anchor is invalid"
+                }
+            }
             check(anchor.incarnationId == head.incarnationId &&
                 anchor.acknowledgedBatchSequence == head.nextBatchSequence - 1 &&
                 anchor.acknowledgedBatchDigest == head.lastBatchDigest &&

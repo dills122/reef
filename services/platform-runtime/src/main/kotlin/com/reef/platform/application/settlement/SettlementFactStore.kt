@@ -491,7 +491,9 @@ data class PostgresSettlementSqlNames(
 class PostgresSettlementFactStore(
     private val dataSource: DataSource,
     private val names: PostgresSettlementSqlNames = PostgresSettlementSqlNames(),
-    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
+    // Explicit candidate-mode guard. Default false preserves existing fact ingestion.
+    private val settlementControlAuthorityEnabled: Boolean = false
 ) : SettlementFactStore {
     init {
         connection().use { conn ->
@@ -871,6 +873,9 @@ class PostgresSettlementFactStore(
     }
 
     override fun appendFacts(facts: SettlementFactBundle): SettlementFactBundle {
+        check(!settlementControlAuthorityEnabled || facts.resourcePositions.isEmpty()) {
+            "resource position mutation requires ordered settlement control acceptance"
+        }
         if (facts.isEmpty()) return facts
         val databaseFacts = facts.withMicrosecondTimestamps()
         connection().use { conn ->

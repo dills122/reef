@@ -24,7 +24,7 @@ import java.security.MessageDigest
 import java.sql.Connection
 import javax.sql.DataSource
 
-/** A verified snapshot is evidence only. No writer may hydrate from it or skip journal replay. */
+/** V1 is proof-only. V2 requires an independent finality pointer and bounded verified tail. */
 data class SettlementJournalSnapshotReceipt(
     val eventStream: String,
     val batchSequence: Long,
@@ -32,6 +32,11 @@ data class SettlementJournalSnapshotReceipt(
     val incarnationId: String,
     val stateDigest: String,
     val duplicate: Boolean
+)
+
+data class SettlementJournalWriterCheckpoint(
+    val head: SettlementJournalHead,
+    val state: SettlementJournalWriterRecoveryState
 )
 
 /**
@@ -46,6 +51,106 @@ class SettlementJournalSnapshotProof(
     private val beforeInsert: () -> Unit = {}
 ) {
     init { require(schema.matches(Regex("[a-z][a-z0-9_]*"))) }
+
+    /** Capture live, already acknowledged writer state without a genesis replay on each checkpoint. */
+    fun captureWriterCurrent(eventStream: String,
+        state: SettlementJournalWriterRecoveryState,
+        anchor: SettlementJournalFinalityAnchor): SettlementJournalSnapshotReceipt {
+        require(eventStream.isNotBlank() && anchor.eventStream == eventStream)
+        val head = journal.head(eventStream)
+        check(state.evaluator.head.batchSequence == head.nextBatchSequence - 1 &&
+            state.evaluator.head.batchDigest == head.lastBatchDigest &&
+            state.evaluator.head.ownerEpoch == head.ownerEpoch &&
+            state.evaluator.head.ownerIncarnation == head.incarnationId &&
+            state.evaluator.orderedControls.size.toLong() == head.lastControlSequence &&
+            anchor.incarnationId == head.incarnationId &&
+            anchor.acknowledgedBatchSequence == state.evaluator.head.batchSequence &&
+            anchor.acknowledgedBatchDigest == head.lastBatchDigest &&
+            anchor.controlSequence == head.lastControlSequence &&
+            anchor.controlDigest == head.lastControlDigest &&
+            anchor.sourceBindingDigest == state.sourceBindingDigest) {
+            "writer checkpoint is not at externally acknowledged journal head"
+        }
+        val bytes = SettlementJournalWriterRecoveryCodec.encode(state)
+        check(SettlementJournalWriterRecoveryCodec.decode(bytes) == state) {
+            "writer checkpoint does not round-trip canonically"
+        }
+        val digest = stateDigestV2(eventStream, head, bytes)
+        beforeInsert()
+        return dataSource.connection.use { connection ->
+            val oldAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                check(lockedHead(connection, eventStream) == head) {
+                    "journal head moved before writer checkpoint commit"
+                }
+                val sequence = head.nextBatchSequence - 1
+                val inserted = connection.prepareStatement(
+                    """INSERT INTO $schema.settlement_journal_snapshots
+                       (event_stream, batch_sequence, batch_digest, owner_epoch, incarnation_id,
+                        control_sequence, control_prefix_digest, state_version, state_bytes, state_digest)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 2, ?, ?)
+                       ON CONFLICT (event_stream, batch_sequence) DO NOTHING"""
+                ).use { statement ->
+                    statement.setString(1, eventStream)
+                    statement.setLong(2, sequence)
+                    statement.setString(3, head.lastBatchDigest)
+                    statement.setLong(4, head.ownerEpoch)
+                    statement.setString(5, head.incarnationId)
+                    statement.setLong(6, head.lastControlSequence)
+                    statement.setString(7, head.lastControlDigest)
+                    statement.setBytes(8, bytes)
+                    statement.setString(9, digest)
+                    statement.executeUpdate() == 1
+                }
+                val saved = read(connection, eventStream, sequence)
+                check(saved.version == 2 && saved.head == head &&
+                    saved.state.contentEquals(bytes) && saved.digest == digest) {
+                    "existing writer checkpoint differs from acknowledged state"
+                }
+                connection.commit()
+                SettlementJournalSnapshotReceipt(eventStream, sequence, head.lastBatchDigest,
+                    head.incarnationId, digest, !inserted)
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = oldAutoCommit
+            }
+        }
+    }
+
+    /** Caller must pin this external anchor across tail replay and enforce a bounded tail. */
+    fun readAnchoredWriterState(eventStream: String,
+        anchor: SettlementJournalFinalityAnchor): SettlementJournalWriterRecoveryState =
+        readAnchoredWriterCheckpoint(eventStream, anchor).state
+
+    fun readAnchoredWriterCheckpoint(eventStream: String,
+        anchor: SettlementJournalFinalityAnchor): SettlementJournalWriterCheckpoint {
+        require(eventStream.isNotBlank() && anchor.eventStream == eventStream)
+        val pointer = anchor.snapshot ?: error("external writer snapshot pointer is missing")
+        check(pointer.stateVersion == 2 &&
+            pointer.batchSequence in 1L..anchor.acknowledgedBatchSequence) {
+            "external snapshot is not a resumable V2 checkpoint"
+        }
+        val saved = dataSource.connection.use { read(it, eventStream, pointer.batchSequence) }
+        check(saved.version == 2 && saved.head.nextBatchSequence - 1 == pointer.batchSequence &&
+            saved.head.lastBatchDigest == pointer.batchDigest &&
+            saved.head.incarnationId == anchor.incarnationId &&
+            saved.digest == pointer.stateDigest &&
+            saved.digest == stateDigestV2(eventStream, saved.head, saved.state)) {
+            "writer checkpoint differs from independent finality pointer"
+        }
+        val state = SettlementJournalWriterRecoveryCodec.decode(saved.state)
+        check(state.evaluator.head.batchSequence == pointer.batchSequence &&
+            state.evaluator.head.batchDigest == pointer.batchDigest &&
+            state.evaluator.head.ownerEpoch == saved.head.ownerEpoch &&
+            state.evaluator.head.ownerIncarnation == anchor.incarnationId &&
+            state.sourceBindingDigest == anchor.sourceBindingDigest) {
+            "writer checkpoint identity differs from anchored journal"
+        }
+        return SettlementJournalWriterCheckpoint(saved.head, state)
+    }
 
     fun captureCurrent(
         eventStream: String,
@@ -89,7 +194,8 @@ class SettlementJournalSnapshotProof(
                     statement.executeUpdate() == 1
                 }
                 val saved = read(connection, eventStream, sequence)
-                check(saved.head == head && saved.state.contentEquals(state) && saved.digest == digest) {
+                check(saved.version == 1 && saved.head == head &&
+                    saved.state.contentEquals(state) && saved.digest == digest) {
                     "existing snapshot differs from verified state"
                 }
                 connection.commit()
@@ -114,7 +220,8 @@ class SettlementJournalSnapshotProof(
         require(eventStream.isNotBlank() && batchSequence > 0)
         val saved = dataSource.connection.use { read(it, eventStream, batchSequence) }
         val head = journal.head(eventStream)
-        check(head == saved.head && batchSequence == head.nextBatchSequence - 1) {
+        check(saved.version == 1 && head == saved.head &&
+            batchSequence == head.nextBatchSequence - 1) {
             "snapshot is not bound to current journal head; tail replay is disabled"
         }
         check(saved.digest == stateDigest(eventStream, saved.head, saved.state)) {
@@ -131,7 +238,8 @@ class SettlementJournalSnapshotProof(
             head.lastBatchDigest, head.incarnationId, saved.digest, true)
     }
 
-    private data class Saved(val head: SettlementJournalHead, val state: ByteArray, val digest: String)
+    private data class Saved(val head: SettlementJournalHead, val version: Int,
+        val state: ByteArray, val digest: String)
 
     private fun read(connection: Connection, stream: String, sequence: Long): Saved =
         connection.prepareStatement(
@@ -146,8 +254,8 @@ class SettlementJournalSnapshotProof(
                 check(rows.next()) { "settlement snapshot is missing" }
                 val head = SettlementJournalHead(sequence + 1, rows.getString(1), rows.getLong(2),
                     rows.getString(3), rows.getLong(4), rows.getString(5))
-                check(rows.getInt(6) == 1) { "unsupported settlement snapshot state version" }
-                val result = Saved(head, rows.getBytes(7), rows.getString(8))
+                val result = Saved(head, rows.getInt(6), rows.getBytes(7), rows.getString(8))
+                check(result.version in 1..2) { "unsupported settlement snapshot state version" }
                 check(!rows.next()) { "settlement snapshot row repeated" }
                 result
             }
@@ -372,6 +480,21 @@ class SettlementJournalSnapshotProof(
         val bytes = ByteArrayOutputStream().use { buffer ->
             DataOutputStream(buffer).use { out ->
                 out.field("reef.settlement.snapshot.digest.v1")
+                out.field(stream); out.writeLong(head.nextBatchSequence - 1)
+                out.field(head.lastBatchDigest); out.writeLong(head.ownerEpoch)
+                out.field(head.incarnationId); out.writeLong(head.lastControlSequence)
+                out.field(head.lastControlDigest); out.field(state)
+            }
+            buffer.toByteArray()
+        }
+        return MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    private fun stateDigestV2(stream: String, head: SettlementJournalHead, state: ByteArray): String {
+        val bytes = ByteArrayOutputStream().use { buffer ->
+            DataOutputStream(buffer).use { out ->
+                out.field("reef.settlement.snapshot.digest.v2")
                 out.field(stream); out.writeLong(head.nextBatchSequence - 1)
                 out.field(head.lastBatchDigest); out.writeLong(head.ownerEpoch)
                 out.field(head.incarnationId); out.writeLong(head.lastControlSequence)

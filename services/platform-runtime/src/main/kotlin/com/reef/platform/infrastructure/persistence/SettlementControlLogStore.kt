@@ -340,6 +340,8 @@ class SettlementControlLogStore(
             is ReferencePolicyActivation -> require(control.runId.isNotBlank() &&
                 control.venueSessionId.isNotBlank() && control.profileId.isNotBlank() &&
                 control.policyVersion > 0 && control.mode in setOf("instant-post-trade", "ops-realistic") &&
+                control.settlementCycle.isNotBlank() && control.nettingMode.isNotBlank() &&
+                control.ledgerPostingMode.isNotBlank() && control.selectionSource.isNotBlank() &&
                 control.effectiveAfterSourceFrontiers.all { (stream, sequence) ->
                     stream.eventStream.isNotBlank() && stream.sourceGeneration.isNotBlank() &&
                         stream.partitionId in 0..32767 &&
@@ -357,7 +359,8 @@ class SettlementControlLogStore(
     }
 
     private fun validAccount(key: ReferenceAccountKey) = listOf(key.runId,
-        key.participantId, key.accountId, key.assetType, key.assetId).all(String::isNotBlank)
+        key.participantId, key.accountId, key.assetId).all(String::isNotBlank) &&
+        key.assetType in setOf("CASH", "SECURITY")
 
     private data class BatchRow(val firstSequence: Long, val lastSequence: Long,
         val previousDigest: String, val batchDigest: String, val ownerEpoch: Long,

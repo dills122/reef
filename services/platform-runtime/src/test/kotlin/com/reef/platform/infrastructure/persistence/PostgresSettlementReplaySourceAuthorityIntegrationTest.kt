@@ -2,6 +2,7 @@ package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalEffect
 import com.reef.platform.application.postmatch.CanonicalOutcomeSource
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -14,7 +15,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.apache.kafka.common.Uuid
 
 class PostgresSettlementReplaySourceAuthorityIntegrationTest {
     @Test
@@ -88,6 +92,21 @@ class PostgresSettlementReplaySourceAuthorityIntegrationTest {
     }
 
     @Test
+    fun nextRetainedSequenceFindsHoleBoundaryAndRejectsForeignStream() = withSource { source ->
+        val reader = PostgresCanonicalOutcomeSourceReader(source)
+        assertNull(reader.nextRetainedSequence(STREAM, 0, 0))
+        insertOutcome(source, 1, "first", "bad")
+        insertOutcome(source, 3, "third", "bad")
+        assertEquals(1L, reader.nextRetainedSequence(STREAM, 0, 0))
+        assertEquals(3L, reader.nextRetainedSequence(STREAM, 0, 1))
+        assertNull(reader.nextRetainedSequence(STREAM, 0, 3))
+        insertOutcome(source, 2, "foreign", "bad", "other-stream")
+        assertFailsWith<IllegalStateException> {
+            reader.nextRetainedSequence(STREAM, 0, 1)
+        }
+    }
+
+    @Test
     fun retainedZeroTradeWindowComposesWithJournalReplayProof() = withSource { source ->
         insertOutcome(source, 1, "first", "bad")
         insertOutcome(source, 2, "second", "bad")
@@ -141,6 +160,196 @@ class PostgresSettlementReplaySourceAuthorityIntegrationTest {
         assertFailsWith<IllegalStateException> {
             PostgresSettlementReplaySourceAuthority(source).readVerified(STREAM, window)
         }
+    }
+
+    @Test
+    fun emptyRangeNeedsBrokerEvidenceAndNoRetainedOutcome() = withSource { source ->
+        val generation = PostMatchSourceCatalog(source).generation()
+        val empty = window(generation, 2, 3).copy(members = emptyList())
+        var calls = 0
+        val authority = PostgresSettlementReplaySourceAuthority(source,
+            emptyRangeAttestor = SettlementEmptyRangeAttestor { stream, candidate ->
+                calls++
+                assertEquals(STREAM, stream)
+                assertEquals(empty, candidate)
+                true
+            })
+        assertTrue(authority.verifyEmpty(STREAM, empty))
+        assertEquals(1, calls)
+        insertOutcome(source, 3, "retained", "bad")
+        assertFalse(authority.verifyEmpty(STREAM, empty))
+        assertEquals(1, calls)
+        assertFalse(authority.verifyEmpty(STREAM, empty.copy(sourceGeneration = UUID.randomUUID().toString())))
+        assertFalse(authority.verifyEmpty(STREAM, empty.copy(members = listOf(
+            SettlementJournalSourceMember(3, "member")))))
+    }
+
+    @Test
+    fun emptyRangeRejectsGenerationChangeDuringBrokerProof() = withSource { source ->
+        val generation = PostMatchSourceCatalog(source).generation()
+        val empty = window(generation, 0, 1).copy(members = emptyList())
+        val authority = PostgresSettlementReplaySourceAuthority(source,
+            emptyRangeAttestor = SettlementEmptyRangeAttestor { _, _ ->
+                source.connection.use { connection ->
+                    connection.createStatement().use {
+                        it.executeUpdate("UPDATE runtime.postmatch_source_generation " +
+                            "SET generation = gen_random_uuid() WHERE singleton = TRUE")
+                    }
+                }
+                true
+            })
+        assertFalse(authority.verifyEmpty(STREAM, empty))
+    }
+
+    @Test
+    fun recoveredTrailingFrontierNeedsRetainedHeadAndEveryBoundedBrokerGap() = withSource { source ->
+        val generation = PostMatchSourceCatalog(source).generation()
+        insertOutcome(source, 1, "retained", "bad")
+        val proved = mutableListOf<Pair<Long, Long>>()
+        val authority = PostgresSettlementReplaySourceAuthority(source,
+            emptyRangeAttestor = SettlementEmptyRangeAttestor { _, window ->
+                proved += window.fromExclusiveSequence to window.throughInclusiveSequence
+                true
+            })
+        assertTrue(authority.verifyRecoveredFrontier(STREAM, generation, 0, 1, 5002))
+        assertEquals(listOf(1L to 5001L, 5001L to 5002L), proved)
+        assertFalse(authority.verifyRecoveredFrontier(STREAM, generation, 0, 2, 5002))
+        assertFalse(authority.verifyRecoveredFrontier(STREAM, generation, 0, 1, 5_000_002))
+        assertFalse(authority.verifyRecoveredFrontier(STREAM, UUID.randomUUID().toString(), 0, 1, 2))
+        insertOutcome(source, 3, "uncovered", "bad")
+        assertFalse(authority.verifyRecoveredFrontier(STREAM, generation, 0, 1, 4))
+    }
+
+    @Test
+    fun kafkaEmptyRangeProbeRequiresPinnedTopicAndMapsCommandOffsets() {
+        val origin = CanonicalStreamPosition.origin(3)
+        val window = SettlementJournalSourceWindow(0, "source-generation", 3,
+            origin + 7, origin + 9, "proof", "digest", emptyList())
+        val calls = mutableListOf<List<Any>>()
+        val broker = object : SettlementKafkaEmptyRangeBroker {
+            override fun hasNoCommittedRecords(topic: String, pinnedTopicId: String,
+                partitionId: Int, startOffset: Long, endOffsetExclusive: Long): Boolean {
+                calls += listOf(topic, pinnedTopicId, partitionId, startOffset, endOffsetExclusive)
+                return true
+            }
+        }
+        val unbound = SettlementKafkaEmptyRangeAttestor(STREAM, "REEF_COMMANDS", "unused",
+            SettlementCommandTopicIdentity { _, _, _ -> null }, broker = broker)
+        assertFalse(unbound.verify(STREAM, window))
+        assertEquals(emptyList(), calls)
+
+        val topicId = Uuid.randomUuid().toString()
+        val pinned = SettlementKafkaEmptyRangeAttestor(STREAM, "REEF_COMMANDS", "unused",
+            SettlementCommandTopicIdentity { stream, generation, topic ->
+                assertEquals(listOf(STREAM, "source-generation", "REEF_COMMANDS"),
+                    listOf(stream, generation, topic))
+                topicId
+            }, broker = broker)
+        assertTrue(pinned.verify(STREAM, window))
+        assertEquals(listOf<Any>("REEF_COMMANDS", topicId, 3, 7L, 9L), calls.single())
+        assertFalse(pinned.verify("foreign-stream", window))
+        assertFalse(pinned.verify(STREAM, window.copy(throughInclusiveSequence = origin + 5009)))
+        assertEquals(1, calls.size)
+    }
+
+    @Test
+    fun freshSourcePinsBothTopicIdsAndBindingCannotChange() = withSource { source ->
+        val generation = PostMatchSourceCatalog(source).generation()
+        val commandId = Uuid.randomUuid().toString()
+        val eventId = Uuid.randomUuid().toString()
+        val registry = PostgresSettlementSourceTopicIdentity(source,
+            SettlementColdKafkaTopicProbe { command, events ->
+                assertEquals("REEF_COMMANDS", command)
+                assertEquals("REEF_VENUE_EVENTS", events)
+                SettlementColdKafkaTopics(commandId, eventId)
+            })
+        assertEquals(null, registry.topicId(STREAM, generation, "REEF_COMMANDS"))
+        assertEquals(SettlementColdKafkaTopics(commandId, eventId),
+            registry.enrollFresh(STREAM, "REEF_COMMANDS", "REEF_VENUE_EVENTS"))
+        assertEquals(commandId, registry.topicId(STREAM, generation, "REEF_COMMANDS"))
+        assertEquals(null, registry.topicId(STREAM, generation, "WRONG_COMMANDS"))
+        val binding = registry.readBinding(STREAM, generation)!!
+        assertEquals(listOf(generation, STREAM, "REEF_COMMANDS", commandId,
+            "REEF_VENUE_EVENTS", eventId), listOf(binding.sourceGeneration,
+            binding.eventStream, binding.commandTopic, binding.commandTopicId,
+            binding.venueEventTopic, binding.venueEventTopicId))
+        assertEquals(binding.digest(), registry.bindingDigest(STREAM, generation,
+            "REEF_COMMANDS", "REEF_VENUE_EVENTS"))
+        assertEquals(64, binding.digest().length)
+        assertNull(registry.bindingDigest(STREAM, generation, "WRONG_COMMANDS", "REEF_VENUE_EVENTS"))
+        assertEquals(binding, registry.verifiedBinding(STREAM, generation,
+            SettlementSourceTopicVerifier { it.commandTopicId == commandId &&
+                it.venueEventTopicId == eventId }))
+        assertNull(registry.verifiedBinding(STREAM, generation,
+            SettlementSourceTopicVerifier { false }))
+        val kafka = SettlementKafkaEmptyRangeAttestor(STREAM, "REEF_COMMANDS", "unused",
+            registry, broker = object : SettlementKafkaEmptyRangeBroker {
+                override fun hasNoCommittedRecords(topic: String, pinnedTopicId: String,
+                    partitionId: Int, startOffset: Long, endOffsetExclusive: Long): Boolean {
+                    assertEquals(commandId, pinnedTopicId)
+                    assertEquals(listOf<Any>("REEF_COMMANDS", 0, 0L, 1L),
+                        listOf<Any>(topic, partitionId, startOffset, endOffsetExclusive))
+                    return true
+                }
+            })
+        assertTrue(PostgresSettlementReplaySourceAuthority(source, emptyRangeAttestor = kafka)
+            .verifyEmpty(STREAM, window(generation, 0, 1).copy(members = emptyList())))
+        source.connection.use { connection ->
+            assertFailsWith<java.sql.SQLException> {
+                connection.createStatement().use { it.executeUpdate(
+                    "UPDATE runtime.settlement_source_topic_identity " +
+                        "SET command_topic_id = 'changed' WHERE event_stream = '$STREAM'") }
+            }
+            assertFailsWith<java.sql.SQLException> {
+                connection.createStatement().use { it.executeUpdate(
+                    "DELETE FROM runtime.settlement_source_topic_identity WHERE event_stream = '$STREAM'") }
+            }
+        }
+        assertFailsWith<java.sql.SQLException> {
+            registry.enrollFresh(STREAM, "REEF_COMMANDS", "REEF_VENUE_EVENTS")
+        }
+    }
+
+    @Test
+    fun populatedSourceAndTopicReplacementCannotBeEnrolled() = withSource { source ->
+        val generation = PostMatchSourceCatalog(source).generation()
+        val first = SettlementColdKafkaTopics(Uuid.randomUuid().toString(), Uuid.randomUuid().toString())
+        val changed = first.copy(venueEventTopicId = Uuid.randomUuid().toString())
+        var reads = 0
+        val racing = PostgresSettlementSourceTopicIdentity(source,
+            SettlementColdKafkaTopicProbe { _, _ -> if (++reads == 1) first else changed })
+        assertFailsWith<IllegalStateException> {
+            racing.enrollFresh(STREAM, "REEF_COMMANDS", "REEF_VENUE_EVENTS")
+        }
+        assertEquals(null, racing.topicId(STREAM, generation, "REEF_COMMANDS"))
+
+        insertOutcome(source, 1, "first", "bad")
+        val registry = PostgresSettlementSourceTopicIdentity(source,
+            SettlementColdKafkaTopicProbe { _, _ -> first })
+        assertFailsWith<IllegalStateException> {
+            registry.enrollFresh(STREAM, "REEF_COMMANDS", "REEF_VENUE_EVENTS")
+        }
+        assertEquals(null, registry.topicId(STREAM, generation, "REEF_COMMANDS"))
+    }
+
+    @Test
+    fun restoredGenerationCannotReusePreviousTopicBinding() = withSource { source ->
+        val originalGeneration = PostMatchSourceCatalog(source).generation()
+        val topics = SettlementColdKafkaTopics(Uuid.randomUuid().toString(), Uuid.randomUuid().toString())
+        val registry = PostgresSettlementSourceTopicIdentity(source,
+            SettlementColdKafkaTopicProbe { _, _ -> topics })
+        registry.enrollFresh(STREAM, "REEF_COMMANDS", "REEF_VENUE_EVENTS")
+        source.connection.use { connection ->
+            connection.createStatement().use {
+                it.executeUpdate("UPDATE runtime.postmatch_source_generation " +
+                    "SET generation = gen_random_uuid() WHERE singleton = TRUE")
+            }
+        }
+        val restoredGeneration = PostMatchSourceCatalog(source).generation()
+        assertNotEquals(originalGeneration, restoredGeneration)
+        assertEquals(null, registry.topicId(STREAM, restoredGeneration, "REEF_COMMANDS"))
+        assertEquals(topics.commandTopicId,
+            registry.topicId(STREAM, originalGeneration, "REEF_COMMANDS"))
     }
 
     private fun window(generation: String, from: Long, through: Long) = SettlementJournalSourceWindow(
@@ -250,6 +459,12 @@ class PostgresSettlementReplaySourceAuthorityIntegrationTest {
                     order_id TEXT NOT NULL, result_status TEXT NOT NULL,
                     result_payload JSONB NOT NULL)""")
             }
+        }
+        val migration = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
+            .map { it.resolve("scripts/dev/db/migrations/runtime/0072_settlement_source_topic_identity.sql") }
+            .first(Files::exists)
+        source.connection.use { connection ->
+            connection.createStatement().use { it.execute(Files.readString(migration)) }
         }
         try {
             test(source)
