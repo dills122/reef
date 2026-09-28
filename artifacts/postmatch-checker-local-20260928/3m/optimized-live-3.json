@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "reef.postmatchShadowDiagnostic.v1",
+  "eventStream": "PM10_CHECKER_20260928",
+  "partitions": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "checkedAt": "2026-09-28T04:18:07.254Z",
+  "status": "pass",
+  "failures": [],
+  "generation": "00000000-0000-4000-8000-000000000010",
+  "rows": [
+    {
+      "partition": 0,
+      "sourceCount": "187500",
+      "sourceSequence": "187500",
+      "liveSequence": "187500",
+      "marketSequence": "187500"
+    },
+    {
+      "partition": 1,
+      "sourceCount": "187500",
+      "sourceSequence": "281474976898156",
+      "liveSequence": "281474976898156",
+      "marketSequence": "281474976898156"
+    },
+    {
+      "partition": 2,
+      "sourceCount": "187500",
+      "sourceSequence": "562949953608812",
+      "liveSequence": "562949953608812",
+      "marketSequence": "562949953608812"
+    },
+    {
+      "partition": 3,
+      "sourceCount": "187500",
+      "sourceSequence": "844424930319468",
+      "liveSequence": "844424930319468",
+      "marketSequence": "844424930319468"
+    },
+    {
+      "partition": 4,
+      "sourceCount": "187500",
+      "sourceSequence": "1125899907030124",
+      "liveSequence": "1125899907030124",
+      "marketSequence": "1125899907030124"
+    },
+    {
+      "partition": 5,
+      "sourceCount": "187500",
+      "sourceSequence": "1407374883740780",
+      "liveSequence": "1407374883740780",
+      "marketSequence": "1407374883740780"
+    },
+    {
+      "partition": 6,
+      "sourceCount": "187500",
+      "sourceSequence": "1688849860451436",
+      "liveSequence": "1688849860451436",
+      "marketSequence": "1688849860451436"
+    },
+    {
+      "partition": 7,
+      "sourceCount": "187500",
+      "sourceSequence": "1970324837162092",
+      "liveSequence": "1970324837162092",
+      "marketSequence": "1970324837162092"
+    },
+    {
+      "partition": 8,
+      "sourceCount": "187500",
+      "sourceSequence": "2251799813872748",
+      "liveSequence": "2251799813872748",
+      "marketSequence": "2251799813872748"
+    },
+    {
+      "partition": 9,
+      "sourceCount": "187500",
+      "sourceSequence": "2533274790583404",
+      "liveSequence": "2533274790583404",
+      "marketSequence": "2533274790583404"
+    },
+    {
+      "partition": 10,
+      "sourceCount": "187500",
+      "sourceSequence": "2814749767294060",
+      "liveSequence": "2814749767294060",
+      "marketSequence": "2814749767294060"
+    },
+    {
+      "partition": 11,
+      "sourceCount": "187500",
+      "sourceSequence": "3096224744004716",
+      "liveSequence": "3096224744004716",
+      "marketSequence": "3096224744004716"
+    },
+    {
+      "partition": 12,
+      "sourceCount": "187500",
+      "sourceSequence": "3377699720715372",
+      "liveSequence": "3377699720715372",
+      "marketSequence": "3377699720715372"
+    },
+    {
+      "partition": 13,
+      "sourceCount": "187500",
+      "sourceSequence": "3659174697426028",
+      "liveSequence": "3659174697426028",
+      "marketSequence": "3659174697426028"
+    },
+    {
+      "partition": 14,
+      "sourceCount": "187500",
+      "sourceSequence": "3940649674136684",
+      "liveSequence": "3940649674136684",
+      "marketSequence": "3940649674136684"
+    },
+    {
+      "partition": 15,
+      "sourceCount": "187500",
+      "sourceSequence": "4222124650847340",
+      "liveSequence": "4222124650847340",
+      "marketSequence": "4222124650847340"
+    }
+  ],
+  "sourceMembership": {
+    "sha256": "10783d13282adeda3f8ce93c409d8d2d2f313fcd987bcd651390afe0bb849348",
+    "bytes": 439821395
+  },
+  "liveMembership": {
+    "sha256": "10783d13282adeda3f8ce93c409d8d2d2f313fcd987bcd651390afe0bb849348",
+    "bytes": 439821395
+  },
+  "sourceMembershipAfter": {
+    "sha256": "10783d13282adeda3f8ce93c409d8d2d2f313fcd987bcd651390afe0bb849348",
+    "bytes": 439821395
+  }
+}

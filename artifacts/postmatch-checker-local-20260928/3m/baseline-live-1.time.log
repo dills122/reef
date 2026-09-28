@@ -1,0 +1,19 @@
+post-match shadow diagnostic: pass; report=/private/tmp/reef-pm10-checker-plan-20260928/full-live-result-1.json
+       18.04 real         4.42 user         4.49 sys
+           110166016  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               73325  page reclaims
+                2533  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+               60007  messages sent
+              246906  messages received
+                4215  signals received
+                1243  voluntary context switches
+              513710  involuntary context switches
+          6501139208  instructions retired
+          6179442666  cycles elapsed
+            76417016  peak memory footprint

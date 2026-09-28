@@ -39,44 +39,45 @@ sequence equality before running source/receipt membership hashes.
   fail, including quantity and identity changes.
 - `node --check` on both checkers and `git diff --check`: passed.
 
-## Frozen local pilot
+## Frozen local cohorts
 
-Research lane seeded three isolated PostgreSQL 16 databases named
-`reef_pm10_checker_pilot_20260928` on the existing source, post-match, and
-settlement containers. Same stream `PM10_CHECKER_20260928`, source generation
-`00000000-0000-4000-8000-000000000010`, and partitions 0–15 were used in all
-passes. Fixture has 512,000 canonical outcomes, 512,000 live receipts, 225,280
-trade outcomes (44%), 225,280 intake rows, obligations, and attempts, 901,120
-ledger legs, and 5,120 admissions and completions. It has checker membership
-and ledger shape but placeholder workflow/admission digests, so it tests exact
-checker cost and membership, not business replay.
+[Tracked raw evidence](../../artifacts/postmatch-checker-local-20260928/README.md)
+contains seed SQL, checker copies, baseline and optimized JSON, all `/usr/bin/time -l`
+logs, SQL plans, resource report, and checksums. PostgreSQL 16 databases for
+source, post-match, and settlement were isolated by named DB. Both cohorts used
+stream `PM10_CHECKER_20260928`, generation
+`00000000-0000-4000-8000-000000000010`, and partitions 0–15. The 512k pilot
+has 225,280 trades; the full-size cohort has 3,000,000 outcomes, 1,320,000
+trades, 3,000,000 live receipts, and 5,280,000 ledger legs (44% trade mix).
+Workflow/admission digests are placeholders, so these measurements prove
+checker cost and membership shape, not business replay.
 
-Each checker was run three times serially with `/usr/bin/time -l`, wait zero,
-and a report per pass. Baseline scripts came from merged PR #402; optimized
-copies matched this branch except for `PM10_DB` selection of the isolated
-database. All twelve reports passed. For each optimized pass, JSON was
-identical to the respective baseline report after removal of `checkedAt`.
+Each baseline and optimized checker ran three times serially with wait zero.
+Checker copies differ from product scripts only in named DB selection. All 24
+reports passed; each optimized JSON matches its paired baseline after removing
+only `checkedAt`.
 
-| Exact checker | Baseline wall seconds | Optimized wall seconds | Baseline max RSS | Optimized max RSS |
-| --- | --- | --- | ---: | ---: |
-| Live/market/receipt | 4.60 / 4.42 / 4.43 | 4.79 / 4.46 / 4.32 | 84–91 MB | 84–88 MB |
-| Settlement/trade/ledger | 11.23 / 10.85 / 10.74 | 9.68 / 9.63 / 9.79 | 91–93 MB | 90–93 MB |
+| Cohort | Checker | Baseline wall seconds | Optimized wall seconds |
+| --- | --- | --- | --- |
+| 512k | Live/market/receipt | 4.60 / 4.42 / 4.43 | 4.80 / 4.87 / 4.37 |
+| 512k | Settlement/trade/ledger | 11.23 / 10.85 / 10.74 | 10.25 / 9.77 / 9.74 |
+| 3m | Live/market/receipt | 18.04 / 17.98 / 16.00 | 16.87 / 17.74 / 16.99 |
+| 3m | Settlement/trade/ledger | 36.10 / 34.42 / 33.80 | 38.36 / 31.80 / 27.79 |
 
-Settlement median fell from 10.85s to 9.68s (10.8%); live median changed from
-4.43s to 4.46s (within this pilot's run variation). Exact source/live receipt
-SHA-256 was `8ccebd821e336292f5eba0ae76f5dd607c35ae392c71aee1e229c3ea230abf49`
-(74,596,894 CSV bytes); source/intake/obligation trade SHA-256 was
-`a7bf8662552b74010660af4c5c7e5e6dbca0799da8425d529ea5869ed5a4f35c`
-(20,833,496 bytes). Settlement metrics were 225,280 settled, zero pending or
-breaks, 901,120 ledger entries, and zero mismatched ledger legs or attempts.
-Original baseline logs, SQL plans, and both checker result sets are retained
-under `/private/tmp/reef-pm10-checker-plan-20260928/` on the local host; the
-pilot databases remain intact for integration.
+At 3m, settlement median fell from 34.42s to 31.80s, while optimized slowest
+pass (38.36s) exceeded baseline slowest (36.10s). Report range and median,
+not a stable speedup. Optimized full-size checker RSS stayed at or below
+119,472,128 bytes. Source/receipt membership SHA-256 matched across all 3m
+passes (`10783d13282adeda3f8ce93c409d8d2d2f313fcd987bcd651390afe0bb849348`);
+source/intake/obligation trade membership matched
+(`39b8e9151d9207e769240b7cb7e84a067d708035c7a653f73a8f15f05a3491d4`).
+Settlement had zero pending, breaks, wrong ledger legs, and wrong attempts.
 
-Research lane measured source-trade membership SQL at 2,226.468ms (512,000
-source rows, JSON expansion and sort) and one settled-obligation count at
-34.277ms. These are single-query `EXPLAIN (ANALYZE, BUFFERS)` measurements,
-not full-checker phase timings. No full 3 million outcome fixture was run.
-Membership sorts, cache state, JSON expansion, and Docker I/O make linear
-extrapolation unreliable. The lead's full-size local run gate still applies
-before a two-hour disposable-host arm; this pilot alone cannot certify it.
+The full-size baseline setup (migrations and seed) took 454.23s; six serial
+baseline exact proofs took 156.34s. This places checker proof cost below a
+minute per checker on this frozen local host. It does not establish an entire
+two-hour disposable run: 300-second load, backlog drain, cross-stage proof,
+artifact capture, teardown, host contention, and business replay remain
+separate gates. Saved `EXPLAIN (ANALYZE, BUFFERS)` plans measured 2,451.778ms
+for source-trade membership and 52.933ms for one settled-obligation count;
+those are single-query times, not full-checker phase attribution.

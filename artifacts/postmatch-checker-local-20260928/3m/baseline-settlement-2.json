@@ -1,0 +1,204 @@
+{
+  "schemaVersion": "reef.settlementShadowDiagnostic.v1",
+  "eventStream": "PM10_CHECKER_20260928",
+  "partitions": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "sourceTradeMembershipVerified": true,
+  "status": "pass",
+  "checkedAt": "2026-09-28T04:08:07.504Z",
+  "failures": [],
+  "generation": "00000000-0000-4000-8000-000000000010",
+  "rows": [
+    {
+      "partition": 0,
+      "sourceCount": "187500",
+      "sourceSequence": "187500",
+      "intakeSequence": "187500",
+      "obligationSequence": "187500",
+      "admissionSequence": "187500",
+      "executionSequence": "187500"
+    },
+    {
+      "partition": 1,
+      "sourceCount": "187500",
+      "sourceSequence": "281474976898156",
+      "intakeSequence": "281474976898156",
+      "obligationSequence": "281474976898156",
+      "admissionSequence": "281474976898156",
+      "executionSequence": "281474976898156"
+    },
+    {
+      "partition": 2,
+      "sourceCount": "187500",
+      "sourceSequence": "562949953608812",
+      "intakeSequence": "562949953608812",
+      "obligationSequence": "562949953608812",
+      "admissionSequence": "562949953608812",
+      "executionSequence": "562949953608812"
+    },
+    {
+      "partition": 3,
+      "sourceCount": "187500",
+      "sourceSequence": "844424930319468",
+      "intakeSequence": "844424930319468",
+      "obligationSequence": "844424930319468",
+      "admissionSequence": "844424930319468",
+      "executionSequence": "844424930319468"
+    },
+    {
+      "partition": 4,
+      "sourceCount": "187500",
+      "sourceSequence": "1125899907030124",
+      "intakeSequence": "1125899907030124",
+      "obligationSequence": "1125899907030124",
+      "admissionSequence": "1125899907030124",
+      "executionSequence": "1125899907030124"
+    },
+    {
+      "partition": 5,
+      "sourceCount": "187500",
+      "sourceSequence": "1407374883740780",
+      "intakeSequence": "1407374883740780",
+      "obligationSequence": "1407374883740780",
+      "admissionSequence": "1407374883740780",
+      "executionSequence": "1407374883740780"
+    },
+    {
+      "partition": 6,
+      "sourceCount": "187500",
+      "sourceSequence": "1688849860451436",
+      "intakeSequence": "1688849860451436",
+      "obligationSequence": "1688849860451436",
+      "admissionSequence": "1688849860451436",
+      "executionSequence": "1688849860451436"
+    },
+    {
+      "partition": 7,
+      "sourceCount": "187500",
+      "sourceSequence": "1970324837162092",
+      "intakeSequence": "1970324837162092",
+      "obligationSequence": "1970324837162092",
+      "admissionSequence": "1970324837162092",
+      "executionSequence": "1970324837162092"
+    },
+    {
+      "partition": 8,
+      "sourceCount": "187500",
+      "sourceSequence": "2251799813872748",
+      "intakeSequence": "2251799813872748",
+      "obligationSequence": "2251799813872748",
+      "admissionSequence": "2251799813872748",
+      "executionSequence": "2251799813872748"
+    },
+    {
+      "partition": 9,
+      "sourceCount": "187500",
+      "sourceSequence": "2533274790583404",
+      "intakeSequence": "2533274790583404",
+      "obligationSequence": "2533274790583404",
+      "admissionSequence": "2533274790583404",
+      "executionSequence": "2533274790583404"
+    },
+    {
+      "partition": 10,
+      "sourceCount": "187500",
+      "sourceSequence": "2814749767294060",
+      "intakeSequence": "2814749767294060",
+      "obligationSequence": "2814749767294060",
+      "admissionSequence": "2814749767294060",
+      "executionSequence": "2814749767294060"
+    },
+    {
+      "partition": 11,
+      "sourceCount": "187500",
+      "sourceSequence": "3096224744004716",
+      "intakeSequence": "3096224744004716",
+      "obligationSequence": "3096224744004716",
+      "admissionSequence": "3096224744004716",
+      "executionSequence": "3096224744004716"
+    },
+    {
+      "partition": 12,
+      "sourceCount": "187500",
+      "sourceSequence": "3377699720715372",
+      "intakeSequence": "3377699720715372",
+      "obligationSequence": "3377699720715372",
+      "admissionSequence": "3377699720715372",
+      "executionSequence": "3377699720715372"
+    },
+    {
+      "partition": 13,
+      "sourceCount": "187500",
+      "sourceSequence": "3659174697426028",
+      "intakeSequence": "3659174697426028",
+      "obligationSequence": "3659174697426028",
+      "admissionSequence": "3659174697426028",
+      "executionSequence": "3659174697426028"
+    },
+    {
+      "partition": 14,
+      "sourceCount": "187500",
+      "sourceSequence": "3940649674136684",
+      "intakeSequence": "3940649674136684",
+      "obligationSequence": "3940649674136684",
+      "admissionSequence": "3940649674136684",
+      "executionSequence": "3940649674136684"
+    },
+    {
+      "partition": 15,
+      "sourceCount": "187500",
+      "sourceSequence": "4222124650847340",
+      "intakeSequence": "4222124650847340",
+      "obligationSequence": "4222124650847340",
+      "admissionSequence": "4222124650847340",
+      "executionSequence": "4222124650847340"
+    }
+  ],
+  "metrics": {
+    "intakeTrades": "1320000",
+    "obligations": "1320000",
+    "pending": "0",
+    "settled": "1320000",
+    "breaks": "0",
+    "nonInstant": "0",
+    "admissions": "30000",
+    "maxAdmissionRank": "30000",
+    "completions": "30000",
+    "attempts": "1320000",
+    "ledgerEntries": "5280000",
+    "badLedgerLegs": "0",
+    "badAttemptOutcomes": "0"
+  },
+  "sourceTradeMembership": {
+    "sha256": "39b8e9151d9207e769240b7cb7e84a067d708035c7a653f73a8f15f05a3491d4",
+    "bytes": 122133596
+  },
+  "intakeMembership": {
+    "sha256": "39b8e9151d9207e769240b7cb7e84a067d708035c7a653f73a8f15f05a3491d4",
+    "bytes": 122133596
+  },
+  "obligationMembership": {
+    "sha256": "39b8e9151d9207e769240b7cb7e84a067d708035c7a653f73a8f15f05a3491d4",
+    "bytes": 122133596
+  },
+  "sourceTradeMembershipAfter": {
+    "sha256": "39b8e9151d9207e769240b7cb7e84a067d708035c7a653f73a8f15f05a3491d4",
+    "bytes": 122133596
+  }
+}

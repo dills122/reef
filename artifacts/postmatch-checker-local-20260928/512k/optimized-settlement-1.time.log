@@ -1,0 +1,19 @@
+settlement shadow diagnostic: pass; report=/private/tmp/reef-pm10-checker-plan-20260928/optimized/512k-settlement-1.json
+       10.25 real         3.90 user         1.04 sys
+            92094464  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              107260  page reclaims
+                  15  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                7813  messages sent
+               19971  messages received
+                5714  signals received
+                1433  voluntary context switches
+               94842  involuntary context switches
+          1204417679  instructions retired
+          1183966747  cycles elapsed
+            55494672  peak memory footprint
