@@ -46,6 +46,13 @@ while partition 0's frontier row was locked), five writer tests, and two
 operational-store tests. The runtime test exercised opt-in per-window
 `postmatch_live_window` read, plan, phase-write, and target-apply logging.
 
+After independent review, the fixed-window assertion expanded to every stored
+receipt, execution, and trade source/canonical column. A focused opt-in
+PostgreSQL rerun passed one test with zero skips or failures on 2026-09-28.
+Control arms measured 352.635 and 203.698 ms; rewrite arms measured 182.183
+and 161.704 ms. SQL calls remained 2,500 versus 530 per arm. These later
+times are separate from the paired-run mean above.
+
 The same local target also ran two sequential scaling sweeps with a 16-connection
 writer pool. Each arm retained the same 16 windows, 8,000 outcomes, and 4,000
 trades; partition count changed how many windows each lane held. Windows on
@@ -54,7 +61,9 @@ threads ran concurrently, with one writer per partition. Source read and
 market maintenance were excluded. Counts, coverage rows, and all partition
 frontiers were checked after each arm. Statement calls fell from 32,000
 append-only + 8,000 state calls to 480 append-only + 8,000 state calls in each
-rewrite arm.
+rewrite arm. The original timed interval also included building and verifying
+the synthetic windows in each worker, so its elapsed figures are not pure
+target-apply timings. Per-window `target` samples timed `applyMeasured` only.
 
 | Writers | Rewrite | Sweep 1 elapsed / target 15th / commit 15th (ms) | Sweep 2 elapsed / target 15th / commit 15th (ms) |
 | ---: | --- | --- | --- |
@@ -81,17 +90,19 @@ coverage, and partition frontiers:
 | 16 | on | 1,121.8 | 469.9 / 595.0 | 3.8 / 7.0 |
 
 Each arm ran 16 windows, so nearest-rank p95 is that arm's slowest window.
-The third sweep confirms eight writers' best elapsed time on this fixture;
+The third sweep again found eight writers' best elapsed time on this fixture;
 its per-window p95 rises versus four because more windows overlap. No DB
 wait-event sampler ran, so the precise cause of the 16-writer slowdown remains
 unassigned. A later harness inspection found that the Hikari target pool may
 have grown from four to eight to sixteen connections during the timed arms.
 That startup cost can exaggerate the sixteen-writer slowdown. The harness now
-warms all configured pool connections before timing; a warm-pool rerun is
-required before treating the eight-writer peak as a stable tuning choice.
+builds/verifies all windows and warms all configured pool connections before
+timing; a corrected rerun is required before treating the eight-writer peak as
+a stable tuning choice.
 
 Eight writers gave best elapsed time in both local rewrite-on sweeps, about
-8.4–8.7k outcomes/s of writer-only work. Sixteen writers regressed to about
+8.4–8.7k outcomes/s of target apply plus fixture setup. Sixteen writers
+regressed to about
 7.3k/s. That is below the integrated 10k target before source reads, market,
 settlement, or legacy projection. The 16-thread target latency rise did not
 appear primarily in commit; detailed PostgreSQL wait events were not captured.

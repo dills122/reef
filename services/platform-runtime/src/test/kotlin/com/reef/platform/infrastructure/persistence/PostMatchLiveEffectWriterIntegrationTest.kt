@@ -396,38 +396,41 @@ class PostMatchLiveEffectWriterIntegrationTest {
                 val dataSource = RuntimeDataSources.dataSource(url, user, password, "postmatch-operational")
                 val workers = Executors.newFixedThreadPool(partitionCount)
                 try {
+                    val verifier = CanonicalSourceCoverageVerifier()
+                    val windowsByPartition = (0 until partitionCount).map { partition ->
+                        (0 until 16 / partitionCount).map { windowIndex ->
+                            val from = CanonicalStreamPosition.origin(partition) + windowIndex * 500L
+                            val outcomes = (1..250).flatMap { index ->
+                                val suffix = "$partition-$windowIndex-$index"
+                                val maker = "maker-$suffix"
+                                val taker = "taker-$suffix"
+                                listOf(
+                                    source(stream, from + index * 2 - 1, maker, "SubmitOrder",
+                                        makerSubmit(maker).replace("accept-maker", "accept-maker-$suffix")
+                                            .replace("engine-maker", "engine-maker-$suffix"), partition),
+                                    source(stream, from + index * 2, taker, "SubmitOrder",
+                                        takerSubmit(taker, maker).replace("accept-taker", "accept-taker-$suffix")
+                                            .replace("engine-taker", "engine-taker-$suffix")
+                                            .replace("exec-buy-event", "exec-buy-event-$suffix")
+                                            .replace("exec-sell-event", "exec-sell-event-$suffix")
+                                            .replace("match-1", "match-$suffix")
+                                            .replace("trade-1", "trade-$suffix")
+                                            .replace("trade-event", "trade-event-$suffix"), partition)
+                                )
+                            }
+                            verifier.verify(consumer, stream, partition, generation, from, from + 500, outcomes)
+                        }
+                    }
                     val poolMax = (dataSource as com.zaxxer.hikari.HikariDataSource).maximumPoolSize
                     val warmConnections = (1..poolMax).map { dataSource.connection }
                     warmConnections.forEach { it.close() }
                     val before = liveInsertCalls(dataSource)
                     val started = System.nanoTime()
-                    val futures = (0 until partitionCount).map { partition ->
+                    val futures = windowsByPartition.map { windows ->
                         workers.submit(Callable {
                             val store = PostMatchOperationalStore(dataSource)
                             val writer = PostMatchLiveEffectWriter()
-                            val verifier = CanonicalSourceCoverageVerifier()
-                            (0 until 16 / partitionCount).map { windowIndex ->
-                                val from = CanonicalStreamPosition.origin(partition) + windowIndex * 500L
-                                val outcomes = (1..250).flatMap { index ->
-                                    val suffix = "$partition-$windowIndex-$index"
-                                    val maker = "maker-$suffix"
-                                    val taker = "taker-$suffix"
-                                    listOf(
-                                        source(stream, from + index * 2 - 1, maker, "SubmitOrder",
-                                            makerSubmit(maker).replace("accept-maker", "accept-maker-$suffix")
-                                                .replace("engine-maker", "engine-maker-$suffix"), partition),
-                                        source(stream, from + index * 2, taker, "SubmitOrder",
-                                            takerSubmit(taker, maker).replace("accept-taker", "accept-taker-$suffix")
-                                                .replace("engine-taker", "engine-taker-$suffix")
-                                                .replace("exec-buy-event", "exec-buy-event-$suffix")
-                                                .replace("exec-sell-event", "exec-sell-event-$suffix")
-                                                .replace("match-1", "match-$suffix")
-                                                .replace("trade-1", "trade-$suffix")
-                                                .replace("trade-event", "trade-event-$suffix"), partition)
-                                    )
-                                }
-                                val window = verifier.verify(consumer, stream, partition, generation,
-                                    from, from + 500, outcomes)
+                            windows.map { window ->
                                 var commitNs = 0L
                                 val windowStarted = System.nanoTime()
                                 assertEquals(PostMatchApplyResult.APPLIED,
