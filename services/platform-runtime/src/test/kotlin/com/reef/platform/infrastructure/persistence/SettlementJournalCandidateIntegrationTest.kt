@@ -172,6 +172,46 @@ class SettlementJournalCandidateIntegrationTest {
             assertTrue(evaluator.snapshot().outstanding.isEmpty())
             assertEquals(3, resultCount(dataSource, schema, streamId))
             assertEquals(3L, store.head(streamId).nextBatchSequence)
+
+            val sourceAuthority = object : SettlementReplaySourceAuthority {
+                override fun readVerified(eventStream: String, window: SettlementJournalSourceWindow):
+                    VerifiedCanonicalSourceWindow {
+                    assertEquals(streamId, eventStream)
+                    assertEquals(0L, window.fromExclusiveSequence)
+                    assertEquals(4L, window.throughInclusiveSequence)
+                    return readRetainedSources(dataSource, streamId, sources).first
+                }
+
+                override fun verifyEmpty(eventStream: String, window: SettlementJournalSourceWindow): Boolean =
+                    false
+            }
+            val replay = SettlementJournalReplayProof(store).prove(streamId, sourceAuthority,
+                { control, memberDigest ->
+                    finalReference.controlDigests[control.controlId] == memberDigest
+                })
+            assertEquals(finalReference.balances, replay.balances)
+            assertTrue(replay.outstandingTradeIds.isEmpty())
+            assertEquals(3, replay.resultCount)
+
+            val changedSources = sources.map { source ->
+                if (source.streamSequence == 2L) source.copy(resultPayloadJson =
+                    source.resultPayloadJson.replace("event-trade-2", "event-trade-2-changed"))
+                else source
+            }
+            val changedAuthority = object : SettlementReplaySourceAuthority {
+                override fun readVerified(eventStream: String, window: SettlementJournalSourceWindow):
+                    VerifiedCanonicalSourceWindow =
+                    readRetainedSources(dataSource, eventStream, changedSources).first
+
+                override fun verifyEmpty(eventStream: String, window: SettlementJournalSourceWindow): Boolean =
+                    false
+            }
+            assertFailsWith<IllegalStateException> {
+                SettlementJournalReplayProof(store).prove(streamId, changedAuthority,
+                    { control, memberDigest ->
+                        finalReference.controlDigests[control.controlId] == memberDigest
+                    })
+            }
         }
     }
 

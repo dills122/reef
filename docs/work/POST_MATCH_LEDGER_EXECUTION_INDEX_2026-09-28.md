@@ -82,6 +82,7 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | PMJ-01 reference and normalized-path parity | `ReferenceSettlementInterpreterTest` and `SettlementJournalReferenceParityIntegrationTest`; combined offline Gradle run against disposable `reef_journal_parity_20260928` settlement database | 9 reference tests and 1 PostgreSQL test; 0 skipped/failures/errors. Covers ordered scarce winners, full four-leg effects, breaks, explicit retry, empty ranges, duplicates, changed inputs and normalized-path parity for three small cohorts. Fixture proof callbacks do not authenticate source absence or control provenance. |
 | 2026-09-28 | PMJ-02 default-off core candidate, after authority-binding repair | `SettlementJournalControlCodecTest`, `SettlementJournalEvaluatorTest`, `SettlementJournalStoreIntegrationTest`, `SettlementJournalCandidateIntegrationTest`, plus PMJ-01 suites; combined offline Gradle run against disposable database | 29 tests, 0 skipped/failures/errors. Typed append, head fence, atomic rollback, duplicate/tampered-row rejection, ordered scarce winner, explicit retry and changed prepared-input rejection have focused coverage. Candidate reads retained JSONB outcomes through existing reader but uses fixture source/control proof callbacks. No projection, restore/replay, sibling market-data load, or throughput qualification yet. |
 | 2026-09-28 | PMJ-03 local recovery-read and failure-boundary slice | `SettlementJournalVerifiedReadIntegrationTest` and `SettlementJournalFailureBoundaryIntegrationTest`, combined with prior six suites against disposable database | 35 tests total, 0 skipped/failures/errors. Verified primary-snapshot read rejects local row/chain/head corruption; immutable envelope and checked replay copy reject post-read mutation. Rollback, lost-reply duplicate and same-incarnation fence boundaries pass. No source/control authenticity, evaluator replay, snapshot, independent restore or new-incarnation takeover is claimed. |
+| 2026-09-28 | PMJ-03 bounded genesis replay proof | `SettlementJournalReplayProofIntegrationTest` and extended `SettlementJournalCandidateIntegrationTest` against disposable database | 2 focused PostgreSQL tests, 0 skipped/failures/errors. Reads retained JSONB text again, rejects changed source value, decodes controls, compares typed results/four effects and cumulative state, and pins head. Fixture callbacks do not establish production control or empty-range authority; no snapshot, writer activation or independent restore. |
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:
@@ -158,6 +159,18 @@ SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_
 Final local slice run: `BUILD SUCCESSFUL in 5s`; JUnit XML 35 tests, zero
 skipped, failures or errors. This is a storage/reply boundary proof, not
 financial-state replay or restore qualification.
+
+Bounded replay command from `services/platform-runtime`, with same disposable
+database and `SETTLEMENT_POSTGRES_PASSWORD_TEST` set locally:
+
+```sh
+SETTLEMENT_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://127.0.0.1:5437/reef_journal_parity_20260928 SETTLEMENT_POSTGRES_USER_TEST=reef ./gradlew test --offline --console=plain --tests com.reef.platform.infrastructure.persistence.SettlementJournalReplayProofIntegrationTest --tests com.reef.platform.infrastructure.persistence.SettlementJournalCandidateIntegrationTest
+```
+
+Run: `BUILD SUCCESSFUL in 4s`; JUnit XML two tests, zero skipped, failures
+or errors. Replay re-evaluates from genesis for each batch, so work grows
+quadratically with batch count and is capped at 256 by default. It is a
+bounded proof, not the snapshot-plus-tail restart path.
 
 Each worker returns scoped status, files, exact commands/results, decisions,
 assumptions, limitations and next action. Lead verifies material claims in
