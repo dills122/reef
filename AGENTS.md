@@ -1,3 +1,7 @@
+<!-- codebase-memory-mcp:start -->
+For structural codebase exploration, use the installed `codebase-memory` skill.
+<!-- codebase-memory-mcp:end -->
+
 # AGENTS
 
 AI coding guidance for Reef. Start with [AI working context](docs/AI_CONTEXT.md)
