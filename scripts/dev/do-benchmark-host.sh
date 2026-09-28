@@ -484,6 +484,8 @@ remote_run_benchmark() {
     REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC="${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" \
     REEF_DO_MATCHED_TOPOLOGY="${REEF_DO_MATCHED_TOPOLOGY:-0}" \
     REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS="${REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS:-320}" \
+    REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS="${REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS:-240}" \
+    REEF_DO_MATCHED_SKIP_SMOKE="${REEF_DO_MATCHED_SKIP_SMOKE:-0}" \
     PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED="${PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED:-false}" \
     DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-}" <<'REMOTE'
 set -euo pipefail
@@ -570,10 +572,13 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
 
   if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
     export REEF_PG_MAX_CONNECTIONS="$REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS"
+    export REEF_SETTLEMENT_PG_MAX_CONNECTIONS="$REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS"
     run_stage reset-before-matched-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
   fi
-  run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
-  run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
+  if [ "${REEF_DO_MATCHED_SKIP_SMOKE:-0}" != "1" ]; then
+    run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
+    run_stage reset-after-materializer-smoke docker compose -f compose.base.yml -f compose.local.yml --profile '*' down --volumes --remove-orphans
+  fi
   if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
     export REEF_COMPOSE_FILES=compose.base.yml,compose.local.yml,compose.benchmark-scale.yml
     export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}benchmark-scale,postmatch"

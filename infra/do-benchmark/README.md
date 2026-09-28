@@ -142,7 +142,14 @@ connections by default (`POSTMATCH_SOURCE_DB_POOL_MAX`). Matched runs set the
 source PostgreSQL limit to 320 connections in both arms
 (`REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS`) to leave headroom for the six
 materializers, sixteen projectors, post-match workers, seed, and observer.
-Target pools retain their separate limits. Record both settings in each run.
+Matched runs also set isolated settlement PostgreSQL to 240 connections
+(`REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS`); its default 100 was full at
+settlement seed before traffic. Target pools retain their separate limits.
+Record both database limits and source pool cap in each run.
+For a time-bounded diagnostic retry after smoke already passed on the same
+source, `REEF_DO_MATCHED_SKIP_SMOKE=1` skips only the smoke run; it still resets
+all matched volumes before measured setup. A final matched claim requires both
+arms through the normal smoke and measured path.
 The treatment writes `postmatch-stage-samples.jsonl`, a load-window-aligned
 `postmatch-stage-summary.json`, `settlement-dependency-graph.json`, exact
 closed-cohort checkers, and dedicated per-worker logs. The control writes the

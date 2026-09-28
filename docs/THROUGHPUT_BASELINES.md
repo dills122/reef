@@ -1460,11 +1460,12 @@ and [checksums](../artifacts/postmatch-capacity-20260927/attempt-1/evidence.sha2
 retain the failed comparison's evidence. Full raw artifacts remain in the
 ignored local `reports/do-benchmark/` directories for the two run IDs.
 
-## PM-S3 attempt 2 — matched post-match comparison blocked by source connection ceiling
+## PM-S3 attempt 2 — matched post-match comparison blocked by connection ceilings
 
 September 28, one disposable `sfo3` `c-32` droplet (`604195292`), 10,000/s
 for 300 seconds, 384 workers, six materializers, sixteen projector owners,
-and source PostgreSQL `max_connections=200`. Control
+source PostgreSQL `max_connections=200`, and settlement PostgreSQL's default
+100-connection limit. Control
 `postmatch-capacity-control-20260927T235615Z` accepted and eventually
 materialized/projected 2,999,950 commands (9,999.67/s), with final lag zero.
 Its stage observer passed: four in-load rate intervals, maximum total query
@@ -1473,23 +1474,25 @@ configuration, not a post-match result.
 
 Treatment `postmatch-capacity-treatment-20260927T235615Z` accepted 2,750,574
 commands (9,166.54/s) and materialized 2,589,916 at the end of the load
-report, leaving 160,658 unmaterialized. Source PostgreSQL rejected the stage
-sampler with `FATAL: sorry, too many clients already`; stage telemetry had only
+report, leaving 160,658 unmaterialized. The stage sampler received
+`FATAL: sorry, too many clients already`; stage telemetry had only
 two samples and no valid in-load intervals. Post-match and settlement exact
 shadow checks failed (32 and 19 failures respectively). The dependency graph
 had 27,622 admissions and maximum depth 27,617, a separate signal of serial
 account dependencies, but its incomplete run cannot establish sustained
 settlement throughput. The treatment failed; the pair does not isolate the
-post-match architecture effect because the source connection ceiling was hit.
+post-match architecture effect because database connection limits were hit.
 
 After capping each dedicated post-match source pool at two connections in
 `3a053626`, treatment-only
 `postmatch-capacity-treatment-pool2-20260928T0047Z` again exhausted the
-200-connection source server during settlement seed, before measured traffic.
-Container inspection showed approximately eight held connections per core
-projector/materializer plus post-match connections, filling the server at
-startup. Correction `e9b907fc` sets source `max_connections=320` in both
-matched arms; a clean pair on the same droplet must establish its result.
+100-connection settlement server during settlement seed, before measured
+traffic. The seed script executes `psql` inside `settlement-postgres`, which
+was initially misidentified as source PostgreSQL. A later treatment-only
+retry with source `max_connections=320` also failed at seed; container
+inspection showed settlement at exactly 100 clients, while source had about
+194 of 320. The source connection increase in `e9b907fc` did not fix this
+failure. A corrected treatment retry sets settlement `max_connections=240`.
 [Attempt 2 evidence](../artifacts/postmatch-capacity-20260928/attempt-2/)
 retains both load reports, gate/stage summaries, failed exact checks, graph,
 pool-two startup log, and checksums. Full raw artifacts remain in ignored
