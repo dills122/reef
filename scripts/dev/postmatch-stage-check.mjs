@@ -41,6 +41,10 @@ export function assessStageSamples(samples, requireSettlement, loadWindows = [])
         failures.push(`sample ${index} settlement observer query duty cycle exceeds 2%`);
       }
     }
+    if (sample.sourceOutcomes == null || before.sourceOutcomes == null) {
+      failures.push(`sample ${index} lacks source outcome count`);
+      return;
+    }
     const row = { sampledAt: sample.sampledAt, sourceSeconds, settlementSeconds, duringLoad,
       observerDutyCycle: duty, targetObserverDutyCycle: targetDuty,
       sourceOutcomesPerSecond: Number(BigInt(sample.sourceOutcomes) - BigInt(before.sourceOutcomes)) / sourceSeconds };

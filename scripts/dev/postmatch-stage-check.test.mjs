@@ -60,6 +60,15 @@ test("stage check rejects one-sided trade counts but accepts absent v2 trade cou
   assert.equal(assessStageSamples(samples, true).status, "pass");
 });
 
+test("stage check reports a missing source outcome count", () => {
+  const samples = [sample(0, 0, 0), sample(60000, 600000, 300000),
+    sample(120000, 1200000, 600000)];
+  delete samples[1].sourceOutcomes;
+  const report = assessStageSamples(samples, true);
+  assert.equal(report.status, "fail");
+  assert.ok(report.failures.some((failure) => failure.includes("lacks source outcome count")));
+});
+
 test("observer duty gate applies to measured load intervals", () => {
   const samples = [sample(0, 0, 0, 3000), sample(60000, 600000, 300000, 3000),
     sample(120000, 1200000, 600000), sample(180000, 1800000, 900000),
