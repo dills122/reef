@@ -1,0 +1,18 @@
+                                                                                     QUERY PLAN
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=14734.52..14734.53 rows=1 width=8) (actual time=51.434..52.785 rows=1 loops=1)
+   Buffers: shared hit=832 read=11025
+   ->  Gather  (cost=14734.31..14734.52 rows=2 width=8) (actual time=51.310..52.780 rows=3 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=832 read=11025
+         ->  Partial Aggregate  (cost=13734.31..13734.32 rows=1 width=8) (actual time=48.900..48.900 rows=1 loops=3)
+               Buffers: shared hit=832 read=11025
+               ->  Parallel Seq Scan on canonical_settlement_obligations  (cost=0.00..13499.64 rows=93865 width=0) (actual time=0.023..44.760 rows=75093 loops=3)
+                     Filter: ((event_stream = 'PM10_CHECKER_20260928'::text) AND (source_generation = '00000000-0000-4000-8000-000000000010'::text) AND (status = 'SETTLED'::text))
+                     Buffers: shared hit=832 read=11025
+ Planning:
+   Buffers: shared hit=128
+ Planning Time: 0.644 ms
+ Execution Time: 52.933 ms
+(15 rows)

@@ -36,7 +36,7 @@ function sqlLiteral(value) { return `'${value.replaceAll("'", "''")}'`; }
 
 function psqlArgs(service, sql) {
   return [...compose, "exec", "-T", service, "psql", "-X", "-A", "-t", "-F", "\t",
-    "-v", "ON_ERROR_STOP=1", "-U", "reef", "-d", "reef", "-c", sql];
+    "-v", "ON_ERROR_STOP=1", "-U", "reef", "-d", process.env.PM10_DB || "reef", "-c", sql];
 }
 
 function query(service, sql) {

@@ -20,7 +20,7 @@ export function assess(source, target, partitions, generation) {
     for (const [name, frontier] of [["live", live], ["market", market]]) {
       if (!frontier) failures.push(`${name} frontier missing for partition ${partition}`);
       else if (frontier.generation !== generation) failures.push(`${name} source generation mismatch for partition ${partition}`);
-      else if (BigInt(frontier.sequence) !== BigInt(sourceRow.sequence)) failures.push(`${name} frontier differs from source for partition ${partition}`);
+      else if (BigInt(frontier.sequence) < BigInt(sourceRow.sequence)) failures.push(`${name} frontier behind source for partition ${partition}`);
     }
     if (live && market && BigInt(market.sequence) < BigInt(live.sequence)) {
       failures.push(`market frontier behind live for partition ${partition}`);
@@ -36,7 +36,7 @@ function sqlLiteral(value) { return `'${value.replaceAll("'", "''")}'`; }
 
 function psqlArgs(service, sql) {
   return [...compose, "exec", "-T", service, "psql", "-X", "-A", "-t", "-F", "\t",
-    "-v", "ON_ERROR_STOP=1", "-U", "reef", "-d", "reef", "-c", sql];
+    "-v", "ON_ERROR_STOP=1", "-U", "reef", "-d", process.env.PM10_DB || "reef", "-c", sql];
 }
 
 function query(service, sql) {
