@@ -37,7 +37,13 @@ test("numeric gates must be complete and cover every candidate read", () => {
   assert.equal(summarizeSamples(lagging, gates).readGatePassed, true);
   assert.equal(summarizeSamples(lagging, gates).byName.book.notCurrent, 1);
   assert.equal(summarizeSamples(complete, gates).ageGateAuthority,
-    "separate source-to-visible window-commit measurements");
+    "API source-age upper bound plus separate projection window-commit measurements");
+  const stale = complete.map((row) => row.name === "book" ?
+    { ...row, currentAtObservation: false, sourceAgeUpperBoundMs: 6000 } : row);
+  assert.equal(summarizeSamples(stale, gates).readGatePassed, false);
+  const missingAge = complete.map((row) => row.name === "tape" ?
+    { ...row, sourceAgeUpperBoundMs: null } : row);
+  assert.equal(summarizeSamples(missingAge, gates).readGatePassed, false);
 });
 
 test("failures and lag remain visible in distribution summary", () => {

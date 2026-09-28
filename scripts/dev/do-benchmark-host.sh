@@ -284,6 +284,9 @@ cmd_run() {
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    node scripts/dev/postmatch-candidate-artifact-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
+  fi
   return "$status"
 }
 
@@ -292,6 +295,7 @@ cmd_check() {
   local profile
   profile="$(benchmark_profile)"
   report_dir="$(benchmark_report_dir)"
+  local status=0
   REEF_DO_REPORT_PROFILE="$profile" \
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
@@ -307,7 +311,11 @@ cmd_check() {
   REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS="${REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
-    node scripts/dev/do-benchmark-check.mjs "$report_dir"
+    node scripts/dev/do-benchmark-check.mjs "$report_dir" || status=$?
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    node scripts/dev/postmatch-candidate-artifact-check.mjs "$report_dir" || status=$?
+  fi
+  return "$status"
 }
 
 cmd_remote_status() {
@@ -756,6 +764,8 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   fi
   if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
     journal_load_reports=("$artifact_dir"/venue-event-materializer-stress-rate-*.json)
+    run_stage settlement-candidate-cohort-check node scripts/dev/settlement-candidate-cohort-check.mjs \
+      "$POSTMATCH_EVENT_STREAM" auto "$artifact_dir/settlement-candidate-cohort.json" || stress_status=$?
     docker compose -f compose.base.yml -f compose.local.yml --profile postmatch-workers logs \
       --no-color --timestamps platform-postmatch-live-0 platform-postmatch-live-1 \
       platform-postmatch-live-2 platform-postmatch-live-3 \
@@ -763,8 +773,6 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     run_stage postmatch-candidate-age-check node scripts/dev/postmatch-candidate-age-check.mjs \
       "$artifact_dir/postmatch-candidate-market.log" "${journal_load_reports[0]}" \
       "$POSTMATCH_EVENT_STREAM" "$artifact_dir/postmatch-candidate-age-summary.json" 16 || stress_status=$?
-    run_stage settlement-candidate-cohort-check node scripts/dev/settlement-candidate-cohort-check.mjs \
-      "$POSTMATCH_EVENT_STREAM" auto "$artifact_dir/settlement-candidate-cohort.json" || stress_status=$?
   fi
   if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ]; then
     postmatch_shadow_wait=120
