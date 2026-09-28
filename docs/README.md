@@ -27,6 +27,10 @@ have separate runbooks under [`infra/`](../infra/README.md).
   [`contracts/`](../contracts/README.md).
 - [Work plan](WORK_PLAN.md) is the execution board. Its stated alignment date
   is part of every status claim; verify against source and newer evidence.
+- [Post-match settlement contract](work/SETTLEMENT_LEDGER_JOURNAL_CONTRACT_2026-09-28.md)
+  and [execution index](work/POST_MATCH_LEDGER_EXECUTION_INDEX_2026-09-28.md)
+  carry the September 28 D-060 redesign direction and its proof gates; neither
+  is a live cutover or throughput qualification.
 - [Current status](CURRENT_STATUS.md) is the September 4 snapshot, with its
   recorded limits. It is orientation, not a live release or capacity report.
 - [Throughput ledger](THROUGHPUT_BASELINES.md) is mandatory before performance

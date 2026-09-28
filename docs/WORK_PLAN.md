@@ -1,5 +1,20 @@
 # Reef Work Plan
 
+## September 28 post-match settlement direction
+
+After PM-S3 and the local PM10 diagnostics missed the complete settlement
+capacity gate, stop micro-tuning the shadow settlement transaction. D-060 and
+the [settlement journal contract](work/SETTLEMENT_LEDGER_JOURNAL_CONTRACT_2026-09-28.md)
+record the agreed post-match-only authority split: matching outcome fixes the
+trade; a later ordered journal result fixes settlement. Market-data and
+settlement are independent consumers of the committed outcome, and both must
+meet latency/freshness/capacity gates together before cutover. The
+[execution index](work/POST_MATCH_LEDGER_EXECUTION_INDEX_2026-09-28.md) owns the
+current slices and stop gates. The logged journal write-shape test is promising
+component evidence, not implementation or sustained qualification. No matching,
+ingress, pre-trade, public-read cutover or production deployment is authorized
+by this plan.
+
 ## September 26 priority update
 
 User-directed priority: build the [post-match rearchitecture](work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md)
