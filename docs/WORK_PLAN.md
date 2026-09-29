@@ -18,6 +18,17 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify Phase 1 checkpoint (2026-09-29 branch)
+
+`codex/calcify-phase1` adds opt-in matching commitment extraction, stub
+verification, and PostgreSQL processing receipts without switching legacy
+post-matching. Local fixtures, partition-poison isolation, and receipt restart
+passed on two-partition Redpanda; this is diagnostic implementation evidence,
+not hosted capacity or settlement qualification. Exact wire contract and limits:
+[Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
+Replay-retention window enforcement and independent source-to-link
+reconciliation remain follow-ups before non-diagnostic use.
+
 ## Source Of Truth
 
 - Command and acceptance semantics:

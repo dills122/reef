@@ -5,6 +5,10 @@ Recorded: 2026-09-28 America/Toronto (2026-09-29 UTC).
 Base: `origin/master` at `368a9247b31c8997c5dd9f51aeb88a911adebfe7` (rollback PR #428 merged).
 Branch: `codex/calcify-discovery`.
 
+Phase 1 implementation checkpoint (2026-09-29): additive opt-in slice and
+local diagnostic evidence live in [CALCIFY_PHASE1_IMPLEMENTATION.md](CALCIFY_PHASE1_IMPLEMENTATION.md);
+this discovery record still owns open full-design questions.
+
 ## Purpose and working assumptions
 
 Calcify names Reef's fresh, full post-matching design effort. This is a working assumption to confirm. Goal: work through post-match product semantics, authority, data flow, failure behavior, read contracts, restore, and capacity proof while validating small, independently testable implementations. This document records questions and a proposed logical flow; it is not an instruction to resume the retired implementation.

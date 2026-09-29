@@ -47,6 +47,16 @@ For full contributor dependencies, first-run troubleshooting, endpoints, and
 module tests, use [Onboarding](ONBOARDING.md). For exact active services and
 merged configuration, inspect `make dev-compose-config` before running.
 
+## Calcify Phase 1 sidecars
+
+Apply forward-only migrations, then add `compose.calcify.yml` to `REEF_COMPOSE_FILES`
+and select profiles `redpanda,calcify-phase1`. This runs independent extractor,
+stub verifier, and receipt worker beside existing post-matching services.
+`CALCIFY_STAGE` is set only inside optional sidecars; default stack behavior
+does not change. [Contract](../contracts/calcify/README.md) and
+[local diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
+link semantics, tests, and replay-retention limits.
+
 ## Change configuration
 
 Copy `.env.example` to ignored `.env`; use named host-port overrides there or
