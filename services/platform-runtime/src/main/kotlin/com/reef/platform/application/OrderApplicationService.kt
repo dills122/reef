@@ -1008,6 +1008,7 @@ internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePer
     }
     return PostgresRuntimePersistence(
         dataSource = runtimeDataSource,
-        projectionDataSource = projectionDataSource
+        projectionDataSource = projectionDataSource,
+        settlementControlAuthorityEnabled = RuntimeEnv.bool("POSTMATCH_SETTLEMENT_CONTROL_AUTHORITY_ENABLED", false)
     )
 }

@@ -58,6 +58,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.ProjectionLag
 import com.reef.platform.infrastructure.persistence.ProjectionStage
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import com.reef.platform.infrastructure.persistence.SettlementControlAcceptanceAdapter
 import com.sun.net.httpserver.Headers
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -108,6 +109,10 @@ private fun OptionalProductAdminRoute.toAdminGatewayRoute(): AdminGatewayRoute =
 )
 
 private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
+private val candidateStatusAdminRoute = AdminGatewayRoute(
+    "/api/v1/postmatch-candidate/status", "admin",
+    setOf(AdminServiceTokenFamily.Admin), adminGatewayPlatformAdminRoles
+)
 private val adminGatewaySecretAdminRoles = setOf(
     AdminIdentityService.RoleSecretAdmin,
     AdminIdentityService.RolePlatformAdmin
@@ -318,6 +323,9 @@ class PlatformHttpServer(
     private val adminIdentityService: AdminIdentityService? = null,
     private val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
     private val settlementFactStore: SettlementFactStore? = null,
+    private val settlementControlAcceptance: SettlementControlAcceptanceAdapter? = null,
+    private val candidateReadRoutes: PostMatchCandidateHttpRoutes? =
+        PostMatchCandidateHttpRoutes.fromEnvOrNull(runtimeRole),
     private val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     private val defaultPostTradeProfileId: String =
         RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
@@ -455,6 +463,7 @@ class PlatformHttpServer(
     )
     private val settlementAdminGateway = SettlementAdminGateway(
         settlementFactStore = settlementFactStore,
+        settlementControlAcceptance = settlementControlAcceptance,
         settlementObligationMaterializer = settlementObligationMaterializer,
         postTradeProfileResolver = postTradeProfileResolver,
         scenarioRunPostTradeProfileLookup = scenarioRunPostTradeProfileLookup,
@@ -636,6 +645,7 @@ class PlatformHttpServer(
         adminIdentityService = deps.adminIdentityService,
         adminGitHubOAuthClient = deps.adminGitHubOAuthClient,
         settlementFactStore = deps.settlementFactStore,
+        settlementControlAcceptance = deps.settlementControlAcceptance,
         settlementObligationMaterializer = deps.settlementObligationMaterializer,
         postTradeProfileResolver = deps.postTradeProfileResolver,
         scenarioRunPostTradeProfileLookup = deps.scenarioRunPostTradeProfileLookup,
@@ -679,6 +689,18 @@ class PlatformHttpServer(
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
                 writeHotPathResponse(exchange, settlementAdminGateway.appendSettlementFactsResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/controls") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                adminSessionAuth.methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, settlementAdminGateway.acceptSettlementControlResponse(body))
             }
         }
 
@@ -947,6 +969,33 @@ class PlatformHttpServer(
                 return@createContext
             }
             adminSessionAuth.writeJson(exchange, 200, api.rebuildOrderLifecycleState())
+        }
+
+        candidateReadRoutes?.let { routes ->
+            server.createContext(PostMatchCandidateHttpRoutes.PREFIX) { exchange ->
+                if (exchange.requestMethod != "GET") {
+                    adminSessionAuth.methodNotAllowed(exchange)
+                    return@createContext
+                }
+                if (!allowApiV1Read(exchange, PostMatchCandidateHttpRoutes.PREFIX)) {
+                    return@createContext
+                }
+                if (exchange.requestURI.path == "${PostMatchCandidateHttpRoutes.PREFIX}status" &&
+                    authorizeAdminGateway(exchange, candidateStatusAdminRoute) == null) {
+                    return@createContext
+                }
+                if (exchange.requestURI.path == "${PostMatchCandidateHttpRoutes.PREFIX}balance") {
+                    val participant = exchange.queryValue("participantId")
+                    val scopeError = boundary.checkParticipantScope(exchange.requestHeaders, participant)
+                    if (scopeError != null) {
+                        adminSessionAuth.writeJson(exchange, scopeError.status,
+                            boundary.toErrorJson(scopeError, correlationId(exchange.requestHeaders)))
+                        return@createContext
+                    }
+                }
+                writeHotPathResponse(exchange, routes.handle(exchange.requestURI.path,
+                    exchange.requestURI.rawQuery))
+            }
         }
 
         server.createContext("/api/v1/market-data/snapshots/") { exchange ->
@@ -1255,6 +1304,20 @@ class PlatformHttpServer(
                 "post-match shadow workers require stream-ack command processing"
             }
             PostMatchRuntimeWorkers.fromEnv().start()
+        }
+        val candidateMarket = RuntimeEnv.bool("POSTMATCH_MATCHING_MARKET_CANDIDATE_ENABLED", false)
+        val candidateFinancial = RuntimeEnv.bool("POSTMATCH_JOURNAL_PROJECTION_CANDIDATE_ENABLED", false)
+        if (runtimeRole.postMatchWorkersEnabled && (candidateMarket || candidateFinancial)) {
+            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
+                "post-match candidate projections require stream-ack command processing"
+            }
+            PostMatchCandidateProjectionWorkers.fromEnv(candidateMarket, candidateFinancial).start()
+        }
+        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_JOURNAL_CANDIDATE_ENABLED", false)) {
+            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
+                "post-match candidate journal requires stream-ack command processing"
+            }
+            PostMatchSettlementJournalCandidateRuntime.start()
         }
         if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_AUDIT_SHADOW_ENABLED", false)) {
             check(commandProcessingMode == CommandProcessingMode.StreamAck) {
@@ -1589,6 +1652,7 @@ class PlatformHttpServer(
         if (method != "POST") return methodNotAllowedResponse()
         return when (path) {
             "/internal/admin/settlement/facts" -> settlementAdminGateway.appendSettlementFactsResponse(body)
+            "/internal/admin/settlement/controls" -> settlementAdminGateway.acceptSettlementControlResponse(body)
             "/internal/admin/settlement/repairs/cash" -> settlementAdminGateway.postCashSettlementRepairResponse(body)
             "/internal/admin/settlement/repairs/security" -> settlementAdminGateway.postSecuritySettlementRepairResponse(body)
             "/internal/admin/settlement/force-settle" -> settlementAdminGateway.forceSettleResponse(body)
@@ -1730,6 +1794,22 @@ class PlatformHttpServer(
                 settlementReadResponse(request, "/api/v1/settlement/score/{scenarioRunId}") { scenarioRunId ->
                     settlementAdminGateway.settlementScoreResponse(scenarioRunId, request.query)
                 }
+            }
+            request.path.startsWith(PostMatchCandidateHttpRoutes.PREFIX) && request.method == "GET" &&
+                candidateReadRoutes != null -> {
+                val readError = apiV1ReadErrorResponse(request, PostMatchCandidateHttpRoutes.PREFIX)
+                if (readError != null) return readError
+                if (request.path == "${PostMatchCandidateHttpRoutes.PREFIX}status" &&
+                    authorizeAdminGateway(request, candidateStatusAdminRoute) == null) {
+                    return unauthorizedAdminGatewayResponse(candidateStatusAdminRoute)
+                }
+                if (request.path == "${PostMatchCandidateHttpRoutes.PREFIX}balance") {
+                    val scopeError = boundary.checkParticipantScope(request.headers,
+                        queryValue(request.query, "participantId"))
+                    if (scopeError != null) return PlatformHotPathResponse(scopeError.status,
+                        boundary.toErrorJson(scopeError, correlationId(request.headers)))
+                }
+                candidateReadRoutes.handle(request.path, request.query)
             }
             request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/snapshots/{instrumentId}")
@@ -3591,6 +3671,7 @@ data class ServerBoundaryDeps(
     val adminIdentityService: AdminIdentityService? = null,
     val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
     val settlementFactStore: SettlementFactStore? = null,
+    val settlementControlAcceptance: SettlementControlAcceptanceAdapter? = null,
     val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     val postTradeProfileResolver: PostTradeProfileResolver =
         PostTradeProfileResolver.envOnly(
