@@ -35,6 +35,11 @@ Phase 1 paired load gate then passed: 1,000-pair burst plus five minutes at
 100 crossing pairs/s, with 60,000 accepted load orders, 30,001 trades/links/
 receipts including preflight, sampled accepted-to-receipt gap p95/peak 70
 trades, and 1,923 ms final drain. Scope remains local single-lane diagnostic.
+Follow-up five-minute run at 300 crossing pairs/s accepted 180,000 load
+orders; 90,001 trades/links/receipts reconciled, sampled gap p95/peak was
+200 trades with steady first/last half means, and final drain was 1,943 ms.
+Tail stayed bounded at this tested rate; higher-rate and longer-run limits
+remain unproven.
 Exact wire contract, corrections, and limits:
 [Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link

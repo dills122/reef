@@ -190,6 +190,40 @@ load, independent identity-level reconciliation, financial settlement, or
 hosted capacity. Next phase needs its own workload/rate and same sustained
 plus burst evidence before promotion.
 
+## Three-times-rate five-minute run, CAL-P1-L5
+
+To test whether L4's accepted-to-receipt tail grows under more sustained
+traffic, repeated its full-path 300-second workload at 300 crossing pairs/s
+(600 orders/s requested) with `make dev-soak-calcify-phase1
+DURATION_SECONDS=300 PAIRS_PER_SECOND=300`. Same branch/runtime code
+`687f04d1b45d12a420daf85a9f758a24cd5269d7`, four broker partitions,
+one hot instrument lane, one worker per Calcify stage, PostgreSQL HTTP
+intake, Go matching, local Docker host, and reused volumes; fresh run topics,
+generation 14, source partition 3. L4's requested rate was 100 pairs/s and
+its source partition differed. Gate and five-second sampling method were
+unchanged, including 95% requested intake rate, p95 gap at most two seconds
+of requested trade rate, peak gap at most five seconds, exact final counts,
+and final drain at most five seconds. No endpoint timestamp is a matched
+per-trade latency observation.
+
+Run `calcify-1790715820375` accepted 180,000 load orders in 299,975 ms
+(600.05 orders/s). All 180,002 intake/source commands and 90,001 source
+trades, commitment links, verified links, and receipts reconciled, including
+preflight. Fifty-nine in-load gap samples ranged from 110 to 200 trades;
+p95 and peak were 200. First six samples averaged 175.2, last six 163.5;
+first half averaged 171.1, last half 171.7. At last acceptance, 89,811
+receipts existed and final 90,001 arrived within 1,943 ms. Last-record
+source-to-commitment, commitment-to-verified, and verified-to-receipt
+endpoint differences were 514, 507, and 546 ms. No error, exception, or
+poison line appeared in matching or Calcify service logs; API keyword match
+was only JVM `ExitOnOutOfMemoryError` option. [Raw report with all samples](../evidence/calcify-phase1-5m-300pps-2026-09-29.json).
+
+At this rate and duration, tail is bounded and does not grow with elapsed
+load or accumulated receipts. This is local single-lane evidence, not a
+per-trade latency distribution, multi-lane or hosted capacity result, or a
+guarantee for higher rates, longer runs, restarts, or future post-match
+phases. Keep same sustained-plus-burst gate as each phase adds work.
+
 ## Run and limits
 
 Start with `compose.base.yml`, `compose.local.yml`, and `compose.calcify.yml`, profiles `redpanda,calcify-phase1`; apply migrations before enabling sidecars. Stage environment has source and output topic names, source generation, and `CALCIFY_AUTO_OFFSET_RESET` (default `earliest`). Output topics are created with source partition count and one replica in this local Phase 1 path; deployment topology and retention need separate review. Source batches lacking `sha256-reef-canonical-v1` stop their partition rather than silently pass.

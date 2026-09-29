@@ -66,6 +66,20 @@ multi-lane, fault-at-load, or higher-rate capacity claim. [Paced raw report](evi
 [burst raw report](evidence/calcify-phase1-burst-repeat-2026-09-29.json), and
 [method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#paired-burst-and-five-minute-run-cal-p1-l4).
 
+CAL-P1-L5 repeated the same 300-second, single-hot-lane local path at 300
+crossing pairs/s (three times L4's requested rate), on the same code and
+topology with fresh topics and further-aged reused volumes. All 180,000 load
+orders were accepted in 299,975 ms (600.05 orders/s); all 180,002 source
+commands and 90,001 source trades/commitment links/verified links/receipts
+reconciled including preflight. Across 59 five-second samples, gap p95/peak
+was 200 trades. First/last six-sample means were 175.2/163.5; first/last
+half means were 171.1/171.7. At last acceptance, 89,811 receipts existed;
+final drain took 1,943 ms. The predeclared local gate passed without gap
+growth at this rate. Counts sample in-flight work, not individual latency;
+this does not establish a capacity ceiling or guarantee against growth at
+higher rates or longer duration. [Raw report](evidence/calcify-phase1-5m-300pps-2026-09-29.json),
+[method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#three-times-rate-five-minute-run-cal-p1-l5).
+
 ## Current measured baseline — September24, before0053
 
 Frozen candidate/image/source and0052 settings below; no0053 optimization applied.
