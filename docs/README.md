@@ -20,6 +20,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 ## Change behavior or architecture
 
+- [Calcify discovery](work/CALCIFY_DISCOVERY.md) records open post-match redesign questions, proposed logical flow, and phased proof gates; it is not an approved architecture.
 - [AI working context](AI_CONTEXT.md) gives agents a task-specific reading path.
 - [Steering index](steering/README.md) links normative architecture and language
   rules. Read the relevant sections for the area being changed.
