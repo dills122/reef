@@ -41,7 +41,6 @@ test-dev-tooling:
 	node scripts/dev/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
-	node --test scripts/dev/postmatch-shadow-check.test.mjs
 	node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
 	node scripts/dev/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs

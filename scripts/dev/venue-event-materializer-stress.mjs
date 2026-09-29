@@ -1,5 +1,4 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
 import { join } from "node:path";
 
 import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
@@ -12,10 +11,6 @@ const MATERIALIZER_STRESS_SESSION_ID = "venue-event-materializer-mixed-lifecycle
 const MATERIALIZER_STRESS_RUN_ID = "venue-event-materializer-mixed-lifecycle-stress";
 
 loadDotEnv();
-if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1" &&
-    env("REEF_SETTLEMENT_POSTGRES_MIGRATIONS", "0") !== "1") {
-  throw new Error("settlement diagnostic requires REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1");
-}
 
 // Inlines the stream-direct no-db setup (services/matching-engine consumes the durable command
 // stream directly, Postgres stays out of the matching hot path) instead of using the
@@ -65,7 +60,7 @@ setDefault("VENUE_EVENT_MATERIALIZER_GROUP_ID", "reef-venue-event-materializer-s
 setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "1000");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
-setValue("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer", "venue-event-materializer-scaled"]));
+setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer", "venue-event-materializer-scaled"]));
 
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
 setDefault("DEV_STRESS_RUN_PROFILE", "materializer-soak");
@@ -119,31 +114,8 @@ validateStreamProfile("materializer-soak");
 printStreamProfileSummary("materializer-soak");
 
 await runStackUp("stream-ack");
-if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1") {
-  await run("node", ["scripts/dev/settlement-shadow-seed.mjs",
-    env("DEV_STRESS_SESSION_CONFIG"), env("DEV_STRESS_RUN_ID")]);
-}
 await stopIdleBackgroundServices();
-let stageSampler;
-let stageSamplerExit;
-if (env("REEF_DO_MATCHED_TOPOLOGY", "0") === "1") {
-  stageSampler = spawn("node", ["scripts/dev/postmatch-stage-sampler.mjs",
-    env("MATCHING_ENGINE_EVENT_STREAM"),
-    join(env("DEV_STRESS_ARTIFACT_DIR"), "postmatch-stage-samples.jsonl"),
-    "true",
-    "60000"],
-  { stdio: "inherit", env: process.env });
-  stageSamplerExit = new Promise((resolve) => stageSampler.once("exit", (code, signal) => resolve({ code, signal })));
-}
-try {
-  await import("./stress.mjs");
-} finally {
-  if (stageSampler) {
-    stageSampler.kill("SIGTERM");
-    const result = await stageSamplerExit;
-    if (result.code !== 0) throw new Error(`post-match stage sampler failed: ${JSON.stringify(result)}`);
-  }
-}
+await import("./stress.mjs");
 
 function appendProfiles(raw, additions) {
   const profiles = new Set(
