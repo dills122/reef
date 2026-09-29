@@ -1,8 +1,86 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assessStageSamples } from "./postmatch-stage-check.mjs";
-import { sourceStageSql, summarizeSourceRows } from "./postmatch-stage-sampler.mjs";
+import { assessJournalStageSamples, assessStageSamples } from "./postmatch-stage-check.mjs";
+import { journalStageSql, marketCandidateStageSql, sourceStageSql,
+  summarizeSourceRows } from "./postmatch-stage-sampler.mjs";
+
+test("candidate sampler targets journal and direct market frontiers", () => {
+  assert.match(journalStageSql("reef_run"), /settlement_journal_projection_checkpoints/);
+  assert.match(marketCandidateStageSql("reef_run"), /matching_market_candidate_frontiers/);
+  assert.throws(() => journalStageSql("bad' stream"), /invalid event stream/);
+  assert.throws(() => marketCandidateStageSql("bad' stream"), /invalid event stream/);
+});
+
+test("candidate stage check reports all three live gaps and rejects ahead projections", () => {
+  const make = (time, source, journal, market, head, financial) => ({
+    sampledAt: new Date(time).toISOString(), sourceMeasuredAt: new Date(time).toISOString(),
+    sourceOutcomes: String(source), sourceFrontierOffsetsTotal: String(source),
+    sourceQueryMs: 2, sourceFrontierQueryMs: 2, journalQueryMs: 2, marketQueryMs: 2,
+    journal: { batchesInserted: String(head), resultsInserted: String(journal),
+      headSequence: String(head), financialProjectionSequence: String(financial),
+      sourceFrontierOffsetsTotal: String(journal) },
+    marketCandidate: { partitionFrontiers: "16", frontierOffsetsTotal: String(market),
+      windowsInserted: String(head), tapeRowsInserted: String(market) },
+  });
+  const samples = [make(0, 0, 0, 0, 0, 0), make(10000, 100, 90, 95, 2, 1),
+    make(20000, 200, 190, 195, 4, 3), make(30000, 300, 290, 295, 6, 5)];
+  const window = [{ startedAt: new Date(0).toISOString(), finishedAt: new Date(30000).toISOString() }];
+  const result = assessJournalStageSamples(samples, window);
+  assert.equal(result.status, "pass");
+  assert.equal(result.scope, "stage-measurement-only");
+  assert.equal(result.rates.at(-1).sourceToJournalGap, "10");
+  assert.equal(result.rates.at(-1).sourceToMarketGap, "5");
+  assert.equal(result.rates.at(-1).journalToFinancialGap, "1");
+  samples[2].marketCandidate.partitionFrontiers = "15";
+  assert.match(assessJournalStageSamples(samples, window).failures.join(" "),
+    /fewer than 16 market partition frontiers during load/);
+  samples[2].marketCandidate.partitionFrontiers = "16";
+  samples[3].marketCandidate.frontierOffsetsTotal = "301";
+  assert.match(assessJournalStageSamples(samples, window).failures.join(" "),
+    /candidate frontier exceeds its authority/);
+});
+
+test("candidate stage check rejects a path that only drains after load", () => {
+  const make = (minute, source, journal, market, head, financial) => ({
+    sampledAt: new Date(minute * 60000).toISOString(),
+    sourceOutcomes: String(source), sourceFrontierOffsetsTotal: String(source),
+    sourceQueryMs: 2, sourceFrontierQueryMs: 2, journalQueryMs: 2, marketQueryMs: 2,
+    journal: { batchesInserted: String(head), resultsInserted: String(journal),
+      headSequence: String(head), financialProjectionSequence: String(financial),
+      sourceFrontierOffsetsTotal: String(journal) },
+    marketCandidate: { partitionFrontiers: "16", frontierOffsetsTotal: String(market),
+      windowsInserted: String(head), tapeRowsInserted: "1" },
+  });
+  const samples = [make(0, 0, 0, 0, 0, 0),
+    make(1, 600000, 580000, 580000, 1000, 950),
+    make(2, 1200000, 1150000, 1140000, 2000, 1850),
+    make(3, 1800000, 1700000, 1690000, 3000, 2700),
+    make(4, 2400000, 2250000, 2240000, 4000, 3550),
+    make(5, 3000000, 2800000, 2790000, 5000, 4400)];
+  const window = [{ startedAt: new Date(0).toISOString(),
+    finishedAt: new Date(300000).toISOString() }];
+  const report = assessJournalStageSamples(samples, window);
+  assert.equal(report.status, "fail");
+  assert.match(report.failures.join(" "), /source-to-journal backlog grew|source-to-market backlog grew/);
+  assert.match(report.failures.join(" "), /journal-to-financial backlog/);
+});
+
+test("candidate stage check requires a sample near load end", () => {
+  const make = (seconds, count) => ({ sampledAt: new Date(seconds * 1000).toISOString(),
+    sourceOutcomes: String(count), sourceFrontierOffsetsTotal: String(count),
+    sourceQueryMs: 1, sourceFrontierQueryMs: 1, journalQueryMs: 1, marketQueryMs: 1,
+    journal: { batchesInserted: String(count), resultsInserted: String(count),
+      headSequence: String(count), financialProjectionSequence: String(count),
+      sourceFrontierOffsetsTotal: String(count) },
+    marketCandidate: { partitionFrontiers: "16", frontierOffsetsTotal: String(count),
+      windowsInserted: String(count), tapeRowsInserted: String(count) } });
+  const samples = [0, 10, 20, 30].map((seconds) => make(seconds, seconds));
+  const window = [{ startedAt: new Date(0).toISOString(),
+    finishedAt: new Date(60000).toISOString() }];
+  assert.match(assessJournalStageSamples(samples, window).failures.join(" "),
+    /no journal stage sample within 15 seconds of measured load end/);
+});
 
 const settlement = (value) => ({ intakeTrades: String(value), obligations: String(value),
   admissions: String(value), completions: String(value), attempts: String(value),

@@ -72,6 +72,9 @@ async function startPostgres(context) {
     if (context.processEnv.REEF_SETTLEMENT_POSTGRES_MIGRATIONS === "1") {
       services.push("settlement-postgres");
     }
+    if (context.processEnv.REEF_FINALITY_POSTGRES_MIGRATIONS === "1") {
+      services.push("finality-postgres");
+    }
   }
   if (composeFiles(context.processEnv).includes("compose.arena.yml")) {
     services.push("arena-postgres");

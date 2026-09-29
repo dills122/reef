@@ -1,17 +1,27 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { configureProjectionSourceNames, printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
-import { selectPartitionSpreadInstruments } from "./lib/stream-partition-spread.mjs";
+import { selectPartitionSpreadInstruments, streamRoutingPartition } from "./lib/stream-partition-spread.mjs";
 
 const MATERIALIZER_STRESS_SESSION_ID = "venue-event-materializer-mixed-lifecycle-stress";
 const MATERIALIZER_STRESS_RUN_ID = "venue-event-materializer-mixed-lifecycle-stress";
 
 loadDotEnv();
+const journalCandidateRequested = env("REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC", "0") === "1";
+if (journalCandidateRequested) {
+  // Start storage, broker, and source first; enroll only while both topics are cold.
+  for (const key of ["POSTMATCH_SETTLEMENT_JOURNAL_CANDIDATE_ENABLED",
+    "POSTMATCH_SETTLEMENT_CONTROL_AUTHORITY_ENABLED",
+    "POSTMATCH_MATCHING_MARKET_CANDIDATE_ENABLED",
+    "POSTMATCH_JOURNAL_PROJECTION_CANDIDATE_ENABLED",
+    "POSTMATCH_CANDIDATE_READS_ENABLED"]) setValue(key, "false");
+}
 if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1" &&
     env("REEF_SETTLEMENT_POSTGRES_MIGRATIONS", "0") !== "1") {
   throw new Error("settlement diagnostic requires REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1");
@@ -119,9 +129,135 @@ validateStreamProfile("materializer-soak");
 printStreamProfileSummary("materializer-soak");
 
 await runStackUp("stream-ack");
+if (journalCandidateRequested) {
+  await startJournalCandidate();
+  configureCandidateReadProbe();
+}
 if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1") {
   await run("node", ["scripts/dev/settlement-shadow-seed.mjs",
     env("DEV_STRESS_SESSION_CONFIG"), env("DEV_STRESS_RUN_ID")]);
+}
+
+async function startJournalCandidate() {
+  const command = composeArgs(["run", "-T", "--rm", "--no-deps", "--entrypoint", "java",
+    "platform-api", "-cp", "/app/platform-runtime/lib/*",
+    "com.reef.platform.api.PostMatchCandidateSourceEnrollmentMain"]);
+  const { stdout } = await run("docker", command, { passthrough: false });
+  const enrollment = stdout.split("\n").map((line) => {
+    try { return JSON.parse(line); } catch { return null; }
+  }).find((value) => value?.type === "settlement_source_enrollment");
+  if (!enrollment || enrollment.eventStream !== env("POSTMATCH_EVENT_STREAM") ||
+      enrollment.partitionCount !== 16 || !/^[0-9a-f]{64}$/.test(enrollment.bindingDigest ?? "")) {
+    throw new Error("cold settlement source enrollment did not return a verified 16-partition binding");
+  }
+  const frontiers = Object.entries(enrollment.frontiers ?? {})
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([partition, sequence]) => `${partition}=${sequence}`);
+  if (frontiers.length !== 16) throw new Error("cold source enrollment lacks 16 genesis frontiers");
+  setValue("POSTMATCH_LEDGER_CONTROL_SOURCE_GENERATION", enrollment.sourceGeneration);
+  setValue("POSTMATCH_SOURCE_GENERATION", enrollment.sourceGeneration);
+  setValue("POSTMATCH_LEDGER_CONTROL_GENESIS_FRONTIERS", frontiers.join(","));
+  setValue("POSTMATCH_LEDGER_CONTROL_INCARNATION", randomUUID());
+  setValue("POSTMATCH_LEDGER_CONTROL_OWNER_NONCE", randomUUID());
+  setValue("POSTMATCH_LEDGER_CONTROL_OWNER_EPOCH", "1");
+  setValue("POSTMATCH_JOURNAL_INCARNATION", randomUUID());
+  setValue("POSTMATCH_LEDGER_CANDIDATE_GENERATION", randomUUID());
+  setValue("POSTMATCH_SETTLEMENT_CONTROL_AUTHORITY_ENABLED", "true");
+  setValue("POSTMATCH_MATCHING_MARKET_CANDIDATE_ENABLED", "true");
+  setValue("POSTMATCH_JOURNAL_PROJECTION_CANDIDATE_ENABLED", "true");
+  setValue("POSTMATCH_SETTLEMENT_JOURNAL_CANDIDATE_ENABLED", "true");
+  setValue("POSTMATCH_CANDIDATE_READS_ENABLED", "true");
+  console.log(`journal candidate enrolled source generation=${enrollment.sourceGeneration} binding=${enrollment.bindingDigest}`);
+  await run("docker", composeArgs(["up", "-d", "--no-deps", "--force-recreate", "--wait",
+    "platform-api", "platform-postmatch-live-0", "platform-postmatch-live-1",
+    "platform-postmatch-live-2", "platform-postmatch-live-3",
+    "platform-postmatch-settlement-0"]));
+  const { stdout: seedOutput } = await run("node", [
+    "scripts/dev/settlement-candidate-control-seed.mjs",
+    env("DEV_STRESS_SESSION_CONFIG"), env("DEV_STRESS_RUN_ID"),
+    `--source-generation=${enrollment.sourceGeneration}`], { passthrough: false });
+  const seed = seedOutput.split("\n").map((line) => {
+    try { return JSON.parse(line); } catch { return null; }
+  }).find((value) => value?.status === "accepted");
+  if (!seed || seed.sourceGeneration !== enrollment.sourceGeneration ||
+      !Number.isInteger(seed.expectedControlSequence) || seed.expectedControlSequence < 1) {
+    throw new Error("immutable settlement control seed did not return an accepted frontier");
+  }
+  await waitForControlFinality(env("POSTMATCH_EVENT_STREAM"),
+    seed.expectedControlSequence, enrollment.bindingDigest);
+}
+
+async function waitForControlFinality(stream, expectedSequence, bindingDigest) {
+  if (!/^[A-Za-z0-9_-]+$/.test(stream)) throw new Error("invalid journal event stream");
+  const deadline = Date.now() + 180_000;
+  let observed = { journal: null, finality: null };
+  while (Date.now() < deadline) {
+    for (const [name, service, sql] of [
+      ["journal", "settlement-postgres", `SELECT last_control_sequence, last_control_digest,
+        next_batch_sequence - 1, last_batch_digest, incarnation_id
+        FROM settlement.settlement_journal_heads WHERE event_stream = '${stream}'`],
+      ["finality", "finality-postgres", `SELECT control_sequence, control_digest,
+        acknowledged_batch_sequence, acknowledged_batch_digest, journal_incarnation_id,
+        source_binding_digest FROM finality.settlement_finality_anchors
+        WHERE event_stream = '${stream}'`],
+    ]) {
+      const { stdout } = await run("docker", composeArgs(["exec", "-T", service, "psql",
+        "-X", "-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=1", "-U", "reef", "-d", "reef",
+        "-c", sql]), { passthrough: false });
+      const fields = stdout.trim().split("|");
+      observed[name] = /^\d+$/.test(fields[0] ?? "") ? fields : null;
+    }
+    const journal = observed.journal;
+    const finality = observed.finality;
+    if (journal && finality && Number(journal[0]) === expectedSequence &&
+        Number(finality[0]) === expectedSequence && journal[1] === finality[1] &&
+        journal[2] === finality[2] && journal[3] === finality[3] &&
+        journal[4] === finality[4] && finality[5] === bindingDigest) {
+      console.log(`immutable controls finalized through sequence=${expectedSequence}`);
+      return;
+    }
+    if (journal && finality && Number(journal[0]) === expectedSequence &&
+        Number(finality[0]) === expectedSequence && journal[2] === finality[2]) {
+      throw new Error(`settlement control finality proof differs from journal: ${JSON.stringify(observed)}`);
+    }
+    if (Number(journal?.[0] ?? 0) > expectedSequence ||
+        Number(finality?.[0] ?? 0) > expectedSequence) {
+      throw new Error(`settlement control frontier exceeded seed: ${JSON.stringify(observed)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`settlement controls did not reach external finality: expected=${expectedSequence} observed=${JSON.stringify(observed)}`);
+}
+
+function configureCandidateReadProbe() {
+  const fixture = readFileSync(env("DEV_STRESS_SESSION_CONFIG"), "utf8");
+  const instrumentId = fixture.match(/^\s+instrumentId: ([A-Za-z0-9_-]+)\s*$/m)?.[1];
+  if (!instrumentId) throw new Error("candidate read probe needs fixture instrument");
+  const runId = env("DEV_STRESS_RUN_ID");
+  const partitionId = streamRoutingPartition({ runId,
+    venueSessionId: MATERIALIZER_STRESS_SESSION_ID, instrumentId,
+    partitionCount: Number(env("STREAM_ACK_PARTITION_COUNT")) });
+  const base = env("SETTLEMENT_CANDIDATE_CONTROL_RUNTIME_URL");
+  const scope = new URLSearchParams({ partitionId: String(partitionId), runId,
+    venueSessionId: MATERIALIZER_STRESS_SESSION_ID, instrumentId, currency: "USD" });
+  const account = new URLSearchParams({ runId,
+    participantId: "materializer-mm-01-participant", accountId: "materializer-mm-01-account",
+    assetType: "CASH", assetId: "USD" });
+  const status = new URLSearchParams({ runId, tradeId: "__TRADE_ID__" });
+  const args = [
+    "--url", `book=${base}/api/v1/postmatch-candidate/book?${scope}`,
+    "--url", `depth=${base}/api/v1/postmatch-candidate/depth?${scope}`,
+    "--url", `tape=${base}/api/v1/postmatch-candidate/tape?${scope}`,
+    "--url", `balance=${base}/api/v1/postmatch-candidate/balance?${account}`,
+    "--url", `status=${base}/api/v1/postmatch-candidate/status?${status}`,
+    "--participant-id", "materializer-mm-01-participant",
+    "--duration-seconds", "300", "--interval-ms", "1000",
+    "--output", join(env("DEV_STRESS_ARTIFACT_DIR"), "postmatch-candidate-read-probe.json")];
+  const p95 = env("POSTMATCH_CANDIDATE_READ_P95_MS");
+  const p99 = env("POSTMATCH_CANDIDATE_READ_P99_MS");
+  if (Boolean(p95) !== Boolean(p99)) throw new Error("both candidate read latency gates are required together");
+  if (p95 && p99) args.push("--latency-p95-ms", p95, "--latency-p99-ms", p99);
+  setValue("DEV_STRESS_CANDIDATE_READ_PROBE_ARGS_JSON", JSON.stringify(args));
 }
 await stopIdleBackgroundServices();
 let stageSampler;
@@ -130,8 +266,8 @@ if (env("REEF_DO_MATCHED_TOPOLOGY", "0") === "1") {
   stageSampler = spawn("node", ["scripts/dev/postmatch-stage-sampler.mjs",
     env("MATCHING_ENGINE_EVENT_STREAM"),
     join(env("DEV_STRESS_ARTIFACT_DIR"), "postmatch-stage-samples.jsonl"),
-    "true",
-    "60000"],
+    env("REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC", "0") === "1" ? "journal" : "true",
+    "10000"],
   { stdio: "inherit", env: process.env });
   stageSamplerExit = new Promise((resolve) => stageSampler.once("exit", (code, signal) => resolve({ code, signal })));
 }
