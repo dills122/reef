@@ -1,5 +1,7 @@
 package com.reef.platform.application.admin
 
+import com.reef.platform.infrastructure.config.RuntimeEnv
+
 import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.JsonCodec
@@ -357,6 +359,7 @@ private fun defaultRuntimePersistence(): RuntimePersistence {
     }
     return PostgresRuntimePersistence(
         dataSource = runtimeDataSource,
-        projectionDataSource = projectionDataSource
+        projectionDataSource = projectionDataSource,
+        settlementControlAuthorityEnabled = RuntimeEnv.bool("POSTMATCH_SETTLEMENT_CONTROL_AUTHORITY_ENABLED", false)
     )
 }

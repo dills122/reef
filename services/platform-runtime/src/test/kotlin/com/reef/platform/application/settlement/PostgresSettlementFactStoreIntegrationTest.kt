@@ -14,6 +14,15 @@ import kotlin.test.assertTrue
 
 class PostgresSettlementFactStoreIntegrationTest {
     @Test
+    fun candidateControlModeRejectsMutableResourcePositionWrite() {
+        withStore(settlementControlAuthorityEnabled = true) { store ->
+            val bundle = position("run-guard", "position-guard")
+            assertFailsWith<IllegalStateException> { store.appendFacts(bundle) }
+            assertTrue(store.factsByScenarioRunId(bundle.scenarioRunId).isEmpty())
+        }
+    }
+
+    @Test
     fun identicalReplaySucceedsButCrossRunIdentityCollisionRollsBack() {
         withStore { store ->
             val first = position("run-first", "shared-position")
@@ -63,7 +72,8 @@ class PostgresSettlementFactStoreIntegrationTest {
         }
     }
 
-    private fun withStore(block: (PostgresSettlementFactStore) -> Unit) {
+    private fun withStore(settlementControlAuthorityEnabled: Boolean = false,
+        block: (PostgresSettlementFactStore) -> Unit) {
         val url = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val user = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
         val password = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
@@ -73,7 +83,8 @@ class PostgresSettlementFactStoreIntegrationTest {
             val store = PostgresSettlementFactStore(
                 source,
                 PostgresSettlementSqlNames(schema),
-                PostgresBootstrapMode.Compat
+                PostgresBootstrapMode.Compat,
+                settlementControlAuthorityEnabled
             )
             block(store)
         } finally {

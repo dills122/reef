@@ -44,6 +44,13 @@ import com.reef.platform.application.settlement.SettlementScoreProjectionOptions
 import com.reef.platform.application.settlement.SettlementScoreProjectionView
 import com.reef.platform.application.settlement.SettlementSettledFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
+import com.reef.platform.application.settlementjournal.ReferenceAccountKey
+import com.reef.platform.application.settlementjournal.ReferenceControl
+import com.reef.platform.application.settlementjournal.ReferenceFunding
+import com.reef.platform.application.settlementjournal.ReferenceOpening
+import com.reef.platform.application.settlementjournal.ReferencePolicyActivation
+import com.reef.platform.application.settlementjournal.ReferenceStreamPartition
+import com.reef.platform.infrastructure.persistence.SettlementControlAcceptance
 import com.sun.net.httpserver.HttpExchange
 import java.time.Instant
 
@@ -58,14 +65,87 @@ internal class SettlementAdminGateway(
     private val postTradeProfileResolver: PostTradeProfileResolver,
     private val scenarioRunPostTradeProfileLookup: (String) -> String?,
     private val venueSessionPostTradeProfileLookup: (String) -> String?,
-    private val adminSessionAuth: AdminSessionAuth
+    private val adminSessionAuth: AdminSessionAuth,
+    private val settlementControlAcceptance: SettlementControlAcceptance? = null
 ) {
+    /** Explicit future control acceptance. Legacy fact and profile routes do not feed this log. */
+    fun acceptSettlementControlResponse(body: String): PlatformHotPathResponse {
+        val acceptance = settlementControlAcceptance ?: return PlatformHotPathResponse(503,
+            JsonCodec.writeObject("error" to "settlement control acceptance disabled"))
+        val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
+        return try {
+            val accepted = acceptance.accept(parseSettlementControl(json))
+            PlatformHotPathResponse(200, JsonCodec.writeObject(
+                "status" to "accepted", "controlId" to accepted.control.controlId,
+                "controlSequence" to accepted.control.controlSequence,
+                "duplicate" to accepted.duplicate))
+        } catch (error: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to
+                (error.message ?: "invalid settlement control")))
+        } catch (error: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to
+                (error.message ?: "settlement control acceptance failed")))
+        }
+    }
+
+    private fun parseSettlementControl(json: JsonDocument): ReferenceControl {
+        fun required(key: String): String = json.string(key).also {
+            require(it.isNotBlank()) { "$key is required" }
+        }
+        fun account(): ReferenceAccountKey = ReferenceAccountKey(required("runId"),
+            required("participantId"), required("accountId"), required("assetType"),
+            required("assetId"))
+        val controlId = required("controlId")
+        return when (required("kind")) {
+            "POLICY" -> {
+                val frontierRows = json.objectDocuments("sourceFrontiers")
+                require(frontierRows.isNotEmpty()) { "sourceFrontiers is required" }
+                val frontiers = frontierRows.associate { row ->
+                    val partition = row.string("partitionId").toIntOrNull()
+                        ?: throw IllegalArgumentException("partitionId must be an integer")
+                    val sequence = row.string("sequence").toLongOrNull()
+                        ?: throw IllegalArgumentException("sequence must be an integer")
+                    ReferenceStreamPartition(row.string("eventStream"),
+                        row.string("sourceGeneration"), partition) to sequence
+                }
+                require(frontiers.size == frontierRows.size) { "sourceFrontiers repeats a partition" }
+                ReferencePolicyActivation(controlSequence = 0, controlId = controlId,
+                    runId = required("runId"), venueSessionId = required("venueSessionId"),
+                    effectiveAfterSourceFrontiers = frontiers,
+                    profileId = required("profileId"),
+                    policyVersion = required("policyVersion").toIntOrNull()
+                        ?: throw IllegalArgumentException("policyVersion must be an integer"),
+                    mode = required("mode"), settlementCycle = required("settlementCycle"),
+                    nettingMode = required("nettingMode"),
+                    ledgerPostingMode = required("ledgerPostingMode"),
+                    selectionSource = required("selectionSource"))
+            }
+            "OPENING" -> ReferenceOpening(controlSequence = 0, controlId = controlId,
+                account = account(), amount = required("amount").toBigDecimalOrNull()
+                    ?: throw IllegalArgumentException("amount must be a decimal"))
+            "FUNDING" -> {
+                val retries = json.objectDocuments("retryTrades").map { it.string("tradeId") }
+                require(retries.all(String::isNotBlank) && retries.distinct() == retries) {
+                    "retryTrades must contain distinct tradeId values"
+                }
+                ReferenceFunding(controlSequence = 0, controlId = controlId,
+                    account = account(), amount = required("amount").toBigDecimalOrNull()
+                        ?: throw IllegalArgumentException("amount must be a decimal"),
+                    retryTradeIds = retries)
+            }
+            else -> throw IllegalArgumentException("unknown settlement control kind")
+        }
+    }
+
     fun appendSettlementFactsResponse(body: String): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
         return try {
             val facts = parseSettlementFactBundle(json)
+            check(settlementControlAcceptance == null || facts.resourcePositions.isEmpty()) {
+                "resource positions require ordered settlement control acceptance"
+            }
             store.appendFacts(facts)
             PlatformHotPathResponse(
                 200,
@@ -114,6 +194,8 @@ internal class SettlementAdminGateway(
         defaultAssetId: (SettlementObligationCreatedFact) -> String,
         defaultQuantity: (SettlementObligationCreatedFact) -> String
     ): PlatformHotPathResponse {
+        if (settlementControlAcceptance != null) return PlatformHotPathResponse(409,
+            JsonCodec.writeObject("error" to "repair requires ordered settlement control acceptance"))
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
         val json = parseGatewayJson(body) ?: return invalidJsonPayloadResponse()
@@ -194,6 +276,8 @@ internal class SettlementAdminGateway(
     }
 
     fun forceSettleResponse(body: String): PlatformHotPathResponse {
+        if (settlementControlAcceptance != null) return PlatformHotPathResponse(409,
+            JsonCodec.writeObject("error" to "force settle requires ordered settlement control acceptance"))
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
         val materializer = settlementObligationMaterializer

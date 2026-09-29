@@ -5,11 +5,79 @@ import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.application.settlementjournal.ReferenceFunding
+import com.reef.platform.application.settlementjournal.ReferenceOpening
+import com.reef.platform.application.settlementjournal.ReferencePolicyActivation
+import com.reef.platform.infrastructure.persistence.AcceptedSettlementControl
+import com.reef.platform.infrastructure.persistence.SettlementControlAcceptance
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class SettlementAdminGatewayParsingTest {
+    @Test
+    fun explicitControlEndpointPassesTypedFutureFactsToAuthority() {
+        val accepted = mutableListOf<com.reef.platform.application.settlementjournal.ReferenceControl>()
+        val intake = SettlementControlAcceptance { control ->
+            accepted += control
+            AcceptedSettlementControl(control, false)
+        }
+        val gateway = SettlementAdminGateway(
+            settlementFactStore = CapturingSettlementFactStore(),
+            settlementObligationMaterializer = null,
+            postTradeProfileResolver = PostTradeProfileResolver(),
+            scenarioRunPostTradeProfileLookup = { null },
+            venueSessionPostTradeProfileLookup = { null },
+            adminSessionAuth = testSettlementAdminSessionAuth(),
+            settlementControlAcceptance = intake
+        )
+
+        val policy = gateway.acceptSettlementControlResponse("""{
+            "kind":"POLICY","controlId":"policy-1","runId":"run-1",
+            "venueSessionId":"session-1","profileId":"instant-post-trade-v1",
+            "policyVersion":1,"mode":"instant-post-trade","settlementCycle":"T+0",
+            "nettingMode":"gross","ledgerPostingMode":"gross-dvp","selectionSource":"fixture",
+            "sourceFrontiers":[{"eventStream":"events","sourceGeneration":"fresh",
+              "partitionId":0,"sequence":0}]
+        }""")
+        val opening = gateway.acceptSettlementControlResponse("""{
+            "kind":"OPENING","controlId":"opening-1","runId":"run-1",
+            "participantId":"participant-1","accountId":"account-1","assetType":"CASH",
+            "assetId":"USD","amount":"100.00"
+        }""")
+        val funding = gateway.acceptSettlementControlResponse("""{
+            "kind":"FUNDING","controlId":"funding-1","runId":"run-1",
+            "participantId":"participant-1","accountId":"account-1","assetType":"CASH",
+            "assetId":"USD","amount":"25.00","retryTrades":[{"tradeId":"trade-1"}]
+        }""")
+
+        assertEquals(listOf(200, 200, 200), listOf(policy, opening, funding).map { it.status })
+        assertEquals(0L, (accepted[0] as ReferencePolicyActivation).controlSequence)
+        assertEquals("100.00", (accepted[1] as ReferenceOpening).amount.toPlainString())
+        assertEquals(listOf("trade-1"), (accepted[2] as ReferenceFunding).retryTradeIds)
+        val legacyResource = gateway.appendSettlementFactsResponse(allSettlementFactTypesBody())
+        assertEquals(409, legacyResource.status)
+        assertContains(legacyResource.body, "resource positions require ordered settlement control")
+        assertEquals(409, gateway.postCashSettlementRepairResponse("{}").status)
+    }
+
+    @Test
+    fun controlEndpointIsDefaultOff() {
+        val gateway = SettlementAdminGateway(
+            settlementFactStore = CapturingSettlementFactStore(),
+            settlementObligationMaterializer = null,
+            postTradeProfileResolver = PostTradeProfileResolver(),
+            scenarioRunPostTradeProfileLookup = { null },
+            venueSessionPostTradeProfileLookup = { null },
+            adminSessionAuth = testSettlementAdminSessionAuth()
+        )
+
+        val response = gateway.acceptSettlementControlResponse(
+            """{"kind":"OPENING","controlId":"opening-1"}""")
+        assertEquals(503, response.status)
+        assertContains(response.body, "settlement control acceptance disabled")
+    }
+
     @Test
     fun parsesAndReturnsEverySettlementFactTypeWithCanonicalDefaults() {
         val store = CapturingSettlementFactStore()
