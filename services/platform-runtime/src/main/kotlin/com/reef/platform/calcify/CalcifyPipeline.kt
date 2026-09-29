@@ -47,7 +47,7 @@ object CalcifyPipeline {
         val config = Config(stage)
         val input = config.input
         if (stage == "extractor") verifyGeneration(config)
-        config.output?.let { ensureOutput(config.bootstrap, input, it) }
+        ensureTopics(config)
         consumer(config).use { consumer ->
             val blocked = mutableSetOf<TopicPartition>()
             consumer.subscribe(listOf(input), object : ConsumerRebalanceListener {
@@ -127,6 +127,7 @@ object CalcifyPipeline {
         val topicId = AdminClient.create(Properties().apply {
             put("bootstrap.servers", config.bootstrap)
         }).use { admin ->
+            require(config.source in admin.listTopics().names().get()) { "Calcify source topic is absent" }
             admin.describeTopics(listOf(config.source)).allTopicNames().get()
                 .getValue(config.source).topicId().toString()
         }
@@ -173,16 +174,20 @@ object CalcifyPipeline {
     private fun connection(config: Config) =
         DriverManager.getConnection(config.jdbc, config.dbUser, config.dbPassword)
 
-    private fun ensureOutput(bootstrap: String, input: String, output: String) {
-        AdminClient.create(Properties().apply { put("bootstrap.servers", bootstrap) }).use { admin ->
-            val count = admin.describeTopics(listOf(input)).allTopicNames().get().getValue(input).partitions().size
-            try {
-                admin.createTopics(listOf(NewTopic(output, count, 1.toShort()))).all().get()
-            } catch (ex: ExecutionException) {
-                if (ex.cause !is TopicExistsException) throw ex
-            }
-            require(admin.describeTopics(listOf(output)).allTopicNames().get().getValue(output).partitions().size == count) {
-                "Calcify topic partition count mismatch"
+    private fun ensureTopics(config: Config) {
+        AdminClient.create(Properties().apply { put("bootstrap.servers", config.bootstrap) }).use { admin ->
+            require(config.source in admin.listTopics().names().get()) { "Calcify source topic is absent" }
+            val count = admin.describeTopics(listOf(config.source)).allTopicNames().get()
+                .getValue(config.source).partitions().size
+            for (topic in listOf(config.commitments, config.verified)) {
+                try {
+                    admin.createTopics(listOf(NewTopic(topic, count, 1.toShort()))).all().get()
+                } catch (ex: ExecutionException) {
+                    if (ex.cause !is TopicExistsException) throw ex
+                }
+                require(admin.describeTopics(listOf(topic)).allTopicNames().get().getValue(topic).partitions().size == count) {
+                    "Calcify topic partition count mismatch: " + topic
+                }
             }
         }
     }

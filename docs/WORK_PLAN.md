@@ -23,11 +23,15 @@ audited checkout; missing local reports do not prove a run never happened.
 `codex/calcify-phase1` adds opt-in matching commitment extraction, stub
 verification, and PostgreSQL processing receipts without switching legacy
 post-matching. Local fixtures, partition-poison isolation, and receipt restart
-passed on two-partition Redpanda; this is diagnostic implementation evidence,
-not hosted capacity or settlement qualification. Exact wire contract and limits:
+passed on two-partition Redpanda. A later four-partition local smoke passed
+PostgreSQL-backed HTTP intake through Go matching to an exact Calcify receipt;
+this is functional evidence, not hosted capacity or settlement qualification.
+Exact wire contract, corrections, and limits:
 [Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link
-reconciliation remain follow-ups before non-diagnostic use.
+reconciliation remain follow-ups before non-diagnostic use. Repeat
+`make dev-smoke-calcify-full-path` as each post-match slice expands, adding
+assertions for that slice's source identity, durable effect, and replay behavior.
 
 ## Source Of Truth
 

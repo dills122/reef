@@ -36,6 +36,38 @@ Full-suite correction: first 654-test run failed two pre-existing helper tests b
 
 `rpk group describe` log-end lag includes transaction control records; report relies on source checkpoints and exact receipt identities, not lag field as per-trade latency measure. Fixtures and command output lived under `/private/tmp/calcify-stage/`; retained evidence is this aggregate and committed fixture builders. No sustained capacity, payload-retention, source-to-link independent reconciliation, or source-restore proof was run.
 
+## Full ingress and matching smoke, CAL-P1-E2E
+
+A later local functional run joined the existing HTTP ingress and Go matching
+path to Phase 1. `make dev-smoke-calcify-full-path` now creates fresh four-partition
+Redpanda command, venue-event, commitment, and verified topics. It uses
+PostgreSQL-backed intake and idempotency, direct matching consumption, and the
+three Calcify sidecars. It sends a resting buy and a crossing sell in one venue
+session, checks two PostgreSQL intake rows, reads committed matching batches,
+then checks exactly one receipt for the real trade's broker partition and offset.
+The resting batch must produce zero receipts. This is a small functional check;
+no rate, latency, retention, or settlement claim follows from it.
+
+Corrections are retained in run order:
+
+| Attempt | Observation | Correction |
+| --- | --- | --- |
+| Initial manual full path, generation 2, `REEF_CALCIFY_E2E_EVENTS_0929` | Broker stored resting batch on partition 2 while batch declared command lane 1. Extractor stopped partition 2; no full-path receipt. | Sarama producer had default key-hash partitioner despite setting `ProducerMessage.Partition`. Configure manual partitioner; regression test first reproduced partition 2 and then passed with declared partition 1. |
+| Manual retry, generation 3, `REEF_CALCIFY_E2E_EVENTS_0929_B` | Broker and batch both used partition 2; resting batch offset 1 had zero trades, crossing sell batch offset 4 had one trade, and extractor produced one link. Verifier failed because receipt consumer had auto-created verified topic with one partition before verifier's four-partition output setup. | Every Calcify stage now provisions and validates both link topics from source partition count before subscribing. Missing source topic fails startup. |
+| First reusable smoke, generation 4 | Real trade reached matching and one receipt existed; harness compared `psql` tab-separated row with pipe-separated expected text and failed its own assertion. | Corrected expected delimiter; reran on fresh topics. |
+| Reusable direct no-DB smoke, generation 5, `calcify-1790709807245` | Resting batch partition 3 offset 1, zero trades; crossing batch partition 3 offset 4, one trade; receipt `(5,3,4,0,1)` present exactly once. | Pass. This profile used in-memory intake metadata; it did not cover PostgreSQL ingress. |
+| PostgreSQL-backed smoke, generation 6, `calcify-1790710028844` | Two command rows in `boundary.stream_command_intake`; resting batch partition 3 offset 1, zero trades; crossing batch partition 3 offset 4, one trade; receipt `(6,3,4,0,1)` present exactly once. | Pass. `make dev-smoke-calcify-full-path` now selects this profile. |
+| Final Make entry point, generation 7, `calcify-1790710280736` | `make dev-smoke-calcify-full-path` passed: two PostgreSQL intake rows, resting batch partition 2 offset 1 with zero trades, crossing batch partition 2 offset 4 with one trade, exactly one receipt `(7,2,4,0,1)`. | Pass with final harness including boundary intake assertion. |
+
+Environment: same local macOS Docker 29.7.2, Redpanda v26.2.3, and
+PostgreSQL 16 as CAL-P1-L1. Corrected matching and runtime images were built
+locally from branch worktree; no hosted or sustained load run. Workload: two
+HTTP order submissions, one instrument and venue session, two participants,
+one zero-trade batch, one one-trade batch. Observation: committed Redpanda
+venue-event metadata and nested trades, PostgreSQL boundary intake rows and
+Calcify receipt primary key. The smoke does not start the legacy materializer
+or read projections; those remain covered by their separate path tests.
+
 ## Run and limits
 
 Start with `compose.base.yml`, `compose.local.yml`, and `compose.calcify.yml`, profiles `redpanda,calcify-phase1`; apply migrations before enabling sidecars. Stage environment has source and output topic names, source generation, and `CALCIFY_AUTO_OFFSET_RESET` (default `earliest`). Output topics are created with source partition count and one replica in this local Phase 1 path; deployment topology and retention need separate review. Source batches lacking `sha256-reef-canonical-v1` stop their partition rather than silently pass.

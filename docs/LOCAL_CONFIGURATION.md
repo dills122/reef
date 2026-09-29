@@ -57,6 +57,14 @@ does not change. [Contract](../contracts/calcify/README.md) and
 [local diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
 link semantics, tests, and replay-retention limits.
 
+Run `make dev-smoke-calcify-full-path` for a local functional check through
+PostgreSQL-backed HTTP intake, Redpanda command log, Go matching, and all three
+Calcify stages. It creates isolated topics and registers a local source
+generation, then checks a zero-trade resting batch and one crossing trade against
+its exact receipt. It leaves stack running; use matching `REEF_COMPOSE_FILES` and
+`DEV_COMPOSE_PROFILES` on `make dev-down` when finished. This smoke does not
+measure capacity or exercise financial settlement.
+
 ## Change configuration
 
 Copy `.env.example` to ignored `.env`; use named host-port overrides there or

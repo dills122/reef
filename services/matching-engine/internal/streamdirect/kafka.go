@@ -678,6 +678,8 @@ func newKafkaClientConfig(clientID string) *sarama.Config {
 	config.Net.MaxOpenRequests = 1
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Idempotent = true
+	// Venue event batches must use the command lane partition, not the batch ID hash.
+	config.Producer.Partitioner = sarama.NewManualPartitioner
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	config.Producer.Retry.Max = envInt("STREAM_ACK_KAFKA_RETRIES", 10)

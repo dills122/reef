@@ -1,6 +1,6 @@
 # Calcify Phase 1 link contract
 
-Version 1 uses fixed-size, big-endian binary records. Kafka keys are null. Each output record uses same numeric partition as input. No trade economics, trade ID, batch ID, checksum, or duplicate ID field is stored in link.
+Version 1 uses fixed-size, big-endian binary records. Kafka keys are null. Each output record uses same numeric partition as input. Matching publisher also places each source batch on its declared command-lane partition; extractor rejects a mismatch between batch metadata and Kafka partition. No trade economics, trade ID, batch ID, checksum, or duplicate ID field is stored in link.
 
 | Record | Bytes | Layout |
 | --- | ---: | --- |
