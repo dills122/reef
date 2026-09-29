@@ -1245,6 +1245,54 @@ capacity remain unqualified; see the
 Research and contract: [`docs/research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md`](./research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md),
 [`docs/work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md`](./work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md).
 
+### D-060: Independent trade and settlement finality in post-match
+
+Status: accepted pre-release architecture direction on 2026-09-28; the
+PostgreSQL journal is a default-off candidate, not a live cutover or qualified
+capacity result.
+
+- The existing committed D-058 matching outcome is authority for execution
+  and trade terms. A durable `202 Accepted` is only ingress acceptance.
+  Settlement neither determines whether the match happened nor delays the
+  existence or reporting of an executed trade. Go matching, ingress, pre-trade
+  and the outcome format are outside this redesign.
+- An ordered append-only settlement journal is the proposed authority for
+  gross-DvP transfers and typed failed attempts. The durable fenced append is
+  settlement finality. A failed attempt moves no assets and leaves the trade
+  executed with an outstanding obligation; explicit later funding/repair may
+  produce a new ordered attempt, never reinterpret the original match.
+- The first candidate uses one ordered in-memory evaluator and one atomic
+  PostgreSQL batch/header/result/head commit. Exact source identity, immutable
+  policy/opening/funding inputs, scarce-account order, four-leg conservation,
+  replay, fencing and independent restore must be proved. Logical attempts,
+  intermediate balances and audit history remain reconstructable; separate
+  synchronous intake, admission, leg, checkpoint and read-model writes are
+  not required as additional authorities in the replacement.
+- Source identity for settlement replay binds canonical source fields and the
+  exact UTF-8 bytes of retained PostgreSQL `result_payload::text`. Original
+  matching transport bytes are not part of this post-match replay contract;
+  changed retained text or missing source members fail closed.
+- Matching outcomes feed two independent sibling paths: market-data
+  projection for book/depth/trade tape, and settlement journal for balances
+  and settlement status. Neither waits for the other. Trade tape keeps an
+  executed trade when settlement is pending or fails. Private account reads
+  expose their journal as-of frontier; market reads expose source freshness.
+- Cutover requires one integrated sustained proof of exact closed cohorts,
+  non-growing settlement backlog, recovery, market-data API p95/p99 response
+  and matching-outcome-to-visible age under the same load. Freeze numeric
+  market freshness/latency limits before qualification. A quick journal append
+  or API response alone is not a pass. Stop the candidate on a material full-
+  path miss rather than resume small-percentage tuning.
+- D-050's same-tick happy-path settlement remains a target, not a precondition
+  for trade execution. This direction replaces D-059's separate admission
+  transaction and canonical per-window checkpoint rows only after the journal
+  path passes correctness and capacity gates; current D-059 behavior remains
+  the implementation until an explicit reviewed cutover. Document pre-release
+  breaking contracts instead of adding compatibility dual-write.
+
+Detailed contract and evidence: [`docs/work/SETTLEMENT_LEDGER_JOURNAL_CONTRACT_2026-09-28.md`](./work/SETTLEMENT_LEDGER_JOURNAL_CONTRACT_2026-09-28.md),
+[`docs/research/evidence/settlement-journal-write-shape-2026-09-28.md`](./research/evidence/settlement-journal-write-shape-2026-09-28.md).
+
 ## 2026-09-24 — Serialize projection invalidations before claiming freshness
 
 Online synthetic C3 validation found382stale lifecycle rows and39market snapshots
