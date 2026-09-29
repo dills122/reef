@@ -268,7 +268,9 @@ cmd_run() {
   fetch_artifacts || status=$?
   local profile
   profile="$(benchmark_profile)"
-  REEF_DO_REPORT_PROFILE="$profile" \
+  local report_profile="$profile"
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then report_profile=materializer; fi
+  REEF_DO_REPORT_PROFILE="$report_profile" \
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
   REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
@@ -296,7 +298,9 @@ cmd_check() {
   profile="$(benchmark_profile)"
   report_dir="$(benchmark_report_dir)"
   local status=0
-  REEF_DO_REPORT_PROFILE="$profile" \
+  local report_profile="$profile"
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then report_profile=materializer; fi
+  REEF_DO_REPORT_PROFILE="$report_profile" \
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
   REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
@@ -695,6 +699,14 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS:-60000}"
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS:-1000}"
     if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+      export STREAM_ACK_PROJECTOR_ENABLED=false
+      export ORDER_LIFECYCLE_PROJECTOR_ENABLED=false
+      export MARKET_DATA_PROJECTOR_ENABLED=false
+      export ORDER_LIFECYCLE_PROJECTOR_0_ENABLED=false
+      export MARKET_DATA_PROJECTOR_0_ENABLED=false
+      export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=0
+      export DEV_STRESS_FAIL_ON_STREAM_ACK_PROJECTOR_FAILURES=0
+      export REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS=0
       export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}postmatch-workers"
       export POSTMATCH_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
       export POSTMATCH_SHADOW_WORKERS_ENABLED=false
