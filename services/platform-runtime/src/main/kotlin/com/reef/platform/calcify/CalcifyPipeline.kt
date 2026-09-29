@@ -17,6 +17,12 @@ import java.util.concurrent.ExecutionException
 
 /** Independent opt-in pipeline. No legacy settlement or balance writes. */
 object CalcifyPipeline {
+    internal data class VerifierPollPlan(
+        val outputs: List<ProducerRecord<ByteArray, ByteArray>>,
+        val offsets: Map<TopicPartition, OffsetAndMetadata>,
+        val poisoned: List<Triple<TopicPartition, Long, String?>>,
+    )
+
     private data class Config(val stage: String) {
         val bootstrap = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         val source = RuntimeEnv.string("CALCIFY_SOURCE_TOPIC", "REEF_VENUE_EVENTS")
@@ -63,7 +69,21 @@ object CalcifyPipeline {
             val receiptConnection = if (stage == "receipt") connection(config) else null
             try {
                 while (!Thread.currentThread().isInterrupted) {
-                    for (record in consumer.poll(Duration.ofMillis(200))) {
+                    val polled = consumer.poll(Duration.ofMillis(200))
+                    if (stage == "verifier") {
+                        val plan = planVerifierPoll(polled, config.output!!, blocked)
+                        if (plan.poisoned.isNotEmpty()) {
+                            consumer.pause(plan.poisoned.map { it.first })
+                            plan.poisoned.forEach { (partition, offset, message) ->
+                                System.err.println("Calcify stopped $partition at $offset: $message")
+                            }
+                        }
+                        if (plan.offsets.isNotEmpty()) {
+                            publishAndCheckpoint(requireNotNull(producer), consumer, plan.outputs, plan.offsets)
+                        }
+                        continue
+                    }
+                    for (record in polled) {
                         val partition = TopicPartition(record.topic(), record.partition())
                         if (partition in blocked) continue
                         val links = try {
@@ -72,11 +92,6 @@ object CalcifyPipeline {
                                     requireNotNull(record.value()).toString(Charsets.UTF_8),
                                     config.source, config.generation, record.partition(), record.offset()
                                 ).map(CalcifyWire::commitment)
-                                "verifier" -> {
-                                    val passed = CalcifyWire.stubVerify(requireNotNull(record.value()))
-                                    require(passed.commitmentId.sourcePartition == record.partition())
-                                    listOf(CalcifyWire.passed(passed))
-                                }
                                 else -> {
                                     val passed = CalcifyWire.readPassed(requireNotNull(record.value()))
                                     require(passed.commitmentId.sourcePartition == record.partition())
@@ -91,7 +106,11 @@ object CalcifyPipeline {
                             System.err.println("Calcify stopped " + partition + " at " + record.offset() + ": " + ex.message)
                             continue
                         }
-                        if (producer != null) publishAndCheckpoint(producer, consumer, record, config.output!!, links)
+                        if (producer != null) publishAndCheckpoint(
+                            producer, consumer,
+                            links.map { ProducerRecord(config.output!!, record.partition(), null, it) },
+                            mapOf(partition to OffsetAndMetadata(record.offset() + 1))
+                        )
                     }
                 }
             } finally {
@@ -101,21 +120,41 @@ object CalcifyPipeline {
         }
     }
 
+    internal fun planVerifierPoll(
+        records: Iterable<ConsumerRecord<ByteArray, ByteArray>>,
+        output: String,
+        blocked: MutableSet<TopicPartition>,
+    ): VerifierPollPlan {
+        val outputs = ArrayList<ProducerRecord<ByteArray, ByteArray>>()
+        val offsets = linkedMapOf<TopicPartition, OffsetAndMetadata>()
+        val poisoned = ArrayList<Triple<TopicPartition, Long, String?>>()
+        for (record in records) {
+            val partition = TopicPartition(record.topic(), record.partition())
+            if (partition in blocked) continue
+            try {
+                val passed = CalcifyWire.stubVerify(requireNotNull(record.value()))
+                require(passed.commitmentId.sourcePartition == record.partition())
+                outputs.add(ProducerRecord(output, record.partition(), null, CalcifyWire.passed(passed)))
+                offsets[partition] = OffsetAndMetadata(record.offset() + 1)
+            } catch (ex: IllegalArgumentException) {
+                blocked.add(partition)
+                poisoned.add(Triple(partition, record.offset(), ex.message))
+            }
+        }
+        return VerifierPollPlan(outputs, offsets, poisoned)
+    }
+
     private fun publishAndCheckpoint(
         producer: KafkaProducer<ByteArray, ByteArray>,
         consumer: KafkaConsumer<ByteArray, ByteArray>,
-        record: ConsumerRecord<ByteArray, ByteArray>,
-        output: String,
-        links: List<ByteArray>
+        outputs: List<ProducerRecord<ByteArray, ByteArray>>,
+        offsets: Map<TopicPartition, OffsetAndMetadata>,
     ) {
         producer.beginTransaction()
         try {
-            val sends = links.map { producer.send(ProducerRecord(output, record.partition(), null, it)) }
+            val sends = outputs.map { producer.send(it) }
             sends.forEach { it.get() }
-            producer.sendOffsetsToTransaction(
-                mapOf(TopicPartition(record.topic(), record.partition()) to OffsetAndMetadata(record.offset() + 1)),
-                consumer.groupMetadata()
-            )
+            producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata())
             producer.commitTransaction()
         } catch (ex: Exception) {
             producer.abortTransaction()

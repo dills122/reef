@@ -126,16 +126,27 @@ async function runBasicLoad(generation, partition) {
   const sourceCommands = batches.reduce((sum, record) => sum + record.batch.commandCount, 0);
   const tradeCount = batches.reduce((sum, record) => sum + record.batch.outcomes.reduce(
     (outcomeSum, outcome) => outcomeSum + (outcome.result.trades?.length ?? 0), 0), 0);
+  const commitmentMeta = await readTopicMeta(commitmentTopic, partition);
+  const verifiedMeta = await readTopicMeta(verifiedTopic, partition);
+  const sourceLastMs = batches.reduce((latest, record) => Math.max(latest, record.timestamp), 0);
+  const receiptLastMs = Number((await psql(`SELECT FLOOR(EXTRACT(EPOCH FROM MAX(recorded_at)) * 1000)::bigint FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
   const intakeRows = Number((await psql(`SELECT COUNT(*) FROM boundary.stream_command_intake WHERE stream_name = '${commandTopic}'`, "boundary-postgres")).trim());
   const result = { smokeId, generation, loadPairs, loadBatchSize, acceptedOrders: acceptedPairs * 2,
     acceptedMs: acceptedAt - started, acceptedOrdersPerSecond: Number((acceptedPairs * 2000 / (acceptedAt - started)).toFixed(2)),
     halfwayReceipts, sourceBatches: batches.length, sourceCommands, sourceTrades: tradeCount,
+    commitmentLinks: commitmentMeta.count, verifiedLinks: verifiedMeta.count,
+    sourceLastMs, commitmentLastMs: commitmentMeta.lastTimestampMs,
+    verifiedLastMs: verifiedMeta.lastTimestampMs, receiptLastMs,
+    sourceToCommitmentLastMs: commitmentMeta.lastTimestampMs - sourceLastMs,
+    commitmentToVerifiedLastMs: verifiedMeta.lastTimestampMs - commitmentMeta.lastTimestampMs,
+    verifiedToReceiptLastMs: receiptLastMs - verifiedMeta.lastTimestampMs,
     finalReceipts, drainMs: drainedAt - acceptedAt, totalMs: drainedAt - started,
     intakeRows, profile: "PostgreSQL-backed HTTP intake + Redpanda + Go matching + Calcify Phase 1",
     capacityClaim: false };
   console.log(JSON.stringify(result, null, 2));
   if (intakeRows !== loadPairs * 2 + 2 || sourceCommands !== loadPairs * 2 + 2 ||
-      tradeCount !== expectedReceipts || finalReceipts !== expectedReceipts) {
+      tradeCount !== expectedReceipts || commitmentMeta.count !== expectedReceipts ||
+      verifiedMeta.count !== expectedReceipts || finalReceipts !== expectedReceipts) {
     throw new Error(`Calcify basic load accounting failed: ${JSON.stringify(result)}`);
   }
   console.log("Calcify basic load passed");
@@ -202,8 +213,18 @@ async function readAllBatches(partition) {
   ]), timeoutMs)).output;
   return output.trim().split(/\r?\n/).filter(Boolean).map((line) => {
     const record = JSON.parse(line);
-    return { partition: Number(record.partition), offset: Number(record.offset), batch: JSON.parse(record.value) };
+    return { partition: Number(record.partition), offset: Number(record.offset), timestamp: Number(record.timestamp), batch: JSON.parse(record.value) };
   });
+}
+
+async function readTopicMeta(topic, partition) {
+  const output = (await capture("docker", composeArgs([
+    "exec", "-T", "redpanda", "rpk", "topic", "consume", topic,
+    "--read-committed", "-p", String(partition), "-o", ":end", "--meta-only",
+    "--format", "json", "--pretty-print=false",
+  ]), timeoutMs)).output;
+  const records = output.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  return { count: records.length, lastTimestampMs: records.reduce((latest, record) => Math.max(latest, Number(record.timestamp)), 0) };
 }
 
 function assertBatch(record, party, tradeCount) {
