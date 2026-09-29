@@ -254,7 +254,7 @@ function configureCandidateReadProbe() {
     "--url", `balance=${base}/api/v1/postmatch-candidate/balance?${account}`,
     "--url", `status=${base}/api/v1/postmatch-candidate/status?${status}`,
     "--participant-id", "materializer-mm-01-participant",
-    "--duration-seconds", "300", "--interval-ms", "1000",
+    "--duration-seconds", env("DEV_STRESS_CANDIDATE_READ_DURATION_SECONDS", "300"), "--interval-ms", "1000",
     "--output", join(env("DEV_STRESS_ARTIFACT_DIR"), "postmatch-candidate-read-probe.json")];
   const p95 = env("POSTMATCH_CANDIDATE_READ_P95_MS");
   const p99 = env("POSTMATCH_CANDIDATE_READ_P99_MS");
@@ -375,7 +375,7 @@ function materializerSpreadSessionConfig() {
 
   return `session:
   name: ${MATERIALIZER_STRESS_SESSION_ID}
-  scenarioRunId: ${MATERIALIZER_STRESS_RUN_ID}
+  scenarioRunId: ${env("DEV_STRESS_RUN_ID", MATERIALIZER_STRESS_RUN_ID)}
   seed: 727272
   mode: strict-lifecycle
 

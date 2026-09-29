@@ -150,10 +150,16 @@ async function main() {
         const sourceFrontier = query("postgres", sourceFrontierSql(partitionCount));
         const journal = query("settlement-postgres", journalStageSql(stream, partitionCount));
         const market = query("postmatch-postgres", marketCandidateStageSql(stream));
+        const sourceFrontierAfterCandidate = query("postgres", sourceFrontierSql(partitionCount));
         if (sourceFrontier.rows.length !== 1 || sourceFrontier.rows[0].length !== 1 ||
+            sourceFrontierAfterCandidate.rows.length !== 1 ||
+            sourceFrontierAfterCandidate.rows[0].length !== 1 ||
             journal.rows.length !== 1 || journal.rows[0].length !== 5 ||
             market.rows.length !== 1 || market.rows[0].length !== 4) {
           throw new Error("journal candidate stage sampler schema is incomplete");
+        }
+        if (BigInt(sourceFrontierAfterCandidate.rows[0][0]) < BigInt(sourceFrontier.rows[0][0])) {
+          throw new Error("canonical source frontier regressed within candidate stage sample");
         }
         sample.journal = Object.fromEntries(["batchesInserted", "resultsInserted",
           "headSequence", "financialProjectionSequence", "sourceFrontierOffsetsTotal"].map((key, index) =>
@@ -163,8 +169,9 @@ async function main() {
           [key, market.rows[0][index]]));
         sample.journalQueryMs = journal.durationMs;
         sample.marketQueryMs = market.durationMs;
-        sample.sourceFrontierOffsetsTotal = sourceFrontier.rows[0][0];
-        sample.sourceFrontierQueryMs = sourceFrontier.durationMs;
+        sample.sourceFrontierBeforeCandidate = sourceFrontier.rows[0][0];
+        sample.sourceFrontierOffsetsTotal = sourceFrontierAfterCandidate.rows[0][0];
+        sample.sourceFrontierQueryMs = sourceFrontier.durationMs + sourceFrontierAfterCandidate.durationMs;
         sample.candidateMeasuredAt = new Date().toISOString();
       }
       appendFileSync(output, `${JSON.stringify(sample)}\n`);

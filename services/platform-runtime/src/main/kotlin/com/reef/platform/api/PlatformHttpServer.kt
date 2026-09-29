@@ -1734,6 +1734,10 @@ class PlatformHttpServer(
             adminDataRoutes.handle(request.method, request.path, request.query, request.body)
         }
         return diagnosticResponse ?: when {
+            request.path == "/internal/admin/settlement/controls" ->
+                withAdminRequestPrincipal(adminPrincipal(request.headers)) {
+                    settlementAdminGatewayResponse(request.method, request.path, request.body)
+                }
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
             request.path == "/api/v1/orders/submit" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }

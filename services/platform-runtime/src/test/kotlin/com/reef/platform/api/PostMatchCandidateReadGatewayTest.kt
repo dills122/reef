@@ -33,6 +33,7 @@ class PostMatchCandidateReadGatewayTest {
     private val market = FakeMarket()
     private val settlement = FakeSettlement()
     private val finality = FakeFinality()
+    private val execution = FakeExecution()
 
     @Test
     fun executedTapeSurvivesSettlementBreakAndKeepsIndependentFrontiers() {
@@ -47,6 +48,9 @@ class PostMatchCandidateReadGatewayTest {
         })
         assertEquals("BREAK", (status["settlement"] as Map<*, *>)["outcome"])
         assertEquals("SECURITY_LEG_FAILED", (status["settlement"] as Map<*, *>)["breakReason"])
+        assertEquals("EXECUTED", (status["execution"] as Map<*, *>)["status"])
+        assertEquals("MATCHING_OUTCOME", (status["execution"] as Map<*, *>)["authority"])
+        assertEquals(3L, (status["executionAsOf"] as Map<*, *>)["sourceSequence"])
         assertEquals(3L, (tape["asOf"] as Map<*, *>)["projectedSourceSequence"])
         assertEquals(4L, (status["asOf"] as Map<*, *>)["batchSequence"])
         assertEquals(1, market.tapeCalls)
@@ -93,10 +97,59 @@ class PostMatchCandidateReadGatewayTest {
     }
 
     @Test
-    fun anchorChangeDuringReadFailsClosed() {
+    fun advancingAnchorDuringBalanceReadRetriesWholeRead() {
+        settlement.afterRead = {
+            finality.anchor = finality.default.copy(
+                acknowledgedBatchSequence = 5, acknowledgedBatchDigest = "new-digest")
+            settlement.frontier = settlement.frontier.copy(batchSequence = 5,
+                batchDigest = "new-digest", observedJournalSequence = 5,
+                observedJournalDigest = "new-digest")
+        }
+        val current = gateway().balance(account)
+        assertEquals(5L, (current["asOf"] as Map<*, *>)["acknowledgedBatchSequence"])
+        assertTrue((current["asOf"] as Map<*, *>)["currentAtObservation"] as Boolean)
+        assertEquals(2, settlement.accountCalls)
+    }
+
+    @Test
+    fun sameSequenceFinalityMutationFailsClosedWithoutRetry() {
         settlement.afterRead = { finality.anchor = finality.default.copy(
-            acknowledgedBatchSequence = 5, acknowledgedBatchDigest = "new-digest") }
+            acknowledgedBatchDigest = "wrong-digest") }
         assertFailsWith<IllegalStateException> { gateway().balance(account, false) }
+        assertEquals(1, settlement.accountCalls)
+    }
+
+    @Test
+    fun tradeStatusRetriesAdvancingAnchorAndKeepsExecutionFact() {
+        settlement.trade = SettlementProjectionTrade("run", "trade-1", 1,
+            "BREAK", "CASH_LEG_FAILED", 4, 0)
+        settlement.afterRead = {
+            finality.anchor = finality.default.copy(
+                acknowledgedBatchSequence = 5, acknowledgedBatchDigest = "new-digest")
+            settlement.frontier = settlement.frontier.copy(batchSequence = 5,
+                batchDigest = "new-digest", observedJournalSequence = 5,
+                observedJournalDigest = "new-digest")
+        }
+        val status = gateway().tradeStatus("run", "trade-1", false)
+        assertEquals("EXECUTED", (status["execution"] as Map<*, *>)["status"])
+        assertEquals("BREAK", (status["settlement"] as Map<*, *>)["outcome"])
+        assertEquals(5L, (status["asOf"] as Map<*, *>)["batchSequence"])
+        assertEquals(2, settlement.tradeCalls)
+    }
+
+    @Test
+    fun matchedTradeWithNoSettlementFactStillReportsExecuted() {
+        val status = gateway().tradeStatus("run", "trade-1", false)
+        assertEquals("EXECUTED", (status["execution"] as Map<*, *>)["status"])
+        assertNull(status["settlement"])
+    }
+
+    @Test
+    fun missingOrMismatchedExecutionFailsClosed() {
+        execution.fact = null
+        assertFailsWith<IllegalStateException> { gateway().tradeStatus("run", "trade-1", false) }
+        execution.fact = execution.default.copy(runId = "other-run")
+        assertFailsWith<IllegalStateException> { gateway().tradeStatus("run", "trade-1", false) }
     }
 
     @Test
@@ -135,7 +188,17 @@ class PostMatchCandidateReadGatewayTest {
         partitionCount: Int = 1) = PostMatchCandidateReadGateway(sourceCatalog, market,
         settlement, SettlementJournalFinalityAnchorReader(finality::read),
         "stream", "market-gen", "settlement-gen", partitionCount,
-        ageReader, Clock.fixed(Instant.parse("2026-09-28T00:00:02Z"), ZoneOffset.UTC))
+        ageReader, Clock.fixed(Instant.parse("2026-09-28T00:00:02Z"), ZoneOffset.UTC), execution)
+
+    private class FakeExecution : CandidateExecutionSourceReadPort {
+        val default = CandidateExecutedTrade("run", "trade-1", "event-1", "execution-1",
+            "source-gen", 0, 3, 0)
+        var fact: CandidateExecutedTrade? = default
+        override fun readExecution(eventStream: String, marketGeneration: String,
+            sourceGeneration: String, partitionCount: Int, runId: String,
+            tradeId: String): CandidateExecutedTrade = fact
+                ?: error("candidate execution position is not yet visible")
+    }
 
     private class FakeCatalog : PostMatchReadSourceCatalog {
         var value = "source-gen"
@@ -175,17 +238,21 @@ class PostMatchCandidateReadGatewayTest {
             4, "digest", 4, "digest", 0)
         var trade: SettlementProjectionTrade? = null
         var tradeCalls = 0
+        var accountCalls = 0
         var afterRead: () -> Unit = {}
         override fun readAccount(stream: String, generation: String, account: ReferenceAccountKey,
             requireCurrent: Boolean): SettlementProjectionAccountRead {
+            accountCalls++
+            val observed = frontier
             afterRead()
-            return SettlementProjectionAccountRead(account, BigDecimal("50.00"), frontier)
+            return SettlementProjectionAccountRead(account, BigDecimal("50.00"), observed)
         }
         override fun readTrade(stream: String, generation: String, runId: String, tradeId: String,
             requireCurrent: Boolean): SettlementProjectionTradeRead {
             tradeCalls++
+            val observed = frontier
             afterRead()
-            return SettlementProjectionTradeRead(runId, tradeId, trade, frontier)
+            return SettlementProjectionTradeRead(runId, tradeId, trade, observed)
         }
     }
 

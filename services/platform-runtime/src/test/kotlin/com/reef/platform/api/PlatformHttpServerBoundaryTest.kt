@@ -3299,6 +3299,41 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun hotPathSettlementControlsRouteReachesAcceptanceAndRespectsInternalExposure() {
+        val server = PlatformHttpServer(
+            port = 0,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            internalHttpExposureMode = InternalHttpExposureMode.LocalOnly
+        )
+        val local = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/internal/admin/settlement/controls",
+                query = null,
+                headers = Headers(),
+                remoteAddress = "127.0.0.1",
+                body = "{}"
+            )
+        )
+        val remote = server.handleHotPathRequest(
+            PlatformHotPathRequest(
+                method = "POST",
+                path = "/internal/admin/settlement/controls",
+                query = null,
+                headers = Headers(),
+                remoteAddress = "203.0.113.10",
+                body = "{}"
+            )
+        )
+
+        assertEquals(503, local?.status)
+        assertContains(local?.body.orEmpty(), "settlement control acceptance disabled")
+        assertEquals(403, remote?.status)
+    }
+
+    @Test
     fun adminGatewaySettlementFactsEndpointAppendsAndReadsP2FactsByScenarioRunId() {
         val auth = testAdminAuth()
         val serviceToken = auth.authService.issueServiceToken(

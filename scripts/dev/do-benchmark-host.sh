@@ -181,6 +181,7 @@ cmd_plan_goal() {
   printf '  postmatch_shadow_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}"
   printf '  postmatch_settlement_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}"
   printf '  postmatch_journal_diagnostic=%s\n' "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}"
+  printf '  container_memory_sampling=%s\n' "$([ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ] && echo '10s during stress stage' || echo 'off')"
   printf '  matched_topology=%s\n' "${REEF_DO_MATCHED_TOPOLOGY:-0}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
@@ -288,6 +289,8 @@ cmd_run() {
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
   if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
     node scripts/dev/postmatch-candidate-artifact-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
+    python3 scripts/dev/lib/do-benchmark-memory.py check \
+      "$LOCAL_REPORT_ROOT/$run_id/container-memory-summary.json" || status=$?
   fi
   return "$status"
 }
@@ -318,6 +321,8 @@ cmd_check() {
     node scripts/dev/do-benchmark-check.mjs "$report_dir" || status=$?
   if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
     node scripts/dev/postmatch-candidate-artifact-check.mjs "$report_dir" || status=$?
+    python3 scripts/dev/lib/do-benchmark-memory.py check \
+      "$report_dir/container-memory-summary.json" || status=$?
   fi
   return "$status"
 }
@@ -761,8 +766,30 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
       fi
     fi
   fi
+  memory_sampler_pid=""
+  stop_memory_sampler() {
+    if [ -n "$memory_sampler_pid" ]; then
+      kill -TERM "$memory_sampler_pid" 2>/dev/null || true
+      wait "$memory_sampler_pid" 2>/dev/null || true
+      memory_sampler_pid=""
+    fi
+  }
+  trap stop_memory_sampler EXIT
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    python3 scripts/dev/lib/do-benchmark-memory.py sample \
+      "$artifact_dir/container-memory-samples.jsonl" --interval-seconds 10 \
+      > "$log_dir/container-memory-observer.log" 2>&1 &
+    memory_sampler_pid=$!
+  fi
   stress_status=0
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer || stress_status=$?
+  stop_memory_sampler
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    memory_reports=("$artifact_dir"/venue-event-materializer-stress-rate-*.json)
+    python3 scripts/dev/lib/do-benchmark-memory.py summarize \
+      "$artifact_dir/container-memory-samples.jsonl" "${memory_reports[0]}" \
+      "$artifact_dir/container-memory-summary.json" --interval-seconds 10 || stress_status=$?
+  fi
   if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
     stage_kind=true
     if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then stage_kind=journal; fi

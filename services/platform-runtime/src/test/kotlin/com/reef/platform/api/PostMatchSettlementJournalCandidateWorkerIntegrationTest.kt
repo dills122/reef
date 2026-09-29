@@ -188,6 +188,99 @@ class PostMatchSettlementJournalCandidateWorkerIntegrationTest {
         }
     }
 
+    @Test
+    fun laterRetainedOutcomeWaitsForEarlierCommittedCommandToMaterialize() {
+        val source = database("SETTLEMENT_SOURCE_POSTGRES", "candidate-gap-source")
+        val settlement = database("SETTLEMENT_POSTGRES", "candidate-gap-journal")
+        val finality = database("SETTLEMENT_FINALITY_POSTGRES", "candidate-gap-finality")
+        val id = UUID.randomUUID().toString().replace("-", "")
+        val controlSchema = "candidate_gap_control_$id"
+        val journalSchema = "candidate_gap_journal_$id"
+        val finalitySchema = "candidate_gap_finality_$id"
+        val stream = "candidate-gap-$id"
+        val incarnation = "incarnation-$id"
+        settlement.sql("CREATE SCHEMA $controlSchema")
+        settlement.sql("CREATE SCHEMA $journalSchema")
+        finality.sql("CREATE SCHEMA $finalitySchema")
+        try {
+            migration(settlement, "postmatch/0007_settlement_control_log.sql", "postmatch.",
+                "$controlSchema.")
+            listOf("0012_settlement_journal.sql", "0014_settlement_journal_snapshots.sql")
+                .forEach { migration(settlement, "settlement/$it", "settlement.", "$journalSchema.") }
+            migration(finality, "finality/0001_settlement_finality_authority.sql", "finality.",
+                "$finalitySchema.")
+            insertOutcome(source, rejectedSource(stream, 1))
+            insertOutcome(source, rejectedSource(stream, 3))
+            val catalog = PostMatchSourceCatalog(source)
+            val reader = PostgresCanonicalOutcomeSourceReader(source)
+            var emptyProofCalls = 0
+            var brokerStableEnd: Long? = 3L
+            val replay = PostgresSettlementReplaySourceAuthority(source, catalog, reader,
+                object : SettlementEmptyRangeAttestor {
+                    override fun verify(eventStream: String,
+                        window: SettlementJournalSourceWindow): Boolean {
+                        emptyProofCalls++
+                        return false
+                    }
+                    override fun stableEndSequence(eventStream: String, sourceGeneration: String,
+                        partitionId: Int, fromExclusiveSequence: Long): Long? = brokerStableEnd
+                })
+            val controls = SettlementControlLogStore(settlement, controlSchema)
+            controls.initialize(stream, 1, "owner-$id", incarnation)
+            val journal = SettlementJournalStore(settlement, journalSchema)
+            val authority = PostgresSettlementJournalFinalityAuthority(finality, finalitySchema)
+            val protocol = SettlementJournalFinalityProtocol(journal, authority)
+            val worker = PostMatchSettlementJournalCandidateWorker.open(source, catalog, reader,
+                replay, controls, incarnation, journal, protocol, authority,
+                SettlementSourceBindingDigestReader { "a".repeat(64) }, stream,
+                listOf(0), incarnation)
+            assertEquals(1L, worker.pollOnce()?.batchSequence)
+            assertEquals(null, worker.pollOnce())
+            assertEquals(1, emptyProofCalls)
+            val partition = ReferenceStreamPartition(stream, catalog.generation(), 0)
+            assertEquals(1L, worker.recoverySnapshot().evaluator.sourceFrontiers.getValue(partition))
+            assertEquals(1L, authority.read(stream)?.acknowledgedBatchSequence)
+
+            insertOutcome(source, rejectedSource(stream, 2))
+            assertEquals(2L, worker.pollOnce()?.batchSequence)
+            assertEquals(listOf(2L, 3L), journal.readVerifiedBatch(stream, 2)
+                .sourceWindows.single().members.map { it.streamSequence })
+            assertEquals(3L, worker.recoverySnapshot().evaluator.sourceFrontiers.getValue(partition))
+            assertEquals(2L, authority.read(stream)?.acknowledgedBatchSequence)
+
+            insertOutcome(source, rejectedSource(stream, 5))
+            brokerStableEnd = null
+            assertFailsWith<IllegalStateException> { worker.pollOnce() }
+            assertEquals(2L, authority.read(stream)?.acknowledgedBatchSequence)
+        } finally {
+            finality.sql("DROP SCHEMA $finalitySchema CASCADE")
+            settlement.sql("DROP SCHEMA $journalSchema CASCADE")
+            settlement.sql("DROP SCHEMA $controlSchema CASCADE")
+            source.connection.use { connection ->
+                connection.prepareStatement(
+                    "DELETE FROM runtime.canonical_command_outcomes WHERE event_stream = ?"
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeUpdate()
+                }
+                connection.prepareStatement(
+                    "DELETE FROM runtime.canonical_venue_event_batches WHERE event_stream = ?"
+                ).use { statement ->
+                    statement.setString(1, stream)
+                    statement.executeUpdate()
+                }
+            }
+        }
+    }
+
+    private fun rejectedSource(stream: String, sequence: Long): CanonicalOutcomeSource =
+        CanonicalOutcomeSource(stream, 0, sequence, "batch-$stream-$sequence",
+            "command-$stream-$sequence", "SubmitOrder", "hash-$sequence", "AAPL",
+            "order-$sequence", "rejected",
+            """{"effectVersion":1,"rejected":{"eventId":"event-$sequence",
+                "orderId":"order-$sequence","code":"R","reason":"bad",
+                "occurredAt":"2026-09-28T00:00:00Z"}}""")
+
     private fun insertRejectedOutcome(source: DataSource, stream: String) {
         source.connection.use { connection ->
             connection.prepareStatement("""INSERT INTO runtime.canonical_venue_event_batches

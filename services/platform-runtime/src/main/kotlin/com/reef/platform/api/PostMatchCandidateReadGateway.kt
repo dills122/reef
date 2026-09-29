@@ -71,6 +71,23 @@ interface CandidateSettlementReadPort {
         requireCurrent: Boolean): SettlementProjectionTradeRead
 }
 
+data class CandidateExecutedTrade(
+    val runId: String,
+    val tradeId: String,
+    val eventId: String,
+    val executionId: String,
+    val sourceGeneration: String,
+    val partitionId: Int,
+    val sourceSequence: Long,
+    val effectOrdinal: Int
+)
+
+/** Source outcome is execution authority; indexed market tape is only a position locator. */
+fun interface CandidateExecutionSourceReadPort {
+    fun readExecution(eventStream: String, marketGeneration: String, sourceGeneration: String,
+        partitionCount: Int, runId: String, tradeId: String): CandidateExecutedTrade
+}
+
 class SettlementJournalCandidateReadPort(
     private val projection: SettlementJournalProjectionStore
 ) : CandidateSettlementReadPort {
@@ -133,7 +150,8 @@ class PostMatchCandidateReadGateway(
     private val settlementGeneration: String,
     private val partitionCount: Int,
     private val sourceTimestampReader: CandidateSourceTimestampReader? = null,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val executionSource: CandidateExecutionSourceReadPort? = null
 ) {
     init {
         require(eventStream.isNotBlank() && marketGeneration.isNotBlank() &&
@@ -199,11 +217,11 @@ class PostMatchCandidateReadGateway(
     }
 
     fun balance(account: ReferenceAccountKey,
-        requireCurrent: Boolean = true): Map<String, Any?> {
+        requireCurrent: Boolean = true): Map<String, Any?> = retryAdvancingFinality {
         val anchor = financialAnchor()
         val read = settlement.readAccount(eventStream, settlementGeneration, account, requireCurrent)
         val current = verifyFinancialRead(read.frontier, anchor, requireCurrent)
-        return mapOf("account" to mapOf(
+        mapOf("account" to mapOf(
             "runId" to account.runId, "participantId" to account.participantId,
             "accountId" to account.accountId, "assetType" to account.assetType,
             "assetId" to account.assetId), "balance" to read.balance?.toPlainString(),
@@ -211,19 +229,45 @@ class PostMatchCandidateReadGateway(
     }
 
     fun tradeStatus(runId: String, tradeId: String,
-        requireCurrent: Boolean = true): Map<String, Any?> {
+        requireCurrent: Boolean = true): Map<String, Any?> = retryAdvancingFinality {
         require(runId.isNotBlank() && tradeId.isNotBlank())
+        val generation = catalog.generation()
+        val execution = checkNotNull(executionSource) { "candidate execution source reader is unavailable" }
+            .readExecution(eventStream, marketGeneration, generation, partitionCount, runId, tradeId)
+        check(execution.runId == runId && execution.tradeId == tradeId &&
+            execution.sourceGeneration == generation && execution.partitionId in 0 until partitionCount) {
+            "candidate execution source identity differs from requested trade"
+        }
         val anchor = financialAnchor()
         val read = settlement.readTrade(eventStream, settlementGeneration,
             runId, tradeId, requireCurrent)
         val current = verifyFinancialRead(read.frontier, anchor, requireCurrent)
+        check(catalog.generation() == generation) { "candidate execution source generation changed" }
         val status = read.status
-        return mapOf("runId" to runId, "tradeId" to tradeId,
+        mapOf("runId" to runId, "tradeId" to tradeId,
+            "execution" to mapOf("status" to "EXECUTED", "authority" to "MATCHING_OUTCOME",
+                "eventId" to execution.eventId, "executionId" to execution.executionId),
+            "executionAsOf" to mapOf("eventStream" to eventStream,
+                "sourceGeneration" to generation, "partitionId" to execution.partitionId,
+                "sourceSequence" to execution.sourceSequence,
+                "effectOrdinal" to execution.effectOrdinal),
             "settlement" to status?.let { mapOf(
                 "attemptNumber" to it.attemptNumber, "outcome" to it.outcome,
                 "breakReason" to it.breakReason, "batchSequence" to it.batchSequence,
                 "resultIndex" to it.resultIndex) },
             "asOf" to settlementAsOf(read.frontier, anchor, current))
+    }
+
+    private class FinalityAdvancedDuringRead : IllegalStateException(
+        "external settlement finality advanced during candidate read")
+
+    private fun <T> retryAdvancingFinality(read: () -> T): T {
+        repeat(3) { attempt ->
+            try { return read() } catch (failure: FinalityAdvancedDuringRead) {
+                if (attempt == 2) throw failure
+            }
+        }
+        error("unreachable candidate finality retry")
     }
 
     private fun financialAnchor(): SettlementJournalFinalityAnchor = try {
@@ -235,10 +279,17 @@ class PostMatchCandidateReadGateway(
     private fun verifyFinancialRead(frontier: SettlementProjectionFrontier,
         anchor: SettlementJournalFinalityAnchor, requireCurrent: Boolean): Boolean {
         check(frontier.eventStream == eventStream && frontier.projectorGeneration == settlementGeneration)
-        val current = CandidateFinancialFinalityGuard.verify(frontier, anchor)
-        check(financialAnchor() == anchor) {
-            "external settlement finality changed during candidate read"
+        val after = financialAnchor()
+        if (after != anchor) {
+            if (after.eventStream == anchor.eventStream &&
+                after.incarnationId == anchor.incarnationId &&
+                after.sourceBindingDigest == anchor.sourceBindingDigest &&
+                after.acknowledgedBatchSequence > anchor.acknowledgedBatchSequence) {
+                throw FinalityAdvancedDuringRead()
+            }
+            error("external settlement finality changed inconsistently during candidate read")
         }
+        val current = CandidateFinancialFinalityGuard.verify(frontier, anchor)
         if (requireCurrent) check(current) {
             "candidate financial read is behind external settlement finality or journal head"
         }

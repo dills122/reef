@@ -442,6 +442,69 @@ class MatchingOutcomeMarketCandidateIntegrationTest {
     }
 
     @Test
+    fun normalFrontierAdvanceBetweenTrustAndReadRetriesBookAndVector() {
+        withDatabase { dataSource, schema, stream ->
+            insertSources(dataSource, listOf(maker(stream, 1, "seller-1", "50")))
+            val writer = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                writer.advanceNext(stream, 0, "source-generation", "projection-a"))
+
+            insertSources(dataSource, listOf(maker(stream, 2, "seller-2", "51")))
+            var bookHooks = 0
+            val bookReader = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterTrustBeforeRead = {
+                    if (bookHooks++ == 0) assertEquals(MatchingMarketAdvance.APPLIED,
+                        writer.advanceNext(stream, 0, "source-generation", "projection-a"))
+                })
+            val book = bookReader.readBook(stream, 0, "projection-a", "source-generation",
+                "run", "session", "AAPL", "USD", depth = 2)
+            assertEquals(2, bookHooks)
+            assertEquals(2L, book.frontier.projectedSequence)
+            assertEquals(listOf(BigDecimal("50"), BigDecimal("51")),
+                book.asks.map { it.price })
+
+            insertSources(dataSource, listOf(maker(stream, 3, "seller-3", "52")))
+            var vectorHooks = 0
+            val vectorReader = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterTrustBeforeRead = {
+                    if (vectorHooks++ == 0) assertEquals(MatchingMarketAdvance.APPLIED,
+                        writer.advanceNext(stream, 0, "source-generation", "projection-a"))
+                })
+            val vector = vectorReader.readVector(stream, "projection-a",
+                mapOf(0 to "source-generation"))
+            assertEquals(2, vectorHooks)
+            assertEquals(3L, vector.frontiers.getValue(0).projectedSequence)
+            assertEquals(0L, vector.frontiers.getValue(0).lagPositions)
+        }
+    }
+
+    @Test
+    fun continuouslyAdvancingFrontierStopsAfterBoundedReadRetries() {
+        withDatabase { dataSource, schema, stream ->
+            insertSources(dataSource, (1..4).map { index ->
+                maker(stream, index.toLong(), "seller-$index", "${49 + index}")
+            })
+            val writer = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema)
+            assertEquals(MatchingMarketAdvance.APPLIED,
+                writer.advanceNext(stream, 0, "source-generation", "projection-a", maxOutcomes = 1))
+            var hooks = 0
+            val reader = MatchingOutcomeMarketCandidate(dataSource, dataSource, schema,
+                afterTrustBeforeRead = {
+                    hooks++
+                    assertEquals(MatchingMarketAdvance.APPLIED,
+                        writer.advanceNext(stream, 0, "source-generation", "projection-a", maxOutcomes = 1))
+                })
+
+            val failure = assertFailsWith<IllegalStateException> {
+                reader.readBook(stream, 0, "projection-a", "source-generation",
+                    "run", "session", "AAPL", "USD")
+            }
+            assertTrue(failure.message.orEmpty().contains("market frontier advanced after read trust proof"))
+            assertEquals(3, hooks)
+        }
+    }
+
+    @Test
     fun liveAppendProgressesDuringRecoveryProofWithoutServingStaleSnapshot() {
         withDatabase { dataSource, schema, stream ->
             insertSources(dataSource, listOf(maker(stream, 1, "seller-1", "50")))

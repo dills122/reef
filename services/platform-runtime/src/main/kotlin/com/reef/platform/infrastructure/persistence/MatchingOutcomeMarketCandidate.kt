@@ -68,7 +68,10 @@ class MatchingOutcomeMarketCandidate(
     private val afterProofSnapshotBeforeReplay: () -> Unit = {},
     private val afterWindowVisible: (VerifiedCanonicalSourceWindow, Instant) -> Unit = { _, _ -> }
 ) {
-    companion object { const val CONSUMER_NAME = "matching-market-candidate-v1" }
+    companion object {
+        const val CONSUMER_NAME = "matching-market-candidate-v1"
+        private const val MAX_READ_ADVANCE_RETRIES = 2
+    }
     init {
         require(schema.matches(Regex("[a-z][a-z0-9_]*")) &&
             maxRecoveryWindows in 1..100_000 &&
@@ -77,6 +80,8 @@ class MatchingOutcomeMarketCandidate(
     private data class ProofKey(val stream: String, val partition: Int,
         val sourceGeneration: String, val projectorGeneration: String)
     private data class TrustedFrontier(val sequence: Long, val digest: String?)
+    private class FrontierAdvancedDuringRead : IllegalStateException(
+        "market frontier advanced after read trust proof")
     private val trustedFrontiers = ConcurrentHashMap<ProofKey, TrustedFrontier>()
     private val recoveryLocks = ConcurrentHashMap<ProofKey, Any>()
 
@@ -477,40 +482,39 @@ class MatchingOutcomeMarketCandidate(
         sourceGenerations: Map<Int, String>, requireCurrent: Boolean = false): MatchingMarketVector {
         require(sourceGenerations.size in 1..32 && sourceGenerations.keys.all { it >= 0 } &&
             sourceGenerations.values.all(String::isNotBlank))
-        val trustedByPartition = sourceGenerations.mapValues { (partition, sourceGeneration) ->
-            ensureRecoveredTargetReplay(ProofKey(stream, partition, sourceGeneration,
-                projectorGeneration))
-        }
-        afterTrustBeforeRead()
-        val observedByPartition = sourceGenerations.keys.associateWith { sourceLatest(stream, it) }
-        return targetDataSource.connection.use { connection ->
-            val oldIsolation = connection.transactionIsolation
-            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
-            connection.autoCommit = false
-            try {
-                val vector = sourceGenerations.toSortedMap().mapValues { (partition, sourceGeneration) ->
-                    val current = frontier(connection, stream, partition, projectorGeneration, false)
-                    check(current.sourceGeneration == sourceGeneration) {
-                        "market source generation changed"
+        return retryReadOnVerifiedAdvance {
+            val trustedByPartition = sourceGenerations.mapValues { (partition, sourceGeneration) ->
+                ensureRecoveredTargetReplay(ProofKey(stream, partition, sourceGeneration,
+                    projectorGeneration))
+            }
+            afterTrustBeforeRead()
+            val observedByPartition = sourceGenerations.keys.associateWith { sourceLatest(stream, it) }
+            targetDataSource.connection.use { connection ->
+                val oldIsolation = connection.transactionIsolation
+                connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+                connection.autoCommit = false
+                try {
+                    val vector = sourceGenerations.toSortedMap().mapValues { (partition, sourceGeneration) ->
+                        val current = frontier(connection, stream, partition, projectorGeneration, false)
+                        check(current.sourceGeneration == sourceGeneration) {
+                            "market source generation changed"
+                        }
+                        checkTrustedForRead(trustedByPartition.getValue(partition), current)
+                        val observed = observedByPartition.getValue(partition)
+                        val lag = observed - current.sequence
+                        check(lag >= 0) { "market projection exceeds retained source" }
+                        if (requireCurrent) check(lag == 0L) { "market projection is behind source" }
+                        MatchingMarketFrontier(stream, partition, projectorGeneration,
+                            sourceGeneration, current.sequence, current.digest, observed, lag)
                     }
-                    check(trustedByPartition.getValue(partition) ==
-                        TrustedFrontier(current.sequence, current.digest)) {
-                        "market frontier changed after read trust proof"
-                    }
-                    val observed = observedByPartition.getValue(partition)
-                    val lag = observed - current.sequence
-                    check(lag >= 0) { "market projection exceeds retained source" }
-                    if (requireCurrent) check(lag == 0L) { "market projection is behind source" }
-                    MatchingMarketFrontier(stream, partition, projectorGeneration,
-                        sourceGeneration, current.sequence, current.digest, observed, lag)
+                    connection.commit()
+                    MatchingMarketVector(vector)
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.transactionIsolation = oldIsolation
                 }
-                connection.commit()
-                MatchingMarketVector(vector)
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.transactionIsolation = oldIsolation
             }
         }
     }
@@ -946,38 +950,54 @@ class MatchingOutcomeMarketCandidate(
         read: (Connection, MatchingMarketFrontier) -> T): T {
         require(stream.isNotBlank() && partition >= 0 && generation.isNotBlank() &&
             sourceGeneration.isNotBlank())
-        val trusted = ensureRecoveredTargetReplay(
-            ProofKey(stream, partition, sourceGeneration, generation))
-        afterTrustBeforeRead()
-        val observed = sourceLatest(stream, partition)
-        val result = targetDataSource.connection.use { connection ->
-            val oldIsolation = connection.transactionIsolation
-            connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
-            connection.autoCommit = false
-            try {
-                val current = frontier(connection, stream, partition, generation, false)
-                check(current.sourceGeneration == sourceGeneration) {
-                    "market source generation changed"
+        return retryReadOnVerifiedAdvance {
+            val trusted = ensureRecoveredTargetReplay(
+                ProofKey(stream, partition, sourceGeneration, generation))
+            afterTrustBeforeRead()
+            val observed = sourceLatest(stream, partition)
+            targetDataSource.connection.use { connection ->
+                val oldIsolation = connection.transactionIsolation
+                connection.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+                connection.autoCommit = false
+                try {
+                    val current = frontier(connection, stream, partition, generation, false)
+                    check(current.sourceGeneration == sourceGeneration) {
+                        "market source generation changed"
+                    }
+                    checkTrustedForRead(trusted, current)
+                    val lag = observed - current.sequence
+                    check(lag >= 0) { "market projection exceeds retained source" }
+                    if (requireCurrent) check(lag == 0L) { "market projection is behind source" }
+                    val value = read(connection, MatchingMarketFrontier(stream, partition,
+                        generation, sourceGeneration, current.sequence, current.digest,
+                        observed, lag))
+                    connection.commit()
+                    value
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.transactionIsolation = oldIsolation
                 }
-                check(trusted == TrustedFrontier(current.sequence, current.digest)) {
-                    "market frontier changed after read trust proof"
-                }
-                val lag = observed - current.sequence
-                check(lag >= 0) { "market projection exceeds retained source" }
-                if (requireCurrent) check(lag == 0L) { "market projection is behind source" }
-                val value = read(connection, MatchingMarketFrontier(stream, partition,
-                    generation, sourceGeneration, current.sequence, current.digest,
-                    observed, lag))
-                connection.commit()
-                value
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.transactionIsolation = oldIsolation
             }
         }
-        return result
+    }
+
+    private fun checkTrustedForRead(trusted: TrustedFrontier, current: StoredFrontier) {
+        if (trusted == TrustedFrontier(current.sequence, current.digest)) return
+        if (current.sequence > trusted.sequence) throw FrontierAdvancedDuringRead()
+        error("market frontier changed after read trust proof")
+    }
+
+    private fun <T> retryReadOnVerifiedAdvance(read: () -> T): T {
+        var retries = 0
+        while (true) {
+            try {
+                return read()
+            } catch (failure: FrontierAdvancedDuringRead) {
+                if (retries++ >= MAX_READ_ADVANCE_RETRIES) throw failure
+            }
+        }
     }
 
     private fun sourceLatest(stream: String, partition: Int): Long =

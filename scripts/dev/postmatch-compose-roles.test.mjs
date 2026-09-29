@@ -88,3 +88,28 @@ test("matched benchmark resets prior volumes before smoke and again before measu
   assert.match(script.slice(before, smoke), /down --volumes --remove-orphans/);
   assert.match(script.slice(after, after + 160), /down --volumes --remove-orphans/);
 });
+
+test("candidate settlement service receives distinct matching and command topics", () => {
+  const command = spawnSync("docker", ["compose", "-f", "compose.base.yml", "-f", "compose.local.yml",
+    "--profile", "postmatch", "--profile", "postmatch-workers", "config", "--format", "json"], {
+    encoding: "utf8", env: { ...process.env,
+      MATCHING_ENGINE_EVENT_STREAM: "REEF_LOCAL_VENUE_EVENTS",
+      STREAM_ACK_COMMAND_STREAM: "REEF_LOCAL_COMMANDS" } });
+  assert.equal(command.status, 0, command.stderr);
+  const environment = JSON.parse(command.stdout).services["platform-postmatch-settlement-0"].environment;
+  assert.equal(environment.MATCHING_ENGINE_EVENT_STREAM, "REEF_LOCAL_VENUE_EVENTS");
+  assert.equal(environment.STREAM_ACK_COMMAND_STREAM, "REEF_LOCAL_COMMANDS");
+});
+
+test("candidate timing is default-off and reaches settlement worker when enabled", () => {
+  const compose = (enabled) => spawnSync("docker", ["compose", "-f", "compose.base.yml",
+    "-f", "compose.local.yml", "--profile", "postmatch-workers", "config", "--format", "json"], {
+    encoding: "utf8", env: { ...process.env, POSTMATCH_LEDGER_CANDIDATE_TIMING_ENABLED: enabled },
+  });
+  for (const enabled of ["false", "true"]) {
+    const command = compose(enabled);
+    assert.equal(command.status, 0, command.stderr);
+    assert.equal(JSON.parse(command.stdout).services["platform-postmatch-settlement-0"].environment
+      .POSTMATCH_LEDGER_CANDIDATE_TIMING_ENABLED, enabled);
+  }
+});

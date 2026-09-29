@@ -18,6 +18,7 @@ import com.reef.platform.application.settlementjournal.SettlementEvaluatorHead
 import com.reef.platform.application.settlementjournal.SettlementEvaluatorRecoveryState
 import com.reef.platform.application.settlementjournal.SettlementJournalEvaluator
 import com.reef.platform.application.settlementjournal.SettlementPreparedInput
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.persistence.PostMatchReadSourceCatalog
 import com.reef.platform.infrastructure.persistence.PostgresCanonicalOutcomeSourceReader
 import com.reef.platform.infrastructure.persistence.PostgresSettlementJournalFinalityAuthority
@@ -122,7 +123,8 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
     lease: SettlementJournalExternalLease,
     recoveredState: SettlementJournalWriterRecoveryState?,
     private val maxSourcePositions: Int,
-    private val maxControlsPerBatch: Int
+    private val maxControlsPerBatch: Int,
+    private val timing: SettlementCandidatePollTiming?
 ) {
     private var lease = lease
     private var stopped = false
@@ -138,6 +140,8 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
             com.reef.platform.application.postmatch.CanonicalStreamPosition.origin(partition)
     }.toMutableMap()
     private val lastIdleTailProbeNanos = LongArray(partitions.size)
+    private val lastDeferredGapProbeNanos = LongArray(partitions.size)
+    private val lastDeferredGapFrom = LongArray(partitions.size) { Long.MIN_VALUE }
     private lateinit var evaluator: SettlementJournalEvaluator
 
     init {
@@ -233,7 +237,9 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
                 sourceReader, sourceAuthority, controlStore, controlIncarnationId, journal,
                 protocol, finalityAuthority, bindingReader, snapshots, eventStream, partitions,
                 generation, binding, lease, recovered?.state, maxSourcePositions,
-                maxControlsPerBatch)
+                maxControlsPerBatch, if (RuntimeEnv.bool(
+                    "POSTMATCH_LEDGER_CANDIDATE_TIMING_ENABLED", false))
+                    SettlementCandidatePollTiming() else null)
         }
     }
 
@@ -241,27 +247,44 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
     @Synchronized
     fun pollOnce(): SettlementCandidateJournalProgress? {
         check(!stopped) { "candidate settlement writer stopped after an ambiguous or invalid input" }
+        val pollTiming = timing?.begin()
+        var durable = false
+        var failed = false
+        var results = 0
         try {
-            lease = finalityAuthority.renewLease(lease)
-            check(sourceCatalog.generation() == sourceGeneration &&
-                bindingReader.readDigest(eventStream) == sourceBindingDigest) {
-                "source identity changed during settlement writing"
+            lease = measuredCandidateStage(pollTiming, SettlementCandidatePollTiming.Stage.LEASE) {
+                finalityAuthority.renewLease(lease)
             }
-            val head = journal.head(eventStream)
-            val local = evaluator.snapshot().head
-            check(head.nextBatchSequence == local.batchSequence + 1 &&
-                head.lastBatchDigest == local.batchDigest &&
-                head.ownerEpoch == lease.epoch && head.incarnationId == lease.journalIncarnationId) {
-                "journal head moved outside candidate writer"
+            measuredCandidateStage(pollTiming, SettlementCandidatePollTiming.Stage.SOURCE_IDENTITY) {
+                check(sourceCatalog.generation() == sourceGeneration &&
+                    bindingReader.readDigest(eventStream) == sourceBindingDigest) {
+                    "source identity changed during settlement writing"
+                }
             }
-            val prefix = controlStore.readVerifiedPrefix(eventStream, controlIncarnationId)
-            val members = prefix.batches.flatMap { it.members }
-            val priorDigest = if (head.lastControlSequence == 0L)
-                SettlementJournalStore.ORIGIN_DIGEST else
-                members.getOrNull(Math.toIntExact(head.lastControlSequence - 1))?.prefixDigest
-                    ?: error("journal control frontier missing from retained control log")
-            check(priorDigest == head.lastControlDigest) {
-                "journal and retained control frontiers differ"
+            val head = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.JOURNAL_HEAD) {
+                journal.head(eventStream).also { durableHead ->
+                    val local = evaluator.snapshot().head
+                    check(durableHead.nextBatchSequence == local.batchSequence + 1 &&
+                        durableHead.lastBatchDigest == local.batchDigest &&
+                        durableHead.ownerEpoch == lease.epoch &&
+                        durableHead.incarnationId == lease.journalIncarnationId) {
+                        "journal head moved outside candidate writer"
+                    }
+                }
+            }
+            val members = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.CONTROL_PREFIX) {
+                val prefix = controlStore.readVerifiedPrefix(eventStream, controlIncarnationId)
+                prefix.batches.flatMap { it.members }.also { retained ->
+                    val priorDigest = if (head.lastControlSequence == 0L)
+                        SettlementJournalStore.ORIGIN_DIGEST else
+                        retained.getOrNull(Math.toIntExact(head.lastControlSequence - 1))?.prefixDigest
+                            ?: error("journal control frontier missing from retained control log")
+                    check(priorDigest == head.lastControlDigest) {
+                        "journal and retained control frontiers differ"
+                    }
+                }
             }
             val pending = members.drop(Math.toIntExact(head.lastControlSequence))
                 .take(maxControlsPerBatch).map { it to it.decode() }
@@ -281,8 +304,11 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
             // Drain a bounded accepted control prefix before source; a future control may
             // advance only after its required source frontier or outstanding trade exists.
             val hasMoreControls = members.size > head.lastControlSequence + readyCount
-            val selected = if (hasMoreControls && blockedControl == null) null else
-                selectSourceWindow(controls.size, stagedState, blockedControl)
+            val selected = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.SOURCE_SELECT) {
+                if (hasMoreControls && blockedControl == null) null else
+                    selectSourceWindow(controls.size, stagedState, blockedControl, pollTiming)
+            }
             val source = selected?.first
             val sourceRead = selected?.second
             if (source != null) {
@@ -294,20 +320,33 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
                     controls.size.toLong(), it) }
             }
             if (prepared.isEmpty()) return null
-            val decision = evaluator.prepare(prepared)
-            val mapped = mapper.map(eventStream, head, decision, prepared,
-                source?.let { listOf(it.journalWindow) } ?: emptyList())
-            activeMapped = mapped
-            verifyControlMembers(newMembers)
-            check(source == null || verifyActiveSource()) {
-                "matching source changed before journal append"
+            val decision = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.EVALUATE) { evaluator.prepare(prepared) }
+            val mapped = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.MAP) {
+                mapper.map(eventStream, head, decision, prepared,
+                    source?.let { listOf(it.journalWindow) } ?: emptyList())
             }
-            val acknowledged = protocol.appendAndAcknowledge(lease, mapped.batch)
+            activeMapped = mapped
+            measuredCandidateStage(pollTiming, SettlementCandidatePollTiming.Stage.REVERIFY) {
+                verifyControlMembers(newMembers)
+                check(source == null || verifyActiveSource()) {
+                    "matching source changed before journal append"
+                }
+            }
+            val acknowledged = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.APPEND_FINALITY) {
+                protocol.appendAndAcknowledge(lease, mapped.batch)
+            }
+            durable = true
+            results = acknowledged.journalReceipt.resultCount
             activeReceipt = acknowledged.journalReceipt
-            evaluator.confirm(decision, SettlementAppendReceipt(decision.expectedHead,
-                decision.proposalDigest, acknowledged.journalReceipt.proposalDigest,
-                decision.expectedHead.copy(batchSequence = acknowledged.journalReceipt.batchSequence,
-                    batchDigest = acknowledged.journalReceipt.batchDigest)))
+            measuredCandidateStage(pollTiming, SettlementCandidatePollTiming.Stage.CONFIRM) {
+                evaluator.confirm(decision, SettlementAppendReceipt(decision.expectedHead,
+                    decision.proposalDigest, acknowledged.journalReceipt.proposalDigest,
+                    decision.expectedHead.copy(batchSequence = acknowledged.journalReceipt.batchSequence,
+                        batchDigest = acknowledged.journalReceipt.batchDigest)))
+            }
             source?.journalWindow?.members?.maxOfOrNull { it.streamSequence }?.let { retained ->
                 val key = ReferenceStreamPartition(eventStream, sourceGeneration,
                     source.journalWindow.partitionId)
@@ -329,19 +368,23 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
             }
             if (snapshots != null && (acknowledged.journalReceipt.batchSequence == 1L ||
                     acknowledged.journalReceipt.batchSequence % 128L == 0L)) {
-                val state = recoverySnapshot()
-                protocol.publishWriterCurrentSnapshot(lease, snapshots,
-                    SettlementJournalWriterRecoveryState(state.evaluator, state.manifest.orders,
-                        state.manifest.seenOrderIds, sourceBindingDigest, controlIncarnationId,
-                        state.lastRetainedSourceFrontiers), bindingReader)
+                measuredCandidateStage(pollTiming, SettlementCandidatePollTiming.Stage.SNAPSHOT) {
+                    val state = recoverySnapshot()
+                    protocol.publishWriterCurrentSnapshot(lease, snapshots,
+                        SettlementJournalWriterRecoveryState(state.evaluator, state.manifest.orders,
+                            state.manifest.seenOrderIds, sourceBindingDigest, controlIncarnationId,
+                            state.lastRetainedSourceFrontiers), bindingReader)
+                }
             }
             return SettlementCandidateJournalProgress(acknowledged.journalReceipt.batchSequence,
                 acknowledged.journalReceipt.resultCount, if (source == null) 0 else 1,
                 controls.size)
         } catch (failure: Throwable) {
             stopped = true
+            failed = true
             throw failure
         } finally {
+            pollTiming?.complete(durable, failed, results)
             activeSource = null
             activeSourceRead = null
             activeMapped = null
@@ -381,9 +424,13 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
     }
 
     private fun selectSourceWindow(stepIndex: Int, state: SettlementCandidateManifestState,
-        blockedControl: ReferenceControl? = null):
+        blockedControl: ReferenceControl? = null,
+        pollTiming: SettlementCandidatePollTiming.Poll? = null):
         Pair<SettlementCandidatePreparedSource, VerifiedCanonicalSourceWindow?>? {
-        val heads = sourceCatalog.partitionHeads(eventStream, partitions.size)
+        val heads = measuredCandidateStage(pollTiming,
+            SettlementCandidatePollTiming.Stage.SOURCE_HEADS) {
+            sourceCatalog.partitionHeads(eventStream, partitions.size)
+        }
         val frontiers = evaluator.snapshot().sourceFrontiers
         partitions.forEach { partition ->
             val key = ReferenceStreamPartition(eventStream, sourceGeneration, partition)
@@ -400,36 +447,74 @@ internal class PostMatchSettlementJournalCandidateWorker private constructor(
                 val now = System.nanoTime()
                 if (now - lastIdleTailProbeNanos[partition] < 500_000_000L) return@forEach
                 lastIdleTailProbeNanos[partition] = now
-                val stable = sourceAuthority.stableEndSequence(eventStream, sourceGeneration,
-                    partition, from) ?: return@forEach
+                val stable = measuredCandidateStage(pollTiming,
+                    SettlementCandidatePollTiming.Stage.BROKER_GAP) {
+                    sourceAuthority.stableEndSequence(eventStream, sourceGeneration,
+                        partition, from)
+                } ?: return@forEach
                 check(stable >= from) { "command broker stable frontier regressed" }
                 if (stable == from) return@forEach
                 val through = minOf(stable, from + maxSourcePositions, policyLimit ?: Long.MAX_VALUE)
                 val proofId = settlementDigest(listOf("reef.settlement.broker-absence.v1",
                     sourceBindingDigest, eventStream, sourceGeneration, partition.toString(),
                     from.toString(), through.toString()))
-                val empty = manifest.prepareEmpty(stepIndex, state, key, from, through, proofId)
+                val empty = measuredCandidateStage(pollTiming,
+                    SettlementCandidatePollTiming.Stage.MANIFEST) {
+                    manifest.prepareEmpty(stepIndex, state, key, from, through, proofId)
+                }
                 // A committed command may be awaiting materialization; do not claim its offset empty.
-                if (!sourceAuthority.verifyEmpty(eventStream, empty.journalWindow)) return@forEach
+                if (!measuredCandidateStage(pollTiming,
+                        SettlementCandidatePollTiming.Stage.BROKER_GAP) {
+                        sourceAuthority.verifyEmpty(eventStream, empty.journalWindow)
+                    }) return@forEach
                 return empty to null
             }
-            val range = nextRetainedRange(partition, from, head)
+            val range = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.SOURCE_RANGE) {
+                nextRetainedRange(partition, from, head)
+            }
             if (range.first > from + 1) {
+                val now = System.nanoTime()
+                if (lastDeferredGapFrom[partition] == from &&
+                    now - lastDeferredGapProbeNanos[partition] < 500_000_000L) return@forEach
                 val through = minOf(range.first - 1, from + maxSourcePositions,
                     policyLimit ?: Long.MAX_VALUE)
                 val proofId = settlementDigest(listOf("reef.settlement.broker-absence.v1",
                     sourceBindingDigest, eventStream, sourceGeneration, partition.toString(),
                     from.toString(), through.toString()))
-                val empty = manifest.prepareEmpty(stepIndex, state, key, from, through, proofId)
-                check(sourceAuthority.verifyEmpty(eventStream, empty.journalWindow)) {
-                    "source gap lacks broker-backed empty-range proof"
+                val empty = measuredCandidateStage(pollTiming,
+                    SettlementCandidatePollTiming.Stage.MANIFEST) {
+                    manifest.prepareEmpty(stepIndex, state, key, from, through, proofId)
+                }
+                // A later outcome may materialize before an earlier committed command.
+                // Recheck broker identity/retention before treating failed absence proof as lag.
+                if (!measuredCandidateStage(pollTiming,
+                        SettlementCandidatePollTiming.Stage.BROKER_GAP) {
+                        sourceAuthority.verifyEmpty(eventStream, empty.journalWindow)
+                    }) {
+                    measuredCandidateStage(pollTiming,
+                        SettlementCandidatePollTiming.Stage.BROKER_GAP) {
+                        check(sourceAuthority.stableEndSequence(eventStream, sourceGeneration,
+                            partition, from) != null) {
+                            "source gap lacks a live broker authority for retry"
+                        }
+                    }
+                    lastDeferredGapFrom[partition] = from
+                    lastDeferredGapProbeNanos[partition] = now
+                    return@forEach
                 }
                 return empty to null
             }
-            val verified = sourceReader.readVerifiedWindow("settlement-journal-candidate",
-                eventStream, partition, sourceGeneration, from,
-                minOf(range.second, policyLimit ?: Long.MAX_VALUE))
-            return manifest.prepare(stepIndex, state, verified) to verified
+            val verified = measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.SOURCE_READ) {
+                sourceReader.readVerifiedWindow("settlement-journal-candidate",
+                    eventStream, partition, sourceGeneration, from,
+                    minOf(range.second, policyLimit ?: Long.MAX_VALUE))
+            }
+            return measuredCandidateStage(pollTiming,
+                SettlementCandidatePollTiming.Stage.MANIFEST) {
+                manifest.prepare(stepIndex, state, verified)
+            } to verified
         }
         return null
     }

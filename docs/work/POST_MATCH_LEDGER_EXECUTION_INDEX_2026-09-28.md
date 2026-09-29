@@ -19,6 +19,8 @@ coordinates delivery; the product contract and raw evidence remain in
 and [`settlement-journal-write-shape-2026-09-28.md`](../research/evidence/settlement-journal-write-shape-2026-09-28.md).
 The agreed authority split is D-060 in [`DECISIONS.md`](../DECISIONS.md).
 The logged write-shape test is only a component proof, not a capacity pass.
+Trial failures and measured local results are recorded in the
+[`2026-09-29 postmortem`](../research/evidence/post-match-ledger-trial-postmortem-2026-09-29.md).
 
 No production deployment or irreversible migration is authorized. Pre-release
 breaking storage/API changes are allowed only after the complete proof and an
@@ -99,6 +101,10 @@ Matching and pre-trade remain outside every item in this index.
 | 2026-09-28 | PMJ-01/04 reviewer repair | Control log 8, worker unit 3, worker three-DB integration 1; financial read gateway 8 and separate settlement/finality DB integration 1; Node read/stage/age/cohort/seed suites 32 | Zero failures/skips in listed focused suites. Fresh future controls fail before acceptance; retained future policy advances source to its boundary. Financial projection excludes unacknowledged journal commit. Status requires admin auth. Stage gate samples every 10 seconds, requires all 16 market frontiers, non-growing in-load backlog and a sample within 15 seconds of load end. No live run or future-control cutover proof. |
 | 2026-09-28 | First hosted wiring attempt, `do-benchmark-20260928T235051Z`, commit `13286ee1`, `sfo3`/`c-32` | Raw fetched host logs in `reports/do-benchmark/do-benchmark-20260928T235051Z/`; no measured rate report | Intentionally stopped during pre-load smoke after review found market HTTP probes omitted age measurement. Generic report checker correctly failed missing 10k report. No load or throughput result; preserve this failed attempt. |
 | 2026-09-28 | Second hosted wiring attempt, `do-benchmark-20260928T235845Z`, commit `30036400`, `sfo3`/`c-32` | Raw fetched host logs in `reports/do-benchmark/do-benchmark-20260928T235845Z/`; preflight smoke passed in 428 seconds, stress setup failed before load | Cold source enrollment one-shot inherited API service environment without `MATCHING_ENGINE_EVENT_STREAM`; no measured rate report. Explicit one-shot environment pass-through added for next run. No 10k/s result. |
+| 2026-09-29 UTC | Third hosted wiring attempt, `do-benchmark-20260929T001956Z`, commit `e50b255a`, `sfo3`/`c-32` | Raw fetched host logs in `reports/do-benchmark/do-benchmark-20260929T001956Z/`; enrollment returned a verified 16-partition source binding, then Compose health failed before control seed or load | Settlement service lacked `MATCHING_ENGINE_EVENT_STREAM` in its runtime environment; `PostMatchSettlementJournalCandidateRuntime.fromEnv` rejected it at line 51. Projection loop also logged missing journal head during cold startup and retries; that message is not yet classified as a separate fault. No measured rate report. Added Compose propagation and a focused config test; exact local cutover-topology boot is required before another hosted attempt. |
+| 2026-09-29 UTC | First isolated local cutover-topology boot | Separate local Compose project and volumes; six databases booted, 16-partition cold enrollment returned a verified binding; first immutable control request returned HTTP 404 | Netty hot-path dispatch omitted `/internal/admin/settlement/controls` although JDK route and gateway implementation exist. No control finality, load, or capacity result. Local route fix and rerun in progress; existing Reef containers and hosted droplet left running. |
+| 2026-09-29 UTC | Second isolated local cutover-topology smoke | `/tmp/reef-pmj-localboot-artifacts/`: 16-partition enrollment, 326 controls at independent finality, 1000/1000 accepted and materialized at 50/s for 20s; closed-cohort parity PASS (290 first trades, 325 balances, journal/finality/financial batch 207); closed-head writer SIGKILL/V2 snapshot/lease takeover PASS | Overall smoke failed: market book/tape returned three 503s on a projection-advance/read-proof race, book p95 was 254 ms versus provisional 250 ms, and no settlement status value appeared during load. Worker log shows journal exited on an unproven transient source gap; lease-active restarts delayed catch-up until after load. Stage checker had only one in-load interval and therefore failed its minimum sample gate. No 10k/s result. Source-gap deferral and read-race fixes require another local proof. |
+| 2026-09-29 UTC | Third isolated local cutover-topology smoke | `/tmp/reef-pmj-localboot-60s-artifacts/`: 2999/2999 accepted and materialized at 50/s for 60s; 16-partition controls finalized; after-drain cohort PASS for 2999 outcomes, 1044 exact source→journal/market trades, 1044 financial statuses, 325 balances and journal/finality/financial batch 806 | Sustained gate FAIL. In-load source→journal gap grew 330→505→610→634→731, then drained after load. Market reads had nine full-replay proof races and p95 about 550–595 ms; two financial reads raced advancing external finality. Journal/market workers stayed alive, so first smoke's source-gap exit is fixed. Stage sampler's three small target-ahead observations were cross-database sampling skew; sampler now rechecks monotonic source heads after candidate reads. No 10k/s result. |
 
 The candidate harness currently defaults to provisional per-read response limits of
 p95 ≤ 250 ms and p99 ≤ 500 ms. These are explicit diagnostic thresholds, not a
@@ -119,6 +125,18 @@ old lifecycle/market loops. Its generic checker uses source-only materializer
 validation plus the candidate stage/read/age/cohort gates. A passing result
 would be a cutover-topology **diagnostic**, not full recovery, parity, and
 public-API cutover proof.
+The earlier preflight smoke exercised legacy topology and did not start the
+full journal cutover stack. That validation gap caused avoidable hosted setup
+failures. Do not repeat the hosted run until a local boot proves source
+enrollment, all candidate processes healthy, control seed, and external
+finality on the matched topology.
+The local read probe exposed two additional cutover gaps: market reads can
+race a normal advancing projector frontier, and the candidate trade-status
+response can show a null settlement while source-to-journal backlog grows.
+Its `currentAtObservation` flag measures financial projection against the
+acknowledged journal, not matching-outcome source freshness. The public
+executed/pending trade contract therefore still needs a source-backed status
+view and an explicit source as-of frontier before cutover.
 
 Focused command from `services/platform-runtime`, with
 `SETTLEMENT_POSTGRES_PASSWORD_TEST` supplied by the local test environment:

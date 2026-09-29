@@ -91,6 +91,161 @@ export async function compareExactFirstTrades(sourceRows, journalRows) {
   return { compared, mismatches };
 }
 
+function canonicalDecimal(value) {
+  if (!/^-?\d+(?:\.\d+)?$/.test(value ?? "")) throw new Error(`invalid trade decimal: ${value}`);
+  const [integer, fraction = ""] = value.split(".");
+  const normalizedInteger = integer.replace(/^(-?)0+(?=\d)/, "$1");
+  const normalizedFraction = fraction.replace(/0+$/, "");
+  return `${normalizedInteger}${normalizedFraction ? `.${normalizedFraction}` : ""}`;
+}
+
+/** Both queries return ordered source identity, exact text facts and numeric value facts. */
+export async function compareTradeBusinessFacts(sourceRows, candidateRows, numericIndexes) {
+  const source = sourceRows[Symbol.asyncIterator]();
+  const candidate = candidateRows[Symbol.asyncIterator]();
+  const mismatches = [];
+  let compared = 0;
+  for (;;) {
+    const [left, right] = await Promise.all([source.next(), candidate.next()]);
+    if (left.done && right.done) break;
+    const expected = left.value?.map((value, index) => numericIndexes.includes(index)
+      ? canonicalDecimal(value) : value);
+    const actual = right.value?.map((value, index) => numericIndexes.includes(index)
+      ? canonicalDecimal(value) : value);
+    if (!expected || !actual || expected.length !== actual.length ||
+        expected.some((value, index) => value !== actual[index])) {
+      if (mismatches.length < 10) mismatches.push({ source: left.value ?? null,
+        candidate: right.value ?? null });
+    }
+    compared++;
+  }
+  return { compared, mismatches };
+}
+
+export function assessTradeProjectionParity(parity, firstTradeCount) {
+  const failures = [];
+  if (Number(parity.journal_trades) !== firstTradeCount ||
+      Number(parity.projected_trades) !== firstTradeCount || Number(parity.mismatches) !== 0) {
+    failures.push("financial trade projection differs from latest journal attempts");
+  }
+  return failures;
+}
+
+function addDecimal(left, right) {
+  const parts = [left, right].map((value) => {
+    if (!/^-?\d+(?:\.\d+)?$/.test(value ?? "") || value.length > 1_000) {
+      throw new Error(`invalid balance decimal: ${value}`);
+    }
+    const [integer, fraction = ""] = value.split(".");
+    return { amount: BigInt(`${integer}${fraction}`), scale: fraction.length };
+  });
+  const scale = Math.max(parts[0].scale, parts[1].scale);
+  const amount = parts.reduce((sum, part) =>
+    sum + part.amount * (10n ** BigInt(scale - part.scale)), 0n);
+  const sign = amount < 0n ? "-" : "";
+  const digits = (amount < 0n ? -amount : amount).toString().padStart(scale + 1, "0");
+  return canonicalDecimal(`${sign}${digits.slice(0, digits.length - scale)}${scale
+    ? `.${digits.slice(-scale)}` : ""}`);
+}
+
+function balanceKey(fields) { return JSON.stringify(fields); }
+
+/** Decoder for immutable v1 OPENING/FUNDING bytes emitted by SettlementJournalControlCodec. */
+export function decodeFinancialControl(kind, payloadHex) {
+  if (!/^(?:[0-9a-f]{2})+$/i.test(payloadHex ?? "")) throw new Error("invalid control payload hex");
+  const bytes = Buffer.from(payloadHex, "hex");
+  let offset = 0;
+  function integer() {
+    if (offset + 4 > bytes.length) throw new Error("truncated control integer");
+    const value = bytes.readInt32BE(offset); offset += 4; return value;
+  }
+  function field() {
+    const length = integer();
+    if (length < 0 || length > 1_048_576 || offset + length > bytes.length) {
+      throw new Error("invalid control field length");
+    }
+    const value = bytes.toString("utf8", offset, offset + length);
+    offset += length;
+    return value;
+  }
+  const tag = field();
+  const encodedKind = field();
+  const version = integer();
+  if (offset + 8 > bytes.length) throw new Error("truncated control sequence");
+  const sequence = bytes.readBigInt64BE(offset); offset += 8;
+  const id = field();
+  if (tag !== "reef.settlement.control.v1" || encodedKind !== kind || version !== 1 ||
+      sequence <= 0n || !id) throw new Error("control header differs from journal row");
+  if (kind === "POLICY") {
+    field(); // run ID
+    field(); // venue session ID
+    const frontiers = integer();
+    if (frontiers < 0 || frontiers > 100_000) throw new Error("invalid policy frontier count");
+    for (let index = 0; index < frontiers; index++) {
+      field(); // event stream
+      field(); // source generation
+      integer(); // partition
+      if (offset + 8 > bytes.length) throw new Error("truncated policy frontier sequence");
+      offset += 8;
+    }
+    field(); // profile ID
+    integer(); // policy version
+    for (let index = 0; index < 5; index++) field();
+    if (offset !== bytes.length) throw new Error("policy control has trailing bytes");
+    return { sequence: sequence.toString(), id, kind };
+  }
+  if (kind !== "OPENING" && kind !== "FUNDING") throw new Error("unknown financial control kind");
+  const account = Array.from({ length: 5 }, field);
+  const amount = field();
+  canonicalDecimal(amount);
+  if (kind === "FUNDING") {
+    const retries = integer();
+    if (retries < 0 || retries > 100_000) throw new Error("invalid funding retry count");
+    for (let index = 0; index < retries; index++) field();
+  }
+  if (offset !== bytes.length) throw new Error("financial control has trailing bytes");
+  return { sequence: sequence.toString(), id, kind, account, amount };
+}
+
+export async function compareFinancialBalances(controlRows, deltaRows, projectionRows) {
+  const expected = new Map();
+  const failures = [];
+  let controlCount = 0;
+  for await (const [rawSequence, id, kind, payloadHex] of controlRows) {
+    const control = decodeFinancialControl(kind, payloadHex);
+    if (control.sequence !== rawSequence || control.id !== id ||
+        BigInt(rawSequence) !== BigInt(controlCount + 1)) {
+      if (failures.length < 10) failures.push(`financial control sequence/identity differs at ${rawSequence}`);
+    }
+    controlCount++;
+    if (!control.account) continue;
+    const key = balanceKey(control.account);
+    if (control.kind === "OPENING") {
+      if (expected.has(key)) failures.push(`duplicate opening for ${key}`);
+      expected.set(key, control.amount);
+    } else {
+      if (!expected.has(key)) failures.push(`funding lacks opening for ${key}`);
+      expected.set(key, addDecimal(expected.get(key) ?? "0", control.amount));
+    }
+  }
+  for await (const row of deltaRows) {
+    const key = balanceKey(row.slice(0, 5));
+    expected.set(key, addDecimal(expected.get(key) ?? "0", row[5]));
+  }
+  let projected = 0;
+  for await (const row of projectionRows) {
+    const key = balanceKey(row.slice(0, 5));
+    const amount = expected.get(key);
+    if (amount === undefined || canonicalDecimal(amount) !== canonicalDecimal(row[5])) {
+      if (failures.length < 10) failures.push(`financial balance differs for ${key}`);
+    }
+    expected.delete(key);
+    projected++;
+  }
+  if (expected.size && failures.length < 10) failures.push(`${expected.size} journal balances missing from projection`);
+  return { controls: controlCount, projected, unmatched: expected.size, failures };
+}
+
 export async function verifyRetainedCoverage(windows, sourceHeads, sourceRows,
   partitionCount, sourceGeneration) {
   const errors = [];
@@ -236,20 +391,51 @@ async function inspect(stream, generation, partitionCount) {
   if (coverage.sourceOutcomes === 0) failures.push("closed source cohort contains no outcomes");
   const sourceTradeSql = `SELECT o.partition_id,o.stream_sequence,(t.ordinality*3)::integer,
     encode(convert_to(t.trade->>'tradeId','UTF8'),'hex'),
-    encode(convert_to(t.trade->>'eventId','UTF8'),'hex')
+    encode(convert_to(t.trade->>'eventId','UTF8'),'hex'),
+    encode(convert_to(t.trade->>'instrumentId','UTF8'),'hex'),
+    encode(convert_to(t.trade->>'currency','UTF8'),'hex'),
+    (t.trade->>'quantityUnits')::numeric,
+    (t.trade->>'quantityUnits')::numeric * (t.trade->>'price')::numeric,
+    extract(epoch FROM (t.trade->>'occurredAt')::timestamptz)
     FROM runtime.canonical_command_outcomes o
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.result_payload->'trades','[]'::jsonb))
       WITH ORDINALITY AS t(trade,ordinality)
     WHERE o.event_stream=${s} ORDER BY o.partition_id,o.stream_sequence,t.ordinality`;
   const journalTradeSql = `SELECT partition_id,stream_sequence,effect_ordinal,
-    encode(convert_to(trade_id,'UTF8'),'hex'),encode(convert_to(event_id,'UTF8'),'hex')
+    encode(convert_to(trade_id,'UTF8'),'hex'),encode(convert_to(event_id,'UTF8'),'hex'),
+    encode(convert_to(instrument_id,'UTF8'),'hex'),encode(convert_to(currency,'UTF8'),'hex'),
+    quantity_units,cash_amount,extract(epoch FROM occurred_at)
     FROM settlement.settlement_journal_results
     WHERE event_stream=${s} AND attempt_number=1
     ORDER BY partition_id,stream_sequence,effect_ordinal`;
-  const trades = await compareExactFirstTrades(rows("postgres", sourceTradeSql),
-    rows("settlement-postgres", journalTradeSql));
-  if (trades.mismatches.length) failures.push("source trades differ from first journal attempts");
+  const trades = await compareTradeBusinessFacts(rows("postgres", sourceTradeSql),
+    rows("settlement-postgres", journalTradeSql), [7, 8, 9]);
+  if (trades.mismatches.length) failures.push("source business trade facts differ from first journal attempts");
   if (trades.compared === 0) failures.push("closed source cohort contains no trades");
+  const sourceMarketSql = `SELECT o.partition_id,o.stream_sequence,(t.ordinality*3)::integer,
+    encode(convert_to(t.trade->>'tradeId','UTF8'),'hex'),
+    encode(convert_to(t.trade->>'eventId','UTF8'),'hex'),
+    encode(convert_to(t.trade->>'executionId','UTF8'),'hex'),
+    encode(convert_to(t.trade->>'instrumentId','UTF8'),'hex'),
+    encode(convert_to(t.trade->>'currency','UTF8'),'hex'),
+    (t.trade->>'quantityUnits')::numeric,(t.trade->>'price')::numeric,
+    t.trade->>'occurredAt'
+    FROM runtime.canonical_command_outcomes o
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.result_payload->'trades','[]'::jsonb))
+      WITH ORDINALITY AS t(trade,ordinality)
+    WHERE o.event_stream=${s} ORDER BY o.partition_id,o.stream_sequence,t.ordinality`;
+  const marketTapeSql = `SELECT partition_id,source_stream_sequence,source_effect_ordinal,
+    encode(convert_to(trade_id,'UTF8'),'hex'),encode(convert_to(event_id,'UTF8'),'hex'),
+    encode(convert_to(execution_id,'UTF8'),'hex'),encode(convert_to(instrument_id,'UTF8'),'hex'),
+    encode(convert_to(currency,'UTF8'),'hex'),quantity_units,price,occurred_at_text
+    FROM postmatch.matching_market_candidate_tape
+    WHERE event_stream=${s} AND projector_generation=${p}
+    ORDER BY partition_id,source_stream_sequence,source_effect_ordinal`;
+  const marketTrades = await compareTradeBusinessFacts(rows("postgres", sourceMarketSql),
+    rows("postmatch-postgres", marketTapeSql), [8, 9]);
+  if (marketTrades.mismatches.length || marketTrades.compared !== trades.compared) {
+    failures.push("market tape differs from retained source trades");
+  }
   const duplicates = await oneJson("settlement-postgres", `SELECT json_build_object(
     'duplicate_first_attempts',(SELECT count(*) FROM (SELECT trade_id
       FROM settlement.settlement_journal_results WHERE event_stream=${s} AND attempt_number=1
@@ -274,6 +460,53 @@ async function inspect(stream, generation, partitionCount) {
   }
   if (Number(duplicates.projected_trades) !== trades.compared) {
     failures.push("projected trade count differs from matched source first attempts");
+  }
+  const tradeProjectionParity = await oneJson("settlement-postgres", `WITH latest AS (
+    SELECT DISTINCT ON (run_id,trade_id) run_id,trade_id,attempt_number,outcome,
+      break_reason,batch_sequence,result_index
+    FROM settlement.settlement_journal_results WHERE event_stream=${s}
+    ORDER BY run_id,trade_id,attempt_number DESC
+  ) SELECT json_build_object(
+    'journal_trades',count(latest.trade_id),
+    'projected_trades',count(projected.trade_id),
+    'mismatches',count(*) FILTER (WHERE latest.trade_id IS NULL OR projected.trade_id IS NULL
+      OR latest.attempt_number IS DISTINCT FROM projected.attempt_number
+      OR latest.outcome IS DISTINCT FROM projected.outcome
+      OR latest.break_reason IS DISTINCT FROM projected.break_reason
+      OR latest.batch_sequence IS DISTINCT FROM projected.result_batch_sequence
+      OR latest.result_index IS DISTINCT FROM projected.result_index))
+    FROM latest FULL OUTER JOIN (
+      SELECT * FROM settlement.settlement_journal_projection_trades
+      WHERE event_stream=${s} AND projector_generation=${p}
+    ) projected ON projected.run_id=latest.run_id AND projected.trade_id=latest.trade_id`);
+  failures.push(...assessTradeProjectionParity(tradeProjectionParity, trades.compared));
+  const controlSql = `SELECT control_sequence,control_id,control_kind,encode(payload,'hex')
+    FROM settlement.settlement_journal_controls WHERE event_stream=${s}
+    ORDER BY control_sequence`;
+  const settledDeltasSql = `SELECT leg.run_id,leg.participant_id,leg.account_id,
+    leg.asset_type,leg.asset_id,sum(leg.delta)
+    FROM settlement.settlement_journal_results result
+    CROSS JOIN LATERAL (VALUES
+      (result.run_id,result.buyer_participant_id,result.buyer_account_id,
+        'CASH',result.currency,-result.cash_amount),
+      (result.run_id,result.seller_participant_id,result.seller_account_id,
+        'CASH',result.currency,result.cash_amount),
+      (result.run_id,result.seller_participant_id,result.seller_account_id,
+        'SECURITY',result.instrument_id,-result.quantity_units),
+      (result.run_id,result.buyer_participant_id,result.buyer_account_id,
+        'SECURITY',result.instrument_id,result.quantity_units)
+    ) AS leg(run_id,participant_id,account_id,asset_type,asset_id,delta)
+    WHERE result.event_stream=${s} AND result.outcome='SETTLED'
+    GROUP BY leg.run_id,leg.participant_id,leg.account_id,leg.asset_type,leg.asset_id`;
+  const projectionBalancesSql = `SELECT run_id,participant_id,account_id,asset_type,asset_id,amount
+    FROM settlement.settlement_journal_projection_balances
+    WHERE event_stream=${s} AND projector_generation=${p}`;
+  const balanceParity = await compareFinancialBalances(rows("settlement-postgres", controlSql),
+    rows("settlement-postgres", settledDeltasSql),
+    rows("settlement-postgres", projectionBalancesSql));
+  failures.push(...balanceParity.failures);
+  if (balanceParity.controls !== Number(journal.last_control_sequence)) {
+    failures.push("financial control count differs from journal control frontier");
   }
   const afterHeads = Object.fromEntries(Array.from({ length: partitionCount }, (_, partition) =>
     [partition, ORIGIN(partition).toString()]));
@@ -301,9 +534,12 @@ async function inspect(stream, generation, partitionCount) {
   }
   return { status: failures.length ? "fail" : "pass", scope: "closed-retained-source-cohort",
     eventStream: stream, sourceGeneration: resolvedGeneration, sourceHeads, journal, finality,
-    financial, market, coverage, firstTrades: trades, duplicates, failures,
+    financial, market, coverage, firstTrades: trades, marketTrades, tradeProjectionParity,
+    balanceParity,
+    duplicates, failures,
     unproven: ["live Kafka topic identity, broker offsets after last retained outcome, and empty-range attestation",
       "full journal batch-chain replay and exact source-member payload digests",
+      "source order ownership/account identities, every intermediate balance, and market order/level parity",
       "same-head source rewrites and replay after crash/takeover",
       "in-load 10000/s throughput, latency, and backlog trend"] };
 }
