@@ -139,6 +139,57 @@ differences are not individual trade latency percentiles. Sustained and
 multi-lane load, fault/restart under load, and independent identity-level
 reconciliation remain open.
 
+## Paired burst and five-minute run, CAL-P1-L4
+
+Phase 1 now has separate repeatable local commands:
+`make dev-stress-calcify-basic PAIRS=1000` and
+`make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`.
+Optional `OUT=/absolute/path.json` saves exact counts and stage timestamps;
+the paced run also saves five-second accepted-to-receipt gap samples. The
+five-minute gate was fixed before the run: at least 95% requested intake rate,
+gap p95 at most two seconds of requested trade rate, gap peak at most five
+seconds, final drain at most five seconds, and exact stage counts. Gap is a
+count of accepted crossing pairs without receipts at sampling time; it includes
+matching and post-match work and is not per-trade latency.
+
+Generation 12, `calcify-1790714410280`, repeated burst after harness changes:
+2,000 load orders accepted in 1,542 ms; 2,002 source commands, 1,001 trades,
+1,001 commitment links, 1,001 verified links, and 1,001 receipts; final drain
+1,197 ms. [Raw burst report](../evidence/calcify-phase1-burst-repeat-2026-09-29.json).
+
+Generation 13, `calcify-1790714556525`, ran five minutes at 100 crossing
+pairs/s (200 orders/s requested). Actual 60,000 load orders accepted in
+299,911 ms, 200.06 accepted orders/s; 60,002 intake/source commands and
+30,001 source trades including preflight. Commitment links, verified links,
+and receipts each counted 30,001. Across 59 five-second samples, accepted-to-
+receipt gap p95 and peak were both 70 trades, with no rising trend. At last
+acceptance, 29,931 receipts existed; all 30,001 existed 1,923 ms later. Last
+source-to-commitment, commitment-to-verified, and verified-to-receipt endpoint
+differences were 511, 509, and 513 ms. [Raw sustained report with all samples](../evidence/calcify-phase1-5m-2026-09-29.json).
+
+One mid-run resource snapshot showed API 9.82%, matching 3.36%, extractor
+1.72%, verifier 1.00%, receipt 2.09%, PostgreSQL 2.45%, boundary PostgreSQL
+5.64%, and Redpanda 14.53% CPU, with memory under 1 GiB per listed service;
+these are not maxima. Overall receipt table size was 2,260,992 bytes at
+16,881 generation-13 rows and 3,571,712 bytes at 30,001 rows, including
+earlier generations and indexes. No error, exception, or poisoned-partition
+line appeared in matching/API/Calcify logs during the run.
+
+Both runs used same local four-partition topology, one hot instrument lane,
+PostgreSQL ingress, matching direct stream, and Phase 1 sidecars, with reused
+volumes and fresh topics. Source lane partition differed between burst and
+paced run. Runtime source base was `39f02b9ab7faab93e18083d4912fa9edba45a8e9`;
+the load observer was uncommitted during measurement, with SHA-256
+`cd234be4f083cf85b9e6291889567f41ca541cbfb20ed37425fa990f3ce3085c`.
+Runtime image ID was `sha256:080af77b58cff7ecd55031e26707d0b3d11a76be6394cf166b7dd18d97180017`;
+matching image ID was `sha256:d73740de8bf39dad8cea3a1db3db3708f0e83cfe8fe8e0a8862459afe46d30c8`.
+Docker 29.7.2 allocated 10 CPUs and 16,745,824,256 bytes. This passes local
+Phase 1 diagnostic gate at 100 pairs/s; it does
+not qualify higher rates, multiple lanes, aged state, faults/restarts under
+load, independent identity-level reconciliation, financial settlement, or
+hosted capacity. Next phase needs its own workload/rate and same sustained
+plus burst evidence before promotion.
+
 ## Run and limits
 
 Start with `compose.base.yml`, `compose.local.yml`, and `compose.calcify.yml`, profiles `redpanda,calcify-phase1`; apply migrations before enabling sidecars. Stage environment has source and output topic names, source generation, and `CALCIFY_AUTO_OFFSET_RESET` (default `earliest`). Output topics are created with source partition count and one replica in this local Phase 1 path; deployment topology and retention need separate review. Source batches lacking `sha256-reef-canonical-v1` stop their partition rather than silently pass.

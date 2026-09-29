@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { composePsqlArgs } from "./lib/compose-psql.mjs";
 import { applyStackProfile } from "./lib/dev-stack-profiles.mjs";
@@ -16,11 +18,17 @@ const instrumentId = `AAPL-${smokeId}`;
 const sessionId = `session-${smokeId}`;
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const timeoutMs = Number(env("DEV_CALCIFY_FULL_PATH_TIMEOUT_MS", "60000"));
-const loadPairs = Number(env("DEV_CALCIFY_FULL_PATH_LOAD_PAIRS", "0"));
+const durationSeconds = Number(env("DEV_CALCIFY_FULL_PATH_DURATION_SECONDS", "0"));
+const ratePairsPerSecond = Number(env("DEV_CALCIFY_FULL_PATH_RATE_PAIRS_PER_SECOND", "0"));
+const sustained = durationSeconds > 0 || ratePairsPerSecond > 0;
+const loadPairs = sustained ? durationSeconds * ratePairsPerSecond : Number(env("DEV_CALCIFY_FULL_PATH_LOAD_PAIRS", "0"));
 const loadBatchSize = Number(env("DEV_CALCIFY_FULL_PATH_LOAD_BATCH_SIZE", "10"));
-if (!Number.isSafeInteger(loadPairs) || loadPairs < 0 ||
+const reportPath = env("DEV_CALCIFY_FULL_PATH_REPORT", "");
+if (!Number.isSafeInteger(durationSeconds) || !Number.isSafeInteger(ratePairsPerSecond) ||
+    (sustained && (durationSeconds < 1 || ratePairsPerSecond < 1)) ||
+    !Number.isSafeInteger(loadPairs) || loadPairs < 0 ||
     !Number.isSafeInteger(loadBatchSize) || loadBatchSize < 1) {
-  throw new Error("load pairs must be nonnegative and batch size must be positive integers");
+  throw new Error("load pairs, duration, rate, and batch size must be valid integers");
 }
 
 setValue("REEF_COMPOSE_FILES", "compose.base.yml,compose.local.yml,compose.calcify.yml");
@@ -102,7 +110,10 @@ async function runBasicLoad(generation, partition) {
   const started = Date.now();
   let acceptedPairs = 0;
   let halfwayReceipts = null;
+  const samples = [];
+  let nextSampleAt = started + 5000;
   for (let first = 0; first < loadPairs; first += loadBatchSize) {
+    if (sustained) await sleep(Math.max(0, started + Math.floor(first * 1000 / ratePairsPerSecond) - Date.now()));
     const last = Math.min(first + loadBatchSize, loadPairs);
     const ids = Array.from({ length: last - first }, (_, index) => first + index);
     await Promise.all(ids.map((id) => submitLoad(id, "buyer", "BUY")));
@@ -111,9 +122,18 @@ async function runBasicLoad(generation, partition) {
     if (halfwayReceipts === null && acceptedPairs >= Math.ceil(loadPairs / 2)) {
       halfwayReceipts = Number((await psql(`SELECT COUNT(*) FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
     }
+    if (sustained && Date.now() >= nextSampleAt) {
+      const receipts = Number((await psql(`SELECT COUNT(*) FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
+      const sample = { elapsedMs: Date.now() - started, acceptedPairs, receipts,
+        acceptedToReceiptGap: acceptedPairs + 1 - receipts };
+      samples.push(sample);
+      console.log(`Calcify sustained sample ${JSON.stringify(sample)}`);
+      nextSampleAt += 5000;
+    }
   }
   const acceptedAt = Date.now();
   console.log(`Calcify load accepted ${acceptedPairs * 2} orders in ${acceptedAt - started} ms`);
+  const receiptsAtAcceptance = Number((await psql(`SELECT COUNT(*) FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
   const expectedReceipts = loadPairs + 1;
   let finalReceipts = 0;
   while (Date.now() - acceptedAt < timeoutMs) {
@@ -122,18 +142,23 @@ async function runBasicLoad(generation, partition) {
     await sleep(500);
   }
   const drainedAt = Date.now();
-  const batches = await readAllBatches(partition);
-  const sourceCommands = batches.reduce((sum, record) => sum + record.batch.commandCount, 0);
-  const tradeCount = batches.reduce((sum, record) => sum + record.batch.outcomes.reduce(
-    (outcomeSum, outcome) => outcomeSum + (outcome.result.trades?.length ?? 0), 0), 0);
+  const source = await readSourceSummary(partition);
   const commitmentMeta = await readTopicMeta(commitmentTopic, partition);
   const verifiedMeta = await readTopicMeta(verifiedTopic, partition);
-  const sourceLastMs = batches.reduce((latest, record) => Math.max(latest, record.timestamp), 0);
+  const sourceLastMs = source.lastTimestampMs;
   const receiptLastMs = Number((await psql(`SELECT FLOOR(EXTRACT(EPOCH FROM MAX(recorded_at)) * 1000)::bigint FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
   const intakeRows = Number((await psql(`SELECT COUNT(*) FROM boundary.stream_command_intake WHERE stream_name = '${commandTopic}'`, "boundary-postgres")).trim());
-  const result = { smokeId, generation, loadPairs, loadBatchSize, acceptedOrders: acceptedPairs * 2,
-    acceptedMs: acceptedAt - started, acceptedOrdersPerSecond: Number((acceptedPairs * 2000 / (acceptedAt - started)).toFixed(2)),
-    halfwayReceipts, sourceBatches: batches.length, sourceCommands, sourceTrades: tradeCount,
+  const gaps = samples.map((sample) => sample.acceptedToReceiptGap).sort((a, b) => a - b);
+  const p95Gap = gaps.length ? gaps[Math.ceil(gaps.length * 0.95) - 1] : null;
+  const maxGap = gaps.length ? gaps[gaps.length - 1] : null;
+  const acceptedMs = acceptedAt - started;
+  const acceptedOrdersPerSecond = Number((acceptedPairs * 2000 / acceptedMs).toFixed(2));
+  const result = { smokeId, generation, mode: sustained ? "sustained" : "burst", loadPairs, loadBatchSize,
+    durationSeconds: sustained ? durationSeconds : null, ratePairsPerSecond: sustained ? ratePairsPerSecond : null,
+    acceptedOrders: acceptedPairs * 2,
+    acceptedMs, acceptedOrdersPerSecond, halfwayReceipts, receiptsAtAcceptance,
+    samples, p95AcceptedToReceiptGap: p95Gap, maxAcceptedToReceiptGap: maxGap,
+    sourceBatches: source.count, sourceCommands: source.commands, sourceTrades: source.trades,
     commitmentLinks: commitmentMeta.count, verifiedLinks: verifiedMeta.count,
     sourceLastMs, commitmentLastMs: commitmentMeta.lastTimestampMs,
     verifiedLastMs: verifiedMeta.lastTimestampMs, receiptLastMs,
@@ -143,13 +168,17 @@ async function runBasicLoad(generation, partition) {
     finalReceipts, drainMs: drainedAt - acceptedAt, totalMs: drainedAt - started,
     intakeRows, profile: "PostgreSQL-backed HTTP intake + Redpanda + Go matching + Calcify Phase 1",
     capacityClaim: false };
-  console.log(JSON.stringify(result, null, 2));
-  if (intakeRows !== loadPairs * 2 + 2 || sourceCommands !== loadPairs * 2 + 2 ||
-      tradeCount !== expectedReceipts || commitmentMeta.count !== expectedReceipts ||
-      verifiedMeta.count !== expectedReceipts || finalReceipts !== expectedReceipts) {
+  if (reportPath) await writeFile(reportPath, JSON.stringify(result, null, 2) + "\n");
+  console.log(JSON.stringify({ ...result, samples: `${samples.length} samples in ${reportPath || "console only"}` }, null, 2));
+  const sustainedGate = !sustained || (acceptedOrdersPerSecond >= ratePairsPerSecond * 2 * 0.95 &&
+    p95Gap !== null && p95Gap <= ratePairsPerSecond * 2 &&
+    maxGap <= ratePairsPerSecond * 5 && drainedAt - acceptedAt <= 5000);
+  if (intakeRows !== loadPairs * 2 + 2 || source.commands !== loadPairs * 2 + 2 ||
+      source.trades !== expectedReceipts || commitmentMeta.count !== expectedReceipts ||
+      verifiedMeta.count !== expectedReceipts || finalReceipts !== expectedReceipts || !sustainedGate) {
     throw new Error(`Calcify basic load accounting failed: ${JSON.stringify(result)}`);
   }
-  console.log("Calcify basic load passed");
+  console.log(`Calcify ${sustained ? "sustained" : "burst"} load passed`);
 }
 
 async function seedReferenceData() {
@@ -206,25 +235,53 @@ async function readBatches(count) {
   return records;
 }
 
-async function readAllBatches(partition) {
-  const output = (await capture("docker", composeArgs([
-    "exec", "-T", "redpanda", "rpk", "topic", "consume", sourceTopic,
-    "--read-committed", "-p", String(partition), "-o", ":end", "--format", "json", "--pretty-print=false",
-  ]), timeoutMs)).output;
-  return output.trim().split(/\r?\n/).filter(Boolean).map((line) => {
-    const record = JSON.parse(line);
-    return { partition: Number(record.partition), offset: Number(record.offset), timestamp: Number(record.timestamp), batch: JSON.parse(record.value) };
+async function readSourceSummary(partition) {
+  const summary = { count: 0, commands: 0, trades: 0, lastTimestampMs: 0 };
+  await consumeToEnd(sourceTopic, partition, false, (record) => {
+    const batch = JSON.parse(record.value);
+    summary.count++;
+    summary.commands += batch.commandCount;
+    summary.trades += batch.outcomes.reduce((sum, outcome) => sum + (outcome.result.trades?.length ?? 0), 0);
+    summary.lastTimestampMs = Math.max(summary.lastTimestampMs, Number(record.timestamp));
   });
+  return summary;
 }
 
 async function readTopicMeta(topic, partition) {
-  const output = (await capture("docker", composeArgs([
-    "exec", "-T", "redpanda", "rpk", "topic", "consume", topic,
-    "--read-committed", "-p", String(partition), "-o", ":end", "--meta-only",
-    "--format", "json", "--pretty-print=false",
-  ]), timeoutMs)).output;
-  const records = output.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-  return { count: records.length, lastTimestampMs: records.reduce((latest, record) => Math.max(latest, Number(record.timestamp)), 0) };
+  const summary = { count: 0, lastTimestampMs: 0 };
+  await consumeToEnd(topic, partition, true, (record) => {
+    summary.count++;
+    summary.lastTimestampMs = Math.max(summary.lastTimestampMs, Number(record.timestamp));
+  });
+  return summary;
+}
+
+function consumeToEnd(topic, partition, metaOnly, visitor) {
+  return new Promise((resolve, reject) => {
+    const args = ["exec", "-T", "redpanda", "rpk", "topic", "consume", topic,
+      "--read-committed", "-p", String(partition), "-o", ":end", "--format", "json", "--pretty-print=false"];
+    if (metaOnly) args.push("--meta-only");
+    const child = spawn("docker", composeArgs(args), { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    let failure = null;
+    let stderr = "";
+    const timer = setTimeout(() => {
+      failure = new Error(`timed out consuming ${topic}`);
+      child.kill("SIGTERM");
+    }, Math.max(timeoutMs, 120000));
+    createInterface({ input: child.stdout, crlfDelay: Infinity }).on("line", (line) => {
+      if (!line || failure) return;
+      try { visitor(JSON.parse(line)); }
+      catch (error) { failure = error; child.kill("SIGTERM"); }
+    });
+    child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-4096); });
+    child.on("error", (error) => { clearTimeout(timer); reject(error); });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (failure) reject(failure);
+      else if (code !== 0) reject(new Error(`rpk consume ${topic} failed (${code}): ${stderr}`));
+      else resolve();
+    });
+  });
 }
 
 function assertBatch(record, party, tradeCount) {

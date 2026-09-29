@@ -70,6 +70,14 @@ the same path. It checks intake, matched source commands/trades, both link
 streams, final receipts, and stage-end timestamps; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
 records the observed rate, drain, and limits. This is not a sustained gate.
 
+Run `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`
+for a five-minute paced local diagnostic. Optional `OUT=/absolute/path.json`
+saves five-second receipt-gap samples and exact final stage counts. This local
+gate requires at least 95% of requested intake rate, sampled receipt gap at
+most two seconds at p95 and five seconds at peak, exact final counts, and final
+drain within five seconds. Compare with the separate burst; neither qualifies
+hosted or production capacity.
+
 ## Change configuration
 
 Copy `.env.example` to ignored `.env`; use named host-port overrides there or

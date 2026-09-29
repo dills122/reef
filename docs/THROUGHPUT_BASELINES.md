@@ -53,6 +53,19 @@ reconciled. Same nominal workload and topology, but selected lane partition
 and aged local state differed; no sustained or hosted promotion follows.
 [Before/after evidence and limits](evidence/calcify-phase1-verifier-batch-2026-09-29.json).
 
+CAL-P1-L4 paired a fresh 1,000-pair local burst with a 300-second paced run
+at 100 crossing pairs/s through PostgreSQL HTTP intake, Go matching, and all
+three Calcify stages. Burst accepted 2,000 orders in 1,542 ms, then drained
+1,001 receipts in 1,197 ms. Paced run accepted 60,000 load orders in 299,911
+ms (200.06 orders/s); all 60,002 intake/source commands, 30,001 source
+trades, commitment links, verified links, and receipts reconciled including
+preflight. Fifty-nine in-load samples had accepted-to-receipt gap p95 and peak
+70 trades with no growth; final drain took 1,923 ms. Frozen local diagnostic
+gate passed. Same single hot lane and local reused volumes; no hosted,
+multi-lane, fault-at-load, or higher-rate capacity claim. [Paced raw report](evidence/calcify-phase1-5m-2026-09-29.json),
+[burst raw report](evidence/calcify-phase1-burst-repeat-2026-09-29.json), and
+[method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#paired-burst-and-five-minute-run-cal-p1-l4).
+
 ## Current measured baseline — September24, before0053
 
 Frozen candidate/image/source and0052 settings below; no0053 optimization applied.

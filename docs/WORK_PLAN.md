@@ -31,6 +31,10 @@ settlement qualification.
 Measured verifier-per-link transaction backlog was corrected by per-poll
 transaction batching: two repeated local 1,000-pair runs drained receipts
 within 960 and 942 ms after last acceptance with exact stage counts.
+Phase 1 paired load gate then passed: 1,000-pair burst plus five minutes at
+100 crossing pairs/s, with 60,000 accepted load orders, 30,001 trades/links/
+receipts including preflight, sampled accepted-to-receipt gap p95/peak 70
+trades, and 1,923 ms final drain. Scope remains local single-lane diagnostic.
 Exact wire contract, corrections, and limits:
 [Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link
@@ -38,6 +42,9 @@ reconciliation remain follow-ups before non-diagnostic use. Repeat
 `make dev-smoke-calcify-full-path` as each post-match slice expands, adding
 assertions for that slice's source identity, durable effect, and replay behavior.
 Repeat `make dev-stress-calcify-basic PAIRS=1000` for local full-path load.
+Pair it with `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`
+after each material post-match phase change; record in-load gap and exact final
+stage counts before claiming that slice handles sustained traffic.
 
 ## Source Of Truth
 
