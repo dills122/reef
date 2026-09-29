@@ -65,6 +65,11 @@ its exact receipt. It leaves stack running; use matching `REEF_COMPOSE_FILES` an
 `DEV_COMPOSE_PROFILES` on `make dev-down` when finished. This smoke does not
 measure capacity or exercise financial settlement.
 
+Run `make dev-stress-calcify-basic PAIRS=1000` for a bounded local burst through
+the same path. It checks intake, matched source commands/trades, and final
+receipts; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
+records the observed rate, drain, and limits. This is not a sustained gate.
+
 ## Change configuration
 
 Copy `.env.example` to ignored `.env`; use named host-port overrides there or
