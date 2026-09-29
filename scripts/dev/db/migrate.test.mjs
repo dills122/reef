@@ -83,6 +83,8 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0066_drop_unused_order_event_time_index.sql",
       "runtime/0068_event_replay_conflicts.sql",
       "runtime/0069_logged_projection_dirty_queues.sql",
+      "runtime/0070_calcify_phase1_receipts.sql",
+      "runtime/0071_calcify_source_topic_identity.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
