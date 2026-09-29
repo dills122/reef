@@ -1,6 +1,6 @@
 # Calcify — post-match redesign discovery
 
-Status: initial discovery for discussion; no architecture, product-policy, storage, or capacity decision approved.
+Status: discovery in progress; Phase 1 outline and match-commitment meaning agreed, implementation details open.
 Recorded: 2026-09-28 America/Toronto (2026-09-29 UTC).
 Base: `origin/master` at `368a9247b31c8997c5dd9f51aeb88a911adebfe7` (rollback PR #428 merged).
 Branch: `codex/calcify-discovery`.
@@ -45,6 +45,14 @@ flowchart LR
 ```
 
 Proposal, not decision: source reader proves contiguous partition coverage and exact bytes once, then independently checkpointed consumers process verified input. Routine API reads use indexed projections, never full-prefix replay. Market tape follows committed execution even while settlement is pending or failed. Workflow records each visible allocation/confirmation/affirmation/clearing/novation/obligation transition under versioned policy. Gross execution detail survives any netting. Settlement fixes scarce-account order durably, evaluates both DvP sides against authoritative account state, and atomically records settled effects or typed pending/failure result. Financial commit defines finality; projection arrival does not. Combined reads expose distinct matching and financial as-of positions. Repair/retry adds facts; it does not rewrite execution or prior failure.
+
+## Phase 1 — match commitment
+
+Agreed high-level path: matching engine publishes `VenueEventBatch` to its durable venue-event log; a commitment extractor reads those batches and publishes one `MatchCommitment` per `TradeCreated` to a new durable commitment log; a verifier publishes verified commitments to a durable inbox; a temporary settlement worker consumes inbox records and writes idempotent PostgreSQL receipts. Exact contracts, verification rules, inbox form, and worker failure behavior remain to be designed. Receipt is not financial settlement.
+
+Agreed meaning: `MatchCommitment` states that, according to the matching engine's current facts, a match was made and durably committed. It does not assert verification, participant acceptance, or settlement. Matching output remains `VenueEventBatch`; the extracted commitment is a post-match representation of one trade fact. The source event retains authority for what matching decided.
+
+Next design point: specify extractor input/output identity, source provenance, ordering, replay, and the atomic durable handoff to the commitment log. Do not treat the draft extractor mechanics as approved until reviewed.
 
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
 
