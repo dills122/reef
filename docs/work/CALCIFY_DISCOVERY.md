@@ -52,9 +52,11 @@ Agreed high-level path: matching engine publishes `VenueEventBatch` to its durab
 
 Agreed meaning: `MatchCommitment` states that, according to the matching engine's current facts, a match was made and durably committed. It does not assert verification, participant acceptance, or settlement. Matching output remains `VenueEventBatch`; the extracted commitment is a post-match representation of one trade fact. The source event retains authority for what matching decided.
 
-Agreed extractor handoff: read a committed `VenueEventBatch`, emit one `MatchCommitment` per `TradeCreated` in source order, and publish those records plus the extractor's consumed source offset in one Redpanda transaction. A batch with no trades advances the source offset without a commitment. This follows the existing matching-engine pattern of atomically publishing `VenueEventBatch` and committing its command offset. The transaction covers this broker handoff only; commitment identity and downstream idempotency still need design.
+Agreed extractor handoff: read a committed `VenueEventBatch`, emit one `MatchCommitment` per `TradeCreated` in source order, and publish those records plus the extractor's consumed source offset in one Redpanda transaction. A batch with no trades advances the source offset without a commitment. This follows the existing matching-engine pattern of atomically publishing `VenueEventBatch` and committing its command offset. The transaction covers this broker handoff only; downstream idempotency still needs design.
 
-Next design point: specify commitment identity, source provenance, and ordering contract. Then define verification and inbox semantics.
+Agreed identity boundary: commitment identity denotes one exact committed source trade fact, derived from its venue-log record position plus outcome and trade positions within the batch. Matching `tradeId` remains a separate business identifier copied into the commitment; its current construction alone does not establish global uniqueness. Exact ID encoding, source generation, provenance fields, and collision/conflict rules remain open.
+
+Next design point: specify source provenance and ordering contract. Then define verification and inbox semantics.
 
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
 
