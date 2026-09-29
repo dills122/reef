@@ -56,7 +56,9 @@ Agreed extractor handoff: read a committed `VenueEventBatch`, emit one `MatchCom
 
 Agreed identity boundary: commitment identity denotes one exact committed source trade fact, derived from its venue-log record position plus outcome and trade positions within the batch. Matching `tradeId` remains a separate business identifier copied into the commitment; its current construction alone does not establish global uniqueness. Exact ID encoding, source generation, provenance fields, and collision/conflict rules remain open.
 
-Next design point: specify source provenance and ordering contract. Then define verification and inbox semantics.
+Agreed extractor scaling and order: source partitions are independently owned by extractor instances in a consumer group, with one active owner per partition. Extractor emits each partition's commitments to the corresponding output partition in source order and checkpoints that partition transactionally. Instances may own multiple partitions; adding instances redistributes partition ownership. Cross-partition order is not asserted. Concurrent preparation within one partition may be considered later only if output and checkpoint order remain intact. This does not decide future cross-partition settlement arbitration.
+
+Next design point: specify source provenance fields and commitment payload. Then define verification and inbox semantics.
 
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
 
