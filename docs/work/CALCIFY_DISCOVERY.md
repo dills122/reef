@@ -7,7 +7,7 @@ Branch: `codex/calcify-discovery`.
 
 ## Purpose and working assumptions
 
-Calcify names Reef's fresh, full post-matching design effort. This is a working assumption to confirm. Goal: specify complete post-match product semantics, authority, data flow, failure behavior, read contracts, restore, and capacity proof before choosing implementation. This document records questions and a proposed logical flow; it is not an instruction to resume the retired implementation.
+Calcify names Reef's fresh, full post-matching design effort. This is a working assumption to confirm. Goal: work through post-match product semantics, authority, data flow, failure behavior, read contracts, restore, and capacity proof while validating small, independently testable implementations. This document records questions and a proposed logical flow; it is not an instruction to resume the retired implementation.
 
 Existing Reef invariants remain in force unless a later explicit decision amends them: deterministic execution and replay; durable acceptance before `202`; same-lane matching order; immutable matching facts separate from rebuildable reads; auditability and idempotency; simulator use of normal command paths. Earlier redesign scope held Go matching, ingress, pretrade, and matching-outcome format fixed. Confirm those boundaries during Calcify discovery instead of silently expanding them.
 
@@ -70,6 +70,16 @@ Agreed Phase 1 fast-path direction: extractor already reads the source batch, so
 
 Next Phase 1 decisions, in order: exact link encoding and source generation; extractor validation and conflict behavior; verifier outcomes and inbox semantics; temporary worker receipt and atomic checkpoint; run-close/retention guard; replay, reconciliation, and load/failure acceptance gates. Optional archive mechanics can follow without blocking Phase 1.
 
+### Phase 1 delivery rule
+
+Build one small capability at a time. Test each against fixtures and its own failure boundary, then test the assembled path. A slice must be correct for the behavior it claims; it does not need the later product model, archive, operational hardening, or production capacity before the next slice can begin. Keep unfinished stages stubbed or disabled and label their semantics explicitly. The broader CAL decision register is a future design map, not a Phase 1 release gate.
+
+1. **Contract fixture:** choose thin commitment identity and representative zero-, one-, and many-trade source batches. Check byte footprint and deterministic mapping without running the pipeline.
+2. **Extractor:** source batch to commitment log with transactional source checkpoint. Test alone, including retry and a small local load.
+3. **Verifier and inbox:** start with explicit stubbed business policy. Test using seeded commitment records, then connect extractor output.
+4. **Temporary receipt worker:** consume seeded inbox records and write idempotent PostgreSQL receipts. Then run the three stages together.
+5. **Incremental stress:** add restart/fault checks and increase rate/duration while measuring each stage's lag and storage growth. Record limits and failures; do not treat an early passing slice as production qualification.
+
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
 
 ## Decision register — all open
@@ -89,7 +99,9 @@ Logical authority and physical storage are separate decisions. Evaluate compact 
 
 Decision status changes only through reviewed Calcify specification and relevant Reef decisions/contracts. Record alternatives, rationale, and tests with each choice.
 
-## Discovery and delivery phases
+## Longer-horizon discovery and delivery topics
+
+These topics are a backlog for the complete redesign, not an ordered prerequisite list for Phase 1 slices.
 
 1. **Product model:** write state machine for both profiles, obligations, netting, partial/fail/repair, and finality. Gate: signed examples and counterexamples for executed-but-unsettled trade.
 2. **Authority and order:** specify source/control provenance, exact coverage, cross-partition arbitration, idempotency, and retention. Gate: deterministic scarce-winner and changed-input replay fixtures.
@@ -103,4 +115,4 @@ Every executed run gets code/config/workload/host/observer/artifact identity, su
 
 ## Next discussion
 
-Use presentation to resolve CAL-01 through CAL-04 first. Then work through remaining decisions and examples before implementation planning. This document should evolve as decisions are reviewed; current flow remains a hypothesis.
+Resolve only the contracts needed for the next Phase 1 slice, build and test that slice, then continue discovery alongside the following slice. This document should evolve as decisions are reviewed; the longer-horizon flow remains a hypothesis.
