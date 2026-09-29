@@ -60,9 +60,11 @@ Agreed storage principle: each stage owns its facts once and downstream stages p
 
 Agreed archive direction: design source references and resolution so an optional, configurable archive can serve original venue-event facts later. Archive is not required to build or run Phase 1. Without archive, broker retention and the declared replay/audit window must remain consistent with downstream links; expiry must not be treated as successful replay. With archive enabled, source batches must be durably copied and verified before their broker copies may expire. Archive format, retention periods, operational controls, and proof gates remain open.
 
+Agreed no-archive scope: replay promise is run-scoped, with a configurable window rather than indefinite source retention. This defines logical availability, not per-run physical deletion: current venue-event topic is shared, and `VenueEventBatch` has no top-level run ID. Exact run-close definition, window start/end, retention safety margin, and how broker-wide retention meets all active run promises remain open.
+
 Agreed extractor scaling and order: source partitions are independently owned by extractor instances in a consumer group, with one active owner per partition. Extractor emits each partition's commitments to the corresponding output partition in source order and checkpoints that partition transactionally. Instances may own multiple partitions; adding instances redistributes partition ownership. Cross-partition order is not asserted. Concurrent preparation within one partition may be considered later only if output and checkpoint order remain intact. This does not decide future cross-partition settlement arbitration.
 
-Next design point: specify source-reference resolution and the no-archive replay window, then verification and inbox semantics.
+Next design point: specify run-close/replay-window semantics and source-reference resolution, then verification and inbox semantics.
 
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
 
