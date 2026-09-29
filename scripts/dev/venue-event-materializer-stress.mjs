@@ -139,7 +139,9 @@ if (env("REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC", "0") === "1") {
 }
 
 async function startJournalCandidate() {
-  const command = composeArgs(["run", "-T", "--rm", "--no-deps", "--entrypoint", "java",
+  const command = composeArgs(["run", "-T", "--rm", "--no-deps",
+    "-e", `MATCHING_ENGINE_EVENT_STREAM=${env("MATCHING_ENGINE_EVENT_STREAM")}`,
+    "--entrypoint", "java",
     "platform-api", "-cp", "/app/platform-runtime/lib/*",
     "com.reef.platform.api.PostMatchCandidateSourceEnrollmentMain"]);
   const { stdout } = await run("docker", command, { passthrough: false });
@@ -320,6 +322,9 @@ async function stopIdleBackgroundServices() {
   }
   if (process.env.STREAM_ACK_PROJECTOR_ENABLED === "false") {
     services.push("platform-projector-0", "platform-projector-1", "platform-projector-2", "platform-projector-3");
+    if (hasProfile("benchmark-scale")) {
+      services.push(...Array.from({ length: 12 }, (_, index) => `platform-projector-${index + 4}`));
+    }
   }
   if (services.length === 0) return;
 
