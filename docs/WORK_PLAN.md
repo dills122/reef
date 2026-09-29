@@ -25,13 +25,16 @@ verification, and PostgreSQL processing receipts without switching legacy
 post-matching. Local fixtures, partition-poison isolation, and receipt restart
 passed on two-partition Redpanda. A later four-partition local smoke passed
 PostgreSQL-backed HTTP intake through Go matching to an exact Calcify receipt;
-this is functional evidence, not hosted capacity or settlement qualification.
+bounded 2,000-order hot-lane local load also reconciled 1,001 trades, links,
+and receipts after drain. These are diagnostics, not hosted capacity or
+settlement qualification.
 Exact wire contract, corrections, and limits:
 [Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link
 reconciliation remain follow-ups before non-diagnostic use. Repeat
 `make dev-smoke-calcify-full-path` as each post-match slice expands, adding
 assertions for that slice's source identity, durable effect, and replay behavior.
+Repeat `make dev-stress-calcify-basic PAIRS=1000` for local full-path load.
 
 ## Source Of Truth
 

@@ -407,6 +407,10 @@ dev-smoke-calcify-full-path:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
 
+dev-stress-calcify-basic:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_CALCIFY_FULL_PATH_LOAD_PAIRS=$(or $(PAIRS),1000) $(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
+
 dev-smoke-venue-event-crash-gate:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-crash-gate.mjs

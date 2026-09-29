@@ -32,6 +32,18 @@ Throughput PRs/handoffs must cite baseline IDs, prior attempts considered,
 changed variable, actual result/artifact location, limitations and next decision.
 Read-only evidence review is not a new approval gate for already authorized work.
 
+## Calcify Phase 1 local diagnostic, CAL-P1-L2 (September29)
+
+On `codex/calcify-phase1`, local one-hot-lane full path accepted 2,000 load
+orders in 1.402 seconds, then drained all 1,001 trades to commitment,
+verification, and receipt stages 8.196 seconds after last acceptance. Two
+attempts are retained: first pipeline reconciled but observer timed out because
+it assumed one source batch per command; corrected run passed. This short burst
+uses one instrument, four broker partitions, and no legacy materializer or
+projectors. It is not a sustained capacity or latency qualification and cannot
+be compared causally to C5 venue-core or C2 full-projection hosted runs.
+[Exact settings and attempts](evidence/calcify-phase1-basic-load-2026-09-29.json).
+
 ## Current measured baseline — September24, before0053
 
 Frozen candidate/image/source and0052 settings below; no0053 optimization applied.

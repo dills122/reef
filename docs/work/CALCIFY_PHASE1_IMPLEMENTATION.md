@@ -68,6 +68,46 @@ venue-event metadata and nested trades, PostgreSQL boundary intake rows and
 Calcify receipt primary key. The smoke does not start the legacy materializer
 or read projections; those remain covered by their separate path tests.
 
+## Bounded full-path load, CAL-P1-L2
+
+`make dev-stress-calcify-basic PAIRS=1000` repeats functional preflight, then
+submits 1,000 crossing buy/sell pairs in waves of 10 pairs. Each wave waits for
+durable HTTP acceptance of its buys before sending its sells. All orders share
+one venue session and instrument, exercising one hot matching lane. The check
+counts commands inside committed venue-event batches, trades inside outcomes,
+and PostgreSQL receipts. [Run evidence](../evidence/calcify-phase1-basic-load-2026-09-29.json)
+retains both attempts and correction.
+
+Generation 8, `calcify-1790711354166`, accepted 2,000 load orders. First
+observer incorrectly expected one source batch per order and timed out asking
+`rpk` for 2,002 records. Post-run checks found 2,002 intake rows, 2,002
+commands in 10 committed batches, 1,001 trades including preflight, and 1,001
+receipts. Matching grouped commands into batches; timeout was an observer
+error, not pipeline count gap. Observer now consumes to broker's current end
+offset and sums `commandCount`.
+
+Generation 9, `calcify-1790711684052`, passed corrected harness: 2,000 load
+orders accepted in 1,402 ms (1,426.53 accepted orders/s during burst); 2,002
+intake rows and source commands including preflight, 1,001 source trades,
+1,001 committed commitment links, 1,001 verified links, and 1,001 receipts.
+Halfway intake sample observed 40 receipts. All receipts existed 8,196 ms after
+last acceptance, 9,598 ms after first load request. This measures whole-cohort
+drain, not individual trade latency. No request latency distribution or precise
+in-load stage-lag slope was captured.
+
+Environment: macOS Docker 29.7.2, 10 CPUs/16.75 GB allocated, Redpanda v26.2.3,
+PostgreSQL 16; `compose.base.yml`, `compose.local.yml`, `compose.calcify.yml`;
+four command/source/link partitions, one extractor/verifier/receipt worker each,
+PostgreSQL-backed ingress, matching direct stream enabled, legacy
+materializer/projectors disabled. Source base `61d293ee`; load harness changed
+in this branch. Both runs reused local volumes but used fresh topic identities.
+These are short burst diagnostics, not sustained throughput or settlement
+qualification. C5's hosted 10k/s venue-core samples used 64 instruments,
+16 partitions, four materializers, and 300 seconds with no Calcify; C2's hosted
+5k/s full-projection failure used a different downstream path. Neither is a
+matched performance comparison. Next ladder steps: controlled rate and duration,
+multiple lanes, in-load stage lag/storage, and restart/fault tests at load.
+
 ## Run and limits
 
 Start with `compose.base.yml`, `compose.local.yml`, and `compose.calcify.yml`, profiles `redpanda,calcify-phase1`; apply migrations before enabling sidecars. Stage environment has source and output topic names, source generation, and `CALCIFY_AUTO_OFFSET_RESET` (default `earliest`). Output topics are created with source partition count and one replica in this local Phase 1 path; deployment topology and retention need separate review. Source batches lacking `sha256-reef-canonical-v1` stop their partition rather than silently pass.
