@@ -2,6 +2,7 @@ package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.application.postmatch.CanonicalOutcomeSource
 import com.reef.platform.application.postmatch.CanonicalSourceCoverageVerifier
+import com.reef.platform.application.postmatch.CanonicalStreamPosition
 import com.reef.platform.application.postmatch.VerifiedCanonicalSourceWindow
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -12,6 +13,32 @@ class PostgresCanonicalOutcomeSourceReader(
     private val sourceDataSource: DataSource,
     private val verifier: CanonicalSourceCoverageVerifier = CanonicalSourceCoverageVerifier()
 ) {
+    /** One indexed lookup lets a consumer split a bounded Kafka hole from the next retained outcome. */
+    fun nextRetainedSequence(eventStream: String, partitionId: Int,
+        afterExclusiveSequence: Long): Long? {
+        require(eventStream.isNotBlank() && partitionId in 0..32767 &&
+            afterExclusiveSequence >= CanonicalStreamPosition.origin(partitionId))
+        return sourceDataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """SELECT event_stream, stream_sequence
+                   FROM runtime.canonical_command_outcomes
+                   WHERE partition_id = ? AND stream_sequence > ?
+                   ORDER BY stream_sequence LIMIT 1"""
+            ).use { statement ->
+                statement.setInt(1, partitionId)
+                statement.setLong(2, afterExclusiveSequence)
+                statement.executeQuery().use { rows ->
+                    if (!rows.next()) null else {
+                        check(rows.getString(1) == eventStream) {
+                            "canonical partition contains a different event stream"
+                        }
+                        rows.getLong(2)
+                    }
+                }
+            }
+        }
+    }
+
     fun readVerifiedWindow(
         consumerName: String,
         eventStream: String,

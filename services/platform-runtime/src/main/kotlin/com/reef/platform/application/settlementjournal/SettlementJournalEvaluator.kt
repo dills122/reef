@@ -93,29 +93,61 @@ data class SettlementEvaluatorSnapshot(
     val sourceFrontiers: Map<ReferenceStreamPartition, Long>
 )
 
+/** Complete decision state at an acknowledged journal head; caller must authenticate its bytes externally. */
+data class SettlementEvaluatorRecoveryState(
+    val head: SettlementEvaluatorHead,
+    val orderedControls: List<Pair<String, String>>,
+    val policies: Map<Pair<String, String>, ReferencePolicyActivation>,
+    val openingIds: Map<ReferenceAccountKey, String>,
+    val fundingIds: Map<ReferenceAccountKey, List<String>>,
+    val balances: Map<ReferenceAccountKey, BigDecimal>,
+    val outstanding: Map<String, ReferenceObligation>,
+    val attempts: Map<String, Int>,
+    val sourceFrontiers: Map<ReferenceStreamPartition, Long>
+)
+
 /**
  * Single-owner decision stage. The caller persists each proposal (even when results is empty)
  * before confirming it. No account or policy database access occurs in the decision loop.
  */
-class SettlementJournalEvaluator(
+class SettlementJournalEvaluator private constructor(
+    recoveryState: SettlementEvaluatorRecoveryState?,
     initialHead: SettlementEvaluatorHead,
     private val manifestVerifier: SettlementSourceManifestVerifier,
     private val commitVerifier: SettlementCommitReceiptVerifier
 ) {
+    constructor(initialHead: SettlementEvaluatorHead,
+        manifestVerifier: SettlementSourceManifestVerifier,
+        commitVerifier: SettlementCommitReceiptVerifier):
+        this(null, initialHead, manifestVerifier, commitVerifier)
+
     companion object {
         /** Recompute exact ordered prepared-input binding before mapping proposal to a store request. */
         fun preparedInputsDigest(inputs: List<SettlementPreparedInput>): String =
             computePreparedInputsDigest(inputs)
+
+        /** Use only after independent finality pointer, snapshot digest, and tail proof validation. */
+        internal fun restoreVerified(state: SettlementEvaluatorRecoveryState, ownerEpoch: Long,
+            manifestVerifier: SettlementSourceManifestVerifier,
+            commitVerifier: SettlementCommitReceiptVerifier): SettlementJournalEvaluator {
+            require(ownerEpoch > 0) { "restored owner must hold a fenced lease" }
+            return SettlementJournalEvaluator(state, state.head.copy(ownerEpoch = ownerEpoch),
+                manifestVerifier, commitVerifier)
+        }
     }
 
     private val mapper = JsonMapper.builder().build()
     private var head = initialHead.also(::validateHead)
-    private var live = State()
+    private var live = recoveryState?.let(::restoreState) ?: State()
     private var pending: Pending? = null
 
     init {
-        require(initialHead.batchSequence == 0L && initialHead.batchDigest == "0".repeat(64)) {
-            "non-genesis evaluator state requires verified snapshot and replay"
+        require(if (recoveryState == null) initialHead.batchSequence == 0L &&
+            initialHead.batchDigest == "0".repeat(64) else
+            initialHead.batchSequence == recoveryState.head.batchSequence &&
+                initialHead.batchDigest == recoveryState.head.batchDigest &&
+                initialHead.ownerIncarnation == recoveryState.head.ownerIncarnation) {
+            "evaluator head requires matching verified recovery state"
         }
     }
 
@@ -258,6 +290,70 @@ class SettlementJournalEvaluator(
         live.controls.toMap(), live.sourceFrontiers.toMap()
     )
 
+    /** Historical batch owner epochs are authenticated by each verified journal envelope. */
+    internal fun rebindVerifiedReplayOwner(ownerEpoch: Long) {
+        check(pending == null) { "cannot rebind an uncommitted decision" }
+        require(ownerEpoch > 0) { "invalid replay owner epoch" }
+        head = head.copy(ownerEpoch = ownerEpoch)
+    }
+
+    /** Includes control order and open obligations, which V1 proof snapshots omit. */
+    fun recoveryState(): SettlementEvaluatorRecoveryState {
+        check(pending == null) { "cannot checkpoint an uncommitted decision" }
+        val ordered = (1L..live.lastControlSequence).map { sequence ->
+            val id = live.controlSequences[sequence] ?: error("control sequence missing")
+            id to (live.controls[id] ?: error("control digest missing"))
+        }
+        return SettlementEvaluatorRecoveryState(head, ordered, live.policies.toMap(),
+            live.openingIds.toMap(), live.fundingIds.mapValues { it.value.toList() },
+            live.balances.toMap(), live.outstanding.toMap(),
+            live.attempts.toMap(), live.sourceFrontiers.toMap())
+    }
+
+    private fun restoreState(checkpoint: SettlementEvaluatorRecoveryState): State {
+        require(checkpoint.head.batchSequence > 0) { "checkpoint must follow a committed batch" }
+        val controls = linkedMapOf<String, String>()
+        val sequences = mutableMapOf<Long, String>()
+        val hash = MessageDigest.getInstance("SHA-256")
+        checkpoint.orderedControls.forEachIndexed { index, (id, digest) ->
+            require(id.isNotBlank() && digest.matches(Regex("[0-9a-f]{64}")) &&
+                controls.putIfAbsent(id, digest) == null) { "invalid checkpoint control order" }
+            sequences[index + 1L] = id
+            appendDigestField(hash, id)
+            appendDigestField(hash, digest)
+        }
+        require(checkpoint.policies.values.all { policy ->
+            controls[policy.controlId] == structuralControlMemberDigest(policy)
+        } && checkpoint.policies.all { (key, policy) ->
+            key == (policy.runId to policy.venueSessionId)
+        } && checkpoint.openingIds.values.all { it in controls } &&
+            checkpoint.fundingIds.values.flatten().all { it in controls } &&
+            checkpoint.outstanding.all { (id, obligation) ->
+                id == obligation.tradeId
+            } && checkpoint.attempts.all { (id, count) ->
+                id in checkpoint.outstanding && count > 0
+            } &&
+            checkpoint.sourceFrontiers.keys.groupBy { it.eventStream to it.partitionId }
+                .values.all { it.size == 1 } &&
+            checkpoint.sourceFrontiers.all { (stream, sequence) ->
+                sequence >= CanonicalStreamPosition.origin(stream.partitionId) &&
+                    sequence <= CanonicalStreamPosition.origin(stream.partitionId) + ((1L shl 48) - 1)
+            }) { "invalid evaluator checkpoint state" }
+        val generations = checkpoint.sourceFrontiers.keys.associate { stream ->
+            (stream.eventStream to stream.partitionId) to stream.sourceGeneration
+        }
+        return State(controls = controls, controlSequences = sequences,
+            lastControlSequence = checkpoint.orderedControls.size.toLong(),
+            policies = checkpoint.policies.toMutableMap(),
+            openingIds = checkpoint.openingIds.toMutableMap(),
+            fundingIds = checkpoint.fundingIds.mapValues { it.value.toMutableList() }.toMutableMap(),
+            balances = checkpoint.balances.toMutableMap(),
+            outstanding = checkpoint.outstanding.toMutableMap(),
+            attempts = checkpoint.attempts.toMutableMap(),
+            sourceFrontiers = checkpoint.sourceFrontiers.toMutableMap(),
+            partitionGenerations = generations.toMutableMap(), controlPrefixHash = hash)
+    }
+
     /** Stable structural digest of the source-decoded, policy-bound trade manifest. */
     fun tradeManifestDigest(trades: List<ReferenceObligation>): String = tradeManifestDigestOf(trades)
 
@@ -333,7 +429,7 @@ class SettlementJournalEvaluator(
     private fun applyTrade(state: State, obligation: ReferenceObligation, stepIndex: Long,
                            pendingManifests: Map<ReferenceSourceWindowKey, ManifestCursor>,
                            results: MutableList<SettlementDecisionResult>) {
-        val earlier = state.obligations[obligation.tradeId]
+        val earlier = state.outstanding[obligation.tradeId]
         if (earlier != null) {
             check(earlier == obligation) { "changed trade input" }
             return // Duplicate delivery is not a new attempt.
@@ -377,7 +473,6 @@ class SettlementJournalEvaluator(
         check(obligation.buyer in state.openingIds && obligation.seller in state.openingIds) {
             "trade debit resources lack immutable opening input"
         }
-        state.obligations[obligation.tradeId] = obligation
         state.lastTradePositionByCoverage[covering.key] = sourceOrder
         state.outstanding[obligation.tradeId] = obligation
         if (obligation.mode == "instant-post-trade") attempt(state, obligation, stepIndex, results)
@@ -412,8 +507,10 @@ class SettlementJournalEvaluator(
             workflow, workflowJson(workflow), if (settled) effects else emptyList(),
             before, affected.associateWith { state.balances[it] ?: BigDecimal.ZERO }
         )
-        state.attempts[obligation.tradeId] = number
-        if (settled) state.outstanding.remove(obligation.tradeId)
+        if (settled) {
+            state.outstanding.remove(obligation.tradeId)
+            state.attempts.remove(obligation.tradeId)
+        } else state.attempts[obligation.tradeId] = number
     }
 
     private fun effects(o: ReferenceObligation): List<ReferenceEffect> = listOf(
@@ -501,7 +598,6 @@ class SettlementJournalEvaluator(
         val openingIds: MutableMap<ReferenceAccountKey, String> = mutableMapOf(),
         val fundingIds: MutableMap<ReferenceAccountKey, MutableList<String>> = mutableMapOf(),
         val balances: MutableMap<ReferenceAccountKey, BigDecimal> = linkedMapOf(),
-        val obligations: MutableMap<String, ReferenceObligation> = mutableMapOf(),
         val outstanding: MutableMap<String, ReferenceObligation> = linkedMapOf(),
         val attempts: MutableMap<String, Int> = mutableMapOf(),
         val sourceWindows: MutableMap<ReferenceSourceWindowKey, CoverageRecord> = mutableMapOf(),
@@ -515,8 +611,8 @@ class SettlementJournalEvaluator(
     ) {
         fun copy(): State = State(OverlayMap(controls), OverlayMap(controlSequences),
             lastControlSequence, OverlayMap(policies), OverlayMap(openingIds),
-            OverlayMap(fundingIds), OverlayMap(balances), OverlayMap(obligations),
-            OverlayMap(outstanding), OverlayMap(attempts), OverlayMap(sourceWindows),
+            OverlayMap(fundingIds), OverlayMap(balances), OverlayMap(outstanding),
+            OverlayMap(attempts), OverlayMap(sourceWindows),
             OverlayMap(sourceFrontiers), OverlayMap(partitionGenerations),
             OverlayMap(latestCoverage), OverlayMap(lastTradePositionByCoverage),
             controlPrefixHash.clone() as MessageDigest)
@@ -528,7 +624,6 @@ class SettlementJournalEvaluator(
             (openingIds as OverlayMap).commitInto(target.openingIds)
             (fundingIds as OverlayMap).commitInto(target.fundingIds)
             (balances as OverlayMap).commitInto(target.balances)
-            (obligations as OverlayMap).commitInto(target.obligations)
             (outstanding as OverlayMap).commitInto(target.outstanding)
             (attempts as OverlayMap).commitInto(target.attempts)
             (sourceWindows as OverlayMap).commitInto(target.sourceWindows)

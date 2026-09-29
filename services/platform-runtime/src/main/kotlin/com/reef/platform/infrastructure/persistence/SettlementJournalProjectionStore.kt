@@ -159,6 +159,9 @@ class SettlementJournalProjectionStore(
                 trade(connection, eventStream, generation, runId, tradeId), frontier)
         }
 
+    fun frontier(eventStream: String, generation: String): SettlementProjectionFrontier =
+        snapshot(eventStream, generation, false) { _, frontier -> frontier }
+
     private fun <T> snapshot(eventStream: String, generation: String, requireCurrent: Boolean,
         read: (Connection, SettlementProjectionFrontier) -> T): T {
         require(eventStream.isNotBlank() && generation.isNotBlank())

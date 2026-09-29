@@ -95,7 +95,9 @@ class PostgresRuntimePersistence(
     private val names: PostgresRuntimeSqlNames = PostgresRuntimeSqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
     private val projectionDataSource: DataSource = dataSource,
-    private val envLookup: (String) -> String? = { key -> System.getenv(key) }
+    private val envLookup: (String) -> String? = { key -> System.getenv(key) },
+    // Explicit candidate-mode guard. Default false preserves all current profile writes.
+    private val settlementControlAuthorityEnabled: Boolean = false
 ) : RuntimePersistence {
     private val intradayBarIntervalText = mapOf(
         "1m" to "1 minute",
@@ -2330,6 +2332,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun savePostTradeProfile(profile: PostTradeProfile) {
+        requireLegacyControlMutationAllowed()
         connection().use { conn ->
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
@@ -2398,6 +2401,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
+        requireLegacyControlMutationAllowed()
         connection().use { conn ->
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
@@ -2423,6 +2427,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveScenarioRunPostTradeProfile(config: ScenarioRunPostTradeProfile) {
+        requireLegacyControlMutationAllowed()
         connection().use { conn ->
             conn.prepareStatement(
                 """
@@ -2469,6 +2474,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        requireLegacyControlMutationAllowed()
         connection().use { conn ->
             conn.prepareStatement(
                 """
@@ -2511,6 +2517,12 @@ class PostgresRuntimePersistence(
                 venueSessionId = getString("venue_session_id"),
                 postTradeProfileId = getString("post_trade_profile_id")
             )
+        }
+    }
+
+    private fun requireLegacyControlMutationAllowed() {
+        check(!settlementControlAuthorityEnabled) {
+            "post-trade profile mutation requires ordered settlement control acceptance"
         }
     }
 

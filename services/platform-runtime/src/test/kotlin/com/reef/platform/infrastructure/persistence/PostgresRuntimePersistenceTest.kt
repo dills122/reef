@@ -22,6 +22,25 @@ import kotlin.test.assertTrue
 
 class PostgresRuntimePersistenceTest {
     @Test
+    fun candidateControlModeRejectsMutableProfileWrites() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword,
+            "runtime-control-guard-test")
+        val persistence = PostgresRuntimePersistence(dataSource,
+            settlementControlAuthorityEnabled = true)
+        val profile = PostTradeProfile("guard-${UUID.randomUUID()}", "ops-realistic",
+            "T+1", "batch-netting", "scheduled-finality")
+        assertFails { persistence.savePostTradeProfile(profile) }
+        assertFails { persistence.activatePostTradeProfile(profile.profileId) }
+        assertFails { persistence.saveScenarioRunPostTradeProfile(
+            ScenarioRunPostTradeProfile("run-guard", profile.profileId)) }
+        assertFails { persistence.saveVenueSessionPostTradeProfile(
+            VenueSessionPostTradeProfile("session-guard", profile.profileId)) }
+    }
+
+    @Test
     fun singleSubmitOutcomePersistsOrderScopeMetadata() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
