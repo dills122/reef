@@ -44,6 +44,15 @@ projectors. It is not a sustained capacity or latency qualification and cannot
 be compared causally to C5 venue-core or C2 full-projection hosted runs.
 [Exact settings and attempts](evidence/calcify-phase1-basic-load-2026-09-29.json).
 
+Follow-up CAL-P1-L3 traced 6,799–7,001 ms last-commitment-to-last-verified
+delay to verifier's one-transaction-per-link loop. Batching up to 100 links
+per poll preserved partition-prefix checkpoints and reduced that endpoint
+difference to 31 and 54 ms in two local repeats; final receipt drain after
+last acceptance measured 960 and 942 ms. All 1,001 trade/link/receipt counts
+reconciled. Same nominal workload and topology, but selected lane partition
+and aged local state differed; no sustained or hosted promotion follows.
+[Before/after evidence and limits](evidence/calcify-phase1-verifier-batch-2026-09-29.json).
+
 ## Current measured baseline — September24, before0053
 
 Frozen candidate/image/source and0052 settings below; no0053 optimization applied.

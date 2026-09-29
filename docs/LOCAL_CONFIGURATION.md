@@ -66,8 +66,8 @@ its exact receipt. It leaves stack running; use matching `REEF_COMPOSE_FILES` an
 measure capacity or exercise financial settlement.
 
 Run `make dev-stress-calcify-basic PAIRS=1000` for a bounded local burst through
-the same path. It checks intake, matched source commands/trades, and final
-receipts; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
+the same path. It checks intake, matched source commands/trades, both link
+streams, final receipts, and stage-end timestamps; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
 records the observed rate, drain, and limits. This is not a sustained gate.
 
 ## Change configuration

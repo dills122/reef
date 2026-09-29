@@ -28,6 +28,9 @@ PostgreSQL-backed HTTP intake through Go matching to an exact Calcify receipt;
 bounded 2,000-order hot-lane local load also reconciled 1,001 trades, links,
 and receipts after drain. These are diagnostics, not hosted capacity or
 settlement qualification.
+Measured verifier-per-link transaction backlog was corrected by per-poll
+transaction batching: two repeated local 1,000-pair runs drained receipts
+within 960 and 942 ms after last acceptance with exact stage counts.
 Exact wire contract, corrections, and limits:
 [Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link

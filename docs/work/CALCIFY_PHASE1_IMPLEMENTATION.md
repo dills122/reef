@@ -108,6 +108,37 @@ qualification. C5's hosted 10k/s venue-core samples used 64 instruments,
 matched performance comparison. Next ladder steps: controlled rate and duration,
 multiple lanes, in-load stage lag/storage, and restart/fault tests at load.
 
+## Verifier backlog correction, CAL-P1-L3
+
+Two retained L2 runs placed last verified output 6,799 and 7,001 ms after
+last commitment output. Extractor followed last matching source batch by
+325 and 50 ms, respectively. Code review found verifier opening and committing
+one Kafka transaction per link. Receipt worker also commits each link to
+PostgreSQL and checkpoints Kafka synchronously, but recorded receipt time
+followed last verified output by about 511 ms on passing L2 run. Verifier was
+measured slow stage.
+
+Verifier now groups up to 100 polled links in one transaction, publishing all
+passing links and checkpointing each partition's valid prefix together. A
+malformed link pauses only its partition; valid prefix and other partitions
+still commit. `CalcifyVerifierBatchTest` covers ordered 100-link batch and
+malformed-link isolation. Full Kotlin tests passed.
+
+Same local 1,000-pair hot-lane workload passed twice after change. Generation
+10 (`calcify-1790712926245`) accepted 2,000 orders in 1,442 ms and drained
+receipts 960 ms after last acceptance; last commitment-to-verified endpoint
+difference was 31 ms. Generation 11 (`calcify-1790713215934`) accepted in
+1,300 ms and drained in 942 ms; last commitment-to-verified difference was
+54 ms. Each had exactly 2,002 intake/source commands, 1,001 source trades,
+1,001 committed links, 1,001 verified links, and 1,001 receipts. Reusable
+load harness now reports stage-end timestamps and link counts. [Exact runs](../evidence/calcify-phase1-verifier-batch-2026-09-29.json).
+
+This is a diagnostic before/after observation. Source lane partition differed
+between L2 and L3, local volumes were reused, and bursts were short. Stage-end
+differences are not individual trade latency percentiles. Sustained and
+multi-lane load, fault/restart under load, and independent identity-level
+reconciliation remain open.
+
 ## Run and limits
 
 Start with `compose.base.yml`, `compose.local.yml`, and `compose.calcify.yml`, profiles `redpanda,calcify-phase1`; apply migrations before enabling sidecars. Stage environment has source and output topic names, source generation, and `CALCIFY_AUTO_OFFSET_RESET` (default `earliest`). Output topics are created with source partition count and one replica in this local Phase 1 path; deployment topology and retention need separate review. Source batches lacking `sha256-reef-canonical-v1` stop their partition rather than silently pass.
