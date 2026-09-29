@@ -48,7 +48,7 @@ Proposal, not decision: source reader proves contiguous partition coverage and e
 
 ## Phase 1 — match commitment
 
-Agreed high-level path: matching engine publishes `VenueEventBatch` to its durable venue-event log; a commitment extractor reads those batches and publishes one `MatchCommitment` per `TradeCreated` to a new durable commitment log; a verifier publishes verified commitments to a durable inbox; a temporary settlement worker consumes inbox records and writes idempotent PostgreSQL receipts. Exact contracts, verification rules, inbox form, and worker failure behavior remain to be designed. Receipt is not financial settlement.
+Agreed high-level path: matching engine publishes `VenueEventBatch` to its durable venue-event log; a commitment extractor reads those batches and publishes one `MatchCommitment` per `TradeCreated` to a new durable commitment log; a verifier publishes passing commitment links to a durable verified commitment stream; a temporary settlement worker consumes those records and writes idempotent PostgreSQL receipts. Exact encoding, worker failure behavior, and acceptance proof remain to be designed. Receipt is not financial settlement.
 
 Agreed meaning: `MatchCommitment` states that, according to the matching engine's current facts, a match was made and durably committed. It does not assert verification, participant acceptance, or settlement. Matching output remains `VenueEventBatch`; the extracted commitment is a post-match representation of one trade fact. The source event retains authority for what matching decided.
 
@@ -68,11 +68,13 @@ Agreed retention constraint: no-archive Phase 1 needs an enforced maximum run du
 
 Agreed extractor scaling and order: source partitions are independently owned by extractor instances in a consumer group, with one active owner per partition. Extractor emits each partition's commitments to the corresponding output partition in source order and checkpoints that partition transactionally. Instances may own multiple partitions; adding instances redistributes partition ownership. Cross-partition order is not asserted. Concurrent preparation within one partition may be considered later only if output and checkpoint order remain intact. This does not decide future cross-partition settlement arbitration.
 
-Agreed Phase 1 fast-path direction: extractor already reads the source batch, so it checks source integrity and trade positions once per batch before emitting thin commitment links. Verifier does not reread each source trade during Phase 1; it checks the commitment contract and applies an explicitly versioned, initially stubbed business-eligibility rule. Inbox carries verified commitment links. Temporary settlement worker records processing receipts without claiming financial settlement. Independent source-to-commitment reconciliation should run outside this latency path at a controlled rate; exact proof and resource budget remain open.
+Agreed Phase 1 fast-path direction: extractor already reads the source batch, so it checks source integrity and trade positions once per batch before emitting thin commitment links. Verifier does not reread each source trade during Phase 1; it checks the commitment contract and applies an explicitly versioned, initially stubbed business-eligibility rule. Verified commitment stream carries passing links. Temporary settlement worker records processing receipts without claiming financial settlement. Independent source-to-commitment reconciliation should run outside this latency path at a controlled rate; exact proof and resource budget remain open.
+
+Agreed verifier stream naming: use “verified commitment stream,” proposed physical topic `REEF_VERIFIED_COMMITMENTS_V1`, rather than “inbox” as an architectural component. A passing record is `CommitmentVerificationPassed { commitmentId, policyVersion }`; policy version identifies the Phase 1 stub, and pass does not assert settlement. Verifier reads compact links without source rereads; malformed records stop the affected partition. Exact wire encoding and transactional publish/checkpoint details remain open.
 
 Agreed extractor traversal: decoded `VenueEventBatch` is already in memory from the broker read. Walk its outcomes and nested `TradeCreated` arrays once, assigning flattened trade ordinals and emitting compact links; no per-trade database lookup or source reread. Default command batch size does not bound trade count because one command may match multiple resting orders. Measure batch bytes, high-fanout trade count, checksum/walk time, and producer buffering before setting a safety limit.
 
-Next Phase 1 decisions, in order: extractor validation and conflict behavior; verifier outcomes and inbox semantics; temporary worker receipt and atomic checkpoint; run-close/retention guard; replay, reconciliation, and load/failure acceptance gates. Optional archive mechanics can follow without blocking Phase 1.
+Next Phase 1 decisions, in order: exact wire encoding and generation registration; temporary worker receipt and checkpoint/retry behavior; run-close/retention bounds; scoped replay, fault, and load acceptance checks. Optional archive mechanics and independent reconciliation service can follow without blocking Phase 1.
 
 ### Phase 1 delivery rule
 
@@ -80,8 +82,8 @@ Build one small capability at a time. Test each against fixtures and its own fai
 
 1. **Contract fixture:** choose thin commitment identity and representative zero-, one-, and many-trade source batches. Check byte footprint and deterministic mapping without running the pipeline.
 2. **Extractor:** source batch to commitment log with transactional source checkpoint. Test alone, including retry and a small local load.
-3. **Verifier and inbox:** start with explicit stubbed business policy. Test using seeded commitment records, then connect extractor output.
-4. **Temporary receipt worker:** consume seeded inbox records and write idempotent PostgreSQL receipts. Then run the three stages together.
+3. **Verifier and verified stream:** start with explicit stubbed business policy. Test using seeded commitment records, then connect extractor output.
+4. **Temporary receipt worker:** consume seeded verified records and write idempotent PostgreSQL receipts. Then run the three stages together.
 5. **Incremental stress:** add restart/fault checks and increase rate/duration while measuring each stage's lag and storage growth. Record limits and failures; do not treat an early passing slice as production qualification.
 
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
