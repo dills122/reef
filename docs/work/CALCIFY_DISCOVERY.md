@@ -70,6 +70,8 @@ Agreed extractor scaling and order: source partitions are independently owned by
 
 Agreed Phase 1 fast-path direction: extractor already reads the source batch, so it checks source integrity and trade positions once per batch before emitting thin commitment links. Verifier does not reread each source trade during Phase 1; it checks the commitment contract and applies an explicitly versioned, initially stubbed business-eligibility rule. Inbox carries verified commitment links. Temporary settlement worker records processing receipts without claiming financial settlement. Independent source-to-commitment reconciliation should run outside this latency path at a controlled rate; exact proof and resource budget remain open.
 
+Agreed extractor traversal: decoded `VenueEventBatch` is already in memory from the broker read. Walk its outcomes and nested `TradeCreated` arrays once, assigning flattened trade ordinals and emitting compact links; no per-trade database lookup or source reread. Default command batch size does not bound trade count because one command may match multiple resting orders. Measure batch bytes, high-fanout trade count, checksum/walk time, and producer buffering before setting a safety limit.
+
 Next Phase 1 decisions, in order: extractor validation and conflict behavior; verifier outcomes and inbox semantics; temporary worker receipt and atomic checkpoint; run-close/retention guard; replay, reconciliation, and load/failure acceptance gates. Optional archive mechanics can follow without blocking Phase 1.
 
 ### Phase 1 delivery rule
