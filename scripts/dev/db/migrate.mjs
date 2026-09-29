@@ -17,6 +17,7 @@ const domainOrder = [
   "command_log",
   "orchestration",
   "settlement",
+  "finality",
   "postmatch",
   "arena",
   "analytics",
@@ -200,6 +201,15 @@ function migrationTargets() {
       user: env("REEF_SETTLEMENT_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
       dbName: env("REEF_SETTLEMENT_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
       domains: ["settlement"],
+    });
+  }
+  if (env("REEF_FINALITY_POSTGRES_MIGRATIONS", "0") === "1") {
+    targets.push({
+      label: "finality",
+      service: env("REEF_FINALITY_POSTGRES_SERVICE", "finality-postgres"),
+      user: env("REEF_FINALITY_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
+      dbName: env("REEF_FINALITY_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+      domains: ["finality"],
     });
   }
   if (env("REEF_ARENA_POSTGRES_MIGRATIONS", "0") === "1") {

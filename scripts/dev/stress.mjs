@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { promisify } from "node:util";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
@@ -448,12 +448,24 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   if (captureHotPath) {
     await resetHotPath(runtimeUrl);
   }
+  const candidateProbeArgs = env("DEV_STRESS_CANDIDATE_READ_PROBE_ARGS_JSON", "");
+  const candidateLoadTester = candidateProbeArgs ? join(artifactDir, "candidate-load-tester") : null;
+  if (candidateLoadTester) {
+    await run("go", ["build", "-o", candidateLoadTester, "./cmd/load-tester"],
+      { cwd: "services/simulator" });
+  }
+  const candidateProbe = candidateProbeArgs ? spawn(process.execPath,
+    ["scripts/dev/postmatch-candidate-read-probe.mjs", ...JSON.parse(candidateProbeArgs)],
+    { stdio: "inherit", env: process.env }) : null;
+  const candidateProbeExit = candidateProbe && new Promise((resolve) => {
+    candidateProbe.once("error", (error) => resolve({ error: error.message }));
+    candidateProbe.once("exit", (code, signal) => resolve({ code, signal }));
+  });
   try {
     await run(
-      "go",
+      candidateLoadTester ?? "go",
       [
-        "run",
-        "./cmd/load-tester",
+        ...(!candidateLoadTester ? ["run", "./cmd/load-tester"] : []),
         ...(sessionConfig ? ["--session-config", sessionConfig] : []),
         "--base-url",
         runtimeUrl,
@@ -499,7 +511,12 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       ],
       { cwd: "services/simulator" },
     );
+    if (candidateProbe) {
+      const result = await candidateProbeExit;
+      if (result.code !== 0) throw new Error(`candidate read probe failed: ${JSON.stringify(result)}`);
+    }
   } finally {
+    if (candidateProbe && candidateProbe.exitCode == null) candidateProbe.kill("SIGTERM");
     if (captureCommandAccounting) {
       const afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
       attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });

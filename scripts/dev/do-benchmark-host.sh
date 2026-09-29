@@ -60,6 +60,7 @@ required for provisioning:
 optional:
   REEF_DO_SSH_PUBLIC_KEY=~/.ssh/id_ed25519.pub
   REEF_DO_SSH_PRIVATE_KEY=~/.ssh/id_ed25519
+  REEF_DO_CONFIG_ENV=/absolute/path/to/existing/local.env
   REEF_DO_ALLOWED_SSH_CIDRS=203.0.113.10/32
   REEF_DO_REGION=sfo2
   REEF_DO_SIZE=c-8
@@ -82,6 +83,7 @@ optional:
   REEF_DO_PROJECTION_STAGE=full|command-status|timeline
   REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1 (materializer-projection only)
   REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC=1 (requires post-match shadow diagnostic)
+  REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC=1 (requires matched materializer-projection topology)
   REEF_DO_MATCHED_TOPOLOGY=1 (six materializers, sixteen projector owners; materializer-projection only)
   REEF_DO_IMAGE_MODE=dockerhub|source
   REEF_DO_STAGE_LOG_TAIL=80
@@ -102,6 +104,18 @@ main() {
   log "loading local environment"
   load_env_file "$ROOT_DIR/.env"
   load_env_file "$ROOT_DIR/.env.local"
+  load_env_file "${REEF_DO_CONFIG_ENV:-}"
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    export REEF_DO_BENCHMARK_GOAL="${REEF_DO_BENCHMARK_GOAL:-sustain}"
+    export REEF_DO_TARGET_ACCEPTED_RPS="${REEF_DO_TARGET_ACCEPTED_RPS:-10000}"
+    export REEF_DO_STRESS_RATES="${REEF_DO_STRESS_RATES:-10000}"
+    export REEF_DO_STRESS_DURATION="${REEF_DO_STRESS_DURATION:-300s}"
+    export REEF_DO_STRESS_REPEAT_SAMPLES="${REEF_DO_STRESS_REPEAT_SAMPLES:-1}"
+    export REEF_DO_STRESS_WORKERS="${REEF_DO_STRESS_WORKERS:-384}"
+    export REEF_DO_SIZE="${REEF_DO_SIZE:-c-32}"
+    export REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-9990}"
+    export REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-9990}"
+  fi
   refresh_runtime_config
 
   local command="${1:-}"
@@ -166,6 +180,7 @@ cmd_plan_goal() {
   printf '  projection_stage=%s\n' "${REEF_DO_PROJECTION_STAGE:-full}"
   printf '  postmatch_shadow_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}"
   printf '  postmatch_settlement_diagnostic=%s\n' "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}"
+  printf '  postmatch_journal_diagnostic=%s\n' "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}"
   printf '  matched_topology=%s\n' "${REEF_DO_MATCHED_TOPOLOGY:-0}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
@@ -224,6 +239,22 @@ cmd_run() {
     echo "matched topology requires materializer-projection profile" >&2
     return 2
   fi
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" != "1" ] || [ "$(benchmark_profile)" != "materializer-projection" ]; then
+      echo "post-match journal diagnostic requires matched materializer-projection topology" >&2
+      return 2
+    fi
+    if [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ] || [ "${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" = "1" ]; then
+      echo "post-match journal diagnostic cannot run legacy post-match diagnostics" >&2
+      return 2
+    fi
+    if [ "$REEF_DO_BENCHMARK_GOAL" != "sustain" ] || [ "$REEF_DO_TARGET_ACCEPTED_RPS" != "10000" ] ||
+       [ "$REEF_DO_STRESS_RATES" != "10000" ] || [ "$REEF_DO_STRESS_DURATION" != "300s" ] ||
+       [ "$REEF_DO_STRESS_REPEAT_SAMPLES" != "1" ]; then
+      echo "post-match journal diagnostic requires one fixed 10000/s, 300s sample" >&2
+      return 2
+    fi
+  fi
   provision_stack
   sync_repo
   local run_id
@@ -237,7 +268,9 @@ cmd_run() {
   fetch_artifacts || status=$?
   local profile
   profile="$(benchmark_profile)"
-  REEF_DO_REPORT_PROFILE="$profile" \
+  local report_profile="$profile"
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then report_profile=materializer; fi
+  REEF_DO_REPORT_PROFILE="$report_profile" \
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
   REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
@@ -253,6 +286,9 @@ cmd_run() {
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    node scripts/dev/postmatch-candidate-artifact-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
+  fi
   return "$status"
 }
 
@@ -261,7 +297,10 @@ cmd_check() {
   local profile
   profile="$(benchmark_profile)"
   report_dir="$(benchmark_report_dir)"
-  REEF_DO_REPORT_PROFILE="$profile" \
+  local status=0
+  local report_profile="$profile"
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then report_profile=materializer; fi
+  REEF_DO_REPORT_PROFILE="$report_profile" \
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
   REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
@@ -276,7 +315,11 @@ cmd_check() {
   REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS="${REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
-    node scripts/dev/do-benchmark-check.mjs "$report_dir"
+    node scripts/dev/do-benchmark-check.mjs "$report_dir" || status=$?
+  if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    node scripts/dev/postmatch-candidate-artifact-check.mjs "$report_dir" || status=$?
+  fi
+  return "$status"
 }
 
 cmd_remote_status() {
@@ -482,6 +525,7 @@ remote_run_benchmark() {
     REEF_DO_PROJECTION_STAGE="${REEF_DO_PROJECTION_STAGE:-}" \
     REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC="${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" \
     REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC="${REEF_DO_POSTMATCH_SETTLEMENT_DIAGNOSTIC:-0}" \
+    REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC="${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" \
     REEF_DO_MATCHED_TOPOLOGY="${REEF_DO_MATCHED_TOPOLOGY:-0}" \
     REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS="${REEF_DO_MATCHED_SOURCE_PG_MAX_CONNECTIONS:-320}" \
     REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS="${REEF_DO_MATCHED_SETTLEMENT_PG_MAX_CONNECTIONS:-240}" \
@@ -592,6 +636,27 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export SETTLEMENT_POSTGRES_PASSWORD=reef
     export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,postmatch-postgres,settlement-postgres"
     export DEV_STRESS_DB_SCHEMAS="${DEV_STRESS_DB_SCHEMAS:-runtime,boundary,command_log,postmatch,settlement}"
+    if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+      export DEV_STRESS_DB_SERVICES="$DEV_STRESS_DB_SERVICES,finality-postgres"
+      export DEV_STRESS_DB_SCHEMAS="$DEV_STRESS_DB_SCHEMAS,finality"
+      export REEF_FINALITY_POSTGRES_MIGRATIONS=1
+      export SETTLEMENT_FINALITY_POSTGRES_JDBC_URL=jdbc:postgresql://finality-postgres:5432/reef
+      export SETTLEMENT_FINALITY_POSTGRES_USER=reef
+      export SETTLEMENT_FINALITY_POSTGRES_PASSWORD=reef
+      export POSTMATCH_SETTLEMENT_CONTROL_AUTHORITY_ENABLED=true
+      export POST_TRADE_PROFILE=instant-post-trade-v1
+      export POSTMATCH_CANDIDATE_READ_P95_MS="${POSTMATCH_CANDIDATE_READ_P95_MS:-250}"
+      export POSTMATCH_CANDIDATE_READ_P99_MS="${POSTMATCH_CANDIDATE_READ_P99_MS:-500}"
+      export SETTLEMENT_CANDIDATE_OPENING_AMOUNT=1000000000000000000000000
+      export SETTLEMENT_CANDIDATE_POLICY_PROFILE_ID=instant-post-trade-v1
+      export SETTLEMENT_CANDIDATE_POLICY_VERSION=1
+      export SETTLEMENT_CANDIDATE_POLICY_MODE=instant-post-trade
+      export SETTLEMENT_CANDIDATE_POLICY_CYCLE=T+0
+      export SETTLEMENT_CANDIDATE_POLICY_NETTING_MODE=gross-or-microbatch
+      export SETTLEMENT_CANDIDATE_POLICY_LEDGER_POSTING_MODE=near-instant-finality
+      export SETTLEMENT_CANDIDATE_POLICY_SELECTION_SOURCE=environment:POST_TRADE_PROFILE
+      export SETTLEMENT_CANDIDATE_CONTROL_RUNTIME_URL=http://127.0.0.1:8080
+    fi
     export STREAM_ACK_PROJECTOR_0_PARTITIONS=0
     export STREAM_ACK_PROJECTOR_1_PARTITIONS=1
     export STREAM_ACK_PROJECTOR_2_PARTITIONS=2
@@ -633,6 +698,31 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
     export DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_RETRY_DELTA:-${REEF_DO_MAX_PROJECTION_DB_RETRIES:-0}}"
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS:-60000}"
     export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS:-1000}"
+    if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+      export STREAM_ACK_PROJECTOR_ENABLED=false
+      export ORDER_LIFECYCLE_PROJECTOR_ENABLED=false
+      export MARKET_DATA_PROJECTOR_ENABLED=false
+      export ORDER_LIFECYCLE_PROJECTOR_0_ENABLED=false
+      export MARKET_DATA_PROJECTOR_0_ENABLED=false
+      export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=0
+      export DEV_STRESS_FAIL_ON_STREAM_ACK_PROJECTOR_FAILURES=0
+      export REEF_DO_REQUIRE_SUSTAINED_DOWNSTREAM_FRESHNESS=0
+      export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}postmatch-workers"
+      export POSTMATCH_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
+      export POSTMATCH_SHADOW_WORKERS_ENABLED=false
+      export POSTMATCH_SETTLEMENT_INTAKE_ENABLED=false
+      export POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=false
+      export POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=false
+      export POSTMATCH_MATCHING_MARKET_CANDIDATE_ENABLED=true
+      export POSTMATCH_JOURNAL_PROJECTION_CANDIDATE_ENABLED=true
+      export POSTMATCH_SETTLEMENT_JOURNAL_CANDIDATE_ENABLED=true
+      export POSTMATCH_CANDIDATE_AGE_METRICS_ENABLED=true
+      export POSTMATCH_JOURNAL_PARTITIONS=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+      export POSTMATCH_WORKER_0_PARTITIONS=0,1,2,3
+      export POSTMATCH_WORKER_1_PARTITIONS=4,5,6,7
+      export POSTMATCH_WORKER_2_PARTITIONS=8,9,10,11
+      export POSTMATCH_WORKER_3_PARTITIONS=12,13,14,15
+    fi
     if [ "$REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC" = "1" ]; then
       export DEV_COMPOSE_PROFILES="${DEV_COMPOSE_PROFILES:+$DEV_COMPOSE_PROFILES,}postmatch,postmatch-workers"
       export POSTMATCH_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
@@ -674,13 +764,27 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   stress_status=0
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer || stress_status=$?
   if [ "${REEF_DO_MATCHED_TOPOLOGY:-0}" = "1" ]; then
+    stage_kind=true
+    if [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then stage_kind=journal; fi
     run_stage postmatch-stage-check node scripts/dev/postmatch-stage-check.mjs \
       "$artifact_dir/postmatch-stage-samples.jsonl" "$artifact_dir/postmatch-stage-summary.json" \
-      true || stress_status=$?
+      "$stage_kind" || stress_status=$?
   fi
   measured_report_available=0
   if compgen -G "$artifact_dir/venue-event-materializer-stress-rate-*.json" >/dev/null; then
     measured_report_available=1
+  fi
+  if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_JOURNAL_DIAGNOSTIC:-0}" = "1" ]; then
+    journal_load_reports=("$artifact_dir"/venue-event-materializer-stress-rate-*.json)
+    run_stage settlement-candidate-cohort-check node scripts/dev/settlement-candidate-cohort-check.mjs \
+      "$POSTMATCH_EVENT_STREAM" auto "$artifact_dir/settlement-candidate-cohort.json" || stress_status=$?
+    docker compose -f compose.base.yml -f compose.local.yml --profile postmatch-workers logs \
+      --no-color --timestamps platform-postmatch-live-0 platform-postmatch-live-1 \
+      platform-postmatch-live-2 platform-postmatch-live-3 \
+      > "$artifact_dir/postmatch-candidate-market.log" 2>&1 || stress_status=$?
+    run_stage postmatch-candidate-age-check node scripts/dev/postmatch-candidate-age-check.mjs \
+      "$artifact_dir/postmatch-candidate-market.log" "${journal_load_reports[0]}" \
+      "$POSTMATCH_EVENT_STREAM" "$artifact_dir/postmatch-candidate-age-summary.json" 16 || stress_status=$?
   fi
   if [ "$measured_report_available" = "1" ] && [ "${REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC:-0}" = "1" ]; then
     postmatch_shadow_wait=120
@@ -859,6 +963,7 @@ sync_repo() {
     --exclude ".env" \
     --exclude ".env.local" \
     --exclude ".gradle/" \
+    --exclude ".kotlin/" \
     --exclude "build/" \
     --exclude "out/" \
     --exclude "bin/" \

@@ -85,6 +85,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0069_logged_projection_dirty_queues.sql",
       "runtime/0070_postmatch_source_generation.sql",
       "runtime/0071_independent_canonical_audit_consumer.sql",
+      "runtime/0072_settlement_source_topic_identity.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -492,5 +493,20 @@ test("routes post-match schema only to its isolated database target", async () =
     "postmatch/0003_market_change_windows.sql",
     "postmatch/0004_live_read_indexes.sql",
     "postmatch/0005_live_read_response_text.sql",
+    "postmatch/0006_matching_outcome_market_candidate.sql",
+    "postmatch/0007_settlement_control_log.sql",
   ]);
+});
+
+test("routes finality authority only to its independent database target", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const finality = migrationsForTarget({ domains: ["finality"] }, migrations);
+  const primary = migrationsForTarget({ domains: ["runtime", "settlement"] }, migrations);
+  const postmatch = migrationsForTarget({ domains: ["postmatch"] }, migrations);
+
+  assert.deepEqual(finality.map((migration) => migration.id), [
+    "finality/0001_settlement_finality_authority.sql",
+  ]);
+  assert.ok(!primary.some((migration) => migration.domain === "finality"));
+  assert.ok(!postmatch.some((migration) => migration.domain === "finality"));
 });
