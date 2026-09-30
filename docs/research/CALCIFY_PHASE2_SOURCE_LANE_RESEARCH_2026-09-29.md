@@ -1,14 +1,14 @@
 # Calcify Phase 2 source-lane coverage research
 
-Status: scoped code research; no architecture change approved or implementation made.
-Decision owner: Calcify design review with product/matching ownership.
+Status: scoped code research; current implementation gap against accepted D-042; no implementation made.
+Decision owner: D-042 already governs matching scope; Calcify design review reaffirmed it on 2026-09-29.
 Question: Can a Phase 2 resolver always find both accepted order facts by scanning only the venue-event partition named by a verified trade commitment?
 
 ## Conclusion
 
 **No unconditional same-partition guarantee exists in current matching code.** Intake routes commands by `(runId, venueSessionId, instrumentId)`, while matching keeps one book by `(venueSessionId, instrumentId)` and shares that book across partition processors in one engine process. A cross-run match is possible in the matching service. For a concrete pair of run IDs, intake routes the two orders to different partitions; the trade's venue batch is published on the crossing command's partition. Its resting order fact can therefore be on another partition. A Phase 2 index local to only the trade partition would miss it.
 
-This is a matching scope/routing decision, not merely a choice between SQL and a faster key-value store. Avoid treating the initial Phase 2 forward-scan design as universal until the intended run/session matching boundary is explicit and enforced.
+This is an implementation gap against [D-042's accepted book-ownership contract](../DECISIONS.md#d-042-shard-local-in-memory-hot-book), not merely a choice between SQL and a faster key-value store. D-042 already defines `runId + venueSessionId + instrumentId` as book and routing key, with one ordered owner and controlled routing transitions. The Calcify discussion reaffirmed that direction. Avoid treating the Phase 2 forward-scan design as valid until code and fixtures enforce it.
 
 ## Method and source versions
 
@@ -30,7 +30,7 @@ This is a matching scope/routing decision, not merely a choice between SQL and a
 | E7 | Documented fact/inference | Engine restores committed commands one partition at a time into shared service. If one book can contain commands from multiple partitions, cross-partition live interleaving is not represented by a single partition order; replay outcome may differ. This failure mode needs a dedicated fixture. | [`runner.go`](../../services/matching-engine/internal/streamdirect/runner.go), [`processor.go`](../../services/matching-engine/internal/streamdirect/processor.go), [`kafka.go`](../../services/matching-engine/internal/streamdirect/kafka.go). [Kafka documents order only within one partition](https://kafka.apache.org/26/streams/architecture/). |
 | E8 | Documented fact | Phase 1 extractor emits links in source-batch trade order to corresponding partition, and verifier publishes passing links to same partition transactionally. Stub verification checks link shape and partition, not source-order monotonicity or order ownership. | [`CalcifyContract.kt` on Phase 1 branch](https://github.com/dills122/reef/blob/684ac5e986ca9373222f74e59ff58ce9855e1917/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/CalcifyContract.kt), [`CalcifyPipeline.kt` on Phase 1 branch](https://github.com/dills122/reef/blob/684ac5e986ca9373222f74e59ff58ce9855e1917/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/CalcifyPipeline.kt) |
 
-## Decision options
+## Alternatives reviewed against D-042
 
 | Direction | Effect on Phase 2 local lookup | Cost or risk |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ This is a matching scope/routing decision, not merely a choice between SQL and a
 | Intend venue-session-wide matching across runs: route solely by session/instrument | Book and routing keys align, including cross-run trades | Changes routing and partition history; run isolation and cutover become explicit design questions |
 | Keep current cross-partition matching and compensate in Phase 2 | Needs cross-partition order-fact distribution or global state, not a simple local index | Does not itself solve matching replay/order ambiguity; high complexity and storage/latency risk at 10k commitments/s |
 
-**Recommendation for discussion:** decide whether trades may cross runs within a venue session. If not, enforce run isolation at matching boundary (book key or run-exclusive session admission), then prove same-lane source coverage. If yes, align routing with book scope before designing Phase 2 lookup. Do not add a cross-partition join as a quiet post-match workaround for an ambiguous matching authority.
+**Accepted direction:** implement D-042 explicitly: matching book scope includes run, session, and instrument; command routing uses the same scope; an active book stays on its assigned lane until a versioned, drained, fenced handoff. Do not add a cross-partition join as a quiet post-match workaround. Venue-session-wide matching would require a new decision that supersedes D-042.
 
 ## Unknowns and next gate
 
@@ -48,4 +48,4 @@ This is a matching scope/routing decision, not merely a choice between SQL and a
 - Source retention and Phase 2 index recovery remain separate open issues. A local index must either rebuild from complete available source or from a durable changelog/snapshot; this research does not pick a state-store implementation.
 - Phase 1 verifier's normal path preserves per-partition order by construction, but a separately produced or corrupted verified link is not checked for monotonic source positions. Phase 2 must validate its own input sequence and source identity.
 
-Gate before resolver implementation: accepted product/matching scope, enforced routing/book invariant, fixture covering resting order in earlier batch and both source partitions, replay equality, and one-lane order-fact coverage. Then confirm index key/lifetime and output contract.
+Gate before resolver implementation: align matching code with D-042; verify cross-run same-session orders cannot trade; test resting order in earlier batch, output partition, restart/replay equality, and one-lane order-fact coverage. Then confirm index key/lifetime and output contract. Existing D-042 defers live book migration until routing epochs, drain/fencing, snapshot/replay handoff, and checksum proof exist; adding partitions must not silently remap an active book.

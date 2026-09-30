@@ -1,6 +1,6 @@
 # Calcify Phase 2 — match context resolution
 
-Status: initial planning skeleton; local-only resolver direction conditional on matching source-lane decision. No Phase 2 implementation approved.
+Status: initial planning skeleton; run-scoped book/lane direction accepted under D-042, matching implementation alignment pending. No Phase 2 implementation approved.
 Recorded: 2026-09-29 America/Toronto.
 Branch: `codex/calcify-phase2-planning`.
 
@@ -8,9 +8,16 @@ Branch: `codex/calcify-phase2-planning`.
 
 Phase 2 starts with a `CommitmentVerificationPassed` link from the Phase 1 verified commitment stream. Its first useful result is a resolved match context: the exact `TradeCreated` source fact connected to both accepted order facts and their participant/account identities. This is fact resolution, not trade approval, allocation, clearing, balance checking, or settlement. The Phase 1 PostgreSQL receipt worker remains a temporary diagnostic endpoint; Phase 2 consumes the verified stream directly.
 
-**Research gate:** [source-lane review](../research/CALCIFY_PHASE2_SOURCE_LANE_RESEARCH_2026-09-29.md) found present intake routing includes run ID while matching book scope does not. A cross-run trade can reference an order accepted on another source partition. The one-lane diagram below is therefore a candidate contingent on an explicit matching-scope decision and enforcement, not a current guarantee.
+**Research gate:** [source-lane review](../research/CALCIFY_PHASE2_SOURCE_LANE_RESEARCH_2026-09-29.md) found present intake routing includes run ID while matching book scope does not. A cross-run trade can reference an order accepted on another source partition. [D-042](../DECISIONS.md#d-042-shard-local-in-memory-hot-book) already requires run-scoped book ownership aligned with routing; user reaffirmed this direction on 2026-09-29. The one-lane diagram below remains conditional on implementing and proving that existing decision.
 
 Matching facts remain authoritative in the venue-event log. Phase 2 may keep a rebuildable lookup index and short-lived decoded batch data, but should not copy trade economics into a second canonical store. Later stages should receive durable source links and only the context fields justified by their access needs.
+
+## Accepted matching prerequisite
+
+- Match scope and routing key are `(runId, venueSessionId, instrumentId)`. Orders from different runs do not trade in one book. Matching book ownership, command lane, venue-event partition, and resolver lane must agree for that scope.
+- One active owner orders each book's commands. Physical lane assignment remains stable until an explicit, durable routing epoch and drain/fencing/snapshot/replay handoff; changing partition count must not silently remap an active book. D-042 already defers live migration until those controls exist.
+- Current Go matching book key omits run ID despite D-042. Correct this upstream with focused matching, source-partition, and replay fixtures before Phase 2 depends on a local-only order index. A Phase 2 cross-partition lookup is not the fix for this invariant.
+- This prerequisite is a narrow matching-boundary alignment, not Phase 2 settlement or a mandate to build live migration now.
 
 ## Initial flow
 
@@ -51,7 +58,7 @@ The intended normal path has **no per-match PostgreSQL read, full-prefix scan, o
 
 ## Delivery sequence — small, independently checked slices
 
-1. **Source/ordering fixture.** Prove accepted-order and trade facts, flattened ordinals, partition relationship, and repeated references to one batch. Include resting order accepted in an earlier batch, partial fill, malformed and missing source, duplicate verified link, and restart ordering.
+1. **Matching alignment and source/ordering fixture.** Enforce D-042's run-scoped book/lane key. Prove cross-run same-session non-match, accepted-order and trade facts, flattened ordinals, partition relationship, and repeated references to one batch. Include resting order accepted in an earlier batch, partial fill, malformed and missing source, duplicate verified link, and restart ordering.
 2. **Resolver core.** Sequential source cursor, batch reuse, small local order index, deterministic context resolution. Test with seeded verified links; no settlement behavior.
 3. **Durability boundary.** Durable/rebuildable state and idempotent output/checkpoint. Test crashes at index update, output, and checkpoint boundaries, plus stale ownership and source-generation change.
 4. **Measured capacity.** Capture source batches decoded, local lookup latency, index bytes/order, cache misses, lag slope, output count/identity parity, CPU, memory, disk I/O, and recovery time. Run hot and spread-lane cohorts, high-fanout batches, aged state, and sustained load. Do not infer Phase 2 capacity from Phase 1 or venue-core results.
@@ -62,10 +69,10 @@ Target: **near 10,000 verified commitments resolved per second, sustained**. Pre
 
 Apache Kafka documents local stream-table joins as a way to avoid a remote database request per record, and disk-backed local state with compacted changelog recovery. These are architectural precedents, not a decision to adopt Kafka Streams: [joins](https://kafka.apache.org/43/streams/developer-guide/dsl-api/), [state stores](https://kafka.apache.org/43/streams/developer-guide/processor-api/). LMAX describes in-memory, single-writer exchange processing, but does not document this specific post-match join: [Disruptor paper](https://github.com/LMAX-Exchange/disruptor/blob/master/src/docs/asciidoc/en/disruptor.adoc).
 
-Agreed performance direction: sequential source consumption and local order lookups, with no SQL reads in normal per-trade path. Whether this can be strictly partition-local depends on the matching-scope decision above. Proposed details remain open until checked against source contracts and a reviewed Phase 2 output/recovery design. No Phase 2 benchmark has been run.
+Agreed performance direction: sequential source consumption and local order lookups, with no SQL reads in normal per-trade path. Strict partition locality depends on implementing and proving D-042's matching scope. Proposed resolver details remain open until checked against source contracts and a reviewed Phase 2 output/recovery design. No Phase 2 benchmark has been run.
 
 ## Next discussion
 
-Start with intended matching scope: can two runs trade within one venue session? Choose and enforce routing/book relationship before claiming one resolver lane can see both order facts for every verified trade. Then settle checkpoint/recovery and output shape before store selection or implementation.
+Start with D-042 implementation alignment: same-run book key, routing and event partition consistency, and deterministic restart/replay. Prove one resolver lane can then see both order facts for every verified trade. Next settle checkpoint/recovery and output shape before store selection or implementation.
 
 Initial source check: current direct matching builds each `VenueEventBatch` from ordered command outcomes; `SubmitOrder` attaches `AcceptedOrderFact` to its result, and a trade carries buy/sell order IDs but no participant/account IDs. The acceptance guard above is required. Intake hashes `runId|venueSessionId|instrumentId` to choose a command partition, so same-context submissions route together. We still need to prove both trade sides always share that context, venue-event partition follows it, and verified links preserve source order under replay. See [`processor.go`](../../services/matching-engine/internal/streamdirect/processor.go), [`order.go`](../../services/matching-engine/internal/domain/order.go), [`StreamCommandContracts.kt`](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandContracts.kt), and [Phase 1 contracts in PR #430](https://github.com/dills122/reef/pull/430).
