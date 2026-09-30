@@ -60,7 +60,7 @@ No claim of end-to-end exactly-once covers a later SQL side effect by itself. Do
 
 ## Piece 4 — output contract and failure policy
 
-Proposed output name: `MatchContextResolvedV1`. Preserve original commitment ID and source generation/partition/offset/ordinal; include trade ID, execution ID, buy/sell order IDs, run/session/instrument, and both participant/account IDs. Include accepted-order source links so consumers can audit/rebuild ownership. Copy trade economics only if a measured later-stage access pattern justifies it; otherwise retain source link and avoid duplicate authoritative payload. Version encoding and validate field relationships. A later stage must still decide its own approval/settlement semantics.
+Accepted direction, 2026-09-29: make `MatchContextResolvedV1` a richer assembled record. It is the authoritative post-match account of the source trade joined to both accepted-order ownership facts, while the venue log remains authority for those upstream facts. Include original commitment ID and verification policy version; exact trade and both accepted-order source links; trade/event/execution IDs; run/session/instrument; buy/sell order, participant, and account IDs; and the trade's immutable quantity, price, currency, and occurrence time. This small execution summary prevents routine downstream rereads of venue batches. Version encoding and validate field relationships. It confers no allocation, clearing, ledger, or settlement status. Exact additional order fields and topic remain open; original order terms and mutable order state should be added only for a demonstrated downstream need. Corrections should carry lineage as new facts rather than mutating the original assembled record.
 
 Reject as **lane-stopping integrity faults**: source generation mismatch, missing/expired source batch, bad checksum, ordinal out of range, missing accepted side, wrong side, run/session/instrument mismatch, trade ID conflict, or same stable commitment ID producing different output. Do not route such records to a best-effort success stream. Duplicates with identical identity/content are replay no-ops. Failure output/operations contract can be a small diagnostic record plus blocked lane and alert; no business rejection or settlement exception is implied. Exact enum and topic need review with the contract slice.
 
@@ -78,7 +78,7 @@ Measure: verified input/s, source batches and bytes scanned/s, source-to-verifie
 
 ## Narrow decisions for next review
 
-1. Confirm `MatchContextResolvedV1` fields and whether later stages truly need copied economics or only immutable identity/context plus links.
+1. Finalize `MatchContextResolvedV1` field schema, especially exact accepted-order source-link coordinates and any additional order identifiers needed routinely. Core trade economics and both sides' ownership context are accepted.
 2. Choose A versus B after a small crash/lag spike, explicitly comparing source lead, state bytes, rebalance correctness, and restart time. This is the main unresolved architecture choice.
 3. Specify source/verified availability and run-close frontier before enabling deletion or claiming run-scoped recovery.
 

@@ -12,7 +12,7 @@ Phase 2 starts with a `CommitmentVerificationPassed` link from the Phase 1 verif
 
 **Architecture research:** [Phase 2 architecture review](../research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md) compares primary FIX/DTCC and Apache Kafka/Flink guidance with Reef contracts. It recommends a verified-led, sequential source walk provisionally, but leaves runtime choice pending a narrow crash/lag experiment; this document remains the working skeleton.
 
-Matching facts remain authoritative in the venue-event log. Phase 2 may keep a rebuildable lookup index and short-lived decoded batch data, but should not copy trade economics into a second canonical store. Later stages should receive durable source links and only the context fields justified by their access needs.
+Matching and accepted-order facts remain authoritative in the venue-event log. Phase 2 assembles them into a durable, self-contained post-match context record; that resolved record is authoritative for what post-match consumers received and can use without rereading source for routine processing. It includes core immutable execution terms and both sides' ownership context, plus exact source links for audit/rebuild. It is not authority for later allocation, clearing, ledger, or settlement outcomes. The local lookup index remains rebuildable state.
 
 ## Accepted matching prerequisite
 
@@ -35,7 +35,7 @@ flowchart LR
 1. Own one source partition and its corresponding verified-commitment partition as one logical lane. Advance a source cursor toward each verified link's `(sourceGeneration, sourcePartition, sourceOffset, tradeOrdinal)`; decode each source batch once and index accepted-order facts encountered along the way.
 2. At target batch, select exact `TradeCreated` by flattened ordinal. Reuse decoded batch for subsequent verified links to that batch. Resolve buy and sell order IDs through two local key lookups.
 3. Check identity relationships and provenance before emitting a resolved result: trade/order IDs, sides, run, venue session, instrument, source generation, and source position as applicable. A link is never treated as settlement authority.
-4. Publish an idempotently identified result with enough durable links for later stages and audit. Exact output event, fields, topic, and atomic checkpoint protocol remain design decisions.
+4. Publish an idempotently identified assembled result with core trade economics, both sides' ownership context, and durable links for later stages and audit. Exact field list, encoding, topic, and atomic checkpoint protocol remain design decisions.
 
 The intended normal path has **no per-match PostgreSQL read, full-prefix scan, or random broker seek**. A source batch is read sequentially once per lane, and each trade needs two local order-ID lookups. Source recovery may require a seek, but repeated seeks per trade are outside this design.
 
@@ -56,7 +56,7 @@ The intended normal path has **no per-match PostgreSQL read, full-prefix scan, o
 | Checkpoint | How do local index updates, source cursor, verified offset, and output survive a crash without losing context or creating a distinct duplicate result? Define replay and idempotency before choosing transaction mechanics. |
 | State lifetime | What terminal-order signal and downstream frontier permit safe deletion? What run-close and retention rules bound local state and its recovery source? |
 | Capacity | Which rate unit, trade fanout, hot-lane skew, run age, duration, resource envelope, backlog/freshness limit, and recovery time form the Phase 2 gate? |
-| Output contract | Which identifiers must be copied for efficient later use, and which should remain durable links to matching facts? What is the exact conflict/mismatch policy? |
+| Output contract | Which additional accepted-order fields have routine post-match use beyond core trade economics and both sides' ownership? What is the exact conflict/mismatch policy? |
 
 ## Delivery sequence — small, independently checked slices
 
