@@ -67,8 +67,8 @@ if ! diff -ru \
   status=1
 fi
 if ! diff -ru \
-  "$repo_root/services/platform-runtime/src/main/java/reef/contracts/orderexecution/v1" \
-  "$work_dir/generated-java/reef/contracts/orderexecution/v1"; then
+  "$repo_root/services/platform-runtime/src/main/java/reef/contracts" \
+  "$work_dir/generated-java/reef/contracts"; then
   echo "checked-in Java protobuf sources are stale; regenerate them with protoc 33.2"
   status=1
 fi

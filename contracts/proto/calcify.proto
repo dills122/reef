@@ -1,0 +1,73 @@
+syntax = "proto3";
+package reef.contracts.calcify.v1;
+
+import "contracts/proto/order_execution.proto";
+option go_package = "github.com/dills122/reef/contracts/proto/orderexecution/v1;orderv1";
+option java_package = "reef.contracts.calcify.v1";
+option java_multiple_files = true;
+
+// Original immutable acceptance economics. Modify outcomes never replace this fact.
+message AcceptedOrderFactV1 {
+  string order_id = 1;
+  string engine_order_id = 2;
+  string client_order_id = 3;
+  string run_id = 4;
+  string venue_session_id = 5;
+  string instrument_id = 6;
+  string participant_id = 7;
+  string account_id = 8;
+  reef.contracts.orderexecution.v1.OrderSide side = 9;
+  reef.contracts.orderexecution.v1.OrderType order_type = 10;
+  string quantity_units = 11;
+  string limit_price = 12;
+  string currency = 13;
+  reef.contracts.orderexecution.v1.TimeInForce time_in_force = 14;
+  string accepted_at = 15;
+}
+
+// Exact committed venue record and nested outcome, independent of event timestamps.
+message SourceProvenanceV1 {
+  uint32 source_generation = 1;
+  uint32 source_partition = 2;
+  int64 source_offset = 3;
+  uint32 outcome_ordinal = 4;
+  string source_topic = 5;
+  string source_topic_id = 6;
+  string batch_id = 7;
+  string batch_checksum = 8;
+  string command_id = 9;
+}
+
+message AcceptedOrderSourceV1 {
+  AcceptedOrderFactV1 fact = 1;
+  reef.contracts.orderexecution.v1.OrderAccepted acceptance = 2;
+  SourceProvenanceV1 source = 3;
+}
+
+message TradeSourceV1 {
+  reef.contracts.orderexecution.v1.TradeCreated fact = 1;
+  SourceProvenanceV1 source = 2;
+}
+
+message CommitmentSourceV1 {
+  uint32 source_generation = 1;
+  uint32 source_partition = 2;
+  int64 source_offset = 3;
+  uint32 trade_ordinal = 4;
+}
+
+// Durable assembled context. No settlement eligibility is implied by policy V1.
+message MatchContextResolvedV1 {
+  CommitmentSourceV1 commitment = 1;
+  uint32 policy_version = 2;
+  string run_id = 3;
+  TradeSourceV1 trade = 4;
+  AcceptedOrderSourceV1 buy_accepted_order = 5;
+  AcceptedOrderSourceV1 sell_accepted_order = 6;
+}
+
+// Managed restart checkpoint for one demand-read target batch.
+message ResolverTargetBatchV1 {
+  int64 source_offset = 1;
+  repeated TradeSourceV1 trades = 2;
+}

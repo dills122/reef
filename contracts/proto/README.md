@@ -57,3 +57,20 @@ Compatibility guard:
 - Without `PROTO_BASE_REF`, it defaults to `origin/HEAD`, then falls back to
   `origin/main` or `origin/master`.
 - If no base ref or required tool is available, the guard fails closed.
+
+Calcify Phase 2 contract: [`calcify.proto`](./calcify.proto) defines
+`MatchContextResolvedV1` with complete immutable trade, both accepted-order facts,
+full acceptance events, command identities and exact source provenance. Generated
+Java lives under `reef/contracts/calcify/v1`; Go retains existing `orderv1` package
+because generation writes all schemas into one Go directory. Java drift guard
+covers all contract packages.
+
+Order-index identity is lane-local `(sourceGeneration, orderId)`. Within that lane,
+new acceptance of a reused ID is a conflict, even after terminal matcher retention;
+upstream callers must issue distinct IDs for the generation. Identical fact,
+acceptance and command replay preserves earliest provenance. Never overwrite
+original acceptance with modify economics. Both sides must share run/session/
+instrument, source generation/topic UUID/lane and currency. Acceptance in same
+outcome logically precedes its trades; later outcomes do not. Commitment ordinal
+counts every nested trade across ordered outcomes, including modify outcomes.
+Source generation must remain bound to registered broker topic UUID.

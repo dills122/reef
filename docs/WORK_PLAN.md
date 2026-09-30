@@ -20,7 +20,7 @@ audited checkout; missing local reports do not prove a run never happened.
 
 ## Calcify Phase 2 implementation (2026-09-30 branch)
 
-User approved [six-slice implementation plan](work/CALCIFY_PHASE2_IMPLEMENTATION.md). Active branch: `codex/calcify-phase2-implementation`, continuing preserved experiment commits. D-042 run-scoped matching and V3 snapshot compatibility implemented; focused replay and complete `go test -race ./...` passed. Next dependency: full-fact Protobuf V1/pure resolver, then managed integration and production fault/recovery/capacity gates. No full Phase 2 throughput or availability qualification claimed.
+User approved [six-slice implementation plan](work/CALCIFY_PHASE2_IMPLEMENTATION.md). Active branch: `codex/calcify-phase2-implementation`, continuing preserved experiment commits. D-042 run-scoped matching and V3 snapshot compatibility implemented; focused replay and complete `go test -race ./...` passed. Full-fact Protobuf V1/pure resolver implemented; 13 Calcify tests and generated compatibility/drift checks pass. Next dependency: managed integration and production fault/recovery/capacity gates. No full Phase 2 throughput or availability qualification claimed.
 
 ## Calcify Phase 2 experiment checkpoint (2026-09-30 branch)
 
