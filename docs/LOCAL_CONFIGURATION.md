@@ -78,6 +78,21 @@ most two seconds at p95 and five seconds at peak, exact final counts, and final
 drain within five seconds. Compare with the separate burst; neither qualifies
 hosted or production capacity.
 
+For higher-rate single-lane Phase 1 pressure, first create fresh source
+generation with `SMOKE_ID=calcify-highrate-local make dev-smoke-calcify-high-rate`.
+Note generation printed by smoke, then run
+`make dev-soak-calcify-high-rate-load SMOKE_ID=calcify-highrate-local GENERATION=21 DURATION=300s PAIRS_PER_SECOND=2500 WORKERS=512 OUT=/private/tmp/calcify-highrate-load.json`
+with actual printed generation in place of `21`. Check source and both link
+streams with
+`make dev-verify-calcify-high-rate LOAD_REPORT=/private/tmp/calcify-highrate-load.json OUT=/private/tmp/calcify-highrate-verify.json`.
+Load command reports offered, dropped, accepted, five-second conservative
+upper receipt gap, and drain; its gate requires at least 95% requested
+acceptance, at most 5% offered pairs dropped, exact receipts, bounded gap,
+and drain within five seconds. Verification command enforces
+exact intake, source, commitment, verification, receipt, and matching counts.
+Use fresh smoke ID/generation for each run; do not reuse pair ID ranges.
+Run short higher-rate probe and five-minute gate after each material phase.
+
 ## Change configuration
 
 Copy `.env.example` to ignored `.env`; use named host-port overrides there or

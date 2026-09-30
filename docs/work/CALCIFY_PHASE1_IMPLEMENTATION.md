@@ -224,6 +224,102 @@ per-trade latency distribution, multi-lane or hosted capacity result, or a
 guarantee for higher rates, longer runs, restarts, or future post-match
 phases. Keep same sustained-plus-burst gate as each phase adds work.
 
+## High-rate calibration and five-minute run, CAL-P1-L6/L7/L8/L9
+
+Goal: find Phase 1 full-path limit while keeping source, commitment,
+verification, and receipt accounting exact. Baseline L5 was 600 accepted
+orders/s for five minutes on one hot lane. Historical hosted C5 venue-core
+10k/s used 64 instruments, 16 partitions, and four materializers with
+projections off; C2 full-projection 5k/s failed. Neither is directly
+comparable to one-lane Calcify. Local host remained Docker 29.7.2 with 10 CPUs
+and 16,745,824,256 bytes, reused volumes, fresh topics per JS setup.
+
+L6a (10k/s offered, 250-pair Bun waves) and L6b (5k/s offered, 100-pair Bun
+waves) both ended early on `FailedToOpenSocket`. L6b also exposed matching
+partition retry at command offset 23,902: a 500-command `VenueEventBatch`
+serialized to 1,049,080 bytes, exceeding Kafka producer's 1,048,576-byte
+limit. Durable intake held 44,065 commands but source reached 23,902, leaving
+20,163 commands. Changing only local matching batch size to 200 removed that
+specific oversized-message failure in L6c; matching acknowledged all 44,074
+accepted commands, but receipts were only 4,878 at the client failure and
+last verified-to-receipt endpoint gap was 8,704 ms after drain. Receipt worker
+had one PostgreSQL transaction and one Kafka offset commit per link.
+
+Receipt worker now validates each poll's partition-prefix records, inserts
+them in a JDBC batch with one transaction per partition, and checkpoints the
+last valid offset after DB commit. Replays remain idempotent; a conflicting
+policy version rolls back batch and falls back to per-record processing to
+stop exactly at conflicting offset. Malformed wire records stop their own
+partition without skipping earlier valid records. Focused PostgreSQL replay,
+conflict rollback, and poison-prefix tests pass. L6d with this change
+reconciled 300,000 accepted load orders and 150,001 source trades, commitment
+links, verified links, and receipts, with gap p95/peak 300 trades and 1,217 ms
+final drain. Bun needed 52,368 socket retries and took 100.770 seconds for a
+30-second 10k/s target, so its measured intake rate was only 2,977.08/s.
+
+Pooled Go crossing-pair load with same HTTP/idempotency path replaced Bun for
+high-rate diagnostics. At 10k/s offered over 30 seconds on aged generation
+18, 512 workers delivered 7,691.22 orders/s and 1024 workers 7,738.65/s;
+neither met 10k. Both had zero request failures/retries and final receipts
+reconciled. [All attempted runs and raw-report links](../evidence/calcify-phase1-high-rate-attempts-2026-09-29.json).
+
+L7 set a 7,500 orders/s offered target for 300 seconds on fresh generation
+19, one hot partition, 200-command matching batches, and batched receipt
+worker. Predeclared local gate remained >=95% target intake, sampled
+accepted-pair-to-receipt gap p95 <= two seconds and peak <= five seconds of
+requested trade rate, exact final stage counts, and <=5-second final drain.
+Go loader scheduled 1,125,000 pairs, dropped 35,121 when its bounded queue
+filled, and accepted 2,179,758 orders in 300.299 seconds: 7,258.61/s,
+96.78% of offered target. No request failure or retry occurred. Exact ingress
+and source count was 2,179,760 including preflight; matching acknowledged
+same count with zero NAKs/failures. Source trade, commitment link, verified
+link, and PostgreSQL receipt counts were each 1,089,880. Sixty five-second
+*lower-bound* gap samples had p95 1,025 and peak 1,670 trades, first six mean 824.5 and
+last six mean 460.5; final drain 1,133 ms. Last-record source-to-commitment,
+commitment-to-verified, and verified-to-receipt endpoint differences were
+517, 335, and 19 ms. These are endpoint differences, not per-trade latency.
+[Raw load report](../evidence/calcify-phase1-go-7k5-5m.json) and
+[exact four-partition reconciliation](../evidence/calcify-phase1-go-7k5-5m-reconciliation.json).
+
+L7 passed intake, exact accounting, and drain gates. Its gap gate was not
+proven because the sampler read accepted count before querying receipts; the
+query interval could add accepted pairs not reflected in that sample. The
+historical raw report is retained. L8 corrected this by measuring accepted
+pairs before and after every receipt query, then gating the conservative
+upper-bound gap. On fresh generation 20 with 7,500 orders/s offered for 300
+seconds, 1,930,226 orders were accepted in 300.624 seconds (6,420.72/s),
+and the bounded client queue dropped 159,887 offered pairs. The 95% intake
+and 5% drop gates failed; there were no request failures or retries. Exact
+source trades, commitment links, verified links, and receipts each counted
+965,114, with matching acking all 1,930,228 commands including preflight and
+zero NAKs/failures. Conservative upper gap p95/peak was 866/1,272 trades;
+final drain was 1,183 ms. Reused volumes had aged further, so the L7/L8
+rate difference is not isolated to the sampler change. [L8 raw report](../evidence/calcify-phase1-go-7k5-upper-5m.json)
+and [exact reconciliation](../evidence/calcify-phase1-go-7k5-upper-5m-reconciliation.json).
+
+L9 lowered offered rate to 5,000 orders/s for 300 seconds on fresh
+generation 21 with the same runtime code and corrected sampler. It accepted
+1,499,902 load orders in 300.098 seconds (4,998.03/s); only 49 of 750,000
+offered pairs dropped from the bounded queue, with no request failures or
+retries. Intake/source commands each counted 1,499,904 including preflight;
+matching acked all with zero NAKs/failures. Source trades, commitment links,
+verified links, and receipts each counted 749,952. Sixty conservative
+upper-gap samples had p95 628 and peak 846 trades; first/last six means were
+436.17/477.67 trades. Final drain was 1,478 ms. The frozen local gate
+passed at this rate. [L9 raw report](../evidence/calcify-phase1-go-5k-upper-5m.json)
+and [exact reconciliation](../evidence/calcify-phase1-go-5k-upper-5m-reconciliation.json).
+
+These runs do not establish 10k/s local capacity, hosted/multi-lane capacity,
+fault/restart behavior under load,
+identity-level independent reconciliation, or settlement readiness. Each
+material post-match phase still needs a short higher-rate probe plus its own
+five-minute sustained gate. `make dev-smoke-calcify-high-rate`,
+`make dev-soak-calcify-high-rate-load`, and
+`make dev-verify-calcify-high-rate` keep setup, paced load, and exact stage
+reconciliation repeatable. Matching's 1 MiB batch ceiling still needs a
+payload-aware limit before arbitrary large command payloads are allowed;
+the 200-command local setting is this fixture's measured safe value.
+
 ## Run and limits
 
 Start with `compose.base.yml`, `compose.local.yml`, and `compose.calcify.yml`, profiles `redpanda,calcify-phase1`; apply migrations before enabling sidecars. Stage environment has source and output topic names, source generation, and `CALCIFY_AUTO_OFFSET_RESET` (default `earliest`). Output topics are created with source partition count and one replica in this local Phase 1 path; deployment topology and retention need separate review. Source batches lacking `sha256-reef-canonical-v1` stop their partition rather than silently pass.

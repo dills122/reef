@@ -24,6 +24,7 @@ const sustained = durationSeconds > 0 || ratePairsPerSecond > 0;
 const loadPairs = sustained ? durationSeconds * ratePairsPerSecond : Number(env("DEV_CALCIFY_FULL_PATH_LOAD_PAIRS", "0"));
 const loadBatchSize = Number(env("DEV_CALCIFY_FULL_PATH_LOAD_BATCH_SIZE", "10"));
 const reportPath = env("DEV_CALCIFY_FULL_PATH_REPORT", "");
+let transportRetries = 0;
 if (!Number.isSafeInteger(durationSeconds) || !Number.isSafeInteger(ratePairsPerSecond) ||
     (sustained && (durationSeconds < 1 || ratePairsPerSecond < 1)) ||
     !Number.isSafeInteger(loadPairs) || loadPairs < 0 ||
@@ -116,16 +117,38 @@ async function runBasicLoad(generation, partition) {
     if (sustained) await sleep(Math.max(0, started + Math.floor(first * 1000 / ratePairsPerSecond) - Date.now()));
     const last = Math.min(first + loadBatchSize, loadPairs);
     const ids = Array.from({ length: last - first }, (_, index) => first + index);
-    await Promise.all(ids.map((id) => submitLoad(id, "buyer", "BUY")));
-    await Promise.all(ids.map((id) => submitLoad(id, "seller", "SELL")));
+    try {
+      const buyers = await Promise.allSettled(ids.map((id) => submitLoad(id, "buyer", "BUY")));
+      const buyerFailure = buyers.find((result) => result.status === "rejected");
+      if (buyerFailure) throw buyerFailure.reason;
+      const sellers = await Promise.allSettled(ids.map((id) => submitLoad(id, "seller", "SELL")));
+      const sellerFailure = sellers.find((result) => result.status === "rejected");
+      if (sellerFailure) throw sellerFailure.reason;
+    } catch (error) {
+      const intakeRows = Number((await psql(`SELECT COUNT(*) FROM boundary.stream_command_intake WHERE stream_name = '${commandTopic}'`, "boundary-postgres")).trim());
+      const receipts = Number((await psql(`SELECT COUNT(*) FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
+      const matching = await matchingPartitionStats(partition);
+      const failure = { smokeId, generation, mode: sustained ? "sustained" : "burst",
+        targetOrdersPerSecond: sustained ? ratePairsPerSecond * 2 : null,
+        durationSeconds: sustained ? durationSeconds : null, loadBatchSize,
+        attemptedPairIndex: first, completedPairs: acceptedPairs,
+        elapsedMs: Date.now() - started, intakeRows, receipts, transportRetries,
+        matching, samples, error: String(error), errorCode: error?.code ?? null };
+      if (reportPath) await writeFile(reportPath, JSON.stringify(failure, null, 2) + "\n");
+      console.error(`Calcify load failed ${JSON.stringify({ ...failure, samples: `${samples.length} samples in ${reportPath || "console only"}` })}`);
+      throw error;
+    }
     acceptedPairs = last;
     if (halfwayReceipts === null && acceptedPairs >= Math.ceil(loadPairs / 2)) {
       halfwayReceipts = Number((await psql(`SELECT COUNT(*) FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
     }
     if (sustained && Date.now() >= nextSampleAt) {
       const receipts = Number((await psql(`SELECT COUNT(*) FROM runtime.calcify_commitment_receipts WHERE source_generation = ${generation}`)).trim());
+      const matching = await matchingPartitionStats(partition);
       const sample = { elapsedMs: Date.now() - started, acceptedPairs, receipts,
-        acceptedToReceiptGap: acceptedPairs + 1 - receipts };
+        acceptedToReceiptGap: acceptedPairs + 1 - receipts,
+        matchingAcked: matching?.acked ?? null, matchingFailed: matching?.failed ?? null,
+        matchingLastError: matching?.lastError ?? null };
       samples.push(sample);
       console.log(`Calcify sustained sample ${JSON.stringify(sample)}`);
       nextSampleAt += 5000;
@@ -156,7 +179,7 @@ async function runBasicLoad(generation, partition) {
   const result = { smokeId, generation, mode: sustained ? "sustained" : "burst", loadPairs, loadBatchSize,
     durationSeconds: sustained ? durationSeconds : null, ratePairsPerSecond: sustained ? ratePairsPerSecond : null,
     acceptedOrders: acceptedPairs * 2,
-    acceptedMs, acceptedOrdersPerSecond, halfwayReceipts, receiptsAtAcceptance,
+    acceptedMs, acceptedOrdersPerSecond, halfwayReceipts, receiptsAtAcceptance, transportRetries,
     samples, p95AcceptedToReceiptGap: p95Gap, maxAcceptedToReceiptGap: maxGap,
     sourceBatches: source.count, sourceCommands: source.commands, sourceTrades: source.trades,
     commitmentLinks: commitmentMeta.count, verifiedLinks: verifiedMeta.count,
@@ -210,15 +233,38 @@ async function submit(party, side) {
 
 async function submitLoad(index, party, side) {
   const commandId = `${party}-load-${index}-${smokeId}`;
-  const response = await post("/api/v1/orders/submit", {
+  const body = {
     commandId, traceId: `trace-${commandId}`, causationId: `cause-${commandId}`, correlationId: `corr-${commandId}`,
     actorId: `${party}-actor-${smokeId}`, runId: smokeId, venueSessionId: sessionId,
     occurredAt: "2026-09-29T15:00:00Z", orderId: `${party}-load-order-${index}-${smokeId}`, instrumentId,
     participantId: `${party}-${smokeId}`, accountId: `${party}-account-${smokeId}`,
     side, orderType: "LIMIT", quantityUnits: "100", limitPrice: "150250000000", currency: "USD", timeInForce: "DAY",
-  }, { "X-Client-Id": `${party}-client-${smokeId}`, "Idempotency-Key": `${party}-load-idem-${index}-${smokeId}` });
+  };
+  const headers = { "X-Client-Id": `${party}-client-${smokeId}`, "Idempotency-Key": `${party}-load-idem-${index}-${smokeId}` };
+  let response;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      response = await post("/api/v1/orders/submit", body, headers);
+      break;
+    } catch (error) {
+      if (!(error instanceof TypeError || error?.code === "FailedToOpenSocket") || attempt >= 3) throw error;
+      transportRetries++;
+      await sleep(25 * (attempt + 1));
+    }
+  }
   if (String(response.status).toLowerCase() !== "accepted" && response.accepted !== true) {
     throw new Error(`command ${commandId} not accepted: ${JSON.stringify(response)}`);
+  }
+}
+
+async function matchingPartitionStats(partition) {
+  try {
+    const response = await fetch(`${engineUrl}/internal/stream-direct/stats`);
+    if (!response.ok) return null;
+    const stats = await response.json();
+    return stats.partitions?.find((entry) => entry.partition === partition) ?? null;
+  } catch {
+    return null;
   }
 }
 

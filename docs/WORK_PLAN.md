@@ -40,16 +40,31 @@ orders; 90,001 trades/links/receipts reconciled, sampled gap p95/peak was
 200 trades with steady first/last half means, and final drain was 1,943 ms.
 Tail stayed bounded at this tested rate; higher-rate and longer-run limits
 remain unproven.
+High-rate CAL-P1-L6 probes exposed a Kafka 1 MiB matching event-batch ceiling,
+per-record receipt transaction/checkpoint backlog, and Bun socket saturation.
+Phase 1 high-rate local setup now uses 200-command matching batches and per-poll
+receipt batches. With pooled Go load, 10k/s-offered 30-second probes reached
+about 7.7k accepted orders/s. First 7.5k/s-offered five-minute run accepted
+7,258.61/s with exact stage counts, but gap samples were lower bounds.
+Corrected 7.5k/s run accepted 6,420.72/s and failed intake gate despite exact
+stage counts. Fresh 5k/s-offered five-minute run passed at 4,998.03 accepted
+orders/s with 749,952 exact trades/links/receipts, conservative upper-gap
+p95/peak 628/846 trades, and 1,478 ms final drain. Repeat sustained plus
+short stress probes for every material post-match phase; 7.5k/s and 10k/s
+local and multi-lane qualification remain open.
 Exact wire contract, corrections, and limits:
 [Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link
 reconciliation remain follow-ups before non-diagnostic use. Repeat
 `make dev-smoke-calcify-full-path` as each post-match slice expands, adding
 assertions for that slice's source identity, durable effect, and replay behavior.
-Repeat `make dev-stress-calcify-basic PAIRS=1000` for local full-path load.
-Pair it with `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`
-after each material post-match phase change; record in-load gap and exact final
-stage counts before claiming that slice handles sustained traffic.
+After each material post-match phase change, run a fresh full-path preflight,
+a 30-second 10k/s-offered probe, and a 300-second 5k/s-offered run through
+`make dev-smoke-calcify-high-rate` and `make dev-soak-calcify-high-rate-load`.
+Use `make dev-verify-calcify-high-rate` for exact final stage counts; record
+offered/accepted rate, dropped pairs, conservative in-load receipt gap, drain,
+failures, and phase-specific effects. Raise sustained target toward 7.5k/s
+only after it passes with the new phase. Retain raw reports for failed runs.
 
 ## Source Of Truth
 

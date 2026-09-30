@@ -80,6 +80,60 @@ this does not establish a capacity ceiling or guarantee against growth at
 higher rates or longer duration. [Raw report](evidence/calcify-phase1-5m-300pps-2026-09-29.json),
 [method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#three-times-rate-five-minute-run-cal-p1-l5).
 
+CAL-P1-L6/L7/L8 raised local Phase 1 full-path pressure. Initial 10k/s and 5k/s
+30-second Bun probes failed: client sockets failed and a 500-command matching
+batch exceeded Kafka's 1 MiB producer message cap by 504 bytes, leaving a
+20,163-command hot-partition backlog. With matching batches at 200, matching
+reconciled but per-link receipt DB transactions/checkpoints lagged. A per-poll
+receipt batch fixed that backlog: a 300,000-order probe reconciled 150,001
+trades/commitments/verifications/receipts with p95/peak in-load gap 300, but
+the Bun client needed 52,368 socket retries and delivered only 2,977.08
+orders/s. A pooled Go crossing-pair client then delivered 7,691.22 and
+7,738.65 orders/s in 30-second 10k/s-offered probes with 512 and 1024
+workers; neither met the 10k target. All attempts, including failures, are
+retained in [high-rate attempt ledger](evidence/calcify-phase1-high-rate-attempts-2026-09-29.json).
+
+CAL-P1-L7 used fresh generation 19 and topics, 200-command matching batches,
+batched receipts, one hot instrument/partition, and the same local 10-CPU
+Docker host. Over 300 seconds with 7,500 orders/s offered, 2,179,758 orders
+were accepted in 300.299 seconds (7,258.61/s; 96.78% of target), with zero
+request failures/retries. Ingress and matching each counted 2,179,760
+commands including preflight; source trades, commitment links, verified links,
+and receipts each counted 1,089,880. Matching had zero NAKs/failures. Across
+60 five-second samples, the *lower-bound* accepted-pair-to-receipt gap p95 was
+1,025 trades, peak 1,670, first six mean 824.5 and last six mean 460.5;
+final drain was 1,133 ms. Intake, accounting, and drain gates passed. Gap
+gate was unproven: accepted count was read before the receipt query, so these
+samples could understate the gap. This is diagnostic single-lane evidence
+for Phase 1 only, not hosted C5's 64-instrument 10k/s venue-core profile,
+per-trade latency, or future post-match phase capacity. [Raw load report](evidence/calcify-phase1-go-7k5-5m.json),
+[exact stage reconciliation](evidence/calcify-phase1-go-7k5-5m-reconciliation.json),
+and [method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#high-rate-calibration-and-five-minute-run-cal-p1-l6-l7-l8-l9).
+
+CAL-P1-L8 corrected sampling by bracketing each receipt query with accepted
+counts and using the conservative upper gap. Fresh generation 20, same runtime
+code and 7,500/s offered workload, accepted 1,930,226 orders in 300.624
+seconds (6,420.72/s); 159,887 offered pairs dropped at the bounded client
+queue. Intake gate failed. Exact source trades, commitments, verifications,
+and receipts each counted 965,114, with zero matching failures. Conservative
+upper gap p95/peak was 866/1,272 trades and final drain was 1,183 ms. This
+corrected run does not establish sustained 7.5k/s on the increasingly aged
+local volumes. [Raw load report](evidence/calcify-phase1-go-7k5-upper-5m.json),
+[exact stage reconciliation](evidence/calcify-phase1-go-7k5-upper-5m-reconciliation.json).
+
+CAL-P1-L9 used fresh generation 21 and the corrected sampler at 5,000
+orders/s offered for 300 seconds. It accepted 1,499,902 load orders in
+300.098 seconds (4,998.03/s); 49 of 750,000 offered pairs were dropped by
+the bounded client queue, with zero request failures/retries. Exact intake
+and source command counts were 1,499,904 including preflight; matching
+acked all, with zero NAKs/failures. Source trades, commitments, verifications,
+and receipts each counted 749,952. Across 60 five-second samples,
+conservative upper-gap p95/peak was 628/846 trades; first/last six sample
+means were 436.17/477.67 trades. Final drain took 1,478 ms. Local 5k/s
+Phase 1 single-lane gate passed. No individual trade latency, fault/restart,
+or later post-match phase capacity was measured. [Raw load report](evidence/calcify-phase1-go-5k-upper-5m.json),
+[exact stage reconciliation](evidence/calcify-phase1-go-5k-upper-5m-reconciliation.json).
+
 ## Current measured baseline — September24, before0053
 
 Frozen candidate/image/source and0052 settings below; no0053 optimization applied.

@@ -23,6 +23,11 @@ object CalcifyPipeline {
         val poisoned: List<Triple<TopicPartition, Long, String?>>,
     )
 
+    internal data class ReceiptPollPlan(
+        val valid: Map<TopicPartition, List<Pair<Long, CommitmentVerificationPassed>>>,
+        val poisoned: List<Triple<TopicPartition, Long, String?>>,
+    )
+
     private data class Config(val stage: String) {
         val bootstrap = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         val source = RuntimeEnv.string("CALCIFY_SOURCE_TOPIC", "REEF_VENUE_EVENTS")
@@ -83,6 +88,35 @@ object CalcifyPipeline {
                         }
                         continue
                     }
+                    if (stage == "receipt") {
+                        val plan = planReceiptPoll(polled, blocked)
+                        if (plan.poisoned.isNotEmpty()) {
+                            consumer.pause(plan.poisoned.map { it.first })
+                            plan.poisoned.forEach { (partition, offset, message) ->
+                                System.err.println("Calcify stopped $partition at $offset: $message")
+                            }
+                        }
+                        for ((partition, entries) in plan.valid) {
+                            try {
+                                CalcifyReceiptStore.recordBatch(requireNotNull(receiptConnection), entries.map { it.second })
+                                consumer.commitSync(mapOf(partition to OffsetAndMetadata(entries.last().first + 1)))
+                            } catch (ex: IllegalArgumentException) {
+                                // Replay valid prefix one record at a time to isolate a conflicting receipt.
+                                for ((offset, passed) in entries) {
+                                    try {
+                                        CalcifyReceiptStore.record(requireNotNull(receiptConnection), passed)
+                                        consumer.commitSync(mapOf(partition to OffsetAndMetadata(offset + 1)))
+                                    } catch (conflict: IllegalArgumentException) {
+                                        blocked.add(partition)
+                                        consumer.pause(listOf(partition))
+                                        System.err.println("Calcify stopped $partition at $offset: ${conflict.message}")
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                        continue
+                    }
                     for (record in polled) {
                         val partition = TopicPartition(record.topic(), record.partition())
                         if (partition in blocked) continue
@@ -92,13 +126,7 @@ object CalcifyPipeline {
                                     requireNotNull(record.value()).toString(Charsets.UTF_8),
                                     config.source, config.generation, record.partition(), record.offset()
                                 ).map(CalcifyWire::commitment)
-                                else -> {
-                                    val passed = CalcifyWire.readPassed(requireNotNull(record.value()))
-                                    require(passed.commitmentId.sourcePartition == record.partition())
-                                    CalcifyReceiptStore.record(requireNotNull(receiptConnection), passed)
-                                    consumer.commitSync(mapOf(partition to OffsetAndMetadata(record.offset() + 1)))
-                                    emptyList()
-                                }
+                                else -> error("Unsupported CALCIFY_STAGE: $stage")
                             }
                         } catch (ex: IllegalArgumentException) {
                             blocked.add(partition)
@@ -142,6 +170,27 @@ object CalcifyPipeline {
             }
         }
         return VerifierPollPlan(outputs, offsets, poisoned)
+    }
+
+    internal fun planReceiptPoll(
+        records: Iterable<ConsumerRecord<ByteArray, ByteArray>>,
+        blocked: MutableSet<TopicPartition>,
+    ): ReceiptPollPlan {
+        val valid = linkedMapOf<TopicPartition, MutableList<Pair<Long, CommitmentVerificationPassed>>>()
+        val poisoned = ArrayList<Triple<TopicPartition, Long, String?>>()
+        for (record in records) {
+            val partition = TopicPartition(record.topic(), record.partition())
+            if (partition in blocked) continue
+            try {
+                val passed = CalcifyWire.readPassed(requireNotNull(record.value()))
+                require(passed.commitmentId.sourcePartition == record.partition())
+                valid.getOrPut(partition) { ArrayList() }.add(record.offset() to passed)
+            } catch (ex: IllegalArgumentException) {
+                blocked.add(partition)
+                poisoned.add(Triple(partition, record.offset(), ex.message))
+            }
+        }
+        return ReceiptPollPlan(valid, poisoned)
     }
 
     private fun publishAndCheckpoint(

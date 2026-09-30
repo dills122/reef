@@ -49,4 +49,54 @@ class CalcifyReceiptStoreTest {
             }
         }
     }
+
+    @Test
+    fun batchReplayIsIdempotentAndConflictRollsBackWholeBatch() {
+        val url = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val user = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val password = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val offset = System.currentTimeMillis()
+        val ids = (0..2).map { CommitmentId(1, 2, offset, it) }
+        DriverManager.getConnection(url, user, password).use { db ->
+            try {
+                val first = ids.take(2).map { CommitmentVerificationPassed(it, 1) }
+                CalcifyReceiptStore.recordBatch(db, first)
+                CalcifyReceiptStore.recordBatch(db, first)
+                assertFailsWith<IllegalArgumentException> {
+                    CalcifyReceiptStore.recordBatch(db, listOf(
+                        CommitmentVerificationPassed(ids[2], 1),
+                        CommitmentVerificationPassed(ids[1], 2),
+                    ))
+                }
+                db.prepareStatement(
+                    "SELECT trade_ordinal, policy_version FROM runtime.calcify_commitment_receipts " +
+                        "WHERE source_generation = ? AND source_partition = ? AND source_offset = ? ORDER BY trade_ordinal"
+                ).use {
+                    it.setInt(1, 1)
+                    it.setInt(2, 2)
+                    it.setLong(3, offset)
+                    it.executeQuery().use { rows ->
+                        assertEquals(true, rows.next())
+                        assertEquals(0, rows.getInt(1))
+                        assertEquals(1, rows.getInt(2))
+                        assertEquals(true, rows.next())
+                        assertEquals(1, rows.getInt(1))
+                        assertEquals(1, rows.getInt(2))
+                        assertEquals(false, rows.next())
+                    }
+                }
+            } finally {
+                db.autoCommit = true
+                db.prepareStatement(
+                    "DELETE FROM runtime.calcify_commitment_receipts WHERE " +
+                        "source_generation = ? AND source_partition = ? AND source_offset = ?"
+                ).use {
+                    it.setInt(1, 1)
+                    it.setInt(2, 2)
+                    it.setLong(3, offset)
+                    it.executeUpdate()
+                }
+            }
+        }
+    }
 }
