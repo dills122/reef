@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestSubmitPairWaitsForDurableBuyBeforeSell(t *testing.T) {
@@ -80,5 +81,53 @@ func TestGateSeparatesAcceptedRateFromReceiptGap(t *testing.T) {
 	result.AcceptedOrdersAtDeadline = 1899
 	if reasons := gateReasons(result); len(reasons) != 1 {
 		t.Fatalf("rate failure reasons=%v", reasons)
+	}
+}
+
+func TestRunPacesFullCrossingPairsThroughHTTP(t *testing.T) {
+	var mu sync.Mutex
+	orders := make(map[string]int)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			CommandID string `json:"commandId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		mu.Lock()
+		orders[payload.CommandID]++
+		mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+
+	result := run(config{
+		BaseURL: server.URL, SmokeID: "paced-test", Duration: time.Second,
+		PairsPerSecond: 10, Workers: 10,
+	})
+	if result.ScheduledPairs != 10 || result.DispatchedPairs != 10 || result.DroppedPairs != 0 {
+		t.Fatalf("schedule=%d dispatched=%d dropped=%d", result.ScheduledPairs, result.DispatchedPairs, result.DroppedPairs)
+	}
+	if result.CompletedPairs != 10 || result.AcceptedOrders != 20 || result.Failures != 0 || result.Retries != 0 {
+		t.Fatalf("completed=%d accepted=%d failures=%d retries=%d", result.CompletedPairs, result.AcceptedOrders, result.Failures, result.Retries)
+	}
+	if len(orders) != 20 {
+		t.Fatalf("unique commands=%d", len(orders))
+	}
+}
+
+func TestSubmitRejectsNonDurableAcknowledgement(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":false,"status":"queued"}`))
+	}))
+	defer server.Close()
+	var counts counters
+	if err := submitPair(server.Client(), config{BaseURL: server.URL, SmokeID: "ack-test"}, 0, &counts); err == nil {
+		t.Fatal("queued acknowledgement accepted as durable")
+	}
+	if counts.acceptedOrders.Load() != 0 || counts.completedPairs.Load() != 0 {
+		t.Fatalf("accepted=%d completed=%d", counts.acceptedOrders.Load(), counts.completedPairs.Load())
 	}
 }
