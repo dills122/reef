@@ -213,6 +213,11 @@ venue history.
 
 ## Attempts, corrections and smallest implementation sequence
 
+Dedicated broker and synthetic temporary stores removed after evidence retention.
+Initial idle probe survived name-based cleanup because Java executable used absolute
+path; stopped through exact observed PID, final shutdown log retained. Probe was
+idle during later measurements; no exclusive-host CPU attribution claimed.
+
 Every execution artifact retained. Raw log/patch whitespace excluded from Git
 whitespace lint through local attributes; byte contents preserved. Setup failure before directory existed and
 sandbox Docker denial preceded successful isolated setup. Scratch patch first failed
