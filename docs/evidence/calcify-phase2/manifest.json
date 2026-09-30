@@ -1,0 +1,31 @@
+{
+  "scripts/experiments/calcify-phase2/src/main/java/BoundedRocks.java": "0748e8ce37af2a27bbc57e552636dfcb0f80cbca0ab7624f69e101a91ef782da",
+  "scripts/experiments/calcify-phase2/src/main/java/CalcifyExperiment.java": "488151b8e9e5a82d0b17ac9e0e6de137f93e80974a57ce3969e502cff6d205f3",
+  "scripts/experiments/calcify-phase2/src/main/java/Capacity.java": "a0fb88dc905837654e77e60c80095cc003fae0434aa1d71d9c53ae81525851b0",
+  "scripts/experiments/calcify-phase2/src/main/java/Facts.java": "d454270a9c95e215630cdd744b963cfe0b584baa6027a891f09ce29d8aa3f4f2",
+  "scripts/experiments/calcify-phase2/src/main/java/FlowControl.java": "67ff8c87edbe5879413c3f80eb939a28a1131b2a542301bda308816a5a75da08",
+  "scripts/experiments/calcify-phase2/src/main/java/Resolver.java": "27915aaea5370ed7105329f6aba7e525ae825dbea767b9a41138abcad38092c4",
+  "scripts/experiments/calcify-phase2/run-availability.py": "e48f04fda1beba40443d3fdf6dfe6275760a575bf282675bf62bcd692038ae85",
+  "scripts/experiments/calcify-phase2/run-fixtures.py": "48bc3788ce7ee38201953902c02bf84eaba7385d3684d2a2c9b424767f90c41a",
+  "scripts/experiments/calcify-phase2/run-recovery.py": "52cf56d4c5d245a332297a0529329c75703eb7598b2257e18f682cb05243e27a",
+  "scripts/experiments/calcify-phase2/source_fixture_test.go.txt": "93575a1242f45dfd1ff4ec8d4893c70424af5d26c5c1147156489424e55a879d",
+  "baseCommit": "79dab22bda4d89c5a75eb677094f6e999dae303d",
+  "latestRecoveryCohort": "E3-40f507ca",
+  "availabilityCohort": "E5-a7fad2dd",
+  "capacityScope": "local store/codec only",
+  "configuration": {
+    "hardware": "MacBookPro18,4",
+    "logicalCpus": 10,
+    "memoryBytes": 68719476736,
+    "macOS": "26.6.2",
+    "java": "25.0.1",
+    "go": "1.26.5",
+    "bun": "1.3.14",
+    "kafkaStreams": "4.3.1",
+    "rocksdbJNI": "10.1.3",
+    "broker": "Redpanda26.2.3 RF1 2CPU 2GiB",
+    "docker": "29.7.2",
+    "brokerImageSha256": "0ceda3e98968e814705a75569063c7dc64ce74c1345681624f47bd8d6a6eb3c6"
+  },
+  "finalFocusedFixtures": "E2-final-all.json"
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "boundary": "output-silent-standby-promoted-state-lag-at-most-one-offset",
+    "after": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "ba935351c2157c63429217447f453e0a7509f63492434a2a59cc399089363f39",
+      "fullFactParity": true
+    },
+    "failoverAndWave2Seconds": 8.55515237498912
+  }
+]

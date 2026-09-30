@@ -1,0 +1,43 @@
+seed 127.0.0.1:29092 p2-e20c9f29 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+
+availability 127.0.0.1:29092 p2-e20c9f29 truncate
+null
+
+inspect 127.0.0.1:29092 p2-e20c9f29 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+{"records":0,"unique":0,"duplicates":0,"outputBytes":0,"outputHash":"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a","fullFactParity":false}
+
+seed 127.0.0.1:29092 p2-c395113e /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+
+inspect 127.0.0.1:29092 p2-c395113e /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+{"records":0,"unique":0,"duplicates":0,"outputBytes":0,"outputHash":"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a","fullFactParity":false}
+
+inspect 127.0.0.1:29092 p2-c395113e /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+{"records":81,"unique":81,"duplicates":0,"outputBytes":156551,"outputHash":"ca80de37090f3d8f5de0b610635682ea0e1d7317932c88bea43367e240e41726","fullFactParity":false}
+
+inspect 127.0.0.1:29092 p2-c395113e /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+{"records":130,"unique":130,"duplicates":0,"outputBytes":251303,"outputHash":"1286547bd17a76b9aa187d20e9bd6fab4b6d5feb7fd796147cf43f808f13d174","fullFactParity":true}
+
+availability 127.0.0.1:29092 p2-c395113e recreate
+oldTopicId=CMNV8Bv8RxObiiHttg0C7g newTopicId=UCiuZLVjTR-p5TIhvllVpQ
+
+inspect 127.0.0.1:29092 p2-c395113e /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 1
+{"records":130,"unique":130,"duplicates":0,"outputBytes":251303,"outputHash":"1286547bd17a76b9aa187d20e9bd6fab4b6d5feb7fd796147cf43f808f13d174","fullFactParity":true}
+
+seed 127.0.0.1:29092 p2-37a83a93 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 2
+
+inspect 127.0.0.1:29092 p2-37a83a93 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 2
+{"records":0,"unique":0,"duplicates":0,"outputBytes":0,"outputHash":"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a","fullFactParity":false}
+
+inspect 127.0.0.1:29092 p2-37a83a93 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 2
+{"records":72,"unique":72,"duplicates":0,"outputBytes":139163,"outputHash":"79e8346f89994e73819a9170a37d665ef708b013541878283b2a610afdc8ee7e","fullFactParity":false}
+
+inspect 127.0.0.1:29092 p2-37a83a93 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 2
+{"records":260,"unique":260,"duplicates":0,"outputBytes":502606,"outputHash":"e60189afd65347dd4b5564a74ea648b9f8ec9b0672695a6f80f678e6e59340ee","fullFactParity":true}
+
+poison 127.0.0.1:29092 p2-37a83a93
+
+append 127.0.0.1:29092 p2-37a83a93 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl -wave2 1
+
+inspect 127.0.0.1:29092 p2-37a83a93 /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-phase2/source-fixture.jsonl 2
+{"records":390,"unique":390,"duplicates":0,"outputBytes":768729,"outputHash":"b220b34a6f85c078c880ed24638c7225ba0d59ed84ae717bccc3270dbde6dec0","fullFactParity":true}
+

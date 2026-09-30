@@ -1,0 +1,41 @@
+[
+  {
+    "case": "actual broker prefix deletion",
+    "output": {
+      "records": 0,
+      "unique": 0,
+      "duplicates": 0,
+      "outputBytes": 0,
+      "outputHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "fullFactParity": false
+    },
+    "fault": "source retention lost"
+  },
+  {
+    "case": "same-name source recreation across restart",
+    "identity": "oldTopicId=FRGDH6PgSi6N9Z2tQBkN3g newTopicId=su5VQfe7SMulHWYQIwJ2CA\n",
+    "output": {
+      "records": 130,
+      "unique": 130,
+      "duplicates": 0,
+      "outputBytes": 251303,
+      "outputHash": "00bc314e9f48fff724e56150b3e8b08a04b85e23e97d15c6c162aa4409808a4f",
+      "fullFactParity": true
+    },
+    "fault": "source topic identity changed"
+  },
+  {
+    "case": "1000 poison links lane0; lane1 fresh wave continues",
+    "output": {
+      "records": 390,
+      "unique": 390,
+      "duplicates": 0,
+      "outputBytes": 768729,
+      "outputHash": "09648d3c416e64738f78aaff066501fd7952e24d254aa291e1eced6023489f2a",
+      "fullFactParity": true
+    },
+    "observedMaxPendingAcrossLocalStores": 100,
+    "hardLimit": 200,
+    "fault": "generation/lane mismatch"
+  }
+]

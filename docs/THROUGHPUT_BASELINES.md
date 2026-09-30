@@ -32,6 +32,23 @@ Throughput PRs/handoffs must cite baseline IDs, prior attempts considered,
 changed variable, actual result/artifact location, limitations and next decision.
 Read-only evidence review is not a new approval gate for already authorized work.
 
+## Calcify Phase 2 local store/codec diagnostic, CAL-P2-E4 (September30)
+
+Isolated experimental branch at planning base `79dab22b`. Single Java thread,
+RocksDB bounded cache32MiB/memtable16MiB×2, WAL off, JVM1GiB; MacBookPro18,4,
+10CPU/64GiB. One million aged rows before paced300s cohort:3,000,000 joins and
+6,000,000 synthetic new full-fact row inserts, 300.000055s, ~10k joins/s.
+Transient offered-minus-resolved peak165 trades, final exact3m; sampled local
+service p95 25.0µs. Full example JSON row646B/V1 1,985B. Source parsing/checksum,
+Kafka/Streams transactions, changelog/standby, intake and matching excluded.
+No full Phase2/system10k claim. Prior CAL-P1-L9 full Phase1 ~5k commands/s and
+L6/L8 failures, hosted C5 ~10k venue-core commands/s considered; stages/workloads
+not causally comparable. Separate short knees, CPU/RSS resource probe, logical
+changelog sample, fault tests and all corrections:
+[report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md),
+[300s artifact](evidence/calcify-phase2/E4-aged-paced.json),
+[experiment directory](evidence/calcify-phase2/).
+
 ## Calcify Phase 1 local diagnostic, CAL-P1-L2 (September29)
 
 On `codex/calcify-phase1`, local one-hot-lane full path accepted 2,000 load

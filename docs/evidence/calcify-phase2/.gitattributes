@@ -1,0 +1,2 @@
+# Raw tool logs preserve original whitespace.
+*.log -whitespace

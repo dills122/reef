@@ -1,0 +1,77 @@
+[
+  {
+    "boundary": "after-commit",
+    "before": {
+      "records": 130,
+      "unique": 130,
+      "duplicates": 0,
+      "outputBytes": 251303,
+      "outputHash": "3a3ec2132677e9d47bcd813077dd3f7eb9f2cb5ef5629ccc0c6bf03b9b1e38b9",
+      "fullFactParity": true
+    },
+    "afterRestartAndWave2": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "1cfb9479bad887a1354776a2a919c8398465ff99f3c528ccd4a21fd794c7c1a1",
+      "fullFactParity": true
+    },
+    "restartToWave2Seconds": 8.357379749999382,
+    "sameDisk": true
+  },
+  {
+    "boundary": "state",
+    "before": {
+      "records": 0,
+      "unique": 0,
+      "duplicates": 0,
+      "outputBytes": 0,
+      "outputHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "fullFactParity": false
+    },
+    "afterRestartAndWave2": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "e99ea334dcd112994db3ff2118be8acf2768504056bcff0648ed06e7e2e45c78",
+      "fullFactParity": true
+    },
+    "restartToWave2Seconds": 10.060521209001308,
+    "sameDisk": true
+  },
+  {
+    "boundary": "forward",
+    "before": {
+      "records": 0,
+      "unique": 0,
+      "duplicates": 0,
+      "outputBytes": 0,
+      "outputHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "fullFactParity": false
+    },
+    "afterRestartAndWave2": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "2fd69b226706ade2de2c890208d5aabd452c12c4e9bff4d2f1ce31da4ee8e2e6",
+      "fullFactParity": true
+    },
+    "restartToWave2Seconds": 10.131590832999791,
+    "sameDisk": true
+  },
+  {
+    "boundary": "node-loss-empty-disk",
+    "after": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "aa41295ad2592146a87dc8c0edf27e15e8ca1b519eb12b40818e8c774fdffa38",
+      "fullFactParity": true
+    },
+    "restoreAndWave2Seconds": 8.893382583002676
+  }
+]

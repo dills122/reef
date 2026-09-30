@@ -18,6 +18,19 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify Phase 2 experiment checkpoint (2026-09-30 branch)
+
+`codex/calcify-phase2-experiments`, based on merged #431, contains isolated source
+fixtures, managed-runtime/fault prototypes and measured local-store diagnostics.
+Recommendation: verified-led one-input Kafka Streams with managed full-fact local
+state/changelog/standby and demand source reader. Scratch D-042 alignment proves
+cross-run isolation/replay fixture; production matching alignment still pending.
+Recovery, topic-generation/retention and two-lane fault probes passed in stated
+local RF1 scope. Five-minute 10k local store/codec joins/s is not full resolver or
+system capacity qualification. [Decision/evidence report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md)
+records remaining implementation gates and reproducible commands. Work pauses for
+requested user sync before production Phase 2 integration; legacy remains intact.
+
 ## Calcify Phase 1 checkpoint (2026-09-29 branch)
 
 `codex/calcify-phase1` adds opt-in matching commitment extraction, stub
