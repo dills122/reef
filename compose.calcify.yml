@@ -1,4 +1,4 @@
-# Opt-in Calcify Phase 1 sidecars. Use with compose.base.yml and compose.local.yml.
+# Opt-in Calcify sidecars. Use with compose.base.yml and compose.local.yml.
 x-calcify-service: &calcify-service
   image: ${REEF_PLATFORM_RUNTIME_IMAGE:-reef-platform-runtime}
   build:
@@ -40,3 +40,30 @@ services:
     environment:
       <<: *calcify-environment
       CALCIFY_STAGE: "receipt"
+
+  calcify-resolver:
+    <<: *calcify-service
+    profiles: ["calcify-phase2"]
+    environment:
+      <<: *calcify-environment
+      CALCIFY_STAGE: "resolver"
+      CALCIFY_RESOLVED_TOPIC: "${CALCIFY_RESOLVED_TOPIC:-REEF_MATCH_CONTEXT_RESOLVED_V1}"
+      CALCIFY_RESOLVER_APPLICATION_ID: "${CALCIFY_RESOLVER_APPLICATION_ID:-reef-calcify-resolver-v1}"
+      CALCIFY_RESOLVER_STATE_DIR: "/app/calcify-state"
+      CALCIFY_RESOLVER_REPLICATION_FACTOR: "${CALCIFY_RESOLVER_REPLICATION_FACTOR:-1}"
+      CALCIFY_RESOLVER_STANDBYS: "${CALCIFY_RESOLVER_STANDBYS:-1}"
+      CALCIFY_RESOLVER_THREADS: "${CALCIFY_RESOLVER_THREADS:-1}"
+      CALCIFY_RESOLVER_MAX_PENDING: "${CALCIFY_RESOLVER_MAX_PENDING:-200}"
+      CALCIFY_RESOLVER_MAX_SOURCE_BYTES: "${CALCIFY_RESOLVER_MAX_SOURCE_BYTES:-4194304}"
+      CALCIFY_RESOLVER_MAX_TARGET_BYTES: "${CALCIFY_RESOLVER_MAX_TARGET_BYTES:-16777216}"
+    volumes:
+      - calcify-resolver-state:/app/calcify-state
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8089/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  calcify-resolver-state:

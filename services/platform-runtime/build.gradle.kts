@@ -21,6 +21,8 @@ dependencies {
     implementation("io.grpc:grpc-stub:1.84.0")
     implementation("io.nats:jnats:2.26.3")
     implementation("org.apache.kafka:kafka-clients:4.3.1")
+    implementation("org.apache.kafka:kafka-streams:4.3.1")
+    testImplementation("org.apache.kafka:kafka-streams-test-utils:4.3.1")
     implementation("com.google.protobuf:protobuf-java:4.36.2")
     testImplementation(kotlin("test"))
 }
