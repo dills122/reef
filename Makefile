@@ -18,7 +18,8 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-arena-isolation
 .PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-hardening-bot-arena-local
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
-.PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
+.PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof dev-smoke-calcify-full-path
+.PHONY: dev-smoke-calcify-high-rate dev-soak-calcify-high-rate-load dev-verify-calcify-high-rate
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-smoke-bot-sdk-hosted-live-container dev-venue-event-replay-check
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
@@ -402,6 +403,29 @@ dev-render-bot-arena-report-index:
 dev-smoke-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-materializer-smoke.mjs
+
+dev-smoke-calcify-full-path:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
+
+dev-stress-calcify-basic:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_CALCIFY_FULL_PATH_LOAD_PAIRS=$(or $(PAIRS),1000) DEV_CALCIFY_FULL_PATH_REPORT=$(OUT) $(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
+
+dev-soak-calcify-phase1:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_CALCIFY_FULL_PATH_DURATION_SECONDS=$(or $(DURATION_SECONDS),300) DEV_CALCIFY_FULL_PATH_RATE_PAIRS_PER_SECOND=$(or $(PAIRS_PER_SECOND),100) DEV_CALCIFY_FULL_PATH_REPORT=$(OUT) $(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
+
+dev-smoke-calcify-high-rate:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_CALCIFY_FULL_PATH_ID=$(SMOKE_ID) MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE=200 $(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
+
+dev-soak-calcify-high-rate-load:
+	cd services/simulator && go run ./cmd/calcify-load --smoke-id $(SMOKE_ID) --receipt-generation $(GENERATION) --duration $(or $(DURATION),300s) --pairs-per-second $(or $(PAIRS_PER_SECOND),3750) --workers $(or $(WORKERS),512) --report-out $(OUT)
+
+dev-verify-calcify-high-rate:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_CALCIFY_LOAD_REPORT=$(LOAD_REPORT) DEV_CALCIFY_VERIFY_REPORT=$(OUT) $(JS_RUNTIME) scripts/dev/calcify-verify-existing.mjs
 
 dev-smoke-venue-event-crash-gate:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

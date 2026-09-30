@@ -18,6 +18,54 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify Phase 1 checkpoint (2026-09-29 branch)
+
+`codex/calcify-phase1` adds opt-in matching commitment extraction, stub
+verification, and PostgreSQL processing receipts without switching legacy
+post-matching. Local fixtures, partition-poison isolation, and receipt restart
+passed on two-partition Redpanda. A later four-partition local smoke passed
+PostgreSQL-backed HTTP intake through Go matching to an exact Calcify receipt;
+bounded 2,000-order hot-lane local load also reconciled 1,001 trades, links,
+and receipts after drain. These are diagnostics, not hosted capacity or
+settlement qualification.
+Measured verifier-per-link transaction backlog was corrected by per-poll
+transaction batching: two repeated local 1,000-pair runs drained receipts
+within 960 and 942 ms after last acceptance with exact stage counts.
+Phase 1 paired load gate then passed: 1,000-pair burst plus five minutes at
+100 crossing pairs/s, with 60,000 accepted load orders, 30,001 trades/links/
+receipts including preflight, sampled accepted-to-receipt gap p95/peak 70
+trades, and 1,923 ms final drain. Scope remains local single-lane diagnostic.
+Follow-up five-minute run at 300 crossing pairs/s accepted 180,000 load
+orders; 90,001 trades/links/receipts reconciled, sampled gap p95/peak was
+200 trades with steady first/last half means, and final drain was 1,943 ms.
+Tail stayed bounded at this tested rate; higher-rate and longer-run limits
+remain unproven.
+High-rate CAL-P1-L6 probes exposed a Kafka 1 MiB matching event-batch ceiling,
+per-record receipt transaction/checkpoint backlog, and Bun socket saturation.
+Phase 1 high-rate local setup now uses 200-command matching batches and per-poll
+receipt batches. With pooled Go load, 10k/s-offered 30-second probes reached
+about 7.7k accepted orders/s. First 7.5k/s-offered five-minute run accepted
+7,258.61/s with exact stage counts, but gap samples were lower bounds.
+Corrected 7.5k/s run accepted 6,420.72/s and failed intake gate despite exact
+stage counts. Fresh 5k/s-offered five-minute run passed at 4,998.03 accepted
+orders/s with 749,952 exact trades/links/receipts, conservative upper-gap
+p95/peak 628/846 trades, and 1,478 ms final drain. Repeat sustained plus
+short stress probes for every material post-match phase; 7.5k/s and 10k/s
+local and multi-lane qualification remain open.
+Exact wire contract, corrections, and limits:
+[Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
+Replay-retention window enforcement and independent source-to-link
+reconciliation remain follow-ups before non-diagnostic use. Repeat
+`make dev-smoke-calcify-full-path` as each post-match slice expands, adding
+assertions for that slice's source identity, durable effect, and replay behavior.
+After each material post-match phase change, run a fresh full-path preflight,
+a 30-second 10k/s-offered probe, and a 300-second 5k/s-offered run through
+`make dev-smoke-calcify-high-rate` and `make dev-soak-calcify-high-rate-load`.
+Use `make dev-verify-calcify-high-rate` for exact final stage counts; record
+offered/accepted rate, dropped pairs, conservative in-load receipt gap, drain,
+failures, and phase-specific effects. Raise sustained target toward 7.5k/s
+only after it passes with the new phase. Retain raw reports for failed runs.
+
 ## Source Of Truth
 
 - Command and acceptance semantics:

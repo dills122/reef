@@ -123,6 +123,44 @@ class JsonDocument internal constructor(
         return value.filterIsInstance<ObjectNode>().map { JsonDocument(it) }
     }
 
+    fun strictTextField(key: String): String {
+        val value = root.get(key)
+        require(value != null && value.isTextual && value.textValue().isNotBlank()) {
+            "missing or invalid text: " + key
+        }
+        return value.textValue()
+    }
+
+    fun strictIntField(key: String): Int {
+        val value = root.get(key)
+        require(value != null && value.isIntegralNumber && value.canConvertToInt()) {
+            "missing or invalid integer: " + key
+        }
+        return value.intValue()
+    }
+
+    fun strictLongField(key: String): Long {
+        val value = root.get(key)
+        require(value != null && value.isIntegralNumber && value.canConvertToLong()) {
+            "missing or invalid long: " + key
+        }
+        return value.longValue()
+    }
+
+    fun strictObject(key: String): JsonDocument {
+        val value = root.get(key)
+        require(value is ObjectNode) { "missing or invalid object: " + key }
+        return JsonDocument(value)
+    }
+
+    fun strictObjectDocuments(key: String, required: Boolean = true): List<JsonDocument> {
+        val value = root.get(key)
+        if (value == null && !required) return emptyList()
+        require(value is ArrayNode) { "missing or invalid array: " + key }
+        require(value.all { it is ObjectNode }) { "non-object array element: " + key }
+        return value.map { JsonDocument(it) }
+    }
+
     fun raw(key: String): String {
         val value = root.get(key) ?: return ""
         return JsonCodec.writeNode(value)

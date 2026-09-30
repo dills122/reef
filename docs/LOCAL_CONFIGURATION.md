@@ -47,6 +47,52 @@ For full contributor dependencies, first-run troubleshooting, endpoints, and
 module tests, use [Onboarding](ONBOARDING.md). For exact active services and
 merged configuration, inspect `make dev-compose-config` before running.
 
+## Calcify Phase 1 sidecars
+
+Apply forward-only migrations, then add `compose.calcify.yml` to `REEF_COMPOSE_FILES`
+and select profiles `redpanda,calcify-phase1`. This runs independent extractor,
+stub verifier, and receipt worker beside existing post-matching services.
+`CALCIFY_STAGE` is set only inside optional sidecars; default stack behavior
+does not change. [Contract](../contracts/calcify/README.md) and
+[local diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
+link semantics, tests, and replay-retention limits.
+
+Run `make dev-smoke-calcify-full-path` for a local functional check through
+PostgreSQL-backed HTTP intake, Redpanda command log, Go matching, and all three
+Calcify stages. It creates isolated topics and registers a local source
+generation, then checks a zero-trade resting batch and one crossing trade against
+its exact receipt. It leaves stack running; use matching `REEF_COMPOSE_FILES` and
+`DEV_COMPOSE_PROFILES` on `make dev-down` when finished. This smoke does not
+measure capacity or exercise financial settlement.
+
+Run `make dev-stress-calcify-basic PAIRS=1000` for a bounded local burst through
+the same path. It checks intake, matched source commands/trades, both link
+streams, final receipts, and stage-end timestamps; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
+records the observed rate, drain, and limits. This is not a sustained gate.
+
+Run `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`
+for a five-minute paced local diagnostic. Optional `OUT=/absolute/path.json`
+saves five-second receipt-gap samples and exact final stage counts. This local
+gate requires at least 95% of requested intake rate, sampled receipt gap at
+most two seconds at p95 and five seconds at peak, exact final counts, and final
+drain within five seconds. Compare with the separate burst; neither qualifies
+hosted or production capacity.
+
+For higher-rate single-lane Phase 1 pressure, first create fresh source
+generation with `SMOKE_ID=calcify-highrate-local make dev-smoke-calcify-high-rate`.
+Note generation printed by smoke, then run
+`make dev-soak-calcify-high-rate-load SMOKE_ID=calcify-highrate-local GENERATION=21 DURATION=300s PAIRS_PER_SECOND=2500 WORKERS=512 OUT=/private/tmp/calcify-highrate-load.json`
+with actual printed generation in place of `21`. Check source and both link
+streams with
+`make dev-verify-calcify-high-rate LOAD_REPORT=/private/tmp/calcify-highrate-load.json OUT=/private/tmp/calcify-highrate-verify.json`.
+Load command reports offered, dropped, accepted, five-second conservative
+upper receipt gap, and drain; its gate requires at least 95% requested
+acceptance, at most 5% offered pairs dropped, exact receipts, bounded gap,
+and drain within five seconds. Verification command enforces
+exact intake, source, commitment, verification, receipt, and matching counts.
+Use fresh smoke ID/generation for each run; do not reuse pair ID ranges.
+Run short higher-rate probe and five-minute gate after each material phase.
+
 ## Change configuration
 
 Copy `.env.example` to ignored `.env`; use named host-port overrides there or

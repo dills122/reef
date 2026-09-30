@@ -5,6 +5,10 @@ Recorded: 2026-09-28 America/Toronto (2026-09-29 UTC).
 Base: `origin/master` at `368a9247b31c8997c5dd9f51aeb88a911adebfe7` (rollback PR #428 merged).
 Branch: `codex/calcify-discovery`.
 
+Phase 1 implementation checkpoint (2026-09-29): additive opt-in slice and
+local diagnostic evidence live in [CALCIFY_PHASE1_IMPLEMENTATION.md](CALCIFY_PHASE1_IMPLEMENTATION.md);
+this discovery record still owns open full-design questions.
+
 ## Purpose and working assumptions
 
 Calcify names Reef's fresh, full post-matching design effort. This is a working assumption to confirm. Goal: work through post-match product semantics, authority, data flow, failure behavior, read contracts, restore, and capacity proof while validating small, independently testable implementations. This document records questions and a proposed logical flow; it is not an instruction to resume the retired implementation.
@@ -87,6 +91,16 @@ Build one small capability at a time. Test each against fixtures and its own fai
 3. **Verifier and verified stream:** start with explicit stubbed business policy. Test using seeded commitment records, then connect extractor output.
 4. **Temporary receipt worker:** consume seeded verified records and write idempotent PostgreSQL receipts. Then run the three stages together.
 5. **Incremental stress:** add restart/fault checks and increase rate/duration while measuring each stage's lag and storage growth. Record limits and failures; do not treat an early passing slice as production qualification.
+
+For each new post-match phase or material expansion, run both a paced,
+time-bounded full-ingress/matching/post-match test and a separate burst through
+the same path. Set rate, duration, workload, topology, and acceptance checks
+before running. Observe accepted commands, matching source commands/trades,
+each post-match stage, in-load backlog, final drain, errors, and exact cohort
+reconciliation. Record every failed or passing attempt and rerun both after a
+performance fix. The Phase 1 local pair starts with a five-minute 100-pair/s
+diagnostic and a 1,000-pair burst; targets for later phases must be chosen from
+their workload and capacity goal, not copied as a production guarantee.
 
 Logical authority and physical storage are separate decisions. Evaluate compact relational transactions, durable ordered log/state-machine designs, and a specialist ledger plus explicit cross-store protocol. PostgreSQL journal is neither presumed nor excluded. A single shared account may impose a real ordered decision floor; batch preparation and durable output must be measured without changing scarce-resource winners.
 

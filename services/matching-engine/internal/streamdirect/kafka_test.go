@@ -31,6 +31,11 @@ func TestNewKafkaClientConfig(t *testing.T) {
 	if !cfg.Producer.Idempotent {
 		t.Error("expected idempotent producer")
 	}
+	message := &sarama.ProducerMessage{Partition: 1, Key: sarama.StringEncoder("engine-0-p1-281474976710657-281474976710657")}
+	partition, err := cfg.Producer.Partitioner("venue-events").Partition(message, 4)
+	if err != nil || partition != 1 {
+		t.Fatalf("event batch partition = %d, %v; want source partition 1", partition, err)
+	}
 	if cfg.Consumer.Offsets.Initial != sarama.OffsetOldest {
 		t.Error("expected OffsetOldest consumer default")
 	}

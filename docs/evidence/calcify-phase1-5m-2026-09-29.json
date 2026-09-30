@@ -1,0 +1,390 @@
+{
+  "smokeId": "calcify-1790714556525",
+  "generation": 13,
+  "mode": "sustained",
+  "loadPairs": 30000,
+  "loadBatchSize": 10,
+  "durationSeconds": 300,
+  "ratePairsPerSecond": 100,
+  "acceptedOrders": 60000,
+  "acceptedMs": 299911,
+  "acceptedOrdersPerSecond": 200.06,
+  "halfwayReceipts": 14941,
+  "receiptsAtAcceptance": 29931,
+  "samples": [
+    {
+      "elapsedMs": 5237,
+      "acceptedPairs": 510,
+      "receipts": 451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 10255,
+      "acceptedPairs": 1010,
+      "receipts": 951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 15250,
+      "acceptedPairs": 1510,
+      "receipts": 1451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 20257,
+      "acceptedPairs": 2010,
+      "receipts": 1941,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 25244,
+      "acceptedPairs": 2510,
+      "receipts": 2441,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 30263,
+      "acceptedPairs": 3010,
+      "receipts": 2961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 35236,
+      "acceptedPairs": 3510,
+      "receipts": 3461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 40251,
+      "acceptedPairs": 4010,
+      "receipts": 3961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 45235,
+      "acceptedPairs": 4510,
+      "receipts": 4451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 50247,
+      "acceptedPairs": 5010,
+      "receipts": 4961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 55238,
+      "acceptedPairs": 5510,
+      "receipts": 5451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 60260,
+      "acceptedPairs": 6010,
+      "receipts": 5951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 65247,
+      "acceptedPairs": 6510,
+      "receipts": 6451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 70240,
+      "acceptedPairs": 7010,
+      "receipts": 6951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 75256,
+      "acceptedPairs": 7510,
+      "receipts": 7451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 80245,
+      "acceptedPairs": 8010,
+      "receipts": 7951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 85247,
+      "acceptedPairs": 8510,
+      "receipts": 8451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 90252,
+      "acceptedPairs": 9010,
+      "receipts": 8951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 95244,
+      "acceptedPairs": 9510,
+      "receipts": 9451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 100238,
+      "acceptedPairs": 10010,
+      "receipts": 9941,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 105236,
+      "acceptedPairs": 10510,
+      "receipts": 10451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 110245,
+      "acceptedPairs": 11010,
+      "receipts": 10941,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 115248,
+      "acceptedPairs": 11510,
+      "receipts": 11441,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 120254,
+      "acceptedPairs": 12010,
+      "receipts": 11959,
+      "acceptedToReceiptGap": 52
+    },
+    {
+      "elapsedMs": 125247,
+      "acceptedPairs": 12510,
+      "receipts": 12441,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 130244,
+      "acceptedPairs": 13010,
+      "receipts": 12953,
+      "acceptedToReceiptGap": 58
+    },
+    {
+      "elapsedMs": 135234,
+      "acceptedPairs": 13510,
+      "receipts": 13461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 140249,
+      "acceptedPairs": 14010,
+      "receipts": 13961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 145234,
+      "acceptedPairs": 14510,
+      "receipts": 14461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 150384,
+      "acceptedPairs": 15000,
+      "receipts": 14941,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 155246,
+      "acceptedPairs": 15510,
+      "receipts": 15461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 160251,
+      "acceptedPairs": 16010,
+      "receipts": 15961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 165244,
+      "acceptedPairs": 16510,
+      "receipts": 16461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 170238,
+      "acceptedPairs": 17010,
+      "receipts": 16960,
+      "acceptedToReceiptGap": 51
+    },
+    {
+      "elapsedMs": 175238,
+      "acceptedPairs": 17510,
+      "receipts": 17461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 180245,
+      "acceptedPairs": 18010,
+      "receipts": 17951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 185236,
+      "acceptedPairs": 18510,
+      "receipts": 18451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 190253,
+      "acceptedPairs": 19010,
+      "receipts": 18941,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 195244,
+      "acceptedPairs": 19510,
+      "receipts": 19441,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 200254,
+      "acceptedPairs": 20010,
+      "receipts": 19961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 205245,
+      "acceptedPairs": 20510,
+      "receipts": 20461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 210255,
+      "acceptedPairs": 21010,
+      "receipts": 20951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 215249,
+      "acceptedPairs": 21510,
+      "receipts": 21451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 220243,
+      "acceptedPairs": 22010,
+      "receipts": 21951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 225246,
+      "acceptedPairs": 22510,
+      "receipts": 22441,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 230236,
+      "acceptedPairs": 23010,
+      "receipts": 22961,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 235246,
+      "acceptedPairs": 23510,
+      "receipts": 23451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 240254,
+      "acceptedPairs": 24010,
+      "receipts": 23951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 245233,
+      "acceptedPairs": 24510,
+      "receipts": 24451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 250245,
+      "acceptedPairs": 25010,
+      "receipts": 24951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 255259,
+      "acceptedPairs": 25510,
+      "receipts": 25451,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 260255,
+      "acceptedPairs": 26010,
+      "receipts": 25951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 265249,
+      "acceptedPairs": 26510,
+      "receipts": 26461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 270255,
+      "acceptedPairs": 27010,
+      "receipts": 26956,
+      "acceptedToReceiptGap": 55
+    },
+    {
+      "elapsedMs": 275229,
+      "acceptedPairs": 27510,
+      "receipts": 27441,
+      "acceptedToReceiptGap": 70
+    },
+    {
+      "elapsedMs": 280235,
+      "acceptedPairs": 28010,
+      "receipts": 27981,
+      "acceptedToReceiptGap": 30
+    },
+    {
+      "elapsedMs": 285240,
+      "acceptedPairs": 28510,
+      "receipts": 28461,
+      "acceptedToReceiptGap": 50
+    },
+    {
+      "elapsedMs": 290243,
+      "acceptedPairs": 29010,
+      "receipts": 28951,
+      "acceptedToReceiptGap": 60
+    },
+    {
+      "elapsedMs": 295227,
+      "acceptedPairs": 29510,
+      "receipts": 29451,
+      "acceptedToReceiptGap": 60
+    }
+  ],
+  "p95AcceptedToReceiptGap": 70,
+  "maxAcceptedToReceiptGap": 70,
+  "sourceBatches": 1437,
+  "sourceCommands": 60002,
+  "sourceTrades": 30001,
+  "commitmentLinks": 30001,
+  "verifiedLinks": 30001,
+  "sourceLastMs": 1790714993457,
+  "commitmentLastMs": 1790714993968,
+  "verifiedLastMs": 1790714994477,
+  "receiptLastMs": 1790714994990,
+  "sourceToCommitmentLastMs": 511,
+  "commitmentToVerifiedLastMs": 509,
+  "verifiedToReceiptLastMs": 513,
+  "finalReceipts": 30001,
+  "drainMs": 1923,
+  "totalMs": 301834,
+  "intakeRows": 60002,
+  "profile": "PostgreSQL-backed HTTP intake + Redpanda + Go matching + Calcify Phase 1",
+  "capacityClaim": false
+}

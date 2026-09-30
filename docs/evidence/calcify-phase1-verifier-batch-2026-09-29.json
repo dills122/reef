@@ -1,0 +1,91 @@
+{
+  "id": "CAL-P1-L3",
+  "date": "2026-09-29",
+  "priorEvidence": "docs/evidence/calcify-phase1-basic-load-2026-09-29.json",
+  "baselineIdsConsidered": ["CAL-P1-L2", "C5", "C2"],
+  "sourceBase": "2294f448f526c1c82fbcd1e7b96046a96bb39b46",
+  "candidateCommit": "c81c9355dac8dfe431c2093a7da78f79e14dbc31",
+  "hypothesis": "one Kafka transaction and offset checkpoint per verifier link creates the observed post-match backlog",
+  "change": "verifier groups up to 100 polled links in one Kafka transaction and checkpoints each valid partition prefix; malformed link stops only its partition",
+  "environment": "same local Docker 29.7.2, 10 CPU, 16.75 GB, Redpanda v26.2.3, PostgreSQL 16, four broker partitions, one active matching lane, one worker per Calcify stage; volumes reused, fresh topics/generation per run",
+  "workload": "2,000 load orders, 1,000 crossing pairs in waves of 10, one instrument and venue session; plus two-order/one-trade preflight",
+  "before": [
+    {
+      "smokeId": "calcify-1790711354166",
+      "generation": 8,
+      "sourcePartition": 3,
+      "lastSourceBatchMs": 1790711485383,
+      "lastCommitmentMs": 1790711485708,
+      "lastVerifiedMs": 1790711492507,
+      "lastCommitmentToLastVerifiedMs": 6799,
+      "receipts": 1001,
+      "note": "original load observer timed out; post-run pipeline counts reconciled"
+    },
+    {
+      "smokeId": "calcify-1790711684052",
+      "generation": 9,
+      "sourcePartition": 3,
+      "acceptedMs": 1402,
+      "lastSourceBatchMs": 1790711821484,
+      "lastCommitmentMs": 1790711821534,
+      "lastVerifiedMs": 1790711828535,
+      "lastCommitmentToLastVerifiedMs": 7001,
+      "lastReceiptMs": 1790711829046,
+      "receiptDrainAfterLastAcceptanceMs": 8196,
+      "sourceTrades": 1001,
+      "commitmentLinks": 1001,
+      "verifiedLinks": 1001,
+      "receipts": 1001
+    }
+  ],
+  "after": [
+    {
+      "smokeId": "calcify-1790712926245",
+      "generation": 10,
+      "sourcePartition": 1,
+      "acceptedMs": 1442,
+      "lastSourceBatchMs": 1790713073689,
+      "lastCommitmentMs": 1790713073750,
+      "lastVerifiedMs": 1790713073781,
+      "lastCommitmentToLastVerifiedMs": 31,
+      "lastReceiptMs": 1790713074089,
+      "receiptDrainAfterLastAcceptanceMs": 960,
+      "intakeRows": 2002,
+      "sourceCommands": 2002,
+      "sourceTrades": 1001,
+      "commitmentLinks": 1001,
+      "verifiedLinks": 1001,
+      "receipts": 1001
+    },
+    {
+      "smokeId": "calcify-1790713215934",
+      "generation": 11,
+      "sourcePartition": 1,
+      "acceptedMs": 1300,
+      "lastSourceBatchMs": 1790713356305,
+      "lastCommitmentMs": 1790713356632,
+      "lastVerifiedMs": 1790713356686,
+      "lastCommitmentToLastVerifiedMs": 54,
+      "lastReceiptMs": 1790713356983,
+      "receiptDrainAfterLastAcceptanceMs": 942,
+      "intakeRows": 2002,
+      "sourceCommands": 2002,
+      "sourceTrades": 1001,
+      "commitmentLinks": 1001,
+      "verifiedLinks": 1001,
+      "receipts": 1001,
+      "observer": "reusable Make target reports exact link counts and stage-end timestamps"
+    }
+  ],
+  "verification": [
+    "CalcifyVerifierBatchTest passed valid 100-link batch and malformed-link partition isolation",
+    "full platform-runtime Gradle test suite passed",
+    "two corrected full ingress, Go matching, Calcify load runs passed exact counts"
+  ],
+  "limits": [
+    "diagnostic short bursts, not sustained capacity qualification",
+    "one hot lane, different selected source partition before and after, reused local volumes",
+    "last-record timestamp differences and whole-cohort drain are not per-trade latency percentiles",
+    "no concurrent fault/restart, aged-state soak, or independent identity-level source-to-link reconciliation"
+  ]
+}
