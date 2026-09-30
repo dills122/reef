@@ -73,12 +73,13 @@ type BookStats struct {
 }
 
 type BookScope struct {
+	RunID          string
 	VenueSessionID string
 	InstrumentID   string
 }
 
 func (s BookScope) Key() string {
-	return bookKey(s.VenueSessionID, s.InstrumentID)
+	return bookKey(s.RunID, s.VenueSessionID, s.InstrumentID)
 }
 
 type MatchAlgorithm string
@@ -218,7 +219,7 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 
 	result := acceptedResult("accepted", cmd.OrderID, now)
 
-	book := s.bookFor(cmd.VenueSessionID, cmd.InstrumentID)
+	book := s.bookFor(cmd.RunID, cmd.VenueSessionID, cmd.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
 
@@ -286,7 +287,7 @@ func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) d
 	if rejection := s.validateSessionForCancel(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
 		return *rejection
 	}
-	book := s.bookFor(record.VenueSessionID, record.InstrumentID)
+	book := s.bookFor(record.RunID, record.VenueSessionID, record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
 
@@ -353,7 +354,7 @@ func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) d
 	if rejection := s.validateSessionForModify(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
 		return *rejection
 	}
-	book := s.bookFor(record.VenueSessionID, record.InstrumentID)
+	book := s.bookFor(record.RunID, record.VenueSessionID, record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
 
@@ -521,8 +522,28 @@ func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
 	return total
 }
 
+// RestingOrdersInSession aggregates all run books in this session.
 func (s *Service) RestingOrdersInSession(venueSessionID string, instrumentID string, side domain.Side) int {
-	book, ok := s.loadBook(venueSessionID, instrumentID)
+	s.booksMu.RLock()
+	books := make([]*orderBook, 0)
+	for key, book := range s.books {
+		scope, ok := parseBookKey(key)
+		if ok && scope.VenueSessionID == venueSessionID && scope.InstrumentID == instrumentID {
+			books = append(books, book)
+		}
+	}
+	s.booksMu.RUnlock()
+	total := 0
+	for _, book := range books {
+		book.mu.Lock()
+		total += restingOrdersInBook(book, side)
+		book.mu.Unlock()
+	}
+	return total
+}
+
+func (s *Service) RestingOrdersInScope(scope BookScope, side domain.Side) int {
+	book, ok := s.loadBook(scope.RunID, scope.VenueSessionID, scope.InstrumentID)
 	if !ok {
 		return 0
 	}
@@ -543,7 +564,7 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 	if !ok {
 		return domain.OrderState{}, false
 	}
-	book := s.bookFor(record.VenueSessionID, record.InstrumentID)
+	book := s.bookFor(record.RunID, record.VenueSessionID, record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
 
@@ -617,39 +638,28 @@ func (s *Service) MatchAlgorithm(instrumentID string) MatchAlgorithm {
 	return MatchAlgorithmFIFO
 }
 
-func (s *Service) loadBook(venueSessionID string, instrumentID string) (*orderBook, bool) {
+func (s *Service) loadBook(runID string, venueSessionID string, instrumentID string) (*orderBook, bool) {
 	s.booksMu.RLock()
-	existing, ok := s.books[bookKey(venueSessionID, instrumentID)]
+	existing, ok := s.books[bookKey(runID, venueSessionID, instrumentID)]
 	s.booksMu.RUnlock()
 	return existing, ok
 }
 
-func (s *Service) bookFor(venueSessionID string, instrumentID string) *orderBook {
-	existing, ok := s.loadBook(venueSessionID, instrumentID)
+func (s *Service) bookFor(runID string, venueSessionID string, instrumentID string) *orderBook {
+	existing, ok := s.loadBook(runID, venueSessionID, instrumentID)
 	if ok {
 		return existing
 	}
 
 	s.booksMu.Lock()
 	defer s.booksMu.Unlock()
-	key := bookKey(venueSessionID, instrumentID)
+	key := bookKey(runID, venueSessionID, instrumentID)
 	if existing, ok := s.books[key]; ok {
 		return existing
 	}
 	book := newOrderBook()
 	s.books[key] = book
 	return book
-}
-
-func bookKey(venueSessionID string, instrumentID string) string {
-	if venueSessionID == "" {
-		return instrumentID
-	}
-	return venueSessionID + "|" + instrumentID
-}
-
-func bookKeyMatchesInstrument(key string, instrumentID string) bool {
-	return key == instrumentID || strings.HasSuffix(key, "|"+instrumentID)
 }
 
 func (s *Service) validateSessionForSubmit(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
@@ -786,7 +796,7 @@ type orderRollback struct {
 	restingOrder hotbook.RestingOrder
 }
 
-// BeginBatch captures each distinct venue-session/instrument book's sequence
+// BeginBatch captures each distinct run/venue-session/instrument book's sequence
 // watermark before processing starts. Individual order/book entries are
 // journaled lazily on first mutation.
 func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
@@ -799,11 +809,11 @@ func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
 		if scope.InstrumentID == "" {
 			continue
 		}
-		key := bookKey(scope.VenueSessionID, scope.InstrumentID)
+		key := scope.Key()
 		if _, ok := rollback.instruments[key]; ok {
 			continue
 		}
-		book := s.bookFor(scope.VenueSessionID, scope.InstrumentID)
+		book := s.bookFor(scope.RunID, scope.VenueSessionID, scope.InstrumentID)
 		book.mu.Lock()
 		nextSequence := book.book.NextSequence()
 		book.mu.Unlock()
@@ -889,7 +899,7 @@ func (rb *BatchRollback) trackCreatedOrder(book *orderBook, record *orderRecord)
 	if rb == nil || record == nil {
 		return
 	}
-	snap := rb.instrument(bookKey(record.VenueSessionID, record.InstrumentID), book)
+	snap := rb.instrument(bookKey(record.RunID, record.VenueSessionID, record.InstrumentID), book)
 	if snap == nil {
 		return
 	}
@@ -903,7 +913,7 @@ func (rb *BatchRollback) trackOrder(book *orderBook, record *orderRecord) {
 	if rb == nil || record == nil {
 		return
 	}
-	snap := rb.instrument(bookKey(record.VenueSessionID, record.InstrumentID), book)
+	snap := rb.instrument(bookKey(record.RunID, record.VenueSessionID, record.InstrumentID), book)
 	if snap == nil {
 		return
 	}

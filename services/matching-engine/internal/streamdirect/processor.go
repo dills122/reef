@@ -353,14 +353,18 @@ func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt strin
 		deliveryVenueSessionIDs[i] = venueSessionID
 		deliveryInstrumentIDs[i] = instrumentID
 		deliveryCommandTypes[i] = commandTypeFromSubject(subject)
-		scope := app.BookScope{VenueSessionID: venueSessionID, InstrumentID: instrumentID}
+		var routeContext struct {
+			RunID string `json:"runId"`
+		}
+		_ = json.Unmarshal(delivery.Data(), &routeContext)
+		scope := app.BookScope{RunID: routeContext.RunID, VenueSessionID: venueSessionID, InstrumentID: instrumentID}
 		if instrumentID == "" || seenScopes[scope.Key()] {
 			continue
 		}
 		seenScopes[scope.Key()] = true
 		bookScopes = append(bookScopes, scope)
 	}
-	// Snapshot every touched session/instrument book/order records *before* any
+	// Snapshot every touched run/session/instrument book/order records *before* any
 	// command in this batch mutates them, so a subsequent failed publish can
 	// roll the engine's live state back to exactly this point.
 	rollback := p.service.BeginBatch(bookScopes)

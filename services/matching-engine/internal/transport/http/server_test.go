@@ -137,7 +137,7 @@ func TestBookSnapshotEndpoint(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte(`"bookKeys":["AAPL"]`)) {
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"bookKeys":["0:0:4:AAPL"]`)) {
 		t.Fatalf("expected AAPL snapshot metadata, got %s", rec.Body.String())
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`"orderId":"ord-1"`)) {

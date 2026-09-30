@@ -18,6 +18,10 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify Phase 2 implementation (2026-09-30 branch)
+
+User approved [six-slice implementation plan](work/CALCIFY_PHASE2_IMPLEMENTATION.md). Active branch: `codex/calcify-phase2-implementation`, continuing preserved experiment commits. D-042 run-scoped matching and V3 snapshot compatibility implemented; focused replay and complete `go test -race ./...` passed. Next dependency: full-fact Protobuf V1/pure resolver, then managed integration and production fault/recovery/capacity gates. No full Phase 2 throughput or availability qualification claimed.
+
 ## Calcify Phase 2 experiment checkpoint (2026-09-30 branch)
 
 `codex/calcify-phase2-experiments`, based on merged #431, contains isolated source
@@ -28,8 +32,7 @@ cross-run isolation/replay fixture; production matching alignment still pending.
 Recovery, topic-generation/retention and two-lane fault probes passed in stated
 local RF1 scope. Five-minute 10k local store/codec joins/s is not full resolver or
 system capacity qualification. [Decision/evidence report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md)
-records remaining implementation gates and reproducible commands. Work pauses for
-requested user sync before production Phase 2 integration; legacy remains intact.
+records remaining implementation gates and reproducible commands. User sync subsequently approved implementation; see implementation checkpoint above. Legacy remains intact.
 
 ## Calcify Phase 1 checkpoint (2026-09-29 branch)
 

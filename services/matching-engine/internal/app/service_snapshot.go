@@ -61,6 +61,17 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 	}), true
 }
 
+func (s *Service) SnapshotForScope(scope BookScope) (Snapshot, bool) {
+	keys, books, unlock := s.lockSnapshotBooks(func(key string) bool { return key == scope.Key() })
+	defer unlock()
+	if len(keys) == 0 {
+		return Snapshot{}, false
+	}
+	return s.buildSnapshot(keys, books, func(record *orderRecord) bool {
+		return bookKey(record.RunID, record.VenueSessionID, record.InstrumentID) == scope.Key()
+	}), true
+}
+
 // buildSnapshot assembles a Snapshot from the given (already locked) book set
 // and order filter. bookIDs must already be sorted and locked by the caller;
 // unlocking is the caller's responsibility.
@@ -82,7 +93,7 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
 	})
 	snapshot.Metadata = SnapshotMetadata{
-		SnapshotVersion: "matching-service-snapshot-v2",
+		SnapshotVersion: "matching-service-snapshot-v3",
 		EngineVersion:   "matching-engine-app-v1",
 		BookCount:       len(snapshot.Books),
 		OrderCount:      len(snapshot.Orders),
@@ -140,6 +151,11 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 	if snapshot.Checksum != "" && snapshot.Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
 		return nil, false
 	}
+	var ok bool
+	snapshot, ok = normalizeSnapshotScope(snapshot)
+	if !ok {
+		return nil, false
+	}
 	service := NewService(options...)
 	for instrumentID, bookSnapshot := range snapshot.Books {
 		restored, ok := hotbook.Restore(bookSnapshot)
@@ -175,6 +191,9 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 			terminalRecords = append(terminalRecords, record)
 		}
 	}
+	if !validSnapshotOrderScopes(snapshot) {
+		return nil, false
+	}
 	for _, record := range terminalRecords {
 		service.trackTerminalOrder(nil, record)
 	}
@@ -193,7 +212,7 @@ func validSnapshotMetadata(snapshot Snapshot) bool {
 	if snapshot.Metadata.SnapshotVersion == "" && snapshot.Metadata.EngineVersion == "" {
 		return true
 	}
-	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2" || snapshot.Metadata.EngineVersion == "" {
+	if (snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v3" && snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2") || snapshot.Metadata.EngineVersion == "" {
 		return false
 	}
 	if snapshot.Metadata.BookCount != len(snapshot.Books) || snapshot.Metadata.OrderCount != len(snapshot.Orders) {
@@ -278,4 +297,67 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 	}
 	sum := sha256.Sum256([]byte(builder.String()))
 	return hex.EncodeToString(sum[:])
+}
+
+// Shared-run legacy books cannot safely become run-local recovery state. Use
+// command-log replay instead. Legacy snapshots without run IDs can migrate.
+func normalizeSnapshotScope(snapshot Snapshot) (Snapshot, bool) {
+	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v3" {
+		for key := range snapshot.Books {
+			if _, ok := parseBookKey(key); !ok {
+				return Snapshot{}, false
+			}
+		}
+		return snapshot, true
+	}
+	for _, order := range snapshot.Orders {
+		if order.RunID != "" {
+			return Snapshot{}, false
+		}
+	}
+	books := make(map[string]hotbook.Snapshot, len(snapshot.Books))
+	keys := make([]string, 0, len(snapshot.Books))
+	for key, book := range snapshot.Books {
+		session, instrument := "", key
+		if sep := strings.LastIndexByte(key, '|'); sep >= 0 {
+			session, instrument = key[:sep], key[sep+1:]
+		}
+		next := bookKey("", session, instrument)
+		if _, exists := books[next]; exists {
+			return Snapshot{}, false
+		}
+		books[next] = book
+		keys = append(keys, next)
+	}
+	sort.Strings(keys)
+	snapshot.Books = books
+	snapshot.Metadata = SnapshotMetadata{SnapshotVersion: "matching-service-snapshot-v3", EngineVersion: "matching-engine-app-v1", BookCount: len(books), OrderCount: len(snapshot.Orders), BookKeys: keys}
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+	return snapshot, true
+}
+
+func validSnapshotOrderScopes(snapshot Snapshot) bool {
+	orders := make(map[string]SnapshotOrderRecord, len(snapshot.Orders))
+	for _, order := range snapshot.Orders {
+		if _, ok := snapshot.Books[bookKey(order.RunID, order.VenueSessionID, order.InstrumentID)]; !ok {
+			return false
+		}
+		orders[order.OrderID] = order
+	}
+	resting := make(map[string]bool)
+	for key, book := range snapshot.Books {
+		for _, entry := range append(append([]hotbook.SnapshotOrder(nil), book.Buys...), book.Sells...) {
+			order, ok := orders[entry.OrderID]
+			if !ok || resting[entry.OrderID] || bookKey(order.RunID, order.VenueSessionID, order.InstrumentID) != key || order.Side != entry.Side || order.LimitPrice != entry.LimitPrice || order.RemainingQuantity <= 0 || (order.Status != domain.OrderStatusAccepted && order.Status != domain.OrderStatusPartiallyFilled) {
+				return false
+			}
+			resting[entry.OrderID] = true
+		}
+	}
+	for _, order := range snapshot.Orders {
+		if (order.Status == domain.OrderStatusAccepted || order.Status == domain.OrderStatusPartiallyFilled) && !resting[order.OrderID] {
+			return false
+		}
+	}
+	return true
 }

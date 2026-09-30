@@ -1294,13 +1294,13 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if snapshot.Checksum == "" {
 		t.Fatal("expected service snapshot checksum")
 	}
-	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2" || snapshot.Metadata.EngineVersion == "" {
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v3" || snapshot.Metadata.EngineVersion == "" {
 		t.Fatalf("expected populated snapshot metadata, got %#v", snapshot.Metadata)
 	}
 	if snapshot.Metadata.BookCount != 1 || snapshot.Metadata.OrderCount != 4 {
 		t.Fatalf("unexpected snapshot metadata counts: %#v", snapshot.Metadata)
 	}
-	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"session-1|AAPL"}) {
+	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{bookKey("", "session-1", "AAPL")}) {
 		t.Fatalf("unexpected snapshot book keys: %#v", snapshot.Metadata.BookKeys)
 	}
 	restored, ok := Restore(snapshot)
@@ -1455,10 +1455,10 @@ func TestSnapshotForInstrumentFiltersBookAndOrders(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AAPL snapshot")
 	}
-	if snapshot.Metadata.BookCount != 1 || !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"AAPL"}) {
+	if snapshot.Metadata.BookCount != 1 || !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{bookKey("", "", "AAPL")}) {
 		t.Fatalf("unexpected AAPL snapshot metadata: %#v", snapshot.Metadata)
 	}
-	if len(snapshot.Books) != 1 || snapshot.Books["AAPL"].Checksum == "" {
+	if len(snapshot.Books) != 1 || snapshot.Books[bookKey("", "", "AAPL")].Checksum == "" {
 		t.Fatalf("expected one AAPL book snapshot, got %#v", snapshot.Books)
 	}
 	if len(snapshot.Orders) != 1 || snapshot.Orders[0].OrderID != "ord-aapl-buy" {
