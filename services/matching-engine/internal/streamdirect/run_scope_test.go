@@ -1,8 +1,10 @@
 package streamdirect
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/dills122/reef/services/matching-engine/internal/app"
 	"reflect"
@@ -98,4 +100,34 @@ func TestRunSourceLaneFixture(t *testing.T) {
 		t.Fatal("fixture failed")
 	}
 	t.Logf("5 batches; %d trades; full replay parity", total)
+}
+
+func TestRunBatchFailedPublishRestoresSequenceAndAcceptance(t *testing.T) {
+	payload := func(id, side string) map[string]string {
+		return map[string]string{"commandId": "cmd-" + id, "orderId": id, "runId": "run-a", "venueSessionId": "session", "instrumentId": "AAPL", "side": side, "quantityUnits": "10", "limitPrice": "100", "currency": "USD", "occurredAt": "2026-09-30T00:00:00Z"}
+	}
+	service := app.NewService()
+	process := func(id, side string, seq uint64, publisher *fakePublisher) error {
+		p := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{newFakeDelivery("reef.cmd.v1.p00.session.AAPL.SubmitOrder", seq, payload(id, side))}}, publisher, ProcessorConfig{Partition: 0, BatchSize: 10})
+		_, err := p.ProcessOnce(context.Background())
+		return err
+	}
+	if err := process("buy", "BUY", 1, &fakePublisher{}); err != nil {
+		t.Fatal(err)
+	}
+	before := service.Snapshot().Checksum
+	if err := process("sell", "SELL", 2, &fakePublisher{err: errors.New("publish failed")}); err == nil {
+		t.Fatal("missing failure")
+	}
+	if service.Snapshot().Checksum != before {
+		t.Fatal("failed publish changed run book checksum")
+	}
+	publisher := &fakePublisher{}
+	if err := process("sell", "SELL", 2, publisher); err != nil {
+		t.Fatal(err)
+	}
+	result := publisher.batches[0].Outcomes[0].Result
+	if result.Accepted == nil || len(result.Trades) != 1 || result.Trades[0].TradeID != "trade-buy-sell-1" {
+		t.Fatalf("retry drift: %+v", result)
+	}
 }
