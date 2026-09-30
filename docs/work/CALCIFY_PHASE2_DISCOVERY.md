@@ -1,12 +1,14 @@
 # Calcify Phase 2 — match context resolution
 
-Status: initial planning skeleton; architecture direction agreed in discussion, contracts and implementation gates open.
+Status: initial planning skeleton; local-only resolver direction conditional on matching source-lane decision. No Phase 2 implementation approved.
 Recorded: 2026-09-29 America/Toronto.
 Branch: `codex/calcify-phase2-planning`.
 
 ## Purpose and boundary
 
 Phase 2 starts with a `CommitmentVerificationPassed` link from the Phase 1 verified commitment stream. Its first useful result is a resolved match context: the exact `TradeCreated` source fact connected to both accepted order facts and their participant/account identities. This is fact resolution, not trade approval, allocation, clearing, balance checking, or settlement. The Phase 1 PostgreSQL receipt worker remains a temporary diagnostic endpoint; Phase 2 consumes the verified stream directly.
+
+**Research gate:** [source-lane review](../research/CALCIFY_PHASE2_SOURCE_LANE_RESEARCH_2026-09-29.md) found present intake routing includes run ID while matching book scope does not. A cross-run trade can reference an order accepted on another source partition. The one-lane diagram below is therefore a candidate contingent on an explicit matching-scope decision and enforcement, not a current guarantee.
 
 Matching facts remain authoritative in the venue-event log. Phase 2 may keep a rebuildable lookup index and short-lived decoded batch data, but should not copy trade economics into a second canonical store. Later stages should receive durable source links and only the context fields justified by their access needs.
 
@@ -60,10 +62,10 @@ Target: **near 10,000 verified commitments resolved per second, sustained**. Pre
 
 Apache Kafka documents local stream-table joins as a way to avoid a remote database request per record, and disk-backed local state with compacted changelog recovery. These are architectural precedents, not a decision to adopt Kafka Streams: [joins](https://kafka.apache.org/43/streams/developer-guide/dsl-api/), [state stores](https://kafka.apache.org/43/streams/developer-guide/processor-api/). LMAX describes in-memory, single-writer exchange processing, but does not document this specific post-match join: [Disruptor paper](https://github.com/LMAX-Exchange/disruptor/blob/master/src/docs/asciidoc/en/disruptor.adoc).
 
-Agreed direction: sequential partition-local source consumption and local order lookups, with no SQL reads in normal per-trade path. Proposed details above are open until checked against Phase 1 contracts and a reviewed Phase 2 output/recovery design. No Phase 2 benchmark has been run.
+Agreed performance direction: sequential source consumption and local order lookups, with no SQL reads in normal per-trade path. Whether this can be strictly partition-local depends on the matching-scope decision above. Proposed details remain open until checked against source contracts and a reviewed Phase 2 output/recovery design. No Phase 2 benchmark has been run.
 
 ## Next discussion
 
-Start with the source/ordering contract: exactly where accepted-order facts appear relative to `TradeCreated`, and whether one resolver lane can see both order facts for every verified trade. This determines whether the simple forward scan is valid. Then settle checkpoint/recovery and output shape before store selection or implementation.
+Start with intended matching scope: can two runs trade within one venue session? Choose and enforce routing/book relationship before claiming one resolver lane can see both order facts for every verified trade. Then settle checkpoint/recovery and output shape before store selection or implementation.
 
 Initial source check: current direct matching builds each `VenueEventBatch` from ordered command outcomes; `SubmitOrder` attaches `AcceptedOrderFact` to its result, and a trade carries buy/sell order IDs but no participant/account IDs. The acceptance guard above is required. Intake hashes `runId|venueSessionId|instrumentId` to choose a command partition, so same-context submissions route together. We still need to prove both trade sides always share that context, venue-event partition follows it, and verified links preserve source order under replay. See [`processor.go`](../../services/matching-engine/internal/streamdirect/processor.go), [`order.go`](../../services/matching-engine/internal/domain/order.go), [`StreamCommandContracts.kt`](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandContracts.kt), and [Phase 1 contracts in PR #430](https://github.com/dills122/reef/pull/430).
