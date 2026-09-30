@@ -10,6 +10,8 @@ Phase 2 starts with a `CommitmentVerificationPassed` link from the Phase 1 verif
 
 **Research gate:** [source-lane review](../research/CALCIFY_PHASE2_SOURCE_LANE_RESEARCH_2026-09-29.md) found present intake routing includes run ID while matching book scope does not. A cross-run trade can reference an order accepted on another source partition. [D-042](../DECISIONS.md#d-042-shard-local-in-memory-hot-book) already requires run-scoped book ownership aligned with routing; user reaffirmed this direction on 2026-09-29. The one-lane diagram below remains conditional on implementing and proving that existing decision.
 
+**Architecture research:** [Phase 2 architecture review](../research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md) compares primary FIX/DTCC and Apache Kafka/Flink guidance with Reef contracts. It recommends a verified-led, sequential source walk provisionally, but leaves runtime choice pending a narrow crash/lag experiment; this document remains the working skeleton.
+
 Matching facts remain authoritative in the venue-event log. Phase 2 may keep a rebuildable lookup index and short-lived decoded batch data, but should not copy trade economics into a second canonical store. Later stages should receive durable source links and only the context fields justified by their access needs.
 
 ## Accepted matching prerequisite
@@ -73,6 +75,6 @@ Agreed performance direction: sequential source consumption and local order look
 
 ## Next discussion
 
-Start with D-042 implementation alignment: same-run book key, routing and event partition consistency, and deterministic restart/replay. Prove one resolver lane can then see both order facts for every verified trade. Next settle checkpoint/recovery and output shape before store selection or implementation.
+Discuss the recovery trade-off in the [architecture review](../research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md): verified-led worker with custom local/Kafka checkpoint versus managed two-input Processor topology with bounded pending state. D-042 alignment remains the implementation prerequisite. Settle output field budget and availability rule before choosing a store or enabling deletion.
 
 Initial source check: current direct matching builds each `VenueEventBatch` from ordered command outcomes; `SubmitOrder` attaches `AcceptedOrderFact` to its result, and a trade carries buy/sell order IDs but no participant/account IDs. The acceptance guard above is required. Intake hashes `runId|venueSessionId|instrumentId` to choose a command partition, so same-context submissions route together. We still need to prove both trade sides always share that context, venue-event partition follows it, and verified links preserve source order under replay. See [`processor.go`](../../services/matching-engine/internal/streamdirect/processor.go), [`order.go`](../../services/matching-engine/internal/domain/order.go), [`StreamCommandContracts.kt`](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandContracts.kt), and [Phase 1 contracts in PR #430](https://github.com/dills122/reef/pull/430).
