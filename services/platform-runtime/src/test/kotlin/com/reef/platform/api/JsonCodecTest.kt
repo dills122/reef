@@ -74,4 +74,27 @@ class JsonCodecTest {
             PlatformCommandParsers.submitOrder("""{"commandId":""")
         }
     }
+    @Test
+    fun canonicalChecksumPreservesByteLengthsAtCacheBoundary() {
+        for (value in listOf("", "x", "x".repeat(255), "x".repeat(256), "é".repeat(128), "x".repeat(1024))) {
+            val bytes = value.toByteArray(Charsets.UTF_8)
+            val tokens = "o1:1s1:xs${bytes.size}:".toByteArray(Charsets.UTF_8) + bytes
+            val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(tokens))
+            assertEquals(expected, JsonCodec.parseObject(JsonCodec.writeObject("x" to value)).semanticSha256())
+        }
+    }
+
+    @Test
+    fun canonicalChecksumSortsFieldsAndExcludesOnlyRoot() {
+        val tokens = "o1:1s1:xo1:2s1:as2:αs1:zs2:β".toByteArray(Charsets.UTF_8)
+        val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(tokens))
+        assertEquals(expected, JsonCodec.parseObject("""{"z":"excluded","x":{"z":"β","a":"α"}}""").semanticSha256(setOf("z")))
+    }
+    @Test
+    fun canonicalChecksumIncludesFieldsBeyondMemoBudgetAndLongUtf8Keys() {
+        val fields = (0 until 130).map { "k" + it.toString().padStart(3, '0') to true } + ("é".repeat(100) to true)
+        val tokens = "o3:131" + fields.joinToString("") { (name, _) -> "s${name.toByteArray(Charsets.UTF_8).size}:" + name + "b1:1" }
+        val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(tokens.toByteArray(Charsets.UTF_8)))
+        assertEquals(expected, JsonCodec.parseObject(JsonCodec.writeObject(*fields.toTypedArray())).semanticSha256())
+    }
 }

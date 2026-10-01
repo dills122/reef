@@ -168,15 +168,24 @@ class JsonDocument internal constructor(
 
     fun semanticSha256(excludedRootFields: Set<String> = emptySet()): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        updateCanonicalDigest(digest, root, excludedRootFields, isRoot = true)
-        return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        updateCanonicalDigest(digest, root, excludedRootFields, HashMap(), isRoot = true)
+        return java.util.HexFormat.of().formatHex(digest.digest())
     }
+}
+
+// Fixed bounded table; changes allocation only, not canonical bytes or field order.
+private val canonicalTokenPrefixes = "nbsdao".map { kind ->
+    Array(256) { length -> "$kind$length:".toByteArray(Charsets.UTF_8) }
+}
+private val canonicalFieldOrder = Comparator<Map.Entry<String, JsonNode>> { left, right ->
+    left.key.compareTo(right.key)
 }
 
 private fun updateCanonicalDigest(
     digest: MessageDigest,
     node: JsonNode,
     excludedRootFields: Set<String>,
+    fieldTokens: MutableMap<String, ByteArray>,
     isRoot: Boolean
 ) {
     when {
@@ -186,17 +195,26 @@ private fun updateCanonicalDigest(
         node.isNumber -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
         node.isArray -> {
             updateCanonicalToken(digest, 'a', node.size().toString().toByteArray(Charsets.UTF_8))
-            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, isRoot = false) }
+            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, fieldTokens, isRoot = false) }
         }
         node.isObject -> {
-            val fields = node.fields().asSequence()
-                .filterNot { (name, _) -> isRoot && name in excludedRootFields }
-                .sortedBy { (name, _) -> name }
-                .toList()
+            val fields = ArrayList<Map.Entry<String, JsonNode>>(node.size())
+            node.fields().forEachRemaining { entry ->
+                if (!isRoot || entry.key !in excludedRootFields) fields.add(entry)
+            }
+            fields.sortWith(canonicalFieldOrder)
             updateCanonicalToken(digest, 'o', fields.size.toString().toByteArray(Charsets.UTF_8))
             fields.forEach { (name, child) ->
-                updateCanonicalToken(digest, 's', name.toByteArray(Charsets.UTF_8))
-                updateCanonicalDigest(digest, child, excludedRootFields, isRoot = false)
+                val cached = fieldTokens[name]
+                if (cached != null) digest.update(cached) else {
+                    val bytes = name.toByteArray(Charsets.UTF_8)
+                    if (bytes.size <= 128 && fieldTokens.size < 128) {
+                        val token = canonicalTokenPrefixes[2][bytes.size] + bytes
+                        fieldTokens[name] = token
+                        digest.update(token)
+                    } else updateCanonicalToken(digest, 's', bytes)
+                }
+                updateCanonicalDigest(digest, child, excludedRootFields, fieldTokens, isRoot = false)
             }
         }
         else -> throw IllegalArgumentException("unsupported canonical checksum JSON node: ${node.nodeType}")
@@ -204,8 +222,9 @@ private fun updateCanonicalDigest(
 }
 
 private fun updateCanonicalToken(digest: MessageDigest, kind: Char, value: ByteArray) {
-    digest.update(kind.code.toByte())
-    digest.update(value.size.toString().toByteArray(Charsets.UTF_8))
-    digest.update(':'.code.toByte())
+    val index = when (kind) { 'n' -> 0; 'b' -> 1; 's' -> 2; 'd' -> 3; 'a' -> 4; 'o' -> 5; else -> error("unknown canonical token") }
+    val prefix = if (value.size < 256) canonicalTokenPrefixes[index][value.size]
+        else "$kind${value.size}:".toByteArray(Charsets.UTF_8)
+    digest.update(prefix)
     digest.update(value)
 }
