@@ -11,10 +11,14 @@ internal data class ResolverSettings(
     val maxTargetBytes:Int=16*1024*1024,
     val maxRowBytes:Int=64*1024,
     val maxWorkPerDrain:Int=200,
+    val maxAcceptedCacheRows:Int=256,
+    val maxAcceptedCacheBytes:Int=4*1024*1024,
 ) {
     init {
         require(generation>0 && sourceTopic.isNotBlank() && sourceTopicId.isNotBlank())
         require(setOf(sourceTopic,verifiedTopic,outputTopic).size==3)
+        require(maxTargetBytes<=Int.MAX_VALUE-1024)
+        require(maxAcceptedCacheRows in 1..4096 && maxAcceptedCacheBytes in 1..32*1024*1024)
         require(maxPending>0 && maxSourceBytes>0 && maxTargetBytes>0 && maxRowBytes>0 && maxWorkPerDrain>0)
     }
 }

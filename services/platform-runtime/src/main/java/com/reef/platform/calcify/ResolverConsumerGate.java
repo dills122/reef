@@ -47,11 +47,9 @@ public final class ResolverConsumerGate implements KafkaClientSupplier {
 
     void setBlocked(TopicPartition p, boolean b) {
       if (b) {
-        blocked.add(p);
-        if (assignment().contains(p)) super.pause(List.of(p));
+        if (blocked.add(p) && assignment().contains(p)) super.pause(List.of(p));
       } else {
-        blocked.remove(p);
-        if (assignment().contains(p)) super.resume(List.of(p));
+        if (blocked.remove(p) && assignment().contains(p)) super.resume(List.of(p));
       }
     }
 
