@@ -32,19 +32,27 @@ internal object CalcifyResolverRuntime {
             maxSourceBytes=RuntimeEnv.int("CALCIFY_RESOLVER_MAX_SOURCE_BYTES",4*1024*1024,min=1),
             maxTargetBytes=RuntimeEnv.int("CALCIFY_RESOLVER_MAX_TARGET_BYTES",16*1024*1024,min=1))
         val replication=RuntimeEnv.int("CALCIFY_RESOLVER_REPLICATION_FACTOR",3,min=1).also {require(it<=Short.MAX_VALUE)}
-        ensureTopics(bootstrap,settings,replication)
+        val broker=ResolverBrokerKind.valueOf(RuntimeEnv.string("CALCIFY_RESOLVER_BROKER_KIND","REDPANDA").uppercase())
         val appId=RuntimeEnv.string("CALCIFY_RESOLVER_APPLICATION_ID","reef-calcify-resolver-v1-g$generation")
+        ensureTopics(bootstrap,settings,replication,broker,appId)
         val config=Properties().apply {
             put(StreamsConfig.APPLICATION_ID_CONFIG,appId);put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG,bootstrap)
             put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,StreamsConfig.EXACTLY_ONCE_V2)
             put(StreamsConfig.STATE_DIR_CONFIG,RuntimeEnv.string("CALCIFY_RESOLVER_STATE_DIR","/tmp/reef-calcify-resolver"))
             put(StreamsConfig.REPLICATION_FACTOR_CONFIG,replication)
-            put(StreamsConfig.topicPrefix("min.insync.replicas"),minOf(2,replication))
+            ResolverTopicDurability.topicConfig(broker,replication).forEach {(key,value)->put(StreamsConfig.topicPrefix(key),value)}
+            put(StreamsConfig.topicPrefix("max.message.bytes"),settings.maxTargetBytes+1024)
             put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG,RuntimeEnv.int("CALCIFY_RESOLVER_STANDBYS",1,min=0))
             put(StreamsConfig.NUM_STREAM_THREADS_CONFIG,RuntimeEnv.int("CALCIFY_RESOLVER_THREADS",1,min=1))
             put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG,100)
+            put(StreamsConfig.producerPrefix("batch.size"),128*1024)
+            put(StreamsConfig.producerPrefix("linger.ms"),20)
+            put(StreamsConfig.producerPrefix("compression.type"),"lz4")
+            put(StreamsConfig.producerPrefix("max.request.size"),settings.maxTargetBytes+1024)
             put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG,8L*1024*1024)
             put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,ResolverRocksConfig::class.java)
+            put(StreamsConfig.consumerPrefix("session.timeout.ms"),RuntimeEnv.int("CALCIFY_RESOLVER_SESSION_TIMEOUT_MS",6000,min=6000))
+            put(StreamsConfig.consumerPrefix("heartbeat.interval.ms"),1000)
             put(StreamsConfig.consumerPrefix("max.poll.records"),minOf(100,settings.maxPending/2))
             put(StreamsConfig.consumerPrefix("auto.offset.reset"),"earliest")
             put(StreamsConfig.consumerPrefix("allow.auto.create.topics"),false)
@@ -82,7 +90,7 @@ internal object CalcifyResolverRuntime {
         check(streams.state()!=KafkaStreams.State.ERROR) {"Calcify resolver terminated with infrastructure error"}
     }
 
-    private fun ensureTopics(bootstrap:String,settings:ResolverSettings,replication:Int) {
+    private fun ensureTopics(bootstrap:String,settings:ResolverSettings,replication:Int,broker:ResolverBrokerKind,appId:String) {
         AdminClient.create(Properties().apply {put("bootstrap.servers",bootstrap)}).use {admin->
             val names=listOf(settings.sourceTopic,settings.verifiedTopic)
             val existing=admin.describeTopics(names).allTopicNames().get(10,TimeUnit.SECONDS)
@@ -90,15 +98,21 @@ internal object CalcifyResolverRuntime {
             require(existing.getValue(settings.verifiedTopic).partitions().size==partitions) {"Calcify source/verified partition count mismatch"}
             val listed=admin.listTopics().names().get(10,TimeUnit.SECONDS)
             if(settings.outputTopic !in listed) {
-                try {admin.createTopics(listOf(NewTopic(settings.outputTopic,partitions,replication.toShort()).configs(mapOf("cleanup.policy" to "delete","min.insync.replicas" to minOf(2,replication).toString())))).all().get(10,TimeUnit.SECONDS)} catch(ex:java.util.concurrent.ExecutionException) {if(ex.cause !is org.apache.kafka.common.errors.TopicExistsException) throw ex}
+                try {admin.createTopics(listOf(NewTopic(settings.outputTopic,partitions,replication.toShort()).configs(mapOf("cleanup.policy" to "delete","max.message.bytes" to (settings.maxTargetBytes+1024).toString())+ResolverTopicDurability.topicConfig(broker,replication)))).all().get(10,TimeUnit.SECONDS)} catch(ex:java.util.concurrent.ExecutionException) {if(ex.cause !is org.apache.kafka.common.errors.TopicExistsException) throw ex}
             }
-            val all=admin.describeTopics(names+settings.outputTopic).allTopicNames().get(10,TimeUnit.SECONDS)
+            val changelog="$appId-resolver-changelog"
+            val topics=names+settings.outputTopic+(if(changelog in listed) listOf(changelog) else emptyList())
+            val all=admin.describeTopics(topics).allTopicNames().get(10,TimeUnit.SECONDS)
             for((name,description) in all) {
                 require(description.partitions().size==partitions && description.partitions().all {it.replicas().size>=replication}) {"Calcify topic replication/partition mismatch: $name"}
                 val resource=ConfigResource(ConfigResource.Type.TOPIC,name)
                 val config=admin.describeConfigs(listOf(resource)).all().get(10,TimeUnit.SECONDS).getValue(resource)
-                require(config.get("min.insync.replicas").value().toInt()>=minOf(2,replication)) {"Calcify topic min ISR too small: $name"}
-                require("compact" !in config.get("cleanup.policy").value().split(',')) {"Calcify source/output history must not compact: $name"}
+                if(name==settings.outputTopic || name==changelog) require((config.get("max.message.bytes")?.value()?.toLongOrNull() ?: 0)>=settings.maxTargetBytes.toLong()+1024) {"Calcify managed topic byte cap too small: $name"}
+                try {
+                    val values=config.entries().associate {it.name() to it.value()}
+                    if(name==changelog) ResolverTopicDurability.validateAcknowledgement(values,broker,replication,true)
+                    else ResolverTopicDurability.validate(values,broker,replication,name==settings.outputTopic)
+                } catch(ex:IllegalArgumentException) {throw IllegalArgumentException("Calcify topic $name: ${ex.message}",ex)}
             }
         }
     }

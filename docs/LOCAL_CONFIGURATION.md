@@ -115,5 +115,5 @@ first so registered generation binds source topic UUID, then start
 `calcify-resolver`. It publishes Protobuf `REEF_MATCH_CONTEXT_RESOLVED_V1`, using
 named `calcify-resolver-state` volume; local replication factor1 is diagnostic.
 `CALCIFY_RESOLVER_REPLICATION_FACTOR=3` requires RF3 source/verified/output and
-minimum ISR2. [Implementation and operations](work/CALCIFY_PHASE2_IMPLEMENTATION.md)
+Redpanda `write.caching=false` on canonical topics; Kafka backend instead requires minimum ISR2. Runtime validates actual settings. [Implementation and operations](work/CALCIFY_PHASE2_IMPLEMENTATION.md)
 cover memory budgets, fault disposition, source retention, health and recovery.
