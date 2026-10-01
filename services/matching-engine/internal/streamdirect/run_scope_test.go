@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dills122/reef/services/matching-engine/internal/app"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -129,5 +131,49 @@ func TestRunBatchFailedPublishRestoresSequenceAndAcceptance(t *testing.T) {
 	result := publisher.batches[0].Outcomes[0].Result
 	if result.Accepted == nil || len(result.Trades) != 1 || result.Trades[0].TradeID != "trade-buy-sell-1" {
 		t.Fatalf("retry drift: %+v", result)
+	}
+}
+
+func TestResolvedPairedSourceFixture(t *testing.T) {
+	build := func() VenueEventBatch {
+		service := app.NewService()
+		deliveries := make([]CommandDelivery, 0, 200)
+		for i := 0; i < 200; i++ {
+			side := "BUY"
+			if i%2 == 1 {
+				side = "SELL"
+			}
+			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", i)
+			deliveries = append(deliveries, newFakeDelivery("reef.cmd.v1.p00.session-1.AAPL.SubmitOrder", uint64(i+1), map[string]string{"commandId": "cmd-" + id, "orderId": id, "clientOrderId": "client-" + id, "runId": "run-a", "venueSessionId": "session-1", "instrumentId": "AAPL", "participantId": "participant-" + side, "accountId": "account-00000000-0000-4000-8000-" + side, "side": side, "orderType": "LIMIT", "quantityUnits": "1000000", "limitPrice": "4200500000000", "currency": "USD", "timeInForce": "DAY", "occurredAt": "2026-09-30T20:00:00Z"}))
+		}
+		processor := NewProcessor(service, &fakeSource{}, &fakePublisher{}, ProcessorConfig{Partition: 0, ShardID: "paired-fixture", EventStreamName: "source"})
+		batch, _, rollback, err := processor.buildBatch(deliveries, "2026-09-30T20:00:00Z")
+		if err != nil {
+			t.Fatal(err)
+		}
+		rollback.Commit()
+		return batch
+	}
+	batch := build()
+	replayed := build()
+	trades := 0
+	for _, outcome := range batch.Outcomes {
+		if outcome.Status != "accepted" || outcome.Result.AcceptedOrder == nil {
+			t.Fatalf("paired source rejection: %+v", outcome)
+		}
+		trades += len(outcome.Result.Trades)
+	}
+	if trades != 100 || !reflect.DeepEqual(batch.Outcomes, replayed.Outcomes) || batch.PayloadChecksum != replayed.PayloadChecksum {
+		t.Fatal("paired fixture count/replay drift")
+	}
+	if path := os.Getenv("CALCIFY_PAIRED_FIXTURE"); path != "" {
+		file, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		if err := json.NewEncoder(file).Encode(batch); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
