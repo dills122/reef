@@ -1,0 +1,176 @@
+{"mode":"init","prefix":"p2-4cf80838-commit","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-commit","args":[1,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-commit","args":[130],"code":0}
+{"result":{"outputHash":"d47aeb9478f912489efa75a808ede0196f061e6a48e50f6ed00c7823f89ebc97","records":130,"unique":130,"duplicates":0,"fullFactParity":true,"expected":130,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-commit","args":[2,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-commit","args":[260],"code":0}
+{"result":{"outputHash":"d47aeb9478f912489efa75a808ede0196f061e6a48e50f6ed00c7823f89ebc97","records":130,"unique":130,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-commit","args":[260],"code":0}
+{"result":{"outputHash":"3628ea71520d39377b2bf611c1812e4f5c2735b7f9e4ad85a3a9a2dafff744aa","records":260,"unique":260,"duplicates":0,"fullFactParity":true,"expected":260,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-4cf80838-state","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-state","args":[1,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-state","args":[0],"code":0}
+{"result":{"outputHash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","records":0,"unique":0,"duplicates":0,"fullFactParity":true,"expected":0,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-state","args":[2,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-state","args":[260],"code":0}
+{"result":{"outputHash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","records":0,"unique":0,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-state","args":[260],"code":0}
+{"result":{"outputHash":"ef8bb1c3d2f1e4e83f8f45ad1c5626564c164d4408960cc4967490ab3f52bace","records":2,"unique":2,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-state","args":[260],"code":0}
+{"result":{"outputHash":"73b8514e8a253eca6f295e210e902009d85424e28099080907b8c713aec3bf4d","records":260,"unique":260,"duplicates":0,"fullFactParity":true,"expected":260,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-4cf80838-forward","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-forward","args":[1,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-forward","args":[0],"code":0}
+{"result":{"outputHash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","records":0,"unique":0,"duplicates":0,"fullFactParity":true,"expected":0,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-forward","args":[2,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-forward","args":[260],"code":0}
+{"result":{"outputHash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","records":0,"unique":0,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-forward","args":[260],"code":0}
+{"result":{"outputHash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","records":0,"unique":0,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-forward","args":[260],"code":0}
+{"result":{"outputHash":"4f257b7152a0a33c20092b7fb8a4ab6fdd257f814425226d4ccd20111929da8f","records":158,"unique":158,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-forward","args":[260],"code":0}
+{"result":{"outputHash":"85d15b5f513be4c31792ffe1a12a6a4a2e159429e3b564bb21ca3a15f6b7b3a9","records":260,"unique":260,"duplicates":0,"fullFactParity":true,"expected":260,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-4cf80838-disk-loss","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-disk-loss","args":[1,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-disk-loss","args":[130],"code":0}
+{"result":{"outputHash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","records":0,"unique":0,"duplicates":0,"fullFactParity":true,"expected":130,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-disk-loss","args":[130],"code":0}
+{"result":{"outputHash":"adbf7bb7f6ec326a0f44fa6311ece2ab214134e35d42a77f15316672266bab71","records":130,"unique":130,"duplicates":0,"fullFactParity":true,"expected":130,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-disk-loss","args":[130],"code":0}
+{"result":{"outputHash":"adbf7bb7f6ec326a0f44fa6311ece2ab214134e35d42a77f15316672266bab71","records":130,"unique":130,"duplicates":0,"fullFactParity":true,"expected":130,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"seed","prefix":"p2-4cf80838-disk-loss","args":[2,0],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-disk-loss","args":[260],"code":0}
+{"result":{"outputHash":"adbf7bb7f6ec326a0f44fa6311ece2ab214134e35d42a77f15316672266bab71","records":130,"unique":130,"duplicates":0,"fullFactParity":true,"expected":260,"pass":false}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"observe","prefix":"p2-4cf80838-disk-loss","args":[260],"code":0}
+{"result":{"outputHash":"1f98435a1f9444313bbc0875ac9ff9de44834ca4e4055e8cdc0030cfd4705bf5","records":260,"unique":260,"duplicates":0,"fullFactParity":true,"expected":260,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-4cf80838-isolation","args":[],"code":1}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+Exception in thread "main" java.util.concurrent.TimeoutException
+	at java.base/java.util.concurrent.CompletableFuture.timedGet(CompletableFuture.java:1960)
+	at java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:2095)
+	at org.apache.kafka.common.internals.KafkaFutureImpl.get(KafkaFutureImpl.java:173)
+	at com.reef.platform.calcify.CalcifyResolverBrokerProbe.main(CalcifyResolverBrokerProbe.kt:34)
+
+["compose","-p","reef-calcify-resolver-test","-f","/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/calcify-resolver/broker.compose.yml","start","rp0"]
+ Container reef-calcify-resolver-test-rp0-1 Starting 
+ Container reef-calcify-resolver-test-rp0-1 Started 
+

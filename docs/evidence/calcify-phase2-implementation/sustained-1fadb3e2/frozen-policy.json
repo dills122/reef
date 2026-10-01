@@ -1,0 +1,16 @@
+{
+  "runId": "1fadb3e2",
+  "policy": {
+    "durationSeconds": 300,
+    "offeredTradesPerSecond": 11000,
+    "targetDurableRate": 10000,
+    "maxEndGap": 20000,
+    "maxDrainSeconds": 90,
+    "requiredExactParity": true
+  },
+  "hashes": {
+    "calcify/CalcifyResolverProcessor.class": "021e22658b4ac1fc55f20c6a7cd273cd99a093dbbd5a00f7613cd80cb0ceaf4d",
+    "api/JsonCodecKt.class": "17bdee9b20e9552b573d4b603ea273d192fd74b67764ed28e2a6bf3467b25cf2"
+  },
+  "scope": "Production resolver stage, RF3/fsync, 2 threads/partitions, 128KiB/LZ4 batches, bounded8MiB state cache, 1MiB test segments; paired canonical source injected; no HTTP capacity claim"
+}

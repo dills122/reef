@@ -1,0 +1,72 @@
+{"mode":"init","prefix":"p2-cap-0ccfefa6-hot","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"paired-seed","prefix":"p2-cap-0ccfefa6-hot","args":[200,"hot"],"code":0}
+{"waves":200,"trades":20000,"bytes":74309474,"elapsedMs":3230}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"measure","prefix":"p2-cap-0ccfefa6-hot","args":[20000,120000],"code":0}
+{"window":{"elapsedMs":5027,"records":14311,"rate":2846.737093455767}}
+{"result":{"expected":20000,"records":20000,"unique":20000,"duplicates":0,"identityChecks":true,"outputBytes":41431800,"elapsedMs":6365,"activeMs":4478,"durableRate":4466.211102876775,"pass":true,"windows":[{"elapsedMs":5027,"records":14311,"rate":2846.737093455767}]}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"paired-oracle","prefix":"p2-cap-0ccfefa6-hot","args":[20000],"code":0}
+{"result":{"records":20000,"expected":20000,"fullFactParity":true,"orderedUnique":true,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-cap-0ccfefa6-spread","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"paired-seed","prefix":"p2-cap-0ccfefa6-spread","args":[200,"spread"],"code":0}
+{"waves":200,"trades":20000,"bytes":74310074,"elapsedMs":2698}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"measure","prefix":"p2-cap-0ccfefa6-spread","args":[20000,120000],"code":0}
+{"window":{"elapsedMs":5060,"records":19179,"rate":3789.60974139285}}
+{"result":{"expected":20000,"records":20000,"unique":20000,"duplicates":0,"identityChecks":true,"outputBytes":41662200,"elapsedMs":5466,"activeMs":3442,"durableRate":5810.501742920717,"pass":true,"windows":[{"elapsedMs":5060,"records":19179,"rate":3789.60974139285}]}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"paired-oracle","prefix":"p2-cap-0ccfefa6-spread","args":[20000],"code":0}
+{"result":{"records":20000,"expected":20000,"fullFactParity":true,"orderedUnique":true,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-cap-0ccfefa6-skew","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"paired-seed","prefix":"p2-cap-0ccfefa6-skew","args":[200,"skew"],"code":0}
+{"waves":200,"trades":20000,"bytes":74309674,"elapsedMs":3039}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"measure","prefix":"p2-cap-0ccfefa6-skew","args":[20000,120000],"code":0}
+{"window":{"elapsedMs":5037,"records":4538,"rate":900.8719577794689}}
+{"result":{"expected":20000,"records":20000,"unique":20000,"duplicates":0,"identityChecks":true,"outputBytes":41499000,"elapsedMs":8331,"activeMs":4394,"durableRate":4551.192840404581,"pass":true,"windows":[{"elapsedMs":5037,"records":4538,"rate":900.8719577794689}]}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"paired-oracle","prefix":"p2-cap-0ccfefa6-skew","args":[20000],"code":0}
+{"result":{"records":20000,"expected":20000,"fullFactParity":true,"orderedUnique":true,"pass":true}}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+

@@ -1,0 +1,24 @@
+[0.275s][info][jfr,startup] Started recording 1.
+[0.275s][info][jfr,startup] 
+[0.275s][info][jfr,startup] Use jcmd 11719 JFR.dump name=1 to copy recording data to file.
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+STATE CREATED -> REBALANCING
+STATE REBALANCING -> RUNNING
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":218,"stagedInputOffset":21808,"resolvedCount":21809,"pendingCount":0,"indexedCount":43800,"decodedCount":219,"outputBytes":45210860,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":456,"stagedInputOffset":45668,"resolvedCount":45669,"pendingCount":0,"indexedCount":91400,"decodedCount":457,"outputBytes":95055307,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":655,"stagedInputOffset":65575,"resolvedCount":65576,"pendingCount":0,"indexedCount":131200,"decodedCount":656,"outputBytes":136641840,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":883,"stagedInputOffset":88323,"resolvedCount":88324,"pendingCount":0,"indexedCount":176800,"decodedCount":884,"outputBytes":184163340,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":999,"stagedInputOffset":99999,"resolvedCount":100000,"pendingCount":0,"indexedCount":200000,"decodedCount":1000,"outputBytes":208555000,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":999,"stagedInputOffset":99999,"resolvedCount":100000,"pendingCount":0,"indexedCount":200000,"decodedCount":1000,"outputBytes":208555000,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+STATE RUNNING -> PENDING_SHUTDOWN
+{"partition":1,"stats":{}}
+{"partition":0,"stats":{}}
+STATE PENDING_SHUTDOWN -> NOT_RUNNING

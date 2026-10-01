@@ -1,0 +1,32 @@
+[
+  {
+    "path": "scripts/dev/calcify-full-path-smoke.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "scripts/dev/calcify-resolver/broker-check.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "scripts/dev/calcify-resolver/capacity-check.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "scripts/dev/calcify-resolver/recovery-check.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "scripts/dev/calcify-resolver/sustained-check.mjs",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "scripts/dev/calcify-resolver/broker.compose.yml",
+    "exitCode": 0,
+    "output": ""
+  }
+]

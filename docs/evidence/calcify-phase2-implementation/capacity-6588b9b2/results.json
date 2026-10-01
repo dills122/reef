@@ -1,0 +1,403 @@
+{
+  "runId": "6588b9b2",
+  "scope": "Resolver-stage short backlog diagnostic; Redpanda RF3/fsync, 2 partitions/threads, 1MiB probe segments, full paired matcher fixture; no HTTP intake, no sustained qualification",
+  "waves": 200,
+  "results": [
+    {
+      "shape": "hot",
+      "seed": {
+        "waves": 200,
+        "trades": 20000,
+        "bytes": 74309474,
+        "elapsedMs": 2349
+      },
+      "measured": {
+        "expected": 20000,
+        "records": 18412,
+        "unique": 18412,
+        "duplicates": 0,
+        "identityChecks": true,
+        "outputBytes": 38114388,
+        "elapsedMs": 120002,
+        "activeMs": 118141,
+        "durableRate": 155.8468579720847,
+        "pass": false,
+        "windows": [
+          {
+            "elapsedMs": 5003,
+            "records": 434,
+            "rate": 86.74394677289573
+          },
+          {
+            "elapsedMs": 10004,
+            "records": 1203,
+            "rate": 153.77101800738106
+          },
+          {
+            "elapsedMs": 15005,
+            "records": 1979,
+            "rate": 155.1630983361382
+          },
+          {
+            "elapsedMs": 20007,
+            "records": 2768,
+            "rate": 157.740770990538
+          },
+          {
+            "elapsedMs": 25014,
+            "records": 3539,
+            "rate": 153.9733870808109
+          },
+          {
+            "elapsedMs": 30019,
+            "records": 4318,
+            "rate": 155.66085348664927
+          },
+          {
+            "elapsedMs": 35021,
+            "records": 5084,
+            "rate": 153.11741483612187
+          },
+          {
+            "elapsedMs": 40038,
+            "records": 5870,
+            "rate": 156.69106610109867
+          },
+          {
+            "elapsedMs": 45041,
+            "records": 6671,
+            "rate": 160.0799707252944
+          },
+          {
+            "elapsedMs": 50047,
+            "records": 7455,
+            "rate": 156.60561328251308
+          },
+          {
+            "elapsedMs": 55053,
+            "records": 8230,
+            "rate": 154.84270690725594
+          },
+          {
+            "elapsedMs": 60054,
+            "records": 9039,
+            "rate": 161.76567600886113
+          },
+          {
+            "elapsedMs": 65057,
+            "records": 9803,
+            "rate": 152.6884407254121
+          },
+          {
+            "elapsedMs": 70061,
+            "records": 10594,
+            "rate": 158.08110590398454
+          },
+          {
+            "elapsedMs": 75065,
+            "records": 11381,
+            "rate": 157.26945323754043
+          },
+          {
+            "elapsedMs": 80069,
+            "records": 12156,
+            "rate": 154.89031055432318
+          },
+          {
+            "elapsedMs": 85071,
+            "records": 12938,
+            "rate": 156.33662894745615
+          },
+          {
+            "elapsedMs": 90073,
+            "records": 13738,
+            "rate": 159.9244996437182
+          },
+          {
+            "elapsedMs": 95076,
+            "records": 14520,
+            "rate": 156.30552762613632
+          },
+          {
+            "elapsedMs": 100081,
+            "records": 15325,
+            "rate": 160.845739574526
+          },
+          {
+            "elapsedMs": 105085,
+            "records": 16057,
+            "rate": 146.27800534302355
+          },
+          {
+            "elapsedMs": 110086,
+            "records": 16854,
+            "rate": 159.37643090339344
+          },
+          {
+            "elapsedMs": 115089,
+            "records": 17619,
+            "rate": 152.91112423181835
+          }
+        ]
+      },
+      "exact": {
+        "outputHash": "00521dd581fdc8482cba1b5abb7da00a9b3d1f92ed288b6e8bacd74971ab04fc",
+        "records": 18917,
+        "unique": 18917,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 20000,
+        "pass": false
+      }
+    },
+    {
+      "shape": "spread",
+      "seed": {
+        "waves": 200,
+        "trades": 20000,
+        "bytes": 74310074,
+        "elapsedMs": 3133
+      },
+      "measured": {
+        "expected": 20000,
+        "records": 20000,
+        "unique": 20000,
+        "duplicates": 0,
+        "identityChecks": true,
+        "outputBytes": 41662200,
+        "elapsedMs": 72547,
+        "activeMs": 70517,
+        "durableRate": 283.6169262197097,
+        "pass": true,
+        "windows": [
+          {
+            "elapsedMs": 5016,
+            "records": 799,
+            "rate": 159.28972333578
+          },
+          {
+            "elapsedMs": 10021,
+            "records": 2245,
+            "rate": 288.9081377765147
+          },
+          {
+            "elapsedMs": 15025,
+            "records": 3698,
+            "rate": 290.3671980989242
+          },
+          {
+            "elapsedMs": 20027,
+            "records": 5145,
+            "rate": 289.27453440256625
+          },
+          {
+            "elapsedMs": 25030,
+            "records": 6471,
+            "rate": 265.0337840623253
+          },
+          {
+            "elapsedMs": 30031,
+            "records": 7948,
+            "rate": 295.35651613691175
+          },
+          {
+            "elapsedMs": 35031,
+            "records": 9444,
+            "rate": 299.1690285263218
+          },
+          {
+            "elapsedMs": 40037,
+            "records": 10788,
+            "rate": 268.504019051765
+          },
+          {
+            "elapsedMs": 45038,
+            "records": 12260,
+            "rate": 294.34159526895877
+          },
+          {
+            "elapsedMs": 50040,
+            "records": 13773,
+            "rate": 302.47836842691464
+          },
+          {
+            "elapsedMs": 55042,
+            "records": 15291,
+            "rate": 303.46091117974026
+          },
+          {
+            "elapsedMs": 60048,
+            "records": 16783,
+            "rate": 298.0624418405036
+          },
+          {
+            "elapsedMs": 65049,
+            "records": 18145,
+            "rate": 272.30275387902094
+          },
+          {
+            "elapsedMs": 70050,
+            "records": 19455,
+            "rate": 261.98690065496726
+          }
+        ]
+      },
+      "exact": {
+        "outputHash": "bef5ddb1fac2c41fdd6ebae256996a80b9c54d1be4ec62de081e8c074f36c1ee",
+        "records": 20000,
+        "unique": 20000,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 20000,
+        "pass": true
+      }
+    },
+    {
+      "shape": "skew",
+      "seed": {
+        "waves": 200,
+        "trades": 20000,
+        "bytes": 74309674,
+        "elapsedMs": 2979
+      },
+      "measured": {
+        "expected": 20000,
+        "records": 19322,
+        "unique": 19322,
+        "duplicates": 0,
+        "identityChecks": true,
+        "outputBytes": 40080570,
+        "elapsedMs": 120005,
+        "activeMs": 116195,
+        "durableRate": 166.2890947592904,
+        "pass": false,
+        "windows": [
+          {
+            "elapsedMs": 5001,
+            "records": 295,
+            "rate": 58.979398979567506
+          },
+          {
+            "elapsedMs": 10004,
+            "records": 1646,
+            "rate": 270.0634829093893
+          },
+          {
+            "elapsedMs": 15006,
+            "records": 3032,
+            "rate": 277.09381305108155
+          },
+          {
+            "elapsedMs": 20006,
+            "records": 4216,
+            "rate": 236.77389368932003
+          },
+          {
+            "elapsedMs": 25008,
+            "records": 4981,
+            "rate": 152.95096138279473
+          },
+          {
+            "elapsedMs": 30011,
+            "records": 5685,
+            "rate": 140.72071912889683
+          },
+          {
+            "elapsedMs": 35015,
+            "records": 6358,
+            "rate": 134.4955216192814
+          },
+          {
+            "elapsedMs": 40016,
+            "records": 7025,
+            "rate": 133.35458055004312
+          },
+          {
+            "elapsedMs": 45017,
+            "records": 7825,
+            "rate": 159.97414552251274
+          },
+          {
+            "elapsedMs": 50020,
+            "records": 8606,
+            "rate": 156.1210014618439
+          },
+          {
+            "elapsedMs": 55020,
+            "records": 9374,
+            "rate": 153.59086134375005
+          },
+          {
+            "elapsedMs": 60024,
+            "records": 10160,
+            "rate": 157.08162721277313
+          },
+          {
+            "elapsedMs": 65025,
+            "records": 10896,
+            "rate": 147.15302383987932
+          },
+          {
+            "elapsedMs": 70025,
+            "records": 11662,
+            "rate": 153.19878464340167
+          },
+          {
+            "elapsedMs": 75026,
+            "records": 12451,
+            "rate": 157.76411128356725
+          },
+          {
+            "elapsedMs": 80028,
+            "records": 13182,
+            "rate": 146.16135005725576
+          },
+          {
+            "elapsedMs": 85028,
+            "records": 13957,
+            "rate": 154.97942908444344
+          },
+          {
+            "elapsedMs": 90029,
+            "records": 14737,
+            "rate": 155.9896071924208
+          },
+          {
+            "elapsedMs": 95033,
+            "records": 15516,
+            "rate": 155.6594784058691
+          },
+          {
+            "elapsedMs": 100037,
+            "records": 16266,
+            "rate": 149.90181928510864
+          },
+          {
+            "elapsedMs": 105039,
+            "records": 17003,
+            "rate": 147.34172022023733
+          },
+          {
+            "elapsedMs": 110040,
+            "records": 17756,
+            "rate": 150.5515826110323
+          },
+          {
+            "elapsedMs": 115042,
+            "records": 18542,
+            "rate": 157.1369487992943
+          }
+        ]
+      },
+      "exact": {
+        "outputHash": "e11599cc559ebc671e0c8848f944dbc8e82f17088988f93027dd44ccf6ec4add",
+        "records": 19844,
+        "unique": 19844,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 20000,
+        "pass": false
+      }
+    }
+  ]
+}

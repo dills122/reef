@@ -1,0 +1,182 @@
+{
+  "runId": "a9bc0494",
+  "scope": "Production resolver Redpanda RF3/write.caching=false; two partitions, small full-fact fixture; synthetic producer source/links",
+  "results": [
+    {
+      "boundary": "commit",
+      "before": {
+        "outputHash": "0b69121d08bd8079ab363b930da5aec10f89c698117ce479b6a616c2edc1eecf",
+        "records": 130,
+        "unique": 130,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 130,
+        "pass": true
+      },
+      "after": {
+        "outputHash": "eb26baedcbae13954b8e7e5186e01b011037c8be745c6bae312616173b624108",
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 6910
+    },
+    {
+      "boundary": "state",
+      "before": {
+        "outputHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "records": 0,
+        "unique": 0,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 0,
+        "pass": true
+      },
+      "after": {
+        "outputHash": "694ab762f6f411952bcae51f7a648a3d9080754fb3fc5ab9091cbd44a360aa52",
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 11488
+    },
+    {
+      "boundary": "forward",
+      "before": {
+        "outputHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "records": 0,
+        "unique": 0,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 0,
+        "pass": true
+      },
+      "after": {
+        "outputHash": "9267d693de4d7896e7999d01232b14b81e3a6c25f26b18662e23dc791b512a8d",
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 9217
+    },
+    {
+      "boundary": "disk-loss",
+      "before": {
+        "outputHash": "913942d2ce83de067160ef5a94c2ffe7ad5acc08beb7ae02b915e842fd57ae30",
+        "records": 130,
+        "unique": 130,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 130,
+        "pass": true
+      },
+      "after": {
+        "outputHash": "2d929940d434a2c993b08707301608a8ba5444c13d429abd2c29b8c467fafa33",
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 10314
+    },
+    {
+      "boundary": "poison-rebalance-promotion",
+      "isolated": {
+        "outputHash": "859921bc6b810d16980227ce0fe4c0e621377355eaeb825b16660c9ceaf67488",
+        "records": 390,
+        "unique": 390,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 390,
+        "pass": true
+      },
+      "promoted": {
+        "outputHash": "7a237ee416cb200f2b278ce7e65b2afd59a3655172607a2964f8c0e85156a2a0",
+        "records": 520,
+        "unique": 520,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 520,
+        "pass": true
+      }
+    },
+    {
+      "boundary": "broker-loss",
+      "after": {
+        "outputHash": "3e94cb7e40acf4fdc434ebceb7955d0cfb3a413888c43d3cd04eef81242c71f0",
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      }
+    },
+    {
+      "boundary": "retention-loss",
+      "after": {
+        "outputHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "records": 0,
+        "unique": 0,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 0,
+        "pass": true
+      }
+    },
+    {
+      "boundary": "live-and-restored-topic-recreation",
+      "after": {
+        "outputHash": "f93513fd886e19058c0c73e0da0b3085b8f52e3fed98398264298c7259c72e8a",
+        "records": 130,
+        "unique": 130,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 130,
+        "pass": true
+      },
+      "restored": {
+        "outputHash": "f93513fd886e19058c0c73e0da0b3085b8f52e3fed98398264298c7259c72e8a",
+        "records": 130,
+        "unique": 130,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 130,
+        "pass": true
+      }
+    },
+    {
+      "boundary": "expired-owner-resumes",
+      "after": {
+        "outputHash": "2a4fd688e803e8af24105f92c33a55e27cbbb925dac4f11e2131d4d4e351de56",
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "resumed": {
+        "outputHash": "4a98d84c8ae005be04af9fa732f000413f7360df30789876991a03c3b50fcae3",
+        "records": 390,
+        "unique": 390,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 390,
+        "pass": true
+      }
+    }
+  ],
+  "pass": true
+}

@@ -1,0 +1,11 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+STATE CREATED -> REBALANCING
+STATE REBALANCING -> RUNNING
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":99,"stagedInputOffset":9999,"resolvedCount":10000,"pendingCount":0,"indexedCount":20000,"decodedCount":100,"outputBytes":20791100,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":99,"stagedInputOffset":9999,"resolvedCount":10000,"pendingCount":0,"indexedCount":20000,"decodedCount":100,"outputBytes":20871100,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+STATE RUNNING -> PENDING_SHUTDOWN
+{"partition":0,"stats":{}}
+{"partition":1,"stats":{}}
+STATE PENDING_SHUTDOWN -> NOT_RUNNING

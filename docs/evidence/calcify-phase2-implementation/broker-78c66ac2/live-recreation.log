@@ -1,0 +1,36 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+STATE CREATED -> REBALANCING
+STATE REBALANCING -> RUNNING
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":4,"stagedInputOffset":129,"resolvedCount":130,"pendingCount":0,"indexedCount":131,"decodedCount":5,"outputBytes":167275,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":-1,"stagedInputOffset":-1,"resolvedCount":0,"pendingCount":0,"indexedCount":0,"decodedCount":0,"outputBytes":0,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+org.apache.kafka.streams.errors.StreamsException: stream-thread [p2-78c66ac2-recreation-app-4332cbbb-2c4c-440e-8b23-34ffbcf86890-StreamThread-1] task [0_0] Exception caught while punctuating processor 'resolve'
+	at org.apache.kafka.streams.processor.internals.StreamTask.createStreamsException(StreamTask.java:1011)
+	at org.apache.kafka.streams.processor.internals.StreamTask.punctuate(StreamTask.java:1001)
+	at org.apache.kafka.streams.processor.internals.PunctuationQueue.maybePunctuate(PunctuationQueue.java:54)
+	at org.apache.kafka.streams.processor.internals.StreamTask.maybePunctuateSystemTime(StreamTask.java:1266)
+	at org.apache.kafka.streams.processor.internals.TaskExecutor.punctuate(TaskExecutor.java:268)
+	at org.apache.kafka.streams.processor.internals.TaskManager.punctuate(TaskManager.java:1947)
+	at org.apache.kafka.streams.processor.internals.StreamThread.runOnceWithoutProcessingThreads(StreamThread.java:1260)
+	at org.apache.kafka.streams.processor.internals.StreamThread.runLoop(StreamThread.java:956)
+	at org.apache.kafka.streams.processor.internals.StreamThread.run(StreamThread.java:916)
+Caused by: java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.UnknownTopicOrPartitionException: This server does not host this topic-partition.
+	at java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:396)
+	at java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:2096)
+	at org.apache.kafka.common.internals.KafkaFutureImpl.get(KafkaFutureImpl.java:173)
+	at com.reef.platform.calcify.BrokerVenueSourceReader.validateIdentity(BrokerVenueSourceReader.kt:36)
+	at com.reef.platform.calcify.CalcifyResolverBrokerProbe$main$topology$1$1.validateIdentity(CalcifyResolverBrokerProbe.kt:67)
+	at com.reef.platform.calcify.CalcifyResolverProcessor.drain(CalcifyResolverProcessor.kt:65)
+	at com.reef.platform.calcify.CalcifyResolverProcessor.init$lambda$0(CalcifyResolverProcessor.kt:36)
+	at org.apache.kafka.streams.processor.internals.StreamTask.lambda$punctuate$0(StreamTask.java:935)
+	at org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency(StreamsMetricsImpl.java:955)
+	at org.apache.kafka.streams.processor.internals.StreamTask.punctuate(StreamTask.java:935)
+	... 7 more
+Caused by: org.apache.kafka.common.errors.UnknownTopicOrPartitionException: This server does not host this topic-partition.
+STATE RUNNING -> PENDING_ERROR
+{"partition":0,"stats":{}}
+{"partition":1,"stats":{}}
+STATE PENDING_ERROR -> ERROR
+Exception in thread "main" java.lang.IllegalStateException: Check failed.
+	at com.reef.platform.calcify.CalcifyResolverBrokerProbe.main(CalcifyResolverBrokerProbe.kt:91)
