@@ -97,4 +97,11 @@ class JsonCodecTest {
         val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(tokens.toByteArray(Charsets.UTF_8)))
         assertEquals(expected, JsonCodec.parseObject(JsonCodec.writeObject(*fields.toTypedArray())).semanticSha256())
     }
+    @Test
+    fun canonicalChecksumRetainsEveryJsonType() {
+        val tokens = "o1:1s1:xa1:8n0:b1:1b1:0d1:2d2:-1d3:0.5s2:éo1:1s1:zd1:0".toByteArray(Charsets.UTF_8)
+        val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(tokens))
+        assertEquals(expected, JsonCodec.parseObject("""{"x":[null,true,false,2,-1,0.5,"é",{"z":0}]}""").semanticSha256())
+    }
+
 }

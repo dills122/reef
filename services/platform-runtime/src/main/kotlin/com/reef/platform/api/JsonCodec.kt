@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.JsonNodeType
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -188,16 +189,16 @@ private fun updateCanonicalDigest(
     fieldTokens: MutableMap<String, ByteArray>,
     isRoot: Boolean
 ) {
-    when {
-        node.isNull -> updateCanonicalToken(digest, 'n', byteArrayOf())
-        node.isBoolean -> updateCanonicalToken(digest, 'b', if (node.booleanValue()) byteArrayOf('1'.code.toByte()) else byteArrayOf('0'.code.toByte()))
-        node.isTextual -> updateCanonicalToken(digest, 's', node.textValue().toByteArray(Charsets.UTF_8))
-        node.isNumber -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
-        node.isArray -> {
+    when (node.nodeType) {
+        JsonNodeType.NULL -> updateCanonicalToken(digest, 'n', byteArrayOf())
+        JsonNodeType.BOOLEAN -> updateCanonicalToken(digest, 'b', if (node.booleanValue()) byteArrayOf('1'.code.toByte()) else byteArrayOf('0'.code.toByte()))
+        JsonNodeType.STRING -> updateCanonicalToken(digest, 's', node.textValue().toByteArray(Charsets.UTF_8))
+        JsonNodeType.NUMBER -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
+        JsonNodeType.ARRAY -> {
             updateCanonicalToken(digest, 'a', node.size().toString().toByteArray(Charsets.UTF_8))
             node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, fieldTokens, isRoot = false) }
         }
-        node.isObject -> {
+        JsonNodeType.OBJECT -> {
             val fields = ArrayList<Map.Entry<String, JsonNode>>(node.size())
             node.fields().forEachRemaining { entry ->
                 if (!isRoot || entry.key !in excludedRootFields) fields.add(entry)
