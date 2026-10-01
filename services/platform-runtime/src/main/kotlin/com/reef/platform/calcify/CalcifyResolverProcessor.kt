@@ -123,8 +123,7 @@ internal class CalcifyResolverProcessor(
 
     private fun ingest(entry:VenueSourceEntry) {
         require(entry.payload.size<=settings.maxSourceBytes) {"source record budget exceeded"}
-        val payload = try { Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(entry.payload)).toString() } catch(ex:java.nio.charset.CharacterCodingException) {throw IllegalArgumentException("invalid source UTF-8",ex)}
-        val batch=MatchContextResolver.parseBatch(payload,settings.sourceTopic,settings.sourceTopicId,settings.generation,partition,entry.offset)
+        val batch=MatchContextResolver.parseBatch(entry.payload,settings.sourceTopic,settings.sourceTopicId,settings.generation,partition,entry.offset)
         for(row in batch.acceptedOrders) {
             // Read managed state for existence: cache cannot decide writes after transaction rollback.
             val key=orderKey(row.fact.orderId);val prior=store.get(key)?.let(AcceptedOrderSourceV1::parseFrom)

@@ -104,4 +104,23 @@ class JsonCodecTest {
         assertEquals(expected, JsonCodec.parseObject("""{"x":[null,true,false,2,-1,0.5,"é",{"z":0}]}""").semanticSha256())
     }
 
+    @Test
+    fun byteParserPreservesStrictUtf8AcrossValidationWindows() {
+        val body = JsonCodec.writeObject("x" to ("a".repeat(8191) + "é😀" + "b".repeat(8192)))
+        assertEquals(JsonCodec.parseObject(body).semanticSha256(), JsonCodec.parseObject(body.toByteArray()).semanticSha256())
+        for (invalid in listOf(byteArrayOf(0xc0.toByte(),0xaf.toByte()), byteArrayOf(0xed.toByte(),0xa0.toByte(),0x80.toByte()), byteArrayOf(0x80.toByte()), byteArrayOf(0xf0.toByte(),0x9f.toByte()))) {
+            assertFailsWith<IllegalArgumentException> { JsonCodec.parseObject("{\"x\":\"".toByteArray() + invalid + "\"}".toByteArray()) }
+        }
+        assertFailsWith<IllegalArgumentException> { JsonCodec.parseObject("[]".toByteArray()) }
+    }
+
+    @Test
+    fun byteParserRejectsEncodingAutodetectionAndBom() {
+        val body = "{\"x\":1}"
+        for (encoding in listOf("UTF-16BE","UTF-16LE","UTF-32BE","UTF-32LE")) {
+            assertFailsWith<IllegalArgumentException> { JsonCodec.parseObject(body.toByteArray(java.nio.charset.Charset.forName(encoding))) }
+        }
+        assertFailsWith<IllegalArgumentException> { JsonCodec.parseObject(("\uFEFF" + body).toByteArray()) }
+    }
+
 }

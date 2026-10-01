@@ -58,4 +58,10 @@ class MatchContextResolverTest {
         val corrected=altered.replace(com.reef.platform.api.JsonCodec.parseObject(original).string("payloadChecksum"),com.reef.platform.api.JsonCodec.parseObject(altered).semanticSha256(setOf("createdAt","workFinishedAt","timingChecksum","payloadChecksum","payloadChecksumAlgorithm")))
         assertFailsWith<IllegalArgumentException> { MatchContextResolver.parseBatch(corrected,"source","uuid",1,0,0) }
     }
+    @Test fun byteAndStringSourcePathsYieldIdenticalFullFacts() {
+        Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines().forEachIndexed { offset, body ->
+            assertEquals(MatchContextResolver.parseBatch(body,"source","uuid",1,0,offset.toLong()), MatchContextResolver.parseBatch(body.toByteArray(),"source","uuid",1,0,offset.toLong()))
+        }
+    }
+
 }

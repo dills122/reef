@@ -92,7 +92,13 @@ object CalcifySourceBatch {
     }
 
     internal fun checked(payloadJson: String, sourceTopic: String, sourcePartition: Int): JsonDocument {
-        val root = JsonCodec.parseObject(payloadJson)
+        return checked(JsonCodec.parseObject(payloadJson), sourceTopic, sourcePartition)
+    }
+
+    internal fun checked(payload: ByteArray, sourceTopic: String, sourcePartition: Int): JsonDocument =
+        checked(JsonCodec.parseObject(payload), sourceTopic, sourcePartition)
+
+    private fun checked(root: JsonDocument, sourceTopic: String, sourcePartition: Int): JsonDocument {
         require(root.strictTextField("payloadChecksumAlgorithm") == CHECKSUM_ALGORITHM) {
             "unsupported or absent venue event batch checksum"
         }

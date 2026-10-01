@@ -9,10 +9,15 @@ import java.time.OffsetDateTime
 internal object MatchContextResolver {
     data class Batch(val acceptedOrders: List<AcceptedOrderSourceV1>, val trades: List<TradeSourceV1>)
 
-    fun parseBatch(payload: String, topic: String, topicId: String, generation: Int, partition: Int, offset: Long): Batch {
+    fun parseBatch(payload: String, topic: String, topicId: String, generation: Int, partition: Int, offset: Long): Batch =
+        parseChecked(CalcifySourceBatch.checked(payload, topic, partition), topic, topicId, generation, partition, offset)
+
+    fun parseBatch(payload: ByteArray, topic: String, topicId: String, generation: Int, partition: Int, offset: Long): Batch =
+        parseChecked(CalcifySourceBatch.checked(payload, topic, partition), topic, topicId, generation, partition, offset)
+
+    private fun parseChecked(root: JsonDocument, topic: String, topicId: String, generation: Int, partition: Int, offset: Long): Batch {
         CommitmentId(generation, partition, offset, 0)
         require(topicId.isNotBlank()) { "missing source topic identity" }
-        val root = CalcifySourceBatch.checked(payload, topic, partition)
         val orders = ArrayList<AcceptedOrderSourceV1>()
         val trades = ArrayList<TradeSourceV1>()
         root.strictObjectDocuments("outcomes").forEachIndexed { ordinal, outcome ->

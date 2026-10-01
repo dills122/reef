@@ -9,7 +9,10 @@ import com.fasterxml.jackson.databind.json.JsonMapper
 import java.security.MessageDigest
 
 object JsonCodec {
-    private val mapper = JsonMapper.builder().build()
+    private val mapper = JsonMapper.builder(
+        com.fasterxml.jackson.core.JsonFactory.builder()
+            .disable(com.fasterxml.jackson.core.JsonFactory.Feature.CHARSET_DETECTION).build()
+    ).build()
 
     fun parseObject(body: String): JsonDocument {
         val root = try {
@@ -17,6 +20,32 @@ object JsonCodec {
         } catch (ex: Exception) {
             throw IllegalArgumentException("invalid json payload", ex)
         }
+        return objectDocument(root)
+    }
+
+    /** Validate UTF-8 with bounded scratch before Jackson's direct byte parser. */
+    fun parseObject(body: ByteArray): JsonDocument {
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        val input = java.nio.ByteBuffer.wrap(body)
+        val scratch = java.nio.CharBuffer.allocate(8192)
+        try {
+            do {
+                val result = decoder.decode(input, scratch, true)
+                if (result.isError) result.throwException()
+                scratch.clear()
+            } while (result.isOverflow)
+        } catch (ex: java.nio.charset.CharacterCodingException) {
+            throw IllegalArgumentException("invalid UTF-8 json payload", ex)
+        }
+        val root = try { mapper.readTree(body) } catch (ex: Exception) {
+            throw IllegalArgumentException("invalid json payload", ex)
+        }
+        return objectDocument(root)
+    }
+
+    private fun objectDocument(root: JsonNode?): JsonDocument {
         if (root == null || !root.isObject) {
             throw IllegalArgumentException("json payload must be an object")
         }
