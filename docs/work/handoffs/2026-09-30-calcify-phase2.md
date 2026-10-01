@@ -112,8 +112,8 @@ Use new full-path ID on each attempt; prior output topic byte caps can intention
 ## Delivery Metadata
 
 - Repository: `dills122/reef`; branch `codex/calcify-phase2-implementation`; base `master`.
-- Draft PR: publication pending; replace before final checkpoint.
-- Code checkpoint `d297c240`; subsequent docs/evidence/delivery commits retained in branch history.
+- Draft PR: [#433 — feat(calcify): add Phase 2 full-fact resolver and run-scoped matching](https://github.com/dills122/reef/pull/433), created and attached to current chat; open draft, merge blockers listed.
+- Code checkpoint `d297c240`; nightly docs/evidence checkpoint `8c06e25c`; final PR metadata commit follows and is retained in branch history. Remote master remains `79dab22b` at publication.
 - Dirty tracked/untracked work at final handoff: none in implementation checkout. Ignored local build outputs/JFR remain; primary checkout's unrelated `.planning/post-match-wave1/` preserved.
 - No new chat, scheduler or deployment created; branch/PR only. Resume in managed checkout above.
 - GitHub operations: use explicitly invoked `$github-keychain-auth` at `/Users/dsteele/.ai-central/templates/skills/first-party/github-keychain-auth/SKILL.md`. Request outside-sandbox execution; run `env -u GH_TOKEN -u GITHUB_TOKEN gh ...` and let Git credential helper resolve Keychain for push/fetch. Sandbox auth check is unreliable; outside-sandbox Keychain-backed access verified for `dills122`. Never extract or pass credential bytes.
