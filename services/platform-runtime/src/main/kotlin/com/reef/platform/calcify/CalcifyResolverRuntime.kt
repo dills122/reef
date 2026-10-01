@@ -64,8 +64,9 @@ internal object CalcifyResolverRuntime {
             {partition,stats->if(stats.isEmpty()) lanes.remove(partition) else {lanes[partition]=stats;println(JsonCodec.writeObject("type" to "calcify-resolver-lane","stats" to stats))}})
         val streams=KafkaStreams(topology,config,gate)
         val stopped=CountDownLatch(1)
-        streams.setUncaughtExceptionHandler {ex->System.err.println("Calcify resolver infrastructure failure: ${ex.javaClass.simpleName}: ${ex.message}");StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT}
-        streams.setStateListener {next,_->if(next==KafkaStreams.State.ERROR || next==KafkaStreams.State.NOT_RUNNING) stopped.countDown()}
+        val failed=java.util.concurrent.atomic.AtomicBoolean(false)
+        streams.setUncaughtExceptionHandler {ex->failed.set(true);System.err.println("Calcify resolver infrastructure failure: ${ex.javaClass.simpleName}: ${ex.message}");StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT}
+        streams.setStateListener {next,_->if(next==KafkaStreams.State.ERROR) failed.set(true);if(next==KafkaStreams.State.ERROR || next==KafkaStreams.State.NOT_RUNNING) stopped.countDown()}
         val health=HttpServer.create(InetSocketAddress(RuntimeEnv.string("CALCIFY_RESOLVER_HEALTH_BIND","127.0.0.1"),RuntimeEnv.int("CALCIFY_RESOLVER_HEALTH_PORT",8089,min=1)),0)
         health.createContext("/healthz") {exchange->
             val alive=streams.state()!=KafkaStreams.State.ERROR && streams.state()!=KafkaStreams.State.NOT_RUNNING
@@ -87,7 +88,7 @@ internal object CalcifyResolverRuntime {
             streams.close(Duration.ofSeconds(10));health.stop(0)
             try {Runtime.getRuntime().removeShutdownHook(shutdown)} catch(_:IllegalStateException) { }
         }
-        check(streams.state()!=KafkaStreams.State.ERROR) {"Calcify resolver terminated with infrastructure error"}
+        check(!failed.get()) {"Calcify resolver terminated with infrastructure error"}
     }
 
     private fun ensureTopics(bootstrap:String,settings:ResolverSettings,replication:Int,broker:ResolverBrokerKind,appId:String) {

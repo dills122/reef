@@ -123,4 +123,12 @@ class JsonCodecTest {
         assertFailsWith<IllegalArgumentException> { JsonCodec.parseObject(("\uFEFF" + body).toByteArray()) }
     }
 
+    @Test
+    fun canonicalChecksumIncludesShortValuesBeyondMemoBudget() {
+        val values = (0 until 130).map(Int::toString).let { it + it }
+        val tokens = "o1:1s1:xa3:260" + values.joinToString("") { "s${it.length}:$it" }
+        val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(tokens.toByteArray()))
+        assertEquals(expected, JsonCodec.parseObject(JsonCodec.writeObject("x" to values)).semanticSha256())
+    }
+
 }

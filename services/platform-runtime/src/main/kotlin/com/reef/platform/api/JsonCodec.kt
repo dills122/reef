@@ -215,17 +215,17 @@ private fun updateCanonicalDigest(
     digest: MessageDigest,
     node: JsonNode,
     excludedRootFields: Set<String>,
-    fieldTokens: MutableMap<String, ByteArray>,
+    stringTokens: MutableMap<String, ByteArray>,
     isRoot: Boolean
 ) {
     when (node.nodeType) {
         JsonNodeType.NULL -> updateCanonicalToken(digest, 'n', byteArrayOf())
         JsonNodeType.BOOLEAN -> updateCanonicalToken(digest, 'b', if (node.booleanValue()) byteArrayOf('1'.code.toByte()) else byteArrayOf('0'.code.toByte()))
-        JsonNodeType.STRING -> updateCanonicalToken(digest, 's', node.textValue().toByteArray(Charsets.UTF_8))
+        JsonNodeType.STRING -> updateCanonicalString(digest, node.textValue(), stringTokens, 32)
         JsonNodeType.NUMBER -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
         JsonNodeType.ARRAY -> {
             updateCanonicalToken(digest, 'a', node.size().toString().toByteArray(Charsets.UTF_8))
-            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, fieldTokens, isRoot = false) }
+            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, stringTokens, isRoot = false) }
         }
         JsonNodeType.OBJECT -> {
             val fields = ArrayList<Map.Entry<String, JsonNode>>(node.size())
@@ -235,20 +235,24 @@ private fun updateCanonicalDigest(
             fields.sortWith(canonicalFieldOrder)
             updateCanonicalToken(digest, 'o', fields.size.toString().toByteArray(Charsets.UTF_8))
             fields.forEach { (name, child) ->
-                val cached = fieldTokens[name]
-                if (cached != null) digest.update(cached) else {
-                    val bytes = name.toByteArray(Charsets.UTF_8)
-                    if (bytes.size <= 128 && fieldTokens.size < 128) {
-                        val token = canonicalTokenPrefixes[2][bytes.size] + bytes
-                        fieldTokens[name] = token
-                        digest.update(token)
-                    } else updateCanonicalToken(digest, 's', bytes)
-                }
-                updateCanonicalDigest(digest, child, excludedRootFields, fieldTokens, isRoot = false)
+                updateCanonicalString(digest, name, stringTokens, 128)
+                updateCanonicalDigest(digest, child, excludedRootFields, stringTokens, isRoot = false)
             }
         }
         else -> throw IllegalArgumentException("unsupported canonical checksum JSON node: ${node.nodeType}")
     }
+}
+
+// Fields and values have identical string tokens; memo is bounded per digest.
+private fun updateCanonicalString(digest: MessageDigest, text: String, tokens: MutableMap<String, ByteArray>, maxBytes: Int) {
+    val cached = if (text.length <= maxBytes) tokens[text] else null
+    if (cached != null) { digest.update(cached); return }
+    val bytes = text.toByteArray(Charsets.UTF_8)
+    if (bytes.size <= maxBytes && tokens.size < 128) {
+        val token = canonicalTokenPrefixes[2][bytes.size] + bytes
+        tokens[text] = token
+        digest.update(token)
+    } else updateCanonicalToken(digest, 's', bytes)
 }
 
 private fun updateCanonicalToken(digest: MessageDigest, kind: Char, value: ByteArray) {

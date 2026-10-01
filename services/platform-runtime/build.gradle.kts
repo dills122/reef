@@ -100,3 +100,9 @@ tasks.jacocoTestCoverageVerification {
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
 }
+
+// Test-only external process probes exercise real broker crash/recovery boundaries.
+tasks.register<Copy>("resolverProbeDependencies") {
+    from(configurations.testRuntimeClasspath)
+    into(layout.buildDirectory.dir("resolver-probe-deps"))
+}
