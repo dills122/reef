@@ -59,9 +59,21 @@ link semantics, tests, and replay-retention limits.
 
 `CALCIFY_VERIFIER_MAX_POLL_RECORDS` and `CALCIFY_RECEIPT_MAX_POLL_RECORDS`
 accept1–1000, default100, and reject malformed explicit values before startup.
-They bound verifier transaction and receipt batch sizes; extractor remains100.
+They bound verifier transaction and receipt batch sizes; extractor remains100
+source records per poll and publishes valid partition prefixes plus source offsets
+in one transaction. Zero-trade source records checkpoint without producing links.
 Larger values require measured backlog/latency and poison-prefix replay checks.
 
+
+For durable direct-ingress capacity work, use `scripts/dev/calcify-direct-bootstrap.mjs`
+and `scripts/dev/calcify-direct-capacity.mjs`; their frozen evidence and exact setup
+are recorded in [direct throughput campaign](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
+This route reuses C5 in-memory intake and direct matching controls, runs Calcify
+through managed resolved output, and omits receipt/legacy SQL settlement workers.
+Source generation/topic identity SQL remains startup/rebalance control work.
+`MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES` defaults to 1 MiB; explicit larger values
+must coordinate source topic `max.message.bytes` and consumer source-byte budgets.
+This setting changes neither command batch size nor transaction ordering.
 
 Run `make dev-smoke-calcify-full-path` for a local functional check through
 PostgreSQL-backed HTTP intake, Redpanda command log, Go matching, and all three

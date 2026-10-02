@@ -20,6 +20,7 @@ import (
 )
 
 type config struct {
+	WorkloadMode      string
 	BaseURL           string
 	InstrumentIDs     []string
 	SmokeID           string
@@ -43,6 +44,10 @@ type sample struct {
 }
 
 type report struct {
+	WorkloadMode             string   `json:"workloadMode"`
+	OrdersPerTrade           int64    `json:"ordersPerTrade"`
+	CompletedTrades          int64    `json:"completedTrades"`
+	JobAccounting            string   `json:"jobAccounting"`
 	InstrumentIDs            []string `json:"instrumentIds"`
 	SmokeID                  string   `json:"smokeId"`
 	TargetPairs              int64    `json:"targetPairs"`
@@ -96,12 +101,13 @@ func (c *counters) recordAcknowledgement(observedAt time.Time) {
 
 func main() {
 	cfg := config{}
+	flag.StringVar(&cfg.WorkloadMode, "workload-mode", "paired", "paired (BUY then SELL) or aggressor (SELL against preseeded makers)")
 	var instrumentIDs string
 	flag.StringVar(&instrumentIDs, "instrument-ids", "", "optional comma-separated instrument IDs; pairs route round-robin by absolute pair index")
 	flag.StringVar(&cfg.BaseURL, "base-url", "http://127.0.0.1:8080", "runtime URL")
 	flag.StringVar(&cfg.SmokeID, "smoke-id", "", "seeded full-path smoke ID")
 	flag.DurationVar(&cfg.Duration, "duration", 30*time.Second, "scheduled load duration")
-	flag.IntVar(&cfg.PairsPerSecond, "pairs-per-second", 0, "crossing pairs per second")
+	flag.IntVar(&cfg.PairsPerSecond, "pairs-per-second", 0, "offered trade jobs per second (legacy pairs flag; mode defines orders per job)")
 	flag.IntVar(&cfg.Workers, "workers", 256, "concurrent pair workers")
 	flag.Int64Var(&cfg.StartIndex, "start-index", 0, "first pair index; use nonoverlapping range on reused session")
 	flag.IntVar(&cfg.ReceiptGeneration, "receipt-generation", 0, "fresh Calcify generation to sample and reconcile")
@@ -113,6 +119,11 @@ func main() {
 		os.Exit(2)
 	}
 	var err error
+	cfg.WorkloadMode, _, err = workloadParameters(cfg.WorkloadMode, cfg.ReceiptGeneration)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	cfg.InstrumentIDs, err = parseInstrumentIDs(instrumentIDs, cfg.SmokeID)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -137,6 +148,11 @@ func main() {
 }
 
 func run(cfg config) report {
+	mode, ordersPerTrade, err := workloadParameters(cfg.WorkloadMode, cfg.ReceiptGeneration)
+	if err != nil {
+		return report{WorkloadMode: cfg.WorkloadMode, Failures: 1, FirstError: err.Error(), GateReasons: []string{err.Error()}}
+	}
+	cfg.WorkloadMode = mode
 	if len(cfg.InstrumentIDs) == 0 {
 		cfg.InstrumentIDs = []string{"AAPL-" + cfg.SmokeID}
 	}
@@ -272,6 +288,8 @@ func run(cfg config) report {
 	sort.Slice(collected, func(i, j int) bool { return collected[i].ElapsedMs < collected[j].ElapsedMs })
 	elapsed := acceptedAt.Sub(started)
 	result := report{
+		WorkloadMode: mode, OrdersPerTrade: ordersPerTrade, CompletedTrades: counts.completedPairs.Load(),
+		JobAccounting: "completedTrades and legacy completedPairs count fully acknowledged trade jobs; pairs fields are legacy job counters; actual completed trades require canonical source/verified/resolved reconciliation; aggressor maker seeding occurs before load window",
 		InstrumentIDs: cfg.InstrumentIDs,
 		SmokeID:       cfg.SmokeID, TargetPairs: total, StartIndex: cfg.StartIndex,
 		TargetPairsPerSecond: cfg.PairsPerSecond,
@@ -322,11 +340,18 @@ func gateReasons(result report) []string {
 	if result.Failures != 0 || result.Retries != 0 {
 		reasons = append(reasons, "request failures or retries")
 	}
-	if result.AcceptedOrdersAtDeadline*100 < result.TargetPairs*2*95 {
+	_, ordersPerTrade, modeErr := workloadParameters(result.WorkloadMode, result.ReceiptGeneration)
+	if modeErr != nil {
+		return append(reasons, modeErr.Error())
+	}
+	if result.OrdersPerTrade != 0 && result.OrdersPerTrade != ordersPerTrade {
+		reasons = append(reasons, "ordersPerTrade conflicts with workload mode")
+	}
+	if result.AcceptedOrdersAtDeadline*100 < result.TargetPairs*ordersPerTrade*95 {
 		reasons = append(reasons, "accepted intake below 95% requested rate at deadline")
 	}
 	if result.DroppedPairs*100 > result.TargetPairs*5 {
-		reasons = append(reasons, "scheduler dropped more than 5% of offered pairs")
+		reasons = append(reasons, "scheduler dropped more than 5% of offered trade jobs")
 	}
 	if result.ReceiptGeneration > 0 {
 		if result.FinalReceipts == nil || *result.FinalReceipts != result.CompletedPairs+1 {
@@ -361,7 +386,15 @@ func receiptCount(generation int) (int64, error) {
 }
 
 func submitPair(client *http.Client, cfg config, index int64, counts *counters) error {
-	for _, side := range []struct{ party, action string }{{"buyer", "BUY"}, {"seller", "SELL"}} {
+	mode, _, err := workloadParameters(cfg.WorkloadMode, cfg.ReceiptGeneration)
+	if err != nil {
+		return err
+	}
+	sides := []struct{ party, action string }{{"buyer", "BUY"}, {"seller", "SELL"}}
+	if mode == "aggressor" {
+		sides = sides[1:]
+	}
+	for _, side := range sides {
 		if err := submit(client, cfg, index, side.party, side.action, counts); err != nil {
 			return err
 		}
@@ -463,4 +496,18 @@ func instrumentForPair(cfg config, index int64) string {
 		return "AAPL-" + cfg.SmokeID
 	}
 	return cfg.InstrumentIDs[index%int64(len(cfg.InstrumentIDs))]
+}
+
+func workloadParameters(mode string, receiptGeneration int) (string, int64, error) {
+	switch mode {
+	case "", "paired":
+		return "paired", 2, nil
+	case "aggressor":
+		if receiptGeneration != 0 {
+			return "", 0, errors.New("aggressor mode requires receipt-generation=0; legacy receipt gate includes paired preflight")
+		}
+		return "aggressor", 1, nil
+	default:
+		return "", 0, fmt.Errorf("unsupported workload-mode %q; use paired or aggressor", mode)
+	}
 }

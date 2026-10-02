@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -129,6 +130,9 @@ func TestRunPacesFullCrossingPairsThroughHTTP(t *testing.T) {
 	}
 	if result.ScheduledPairs != 10 || result.DispatchedPairs != 10 || result.DroppedPairs != 0 {
 		t.Fatalf("schedule=%d dispatched=%d dropped=%d", result.ScheduledPairs, result.DispatchedPairs, result.DroppedPairs)
+	}
+	if result.WorkloadMode != "paired" || result.OrdersPerTrade != 2 || result.CompletedTrades != result.CompletedPairs || result.JobAccounting == "" {
+		t.Fatalf("paired report mode/units=%+v", result)
 	}
 	if !reflect.DeepEqual(result.InstrumentIDs, []string{"AAPL-paced-test"}) {
 		t.Fatalf("default report instruments=%v", result.InstrumentIDs)
@@ -261,5 +265,69 @@ func TestSubmitPairRoutesBothSidesRoundRobinWithoutChangingIdentity(t *testing.T
 		if order.Instrument != cfg.InstrumentIDs[index%3] || order.Side != side || order.CommandID != fmt.Sprintf("%s-load-%d-lanes-test", party, index) || order.OrderID != fmt.Sprintf("%s-load-order-%d-lanes-test", party, index) || order.RunID != "lanes-test" || order.SessionID != "session-lanes-test" {
 			t.Fatalf("order%d routing/identity=%+v", i, order)
 		}
+	}
+}
+
+func TestWorkloadModeValidatesAndGateCountsOrdersPerTrade(t *testing.T) {
+	for _, test := range []struct {
+		mode       string
+		generation int
+		orders     int64
+		valid      bool
+	}{
+		{"", 0, 2, true}, {"paired", 0, 2, true}, {"paired", 7, 2, true}, {"aggressor", 0, 1, true}, {"aggressor", 7, 0, false}, {"invalid", 0, 0, false},
+	} {
+		_, orders, err := workloadParameters(test.mode, test.generation)
+		if (err == nil) != test.valid || (test.valid && orders != test.orders) {
+			t.Fatalf("mode=%q generation=%d orders=%d err=%v", test.mode, test.generation, orders, err)
+		}
+	}
+	result := report{WorkloadMode: "aggressor", OrdersPerTrade: 1, TargetPairs: 100, AcceptedOrdersAtDeadline: 95}
+	if reasons := gateReasons(result); len(reasons) != 0 {
+		t.Fatalf("95 aggressor orders/100 tradejobs failed: %v", reasons)
+	}
+	result.AcceptedOrdersAtDeadline = 94
+	if reasons := gateReasons(result); len(reasons) != 1 {
+		t.Fatalf("94 aggressor orders failed threshold reasons=%v", reasons)
+	}
+	result.WorkloadMode = "paired"
+	result.OrdersPerTrade = 2
+	result.AcceptedOrdersAtDeadline = 190
+	if reasons := gateReasons(result); len(reasons) != 0 {
+		t.Fatalf("190 paired orders/100 tradejobs failed: %v", reasons)
+	}
+}
+
+func TestAggressorPostsOnlySellerAndClassifiesSingleAcknowledgement(t *testing.T) {
+	var count atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if body["side"] != "SELL" || body["participantId"] != "seller-mode-test" || body["instrumentId"] != "lane-b" || body["quantityUnits"] != "100" || body["commandId"] != "seller-load-7-mode-test" {
+			t.Errorf("aggressor payload=%v", body)
+		}
+		count.Add(1)
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+	deadline := time.Now().Add(time.Second)
+	var clockCalls atomic.Int64
+	counts := counters{loadDeadline: deadline, now: func() time.Time { clockCalls.Add(1); return deadline.Add(-time.Nanosecond) }}
+	cfg := config{WorkloadMode: "aggressor", BaseURL: server.URL, SmokeID: "mode-test", InstrumentIDs: []string{"lane-a", "lane-b"}}
+	if err := submitPair(server.Client(), cfg, 7, &counts); err != nil {
+		t.Fatal(err)
+	}
+	if count.Load() != 1 || counts.acceptedOrders.Load() != 1 || counts.acceptedBeforeDeadline.Load() != 1 || counts.completedPairs.Load() != 1 || clockCalls.Load() != 1 {
+		t.Fatalf("posts=%d ACKs=%d deadlineACKs=%d jobs=%d clocks=%d", count.Load(), counts.acceptedOrders.Load(), counts.acceptedBeforeDeadline.Load(), counts.completedPairs.Load(), clockCalls.Load())
+	}
+	cfg.WorkloadMode = "bad"
+	if err := submitPair(server.Client(), cfg, 8, &counts); err == nil {
+		t.Fatal("invalid mode accepted")
+	}
+	if count.Load() != 1 {
+		t.Fatal("invalid mode issued HTTP request")
 	}
 }

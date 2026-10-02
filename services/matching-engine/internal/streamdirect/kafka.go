@@ -682,6 +682,9 @@ func newKafkaClientConfig(clientID string) *sarama.Config {
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
+	// Coordinate explicit larger event records with broker/topic limits; this
+	// changes neither command batch size nor transaction/ordering guarantees.
+	config.Producer.MaxMessageBytes = envInt("MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES", config.Producer.MaxMessageBytes)
 	config.Producer.Retry.Max = envInt("STREAM_ACK_KAFKA_RETRIES", 10)
 	config.Producer.Flush.Frequency = time.Duration(envInt("STREAM_ACK_KAFKA_LINGER_MS", 1)) * time.Millisecond
 	config.Producer.Flush.Bytes = envInt("STREAM_ACK_KAFKA_BATCH_SIZE", 65536)

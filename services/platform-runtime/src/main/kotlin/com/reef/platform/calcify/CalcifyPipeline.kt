@@ -31,6 +31,12 @@ object CalcifyPipeline {
         return limit
     }
 
+    internal data class ExtractorPollPlan(
+        val outputs: List<ProducerRecord<ByteArray, ByteArray>>,
+        val offsets: Map<TopicPartition, OffsetAndMetadata>,
+        val poisoned: List<Triple<TopicPartition, Long, String?>>,
+    )
+
     internal data class VerifierPollPlan(
         val outputs: List<ProducerRecord<ByteArray, ByteArray>>,
         val offsets: Map<TopicPartition, OffsetAndMetadata>,
@@ -155,28 +161,15 @@ object CalcifyPipeline {
                         }
                         continue
                     }
-                    for (record in polled) {
-                        val partition = TopicPartition(record.topic(), record.partition())
-                        if (partition in blocked) continue
-                        val links = try {
-                            when (stage) {
-                                "extractor" -> CalcifySourceBatch.extract(
-                                    requireNotNull(record.value()).toString(Charsets.UTF_8),
-                                    config.source, config.generation, record.partition(), record.offset()
-                                ).map(CalcifyWire::commitment)
-                                else -> error("Unsupported CALCIFY_STAGE: $stage")
-                            }
-                        } catch (ex: IllegalArgumentException) {
-                            blocked.add(partition)
-                            consumer.pause(listOf(partition))
-                            System.err.println("Calcify stopped " + partition + " at " + record.offset() + ": " + ex.message)
-                            continue
+                    val plan = planExtractorPoll(polled, config.source, config.output!!, config.generation, blocked)
+                    if (plan.poisoned.isNotEmpty()) {
+                        consumer.pause(plan.poisoned.map { it.first })
+                        plan.poisoned.forEach { (partition, offset, message) ->
+                            System.err.println("Calcify stopped $partition at $offset: $message")
                         }
-                        if (producer != null) publishAndCheckpoint(
-                            producer, consumer,
-                            links.map { ProducerRecord(config.output!!, record.partition(), null, it) },
-                            mapOf(partition to OffsetAndMetadata(record.offset() + 1))
-                        )
+                    }
+                    if (plan.offsets.isNotEmpty()) {
+                        publishAndCheckpoint(requireNotNull(producer), consumer, plan.outputs, plan.offsets)
                     }
                 }
             } finally {
@@ -184,6 +177,39 @@ object CalcifyPipeline {
                 receiptConnection?.close()
             }
         }
+    }
+
+    /** One transaction for the valid prefixes of a bounded (100-source-record) poll.
+     * Decode one source batch at a time; retain only compact links and checkpoints.
+     * Even a zero-trade batch advances its offset in the same transaction.
+     */
+    internal fun planExtractorPoll(
+        records: Iterable<ConsumerRecord<ByteArray, ByteArray>>,
+        source: String,
+        output: String,
+        generation: Int,
+        blocked: MutableSet<TopicPartition>,
+    ): ExtractorPollPlan {
+        val outputs = ArrayList<ProducerRecord<ByteArray, ByteArray>>()
+        val offsets = linkedMapOf<TopicPartition, OffsetAndMetadata>()
+        val poisoned = ArrayList<Triple<TopicPartition, Long, String?>>()
+        for (record in records) {
+            val partition = TopicPartition(record.topic(), record.partition())
+            if (partition in blocked) continue
+            try {
+                // Finish validating the complete record before adding any links.
+                val links = CalcifySourceBatch.extract(
+                    requireNotNull(record.value()).toString(Charsets.UTF_8),
+                    source, generation, record.partition(), record.offset()
+                ).map(CalcifyWire::commitment)
+                outputs.addAll(links.map { ProducerRecord(output, record.partition(), null, it) })
+                offsets[partition] = OffsetAndMetadata(record.offset() + 1)
+            } catch (ex: IllegalArgumentException) {
+                blocked.add(partition)
+                poisoned.add(Triple(partition, record.offset(), ex.message))
+            }
+        }
+        return ExtractorPollPlan(outputs, offsets, poisoned)
     }
 
     internal fun planVerifierPoll(
