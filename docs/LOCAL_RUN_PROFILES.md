@@ -9,7 +9,7 @@ monitor settings, and stress command before starting a run.
 These are **recorded run configurations**, not defaults for `.env` or a claim
 that every current revision will repeat the result. The [throughput
 ledger](THROUGHPUT_BASELINES.md) owns the verdicts; its [artifact
-index](evidence/throughput-baseline-artifact-index-2026-09-24.json) and the
+index](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-baseline-artifact-index-2026-09-24.json) and the
 linked original reports own historical settings. A new run must record its
 source, image, host, workload, configuration, checker, and stage counts.
 
@@ -23,8 +23,8 @@ source, image, host, workload, configuration, checker, and stage counts.
 
 The C22/C28 HTTP figures measure **API acceptance latency**, not time until
 lifecycle or market read models became visible. Their
-[C22 aggregate](evidence/throughput-10000-capacity-2026-09-24.json) and
-[C28 aggregate](evidence/throughput-prefix-attribution-c28-2026-09-24.json)
+[C22 aggregate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-10000-capacity-2026-09-24.json) and
+[C28 aggregate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-prefix-attribution-c28-2026-09-24.json)
 hold the original report hashes and rates; counts include final drain, so they
 do not independently prove a 10k/s in-load projection service rate.
 

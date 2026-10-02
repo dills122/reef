@@ -6,14 +6,14 @@ Base: `origin/master` at `368a9247b31c8997c5dd9f51aeb88a911adebfe7` (rollback PR
 Branch: `codex/calcify-discovery`.
 
 Phase 1 implementation checkpoint (2026-09-29): additive opt-in slice and
-local diagnostic evidence live in [CALCIFY_PHASE1_IMPLEMENTATION.md](CALCIFY_PHASE1_IMPLEMENTATION.md);
+local diagnostic evidence live in [CALCIFY_PHASE1_IMPLEMENTATION.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md);
 this discovery record still owns open full-design questions.
 
 ## Purpose and working assumptions
 
 Calcify names Reef's fresh, full post-matching design effort. This is a working assumption to confirm. Goal: work through post-match product semantics, authority, data flow, failure behavior, read contracts, restore, and capacity proof while validating small, independently testable implementations. This document records questions and a proposed logical flow; it is not an instruction to resume the retired implementation.
 
-Existing Reef invariants remain in force unless a later explicit decision amends them: deterministic execution and replay; durable acceptance before `202`; same-lane matching order; immutable matching facts separate from rebuildable reads; auditability and idempotency; simulator use of normal command paths. Earlier redesign scope held Go matching, ingress, pretrade, and matching-outcome format fixed. Phase 2 discovery found a narrow exception: current Go book key omits run ID despite accepted D-042 run-scoped ownership. Align matching with D-042 before relying on a partition-local Calcify resolver; see [source-lane research](../research/CALCIFY_PHASE2_SOURCE_LANE_RESEARCH_2026-09-29.md) and [Phase 2 plan](CALCIFY_PHASE2_DISCOVERY.md). This does not reopen matching-outcome format or broad matching redesign.
+Existing Reef invariants remain in force unless a later explicit decision amends them: deterministic execution and replay; durable acceptance before `202`; same-lane matching order; immutable matching facts separate from rebuildable reads; auditability and idempotency; simulator use of normal command paths. Earlier redesign scope held Go matching, ingress, pretrade, and matching-outcome format fixed. Phase 2 discovery found a narrow exception: current Go book key omits run ID despite accepted D-042 run-scoped ownership. Align matching with D-042 before relying on a partition-local Calcify resolver; see [source-lane research](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_SOURCE_LANE_RESEARCH_2026-09-29.md) and [Phase 2 plan](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE2_DISCOVERY.md). This does not reopen matching-outcome format or broad matching redesign.
 
 ## Starting state and evidence
 

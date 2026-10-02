@@ -1,9 +1,0 @@
-WARNING: A restricted method in java.lang.System has been called
-WARNING: java.lang.System::loadLibrary has been called by org.rocksdb.RocksDB in an unnamed module (file:/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/experiments/calcify-phase2/build/deps/rocksdbjni-10.1.3.jar)
-WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
-WARNING: Restricted methods will be blocked in a future release unless native access is enabled
-
-{"seconds":5.00000475,"resolved":285426,"rateLast5s":57085.2,"offeredMinusResolved":0}
-{"seconds":10.0000125,"resolved":572228,"rateLast5s":57360.4,"offeredMinusResolved":0}
-{"seconds":15.000005291,"resolved":788894,"rateLast5s":43333.2,"offeredMinusResolved":0}
-{"seconds":20.000007458,"resolved":951237,"rateLast5s":32468.6,"offeredMinusResolved":0}

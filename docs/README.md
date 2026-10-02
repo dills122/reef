@@ -29,7 +29,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
   [`contracts/`](../contracts/README.md).
 - [Work plan](WORK_PLAN.md) is the execution board. Its stated alignment date
   is part of every status claim; verify against source and newer evidence.
-- [Current status](CURRENT_STATUS.md) is the September 4 snapshot, with its
+- [Current status](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) is the September 4 snapshot, with its
   recorded limits. It is orientation, not a live release or capacity report.
 - [Throughput ledger](THROUGHPUT_BASELINES.md) is mandatory before performance
   investigation, planning, benchmarking, or status claims. Read linked original
@@ -37,7 +37,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 ## Historical material
 
-[Archive index](archive/README.md) contains completed plans, dated audits,
+[Reef Records index](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/INDEX.md) contains completed plans, dated audits,
 benchmark evidence, and older research. [Research](research/) holds recent
 investigations; its results remain scoped to their run and date. Use history
 when a current claim cites it or a decision needs rechecking. Do not treat old
@@ -45,3 +45,6 @@ checklists as open work.
 
 [Documentation lifecycle](DOCUMENTATION_CLEANUP_PLAN.md) defines how new docs
 become active, reference, or historical.
+
+[Records retention](RECORDS_RETENTION.md) names latest complete evidence bundles
+kept in Reef and describes checksum-verified archive lookup and restore.

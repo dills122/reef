@@ -268,7 +268,7 @@ The load tester supports config-driven persona sessions (named actors, strategie
 
 Planning/spec:
 - [`docs/SIMULATOR_PERSONA_CONFIG.md`](../../docs/SIMULATOR_PERSONA_CONFIG.md)
-- [`docs/archive/SIMULATOR_UPGRADE_BACKLOG.md`](../../docs/archive/SIMULATOR_UPGRADE_BACKLOG.md)
+- [docs/archive/SIMULATOR_UPGRADE_BACKLOG.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SIMULATOR_UPGRADE_BACKLOG.md)
 
 Example session file:
 - [`packages/scenario-definitions/persona-session.example.yaml`](../../packages/scenario-definitions/persona-session.example.yaml)
@@ -281,5 +281,5 @@ make dev-replay
 
 Reference:
 
-- [`docs/ROADMAP.md`](../../docs/archive/ROADMAP.md)
+- [`docs/ROADMAP.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ROADMAP.md)
 - [`docs/steering/architecture.md`](../../docs/steering/architecture.md)

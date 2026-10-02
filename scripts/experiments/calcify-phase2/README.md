@@ -4,7 +4,7 @@ Isolated research harness. No production resolver or matcher wiring. Do not appl
 `run-scope-prototype.patch` to production: it covers command/batch scope only;
 compatibility queries, contracts and deployment ownership still need implementation.
 
-Read [matrix](MATRIX.md) and [decision report](../../../docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md).
+Read [matrix](MATRIX.md) and [decision report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md).
 
 ## Reproduce
 

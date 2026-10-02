@@ -68,3 +68,11 @@ node scripts/dev/script-surface-check.mjs
 actionlint
 make test-dev-tooling
 ```
+
+## Historical-record retention
+
+`Records retention` workflow runs `bun run repo:check:records` and
+`bun run repo:test:records` without product dependencies or cross-repository access.
+It checks relocation metadata, active links, required fixtures, complete retained
+evidence bundles and original checksum companions. [Retention policy](RECORDS_RETENTION.md)
+defines latest-bundle selection and immutable archive lookup.

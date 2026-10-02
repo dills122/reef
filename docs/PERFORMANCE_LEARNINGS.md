@@ -25,7 +25,7 @@ The recorded sustained projection baseline is `2.5k/5m`; August `5k/5m`
 failed freshness. Recovered August 21 one-maintainer remote short evidence
 already exercises nested statement/I/O instrumentation: `2.5k` passes the
 current checker, while `5k` fails downstream lifecycle/market drain despite
-exact canonical counts. See the [audit record](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
+exact canonical counts. See the [audit record](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
 Earlier dated short-run interpretations below remain historical evidence;
 they do not replace this checkpoint or the [work board](./WORK_PLAN.md#work-board).
 
@@ -65,7 +65,7 @@ lock-refused reference attempts instead of interpreting them as equality passes.
 
 Sustained full-projection baseline remains 2.5k/5m. Raw evidence, failed checks,
 and current work are recorded in the
-[measurement validation report](./research/PROJECTION_MEASUREMENT_VALIDATION_2026-09-24.md).
+[measurement validation report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_MEASUREMENT_VALIDATION_2026-09-24.md).
 
 ## Projection SQL remediation and materializer limit (September 25, 2026)
 
@@ -161,7 +161,7 @@ Immediate implications:
 2. Matching/business rejections for lifecycle modify/cancel commands must be counted as durable outcomes, not infrastructure failures.
 3. The next persistence risk is no longer synchronous hot-path Postgres writes; it is downstream projection completeness, freshness, replay/checksum coverage, and longer bounded soaks.
 
-Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./archive/PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
+Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 
 ## DigitalOcean Materializer 10k Gate (July 8, 2026)
 
@@ -484,7 +484,7 @@ After isolating DB writes with `RUNTIME_PERSISTENCE=noop`, the matching engine i
 
 Engine-only evidence:
 
-- `reports/matching-engine-load/resting-15k-30s-heap/summary.json`
+- [reports/matching-engine-load/resting-15k-30s-heap/summary.json](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/reports/matching-engine-load/resting-15k-30s-heap/summary.json)
 - scenario: `resting-book`, `16` instruments, `15000 rps`, `30s`
 - result: `450000` processed, `15000.17/sec`, `0` failures, `p95=4us`, `p99=7us`
 
@@ -884,7 +884,7 @@ Targeted audit of `services/matching-engine` for correctness/scaling issues, wit
 - Architecture steering: [`docs/steering/architecture.md`](./steering/architecture.md)
 - Work plan: [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - Performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
-- Historical stress baseline: [`docs/archive/DEV_STRESS_BASELINE_2026-05-23.md`](./archive/DEV_STRESS_BASELINE_2026-05-23.md)
+- Historical stress baseline: [docs/archive/DEV_STRESS_BASELINE_2026-05-23.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/DEV_STRESS_BASELINE_2026-05-23.md)
 
 ## Dirty projection correctness under concurrent producers (2026-09-24)
 

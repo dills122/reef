@@ -12,7 +12,7 @@ User approved implementation, then explicitly paused for night. Resume when user
 
 - `AGENTS.md`, `docs/AI_CONTEXT.md`, `docs/README.md` and relevant steering.
 - `docs/work/CALCIFY_PHASE2_IMPLEMENTATION.md`: approved six-slice plan and current limits.
-- `docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md`: preserved bounded experiments before implementation.
+- [docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md): preserved bounded experiments before implementation.
 - `docs/WORK_PLAN.md`: current dated work checkpoint.
 - `docs/THROUGHPUT_BASELINES.md`, `docs/PERFORMANCE_LEARNINGS.md`, relevant historic L6/L8/L9 evidence: performance claims must retain workload/config/pipeline differences.
 - `docs/DECISIONS.md` D-042, `docs/HOT_BOOK_SHARDING_PLAN.md`, `docs/LOCAL_CONFIGURATION.md`, relevant contract/boundary storage steering.

@@ -1,7 +1,0 @@
-SLF4J(W): No SLF4J providers were found.
-SLF4J(W): Defaulting to no-operation (NOP) logger implementation
-SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
-Exception in thread "main" java.util.concurrent.TimeoutException: Timeout after waiting for 20000 ms.
-	at org.apache.kafka.clients.producer.internals.FutureRecordMetadata.get(FutureRecordMetadata.java:76)
-	at org.apache.kafka.clients.producer.internals.FutureRecordMetadata.get(FutureRecordMetadata.java:30)
-	at com.reef.platform.calcify.CalcifyResolverBrokerProbe.main(CalcifyResolverBrokerProbe.kt:71)

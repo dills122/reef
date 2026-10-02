@@ -35,7 +35,7 @@ scope, not an instruction to reopen old work.
   `docs/steering/external-api-boundary.md`, `docs/API_BOUNDARY_STORAGE_DECISIONS.md`,
   and `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` as applicable.
 - Current work: `docs/WORK_PLAN.md` and source/test evidence. Its September 4
-  alignment and `docs/CURRENT_STATUS.md` are dated checkpoints; verify newer
+  alignment and [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) are dated checkpoints; verify newer
   changes before reporting status.
 - Throughput: first read `docs/THROUGHPUT_BASELINES.md`, original relevant
   success and failure artifacts, `docs/PERFORMANCE_LEARNINGS.md`, and active

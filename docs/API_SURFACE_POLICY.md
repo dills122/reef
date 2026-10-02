@@ -101,7 +101,7 @@ Migration target:
 This backlog is active work, not optional cleanup.
 
 Implementation checked against `cebbffc1` on 2026-09-04; detailed source/test
-evidence is in the [status audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+evidence is in the [status audit](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 
 1. Finish read/object authorization.
    - implemented/tested: current/history/fill order reads enforce participant

@@ -38,7 +38,7 @@ runs the Svelte typecheck and static build.
 
 For the real GitHub OAuth/Admin DB local smoke, environment requirements, and
 owner-config setup, see
-[`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](../../docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
+[docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
 For launch status and external-submission blockers, see
 [`docs/BOT_ARENA_RELEASE_READINESS.md`](../../docs/BOT_ARENA_RELEASE_READINESS.md).
 

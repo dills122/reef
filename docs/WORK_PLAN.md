@@ -7,16 +7,20 @@ that own detailed contracts, evidence, and sprint tasking. Its September 4
 alignment is a checkpoint, not a live claim about later branches or runs;
 check source and newer evidence before reporting any item as current.
 
-Read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) first for the implementation
-snapshot and verified performance claims.
+Historical [CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) records September 4 implementation
+snapshot and scoped performance claims. Use newer source and evidence for current claims.
 
 Last aligned: 2026-09-04 against `master` at `cebbffc1`; hosted release gates
 were not re-run during this documentation check.
 
 Source/test/artifact reconciliation:
-[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
+
+## Records separation (2026-10-02)
+
+Reef Records bootstrap and archive import landed in [Records PR #2](https://github.com/dills122/reef-records/pull/2). 386 historical files (39.36 MiB) preserved byte-for-byte at pinned archive commit; Reef cleanup on `codex/extract-historical-records` retains 89 current evidence files plus active code/docs and required fixtures. [Retention policy](RECORDS_RETENTION.md) and relocation inventory own selection and lookup. Local archive hashes, retained checksums, active links and five retention failure-path tests pass; no new runtime or performance qualification claimed.
 
 ## Calcify Phase 2 implementation (2026-09-30 branch)
 
@@ -31,7 +35,7 @@ state/changelog/standby and demand source reader. Scratch D-042 alignment proves
 cross-run isolation/replay fixture; production matching alignment still pending.
 Recovery, topic-generation/retention and two-lane fault probes passed in stated
 local RF1 scope. Five-minute 10k local store/codec joins/s is not full resolver or
-system capacity qualification. [Decision/evidence report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md)
+system capacity qualification. [Decision/evidence report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md)
 records remaining implementation gates and reproducible commands. User sync subsequently approved implementation; see implementation checkpoint above. Legacy remains intact.
 
 ## Calcify Phase 1 checkpoint (2026-09-29 branch)
@@ -69,7 +73,7 @@ p95/peak 628/846 trades, and 1,478 ms final drain. Repeat sustained plus
 short stress probes for every material post-match phase; 7.5k/s and 10k/s
 local and multi-lane qualification remain open.
 Exact wire contract, corrections, and limits:
-[Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
+[Calcify Phase 1 implementation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md).
 Replay-retention window enforcement and independent source-to-link
 reconciliation remain follow-ups before non-diagnostic use. Repeat
 `make dev-smoke-calcify-full-path` as each post-match slice expands, adding
@@ -137,7 +141,7 @@ and readiness remain independent.
   readback plus replay/checksum evidence.
 - Reef/Arena artifact, route, persistence, Compose, failure-isolation, and P1
   equivalence gates are promoted in
-  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
 - Fork admission, SHA-bound maintainer approval, and external-account
   onboarding are complete through the July 23 `noodle-invite-smoke` test and
   follow-up fixes. The completion record lives in
@@ -179,7 +183,7 @@ describes the remaining task, not whether the whole subsystem exists.
 | CI, onboarding, mutation/protobuf hardening | Delivered; regression maintenance | Preserve gates; do not reopen initial implementation. |
 
 Evidence and source/test mapping:
-[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+[`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Supplemental UI and simulator backlogs are candidate catalogs, not competing
 priority ladders; reconcile individual candidates before scheduling them.
 

@@ -1,4 +1,0 @@
-# github.com/dills122/reef/services/matching-engine/internal/app
-internal/app/service.go:821:10: undefined: fmt
-FAIL	github.com/dills122/reef/services/matching-engine/internal/streamdirect [build failed]
-FAIL

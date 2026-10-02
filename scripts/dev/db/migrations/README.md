@@ -57,8 +57,7 @@ Existing routes are `POST /api/v1/orders/lifecycle-state`, followed by
 Use existing deployment external-client authorization (`X-Client-Id`, configured
 bearer token, required `Idempotency-Key`); do not disable auth or substitute an
 admin token for external-client credentials. Full market refresh does not rebuild
-lifecycle. See [recovery runbook](../../../../.planning/sustained-10k/recovery-runbook.md)
-for execution context, authenticated requests, capture, and verification.
+lifecycle. Earlier execution context is preserved in [projection task plan](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/.planning/sustained-10k/task_plan.md); use current routes and validation requirements above.
 
 Local PostgreSQL regression
 `PostgresLifecycleNumericParityIntegrationTest` failed before 0051 (five terminal
