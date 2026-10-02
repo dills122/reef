@@ -74,3 +74,13 @@ instrument, source generation/topic UUID/lane and currency. Acceptance in same
 outcome logically precedes its trades; later outcomes do not. Commitment ordinal
 counts every nested trade across ordered outcomes, including modify outcomes.
 Source generation must remain bound to registered broker topic UUID.
+
+Matching snapshot/retention compatibility (2026-10-01): terminal matcher retention
+is per exact `(runId, venueSessionId, instrumentId)` book, independently of
+Calcify's no-reuse acceptance identity. Matcher reservations and rollback preimages
+use `(runId, orderId)`; different runs may independently reuse an order ID.
+Reservations remain held through provisional evictions until publication commits
+or rolls back.
+Snapshot V4 carries checksum-covered `book-scoped-v1` policy and exact retention
+limit; restore rejects changed limits and old snapshots with enabled retention.
+See [matching-engine recovery contract](../../services/matching-engine/README.md#terminal-retention-and-recovery-compatibility).

@@ -1,0 +1,10 @@
+--- FAIL: TestTerminalRetentionCrossBookReuseDoesNotDependOnBatchCut (0.00s)
+    terminal_retention_replay_test.go:290: cross-book reused ID changed batchcut outcome: one={Accepted:<nil> Rejected:0x5a725a5c0320 AcceptedOrder:<nil> Executions:[] Trades:[]} many={Accepted:0x5a725a58ae80 Rejected:<nil> AcceptedOrder:<nil> Executions:[] Trades:[]}
+--- FAIL: TestTerminalRetentionCrossBookReuseRollbackRestoresGlobalPreimage (0.00s)
+    --- FAIL: TestTerminalRetentionCrossBookReuseRollbackRestoresGlobalPreimage/true (0.00s)
+        terminal_retention_replay_test.go:315: submit a: {Accepted:<nil> Rejected:0x5a725a5c0780 AcceptedOrder:<nil> Executions:[] Trades:[]}
+    --- FAIL: TestTerminalRetentionCrossBookReuseRollbackRestoresGlobalPreimage/false (0.00s)
+        terminal_retention_replay_test.go:315: submit a: {Accepted:<nil> Rejected:0x5a725a5c09b0 AcceptedOrder:<nil> Executions:[] Trades:[]}
+FAIL
+FAIL	github.com/dills122/reef/services/matching-engine/internal/app	0.321s
+FAIL

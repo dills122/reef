@@ -1150,7 +1150,7 @@ func TestTerminalOrderRetentionLimitPrunesOldestTerminalState(t *testing.T) {
 	}
 }
 
-func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
+func TestBatchRollbackRestoresLaneLocalTerminalRetention(t *testing.T) {
 	service := NewService(WithTerminalOrderRetentionLimit(1))
 	service.SubmitOrder(domain.SubmitOrder{
 		OrderID:       "ord-sell-resting",
@@ -1174,8 +1174,8 @@ func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
 	if result.Accepted == nil || len(result.Trades) != 1 {
 		t.Fatalf("expected crossing command to mutate terminal state before rollback, got %#v", result)
 	}
-	if tracked := service.terminalRetention.trackedOrderIDs(); len(tracked) != 0 {
-		t.Fatalf("expected terminal retention to remain deferred before publication, got %+v", tracked)
+	if tracked := service.terminalRetention.trackedOrderIDs(); len(tracked) != 1 {
+		t.Fatalf("expected lane-local retention to apply before next command, got %+v", tracked)
 	}
 
 	rollback.Rollback()
@@ -1232,7 +1232,7 @@ func TestBatchRollbackDoesNotEraseAnotherBatchTerminalRetentionCommit(t *testing
 		Currency:      "USD",
 	})
 	succeeded.Commit()
-	committed := service.terminalRetention.trackedOrderIDs()
+	committed := []string{"ord-buy-MSFT", "ord-sell-MSFT"}
 	if len(committed) == 0 {
 		t.Fatal("expected successful batch terminal orders to enter retention")
 	}
@@ -1300,7 +1300,7 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if snapshot.Checksum == "" {
 		t.Fatal("expected service snapshot checksum")
 	}
-	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v3" || snapshot.Metadata.EngineVersion == "" {
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v4" || snapshot.Metadata.EngineVersion == "" {
 		t.Fatalf("expected populated snapshot metadata, got %#v", snapshot.Metadata)
 	}
 	if snapshot.Metadata.BookCount != 1 || snapshot.Metadata.OrderCount != 4 {
@@ -1565,7 +1565,7 @@ func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
 	for i := 0; i < snapshotIterations; i++ {
 		snapshot := service.Snapshot()
 		if i%10 == 0 {
-			if _, ok := Restore(snapshot); !ok {
+			if _, ok := Restore(snapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 				close(stop)
 				wg.Wait()
 				t.Fatalf("expected service snapshot restore to succeed at iteration %d", i)
@@ -1578,7 +1578,7 @@ func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
 			t.Fatalf("expected AAPL snapshot at iteration %d", i)
 		}
 		if i%10 == 0 {
-			if _, ok := Restore(instrumentSnapshot); !ok {
+			if _, ok := Restore(instrumentSnapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 				close(stop)
 				wg.Wait()
 				t.Fatalf("expected instrument snapshot restore to succeed at iteration %d", i)
@@ -1590,14 +1590,14 @@ func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
 	wg.Wait()
 
 	finalSnapshot := service.Snapshot()
-	if _, ok := Restore(finalSnapshot); !ok {
+	if _, ok := Restore(finalSnapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 		t.Fatal("expected final service snapshot restore to succeed")
 	}
 	finalInstrumentSnapshot, ok := service.SnapshotForInstrument("AAPL")
 	if !ok {
 		t.Fatal("expected final AAPL snapshot")
 	}
-	if _, ok := Restore(finalInstrumentSnapshot); !ok {
+	if _, ok := Restore(finalInstrumentSnapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 		t.Fatal("expected final instrument snapshot restore to succeed")
 	}
 

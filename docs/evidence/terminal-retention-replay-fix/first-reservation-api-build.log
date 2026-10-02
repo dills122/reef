@@ -1,0 +1,28 @@
+# github.com/dills122/reef/services/matching-engine/internal/app [github.com/dills122/reef/services/matching-engine/internal/app.test]
+internal/app/order_index_test.go:13:18: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:32:18: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:35:17: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:46:14: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:59:14: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:60:14: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:82:19: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+internal/app/order_index_test.go:137:21: not enough arguments in call to idx.reserve
+	have (*orderRecord)
+	want (*orderRecord, *BatchRollback)
+FAIL	github.com/dills122/reef/services/matching-engine/internal/app [build failed]
+ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	0.318s
+FAIL

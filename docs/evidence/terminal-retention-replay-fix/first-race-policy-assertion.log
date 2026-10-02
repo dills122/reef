@@ -1,0 +1,20 @@
+ok  	github.com/dills122/reef/services/matching-engine/cmd/http-healthcheck	1.402s
+?   	github.com/dills122/reef/services/matching-engine/cmd/matching-engine	[no test files]
+?   	github.com/dills122/reef/services/matching-engine/cmd/matching-engine-load	[no test files]
+ok  	github.com/dills122/reef/services/matching-engine/cmd/proto-compat-check	1.239s
+ok  	github.com/dills122/reef/services/matching-engine/internal/app	1.547s
+ok  	github.com/dills122/reef/services/matching-engine/internal/book	1.482s
+?   	github.com/dills122/reef/services/matching-engine/internal/domain	[no test files]
+ok  	github.com/dills122/reef/services/matching-engine/internal/loadtest	1.978s
+2026/10/01 22:06:46 matching-engine direct stream startup waiting for provider=: not ready yet
+2026/10/01 22:06:47 matching-engine direct stream startup waiting for provider=: not ready yet
+2026/10/01 22:06:48 matching-engine direct stream startup waiting for provider=: always fails
+2026/10/01 22:06:49 matching-engine direct stream startup waiting for provider=: still failing
+--- FAIL: TestMultiPartitionRecoveryMatchesLiveBoundedTerminalState (0.01s)
+    terminal_retention_recovery_test.go:32: live bounded state retained chronologically oldest terminal order
+FAIL
+FAIL	github.com/dills122/reef/services/matching-engine/internal/streamdirect	3.827s
+ok  	github.com/dills122/reef/services/matching-engine/internal/transport/grpc	1.702s
+?   	github.com/dills122/reef/services/matching-engine/internal/transport/grpc/pb/contracts/proto	[no test files]
+ok  	github.com/dills122/reef/services/matching-engine/internal/transport/http	1.960s
+FAIL

@@ -17,12 +17,16 @@ type Snapshot struct {
 	Checksum string                      `json:"checksum"`
 }
 
+const terminalRetentionPolicy = "book-scoped-v1"
+
 type SnapshotMetadata struct {
-	SnapshotVersion string   `json:"snapshotVersion"`
-	EngineVersion   string   `json:"engineVersion"`
-	BookCount       int      `json:"bookCount"`
-	OrderCount      int      `json:"orderCount"`
-	BookKeys        []string `json:"bookKeys"`
+	SnapshotVersion         string   `json:"snapshotVersion"`
+	EngineVersion           string   `json:"engineVersion"`
+	BookCount               int      `json:"bookCount"`
+	OrderCount              int      `json:"orderCount"`
+	BookKeys                []string `json:"bookKeys"`
+	TerminalRetentionPolicy string   `json:"terminalRetentionPolicy,omitempty"`
+	TerminalRetentionLimit  int      `json:"terminalRetentionLimit,omitempty"`
 }
 
 type SnapshotOrderRecord struct {
@@ -96,11 +100,13 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		return snapshot.Orders[i].RunID < snapshot.Orders[j].RunID
 	})
 	snapshot.Metadata = SnapshotMetadata{
-		SnapshotVersion: "matching-service-snapshot-v3",
-		EngineVersion:   "matching-engine-app-v1",
-		BookCount:       len(snapshot.Books),
-		OrderCount:      len(snapshot.Orders),
-		BookKeys:        bookIDs,
+		SnapshotVersion:         "matching-service-snapshot-v4",
+		TerminalRetentionPolicy: terminalRetentionPolicy,
+		TerminalRetentionLimit:  s.terminalRetention.limit,
+		EngineVersion:           "matching-engine-app-v1",
+		BookCount:               len(snapshot.Books),
+		OrderCount:              len(snapshot.Orders),
+		BookKeys:                bookIDs,
 	}
 	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
 	return snapshot
@@ -154,12 +160,25 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 	if snapshot.Checksum != "" && snapshot.Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
 		return nil, false
 	}
+	service := NewService(options...)
+	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v4" {
+		if snapshot.Metadata.TerminalRetentionLimit != service.terminalRetention.limit {
+			return nil, false
+		}
+	} else if service.terminalRetention.limit > 0 {
+		// Old snapshots cannot prove that the global queue never evicted another
+		// lane's terminal outcomes. Rebuild from canonical commands to enable v4.
+		return nil, false
+	}
 	var ok bool
 	snapshot, ok = normalizeSnapshotScope(snapshot)
 	if !ok {
 		return nil, false
 	}
-	service := NewService(options...)
+	snapshot.Metadata.SnapshotVersion = "matching-service-snapshot-v4"
+	snapshot.Metadata.TerminalRetentionPolicy = terminalRetentionPolicy
+	snapshot.Metadata.TerminalRetentionLimit = service.terminalRetention.limit
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
 	for instrumentID, bookSnapshot := range snapshot.Books {
 		restored, ok := hotbook.Restore(bookSnapshot)
 		if !ok {
@@ -219,10 +238,17 @@ func (s Snapshot) withoutChecksum() Snapshot {
 }
 
 func validSnapshotMetadata(snapshot Snapshot) bool {
+	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v4" {
+		if snapshot.Metadata.TerminalRetentionPolicy != terminalRetentionPolicy || snapshot.Metadata.TerminalRetentionLimit < 0 {
+			return false
+		}
+	} else if snapshot.Metadata.TerminalRetentionPolicy != "" || snapshot.Metadata.TerminalRetentionLimit != 0 {
+		return false
+	}
 	if snapshot.Metadata.SnapshotVersion == "" && snapshot.Metadata.EngineVersion == "" {
 		return true
 	}
-	if (snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v3" && snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2") || snapshot.Metadata.EngineVersion == "" {
+	if (snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v4" && snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v3" && snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2") || snapshot.Metadata.EngineVersion == "" {
 		return false
 	}
 	if snapshot.Metadata.BookCount != len(snapshot.Books) || snapshot.Metadata.OrderCount != len(snapshot.Orders) {
@@ -257,6 +283,13 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 	builder.WriteByte(':')
 	builder.WriteString(strings.Join(snapshot.Metadata.BookKeys, ","))
 	builder.WriteByte(';')
+	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v4" {
+		builder.WriteString("retention:")
+		builder.WriteString(snapshot.Metadata.TerminalRetentionPolicy)
+		builder.WriteByte(':')
+		builder.WriteString(strconv.Itoa(snapshot.Metadata.TerminalRetentionLimit))
+		builder.WriteByte(';')
+	}
 	bookIDs := make([]string, 0, len(snapshot.Books))
 	for instrumentID := range snapshot.Books {
 		bookIDs = append(bookIDs, instrumentID)
@@ -321,7 +354,7 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 // Shared-run legacy books cannot safely become run-local recovery state. Use
 // command-log replay instead. Legacy snapshots without run IDs can migrate.
 func normalizeSnapshotScope(snapshot Snapshot) (Snapshot, bool) {
-	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v3" {
+	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v3" || snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v4" {
 		for key := range snapshot.Books {
 			if _, ok := parseBookKey(key); !ok {
 				return Snapshot{}, false

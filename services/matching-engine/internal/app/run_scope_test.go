@@ -60,6 +60,8 @@ func TestRestoreRejectsLegacyRunScopedSnapshot(t *testing.T) {
 	s.SubmitOrder(runOrder("buy-a", "run-a", domain.SideBuy))
 	snap := s.Snapshot()
 	snap.Metadata.SnapshotVersion = "matching-service-snapshot-v2"
+	snap.Metadata.TerminalRetentionPolicy = ""
+	snap.Metadata.TerminalRetentionLimit = 0
 	snap.Checksum = serviceSnapshotChecksum(snap.withoutChecksum())
 	if _, ok := Restore(snap); ok {
 		t.Fatal("legacy shared-book snapshot must rebuild from command log")
@@ -158,6 +160,8 @@ func TestLegacyEmptyRunSnapshotMigration(t *testing.T) {
 	book := snap.Books[bookKey("", "session", "AAPL")]
 	snap.Books = map[string]hotbook.Snapshot{"session|AAPL": book}
 	snap.Metadata.SnapshotVersion = "matching-service-snapshot-v2"
+	snap.Metadata.TerminalRetentionPolicy = ""
+	snap.Metadata.TerminalRetentionLimit = 0
 	snap.Metadata.BookKeys = []string{"session|AAPL"}
 	snap.Checksum = serviceSnapshotChecksum(snap.withoutChecksum())
 	restored, ok := Restore(snap)
