@@ -457,8 +457,11 @@ history. Missing checkpoint does not authorize starting at today's earliest offs
 
 No auto recreation/reset of active authoritative topics. Ordinary UUID checks
 detect mismatch but do not prevent in-flight deletion; restrict administrative
-permissions and coordinate stop/cut/restore. Redpanda documents different guarantees
-for topic deletion and remote recovery. [Transactions](https://docs.redpanda.com/streaming/current/develop/transactions/).
+permissions and coordinate stop/cut/restore. Official Cloud docs describe deletion
+exception; legacy Streaming23.3 docs warn about remote-recovery atomicity. Current
+page retrievals differed; deployed-version guarantees require pinned proof.
+[Cloud transactions](https://docs.redpanda.com/cloud-data-platform/develop/transactions/),
+[Streaming23.3 transactions](https://docs.redpanda.com/streaming/23.3/develop/transactions/).
 
 | Failure | Continuation rule |
 | --- | --- |

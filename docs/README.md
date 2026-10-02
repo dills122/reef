@@ -25,6 +25,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 - [Calcify system RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) proposes full post-trade architecture and bounded financial proofs; [research and review reconciliation](research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md) compares authorities and corrects historical findings against October 2 master. Neither accepts a new architecture or claims capacity qualification.
 - [Calcify system independent review](research/CALCIFY_SYSTEM_ARCHITECTURE_INDEPENDENT_REVIEW_2026-10-02.md) retains first fresh-context findings and bounded corrections. Author testimony is separate in [review handoff](work/handoffs/2026-10-02-calcify-system-architecture-author.md).
 - [Calcify full blind review](research/CALCIFY_SYSTEM_ARCHITECTURE_BLIND_REVIEW_2026-10-02.md) records second-pass critique and correction separating delivery history from stable financial identity.
+- [Calcify final review](research/CALCIFY_SYSTEM_ARCHITECTURE_FINAL_REVIEW_2026-10-02.md) checks corrected identity/replay contract, closes review loop at3of3 and retains source-attribution limits. Verdict applies to proposed documentation publication.
 - [AI working context](AI_CONTEXT.md) gives agents a task-specific reading path.
 - [Steering index](steering/README.md) links normative architecture and language
   rules. Read the relevant sections for the area being changed.
