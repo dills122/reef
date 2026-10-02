@@ -169,6 +169,24 @@ func TestLegacyEmptyRunSnapshotMigration(t *testing.T) {
 	}
 }
 
+// TestValidSnapshotOrderScopesRejectsDuplicateRunOrderPair calls
+// validSnapshotOrderScopes directly, bypassing Restore's own earlier
+// seenOrderIDs dedup, so the function must reject the duplicate on its
+// own rather than relying on its only current caller having already
+// checked for it.
+func TestValidSnapshotOrderScopesRejectsDuplicateRunOrderPair(t *testing.T) {
+	s := NewService()
+	s.SubmitOrder(runOrder("ord-dup", "run-a", domain.SideBuy))
+	snap := s.Snapshot()
+	if len(snap.Orders) != 1 {
+		t.Fatalf("expected one order in snapshot, got %+v", snap.Orders)
+	}
+	snap.Orders = append(snap.Orders, snap.Orders[0])
+	if validSnapshotOrderScopes(snap) {
+		t.Fatal("expected duplicate (RunID, OrderID) pair to be rejected")
+	}
+}
+
 func TestRestoreRejectsMismatchedBookOrderScope(t *testing.T) {
 	s := NewService()
 	s.SubmitOrder(runOrder("buy", "run-a", domain.SideBuy))

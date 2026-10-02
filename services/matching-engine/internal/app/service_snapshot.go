@@ -365,7 +365,11 @@ func validSnapshotOrderScopes(snapshot Snapshot) bool {
 		if _, ok := snapshot.Books[bookKey(order.RunID, order.VenueSessionID, order.InstrumentID)]; !ok {
 			return false
 		}
-		orders[orderIndexKey(order.RunID, order.OrderID)] = order
+		key := orderIndexKey(order.RunID, order.OrderID)
+		if _, exists := orders[key]; exists {
+			return false
+		}
+		orders[key] = order
 	}
 	resting := make(map[string]bool)
 	for key, book := range snapshot.Books {
