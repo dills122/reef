@@ -17,3 +17,5 @@ Use a feature branch. Keep changes bounded, add focused tests for behavior, and
 update contracts and documentation in the same change when setup, commands,
 workflows, or architecture direction move. A handoff should include the branch
 name, PR title and summary, and the exact test evidence.
+
+Every feature, fix or refactor follows [required completion pass](./docs/RECORDS_RETENTION.md#required-completion-pass): code/tests/contracts/docs/latest evidence first, affected guidance and overviews next, then archive superseded topic records in `reef-records`. Keep local material for current planning, ramp-up, system/design and verification. Retrieve historical context from Records with source/commit citations. PR/handoff includes verified archive reference or retention no-op reason.

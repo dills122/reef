@@ -2,6 +2,28 @@
 
 Policy confirmed October 2, 2026: Reef keeps current code and docs plus latest complete evidence bundle per topic/profile. Historical documents, older attempts and dated reports live in [Reef Records](https://github.com/dills122/reef-records).
 
+## Required completion pass
+
+Apply to every feature, fix, refactor and code-working session before PR/handoff.
+
+1. Update implementation, focused tests, affected contracts and owner docs together. Preserve latest relevant evidence with exact source/configuration, commands, date, scope, results and corrections. Generate new evidence when behavior or claims require it; do not rerun unrelated qualifications for prose-only changes.
+2. Check guidance and overviews against resulting system: `AGENTS.md`, `AI_CONTEXT.md`, documentation map, relevant steering, system/project overview, technical design and accepted decisions. Update affected owners only; explain non-applicability in PR rather than editing every overview mechanically. Put current execution/status in `WORK_PLAN.md`.
+3. Review touched topic and related plans, reports, handoffs, research and evidence for supersession. Keep only material needed for active planning, session understanding, onboarding, current system/design, operations or latest verification. File age or recent creation alone is not a reason to retain it. Before moving mixed current/history material, promote still-live facts and open tasks to current owner, leaving concise links to historical reasoning.
+4. Lift and shift superseded records into `reef-records` using [archive protocol](https://github.com/dills122/reef-records/blob/main/docs/ARCHIVE_POLICY.md): preserve bytes and paths, record source commit/hash/selection reason, publish and land archive, verify destination, then remove Reef copies and repair active links to immutable archive commits. Retain latest complete bundle per topic/profile, including failed latest attempts and necessary fixtures/corrections. Never keep only a favorable success or remove active dependencies to meet size targets.
+5. Update archive index and Reef relocation/retained-evidence inventory for actual moves; update relevant local navigation and reading guidance. Run retention checks, affected validation and link checks. PR/handoff records retained latest bundle, archive commit/PR and verification, or explicit no-op reason when no superseded material exists. Pass is required; artificial archive churn is not.
+
+Existing checker verifies October 2 inventory. Future migrations must extend checker to cover every new inventory and maintained latest-bundle selection; adding an unchecked JSON file does not complete retention gate. Preserve historical relocation facts while updating current retained-evidence selection with dated replacement/archive links.
+
+Ordinary prior versions of continuously maintained code/docs stay in Git history. Archive standalone superseded records and evidence; do not snapshot whole repository for every edit. No automatic age-based purge or deletion of ignored local data.
+
+## Historical context lookup
+
+Start sessions with current task, source/tests, `AI_CONTEXT.md` and relevant owner docs. Read Records when question needs historical reasoning, old run comparison, failed attempt, correction or superseded design; throughput baseline comparison remains mandatory when applicable.
+
+Search [Records index](https://github.com/dills122/reef-records/blob/main/INDEX.md) and manifests by original path, topic, date, run ID or source commit. Open only relevant originals at recorded archive commit; parse evidence and corrections together. Cite archive path/commit, original source commit and measurement/design scope. Verify any claimed current implication against current source, contracts, decisions and latest evidence. Archive availability or an unchecked old checklist never establishes present behavior or open work.
+
+If current work needs a durable lesson, add concise verified fact to current owner with archive citation. Keep original report and bulk historical narrative in Records. When history is unavailable, state missing evidence and its impact; do not guess or recreate its claims as current facts.
+
 ## What stays
 
 - Current code, tests, scenario definitions, contracts, accepted decisions, steering and operational runbooks.

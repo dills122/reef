@@ -16,6 +16,10 @@ history. Start at [the documentation map](README.md).
 
 ## Promotion and archive rules
 
+- Run [required completion pass](RECORDS_RETENTION.md#required-completion-pass)
+  after each feature/code change. Keep current planning, session/ramp-up context,
+  pertinent system/design facts and latest verification; move superseded records
+  to Records and retrieve historical context there when needed.
 - A new active document names its owner, scope, and last verification date.
   Entry indexes link it only when routine work needs it.
 - A completed or superseded plan moves to Reef Records with links repaired and

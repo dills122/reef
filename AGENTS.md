@@ -34,9 +34,9 @@ scope, not an instruction to reopen old work.
 - Contracts: `contracts/proto/`, `docs/steering/inter-service-communication.md`,
   `docs/steering/external-api-boundary.md`, `docs/API_BOUNDARY_STORAGE_DECISIONS.md`,
   and `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` as applicable.
-- Current work: `docs/WORK_PLAN.md` and source/test evidence. Its September 4
-  alignment and [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) are dated checkpoints; verify newer
-  changes before reporting status.
+- Current work: `docs/WORK_PLAN.md`, current source/tests and latest relevant
+  evidence. Board alignment dates bound status claims; verify newer changes.
+  Fetch historical snapshots from Records only when task needs dated comparison.
 - Throughput: first read `docs/THROUGHPUT_BASELINES.md`, original relevant
   success and failure artifacts, `docs/PERFORMANCE_LEARNINGS.md`, and active
   scaling plan. State baseline, code/config/workload/measurement differences,
@@ -47,6 +47,13 @@ scope, not an instruction to reopen old work.
 
 ## Workflow
 
+- Every feature or code change completes [delivery and retention pass](docs/RECORDS_RETENTION.md#required-completion-pass): update code, tests, contracts, owner docs and latest relevant evidence; update guidance/overviews when affected; then move superseded records to `reef-records` before finishing.
+- Keep local context only when needed for active planning, session understanding,
+  onboarding, current system/design, operations or latest verification. Promote
+  still-live facts before archiving; repair links after verified archive publication.
+- Historical questions go to `reef-records`: search index/manifests, read relevant
+  originals, cite commit and scope. Do not copy historical reports back into Reef
+  or treat archived plans as current tasks. Record retention pass or no-op reason in PR.
 - Keep changes small and local-first. Prefer Bun scripts under `scripts/` and
   thin Make wrappers. Do not change public behavior or scenario determinism
   without explicit intent.
