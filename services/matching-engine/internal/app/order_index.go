@@ -21,7 +21,10 @@ type orderShard struct {
 // orderIndex is a striped replacement for a flat map[string]*orderRecord
 // plus one global RWMutex. Every method routes to exactly one shard by
 // hashing the order ID, so unrelated orders (typically on different
-// instruments) rarely contend on the same lock.
+// instruments) rarely contend on the same lock. Each shard's map is keyed by
+// orderIndexKey(runID, orderID), not orderID alone, so two different runs
+// may reuse the same order ID. Shard selection still hashes on the raw
+// order ID (not the composite key) so distribution is unaffected by run ID.
 type orderIndex struct {
 	shards [orderIndexShardCount]orderShard
 }
@@ -38,54 +41,56 @@ func (idx *orderIndex) shard(orderID string) *orderShard {
 	return &idx.shards[orderIDShardHash(orderID)%orderIndexShardCount]
 }
 
-func (idx *orderIndex) load(orderID string) (*orderRecord, bool) {
+func (idx *orderIndex) load(runID string, orderID string) (*orderRecord, bool) {
 	shard := idx.shard(orderID)
 	shard.mu.RLock()
 	defer shard.mu.RUnlock()
-	record, ok := shard.orders[orderID]
+	record, ok := shard.orders[orderIndexKey(runID, orderID)]
 	return record, ok
 }
 
-// reserve inserts record if no order with the same ID already exists,
-// reporting whether the insert happened.
+// reserve inserts record if no order with the same (RunID, OrderID) already
+// exists, reporting whether the insert happened.
 func (idx *orderIndex) reserve(record *orderRecord) bool {
 	shard := idx.shard(record.OrderID)
+	key := orderIndexKey(record.RunID, record.OrderID)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
-	if _, exists := shard.orders[record.OrderID]; exists {
+	if _, exists := shard.orders[key]; exists {
 		return false
 	}
-	shard.orders[record.OrderID] = record
+	shard.orders[key] = record
 	return true
 }
 
-func (idx *orderIndex) release(orderID string) {
+func (idx *orderIndex) release(runID string, orderID string) {
 	shard := idx.shard(orderID)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
-	delete(shard.orders, orderID)
+	delete(shard.orders, orderIndexKey(runID, orderID))
 }
 
 // restore unconditionally inserts record, overwriting any existing entry
-// with the same ID. Used only while building a Service from a snapshot,
-// before the service is shared across goroutines.
+// with the same (RunID, OrderID). Used only while building a Service from a
+// snapshot, before the service is shared across goroutines.
 func (idx *orderIndex) restore(record *orderRecord) {
 	shard := idx.shard(record.OrderID)
 	shard.mu.Lock()
-	shard.orders[record.OrderID] = record
+	shard.orders[orderIndexKey(record.RunID, record.OrderID)] = record
 	shard.mu.Unlock()
 }
 
 // restoreOrDelete sets or removes a single order's entry in its shard. Used
 // by BatchRollback.Rollback to undo mutations one order at a time, rather
 // than serializing the whole rollback behind one engine-wide lock.
-func (idx *orderIndex) restoreOrDelete(orderID string, existed bool, record *orderRecord) {
+func (idx *orderIndex) restoreOrDelete(runID string, orderID string, existed bool, record *orderRecord) {
 	shard := idx.shard(orderID)
+	key := orderIndexKey(runID, orderID)
 	shard.mu.Lock()
 	if existed {
-		shard.orders[orderID] = record
+		shard.orders[key] = record
 	} else {
-		delete(shard.orders, orderID)
+		delete(shard.orders, key)
 	}
 	shard.mu.Unlock()
 }

@@ -90,7 +90,10 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		snapshot.Orders = append(snapshot.Orders, snapshotOrderRecord(record))
 	})
 	sort.Slice(snapshot.Orders, func(i, j int) bool {
-		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
+		if snapshot.Orders[i].OrderID != snapshot.Orders[j].OrderID {
+			return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
+		}
+		return snapshot.Orders[i].RunID < snapshot.Orders[j].RunID
 	})
 	snapshot.Metadata = SnapshotMetadata{
 		SnapshotVersion: "matching-service-snapshot-v3",
@@ -162,15 +165,22 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 		if !ok {
 			return nil, false
 		}
-		service.books[instrumentID] = &orderBook{book: restored}
+		scope, ok := parseBookKey(instrumentID)
+		if !ok {
+			return nil, false
+		}
+		service.books[instrumentID] = &orderBook{RunID: scope.RunID, book: restored}
 	}
+	// Order IDs are only unique within one run, so the dedup/scope checks
+	// below key on (RunID, OrderID), not OrderID alone.
 	seenOrderIDs := make(map[string]bool, len(snapshot.Orders))
 	terminalRecords := make([]*orderRecord, 0)
 	for _, order := range snapshot.Orders {
-		if order.OrderID == "" || seenOrderIDs[order.OrderID] {
+		key := orderIndexKey(order.RunID, order.OrderID)
+		if order.OrderID == "" || seenOrderIDs[key] {
 			return nil, false
 		}
-		seenOrderIDs[order.OrderID] = true
+		seenOrderIDs[key] = true
 		record := &orderRecord{
 			OrderID:           order.OrderID,
 			RunID:             order.RunID,
@@ -263,8 +273,17 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 		builder.WriteByte(';')
 	}
 	orders := append([]SnapshotOrderRecord(nil), snapshot.Orders...)
+	// Tie-break on RunID too: order IDs are only unique within one run, and
+	// this must stay deterministic even when two runs reuse an ID. This
+	// tie-break only ever activates on that collision - it reproduces the
+	// exact same byte order (and checksum) as before for any snapshot where
+	// every OrderID was already unique, which was true of every snapshot
+	// ever produced by the prior, globally-unique order index.
 	sort.Slice(orders, func(i, j int) bool {
-		return orders[i].OrderID < orders[j].OrderID
+		if orders[i].OrderID != orders[j].OrderID {
+			return orders[i].OrderID < orders[j].OrderID
+		}
+		return orders[i].RunID < orders[j].RunID
 	})
 	for _, order := range orders {
 		builder.WriteString("order:")
@@ -336,26 +355,35 @@ func normalizeSnapshotScope(snapshot Snapshot) (Snapshot, bool) {
 	return snapshot, true
 }
 
+// validSnapshotOrderScopes keys its lookup maps by orderIndexKey(RunID,
+// OrderID), not OrderID alone: order IDs are only unique within one run,
+// and this runs on snapshots that may legitimately contain the same order
+// ID reused by two different runs.
 func validSnapshotOrderScopes(snapshot Snapshot) bool {
 	orders := make(map[string]SnapshotOrderRecord, len(snapshot.Orders))
 	for _, order := range snapshot.Orders {
 		if _, ok := snapshot.Books[bookKey(order.RunID, order.VenueSessionID, order.InstrumentID)]; !ok {
 			return false
 		}
-		orders[order.OrderID] = order
+		orders[orderIndexKey(order.RunID, order.OrderID)] = order
 	}
 	resting := make(map[string]bool)
 	for key, book := range snapshot.Books {
+		scope, ok := parseBookKey(key)
+		if !ok {
+			return false
+		}
 		for _, entry := range append(append([]hotbook.SnapshotOrder(nil), book.Buys...), book.Sells...) {
-			order, ok := orders[entry.OrderID]
-			if !ok || resting[entry.OrderID] || bookKey(order.RunID, order.VenueSessionID, order.InstrumentID) != key || order.Side != entry.Side || order.LimitPrice != entry.LimitPrice || order.RemainingQuantity <= 0 || (order.Status != domain.OrderStatusAccepted && order.Status != domain.OrderStatusPartiallyFilled) {
+			restingKey := orderIndexKey(scope.RunID, entry.OrderID)
+			order, ok := orders[restingKey]
+			if !ok || resting[restingKey] || bookKey(order.RunID, order.VenueSessionID, order.InstrumentID) != key || order.Side != entry.Side || order.LimitPrice != entry.LimitPrice || order.RemainingQuantity <= 0 || (order.Status != domain.OrderStatusAccepted && order.Status != domain.OrderStatusPartiallyFilled) {
 				return false
 			}
-			resting[entry.OrderID] = true
+			resting[restingKey] = true
 		}
 	}
 	for _, order := range snapshot.Orders {
-		if (order.Status == domain.OrderStatusAccepted || order.Status == domain.OrderStatusPartiallyFilled) && !resting[order.OrderID] {
+		if (order.Status == domain.OrderStatusAccepted || order.Status == domain.OrderStatusPartiallyFilled) && !resting[orderIndexKey(order.RunID, order.OrderID)] {
 			return false
 		}
 	}
