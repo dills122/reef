@@ -1,0 +1,31 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from matching.Dockerfile
+#1 transferring dockerfile: 185B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/reef-matching-engine:calcify-p2-local
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 101B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/reef-matching-engine:calcify-p2-local
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 16.26MB 0.2s done
+#5 DONE 0.2s
+
+#4 [1/2] FROM docker.io/library/reef-matching-engine:calcify-p2-local
+#4 CACHED
+
+#6 [2/2] COPY .planning/calcify-10k-timebox/image-build/matching-engine /usr/local/bin/matching-engine
+#6 DONE 0.0s
+
+#7 exporting to image
+#7 exporting layers 0.0s done
+#7 writing image sha256:a97c87352ca3ed222b1d6cbaf5414951f980e0620fa1076e056277a2d98a68a0 done
+#7 naming to docker.io/library/reef-matching-engine:calcify-10k-canonical done
+#7 DONE 0.0s
