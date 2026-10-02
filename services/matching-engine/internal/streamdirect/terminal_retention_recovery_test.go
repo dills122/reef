@@ -28,17 +28,17 @@ func TestMultiPartitionRecoveryMatchesLiveBoundedTerminalState(t *testing.T) {
 	restoreTerminalLane(t, recovered, 0, partitionZero)
 	restoreTerminalLane(t, recovered, 1, partitionOne)
 
-	if _, ok := live.OrderState("ord-a"); ok {
+	if _, ok := live.OrderState("run-1", "ord-a"); ok {
 		t.Fatal("live bounded state retained chronologically oldest terminal order")
 	}
-	if _, ok := recovered.OrderState("ord-a"); ok {
+	if _, ok := recovered.OrderState("run-1", "ord-a"); ok {
 		t.Fatal("recovered bounded state retained chronologically oldest terminal order")
 	}
 	for _, orderID := range []string{"ord-b", "ord-c"} {
-		if _, ok := live.OrderState(orderID); !ok {
+		if _, ok := live.OrderState("run-1", orderID); !ok {
 			t.Fatalf("live bounded state lost %s", orderID)
 		}
-		if _, ok := recovered.OrderState(orderID); !ok {
+		if _, ok := recovered.OrderState("run-1", orderID); !ok {
 			t.Fatalf("recovered bounded state lost %s", orderID)
 		}
 	}

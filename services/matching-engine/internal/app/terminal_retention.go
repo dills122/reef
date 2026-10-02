@@ -21,6 +21,7 @@ type terminalOrderRetention struct {
 }
 
 type terminalRetentionEntry struct {
+	runID      string
 	orderID    string
 	terminalAt string
 }
@@ -29,11 +30,17 @@ type terminalRetentionHeap []terminalRetentionEntry
 
 func (h terminalRetentionHeap) Len() int { return len(h) }
 
+// Less breaks ties on orderID with runID so ordering stays deterministic
+// even when two different runs reach a terminal state for the same order
+// ID at the same terminalAt - order IDs are only unique within one run.
 func (h terminalRetentionHeap) Less(i int, j int) bool {
 	if h[i].terminalAt != h[j].terminalAt {
 		return h[i].terminalAt < h[j].terminalAt
 	}
-	return h[i].orderID < h[j].orderID
+	if h[i].orderID != h[j].orderID {
+		return h[i].orderID < h[j].orderID
+	}
+	return h[i].runID < h[j].runID
 }
 
 func (h terminalRetentionHeap) Swap(i int, j int) { h[i], h[j] = h[j], h[i] }
@@ -52,9 +59,9 @@ func (h *terminalRetentionHeap) Pop() any {
 }
 
 // track records that record just reached a terminal state and, if that
-// pushes the tracked count past limit, calls evict for the order ID with the
-// smallest deterministic retention key.
-func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID string)) {
+// pushes the tracked count past limit, calls evict for the (run, order) ID
+// with the smallest deterministic retention key.
+func (t *terminalOrderRetention) track(record *orderRecord, evict func(runID string, orderID string)) {
 	if t.limit <= 0 || record.terminalTracked {
 		return
 	}
@@ -71,7 +78,7 @@ func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID s
 // Delaying this mutation keeps batch rollback local to the orders it changed;
 // a failed lane can never restore an old global queue snapshot over another
 // lane's successful work.
-func (t *terminalOrderRetention) commit(record *orderRecord, evict func(orderID string)) {
+func (t *terminalOrderRetention) commit(record *orderRecord, evict func(runID string, orderID string)) {
 	if t.limit <= 0 || record == nil || record.OrderID == "" {
 		return
 	}
@@ -79,12 +86,13 @@ func (t *terminalOrderRetention) commit(record *orderRecord, evict func(orderID 
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	heap.Push(&t.entries, terminalRetentionEntry{
+		runID:      record.RunID,
 		orderID:    record.OrderID,
 		terminalAt: normalizedTerminalTime(record.LastUpdatedAt),
 	})
 	if t.entries.Len() > t.limit {
 		evicted := heap.Pop(&t.entries).(terminalRetentionEntry)
-		evict(evicted.orderID)
+		evict(evicted.runID, evicted.orderID)
 	}
 }
 
@@ -96,7 +104,10 @@ func (t *terminalOrderRetention) trackedOrderIDs() []string {
 		if entries[i].terminalAt != entries[j].terminalAt {
 			return entries[i].terminalAt < entries[j].terminalAt
 		}
-		return entries[i].orderID < entries[j].orderID
+		if entries[i].orderID != entries[j].orderID {
+			return entries[i].orderID < entries[j].orderID
+		}
+		return entries[i].runID < entries[j].runID
 	})
 	orderIDs := make([]string, 0, len(entries))
 	for _, entry := range entries {
