@@ -21,6 +21,7 @@ import (
 
 type config struct {
 	BaseURL           string
+	InstrumentIDs     []string
 	SmokeID           string
 	Duration          time.Duration
 	PairsPerSecond    int
@@ -42,6 +43,7 @@ type sample struct {
 }
 
 type report struct {
+	InstrumentIDs            []string `json:"instrumentIds"`
 	SmokeID                  string   `json:"smokeId"`
 	TargetPairs              int64    `json:"targetPairs"`
 	StartIndex               int64    `json:"startIndex"`
@@ -52,6 +54,11 @@ type report struct {
 	CompletedPairs           int64    `json:"completedPairs"`
 	AcceptedOrders           int64    `json:"acceptedOrders"`
 	AcceptedOrdersAtDeadline int64    `json:"acceptedOrdersAtDeadline"`
+	DeadlineAccounting       string   `json:"deadlineAccounting"`
+	LoadStartedEpochMs       int64    `json:"loadStartedEpochMs"`
+	ScheduledDeadlineEpochMs int64    `json:"scheduledDeadlineEpochMs"`
+	AcceptedAllEpochMs       int64    `json:"acceptedAllEpochMs"`
+	ReceiptDrainAccounting   string   `json:"receiptDrainAccounting"`
 	AcceptedOrdersPerSecond  float64  `json:"acceptedOrdersPerSecond"`
 	ElapsedMs                int64    `json:"elapsedMs"`
 	Retries                  int64    `json:"retries"`
@@ -68,15 +75,29 @@ type report struct {
 }
 
 type counters struct {
-	acceptedOrders atomic.Int64
+	acceptedOrders         atomic.Int64
+	acceptedBeforeDeadline atomic.Int64
+	// loadDeadline and now are fixed before workers start; only counters mutate.
+	loadDeadline   time.Time
+	now            func() time.Time
 	completedPairs atomic.Int64
 	retries        atomic.Int64
 	failures       atomic.Int64
 	firstError     atomic.Value
 }
 
+// recordAcknowledgement classifies one validated durable HTTP acknowledgement.
+func (c *counters) recordAcknowledgement(observedAt time.Time) {
+	c.acceptedOrders.Add(1)
+	if observedAt.Before(c.loadDeadline) {
+		c.acceptedBeforeDeadline.Add(1)
+	}
+}
+
 func main() {
 	cfg := config{}
+	var instrumentIDs string
+	flag.StringVar(&instrumentIDs, "instrument-ids", "", "optional comma-separated instrument IDs; pairs route round-robin by absolute pair index")
 	flag.StringVar(&cfg.BaseURL, "base-url", "http://127.0.0.1:8080", "runtime URL")
 	flag.StringVar(&cfg.SmokeID, "smoke-id", "", "seeded full-path smoke ID")
 	flag.DurationVar(&cfg.Duration, "duration", 30*time.Second, "scheduled load duration")
@@ -89,6 +110,12 @@ func main() {
 	if cfg.SmokeID == "" || cfg.Duration <= 0 || cfg.Duration%time.Second != 0 ||
 		cfg.PairsPerSecond <= 0 || cfg.Workers <= 0 || cfg.StartIndex < 0 || cfg.ReportOut == "" {
 		fmt.Fprintln(os.Stderr, "smoke-id, whole-second duration, pairs-per-second, workers, and report-out required")
+		os.Exit(2)
+	}
+	var err error
+	cfg.InstrumentIDs, err = parseInstrumentIDs(instrumentIDs, cfg.SmokeID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 	result := run(cfg)
@@ -110,6 +137,9 @@ func main() {
 }
 
 func run(cfg config) report {
+	if len(cfg.InstrumentIDs) == 0 {
+		cfg.InstrumentIDs = []string{"AAPL-" + cfg.SmokeID}
+	}
 	transport := &http.Transport{
 		MaxIdleConns: cfg.Workers * 2, MaxIdleConnsPerHost: cfg.Workers,
 		MaxConnsPerHost: cfg.Workers, IdleConnTimeout: 90 * time.Second,
@@ -118,11 +148,11 @@ func run(cfg config) report {
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	total := int64(cfg.PairsPerSecond) * int64(cfg.Duration/time.Second)
 	jobs := make(chan int64, cfg.Workers*4)
-	var counts counters
+	started := time.Now()
+	counts := counters{loadDeadline: started.Add(cfg.Duration)}
 	var sampleMu sync.Mutex
 	var samples []sample
 	var workers sync.WaitGroup
-	started := time.Now()
 	for range cfg.Workers {
 		workers.Add(1)
 		go func() {
@@ -217,12 +247,11 @@ func run(cfg config) report {
 			scheduled++
 		}
 	}
-	acceptedAtDeadline := counts.acceptedOrders.Load()
 	close(jobs)
 	workers.Wait()
+	acceptedAt := time.Now()
 	close(progressDone)
 	<-progressStopped
-	acceptedAt := time.Now()
 	var finalReceipts, drainMs *int64
 	if cfg.ReceiptGeneration > 0 && counts.failures.Load() == 0 {
 		for time.Since(acceptedAt) < 60*time.Second {
@@ -243,11 +272,17 @@ func run(cfg config) report {
 	sort.Slice(collected, func(i, j int) bool { return collected[i].ElapsedMs < collected[j].ElapsedMs })
 	elapsed := acceptedAt.Sub(started)
 	result := report{
-		SmokeID: cfg.SmokeID, TargetPairs: total, StartIndex: cfg.StartIndex,
+		InstrumentIDs: cfg.InstrumentIDs,
+		SmokeID:       cfg.SmokeID, TargetPairs: total, StartIndex: cfg.StartIndex,
 		TargetPairsPerSecond: cfg.PairsPerSecond,
 		ScheduledPairs:       scheduled, DispatchedPairs: dispatched, DroppedPairs: dropped,
 		CompletedPairs: counts.completedPairs.Load(), AcceptedOrders: counts.acceptedOrders.Load(),
-		AcceptedOrdersAtDeadline: acceptedAtDeadline,
+		AcceptedOrdersAtDeadline: counts.acceptedBeforeDeadline.Load(),
+		DeadlineAccounting:       "validated durable HTTP acknowledgement observed strictly before fixed monotonic load-start plus requested duration; late/equal acknowledgements count only in acceptedOrders; epoch fields expose wall time from those same Go instants",
+		LoadStartedEpochMs:       started.UnixMilli(),
+		ScheduledDeadlineEpochMs: counts.loadDeadline.UnixMilli(),
+		AcceptedAllEpochMs:       acceptedAt.UnixMilli(),
+		ReceiptDrainAccounting:   "drainMs runs from HTTP worker completion before stopping the progress observer through successful receipt reconciliation; includes any outstanding observer query wait; acceptedAllEpochMs records worker completion even if requests failed",
 		AcceptedOrdersPerSecond:  float64(counts.acceptedOrders.Load()) / elapsed.Seconds(),
 		ElapsedMs:                elapsed.Milliseconds(), Retries: counts.retries.Load(), Failures: counts.failures.Load(),
 		ReceiptGeneration: cfg.ReceiptGeneration, Samples: collected,
@@ -330,7 +365,6 @@ func submitPair(client *http.Client, cfg config, index int64, counts *counters) 
 		if err := submit(client, cfg, index, side.party, side.action, counts); err != nil {
 			return err
 		}
-		counts.acceptedOrders.Add(1)
 	}
 	counts.completedPairs.Add(1)
 	return nil
@@ -345,7 +379,7 @@ func submit(client *http.Client, cfg config, index int64, party, side string, co
 		"runId":   cfg.SmokeID, "venueSessionId": "session-" + cfg.SmokeID,
 		"occurredAt":    "2026-09-29T15:00:00Z",
 		"orderId":       fmt.Sprintf("%s-load-order-%d-%s", party, index, cfg.SmokeID),
-		"instrumentId":  "AAPL-" + cfg.SmokeID,
+		"instrumentId":  instrumentForPair(cfg, index),
 		"participantId": party + "-" + cfg.SmokeID,
 		"accountId":     party + "-account-" + cfg.SmokeID,
 		"side":          side, "orderType": "LIMIT", "quantityUnits": "100",
@@ -389,7 +423,44 @@ func submit(client *http.Client, cfg config, index int64, party, side string, co
 		if !ack.Accepted && !strings.EqualFold(ack.Status, "accepted") {
 			return errors.New(commandID + " was not accepted")
 		}
+		observedAt := time.Now()
+		if counts.now != nil {
+			observedAt = counts.now()
+		}
+		counts.recordAcknowledgement(observedAt)
 		return nil
 	}
 	return errors.New(commandID + " exhausted retries")
+}
+
+// parseInstrumentIDs bounds explicit load routing before issuing HTTP work.
+// Default preserves existing seeded smoke instrument and command identities.
+func parseInstrumentIDs(raw, smokeID string) ([]string, error) {
+	if raw == "" {
+		return []string{"AAPL-" + smokeID}, nil
+	}
+	ids := strings.Split(raw, ",")
+	if len(ids) > 64 {
+		return nil, errors.New("instrument-ids allows at most 64 IDs")
+	}
+	seen := make(map[string]bool, len(ids))
+	for i, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || len(id) > 128 {
+			return nil, errors.New("instrument-ids requires nonempty IDs of at most 128 UTF-8 bytes")
+		}
+		if seen[id] {
+			return nil, fmt.Errorf("instrument-ids repeats %q", id)
+		}
+		seen[id] = true
+		ids[i] = id
+	}
+	return ids, nil
+}
+
+func instrumentForPair(cfg config, index int64) string {
+	if len(cfg.InstrumentIDs) == 0 {
+		return "AAPL-" + cfg.SmokeID
+	}
+	return cfg.InstrumentIDs[index%int64(len(cfg.InstrumentIDs))]
 }

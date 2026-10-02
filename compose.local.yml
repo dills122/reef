@@ -110,6 +110,10 @@ services:
       - "wal_compression=${REEF_BOUNDARY_PG_WAL_COMPRESSION:-on}"
       - "-c"
       - "log_checkpoints=${REEF_BOUNDARY_PG_LOG_CHECKPOINTS:-on}"
+      - "-c"
+      - "shared_buffers=${REEF_BOUNDARY_PG_SHARED_BUFFERS:-128MB}"
+      - "-c"
+      - "commit_delay=${REEF_BOUNDARY_PG_COMMIT_DELAY_MICROS:-0}"
     environment:
       POSTGRES_DB: reef
       POSTGRES_USER: reef

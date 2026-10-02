@@ -34,12 +34,14 @@ services:
     environment:
       <<: *calcify-environment
       CALCIFY_STAGE: "verifier"
+      CALCIFY_VERIFIER_MAX_POLL_RECORDS: "${CALCIFY_VERIFIER_MAX_POLL_RECORDS:-100}"
 
   calcify-receipt:
     <<: *calcify-service
     environment:
       <<: *calcify-environment
       CALCIFY_STAGE: "receipt"
+      CALCIFY_RECEIPT_MAX_POLL_RECORDS: "${CALCIFY_RECEIPT_MAX_POLL_RECORDS:-100}"
 
   calcify-resolver:
     <<: *calcify-service

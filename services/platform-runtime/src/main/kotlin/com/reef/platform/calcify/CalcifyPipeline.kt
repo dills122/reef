@@ -16,6 +16,20 @@ import java.util.concurrent.ExecutionException
 
 /** Independent opt-in pipeline. No legacy settlement or balance writes. */
 object CalcifyPipeline {
+    /** Stage-local opt-in poll bounds; invalid explicit settings fail before broker/DB work. */
+    internal fun maxPollRecords(stage: String, lookup: (String) -> String? = System::getenv): Int {
+        val key = when (stage) {
+            "extractor" -> return 100
+            "verifier" -> "CALCIFY_VERIFIER_MAX_POLL_RECORDS"
+            "receipt" -> "CALCIFY_RECEIPT_MAX_POLL_RECORDS"
+            else -> error("Unsupported CALCIFY_STAGE: $stage")
+        }
+        val value = lookup(key) ?: return 100
+        val limit = requireNotNull(value.trim().toIntOrNull()) { "$key must be an integer in 1..1000" }
+        require(limit in 1..1000) { "$key must be an integer in 1..1000" }
+        return limit
+    }
+
     internal data class VerifierPollPlan(
         val outputs: List<ProducerRecord<ByteArray, ByteArray>>,
         val offsets: Map<TopicPartition, OffsetAndMetadata>,
@@ -28,6 +42,7 @@ object CalcifyPipeline {
     )
 
     private data class Config(val stage: String) {
+        val maxPollRecords = CalcifyPipeline.maxPollRecords(stage)
         val bootstrap = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         val source = RuntimeEnv.string("CALCIFY_SOURCE_TOPIC", "REEF_VENUE_EVENTS")
         val commitments = RuntimeEnv.string("CALCIFY_COMMITMENT_TOPIC", "REEF_MATCH_COMMITMENTS_V1")
@@ -247,7 +262,7 @@ object CalcifyPipeline {
             put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
             put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
             put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, config.reset)
-            put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100)
+            put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, config.maxPollRecords)
         })
 
     private fun producer(config: Config): KafkaProducer<ByteArray, ByteArray> =

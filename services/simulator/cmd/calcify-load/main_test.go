@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +29,9 @@ func TestSubmitPairWaitsForDurableBuyBeforeSell(t *testing.T) {
 			t.Error(err)
 		}
 		mu.Lock()
+		if payload.Instrument != "AAPL-test" {
+			t.Errorf("default instrument=%s", payload.Instrument)
+		}
 		sides = append(sides, payload.Side)
 		keys = append(keys, r.Header.Get("Idempotency-Key"))
 		mu.Unlock()
@@ -102,12 +108,30 @@ func TestRunPacesFullCrossingPairsThroughHTTP(t *testing.T) {
 	}))
 	defer server.Close()
 
+	beforeRun := time.Now().UnixMilli()
 	result := run(config{
 		BaseURL: server.URL, SmokeID: "paced-test", Duration: time.Second,
 		PairsPerSecond: 10, Workers: 10,
 	})
+	afterRun := time.Now().UnixMilli()
+	if result.LoadStartedEpochMs < beforeRun || result.AcceptedAllEpochMs > afterRun || result.AcceptedAllEpochMs < result.LoadStartedEpochMs {
+		t.Fatalf("run instants outside observed bounds: before=%d start=%d acceptedAll=%d after=%d", beforeRun, result.LoadStartedEpochMs, result.AcceptedAllEpochMs, afterRun)
+	}
+	if result.ScheduledDeadlineEpochMs-result.LoadStartedEpochMs != 1000 {
+		t.Fatalf("scheduled duration=%d want1000", result.ScheduledDeadlineEpochMs-result.LoadStartedEpochMs)
+	}
+	wallElapsed := result.AcceptedAllEpochMs - result.LoadStartedEpochMs
+	if delta := wallElapsed - result.ElapsedMs; delta < -1 || delta > 1 {
+		t.Fatalf("completion elapsed=%d wallElapsed=%d", result.ElapsedMs, wallElapsed)
+	}
+	if result.DeadlineAccounting == "" || result.ReceiptDrainAccounting == "" {
+		t.Fatal("missing deadline/drain measurement definitions")
+	}
 	if result.ScheduledPairs != 10 || result.DispatchedPairs != 10 || result.DroppedPairs != 0 {
 		t.Fatalf("schedule=%d dispatched=%d dropped=%d", result.ScheduledPairs, result.DispatchedPairs, result.DroppedPairs)
+	}
+	if !reflect.DeepEqual(result.InstrumentIDs, []string{"AAPL-paced-test"}) {
+		t.Fatalf("default report instruments=%v", result.InstrumentIDs)
 	}
 	if result.CompletedPairs != 10 || result.AcceptedOrders != 20 || result.Failures != 0 || result.Retries != 0 {
 		t.Fatalf("completed=%d accepted=%d failures=%d retries=%d", result.CompletedPairs, result.AcceptedOrders, result.Failures, result.Retries)
@@ -129,5 +153,113 @@ func TestSubmitRejectsNonDurableAcknowledgement(t *testing.T) {
 	}
 	if counts.acceptedOrders.Load() != 0 || counts.completedPairs.Load() != 0 {
 		t.Fatalf("accepted=%d completed=%d", counts.acceptedOrders.Load(), counts.completedPairs.Load())
+	}
+}
+
+func TestAcknowledgementDeadlineIsStrictAndIndependentOfSnapshotTime(t *testing.T) {
+	deadline := time.Now().Add(time.Second)
+	counts := counters{loadDeadline: deadline}
+	for _, observedAt := range []time.Time{deadline.Add(-time.Nanosecond), deadline, deadline.Add(time.Nanosecond)} {
+		counts.recordAcknowledgement(observedAt)
+	}
+	if got := counts.acceptedOrders.Load(); got != 3 {
+		t.Fatalf("total accepted=%d want3", got)
+	}
+	// Reading after every response has completed must not turn late/equal ACKs
+	// into in-window ACKs. Deadline equality is excluded explicitly.
+	if got := counts.acceptedBeforeDeadline.Load(); got != 1 {
+		t.Fatalf("before deadline=%d want1", got)
+	}
+}
+
+func TestSubmitPairClassifiesEachValidatedHTTPAcknowledgementAtObservation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+	deadline := time.Now().Add(time.Second)
+	observations := []time.Time{deadline.Add(-time.Nanosecond), deadline.Add(time.Nanosecond)}
+	calls := 0
+	counts := counters{loadDeadline: deadline, now: func() time.Time { at := observations[calls]; calls++; return at }}
+	if err := submitPair(server.Client(), config{BaseURL: server.URL, SmokeID: "deadline-test"}, 0, &counts); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || counts.acceptedOrders.Load() != 2 || counts.completedPairs.Load() != 1 || counts.acceptedBeforeDeadline.Load() != 1 {
+		t.Fatalf("ACK clocks=%d total=%d pairs=%d beforeDeadline=%d", calls, counts.acceptedOrders.Load(), counts.completedPairs.Load(), counts.acceptedBeforeDeadline.Load())
+	}
+}
+
+func TestParseInstrumentIDsValidatesBoundedExplicitList(t *testing.T) {
+	for _, test := range []struct {
+		raw  string
+		want []string
+	}{
+		{"", []string{"AAPL-test"}}, {"lane-a, lane-b,lane-c", []string{"lane-a", "lane-b", "lane-c"}},
+		{strings.Repeat("x", 128), []string{strings.Repeat("x", 128)}},
+	} {
+		got, err := parseInstrumentIDs(test.raw, "test")
+		if err != nil || !reflect.DeepEqual(got, test.want) {
+			t.Fatalf("raw=%q got=%v err=%v want=%v", test.raw, got, err, test.want)
+		}
+	}
+	many := make([]string, 65)
+	for i := range many {
+		many[i] = fmt.Sprintf("lane-%d", i)
+	}
+	if got, err := parseInstrumentIDs(strings.Join(many[:64], ","), "test"); err != nil || len(got) != 64 {
+		t.Fatalf("64 lanes got=%d err=%v", len(got), err)
+	}
+	for _, raw := range []string{"lane-a,", "lane-a,,lane-b", "lane-a,lane-a", strings.Join(many, ","), strings.Repeat("界", 43)} {
+		if _, err := parseInstrumentIDs(raw, "test"); err == nil {
+			t.Fatalf("invalid list accepted: %q", raw)
+		}
+	}
+}
+
+func TestSubmitPairRoutesBothSidesRoundRobinWithoutChangingIdentity(t *testing.T) {
+	type submitted struct {
+		Instrument string `json:"instrumentId"`
+		Side       string `json:"side"`
+		CommandID  string `json:"commandId"`
+		OrderID    string `json:"orderId"`
+		RunID      string `json:"runId"`
+		SessionID  string `json:"venueSessionId"`
+	}
+	var orders []submitted
+	var ordersMu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload submitted
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		ordersMu.Lock()
+		orders = append(orders, payload)
+		ordersMu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+	cfg := config{BaseURL: server.URL, SmokeID: "lanes-test", StartIndex: 7, InstrumentIDs: []string{"lane-a", "lane-b", "lane-c"}}
+	var counts counters
+	for index := int64(7); index < 10; index++ {
+		if err := submitPair(server.Client(), cfg, index, &counts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ordersMu.Lock()
+	defer ordersMu.Unlock()
+	if len(orders) != 6 {
+		t.Fatalf("orders=%d want6", len(orders))
+	}
+	for i, order := range orders {
+		index := int64(7 + i/2)
+		party, side := "buyer", "BUY"
+		if i%2 == 1 {
+			party, side = "seller", "SELL"
+		}
+		if order.Instrument != cfg.InstrumentIDs[index%3] || order.Side != side || order.CommandID != fmt.Sprintf("%s-load-%d-lanes-test", party, index) || order.OrderID != fmt.Sprintf("%s-load-order-%d-lanes-test", party, index) || order.RunID != "lanes-test" || order.SessionID != "session-lanes-test" {
+			t.Fatalf("order%d routing/identity=%+v", i, order)
+		}
 	}
 }
