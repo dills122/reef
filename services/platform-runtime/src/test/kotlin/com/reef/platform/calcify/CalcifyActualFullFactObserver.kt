@@ -66,17 +66,16 @@ object CalcifyActualFullFactObserver {
                                         val decoded=decode(record.value(),source,uuid,generation,partition,record.offset())
                                         batches++
                                         for(next in decoded.orders) {
-                                            val key="$partition:${next.fact.orderId}".toByteArray(Charsets.UTF_8)
+                                            val key=acceptanceKey(partition,next.fact.runId,next.fact.orderId)
                                             val prior=store.get(key)?.let {AcceptedOrderSourceV1.parseFrom(it)}
-                                            if(prior!=null) {
-                                                require(prior.fact==next.fact && prior.acceptance==next.acceptance && prior.source.commandId==next.source.commandId) { "independent acceptance conflict ${next.fact.orderId}" }
-                                            } else {store.put(key,next.toByteArray());orders++}
+                                            val retained=retainAcceptance(prior,next)
+                                            if(prior==null) {store.put(key,retained.toByteArray());orders++}
                                         }
                                         decoded.trades.forEachIndexed {ordinal,trade ->
                                             val id=CommitmentId(generation,partition,record.offset(),ordinal)
                                             val row=outputReader.next() ?: error("missing resolved context $id")
                                             require(row.partition()==partition && CalcifyWire.readCommitment(row.key())==id) { "ordered context mismatch: expected $id at output ${row.offset()}" }
-                                            fun lookup(orderId:String)=store.get("$partition:$orderId".toByteArray(Charsets.UTF_8))?.let {AcceptedOrderSourceV1.parseFrom(it)} ?: error("missing source acceptance $orderId")
+                                            fun lookup(orderId:String)=store.get(acceptanceKey(partition,trade.runId,orderId))?.let {AcceptedOrderSourceV1.parseFrom(it)} ?: error("missing source acceptance $orderId")
                                             val oracle=context(id,policy,trade,lookup(trade.fact.buyOrderId),lookup(trade.fact.sellOrderId))
                                             require(MatchContextResolvedV1.parseFrom(row.value())==oracle) { "independent full-fact mismatch $id" }
                                             hashes.getOrPut(partition) {java.security.MessageDigest.getInstance("SHA-256")}.apply {update(row.key());update(java.nio.ByteBuffer.allocate(4).putInt(row.value().size).array());update(row.value())}
@@ -128,6 +127,7 @@ object CalcifyActualFullFactObserver {
                     .setEngineOrderId(text(accepted,"engineOrderId")).setOccurredAt(timestamp(accepted,"occurredAt")).build()
                 require(event.orderId==fact.orderId && event.engineOrderId==fact.engineOrderId && event.occurredAt==fact.acceptedAt)
                 require(text(outcome,"orderId")==fact.orderId && text(outcome,"instrumentId")==fact.instrumentId)
+                if(outcome.has("runId")) require(text(outcome,"runId")==fact.runId) {"acceptance outcome run mismatch"}
                 orders+=AcceptedOrderSourceV1.newBuilder().setFact(fact).setAcceptance(event).setSource(provenance).build()
             }
             val rows=result.get("trades")
@@ -141,7 +141,12 @@ object CalcifyActualFullFactObserver {
                         .setPrice(Price.newBuilder().setNanos(positive(trade,"price")).setCurrency(text(trade,"currency")))
                         .setOccurredAt(timestamp(trade,"occurredAt")).build()
                     require(text(outcome,"instrumentId")==fact.instrumentId)
-                    trades+=TradeSourceV1.newBuilder().setFact(fact).setSource(provenance).build()
+                    val runId=if(outcome.has("runId")) text(outcome,"runId") else {
+                        require(text(outcome,"commandType")=="SubmitOrder" && result.has("acceptedOrder")) {"missing authoritative trade run"}
+                        text(result.get("acceptedOrder"),"runId")
+                    }
+                    if(result.has("acceptedOrder")) require(text(result.get("acceptedOrder"),"runId")==runId) {"trade acceptance run mismatch"}
+                    trades+=TradeSourceV1.newBuilder().setFact(fact).setSource(provenance).setRunId(runId).build()
                 }
             }
         }
@@ -154,17 +159,32 @@ object CalcifyActualFullFactObserver {
             .setClientOrderId(client?.textValue() ?: "").setRunId(text(row,"runId")).setVenueSessionId(text(row,"venueSessionId"))
             .setInstrumentId(text(row,"instrumentId")).setParticipantId(text(row,"participantId")).setAccountId(text(row,"accountId"))
             .setSide(when(text(row,"side")){"BUY"->OrderSide.ORDER_SIDE_BUY;"SELL"->OrderSide.ORDER_SIDE_SELL;else->error("bad side")})
-            .setOrderType(when(text(row,"orderType")){"LIMIT"->OrderType.ORDER_TYPE_LIMIT;else->error("bad order type")})
+            .setOrderType(when(text(row,"orderType")){"LIMIT","LIMIT_HIDDEN"->OrderType.ORDER_TYPE_LIMIT;else->error("bad order type")})
             .setQuantityUnits(positive(row,"quantityUnits")).setLimitPrice(positive(row,"limitPrice")).setCurrency(text(row,"currency"))
             .setTimeInForce(when(text(row,"timeInForce")){"DAY"->TimeInForce.TIME_IN_FORCE_DAY;"IOC"->TimeInForce.TIME_IN_FORCE_IOC;else->error("bad TIF")})
             .setAcceptedAt(timestamp(row,"acceptedAt")).build()
+    }
+
+    internal fun acceptanceKey(partition:Int,runId:String,orderId:String):ByteArray {
+        require(runId.isNotBlank() && orderId.isNotBlank())
+        val run=runId.toByteArray(Charsets.UTF_8);val order=orderId.toByteArray(Charsets.UTF_8)
+        return java.nio.ByteBuffer.allocate(12+run.size+order.size).putInt(partition).putInt(run.size).put(run).putInt(order.size).put(order).array()
+    }
+
+    internal fun retainAcceptance(prior:AcceptedOrderSourceV1?,next:AcceptedOrderSourceV1):AcceptedOrderSourceV1 {
+        if(prior==null) return next
+        require(prior.fact==next.fact && prior.acceptance==next.acceptance && prior.source.commandId==next.source.commandId) {"independent acceptance conflict ${next.fact.runId}/${next.fact.orderId}"}
+        val a=prior.source;val b=next.source
+        require(a.sourceGeneration==b.sourceGeneration && a.sourcePartition==b.sourcePartition && a.sourceTopic==b.sourceTopic && a.sourceTopicId==b.sourceTopicId) {"acceptance lane conflict"}
+        require(a.sourceOffset<b.sourceOffset || (a.sourceOffset==b.sourceOffset && a.outcomeOrdinal<=b.outcomeOrdinal)) {"source acceptance order regression"}
+        return prior
     }
 
     internal fun context(id:CommitmentId,policy:Int,trade:TradeSourceV1,buy:AcceptedOrderSourceV1,sell:AcceptedOrderSourceV1):MatchContextResolvedV1 {
         require(trade.source.sourceGeneration==id.sourceGeneration && trade.source.sourcePartition==id.sourcePartition && trade.source.sourceOffset==id.sourceOffset)
         require(buy.fact.side==OrderSide.ORDER_SIDE_BUY && sell.fact.side==OrderSide.ORDER_SIDE_SELL)
         require(buy.fact.orderId==trade.fact.buyOrderId && sell.fact.orderId==trade.fact.sellOrderId && buy.fact.orderId!=sell.fact.orderId)
-        require(buy.fact.runId==sell.fact.runId && buy.fact.venueSessionId==sell.fact.venueSessionId && buy.fact.instrumentId==sell.fact.instrumentId && trade.fact.instrumentId==buy.fact.instrumentId)
+        require(trade.runId.isNotBlank() && trade.runId==buy.fact.runId && buy.fact.runId==sell.fact.runId && buy.fact.venueSessionId==sell.fact.venueSessionId && buy.fact.instrumentId==sell.fact.instrumentId && trade.fact.instrumentId==buy.fact.instrumentId)
         require(buy.fact.currency==trade.fact.price.currency && sell.fact.currency==trade.fact.price.currency)
         for(order in listOf(buy,sell)) {
             val a=order.source;val b=trade.source

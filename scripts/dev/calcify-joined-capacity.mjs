@@ -99,7 +99,7 @@ try {
   const accounting = launch('phase1-accounting', 'bun', ['scripts/dev/calcify-verify-existing.mjs'], null,
     { DEV_CALCIFY_LOAD_REPORT: loadPath, DEV_CALCIFY_VERIFY_REPORT: accountingPath });
   evidence.accountingExitCode = await accounting.done;
-  evidence.accounting = JSON.parse(await readFile(accountingPath, 'utf8')); 
+  evidence.accounting = JSON.parse(await readFile(accountingPath, 'utf8'));
   evidence.pass = seconds >= 300 && evidence.acceptedAtDeadlinePerSecond >= policy.minimumAcceptedAtDeadlinePerSecond &&
     evidence.loadExitCode === 0 && evidence.load.elapsedMs <= seconds * 1000 + policy.maxLoadOverrunMs && evidence.load.gatePassed && evidence.load.failures === 0 && evidence.load.drainMs <= policy.maxReceiptDrainMs &&
     evidence.observerExitCode === 0 && observerResult.pass && evidence.resolvedDrainUpperMs <= policy.maxResolvedDrainMs &&

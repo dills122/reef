@@ -38,7 +38,7 @@ object CalcifyResolverBrokerProbe {
             "seed"->{
                 val wave=args[3].toInt();val partition=args[4].toInt()
                 KafkaProducer(props,ByteArraySerializer(),ByteArraySerializer()).use {producer->
-                    for(original in Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines()) {
+                    for(original in CalcifySourceFixtures.currentBodies()) {
                         val node=mapper.readTree(original) as ObjectNode
                         suffix(node,"-w$wave-p$partition")
                         node.put("partition",partition);node.put("eventStream",source)
