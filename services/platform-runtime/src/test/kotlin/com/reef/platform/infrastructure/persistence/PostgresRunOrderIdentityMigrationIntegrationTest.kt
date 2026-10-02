@@ -129,7 +129,11 @@ class PostgresRunOrderIdentityMigrationIntegrationTest {
                 }
                 connection.autoCommit = false
                 try {
-                    connection.createStatement().use { it.execute(schemaSql(Files.readString(directory.resolve("0073_runtime_order_run_identity.sql")))) }
+                    connection.createStatement().use { statement ->
+                        for (migration in listOf("0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql", "0075_instrument_quote_currency.sql")) {
+                            statement.execute(schemaSql(Files.readString(directory.resolve(migration))))
+                        }
+                    }
                     connection.commit()
                 } catch (error: Exception) {
                     connection.rollback()

@@ -3,12 +3,10 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
-import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.NonLifecycleRejectCodes
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
-import com.reef.platform.domain.TradeCreated
 
 internal fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
     commandPayloadJson: String = "{}",
@@ -38,6 +36,7 @@ internal fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
         )
     } else {
         SubmitOrderResult(
+            cancelled = cancellationFromResultPayload(resultPayloadJson),
             accepted = EngineOrderAccepted(
                 eventId = eventId,
                 orderId = orderId,
@@ -100,7 +99,10 @@ internal fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
                 payloadJson = resultPayloadJson.ifBlank { "{}" },
                 runId = runtimeRunId
             )
-        ),
+        ).let { events ->
+            result.cancelled?.let { events + cancellationEvent(it, events.first(), commandId) } ?: events
+        },
+        originalMatchingFactsJson = matchingFactsFromResultPayload(resultPayloadJson),
         streamSequence = streamSequence
     )
 }
@@ -111,39 +113,6 @@ private fun lifecycleEventType(commandType: String, rejected: Boolean): String {
         "CancelOrder" -> "OrderCancelled"
         "ModifyOrder" -> "OrderModified"
         else -> "OrderAccepted"
-    }
-}
-
-private fun executionsFromResultPayload(json: String): List<ExecutionCreated> {
-    return JsonCodec.parseLegacyObjectOrEmpty(json).objectDocuments("executions").map { execution ->
-        ExecutionCreated(
-            eventId = execution.string("eventId"),
-            executionId = execution.string("executionId"),
-            orderId = execution.string("orderId"),
-            instrumentId = execution.string("instrumentId"),
-            quantityUnits = execution.string("quantityUnits"),
-            executionPrice = execution.string("executionPrice"),
-            currency = execution.string("currency"),
-            occurredAt = execution.string("occurredAt"),
-            liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" }
-        )
-    }
-}
-
-private fun tradesFromResultPayload(json: String): List<TradeCreated> {
-    return JsonCodec.parseLegacyObjectOrEmpty(json).objectDocuments("trades").map { trade ->
-        TradeCreated(
-            eventId = trade.string("eventId"),
-            tradeId = trade.string("tradeId"),
-            executionId = trade.string("executionId"),
-            buyOrderId = trade.string("buyOrderId"),
-            sellOrderId = trade.string("sellOrderId"),
-            instrumentId = trade.string("instrumentId"),
-            quantityUnits = trade.string("quantityUnits"),
-            price = trade.string("price"),
-            currency = trade.string("currency"),
-            occurredAt = trade.string("occurredAt")
-        )
     }
 }
 

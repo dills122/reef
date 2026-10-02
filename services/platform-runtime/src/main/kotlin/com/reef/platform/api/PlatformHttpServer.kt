@@ -2041,6 +2041,11 @@ class PlatformHttpServer(
             return
         }
 
+        if (route == "/api/v1/orders/submit" && !api.instrumentCurrencyMatches(body)) {
+            adminSessionAuth.writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "CURRENCY_MISMATCH", "currency differs from instrument quote currency"), correlationId))
+            return
+        }
+
         if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
             handleAcceptedAsyncMutation(exchange, route, clientId, idempotencyKey, correlationId, body)
             return
@@ -2471,6 +2476,12 @@ class PlatformHttpServer(
             return PreparedApiV1MutationResult.Rejected(
                 PlatformHotPathResponse(identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
             )
+        }
+
+        if (route == "/api/v1/orders/submit" && !api.instrumentCurrencyMatches(body)) {
+            return PreparedApiV1MutationResult.Rejected(PlatformHotPathResponse(
+                400, boundary.toErrorJson(BoundaryError(400, "CURRENCY_MISMATCH", "currency differs from instrument quote currency"), correlationId)
+            ))
         }
 
         return PreparedApiV1MutationResult.Prepared(

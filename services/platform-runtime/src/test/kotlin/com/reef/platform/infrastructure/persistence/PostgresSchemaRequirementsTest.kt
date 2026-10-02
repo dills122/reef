@@ -176,7 +176,9 @@ class PostgresSchemaRequirementsTest {
                 "runtime.submit_results.occurred_at:text",
                 "runtime.submit_results.occurred_at_ts:timestamp with time zone",
                 "runtime.submit_results.run_id:text",
-                "runtime.submit_results.result_type:text"
+                "runtime.submit_results.result_type:text",
+                "runtime.submit_results.cancelled:jsonb",
+                "runtime.submit_results.matching_facts:jsonb"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.submit_results" }

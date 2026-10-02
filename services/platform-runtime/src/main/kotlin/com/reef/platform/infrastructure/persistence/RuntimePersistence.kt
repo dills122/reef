@@ -23,7 +23,8 @@ data class ReferenceDataValidation(
     val instrumentExists: Boolean,
     val participantExists: Boolean,
     val accountExists: Boolean,
-    val accountBelongsToParticipant: Boolean = true
+    val accountBelongsToParticipant: Boolean = true,
+    val instrumentQuoteCurrency: String? = "USD"
 )
 
 data class PersistableSubmitOutcome(
@@ -31,7 +32,9 @@ data class PersistableSubmitOutcome(
     val result: SubmitOrderResult,
     val acceptedOrder: PersistedOrder?,
     val lifecycleEvents: List<RuntimeEvent>,
-    val streamSequence: Long = 0L
+    val streamSequence: Long = 0L,
+    val originalMatchingFactsJson: String? = null,
+    val runId: String = ""
 )
 
 data class CanonicalSubmitOutcome(
@@ -294,6 +297,7 @@ interface RuntimePersistence {
     fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation {
         return ReferenceDataValidation(
             instrumentExists = hasInstrument(instrumentId),
+            instrumentQuoteCurrency = instruments().firstOrNull { it.instrumentId == instrumentId }?.quoteCurrency,
             participantExists = hasParticipant(participantId),
             accountExists = hasAccount(accountId),
             accountBelongsToParticipant = accounts().any { account ->

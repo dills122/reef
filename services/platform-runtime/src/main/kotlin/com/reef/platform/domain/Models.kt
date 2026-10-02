@@ -145,11 +145,20 @@ data class OwnExecutionView(
     val runId: String = ""
 )
 
+data class EngineOrderCancelled(
+    val eventId: String,
+    val orderId: String,
+    val cancelledQuantityUnits: String,
+    val reason: String,
+    val occurredAt: String
+)
+
 data class SubmitOrderResult(
     val accepted: EngineOrderAccepted? = null,
     val rejected: EngineOrderRejected? = null,
     val executions: List<ExecutionCreated> = emptyList(),
-    val trades: List<TradeCreated> = emptyList()
+    val trades: List<TradeCreated> = emptyList(),
+    val cancelled: EngineOrderCancelled? = null
 )
 
 /** Runtime identity: order IDs may repeat across simulation runs. Blank run is the legacy namespace. */
@@ -179,7 +188,8 @@ data class PersistedOrder(
 
 data class Instrument(
     val instrumentId: String,
-    val symbol: String
+    val symbol: String,
+    val quoteCurrency: String = "USD"
 )
 
 data class Participant(

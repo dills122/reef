@@ -75,7 +75,7 @@ internal fun PersistableSubmitOutcome.toJsonObject(): String {
     val resultType = if (accepted != null) "accepted" else "rejected"
     val fields = listOf(
         "commandId" to commandId,
-        "runId" to (acceptedOrder?.runId ?: lifecycleEvents.firstOrNull()?.runId.orEmpty()),
+        "runId" to (acceptedOrder?.runId ?: lifecycleEvents.firstOrNull()?.runId ?: runId),
         "resultType" to resultType,
         "eventId" to (accepted?.eventId ?: rejected?.eventId.orEmpty()),
         "orderId" to (accepted?.orderId ?: rejected?.orderId.orEmpty()),
@@ -88,6 +88,8 @@ internal fun PersistableSubmitOutcome.toJsonObject(): String {
         "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
     }
     return "{$fields," +
+        "\"cancelled\":${result.cancelled?.toJsonObject() ?: "null"}," +
+        "\"matchingFacts\":${originalMatchingFactsJson ?: result.matchingFactsJson()}," +
         "\"acceptedOrder\":${acceptedOrder?.toJsonObject() ?: "null"}," +
         "\"executions\":${result.executions.toJsonArray { it.toJsonObject() }}," +
         "\"trades\":${result.trades.toJsonArray { it.toJsonObject() }}," +

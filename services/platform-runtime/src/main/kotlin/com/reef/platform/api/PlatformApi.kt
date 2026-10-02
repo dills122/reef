@@ -44,6 +44,7 @@ class PlatformApi(
     private val defaultVenueProjectionName = "runtime-normalized-venue-outcomes"
     private val defaultMarketDataProjectionName = "market-data-top-of-book"
 
+    fun instrumentCurrencyMatches(body: String): Boolean = orderService.instrumentCurrencyMatches(PlatformCommandParsers.submitOrder(body))
     internal fun bindCapturedCommandPayloadLookup(lookup: (String) -> String?) {
         orderService.bindCapturedCommandPayloadLookup(lookup)
     }
@@ -374,7 +375,8 @@ class PlatformApi(
         return JsonCodec.writeObject("instruments" to orderService.instruments().map { instrument ->
             mapOf(
                 "instrumentId" to instrument.instrumentId,
-                "symbol" to instrument.symbol
+                "symbol" to instrument.symbol,
+                "quoteCurrency" to instrument.quoteCurrency
             )
         })
     }
@@ -733,7 +735,12 @@ class PlatformApi(
                     "occurredAt" to accepted.occurredAt
                 ),
                 "executions" to result.executions.map { it.toMap() },
-                "trades" to result.trades.map { it.toMap() }
+                "trades" to result.trades.map { it.toMap() },
+                "cancelled" to result.cancelled?.let { cancelled -> mapOf(
+                    "eventId" to cancelled.eventId, "orderId" to cancelled.orderId,
+                    "cancelledQuantityUnits" to cancelled.cancelledQuantityUnits,
+                    "reason" to cancelled.reason, "occurredAt" to cancelled.occurredAt
+                ) }
             )
         }
 

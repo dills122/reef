@@ -175,3 +175,61 @@ Build guidance:
 - follow [`../../docs/steering/go.md`](../../docs/steering/go.md)
 - keep transport adapters thin and matching logic deterministic
 - track engine realism and hardening work in [`../../docs/MATCHING_ENGINE_HARDENING_RESEARCH.md`](../../docs/MATCHING_ENGINE_HARDENING_RESEARCH.md)
+
+## IOC lifecycle and match identity V2
+
+`IOC` executes immediately against eligible resting liquidity. Any unfilled
+quantity produces an additive `cancelled` result fact (`IOC_RESIDUAL`, exact
+cancelled quantity, command timestamp), then terminal `CANCELLED` state with zero
+remaining quantity. Full fills produce no cancellation. `DAY` residuals rest as
+before. Acceptance, executions/trades, and residual cancellation belong to one
+command outcome; cancellation follows fills in lifecycle projections.
+
+Trade and execution IDs use `trade-v2-` / `exec-v2-` plus SHA-256 over a
+length-framed tuple: identity version, run, venue session, instrument, buy order,
+sell order, incoming book sequence, match ordinal. Buy/sell execution suffixes
+and event prefixes preserve fact kind/side distinctions. Book sequence is
+snapshot-covered and transaction rollback restores its preimage; fresh replay,
+restore continuation, and publication retry therefore emit identical IDs.
+Delimiter characters in IDs cannot alter tuple boundaries. Matcher retention
+may permit order-ID reuse; the new book occurrence still gets distinct IDs.
+Calcify acceptance no-reuse rules remain independently enforced.
+
+Compatibility: existing canonical facts keep their original IDs. V2 matching is
+an economic/replay behavior change, not merely protobuf addition. Before upgrade,
+drain old lanes and use a new run/source generation for new matching output.
+Do not recompute historical V1 command logs into the same canonical output
+namespace with this binary: both trade IDs and IOC outcomes differ. Historical
+rebuilds consume original durable event facts or use the original matching
+binary. A valid snapshot can continue a drained book with its sequence intact,
+but cannot make V1 and V2 full-log recomputation interchangeable. Upgrade runtime
+consumers before enabling IOC cancellation producers; old consumers ignore the
+additive field and would leave residual exposure open.
+
+Currency authority: reference instruments persist immutable `quoteCurrency` (default
+`USD` preserves legacy instrument specification). Instrument creation rejects
+invalid ISO codes; updates may change symbol but cannot change quote units.
+Both public intake paths check cached reference currency before durable reserve,
+capture, or publish; direct orchestration repeats validation before engine call.
+Core checks startup instrument specification before touching a book, including
+empty and drained books, and still checks resting-side units before matching.
+
+Set `MATCHING_ENGINE_INSTRUMENT_QUOTES` to JSON such as
+`{"AAPL":"USD","CAD-EQUITY":"CAD"}` matching persisted reference specifications.
+Explicit catalogs reject unregistered IDs and invalid configuration stops startup.
+Unset configuration retains legacy USD-only instruments. Configure every matcher
+shard consistently before opening lanes; non-USD specifications require explicit
+catalog configuration. Snapshot metadata/checksum binds explicit catalog hash;
+restoration requires identical catalog even after books drain. No FX conversion.
+
+Deploy runtime migrations `0074` and `0075` after run-identity migration `0073` before cancellation producers.
+`0074` preserves exact cancellation and original matching arrays on command result,
+so retries cannot lose maker execution or acquire later order fills. Stream SQL and
+Kotlin projectors materialize cancellation into existing lifecycle events. Split
+projection stages preserve original response facts even when fill writes are deferred.
+`0075` defaults legacy reference quotes to USD and aborts if retained accepted orders
+contradict configured quote. Guard requires accepted result with matching order/engine
+identity; rejected stream audit rows do not block migration or restart. Provision
+authoritative non-USD reference values before
+retrying migration; never silently relabel historical facts. Old result rows retain
+legacy fallback; do not recompute historical outcomes into existing namespaces.

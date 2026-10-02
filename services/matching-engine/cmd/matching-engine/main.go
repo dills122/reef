@@ -25,7 +25,11 @@ func main() {
 	}
 	enableGRPC := os.Getenv("MATCHING_ENGINE_ENABLE_GRPC") == "1"
 
-	service := app.NewService()
+	quotes, err := app.InstrumentQuoteCurrenciesFromJSON(os.Getenv("MATCHING_ENGINE_INSTRUMENT_QUOTES"))
+	if err != nil {
+		log.Fatalf("invalid matching instrument quotes: %v", err)
+	}
+	service := app.NewService(quotes)
 	server := transport.NewServer(service)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

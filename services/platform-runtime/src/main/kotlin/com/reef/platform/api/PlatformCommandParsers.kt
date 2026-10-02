@@ -1,5 +1,7 @@
 package com.reef.platform.api
 
+import com.reef.platform.domain.validQuoteCurrency
+
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.Instrument
@@ -120,6 +122,8 @@ object PlatformCommandParsers {
         }
         timestampValidationError(json, "occurredAt")?.let { return ApiV1CommandValidation.Invalid(it) }
         if (route == "/api/v1/orders/submit") {
+            val quote = json.string("currency")
+            if (!validQuoteCurrency(quote)) return ApiV1CommandValidation.Invalid("invalid quote currency: $quote")
             enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return ApiV1CommandValidation.Invalid(it) }
             enumValidationError(json, "orderType", setOf("LIMIT", "LIMIT_HIDDEN"))?.let { return ApiV1CommandValidation.Invalid(it) }
             enumValidationError(json, "timeInForce", setOf("DAY", "IOC"))?.let { return ApiV1CommandValidation.Invalid(it) }
@@ -242,7 +246,10 @@ object PlatformCommandParsers {
         val json = JsonCodec.parseObject(body)
         return Instrument(
             instrumentId = json.string("instrumentId"),
-            symbol = json.string("symbol")
+            symbol = json.string("symbol"),
+            quoteCurrency = (if (json.has("quoteCurrency")) json.string("quoteCurrency") else "USD").also {
+                require(validQuoteCurrency(it)) { "quoteCurrency must be a recognized uppercase currency" }
+            }
         )
     }
 

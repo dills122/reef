@@ -5226,6 +5226,45 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun hotPathRejectsWrongInstrumentQuoteBeforeReserveOrPublish() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val publisher = RecordingStreamCommandPublisher()
+        val intake = InMemoryStreamCommandIntakeStore()
+        val server = PlatformHttpServer(port = 0,
+            boundary = ExternalApiBoundary(), idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            api = PlatformApi(OrderApplicationService(EchoOrderEngineGateway(), persistence)),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = intake, streamCommandPublisher = publisher)
+        val headers = Headers().apply { add("X-Client-Id", "client-1"); add("Idempotency-Key", "hot-wrong-quote") }
+        val response = server.handleHotPathRequest(PlatformHotPathRequest("POST", "/api/v1/orders/submit", null, headers,
+            "127.0.0.1", validSubmitBody("hot-wrong-quote", "hot-wrong-quote", "hot-wrong-quote", extra = streamRoutingExtra()).replace("\"USD\"", "\"CAD\"")))
+        assertEquals(400, response?.status)
+        assertContains(response?.body.orEmpty(), "CURRENCY_MISMATCH")
+        assertEquals(0, publisher.published.size)
+        assertEquals(null, intake.findByCommandId("hot-wrong-quote"))
+    }
+
+    @Test
+    fun streamAckRejectsWrongInstrumentQuoteBeforeReserveOrPublish() {
+        val publisher = RecordingStreamCommandPublisher()
+        val intakeStore = InMemoryStreamCommandIntakeStore()
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(gateway = gateway, commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = intakeStore, streamCommandPublisher = publisher)
+        try {
+            val response = post(server.address.port, "/api/v1/orders/submit",
+                mapOf("X-Client-Id" to "client-1", "Idempotency-Key" to "wrong-quote"),
+                validSubmitBody("wrong-quote", "wrong-quote", "wrong-quote", extra = streamRoutingExtra()).replace("\"USD\"", "\"CAD\""))
+            assertEquals(400, response.status)
+            assertContains(response.body, "CURRENCY_MISMATCH")
+            assertEquals(0, publisher.published.size)
+            assertEquals(null, intakeStore.findByCommandId("wrong-quote"))
+        } finally { server.stop(0) }
+    }
+
+    @Test
     fun streamAckRejectsMalformedJsonBeforeReserveOrPublish() {
         val publisher = RecordingStreamCommandPublisher()
         val intakeStore = InMemoryStreamCommandIntakeStore()

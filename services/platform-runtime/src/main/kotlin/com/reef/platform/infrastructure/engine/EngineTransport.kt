@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.engine
 
 import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.EngineOrderCancelled
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
@@ -523,6 +524,10 @@ private fun ProtoSubmitOrderResult.toDomainResult(): SubmitOrderResult =
     SubmitOrderResult(
         accepted = if (hasAccepted()) accepted.toDomain() else null,
         rejected = if (hasRejected()) rejected.toDomain() else null,
+        cancelled = if (hasCancelled()) EngineOrderCancelled(
+            cancelled.eventId, cancelled.orderId, cancelled.cancelledQuantity.units,
+            cancelled.reason, cancelled.occurredAt
+        ) else null,
         executions = executionsList.map { execution ->
             ExecutionCreated(
                 eventId = execution.eventId,

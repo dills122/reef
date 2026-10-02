@@ -142,7 +142,16 @@ type TradeCreated struct {
 	OccurredAt    string `json:"occurredAt"`
 }
 
+type OrderCancelled struct {
+	EventID                string `json:"eventId"`
+	OrderID                string `json:"orderId"`
+	CancelledQuantityUnits string `json:"cancelledQuantityUnits"`
+	Reason                 string `json:"reason"`
+	OccurredAt             string `json:"occurredAt"`
+}
+
 type SubmitOrderResult struct {
+	Cancelled     *OrderCancelled    `json:"cancelled,omitempty"`
 	Accepted      *OrderAccepted     `json:"accepted,omitempty"`
 	Rejected      *OrderRejected     `json:"rejected,omitempty"`
 	AcceptedOrder *AcceptedOrderFact `json:"acceptedOrder,omitempty"`

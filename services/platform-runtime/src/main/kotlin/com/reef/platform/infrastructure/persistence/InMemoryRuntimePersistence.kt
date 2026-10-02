@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.validQuoteCurrency
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.RuntimeOrderIdentity
 import com.reef.platform.domain.identity
@@ -85,8 +86,20 @@ class InMemoryRuntimePersistence(
 
     override fun saveInstrument(instrument: Instrument) {
         synchronized(lock) {
+        require(validQuoteCurrency(instrument.quoteCurrency)) { "invalid instrument quote currency" }
+        require(instruments[instrument.instrumentId]?.quoteCurrency?.let { it == instrument.quoteCurrency } != false) { "instrument quote currency is immutable" }
         instruments[instrument.instrumentId] = instrument
         }
+    }
+
+    override fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation = synchronized(lock) {
+        ReferenceDataValidation(
+            instrumentExists = instruments.containsKey(instrumentId),
+            participantExists = participants.containsKey(participantId),
+            accountExists = accounts.containsKey(accountId),
+            accountBelongsToParticipant = accounts[accountId]?.participantId == participantId,
+            instrumentQuoteCurrency = instruments[instrumentId]?.quoteCurrency
+        )
     }
 
     override fun saveParticipant(participant: Participant) {
@@ -617,7 +630,7 @@ class InMemoryRuntimePersistence(
             val commandPayload = capturedCommandPayloadLookup(outcome.commandId) ?: "{}"
             if (projectionStage != ProjectionStage.Timeline) {
                 val projected = outcome.toPersistableSubmitOutcome(commandPayload, includeFills = includeFills)
-                saveSubmitResult(outcome.commandId, projected.result)
+                saveSubmitResult(outcome.commandId, outcome.toPersistableSubmitOutcome(commandPayload, includeFills = true).result)
                 projected.acceptedOrder?.let { saveAcceptedOrder(it) }
                 saveExecutions(projected.result.executions)
                 saveTrades(projected.result.trades)

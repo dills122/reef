@@ -3,6 +3,7 @@ package com.reef.platform.infrastructure.engine
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.api.JsonDocument
 import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.EngineOrderCancelled
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
@@ -141,7 +142,11 @@ class EngineClient : EngineGateway {
                     occurredAt = accepted.string("occurredAt")
                 ),
                 executions = parseExecutions(json),
-                trades = parseTrades(json)
+                trades = parseTrades(json),
+                cancelled = if (json.has("cancelled")) json.obj("cancelled").let {
+                    EngineOrderCancelled(it.string("eventId"), it.string("orderId"),
+                        it.string("cancelledQuantityUnits"), it.string("reason"), it.string("occurredAt"))
+                } else null
             )
         }
 

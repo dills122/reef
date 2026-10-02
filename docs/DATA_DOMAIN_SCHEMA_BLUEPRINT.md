@@ -138,11 +138,15 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - partitioned archive target for old trade-tape facts; not a current trade read path.
 - range partitioned by non-null `occurred_at_ts`, with bootstrap default partition `runtime.trades_archive_default`, `archived_at timestamptz default now()`, and primary key `(occurred_at_ts, event_id)`.
 
-8. `runtime.submit_results` (`runtime/0003`, `0030`)
+8. `runtime.submit_results` (`runtime/0003`, `0030`, `0073`, `0074`)
 - `command_id text pk`, `result_type text not null`, `event_id text not null`, `order_id text not null`, `engine_order_id text not null`, `code text not null`, `reason text not null`, `occurred_at text not null`.
 - typed companions: `event_id_uuid uuid`, `occurred_at_ts timestamptz`.
 
-9. Reference tables (`runtime/0003`, `0034`): `runtime.reference_instruments (instrument_id text pk, symbol text)`, `runtime.reference_participants (participant_id text pk, name text)`, `runtime.reference_accounts (account_id text pk, participant_id text)`, `runtime.reference_scenario_runs (scenario_run_id text pk, post_trade_profile_id text, updated_at timestamptz)`, `runtime.reference_venue_sessions (venue_session_id text pk, post_trade_profile_id text, updated_at timestamptz)`.
+- `cancelled jsonb` stores exact IOC terminal fact; `matching_facts jsonb` preserves original execution/trade arrays for immutable retry response, independent of later order fills. Migration/bootstrap backfills legacy null facts from retained canonical command results (live or archived), preserving exact replay checks. Rows without retained source facts keep existing read fallback; null is not treated as an empty result during replay.
+
+9. Reference tables (`runtime/0003`, `0034`, `0075`): `runtime.reference_instruments (instrument_id text pk, symbol text, quote_currency text not null default 'USD')`, `runtime.reference_participants (participant_id text pk, name text)`, `runtime.reference_accounts (account_id text pk, participant_id text)`, `runtime.reference_scenario_runs (scenario_run_id text pk, post_trade_profile_id text, updated_at timestamptz)`, `runtime.reference_venue_sessions (venue_session_id text pk, post_trade_profile_id text, updated_at timestamptz)`.
+
+Instrument quote is immutable through reference write APIs. `quoteCurrency` is additive in instrument HTTP JSON; omission defaults to legacy USD. New non-USD instruments require matching startup catalog agreement. Migration fails on retained accepted-order currency contradictions with matching accepted-result order/engine identity; rejected stream audit rows stay unchanged and do not block restart/migration.
 
 10. `runtime.projection_watermarks` (`runtime/0007`)
 - `projection_name text`, `partition_id int`, `last_partition_seq bigint default 0`, `last_projected_at timestamptz`, `updated_at timestamptz default now()`, `last_error text default ''`, primary key `(projection_name, partition_id)`.
