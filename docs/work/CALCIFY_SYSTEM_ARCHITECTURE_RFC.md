@@ -104,8 +104,9 @@ copies. Never call both authorities primary. [Research comparison](../research/C
 | Execution | Authoritative matcher business execution ID plus run/session/instrument scope; independent of transport batch cuts |
 | Business action | Domain + command/action ID + normalized payload identity; retry returns original disposition |
 | Attempt | Obligation/instruction + attempt ordinal; retry same attempt is dedup, authorized repair starts new attempt |
-| Decision | Domain + monotonic decision sequence; links input/action and prior domain sequence |
-| Journal / effect | Decision + stable local ordinal; retries never allocate a new financial movement/effect identity |
+| History record | Domain + monotonic `historySeq`; orders every durable record, including technical staging |
+| Business decision | Domain + stable action/attempt/continuation identity; canonical `businessSeq` and preceding business sequence |
+| Journal / effect | Stable business decision ID + local ordinal; never derived from history sequence, broker batching or CPU yields |
 
 PR #461 already supplies authoritative run to resolver lookups. Remaining first
 slice recommendation: prohibit internal order reuse during run, enforce upstream
@@ -298,15 +299,23 @@ and security quantities never share a ledger unit. State access is indexed by
 known IDs; due work uses `(logicalDueTick, priority, stableWorkId)` index, not a
 full obligation scan every tick.
 
+Business decision read view excludes future staged inputs, delivery cursors and
+history sequence. Executor uses those only to preserve canonical readiness/order;
+financial rules cannot inspect them to change economics. Complete owner state has
+business state plus delivery state, both reconstructible by `evolve`.
+
 `PostTradeCommitV1` has:
 
-- Domain/sequence, prior sequence, input/action identity and source causation.
+- Domain/history sequence and prior history sequence; record kind and input causation.
+- For business records: stable decision ID, business sequence/prior business sequence,
+  action/attempt/continuation identity and source causation.
 - Kernel/schema/policy/reference versions, logical time and input disposition.
 - Complete semantic workflow, obligation/instruction/attempt and exception changes.
 - Exact journal groups/legs and reservation acquire/release/consume changes.
 - Due-work enqueue/dequeue and continuation phase/cursor changes.
 - Account/entity version transitions, dedup result and external intent/status changes.
-- Defined normalized semantic digest; original-byte checksum where stored.
+- Business semantic digest excluding delivery-only fields; separate exact-history
+  integrity checksum including staging and original bytes where stored.
 
 Events/deltas must let `evolve` reconstruct balances, reservations, outstanding
 obligations, workflow waits, attempts, policy activation, logical clock, due queue,
@@ -371,9 +380,27 @@ or retained content reference/digest, canonical queue position, dependencies and
 phase context. `evolve` restores that queue from results. Staged action dedup means
 pending, not completed: later `InputDequeued` plus business decision atomically
 removes queue item and records terminal disposition/effects. Identical retry cannot
-queue twice or suppress eventual execution. Decision sequence identifies each
-history record; action identity identifies one eventual business effect. Ordinary
+queue twice or suppress eventual execution. `historySeq` identifies each durable
+history record; stable business identity identifies eventual
+financial effect. Staging/dequeue transport records do not advance `businessSeq`
+or account/workflow versions merely because delivery schedule changed. Ordinary
 immediate inputs need no separate staging record.
+
+Each logical due-work item/attempt has canonical business decision identity, e.g.
+`(domain, clockActionId, phaseId, dueWorkId, attemptOrdinal)`, with journal/effect
+ordinals within it. Phase start/completion identities are fixed logical transitions.
+CPU yields cannot regroup business decisions or allocate new IDs; transactions may
+batch several unchanged decisions. `businessSeq` advances only in canonical logical
+action order, independent of technical staging/cursor records. Duplicate delivery
+adds no new financial effect or business version.
+
+Recovery of existing history reproduces its exact history order and full owner
+state. Recompute from same ordered admissions may have different optional staging
+records/history sequences, but must preserve canonical business decision sequence,
+IDs, semantic digests, journal/effect IDs and business state at equivalent business
+frontiers. Delivery queues/cursors are compared for correct reconstruction within
+each history, not byte equality between different schedules. Seed-only comparison
+also excludes physical locators; source business identity contract still applies.
 
 For clock→two settlements→funding, funding cannot overtake second settlement because
 CPU budget changed. Zero-delay self-rescheduling must terminate or move to later
@@ -402,7 +429,9 @@ decision path. Partition projector work without splitting one consistent financi
 bundle; measure account-row contention and WAL.
 
 API reads one committed bundle snapshot for coupled financial view. Return progress
-token `(namespace,epoch,domainDecisionSeq)`; cross-domain views return vector. A
+token `(namespace,epoch,domainBusinessSeq)`; cross-domain views return vector.
+Projector separately checkpoints history position, including staging-only records;
+technical progress alone cannot imply new financial bundle/version. A
 request requiring fresher result waits bounded time or reports pending/stale status;
 it never silently joins incompatible trade/account versions. Separate public
 order/market-data projections can consume source history independently. Public
@@ -439,7 +468,7 @@ for topic deletion and remote recovery. [Transactions](https://docs.redpanda.com
 | Cluster/topic restoration | Coordinated cut of all required histories/state/policies; prove sequences and staged work consistent before promotion |
 | Missing required source/decision/control history | Refuse continuation; surface unavailable scope, do not relabel latest available data genesis |
 
-Reconstruction cut certifies domain decision frontier, corresponding input resume
+Reconstruction cut certifies domain history and business frontiers, corresponding input resume
 positions, pending staged envelopes/dependencies/continuation phase, logical clock,
 policy activation, reservations, due/effect/dedup state, gate windows/outstanding
 credits and adapter resume positions, plus checksums. Inspect SQL
@@ -505,9 +534,10 @@ next slice. Pure kernel work can use complete fixtures while source contracts cl
 | P4: capacity decision | One hot shared-account domain, then independent spread/skew domains; aged state, real payload/journal/API reads; injected failure/catch-up | Freeze objectives/topology; meet hot-domain required rate and recovery headroom. Failure triggers smallest equivalent Postgres comparison, not unreviewed sharding. |
 | Qualification | Unchanged candidate, declared10k/600s and7.5k/900s workload; real upstream path and required observers | No loss/duplicate effect, all stages reconcile, no growing lag, fixed latency/freshness/drain/recovery limits. Distinguish component diagnostic from full-system pass. |
 
-P1 proves `evolve(genesis, decisions)` equals live state and identical next-decision
-behavior, including reservations/due work. Test same ordered admissions under
-different commit batch sizes, CPU yield budgets and restore points. Seed-only
+P1 proves `evolve(genesis, historyRecords)` equals that history's full live owner
+state. Across same-admission recomputations, compare business state/decisions at
+equivalent business frontiers as defined in6.4, including reservations/due work.
+Test different commit batch sizes, CPU yield budgets and restore points. Seed-only
 simulation additionally proves producer closure/observations/source behavior; defer
 that promise if simulator does not meet it.
 
@@ -521,6 +551,13 @@ then apply funding exactly once. Explicit gate fixture: pause headers at high wa
 offer unopened-window burst upstream while admitted seal is due, restore gate and
 adapters mid-grant, and prove bounded seal progress without duplicate capacity.
 Also bypass credits to verify controlled fault preserves all executed-source facts.
+
+P1 identity fixture uses same admitted clock→funding history with two due settlements:
+finish phase before consuming funding, versus stage funding between settlements.
+Business sequences, decisions/digests, journal/effect IDs and financial state must
+match despite different history sequences. Repeat with duplicate funding and restore
+between staging/dequeue; eventual funding effect occurs once. Include different
+yield budgets that attempt to regroup due items into transactions.
 
 P4 reports offered trades, durably admitted trades, captured/decided/settled/pending
 counts, journal legs, broker bytes, SQL rows/WAL, CPU/heap/native RSS/disk, source and

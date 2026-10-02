@@ -54,7 +54,12 @@ First reviewer found bounded clarifications. Corrected RFC records unfinished in
 via nonterminal InputStaged; later dequeue/business completion separate. Gate grants
 durable window credits with full completion/seal reservation; uncredited work stays
 upstream. Both require real reconstruction/liveness experiments. P0 explicitly
-tests concatenated execution-ID collisions. No financial/runtime repair claimed.
+tests concatenated execution-ID collisions. Second blind review identified optional
+staging shifting sequence-derived financial IDs. Corrected RFC separates exact
+history sequence from canonical business sequence/IDs, excludes future delivery
+state from decision view, and compares business semantics at equivalent frontiers.
+P1 now tests both schedules, duplicate funding and mid-stage restore. No
+financial/runtime repair claimed.
 
 ## Verification performed and limits
 
