@@ -648,7 +648,11 @@ jobs:
       - name: Start Postgres
         run: docker compose -f compose.base.yml -f compose.local.yml up -d postgres --wait --wait-timeout 120
       - name: Apply runtime migrations
-        run: JS_RUNTIME=node make dev-db-migrate
+        # Calcify only needs the runtime schema on the primary postgres
+        # service. dev-db-migrate unconditionally also migrates
+        # projection-postgres/boundary-postgres unless told not to, and
+        # this job never starts those containers.
+        run: JS_RUNTIME=node REEF_PROJECTION_POSTGRES_MIGRATIONS=0 REEF_BOUNDARY_POSTGRES_MIGRATIONS=0 make dev-db-migrate
       - name: Run Calcify tests against real Postgres
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
