@@ -14,7 +14,6 @@ class SeedWorkflow(
     fun seed(gameSeedId: String, symbols: List<String>, asOf: Instant): StockSeedSnapshotBatch {
         repository.find(gameSeedId)?.let { return it }
         val batch = provider.getSeedSnapshots(gameSeedId, symbols, asOf)
-        repository.save(batch)
-        return batch
+        return repository.createOrExisting(batch)
     }
 }

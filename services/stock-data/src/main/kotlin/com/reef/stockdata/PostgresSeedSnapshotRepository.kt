@@ -6,68 +6,30 @@ import java.sql.ResultSet
 import java.sql.Timestamp
 import java.sql.Types
 import java.time.Instant
+import java.util.Collections
 import javax.sql.DataSource
 
 class PostgresSeedSnapshotRepository(private val dataSource: DataSource) : SeedSnapshotRepository {
 
     override fun find(gameSeedId: String): StockSeedSnapshotBatch? {
         dataSource.connection.use { conn ->
-            val asOf = findBatchAsOf(conn, gameSeedId) ?: return null
-            val snapshots = findSnapshots(conn, gameSeedId)
-            if (snapshots.isEmpty()) return null
-            return StockSeedSnapshotBatch(gameSeedId, asOf, snapshots)
+            return find(conn, gameSeedId)
         }
     }
 
-    override fun save(batch: StockSeedSnapshotBatch) {
+    override fun createOrExisting(batch: StockSeedSnapshotBatch): StockSeedSnapshotBatch {
+        val candidate = batch.canonicalCandidate()
         dataSource.connection.use { conn ->
+            // READ COMMITTED gives the conflict loser a fresh snapshot after the winner commits.
+            conn.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
             conn.autoCommit = false
             try {
-                conn.prepareStatement(
-                    """
-                    INSERT INTO stock_data.seed_snapshot_batches (game_seed_id, as_of, batch_seed_hash)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT (game_seed_id) DO NOTHING
-                    """.trimIndent(),
-                ).use { stmt ->
-                    stmt.setString(1, batch.gameSeedId)
-                    stmt.setTimestamp(2, Timestamp.from(batch.asOf))
-                    stmt.setString(3, batch.batchSeedHash)
-                    stmt.executeUpdate()
+                if (claimBatch(conn, candidate)) {
+                    insertSnapshots(conn, candidate)
                 }
-
-                conn.prepareStatement(
-                    """
-                    INSERT INTO stock_data.seed_snapshots (
-                        game_seed_id, symbol, provider, source_type, as_of, source_timestamp,
-                        retrieved_at, currency, price, open, high, low, previous_close, volume,
-                        raw_provider_payload_hash, selection_reason
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (game_seed_id, symbol) DO NOTHING
-                    """.trimIndent(),
-                ).use { stmt ->
-                    for (snapshot in batch.snapshots) {
-                        stmt.setString(1, snapshot.gameSeedId)
-                        stmt.setString(2, snapshot.symbol)
-                        stmt.setString(3, snapshot.provider)
-                        stmt.setString(4, snapshot.sourceType.wireValue)
-                        stmt.setTimestamp(5, Timestamp.from(snapshot.asOf))
-                        stmt.setTimestamp(6, Timestamp.from(snapshot.sourceTimestamp))
-                        stmt.setTimestamp(7, Timestamp.from(snapshot.retrievedAt))
-                        stmt.setString(8, snapshot.currency)
-                        stmt.setBigDecimal(9, snapshot.price)
-                        stmt.setNullableBigDecimal(10, snapshot.open)
-                        stmt.setNullableBigDecimal(11, snapshot.high)
-                        stmt.setNullableBigDecimal(12, snapshot.low)
-                        stmt.setNullableBigDecimal(13, snapshot.previousClose)
-                        if (snapshot.volume != null) stmt.setLong(14, snapshot.volume) else stmt.setNull(14, Types.BIGINT)
-                        stmt.setString(15, snapshot.rawProviderPayloadHash)
-                        stmt.setString(16, snapshot.selectionReason)
-                        stmt.addBatch()
-                    }
-                    stmt.executeBatch()
-                }
+                val winner = checkNotNull(find(conn, candidate.gameSeedId)) { "Seed batch missing after publication" }
                 conn.commit()
+                return winner
             } catch (ex: Exception) {
                 conn.rollback()
                 throw ex
@@ -75,6 +37,59 @@ class PostgresSeedSnapshotRepository(private val dataSource: DataSource) : SeedS
                 conn.autoCommit = true
             }
         }
+    }
+
+    private fun claimBatch(conn: Connection, candidate: StockSeedSnapshotBatch): Boolean {
+        return conn.prepareStatement(
+            """
+            INSERT INTO stock_data.seed_snapshot_batches (game_seed_id, as_of, batch_seed_hash)
+            VALUES (?, ?, ?)
+            ON CONFLICT (game_seed_id) DO NOTHING
+            """.trimIndent(),
+        ).use { stmt ->
+            stmt.setString(1, candidate.gameSeedId)
+            stmt.setTimestamp(2, Timestamp.from(candidate.asOf))
+            stmt.setString(3, candidate.batchSeedHash)
+            stmt.executeUpdate() == 1
+        }
+    }
+
+    private fun insertSnapshots(conn: Connection, candidate: StockSeedSnapshotBatch) {
+        conn.prepareStatement(
+            """
+            INSERT INTO stock_data.seed_snapshots (
+                game_seed_id, symbol, provider, source_type, as_of, source_timestamp,
+                retrieved_at, currency, price, open, high, low, previous_close, volume,
+                raw_provider_payload_hash, selection_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+        ).use { stmt ->
+            for (snapshot in candidate.snapshots) {
+                stmt.setString(1, snapshot.gameSeedId)
+                stmt.setString(2, snapshot.symbol)
+                stmt.setString(3, snapshot.provider)
+                stmt.setString(4, snapshot.sourceType.wireValue)
+                stmt.setTimestamp(5, Timestamp.from(snapshot.asOf))
+                stmt.setTimestamp(6, Timestamp.from(snapshot.sourceTimestamp))
+                stmt.setTimestamp(7, Timestamp.from(snapshot.retrievedAt))
+                stmt.setString(8, snapshot.currency)
+                stmt.setBigDecimal(9, snapshot.price)
+                stmt.setNullableBigDecimal(10, snapshot.open)
+                stmt.setNullableBigDecimal(11, snapshot.high)
+                stmt.setNullableBigDecimal(12, snapshot.low)
+                stmt.setNullableBigDecimal(13, snapshot.previousClose)
+                if (snapshot.volume != null) stmt.setLong(14, snapshot.volume) else stmt.setNull(14, Types.BIGINT)
+                stmt.setString(15, snapshot.rawProviderPayloadHash)
+                stmt.setString(16, snapshot.selectionReason)
+                stmt.addBatch()
+            }
+            stmt.executeBatch()
+        }
+    }
+
+    private fun find(conn: Connection, gameSeedId: String): StockSeedSnapshotBatch? {
+        val asOf = findBatchAsOf(conn, gameSeedId) ?: return null
+        return StockSeedSnapshotBatch(gameSeedId, asOf, findSnapshots(conn, gameSeedId))
     }
 
     private fun findBatchAsOf(conn: Connection, gameSeedId: String): Instant? {
@@ -105,7 +120,7 @@ class PostgresSeedSnapshotRepository(private val dataSource: DataSource) : SeedS
                 while (rs.next()) {
                     results += rs.toSnapshot(gameSeedId)
                 }
-                return results
+                return Collections.unmodifiableList(results)
             }
         }
     }
