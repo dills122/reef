@@ -9,6 +9,11 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
+/** Immutable captured command payload source for canonical projection attribution. */
+interface CapturedCommandPayloadLookup {
+    fun capturedCommandPayloadJson(commandId: String): String?
+}
+
 interface CommandCaptureStore {
     fun reserveReceived(
         clientId: String,
@@ -129,7 +134,7 @@ private fun commandIdFromParsedPayloadOrKey(
     return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
 }
 
-class InMemoryCommandCaptureStore : CommandCaptureStore, CommandStatusLookup {
+class InMemoryCommandCaptureStore : CommandCaptureStore, CommandStatusLookup, CapturedCommandPayloadLookup {
     private data class CapturedCommand(
         val commandId: String,
         val clientId: String,
@@ -236,6 +241,10 @@ class InMemoryCommandCaptureStore : CommandCaptureStore, CommandStatusLookup {
         }
     }
 
+    override fun capturedCommandPayloadJson(commandId: String): String? {
+        return records.values.filter { it.commandId == commandId }.singleOrNull()?.requestPayload
+    }
+
     override fun findCommandStatus(commandId: String): CommandStatusView? {
         return records.values.firstOrNull { it.commandId == commandId }?.toStatusView()
     }
@@ -274,7 +283,7 @@ class CommandLogCommandCaptureStore(
     private val commandLogStore: CommandLogStore,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val clock: () -> Instant = { Instant.now() }
-) : CommandCaptureStore, CommandStatusLookup, CapturedCommandQueue {
+) : CommandCaptureStore, CommandStatusLookup, CapturedCommandQueue, CapturedCommandPayloadLookup {
     override fun reserveReceived(
         clientId: String,
         route: String,
@@ -340,6 +349,10 @@ class CommandLogCommandCaptureStore(
             commandLogStore.markFailed(record.commandId, responseStatus, errorMessage)
         }
         delegate.markFailed(clientId, route, idempotencyKey, responseStatus, errorClass, errorMessage)
+    }
+
+    override fun capturedCommandPayloadJson(commandId: String): String? {
+        return commandLogStore.findByCommandId(commandId)?.payloadJson
     }
 
     override fun findCommandStatus(commandId: String): CommandStatusView? {
@@ -439,7 +452,7 @@ class PostgresCommandCaptureStore(
     private val dataSource: DataSource,
     private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
-) : CommandCaptureStore, CommandStatusLookup {
+) : CommandCaptureStore, CommandStatusLookup, CapturedCommandPayloadLookup {
     init {
         connection().use { conn ->
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
@@ -598,6 +611,21 @@ class PostgresCommandCaptureStore(
                 ps.setString(5, route)
                 ps.setString(6, idempotencyKey)
                 ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun capturedCommandPayloadJson(commandId: String): String? {
+        connection().use { connection ->
+            connection.prepareStatement(
+                "SELECT request_payload FROM ${names.commandCaptures} WHERE request_payload::jsonb ->> 'commandId' = ? LIMIT 2"
+            ).use { statement ->
+                statement.setString(1, commandId)
+                statement.executeQuery().use { rows ->
+                    val payloads = mutableListOf<String>()
+                    while (rows.next()) payloads += rows.getString("request_payload")
+                    return payloads.singleOrNull()
+                }
             }
         }
     }

@@ -79,7 +79,8 @@ data class ExecutionCreated(
     val executionPrice: String,
     val currency: String,
     val occurredAt: String,
-    val liquidityRole: String = "UNSPECIFIED"
+    val liquidityRole: String = "UNSPECIFIED",
+    val runId: String = ""
 )
 
 data class TradeCreated(
@@ -92,7 +93,8 @@ data class TradeCreated(
     val quantityUnits: String,
     val price: String,
     val currency: String,
-    val occurredAt: String
+    val occurredAt: String,
+    val runId: String = ""
 )
 
 data class PublicTradeTapeEntry(
@@ -139,7 +141,8 @@ data class OwnExecutionView(
     val executionPrice: String,
     val currency: String,
     val occurredAt: String,
-    val liquidityRole: String = "UNSPECIFIED"
+    val liquidityRole: String = "UNSPECIFIED",
+    val runId: String = ""
 )
 
 data class SubmitOrderResult(
@@ -148,6 +151,13 @@ data class SubmitOrderResult(
     val executions: List<ExecutionCreated> = emptyList(),
     val trades: List<TradeCreated> = emptyList()
 )
+
+/** Runtime identity: order IDs may repeat across simulation runs. Blank run is the legacy namespace. */
+data class RuntimeOrderIdentity(val runId: String, val orderId: String)
+
+val PersistedOrder.identity: RuntimeOrderIdentity get() = RuntimeOrderIdentity(runId, orderId)
+val ExecutionCreated.orderIdentity: RuntimeOrderIdentity get() = RuntimeOrderIdentity(runId, orderId)
+val RuntimeEvent.orderIdentity: RuntimeOrderIdentity get() = RuntimeOrderIdentity(runId, orderId)
 
 data class PersistedOrder(
     val orderId: String,
@@ -194,7 +204,8 @@ data class RuntimeEvent(
     val sequenceNumber: Long = 0,
     val occurredAt: String,
     val actorId: String = "",
-    val payloadJson: String = "{}"
+    val payloadJson: String = "{}",
+    val runId: String = ""
 )
 
 data class RoleDefinition(

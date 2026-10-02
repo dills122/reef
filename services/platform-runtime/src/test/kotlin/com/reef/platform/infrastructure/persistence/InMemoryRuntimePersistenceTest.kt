@@ -16,6 +16,38 @@ import kotlin.test.assertTrue
 
 class InMemoryRuntimePersistenceTest {
     @Test
+    fun canonicalReplayPreservesScopedAcceptancesAndFills() = assertCanonicalRunOrderProjectionIsolation(InMemoryRuntimePersistence())
+
+    @Test
+    fun canonicalCancelAndModifyReplayUsesCapturedRunScope() {
+        val payloads = mutableMapOf<String, String>()
+        val persistence = InMemoryRuntimePersistence(capturedCommandPayloadLookup = payloads::get)
+        assertCanonicalRunOrderLifecycleIsolation(persistence) { commandId, payload -> payloads[commandId] = payload }
+    }
+
+    @Test
+    fun bulkReplayKeepsRunOrderHistory() = assertRunOrderHistoryIsolation(InMemoryRuntimePersistence(), bulk = true)
+
+    @Test
+    fun sameOrderIdsKeepIndependentLifecycleFillsAndSettlementHistory() = assertRunOrderHistoryIsolation(InMemoryRuntimePersistence())
+
+    @Test
+    fun sameOrderIdPreservesBothRunAcceptances() {
+        val persistence = InMemoryRuntimePersistence()
+        val order = PersistedOrder(
+            orderId = "shared", engineOrderId = "shared", instrumentId = "AAPL",
+            participantId = "participant-a", accountId = "account-a", side = "BUY",
+            orderType = "LIMIT", quantityUnits = "10", limitPrice = "100",
+            currency = "USD", timeInForce = "DAY", acceptedAt = "2026-10-01T00:00:00Z",
+            runId = "run-a", venueSessionId = "session"
+        )
+        persistence.saveAcceptedOrder(order)
+        persistence.saveAcceptedOrder(order.copy(runId = "run-b", participantId = "participant-b", accountId = "account-b"))
+        assertEquals(setOf("run-a", "run-b"), persistence.acceptedOrders().map { it.runId }.toSet())
+        assertEquals(setOf("participant-a", "participant-b"), persistence.acceptedOrders().map { it.participantId }.toSet())
+    }
+
+    @Test
     fun eventReplayIsIdempotentAndChangedBatchIsAtomic() {
         val persistence = InMemoryRuntimePersistence()
         fun event(id: String, payload: String = "{}") = RuntimeEvent(

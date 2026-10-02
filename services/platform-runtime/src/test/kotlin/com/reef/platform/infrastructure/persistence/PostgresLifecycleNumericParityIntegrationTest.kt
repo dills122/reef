@@ -20,8 +20,8 @@ class PostgresLifecycleNumericParityIntegrationTest {
         try {
             val persistence = PostgresRuntimePersistence(source, names, PostgresBootstrapMode.Compat)
             source.connection.use { c ->
-                c.exec("CREATE TABLE ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
-                c.exec("CREATE TABLE ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                c.exec("CREATE TABLE IF NOT EXISTS ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                c.exec("CREATE TABLE IF NOT EXISTS ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
                 // Install the latest migration-owned function, preserving production SQL verbatim.
                 val migrationDir = Path.of("../../scripts/dev/db/migrations/runtime")
                 val functionSql = Files.list(migrationDir).use { files ->
