@@ -31,6 +31,14 @@ internal class CalcifyResolverProcessor(
     override fun init(context:ProcessorContext<ByteArray,ByteArray>) {
         this.context=context;store=context.getStateStore("resolver");partition=context.taskId().partition()
         cachedTarget=null;acceptedCache.clear();acceptedCacheBytes=0;reader=readerFactory(partition)
+        // Version is transactionally checkpointed with index and target. Legacy keys
+        // cannot be migrated by renaming: lost run collisions require source replay.
+        val stateVersion = store.get("stateVersion")?.toString(Charsets.UTF_8)
+        if (stateVersion == null) {
+            val empty = store.all().use { !it.hasNext() }
+            if (empty) store.put("stateVersion", STATE_VERSION.toByteArray())
+            else fault("resolver state version missing; coordinated source/verification replay required")
+        } else if (stateVersion != STATE_VERSION) fault("resolver state version incompatible; coordinated source/verification replay required")
         val identity="${settings.generation}:${settings.sourceTopic}:${settings.sourceTopicId}".toByteArray()
         val prior=store.get("identity")
         if(prior!=null && !prior.contentEquals(identity)) fault("source generation/topic identity changed") else store.put("identity",identity)
@@ -109,8 +117,8 @@ internal class CalcifyResolverProcessor(
         cachedTarget=target
         require(id.tradeOrdinal<target.tradesCount) {"trade ordinal absent"}
         val trade=target.getTrades(id.tradeOrdinal)
-        val buy=accepted(orderKey(trade.fact.buyOrderId))
-        val sell=accepted(orderKey(trade.fact.sellOrderId))
+        val buy=accepted(orderKey(trade.runId,trade.fact.buyOrderId))
+        val sell=accepted(orderKey(trade.runId,trade.fact.sellOrderId))
         val output=MatchContextResolver.resolve(passed,trade,buy,sell).toByteArray()
         require(output.size<=settings.maxTargetBytes) {"output budget exceeded"}
         reader.validateIdentity()
@@ -126,7 +134,7 @@ internal class CalcifyResolverProcessor(
         val batch=MatchContextResolver.parseBatch(entry.payload,settings.sourceTopic,settings.sourceTopicId,settings.generation,partition,entry.offset)
         for(row in batch.acceptedOrders) {
             // Read managed state for existence: cache cannot decide writes after transaction rollback.
-            val key=orderKey(row.fact.orderId);val prior=store.get(key)?.let(AcceptedOrderSourceV1::parseFrom)
+            val key=orderKey(row.fact.runId,row.fact.orderId);val prior=store.get(key)?.let(AcceptedOrderSourceV1::parseFrom)
             val mergedRow=MatchContextResolver.mergeAcceptance(prior,row)
             val merged=mergedRow.toByteArray()
             require(merged.size<=settings.maxRowBytes) {"accepted row budget exceeded"}
@@ -175,10 +183,14 @@ internal class CalcifyResolverProcessor(
     private fun stats():Map<String,Any> = mapOf("generation" to settings.generation,"partition" to partition,"sourceCursor" to number("cursor",-1),"stagedInputOffset" to number("stagedInputOffset",-1),"resolvedCount" to number("resolvedCount",0),"pendingCount" to number("pendingCount",0),"indexedCount" to number("indexedCount",0),"decodedCount" to number("decodedCount",0),"outputBytes" to number("outputBytes",0),"acceptedCacheRows" to acceptedCache.size,"acceptedCacheBytes" to acceptedCacheBytes,"faultSuffixCount" to number("faultSuffixCount",0),"faultInputOffset" to number("faultInputOffset",-1),"fault" to (store.get("fault")?.toString(Charsets.UTF_8) ?: ""))
     private fun number(key:String,default:Long)=store.get(key)?.let {ByteBuffer.wrap(it).long} ?: default
     private fun setNumber(key:String,value:Long)=store.put(key,ByteBuffer.allocate(8).putLong(value).array())
-    private fun orderKey(id:String)="O:${settings.generation}:${id.toByteArray().size}:$id"
+    private fun orderKey(runId:String,id:String):String {
+        require(runId.isNotBlank()) { "missing authoritative order run" }
+        return "O:${settings.generation}:${runId.toByteArray(Charsets.UTF_8).size}:$runId:${id.toByteArray(Charsets.UTF_8).size}:$id"
+    }
     override fun close() {if(this::reader.isInitialized) reader.close();cachedTarget=null;acceptedCache.clear();acceptedCacheBytes=0;report(partition,emptyMap())}
 
     companion object {
+        internal const val STATE_VERSION = "2"
         private fun pendingKey(id:CommitmentId)="P:"+id.sourceOffset.toString().padStart(20,'0')+":"+id.tradeOrdinal.toString().padStart(10,'0')
         private fun doneKey(id:CommitmentId)="D:"+java.util.HexFormat.of().formatHex(CalcifyWire.commitment(id))
         fun topology(settings:ResolverSettings,readerFactory:(Int)->VenueSourceReader,blocked:(Int,Boolean)->Unit={_,_->},report:(Int,Map<String,Any>)->Unit={_,_->}):Topology = Topology().apply {

@@ -95,28 +95,28 @@ public final class Calcify extends com.google.protobuf.GeneratedFile {
       "ceptedOrderFactV1\022C\n\nacceptance\030\002 \001(\0132/." +
       "reef.contracts.orderexecution.v1.OrderAc" +
       "cepted\022=\n\006source\030\003 \001(\0132-.reef.contracts." +
-      "calcify.v1.SourceProvenanceV1\"\214\001\n\rTradeS" +
-      "ourceV1\022<\n\004fact\030\001 \001(\0132..reef.contracts.o" +
-      "rderexecution.v1.TradeCreated\022=\n\006source\030" +
-      "\002 \001(\0132-.reef.contracts.calcify.v1.Source" +
-      "ProvenanceV1\"w\n\022CommitmentSourceV1\022\031\n\021so" +
-      "urce_generation\030\001 \001(\r\022\030\n\020source_partitio" +
-      "n\030\002 \001(\r\022\025\n\rsource_offset\030\003 \001(\003\022\025\n\rtrade_" +
-      "ordinal\030\004 \001(\r\"\331\002\n\026MatchContextResolvedV1" +
-      "\022A\n\ncommitment\030\001 \001(\0132-.reef.contracts.ca" +
-      "lcify.v1.CommitmentSourceV1\022\026\n\016policy_ve" +
-      "rsion\030\002 \001(\r\022\016\n\006run_id\030\003 \001(\t\0227\n\005trade\030\004 \001" +
-      "(\0132(.reef.contracts.calcify.v1.TradeSour" +
-      "ceV1\022L\n\022buy_accepted_order\030\005 \001(\01320.reef." +
-      "contracts.calcify.v1.AcceptedOrderSource" +
-      "V1\022M\n\023sell_accepted_order\030\006 \001(\01320.reef.c" +
-      "ontracts.calcify.v1.AcceptedOrderSourceV" +
-      "1\"h\n\025ResolverTargetBatchV1\022\025\n\rsource_off" +
-      "set\030\001 \001(\003\0228\n\006trades\030\002 \003(\0132(.reef.contrac" +
-      "ts.calcify.v1.TradeSourceV1Ba\n\031reef.cont" +
-      "racts.calcify.v1P\001ZBgithub.com/dills122/" +
-      "reef/contracts/proto/orderexecution/v1;o" +
-      "rderv1b\006proto3"
+      "calcify.v1.SourceProvenanceV1\"\234\001\n\rTradeS" +
+      "ourceV1\022\016\n\006run_id\030\003 \001(\t\022<\n\004fact\030\001 \001(\0132.." +
+      "reef.contracts.orderexecution.v1.TradeCr" +
+      "eated\022=\n\006source\030\002 \001(\0132-.reef.contracts.c" +
+      "alcify.v1.SourceProvenanceV1\"w\n\022Commitme" +
+      "ntSourceV1\022\031\n\021source_generation\030\001 \001(\r\022\030\n" +
+      "\020source_partition\030\002 \001(\r\022\025\n\rsource_offset" +
+      "\030\003 \001(\003\022\025\n\rtrade_ordinal\030\004 \001(\r\"\331\002\n\026MatchC" +
+      "ontextResolvedV1\022A\n\ncommitment\030\001 \001(\0132-.r" +
+      "eef.contracts.calcify.v1.CommitmentSourc" +
+      "eV1\022\026\n\016policy_version\030\002 \001(\r\022\016\n\006run_id\030\003 " +
+      "\001(\t\0227\n\005trade\030\004 \001(\0132(.reef.contracts.calc" +
+      "ify.v1.TradeSourceV1\022L\n\022buy_accepted_ord" +
+      "er\030\005 \001(\01320.reef.contracts.calcify.v1.Acc" +
+      "eptedOrderSourceV1\022M\n\023sell_accepted_orde" +
+      "r\030\006 \001(\01320.reef.contracts.calcify.v1.Acce" +
+      "ptedOrderSourceV1\"h\n\025ResolverTargetBatch" +
+      "V1\022\025\n\rsource_offset\030\001 \001(\003\0228\n\006trades\030\002 \003(" +
+      "\0132(.reef.contracts.calcify.v1.TradeSourc" +
+      "eV1Ba\n\031reef.contracts.calcify.v1P\001ZBgith" +
+      "ub.com/dills122/reef/contracts/proto/ord" +
+      "erexecution/v1;orderv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -146,7 +146,7 @@ public final class Calcify extends com.google.protobuf.GeneratedFile {
     internal_static_reef_contracts_calcify_v1_TradeSourceV1_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_calcify_v1_TradeSourceV1_descriptor,
-        new java.lang.String[] { "Fact", "Source", });
+        new java.lang.String[] { "RunId", "Fact", "Source", });
     internal_static_reef_contracts_calcify_v1_CommitmentSourceV1_descriptor =
       getDescriptor().getMessageType(4);
     internal_static_reef_contracts_calcify_v1_CommitmentSourceV1_fieldAccessorTable = new

@@ -37,3 +37,44 @@ Recovery diagnostic objective:1m full accepted rows, cold local-state loss, same
 Current source-generation/source-UUID checks do not bind verified/output UUIDs. Review found expired verified checkpoints may reset to earliest, and verified/output recreation may reuse restored checkpoints/completed identities against different history. Both require fail-closed fixes before merge. Planned remedy: explicit verified checkpoint retention validation with reset disabled and pinned classic consumer protocol; persist generation plus names/UUIDs of source, verified and output topics; reject missing output before creation when application changelog exists; extend existing periodic identity check. Existing source-only checkpoints need explicit repair, since prior input/output UUIDs cannot be inferred. These changes are pending, not current guarantees. Simultaneous destruction of changelog and namespace, and atomic malicious cross-topic replacement, remain outside this guard's proof.
 
 Final local platform regression/coverage passes. Earlier actual HTTP smoke, nine-boundary RF3 fault matrix and1m-row recovery precede final candidate changes. Latest sustained hot cohort has exact3.15m outputs and10,160.50/s active covering rate but fails actual source-delivery duration310.730s versus301s maximum; remaining profiles unrun. Draft cannot merge until review defects and unchanged-candidate qualification close. [Continuation handoff](handoffs/2026-09-30-calcify-phase2.md).
+
+## Run namespace upgrade and coordinated replay (2026-10-02)
+
+Resolver state version 2 uses acceptance keys `O:<generation>:<run UTF-8 byte
+length>:<runId>:<order UTF-8 byte length>:<orderId>`. Lane remains store-owned.
+`TradeSourceV1.run_id` binds both point lookups to checksum-covered outcome run
+metadata, never to whichever acceptance happens to exist. Matching outcome producer
+now preserves decoded command run ID for submit/modify/cancel. Legacy submit
+records remain readable through their accepted-order run; unscoped legacy modify
+trades require audited reconstruction or reconciliation and remain fail-closed.
+`LIMIT` and public `LIMIT_HIDDEN` decode to same hidden-limit enum, preserving
+original source checksum/provenance and all immutable economics.
+
+Upgrade requires producer rollout before resolver version 2. Empty or already
+version-2 state starts normally. A nonempty unversioned/version-1 store faults;
+version-2 cannot recover run collisions already collapsed by legacy keys. Preserve
+old state/changelog/output and stop resolver/extractor writers before repair.
+Inventory source, verified and output UUIDs, offsets, committed contexts and retained
+prefixes. Confirm full source and verification history are retained, and identify
+legacy unscoped modify trades before replay. If authoritative command records
+cannot supply missing run metadata, keep lane stopped and record required repair;
+do not manufacture modified canonical history or infer run from order-ID uniqueness.
+
+Operator must approve audited replay plan: replay retained source/verification
+history into an isolated version-2 validation namespace and isolated output; compare
+commitment identities, complete contexts and already committed downstream effects;
+then coordinate production state/checkpoint/output reconciliation under same
+registered source generation and source identity. Stop all writers during cutover
+and retain rollback copies. Fresh application ID alone is never production repair:
+it can duplicate committed output. This change supplies fail-closed version gate,
+not an automatic migration/reset tool. No production replay/cutover exercised here.
+
+Regression suite covers interleaved runs with identical IDs, bounded-cache fallback,
+pending checkpoint snapshot restoration versus live/fresh replay, duplicate
+verification suppression, incompatible-state evidence retention, legacy submit
+compatibility and legacy modify rejection. Snapshot test is process-local; broker
+EOS/RF3 crash recovery remains separate qualification. Historical source fixture
+and prior measurements remain unchanged; current-producer tests explicitly add
+known fixture command run metadata and recompute checksum. New
+`hidden-run-source-fixture.jsonl` generated from real stream processor submit/modify
+commands, with `LIMIT_HIDDEN` preserved in source and canonical enum in contexts.

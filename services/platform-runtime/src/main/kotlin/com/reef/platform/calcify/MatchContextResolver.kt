@@ -36,6 +36,7 @@ internal object MatchContextResolver {
                     .setOccurredAt(timestamp(accepted,"occurredAt")).build()
                 require(acceptance.orderId == fact.orderId && acceptance.engineOrderId == fact.engineOrderId && acceptance.occurredAt == fact.acceptedAt) { "acceptance identity mismatch" }
                 require(outcome.strictTextField("orderId") == fact.orderId && outcome.strictTextField("instrumentId") == fact.instrumentId) { "acceptance outcome scope mismatch" }
+                if (outcome.has("runId")) require(outcome.strictTextField("runId") == fact.runId) { "acceptance outcome run mismatch" }
                 orders += AcceptedOrderSourceV1.newBuilder().setFact(fact).setAcceptance(acceptance).setSource(source).build()
             }
             for (trade in result.strictObjectDocuments("trades", required = false)) {
@@ -48,7 +49,14 @@ internal object MatchContextResolver {
                     .setPrice(Price.newBuilder().setNanos(positive(trade,"price")).setCurrency(trade.strictTextField("currency")))
                     .setOccurredAt(timestamp(trade,"occurredAt")).build()
                 require(outcome.strictTextField("instrumentId") == fact.instrumentId) { "trade outcome instrument mismatch" }
-                trades += TradeSourceV1.newBuilder().setFact(fact).setSource(source).build()
+                // Old submit outcomes retain authoritative run scope in acceptedOrder.
+                // Old modify outcomes do not: guessing from order IDs can borrow another run.
+                val runId = if (outcome.has("runId")) outcome.strictTextField("runId") else {
+                    require(outcome.strictTextField("commandType") == "SubmitOrder" && result.has("acceptedOrder")) { "missing authoritative trade run" }
+                    result.strictObject("acceptedOrder").strictTextField("runId")
+                }
+                if (result.has("acceptedOrder")) require(result.strictObject("acceptedOrder").strictTextField("runId") == runId) { "trade acceptance run mismatch" }
+                trades += TradeSourceV1.newBuilder().setFact(fact).setSource(source).setRunId(runId).build()
             }
         }
         return Batch(orders, trades)
@@ -61,7 +69,7 @@ internal object MatchContextResolver {
         .setInstrumentId(row.strictTextField("instrumentId")).setParticipantId(row.strictTextField("participantId"))
         .setAccountId(row.strictTextField("accountId"))
         .setSide(when (row.strictTextField("side")) { "BUY" -> OrderSide.ORDER_SIDE_BUY; "SELL" -> OrderSide.ORDER_SIDE_SELL; else -> errorFact("side") })
-        .setOrderType(when (row.strictTextField("orderType")) { "LIMIT" -> OrderType.ORDER_TYPE_LIMIT; else -> errorFact("orderType") })
+        .setOrderType(when (row.strictTextField("orderType")) { "LIMIT", "LIMIT_HIDDEN" -> OrderType.ORDER_TYPE_LIMIT; else -> errorFact("orderType") })
         .setQuantityUnits(positive(row,"quantityUnits")).setLimitPrice(positive(row,"limitPrice"))
         .setCurrency(row.strictTextField("currency"))
         .setTimeInForce(when (row.strictTextField("timeInForce")) { "DAY" -> TimeInForce.TIME_IN_FORCE_DAY; "IOC" -> TimeInForce.TIME_IN_FORCE_IOC; else -> errorFact("timeInForce") })
@@ -92,7 +100,7 @@ internal object MatchContextResolver {
         val id=passed.commitmentId; val target=trade.source; val fact=trade.fact
         require(target.sourceGeneration == id.sourceGeneration && target.sourcePartition == id.sourcePartition && target.sourceOffset == id.sourceOffset) { "target provenance mismatch" }
         require(buy.fact.side == OrderSide.ORDER_SIDE_BUY && sell.fact.side == OrderSide.ORDER_SIDE_SELL) { "side mismatch" }
-        require(buy.fact.runId.isNotBlank() && buy.fact.runId == sell.fact.runId && buy.fact.venueSessionId == sell.fact.venueSessionId && buy.fact.instrumentId == sell.fact.instrumentId && fact.instrumentId == buy.fact.instrumentId) { "scope mismatch" }
+        require(trade.runId.isNotBlank() && trade.runId == buy.fact.runId && buy.fact.runId == sell.fact.runId && buy.fact.venueSessionId == sell.fact.venueSessionId && buy.fact.instrumentId == sell.fact.instrumentId && fact.instrumentId == buy.fact.instrumentId) { "scope mismatch" }
         require(fact.buyOrderId == buy.fact.orderId && fact.sellOrderId == sell.fact.orderId && fact.buyOrderId != fact.sellOrderId) { "order reference mismatch" }
         require(fact.price.currency == buy.fact.currency && fact.price.currency == sell.fact.currency) { "currency mismatch" }
         for (row in listOf(buy,sell)) {

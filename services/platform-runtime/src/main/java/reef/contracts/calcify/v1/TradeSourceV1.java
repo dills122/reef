@@ -28,6 +28,7 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private TradeSourceV1() {
+    runId_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -44,6 +45,53 @@ private static final long serialVersionUID = 0L;
   }
 
   private int bitField0_;
+  public static final int RUN_ID_FIELD_NUMBER = 3;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object runId_ = "";
+  /**
+   * <pre>
+   * Authoritative validated command run; required for namespaced acceptance lookup.
+   * </pre>
+   *
+   * <code>string run_id = 3;</code>
+   * @return The runId.
+   */
+  @java.lang.Override
+  public java.lang.String getRunId() {
+    java.lang.Object ref = runId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      runId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * Authoritative validated command run; required for namespaced acceptance lookup.
+   * </pre>
+   *
+   * <code>string run_id = 3;</code>
+   * @return The bytes for runId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRunIdBytes() {
+    java.lang.Object ref = runId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      runId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   public static final int FACT_FIELD_NUMBER = 1;
   private reef.contracts.orderexecution.v1.TradeCreated fact_;
   /**
@@ -116,6 +164,9 @@ private static final long serialVersionUID = 0L;
     if (((bitField0_ & 0x00000002) != 0)) {
       output.writeMessage(2, getSource());
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(runId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 3, runId_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -133,6 +184,9 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, getSource());
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(runId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(3, runId_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -148,6 +202,8 @@ private static final long serialVersionUID = 0L;
     }
     reef.contracts.calcify.v1.TradeSourceV1 other = (reef.contracts.calcify.v1.TradeSourceV1) obj;
 
+    if (!getRunId()
+        .equals(other.getRunId())) return false;
     if (hasFact() != other.hasFact()) return false;
     if (hasFact()) {
       if (!getFact()
@@ -169,6 +225,8 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
+    hash = (37 * hash) + RUN_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getRunId().hashCode();
     if (hasFact()) {
       hash = (37 * hash) + FACT_FIELD_NUMBER;
       hash = (53 * hash) + getFact().hashCode();
@@ -315,6 +373,7 @@ private static final long serialVersionUID = 0L;
     public Builder clear() {
       super.clear();
       bitField0_ = 0;
+      runId_ = "";
       fact_ = null;
       if (factBuilder_ != null) {
         factBuilder_.dispose();
@@ -358,14 +417,17 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartial0(reef.contracts.calcify.v1.TradeSourceV1 result) {
       int from_bitField0_ = bitField0_;
-      int to_bitField0_ = 0;
       if (((from_bitField0_ & 0x00000001) != 0)) {
+        result.runId_ = runId_;
+      }
+      int to_bitField0_ = 0;
+      if (((from_bitField0_ & 0x00000002) != 0)) {
         result.fact_ = factBuilder_ == null
             ? fact_
             : factBuilder_.build();
         to_bitField0_ |= 0x00000001;
       }
-      if (((from_bitField0_ & 0x00000002) != 0)) {
+      if (((from_bitField0_ & 0x00000004) != 0)) {
         result.source_ = sourceBuilder_ == null
             ? source_
             : sourceBuilder_.build();
@@ -386,6 +448,11 @@ private static final long serialVersionUID = 0L;
 
     public Builder mergeFrom(reef.contracts.calcify.v1.TradeSourceV1 other) {
       if (other == reef.contracts.calcify.v1.TradeSourceV1.getDefaultInstance()) return this;
+      if (!other.getRunId().isEmpty()) {
+        runId_ = other.runId_;
+        bitField0_ |= 0x00000001;
+        onChanged();
+      }
       if (other.hasFact()) {
         mergeFact(other.getFact());
       }
@@ -422,16 +489,21 @@ private static final long serialVersionUID = 0L;
               input.readMessage(
                   internalGetFactFieldBuilder().getBuilder(),
                   extensionRegistry);
-              bitField0_ |= 0x00000001;
+              bitField0_ |= 0x00000002;
               break;
             } // case 10
             case 18: {
               input.readMessage(
                   internalGetSourceFieldBuilder().getBuilder(),
                   extensionRegistry);
-              bitField0_ |= 0x00000002;
+              bitField0_ |= 0x00000004;
               break;
             } // case 18
+            case 26: {
+              runId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000001;
+              break;
+            } // case 26
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -449,6 +521,98 @@ private static final long serialVersionUID = 0L;
     }
     private int bitField0_;
 
+    private java.lang.Object runId_ = "";
+    /**
+     * <pre>
+     * Authoritative validated command run; required for namespaced acceptance lookup.
+     * </pre>
+     *
+     * <code>string run_id = 3;</code>
+     * @return The runId.
+     */
+    public java.lang.String getRunId() {
+      java.lang.Object ref = runId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        runId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Authoritative validated command run; required for namespaced acceptance lookup.
+     * </pre>
+     *
+     * <code>string run_id = 3;</code>
+     * @return The bytes for runId.
+     */
+    public com.google.protobuf.ByteString
+        getRunIdBytes() {
+      java.lang.Object ref = runId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        runId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Authoritative validated command run; required for namespaced acceptance lookup.
+     * </pre>
+     *
+     * <code>string run_id = 3;</code>
+     * @param value The runId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRunId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      runId_ = value;
+      bitField0_ |= 0x00000001;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Authoritative validated command run; required for namespaced acceptance lookup.
+     * </pre>
+     *
+     * <code>string run_id = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRunId() {
+      runId_ = getDefaultInstance().getRunId();
+      bitField0_ = (bitField0_ & ~0x00000001);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Authoritative validated command run; required for namespaced acceptance lookup.
+     * </pre>
+     *
+     * <code>string run_id = 3;</code>
+     * @param value The bytes for runId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRunIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      runId_ = value;
+      bitField0_ |= 0x00000001;
+      onChanged();
+      return this;
+    }
+
     private reef.contracts.orderexecution.v1.TradeCreated fact_;
     private com.google.protobuf.SingleFieldBuilder<
         reef.contracts.orderexecution.v1.TradeCreated, reef.contracts.orderexecution.v1.TradeCreated.Builder, reef.contracts.orderexecution.v1.TradeCreatedOrBuilder> factBuilder_;
@@ -457,7 +621,7 @@ private static final long serialVersionUID = 0L;
      * @return Whether the fact field is set.
      */
     public boolean hasFact() {
-      return ((bitField0_ & 0x00000001) != 0);
+      return ((bitField0_ & 0x00000002) != 0);
     }
     /**
      * <code>.reef.contracts.orderexecution.v1.TradeCreated fact = 1;</code>
@@ -482,7 +646,7 @@ private static final long serialVersionUID = 0L;
       } else {
         factBuilder_.setMessage(value);
       }
-      bitField0_ |= 0x00000001;
+      bitField0_ |= 0x00000002;
       onChanged();
       return this;
     }
@@ -496,7 +660,7 @@ private static final long serialVersionUID = 0L;
       } else {
         factBuilder_.setMessage(builderForValue.build());
       }
-      bitField0_ |= 0x00000001;
+      bitField0_ |= 0x00000002;
       onChanged();
       return this;
     }
@@ -505,7 +669,7 @@ private static final long serialVersionUID = 0L;
      */
     public Builder mergeFact(reef.contracts.orderexecution.v1.TradeCreated value) {
       if (factBuilder_ == null) {
-        if (((bitField0_ & 0x00000001) != 0) &&
+        if (((bitField0_ & 0x00000002) != 0) &&
           fact_ != null &&
           fact_ != reef.contracts.orderexecution.v1.TradeCreated.getDefaultInstance()) {
           getFactBuilder().mergeFrom(value);
@@ -516,7 +680,7 @@ private static final long serialVersionUID = 0L;
         factBuilder_.mergeFrom(value);
       }
       if (fact_ != null) {
-        bitField0_ |= 0x00000001;
+        bitField0_ |= 0x00000002;
         onChanged();
       }
       return this;
@@ -525,7 +689,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.TradeCreated fact = 1;</code>
      */
     public Builder clearFact() {
-      bitField0_ = (bitField0_ & ~0x00000001);
+      bitField0_ = (bitField0_ & ~0x00000002);
       fact_ = null;
       if (factBuilder_ != null) {
         factBuilder_.dispose();
@@ -538,7 +702,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.orderexecution.v1.TradeCreated fact = 1;</code>
      */
     public reef.contracts.orderexecution.v1.TradeCreated.Builder getFactBuilder() {
-      bitField0_ |= 0x00000001;
+      bitField0_ |= 0x00000002;
       onChanged();
       return internalGetFactFieldBuilder().getBuilder();
     }
@@ -578,7 +742,7 @@ private static final long serialVersionUID = 0L;
      * @return Whether the source field is set.
      */
     public boolean hasSource() {
-      return ((bitField0_ & 0x00000002) != 0);
+      return ((bitField0_ & 0x00000004) != 0);
     }
     /**
      * <code>.reef.contracts.calcify.v1.SourceProvenanceV1 source = 2;</code>
@@ -603,7 +767,7 @@ private static final long serialVersionUID = 0L;
       } else {
         sourceBuilder_.setMessage(value);
       }
-      bitField0_ |= 0x00000002;
+      bitField0_ |= 0x00000004;
       onChanged();
       return this;
     }
@@ -617,7 +781,7 @@ private static final long serialVersionUID = 0L;
       } else {
         sourceBuilder_.setMessage(builderForValue.build());
       }
-      bitField0_ |= 0x00000002;
+      bitField0_ |= 0x00000004;
       onChanged();
       return this;
     }
@@ -626,7 +790,7 @@ private static final long serialVersionUID = 0L;
      */
     public Builder mergeSource(reef.contracts.calcify.v1.SourceProvenanceV1 value) {
       if (sourceBuilder_ == null) {
-        if (((bitField0_ & 0x00000002) != 0) &&
+        if (((bitField0_ & 0x00000004) != 0) &&
           source_ != null &&
           source_ != reef.contracts.calcify.v1.SourceProvenanceV1.getDefaultInstance()) {
           getSourceBuilder().mergeFrom(value);
@@ -637,7 +801,7 @@ private static final long serialVersionUID = 0L;
         sourceBuilder_.mergeFrom(value);
       }
       if (source_ != null) {
-        bitField0_ |= 0x00000002;
+        bitField0_ |= 0x00000004;
         onChanged();
       }
       return this;
@@ -646,7 +810,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.calcify.v1.SourceProvenanceV1 source = 2;</code>
      */
     public Builder clearSource() {
-      bitField0_ = (bitField0_ & ~0x00000002);
+      bitField0_ = (bitField0_ & ~0x00000004);
       source_ = null;
       if (sourceBuilder_ != null) {
         sourceBuilder_.dispose();
@@ -659,7 +823,7 @@ private static final long serialVersionUID = 0L;
      * <code>.reef.contracts.calcify.v1.SourceProvenanceV1 source = 2;</code>
      */
     public reef.contracts.calcify.v1.SourceProvenanceV1.Builder getSourceBuilder() {
-      bitField0_ |= 0x00000002;
+      bitField0_ |= 0x00000004;
       onChanged();
       return internalGetSourceFieldBuilder().getBuilder();
     }
