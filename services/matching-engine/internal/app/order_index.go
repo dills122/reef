@@ -14,8 +14,13 @@ import "sync"
 const orderIndexShardCount = 64
 
 type orderShard struct {
-	mu     sync.RWMutex
-	orders map[string]*orderRecord
+	mu           sync.RWMutex
+	orders       map[string]*orderRecord
+	reservations map[string]orderReservation
+}
+
+type orderReservation struct {
+	owner *BatchRollback
 }
 
 // orderIndex is a striped replacement for a flat map[string]*orderRecord
@@ -49,9 +54,16 @@ func (idx *orderIndex) load(orderID string) (*orderRecord, bool) {
 // reserve inserts record if no order with the same ID already exists,
 // reporting whether the insert happened.
 func (idx *orderIndex) reserve(record *orderRecord) bool {
+	return idx.reserveInBatch(record, nil)
+}
+
+func (idx *orderIndex) reserveInBatch(record *orderRecord, owner *BatchRollback) bool {
 	shard := idx.shard(record.OrderID)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
+	if reservation, exists := shard.reservations[record.OrderID]; exists && reservation.owner != owner {
+		return false
+	}
 	if _, exists := shard.orders[record.OrderID]; exists {
 		return false
 	}
@@ -64,6 +76,30 @@ func (idx *orderIndex) release(orderID string) {
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 	delete(shard.orders, orderID)
+}
+
+// releaseInBatch hides a terminal record immediately, but retains its global
+// ID reservation until the batch closes. Another lane must not accept this ID
+// and have its committed record overwritten by rollback. Same-owner reuse across books
+// is safe because one global index preimage covers the entire batch.
+func (idx *orderIndex) releaseInBatch(record *orderRecord, owner *BatchRollback) {
+	shard := idx.shard(record.OrderID)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if shard.reservations == nil {
+		shard.reservations = make(map[string]orderReservation)
+	}
+	shard.reservations[record.OrderID] = orderReservation{owner: owner}
+	delete(shard.orders, record.OrderID)
+}
+
+func (idx *orderIndex) releaseReservation(orderID string, owner *BatchRollback) {
+	shard := idx.shard(orderID)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if reservation, ok := shard.reservations[orderID]; ok && reservation.owner == owner {
+		delete(shard.reservations, orderID)
+	}
 }
 
 // restore unconditionally inserts record, overwriting any existing entry

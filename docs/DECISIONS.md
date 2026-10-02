@@ -668,6 +668,7 @@ Summary:
 - the matching engine should use a Reef-owned book implementation with ordered price levels, FIFO queues per price, and an order-id index for direct cancel/modify unlinking.
 - `github.com/tidwall/btree` is acceptable as a narrow ordered price-level index dependency; matching semantics, replay, event generation, and checksums remain Reef-owned.
 - snapshots are recovery accelerators for shard-local book state, not the source of truth. Recovery must remain snapshot plus durable command/event replay plus checksum verification.
+- 2026-10-01 replay correction: enabled terminal-order retention is bounded per exact run/session/instrument book, not globally across books. Apply retention at each terminal transition with batch-local undo, so cross-book scheduling and publication batch cuts cannot change same-book command outcomes. Provisional evictions retain the engine-wide order-ID reservation until commit/rollback. Snapshot V4 records this policy and exact limit; old snapshots may resume only with retention disabled, and enabling the new policy requires canonical command replay. See [matching-engine recovery compatibility](../services/matching-engine/README.md#terminal-retention-and-recovery-compatibility).
 - Redis, Postgres, RocksDB/Pebble, and embedded C++ engines are not accepted hot-book stores for this phase.
 
 Primary references:
