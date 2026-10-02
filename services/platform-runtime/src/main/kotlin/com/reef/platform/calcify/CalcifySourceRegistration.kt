@@ -33,4 +33,28 @@ internal object CalcifySourceRegistration {
         }
         return topicId
     }
+
+    /** Binds (or validates) one non-source Calcify topic's identity for this generation.
+     * Always binds on first sight: unlike source, no earlier stage registers these first. */
+    fun verifyTopic(jdbc:String,user:String,password:String,generation:Int,role:String,topicName:String,topicId:String) {
+        require(topicId.isNotBlank()) {"Calcify $role topic ID must not be blank"}
+        DriverManager.getConnection(jdbc,user,password).use {db->
+            db.autoCommit=false
+            try {
+                db.prepareStatement("SELECT topic_name, topic_id FROM runtime.calcify_topic_identities WHERE source_generation = ? AND role = ? FOR UPDATE").use {query->
+                    query.setInt(1,generation);query.setString(2,role)
+                    query.executeQuery().use {rows->
+                        if(rows.next()) {
+                            require(rows.getString(1)==topicName && rows.getString(2)==topicId) {"Calcify $role topic recreated: register next Calcify source generation"}
+                        } else {
+                            db.prepareStatement("INSERT INTO runtime.calcify_topic_identities(source_generation,role,topic_name,topic_id) VALUES (?,?,?,?)").use {insert->
+                                insert.setInt(1,generation);insert.setString(2,role);insert.setString(3,topicName);insert.setString(4,topicId);insert.executeUpdate()
+                            }
+                        }
+                    }
+                }
+                db.commit()
+            } catch(ex:Exception) {db.rollback();throw ex}
+        }
+    }
 }
