@@ -1,6 +1,7 @@
 package com.reef.platform.application
 
 import com.reef.platform.api.JsonCodec
+import com.reef.platform.domain.validQuoteCurrency
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -256,6 +257,21 @@ class OrderApplicationService(
                         occurredAt = trade.occurredAt,
                         actorId = command.actorId,
                         payloadJson = commandPayload(command.commandId)
+                    )
+                )
+            }
+            result.cancelled?.let { cancelled ->
+                lifecycleEvents.add(
+                    lifecycleEvent(
+                        eventId = cancelled.eventId, eventType = "OrderCancelled",
+                        orderId = cancelled.orderId, traceId = traceId,
+                        causationId = accepted.eventId, correlationId = command.correlationId,
+                        occurredAt = cancelled.occurredAt, actorId = command.actorId,
+                        payloadJson = JsonCodec.writeObject(
+                            "commandId" to command.commandId,
+                            "cancelledQuantityUnits" to cancelled.cancelledQuantityUnits,
+                            "reason" to cancelled.reason
+                        )
                     )
                 )
             }
@@ -888,6 +904,13 @@ class OrderApplicationService(
 
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt
+        if (!validQuoteCurrency(command.currency)) {
+            return SubmitOrderResult(rejected = EngineOrderRejected(
+                eventId = "evt-reject-currency-${command.commandId}", orderId = command.orderId,
+                code = "CURRENCY_MISMATCH", reason = "currency must be a recognized uppercase quote currency",
+                occurredAt = now
+            ))
+        }
         val validation = cachedReferenceDataValidation(
             instrumentId = command.instrumentId,
             participantId = command.participantId,

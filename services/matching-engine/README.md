@@ -175,3 +175,41 @@ Build guidance:
 - follow [`../../docs/steering/go.md`](../../docs/steering/go.md)
 - keep transport adapters thin and matching logic deterministic
 - track engine realism and hardening work in [`../../docs/MATCHING_ENGINE_HARDENING_RESEARCH.md`](../../docs/MATCHING_ENGINE_HARDENING_RESEARCH.md)
+
+## IOC lifecycle and match identity V2
+
+`IOC` executes immediately against eligible resting liquidity. Any unfilled
+quantity produces an additive `cancelled` result fact (`IOC_RESIDUAL`, exact
+cancelled quantity, command timestamp), then terminal `CANCELLED` state with zero
+remaining quantity. Full fills produce no cancellation. `DAY` residuals rest as
+before. Acceptance, executions/trades, and residual cancellation belong to one
+command outcome; cancellation follows fills in lifecycle projections.
+
+Trade and execution IDs use `trade-v2-` / `exec-v2-` plus SHA-256 over a
+length-framed tuple: identity version, run, venue session, instrument, buy order,
+sell order, incoming book sequence, match ordinal. Buy/sell execution suffixes
+and event prefixes preserve fact kind/side distinctions. Book sequence is
+snapshot-covered and transaction rollback restores its preimage; fresh replay,
+restore continuation, and publication retry therefore emit identical IDs.
+Delimiter characters in IDs cannot alter tuple boundaries. Matcher retention
+may permit order-ID reuse; the new book occurrence still gets distinct IDs.
+Calcify acceptance no-reuse rules remain independently enforced.
+
+Compatibility: existing canonical facts keep their original IDs. V2 matching is
+an economic/replay behavior change, not merely protobuf addition. Before upgrade,
+drain old lanes and use a new run/source generation for new matching output.
+Do not recompute historical V1 command logs into the same canonical output
+namespace with this binary: both trade IDs and IOC outcomes differ. Historical
+rebuilds consume original durable event facts or use the original matching
+binary. A valid snapshot can continue a drained book with its sequence intact,
+but cannot make V1 and V2 full-log recomputation interchangeable. Upgrade runtime
+consumers before enabling IOC cancellation producers; old consumers ignore the
+additive field and would leave residual exposure open.
+
+Currency safety: core rejects blank, unknown, non-uppercase, or `XXX` quote
+codes and rejects a quote differing from either resting book side before price
+comparison or order mutation. Restore rejects mixed/invalid resting quote
+currencies. No conversion occurs. This defensive invariant does not establish
+an instrument's authoritative quote currency while its book is empty; that
+requires instrument specification/admission binding. Runtime stream projection
+of additive IOC cancellation also requires materializer support before release.

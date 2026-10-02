@@ -142,11 +142,20 @@ data class OwnExecutionView(
     val liquidityRole: String = "UNSPECIFIED"
 )
 
+data class EngineOrderCancelled(
+    val eventId: String,
+    val orderId: String,
+    val cancelledQuantityUnits: String,
+    val reason: String,
+    val occurredAt: String
+)
+
 data class SubmitOrderResult(
     val accepted: EngineOrderAccepted? = null,
     val rejected: EngineOrderRejected? = null,
     val executions: List<ExecutionCreated> = emptyList(),
-    val trades: List<TradeCreated> = emptyList()
+    val trades: List<TradeCreated> = emptyList(),
+    val cancelled: EngineOrderCancelled? = null
 )
 
 data class PersistedOrder(

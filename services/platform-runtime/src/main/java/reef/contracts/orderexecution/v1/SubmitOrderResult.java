@@ -45,6 +45,7 @@ private static final long serialVersionUID = 0L;
             reef.contracts.orderexecution.v1.SubmitOrderResult.class, reef.contracts.orderexecution.v1.SubmitOrderResult.Builder.class);
   }
 
+  private int bitField0_;
   private int outcomeCase_ = 0;
   @SuppressWarnings("serial")
   private java.lang.Object outcome_;
@@ -231,6 +232,32 @@ private static final long serialVersionUID = 0L;
     return trades_.get(index);
   }
 
+  public static final int CANCELLED_FIELD_NUMBER = 5;
+  private reef.contracts.orderexecution.v1.OrderCancelled cancelled_;
+  /**
+   * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+   * @return Whether the cancelled field is set.
+   */
+  @java.lang.Override
+  public boolean hasCancelled() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+   * @return The cancelled.
+   */
+  @java.lang.Override
+  public reef.contracts.orderexecution.v1.OrderCancelled getCancelled() {
+    return cancelled_ == null ? reef.contracts.orderexecution.v1.OrderCancelled.getDefaultInstance() : cancelled_;
+  }
+  /**
+   * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+   */
+  @java.lang.Override
+  public reef.contracts.orderexecution.v1.OrderCancelledOrBuilder getCancelledOrBuilder() {
+    return cancelled_ == null ? reef.contracts.orderexecution.v1.OrderCancelled.getDefaultInstance() : cancelled_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -257,6 +284,9 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < trades_.size(); i++) {
       output.writeMessage(4, trades_.get(i));
     }
+    if (((bitField0_ & 0x00000001) != 0)) {
+      output.writeMessage(5, getCancelled());
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -282,6 +312,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(4, trades_.get(i));
     }
+    if (((bitField0_ & 0x00000001) != 0)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(5, getCancelled());
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -301,6 +335,11 @@ private static final long serialVersionUID = 0L;
         .equals(other.getExecutionsList())) return false;
     if (!getTradesList()
         .equals(other.getTradesList())) return false;
+    if (hasCancelled() != other.hasCancelled()) return false;
+    if (hasCancelled()) {
+      if (!getCancelled()
+          .equals(other.getCancelled())) return false;
+    }
     if (!getOutcomeCase().equals(other.getOutcomeCase())) return false;
     switch (outcomeCase_) {
       case 1:
@@ -332,6 +371,10 @@ private static final long serialVersionUID = 0L;
     if (getTradesCount() > 0) {
       hash = (37 * hash) + TRADES_FIELD_NUMBER;
       hash = (53 * hash) + getTradesList().hashCode();
+    }
+    if (hasCancelled()) {
+      hash = (37 * hash) + CANCELLED_FIELD_NUMBER;
+      hash = (53 * hash) + getCancelled().hashCode();
     }
     switch (outcomeCase_) {
       case 1:
@@ -464,13 +507,21 @@ private static final long serialVersionUID = 0L;
 
     // Construct using reef.contracts.orderexecution.v1.SubmitOrderResult.newBuilder()
     private Builder() {
-
+      maybeForceBuilderInitialization();
     }
 
     private Builder(
         com.google.protobuf.GeneratedMessage.BuilderParent parent) {
       super(parent);
-
+      maybeForceBuilderInitialization();
+    }
+    private void maybeForceBuilderInitialization() {
+      if (com.google.protobuf.GeneratedMessage
+              .alwaysUseFieldBuilders) {
+        internalGetExecutionsFieldBuilder();
+        internalGetTradesFieldBuilder();
+        internalGetCancelledFieldBuilder();
+      }
     }
     @java.lang.Override
     public Builder clear() {
@@ -496,6 +547,11 @@ private static final long serialVersionUID = 0L;
         tradesBuilder_.clear();
       }
       bitField0_ = (bitField0_ & ~0x00000008);
+      cancelled_ = null;
+      if (cancelledBuilder_ != null) {
+        cancelledBuilder_.dispose();
+        cancelledBuilder_ = null;
+      }
       outcomeCase_ = 0;
       outcome_ = null;
       return this;
@@ -554,6 +610,14 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartial0(reef.contracts.orderexecution.v1.SubmitOrderResult result) {
       int from_bitField0_ = bitField0_;
+      int to_bitField0_ = 0;
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.cancelled_ = cancelledBuilder_ == null
+            ? cancelled_
+            : cancelledBuilder_.build();
+        to_bitField0_ |= 0x00000001;
+      }
+      result.bitField0_ |= to_bitField0_;
     }
 
     private void buildPartialOneofs(reef.contracts.orderexecution.v1.SubmitOrderResult result) {
@@ -632,6 +696,9 @@ private static final long serialVersionUID = 0L;
             tradesBuilder_.addAllMessages(other.trades_);
           }
         }
+      }
+      if (other.hasCancelled()) {
+        mergeCancelled(other.getCancelled());
       }
       switch (other.getOutcomeCase()) {
         case ACCEPTED: {
@@ -712,6 +779,13 @@ private static final long serialVersionUID = 0L;
               }
               break;
             } // case 34
+            case 42: {
+              input.readMessage(
+                  internalGetCancelledFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 42
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1506,6 +1580,127 @@ private static final long serialVersionUID = 0L;
         trades_ = null;
       }
       return tradesBuilder_;
+    }
+
+    private reef.contracts.orderexecution.v1.OrderCancelled cancelled_;
+    private com.google.protobuf.SingleFieldBuilder<
+        reef.contracts.orderexecution.v1.OrderCancelled, reef.contracts.orderexecution.v1.OrderCancelled.Builder, reef.contracts.orderexecution.v1.OrderCancelledOrBuilder> cancelledBuilder_;
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     * @return Whether the cancelled field is set.
+     */
+    public boolean hasCancelled() {
+      return ((bitField0_ & 0x00000010) != 0);
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     * @return The cancelled.
+     */
+    public reef.contracts.orderexecution.v1.OrderCancelled getCancelled() {
+      if (cancelledBuilder_ == null) {
+        return cancelled_ == null ? reef.contracts.orderexecution.v1.OrderCancelled.getDefaultInstance() : cancelled_;
+      } else {
+        return cancelledBuilder_.getMessage();
+      }
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    public Builder setCancelled(reef.contracts.orderexecution.v1.OrderCancelled value) {
+      if (cancelledBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        cancelled_ = value;
+      } else {
+        cancelledBuilder_.setMessage(value);
+      }
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    public Builder setCancelled(
+        reef.contracts.orderexecution.v1.OrderCancelled.Builder builderForValue) {
+      if (cancelledBuilder_ == null) {
+        cancelled_ = builderForValue.build();
+      } else {
+        cancelledBuilder_.setMessage(builderForValue.build());
+      }
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    public Builder mergeCancelled(reef.contracts.orderexecution.v1.OrderCancelled value) {
+      if (cancelledBuilder_ == null) {
+        if (((bitField0_ & 0x00000010) != 0) &&
+          cancelled_ != null &&
+          cancelled_ != reef.contracts.orderexecution.v1.OrderCancelled.getDefaultInstance()) {
+          getCancelledBuilder().mergeFrom(value);
+        } else {
+          cancelled_ = value;
+        }
+      } else {
+        cancelledBuilder_.mergeFrom(value);
+      }
+      if (cancelled_ != null) {
+        bitField0_ |= 0x00000010;
+        onChanged();
+      }
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    public Builder clearCancelled() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      cancelled_ = null;
+      if (cancelledBuilder_ != null) {
+        cancelledBuilder_.dispose();
+        cancelledBuilder_ = null;
+      }
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    public reef.contracts.orderexecution.v1.OrderCancelled.Builder getCancelledBuilder() {
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return internalGetCancelledFieldBuilder().getBuilder();
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    public reef.contracts.orderexecution.v1.OrderCancelledOrBuilder getCancelledOrBuilder() {
+      if (cancelledBuilder_ != null) {
+        return cancelledBuilder_.getMessageOrBuilder();
+      } else {
+        return cancelled_ == null ?
+            reef.contracts.orderexecution.v1.OrderCancelled.getDefaultInstance() : cancelled_;
+      }
+    }
+    /**
+     * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        reef.contracts.orderexecution.v1.OrderCancelled, reef.contracts.orderexecution.v1.OrderCancelled.Builder, reef.contracts.orderexecution.v1.OrderCancelledOrBuilder>
+        internalGetCancelledFieldBuilder() {
+      if (cancelledBuilder_ == null) {
+        cancelledBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            reef.contracts.orderexecution.v1.OrderCancelled, reef.contracts.orderexecution.v1.OrderCancelled.Builder, reef.contracts.orderexecution.v1.OrderCancelledOrBuilder>(
+                getCancelled(),
+                getParentForChildren(),
+                isClean());
+        cancelled_ = null;
+      }
+      return cancelledBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:reef.contracts.orderexecution.v1.SubmitOrderResult)

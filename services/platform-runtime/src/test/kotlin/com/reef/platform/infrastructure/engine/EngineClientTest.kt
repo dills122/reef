@@ -10,6 +10,17 @@ import kotlin.test.assertTrue
 
 class EngineClientTest {
     @Test
+    fun parseIOCResultPreservesTerminalCancellation() {
+        val result = EngineClient().parseSubmitOrderResult("""{
+          "accepted":{"eventId":"accepted","orderId":"ioc","engineOrderId":"ioc","occurredAt":"2026-10-02T01:00:00Z"},
+          "cancelled":{"eventId":"cancelled","orderId":"ioc","cancelledQuantityUnits":"6","reason":"IOC_RESIDUAL","occurredAt":"2026-10-02T01:00:00Z"}
+        }""")
+        assertNotNull(result.accepted)
+        assertEquals("6", result.cancelled?.cancelledQuantityUnits)
+        assertEquals("IOC_RESIDUAL", result.cancelled?.reason)
+    }
+
+    @Test
     fun submitPayloadMatchesStrictEngineHttpContract() {
         val client = EngineClient()
         val payload = client.submitPayload(submitCommand())

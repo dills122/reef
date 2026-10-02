@@ -213,6 +213,13 @@ func toProtoResult(result domain.SubmitOrderResult) *orderv1.SubmitOrderResult {
 			},
 		}
 	}
+	if cancelled := result.Cancelled; cancelled != nil {
+		out.Cancelled = &orderv1.OrderCancelled{
+			EventId: cancelled.EventID, OrderId: cancelled.OrderID,
+			CancelledQuantity: &orderv1.OrderQuantity{Units: cancelled.CancelledQuantityUnits},
+			Reason:            cancelled.Reason, OccurredAt: cancelled.OccurredAt,
+		}
+	}
 	for _, execution := range result.Executions {
 		out.Executions = append(out.Executions, &orderv1.ExecutionCreated{
 			EventId:      execution.EventID,

@@ -88,5 +88,20 @@ public interface SubmitOrderResultOrBuilder extends
   reef.contracts.orderexecution.v1.TradeCreatedOrBuilder getTradesOrBuilder(
       int index);
 
+  /**
+   * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+   * @return Whether the cancelled field is set.
+   */
+  boolean hasCancelled();
+  /**
+   * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+   * @return The cancelled.
+   */
+  reef.contracts.orderexecution.v1.OrderCancelled getCancelled();
+  /**
+   * <code>.reef.contracts.orderexecution.v1.OrderCancelled cancelled = 5;</code>
+   */
+  reef.contracts.orderexecution.v1.OrderCancelledOrBuilder getCancelledOrBuilder();
+
   reef.contracts.orderexecution.v1.SubmitOrderResult.OutcomeCase getOutcomeCase();
 }

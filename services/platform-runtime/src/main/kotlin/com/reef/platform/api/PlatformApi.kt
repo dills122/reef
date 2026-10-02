@@ -724,7 +724,12 @@ class PlatformApi(
                     "occurredAt" to accepted.occurredAt
                 ),
                 "executions" to result.executions.map { it.toMap() },
-                "trades" to result.trades.map { it.toMap() }
+                "trades" to result.trades.map { it.toMap() },
+                "cancelled" to result.cancelled?.let { cancelled -> mapOf(
+                    "eventId" to cancelled.eventId, "orderId" to cancelled.orderId,
+                    "cancelledQuantityUnits" to cancelled.cancelledQuantityUnits,
+                    "reason" to cancelled.reason, "occurredAt" to cancelled.occurredAt
+                ) }
             )
         }
 

@@ -129,7 +129,7 @@ func TestRunBatchFailedPublishRestoresSequenceAndAcceptance(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := publisher.batches[0].Outcomes[0].Result
-	if result.Accepted == nil || len(result.Trades) != 1 || result.Trades[0].TradeID != "trade-buy-sell-1" {
+	if result.Accepted == nil || len(result.Trades) != 1 || result.Trades[0].TradeID != "trade-v2-b7e49782c16b7f09a7250ea11e12887d10c670b76ea08ca46b9c375601d4224d" {
 		t.Fatalf("retry drift: %+v", result)
 	}
 }

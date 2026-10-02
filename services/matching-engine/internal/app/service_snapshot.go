@@ -194,7 +194,18 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 	// below key on (RunID, OrderID), not OrderID alone.
 	seenOrderIDs := make(map[string]bool, len(snapshot.Orders))
 	terminalRecords := make([]*orderRecord, 0)
+	restingCurrencies := make(map[string]string)
 	for _, order := range snapshot.Orders {
+		if order.RemainingQuantity > 0 {
+			lane := bookKey(order.RunID, order.VenueSessionID, order.InstrumentID)
+			if quote, exists := restingCurrencies[lane]; exists && quote != order.Currency {
+				return nil, false
+			}
+			if !validQuoteCurrency(order.Currency) {
+				return nil, false
+			}
+			restingCurrencies[lane] = order.Currency
+		}
 		key := orderIndexKey(order.RunID, order.OrderID)
 		if order.OrderID == "" || seenOrderIDs[key] {
 			return nil, false

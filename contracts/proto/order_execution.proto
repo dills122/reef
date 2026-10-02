@@ -106,6 +106,14 @@ message TradeCreated {
   string occurred_at = 9;
 }
 
+message OrderCancelled {
+  string event_id = 1;
+  string order_id = 2;
+  OrderQuantity cancelled_quantity = 3;
+  string reason = 4;
+  string occurred_at = 5;
+}
+
 message SubmitOrderResult {
   oneof outcome {
     OrderAccepted accepted = 1;
@@ -114,6 +122,7 @@ message SubmitOrderResult {
 
   repeated ExecutionCreated executions = 3;
   repeated TradeCreated trades = 4;
+  OrderCancelled cancelled = 5;
 }
 
 message HealthCheckRequest {}
