@@ -40,7 +40,7 @@ kotlin {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags("postgres") }
     dependsOn("verifyNoTestSourceExclusions")
     finalizedBy(tasks.jacocoTestReport)
 }
@@ -81,4 +81,13 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+// Explicit opt-in: missing database configuration fails rather than silently passing integration tests.
+tasks.register<Test>("postgresTest") {
+    group = "verification"
+    description = "Runs canonical seed persistence tests against an isolated PostgreSQL database."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("postgres") }
 }

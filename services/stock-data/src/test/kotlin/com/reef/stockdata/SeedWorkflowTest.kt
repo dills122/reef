@@ -4,8 +4,58 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import java.time.temporal.ChronoUnit
 
 class SeedWorkflowTest {
+
+    @Test
+    fun `batch children must belong to their seed and have unique symbols`() {
+        val repository = InMemorySeedSnapshotRepository()
+        val candidate = FakeStockDataProvider().getSeedSnapshots("invalid-seed", listOf("AAPL"), Instant.EPOCH)
+        val invalidBatches = listOf(
+            candidate.copy(snapshots = emptyList()),
+            candidate.copy(snapshots = candidate.snapshots + candidate.snapshots),
+            candidate.copy(snapshots = candidate.snapshots.map { it.copy(gameSeedId = "other-seed") }),
+        )
+        for (invalid in invalidBatches) {
+            assertFailsWith<IllegalArgumentException> { repository.createOrExisting(invalid) }
+            assertEquals(null, repository.find(candidate.gameSeedId))
+            assertEquals(null, repository.find("other-seed"))
+        }
+    }
+
+
+    @Test
+    fun `published in-memory snapshots cannot be changed through caller list aliases`() {
+        val repository = InMemorySeedSnapshotRepository()
+        val candidate = FakeStockDataProvider().getSeedSnapshots("alias-seed", listOf("AAPL"), Instant.EPOCH)
+        val mutableSnapshots = candidate.snapshots.toMutableList()
+        val winner = repository.createOrExisting(candidate.copy(snapshots = mutableSnapshots))
+        mutableSnapshots.clear()
+        assertEquals(candidate, repository.find(candidate.gameSeedId))
+        assertFailsWith<UnsupportedOperationException> {
+            (winner.snapshots as MutableList<StockSeedSnapshot>).clear()
+        }
+        assertEquals(candidate, repository.find(candidate.gameSeedId))
+    }
+
+    @Test
+    fun `in-memory canonical timestamps use PostgreSQL microsecond precision`() {
+        val repository = InMemorySeedSnapshotRepository()
+        val asOf = Instant.parse("2026-07-08T15:00:00.123456789Z")
+        val candidate = FakeStockDataProvider().getSeedSnapshots("precision-seed", listOf("AAPL"), asOf)
+        val winner = repository.createOrExisting(candidate)
+        assertEquals(asOf.truncatedTo(ChronoUnit.MICROS), winner.asOf)
+        assertEquals(asOf.truncatedTo(ChronoUnit.MICROS), winner.snapshots.single().sourceTimestamp)
+        assertEquals(winner, repository.find(candidate.gameSeedId))
+    }
+
+
+    @Test
+    fun `concurrent seed requests and replay return one canonical winner`() {
+        assertConcurrentSeedWinner(InMemorySeedSnapshotRepository())
+    }
+
 
     @Test
     fun `second seed request for the same gameSeedId does not call the provider again`() {
