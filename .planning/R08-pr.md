@@ -21,6 +21,11 @@ PR Description
 - Independent review 3/3: Ready; prior findings fixed with regressions.
 - TDD regressions and `git diff --check` passed; see `.planning/R08-ledger.md`.
 
+## CI Follow-up
+- Runtime/Arena images use root context and package same migration; missing migration fails explicitly.
+- Arena lifecycle schema fixture uses run/order identity and retains no-op rewrite assertions.
+- Both image builds passed; full real-DB schema-placement suite15 passed; tooling31 passed.
+
 ## Scope Notes
 - Migration forward-only; retained history without local provenance requires verified fresh projection rebuild.
 - Unknown legacy facts remain unchanged. Production cutover and performance qualification not executed.

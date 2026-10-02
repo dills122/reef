@@ -25,7 +25,9 @@ Apply `runtime/0073_runtime_order_run_identity.sql` transactionally with order
 writers and projectors stopped. It replaces order-only keys, adds scope to
 facts/results, and installs scoped status/timeline/lifecycle projection SQL.
 Compat bootstrap packages this exact migration source instead of maintaining a
-second copy of its scoped SQL. Direct projection writes atomically invalidate
+second copy of its scoped SQL. Runtime and Arena images use repository-root
+build context and copy this migration into builder; resource packaging fails
+explicitly when source is absent. Direct projection writes atomically invalidate
 scoped lifecycle markers. Dirty conflict updates retain the established row
 lock and oldest timestamp without rewriting an unchanged marker.
 
