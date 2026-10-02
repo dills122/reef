@@ -8,7 +8,7 @@
         "decimal.js": "10.6.0",
         "lodash-es": "4.18.1",
         "ses": "^2.3.0",
-        "simple-statistics": "7.9.3",
+        "simple-statistics": "7.12.1",
         "trading-signals": "7.4.3",
         "typescript": "^7.0.2",
       },
@@ -67,7 +67,7 @@
 
     "ses": ["ses@2.3.0", "", { "dependencies": { "@endo/cache-map": "^1.1.0", "@endo/env-options": "^1.1.11", "@endo/immutable-arraybuffer": "^2.0.0" } }, "sha512-qd3iWzDqGKllI2FmExKsWLrJwt+6COWb8jUdzaCn8Cq5OTeoXdQ62Gn/xLy0GWLORC3du6yBAVe/V0B0dLVKew=="],
 
-    "simple-statistics": ["simple-statistics@7.9.3", "", {}, "sha512-WXpxUfo7BJCRpyl4besiuMV7wNj9xiPIq7IKmUQO4upIaF8pK2AXwhjttHN5L8KXZrLkGMCHGHq4p+pJXiIahQ=="],
+    "simple-statistics": ["simple-statistics@7.12.1", "", {}, "sha512-LYRvHhZceO9MTzDw6ptt3PBoOHuiTqNU5Ew5MLjjcLwuzgfATMf1oMFdgDW7elVDGwZvi98pGoUoFhwuXTHTRA=="],
 
     "trading-signals": ["trading-signals@7.4.3", "", {}, "sha512-kOyzd85qhuhU7yGkB5z74MVP6j30xBCfZy5+bgBnvfxY1ZdvaQsdD+C5j+CoIRtCAgSOuxB7jmPpBrqO6h17sQ=="],
 
