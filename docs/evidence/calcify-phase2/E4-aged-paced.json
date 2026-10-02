@@ -1,0 +1,320 @@
+{
+  "scope" : "single Java thread RocksDB full-fact inserts/two gets/JSON V1/aged sparse lookup; no source parsing/Kafka/changelog/standby/intake",
+  "agedRows" : 1000000,
+  "lanesSequential" : 1,
+  "cacheMiBPerLane" : 32,
+  "memtableMiBPerLane" : 16,
+  "WAL" : false,
+  "seedSeconds" : 4.307446833,
+  "initialDiskBytes" : 132393098,
+  "requestedSeconds" : 300,
+  "requestedTradesPerSecond" : 10000,
+  "resolvedTrades" : 3000000,
+  "elapsedSeconds" : 300.000054875,
+  "resolvedPerSecond" : 9999.998170833669,
+  "impliedNewAcceptedOrdersPerSecond" : 19999.996341667338,
+  "fullExampleRowJsonBytes" : 646,
+  "fullExampleV1JsonBytes" : 1985,
+  "insertLogicalBytes" : 3960777780,
+  "outputLogicalBytes" : 5968555560,
+  "finalDiskBytes" : 867334669,
+  "physicalGrowthPerNewOrderBytes" : 122.49026183333334,
+  "maxOfferedMinusResolvedTrades" : 165,
+  "sampledLocalServiceP95Micros" : 25.041,
+  "samples" : [ {
+    "seconds" : 5.000109584,
+    "resolved" : 50001,
+    "rateLast5s" : 10000.2,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 10.000096,
+    "resolved" : 100001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 15.000120209,
+    "resolved" : 150001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 20.000083959,
+    "resolved" : 200001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 25.000087709,
+    "resolved" : 250001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 30.000088584,
+    "resolved" : 300001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 35.000060625,
+    "resolved" : 350001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 40.000080459,
+    "resolved" : 400001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 45.000059542,
+    "resolved" : 450001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 50.000086375,
+    "resolved" : 500001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 55.000115459,
+    "resolved" : 550001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 60.000122709,
+    "resolved" : 600001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 65.000096875,
+    "resolved" : 650001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 70.000089667,
+    "resolved" : 700001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 75.000063167,
+    "resolved" : 750001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 80.00005375,
+    "resolved" : 800001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 85.00006425,
+    "resolved" : 850001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 90.000078292,
+    "resolved" : 900001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 95.000066375,
+    "resolved" : 950001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 100.0000575,
+    "resolved" : 1000001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 105.000074959,
+    "resolved" : 1050001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 110.000056959,
+    "resolved" : 1100001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 115.00009275,
+    "resolved" : 1150001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 120.000064959,
+    "resolved" : 1200001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 125.000094625,
+    "resolved" : 1250001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 130.000001917,
+    "resolved" : 1300000,
+    "rateLast5s" : 9999.8,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 135.000082584,
+    "resolved" : 1350001,
+    "rateLast5s" : 10000.2,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 140.000064542,
+    "resolved" : 1400001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 145.000064125,
+    "resolved" : 1450001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 150.000096042,
+    "resolved" : 1500001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 155.000098292,
+    "resolved" : 1550001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 160.00008225,
+    "resolved" : 1600001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 165.000083875,
+    "resolved" : 1650001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 170.000069375,
+    "resolved" : 1700001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 175.000065334,
+    "resolved" : 1750001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 180.000046792,
+    "resolved" : 1800001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 185.000071959,
+    "resolved" : 1850001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 190.000108084,
+    "resolved" : 1900001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 195.000057584,
+    "resolved" : 1950001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 200.000048625,
+    "resolved" : 2000001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 205.000095292,
+    "resolved" : 2050001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 210.000065667,
+    "resolved" : 2100001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 215.00005375,
+    "resolved" : 2150001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 220.000045167,
+    "resolved" : 2200001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 225.000094542,
+    "resolved" : 2250001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 230.000055459,
+    "resolved" : 2300001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 235.000074209,
+    "resolved" : 2350001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 240.0000615,
+    "resolved" : 2400001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 245.000060167,
+    "resolved" : 2450001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 250.000083125,
+    "resolved" : 2500001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 255.000071084,
+    "resolved" : 2550001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 260.000074917,
+    "resolved" : 2600001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 265.000111792,
+    "resolved" : 2650001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 270.000065417,
+    "resolved" : 2700001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 275.000059834,
+    "resolved" : 2750001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 280.000113834,
+    "resolved" : 2800001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 285.000065167,
+    "resolved" : 2850001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 290.000073042,
+    "resolved" : 2900001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 295.000077084,
+    "resolved" : 2950001,
+    "rateLast5s" : 10000.0,
+    "offeredMinusResolved" : 0
+  } ]
+}

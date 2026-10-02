@@ -1,0 +1,15 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :compileJava
+Note: /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/experiments/calcify-phase2/src/main/java/Resolver.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :processResources NO-SOURCE
+> Task :classes
+
+[Incubating] Problems report is available at: file:///Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/experiments/calcify-phase2/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 3s
+1 actionable task: 1 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html

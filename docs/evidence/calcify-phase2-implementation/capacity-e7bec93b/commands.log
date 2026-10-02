@@ -1,0 +1,15 @@
+{"mode":"init","prefix":"p2-cap-e7bec93b-hot","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-cap-e7bec93b-spread","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+{"mode":"init","prefix":"p2-cap-e7bec93b-skew","args":[],"code":0}
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+

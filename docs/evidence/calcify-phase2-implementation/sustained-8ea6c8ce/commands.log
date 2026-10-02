@@ -1,0 +1,6 @@
+{"mode":"init","prefix":"p2-sus-8ea6c8ce-hot","args":[],"code":0}
+{"mode":"paired-seed","prefix":"p2-sus-8ea6c8ce-hot","args":[31500,"hot",0,105],"code":0}
+{"mode":"measure","prefix":"p2-sus-8ea6c8ce-hot","args":[3150000,390000,false,1000],"code":0}
+{"mode":"paired-oracle","prefix":"p2-sus-8ea6c8ce-hot","args":[3150000],"code":0}
+{"mode":"worker","prefix":"p2-sus-8ea6c8ce-hot","args":["p2-sus-8ea6c8ce-hot-app","/var/folders/lg/j56llg991d1gpjvtjh8l9gbh0000gn/T/reef-resolver-sustained-g1Pjc3","",2],"code":null}
+{"mode":"cleanup","prefix":"p2-sus-8ea6c8ce-hot","args":[],"code":0}

@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.JsonNodeType
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -8,7 +9,10 @@ import com.fasterxml.jackson.databind.json.JsonMapper
 import java.security.MessageDigest
 
 object JsonCodec {
-    private val mapper = JsonMapper.builder().build()
+    private val mapper = JsonMapper.builder(
+        com.fasterxml.jackson.core.JsonFactory.builder()
+            .disable(com.fasterxml.jackson.core.JsonFactory.Feature.CHARSET_DETECTION).build()
+    ).build()
 
     fun parseObject(body: String): JsonDocument {
         val root = try {
@@ -16,6 +20,32 @@ object JsonCodec {
         } catch (ex: Exception) {
             throw IllegalArgumentException("invalid json payload", ex)
         }
+        return objectDocument(root)
+    }
+
+    /** Validate UTF-8 with bounded scratch before Jackson's direct byte parser. */
+    fun parseObject(body: ByteArray): JsonDocument {
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        val input = java.nio.ByteBuffer.wrap(body)
+        val scratch = java.nio.CharBuffer.allocate(8192)
+        try {
+            do {
+                val result = decoder.decode(input, scratch, true)
+                if (result.isError) result.throwException()
+                scratch.clear()
+            } while (result.isOverflow)
+        } catch (ex: java.nio.charset.CharacterCodingException) {
+            throw IllegalArgumentException("invalid UTF-8 json payload", ex)
+        }
+        val root = try { mapper.readTree(body) } catch (ex: Exception) {
+            throw IllegalArgumentException("invalid json payload", ex)
+        }
+        return objectDocument(root)
+    }
+
+    private fun objectDocument(root: JsonNode?): JsonDocument {
         if (root == null || !root.isObject) {
             throw IllegalArgumentException("json payload must be an object")
         }
@@ -168,44 +198,67 @@ class JsonDocument internal constructor(
 
     fun semanticSha256(excludedRootFields: Set<String> = emptySet()): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        updateCanonicalDigest(digest, root, excludedRootFields, isRoot = true)
-        return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        updateCanonicalDigest(digest, root, excludedRootFields, HashMap(), isRoot = true)
+        return java.util.HexFormat.of().formatHex(digest.digest())
     }
+}
+
+// Fixed bounded table; changes allocation only, not canonical bytes or field order.
+private val canonicalTokenPrefixes = "nbsdao".map { kind ->
+    Array(256) { length -> "$kind$length:".toByteArray(Charsets.UTF_8) }
+}
+private val canonicalFieldOrder = Comparator<Map.Entry<String, JsonNode>> { left, right ->
+    left.key.compareTo(right.key)
 }
 
 private fun updateCanonicalDigest(
     digest: MessageDigest,
     node: JsonNode,
     excludedRootFields: Set<String>,
+    stringTokens: MutableMap<String, ByteArray>,
     isRoot: Boolean
 ) {
-    when {
-        node.isNull -> updateCanonicalToken(digest, 'n', byteArrayOf())
-        node.isBoolean -> updateCanonicalToken(digest, 'b', if (node.booleanValue()) byteArrayOf('1'.code.toByte()) else byteArrayOf('0'.code.toByte()))
-        node.isTextual -> updateCanonicalToken(digest, 's', node.textValue().toByteArray(Charsets.UTF_8))
-        node.isNumber -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
-        node.isArray -> {
+    when (node.nodeType) {
+        JsonNodeType.NULL -> updateCanonicalToken(digest, 'n', byteArrayOf())
+        JsonNodeType.BOOLEAN -> updateCanonicalToken(digest, 'b', if (node.booleanValue()) byteArrayOf('1'.code.toByte()) else byteArrayOf('0'.code.toByte()))
+        JsonNodeType.STRING -> updateCanonicalString(digest, node.textValue(), stringTokens, 32)
+        JsonNodeType.NUMBER -> updateCanonicalToken(digest, 'd', node.asText().toByteArray(Charsets.UTF_8))
+        JsonNodeType.ARRAY -> {
             updateCanonicalToken(digest, 'a', node.size().toString().toByteArray(Charsets.UTF_8))
-            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, isRoot = false) }
+            node.forEach { child -> updateCanonicalDigest(digest, child, excludedRootFields, stringTokens, isRoot = false) }
         }
-        node.isObject -> {
-            val fields = node.fields().asSequence()
-                .filterNot { (name, _) -> isRoot && name in excludedRootFields }
-                .sortedBy { (name, _) -> name }
-                .toList()
+        JsonNodeType.OBJECT -> {
+            val fields = ArrayList<Map.Entry<String, JsonNode>>(node.size())
+            node.fields().forEachRemaining { entry ->
+                if (!isRoot || entry.key !in excludedRootFields) fields.add(entry)
+            }
+            fields.sortWith(canonicalFieldOrder)
             updateCanonicalToken(digest, 'o', fields.size.toString().toByteArray(Charsets.UTF_8))
             fields.forEach { (name, child) ->
-                updateCanonicalToken(digest, 's', name.toByteArray(Charsets.UTF_8))
-                updateCanonicalDigest(digest, child, excludedRootFields, isRoot = false)
+                updateCanonicalString(digest, name, stringTokens, 128)
+                updateCanonicalDigest(digest, child, excludedRootFields, stringTokens, isRoot = false)
             }
         }
         else -> throw IllegalArgumentException("unsupported canonical checksum JSON node: ${node.nodeType}")
     }
 }
 
+// Fields and values have identical string tokens; memo is bounded per digest.
+private fun updateCanonicalString(digest: MessageDigest, text: String, tokens: MutableMap<String, ByteArray>, maxBytes: Int) {
+    val cached = if (text.length <= maxBytes) tokens[text] else null
+    if (cached != null) { digest.update(cached); return }
+    val bytes = text.toByteArray(Charsets.UTF_8)
+    if (bytes.size <= maxBytes && tokens.size < 128) {
+        val token = canonicalTokenPrefixes[2][bytes.size] + bytes
+        tokens[text] = token
+        digest.update(token)
+    } else updateCanonicalToken(digest, 's', bytes)
+}
+
 private fun updateCanonicalToken(digest: MessageDigest, kind: Char, value: ByteArray) {
-    digest.update(kind.code.toByte())
-    digest.update(value.size.toString().toByteArray(Charsets.UTF_8))
-    digest.update(':'.code.toByte())
+    val index = when (kind) { 'n' -> 0; 'b' -> 1; 's' -> 2; 'd' -> 3; 'a' -> 4; 'o' -> 5; else -> error("unknown canonical token") }
+    val prefix = if (value.size < 256) canonicalTokenPrefixes[index][value.size]
+        else "$kind${value.size}:".toByteArray(Charsets.UTF_8)
+    digest.update(prefix)
     digest.update(value)
 }

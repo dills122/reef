@@ -635,3 +635,7 @@ hetzner-core:
 hetzner-core-tofu:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/deploy/hetzner-core-tofu.mjs $(ARGS)
+
+.PHONY: dev-smoke-calcify-phase2
+dev-smoke-calcify-phase2:
+	DEV_CALCIFY_PHASE2=1 $(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs

@@ -1,0 +1,117 @@
+{
+  "runId": "bf939b54",
+  "scope": "Production resolver RF3/minISR2; two partitions, small full-fact fixture; synthetic producer source/links",
+  "results": [
+    {
+      "boundary": "commit",
+      "before": {
+        "records": 130,
+        "unique": 130,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 130,
+        "pass": true
+      },
+      "after": {
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 63620
+    },
+    {
+      "boundary": "state",
+      "before": {
+        "records": 0,
+        "unique": 0,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 0,
+        "pass": true
+      },
+      "after": {
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 48308
+    },
+    {
+      "boundary": "forward",
+      "before": {
+        "records": 0,
+        "unique": 0,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 0,
+        "pass": true
+      },
+      "after": {
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 48287
+    },
+    {
+      "boundary": "disk-loss",
+      "before": {
+        "records": 130,
+        "unique": 130,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 0,
+        "pass": false
+      },
+      "after": {
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      },
+      "restartAndWaveMs": 46832
+    },
+    {
+      "boundary": "poison-rebalance-promotion",
+      "isolated": {
+        "records": 390,
+        "unique": 390,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 390,
+        "pass": true
+      },
+      "promoted": {
+        "records": 520,
+        "unique": 520,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 520,
+        "pass": true
+      }
+    },
+    {
+      "boundary": "broker-loss",
+      "after": {
+        "records": 260,
+        "unique": 260,
+        "duplicates": 0,
+        "fullFactParity": true,
+        "expected": 260,
+        "pass": true
+      }
+    }
+  ],
+  "pass": true
+}

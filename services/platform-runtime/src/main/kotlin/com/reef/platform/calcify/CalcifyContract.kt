@@ -1,6 +1,7 @@
 package com.reef.platform.calcify
 
 import com.reef.platform.api.JsonCodec
+import com.reef.platform.api.JsonDocument
 import java.nio.ByteBuffer
 
 /** Wire v1: version:u8, sourceGeneration:i32, sourcePartition:i32, sourceOffset:i64, tradeOrdinal:i32. */
@@ -76,7 +77,28 @@ object CalcifySourceBatch {
         sourcePartition: Int,
         sourceOffset: Long
     ): List<CommitmentId> {
-        val root = JsonCodec.parseObject(payloadJson)
+        val root = checked(payloadJson, sourceTopic, sourcePartition)
+        val outcomes = root.strictObjectDocuments("outcomes")
+        val ids = ArrayList<CommitmentId>()
+        for (outcome in outcomes) {
+            val result = outcome.strictObject("result")
+            for (trade in result.strictObjectDocuments("trades", required = false)) {
+                trade.strictTextField("tradeId")
+                trade.strictTextField("executionId")
+                ids.add(CommitmentId(sourceGeneration, sourcePartition, sourceOffset, ids.size))
+            }
+        }
+        return ids
+    }
+
+    internal fun checked(payloadJson: String, sourceTopic: String, sourcePartition: Int): JsonDocument {
+        return checked(JsonCodec.parseObject(payloadJson), sourceTopic, sourcePartition)
+    }
+
+    internal fun checked(payload: ByteArray, sourceTopic: String, sourcePartition: Int): JsonDocument =
+        checked(JsonCodec.parseObject(payload), sourceTopic, sourcePartition)
+
+    private fun checked(root: JsonDocument, sourceTopic: String, sourcePartition: Int): JsonDocument {
         require(root.strictTextField("payloadChecksumAlgorithm") == CHECKSUM_ALGORITHM) {
             "unsupported or absent venue event batch checksum"
         }
@@ -106,16 +128,7 @@ object CalcifySourceBatch {
                 "venue event batch outcomes not strictly ordered"
             }
         }
-        val ids = ArrayList<CommitmentId>()
-        for (outcome in outcomes) {
-            val result = outcome.strictObject("result")
-            for (trade in result.strictObjectDocuments("trades", required = false)) {
-                trade.strictTextField("tradeId")
-                trade.strictTextField("executionId")
-                ids.add(CommitmentId(sourceGeneration, sourcePartition, sourceOffset, ids.size))
-            }
-        }
-        return ids
+        return root
     }
 
 }

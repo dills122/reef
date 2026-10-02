@@ -1,0 +1,4 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+{"result":{"sourceTopicId":"QLYzMh1FQaiIOxaXlmzKVQ","partitionSha256":{"0":"d88aab85abb6eda1b10767f6c22ca754ba89a7f3512e0fd4bc1bdc04296d02b4"},"records":3150000,"expected":3150000,"fullFactParity":true,"orderedUnique":true,"pass":true}}

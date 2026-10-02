@@ -14,6 +14,8 @@ const commandTopic = `REEF_${token}_COMMANDS`;
 const sourceTopic = `REEF_${token}_EVENTS`;
 const commitmentTopic = `REEF_${token}_COMMITMENTS`;
 const verifiedTopic = `REEF_${token}_VERIFIED`;
+const resolvedTopic = `REEF_${token}_RESOLVED`;
+const phase2 = env("DEV_CALCIFY_PHASE2", "0") === "1";
 const instrumentId = `AAPL-${smokeId}`;
 const sessionId = `session-${smokeId}`;
 const { runtimeUrl, engineUrl } = deriveDevUrls();
@@ -71,6 +73,9 @@ setValue("CALCIFY_SOURCE_TOPIC", sourceTopic);
 setValue("CALCIFY_COMMITMENT_TOPIC", commitmentTopic);
 setValue("CALCIFY_VERIFIED_TOPIC", verifiedTopic);
 setValue("CALCIFY_SOURCE_GENERATION", String(generation));
+setValue("CALCIFY_RESOLVED_TOPIC", resolvedTopic);
+setValue("CALCIFY_RESOLVER_APPLICATION_ID", `reef-calcify-resolver-smoke-${smokeId}-g${generation}`);
+setValue("CALCIFY_RESOLVER_REPLICATION_FACTOR", "1");
 setValue("COMPOSE_PROFILES", "redpanda,calcify-phase1");
 await run("docker", composeArgs([
   "up", "-d", "--no-deps", "--force-recreate",
@@ -81,6 +86,10 @@ await seedReferenceData();
 await submit("buyer", "BUY");
 const [resting] = await readBatches(1);
 assertBatch(resting, "buyer", 0);
+if (phase2) {
+  setValue("COMPOSE_PROFILES", "redpanda,calcify-phase1,calcify-phase2");
+  await run("docker", composeArgs(["up", "-d", "--no-deps", "--force-recreate", "calcify-resolver"]));
+}
 await submit("seller", "SELL");
 const batches = await readBatches(2);
 const matching = batches.find((record) => record.batch.outcomes.some((outcome) => outcome.commandId === `seller-cmd-${smokeId}`));
@@ -100,11 +109,22 @@ if (count !== "1") throw new Error(`expected one real-match receipt and no resti
 const intakeCount = (await psql(`SELECT COUNT(*) FROM boundary.stream_command_intake WHERE command_id IN ('buyer-cmd-${smokeId}', 'seller-cmd-${smokeId}') AND stream_name = '${commandTopic}'`, "boundary-postgres")).trim();
 if (intakeCount !== "2") throw new Error(`expected both commands in PostgreSQL intake, got ${intakeCount}`);
 
+let resolved = null;
+if (phase2) {
+  const observed = await capture("docker", composeArgs([
+    "exec", "-T", "calcify-resolver", "java", "-cp", "/app/platform-runtime/lib/*",
+    "com.reef.platform.tools.CalcifyResolvedSmoke", "redpanda:9092", sourceTopic,
+    resolvedTopic, String(generation), String(matching.partition), String(matching.offset), trade.tradeId,
+  ]), 75000, true);
+  if (observed.code !== 0) throw new Error(`Calcify resolved observer failed: ${observed.output}`);
+  resolved = JSON.parse(observed.output.trim().split("\n").at(-1));
+  if (!resolved.fullFactParity) throw new Error("Calcify resolved full fact parity failed");
+}
 console.log("Calcify full-path smoke passed");
 console.log(JSON.stringify({ smokeId, commandTopic, sourceTopic, commitmentTopic, verifiedTopic,
   generation, resting: { partition: resting.partition, offset: resting.offset, trades: 0 },
   matching: { partition: matching.partition, offset: matching.offset, trades: 1, tradeId: trade.tradeId },
-  receipt, intakeRows: Number(intakeCount), profile: "PostgreSQL-backed HTTP intake + Redpanda + Go matching + Calcify Phase 1", capacityClaim: false }, null, 2));
+  receipt, resolved, intakeRows: Number(intakeCount), profile: phase2 ? "PostgreSQL HTTP intake + Redpanda + Go matching + Calcify verification + managed full-fact resolver" : "PostgreSQL-backed HTTP intake + Redpanda + Go matching + Calcify Phase 1", capacityClaim: false }, null, 2));
 if (loadPairs > 0) await runBasicLoad(generation, matching.partition);
 
 async function runBasicLoad(generation, partition) {

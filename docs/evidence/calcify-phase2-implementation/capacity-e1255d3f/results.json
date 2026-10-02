@@ -1,0 +1,54 @@
+{
+  "runId": "e1255d3f",
+  "scope": "Resolver-stage short backlog diagnostic; Redpanda RF3/fsync, 2 partitions/threads, 32MiB probe segments, full paired matcher fixture; no HTTP intake, no sustained qualification",
+  "waves": 1000,
+  "results": [
+    {
+      "shape": "hot",
+      "seed": {
+        "startedEpochMs": 1790819844001,
+        "paceWavesPerSecond": 0,
+        "waves": 1000,
+        "trades": 100000,
+        "bytes": 375157676,
+        "elapsedMs": 10375
+      },
+      "measured": {
+        "startedEpochMs": 1790819854974,
+        "expected": 100000,
+        "records": 100000,
+        "unique": 100000,
+        "duplicates": 0,
+        "identityChecks": true,
+        "outputBytes": 209455000,
+        "elapsedMs": 11759,
+        "activeMs": 9491,
+        "durableRate": 10535.254998808115,
+        "pass": true,
+        "windows": [
+          {
+            "elapsedMs": 5003,
+            "records": 27190,
+            "rate": 5434.348706752462
+          },
+          {
+            "elapsedMs": 10046,
+            "records": 84151,
+            "rate": 11294.841477667247
+          }
+        ]
+      },
+      "exact": {
+        "sourceTopicId": "XvJYTuNiSMCiEQ2BGRxKlQ",
+        "partitionSha256": {
+          "0": "9b3eabd58edf59dadb3904d730a412a9063ca01dd3060a77c659ffebde8b8edb"
+        },
+        "records": 100000,
+        "expected": 100000,
+        "fullFactParity": true,
+        "orderedUnique": true,
+        "pass": true
+      }
+    }
+  ]
+}

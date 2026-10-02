@@ -1,0 +1,47 @@
+{
+  "runId": "863faaaf",
+  "scope": "Resolver-stage short backlog diagnostic; Redpanda RF3/fsync, 2 partitions/threads, 1MiB probe segments, full paired matcher fixture; no HTTP intake, no sustained qualification",
+  "waves": 1000,
+  "results": [
+    {
+      "shape": "hot",
+      "seed": {
+        "waves": 1000,
+        "trades": 100000,
+        "bytes": 373057676,
+        "elapsedMs": 11632
+      },
+      "measured": {
+        "expected": 100000,
+        "records": 100000,
+        "unique": 100000,
+        "duplicates": 0,
+        "identityChecks": true,
+        "outputBytes": 208555000,
+        "elapsedMs": 14645,
+        "activeMs": 12450,
+        "durableRate": 8032.080396410901,
+        "pass": true,
+        "windows": [
+          {
+            "elapsedMs": 5013,
+            "records": 21516,
+            "rate": 4291.342876301926
+          },
+          {
+            "elapsedMs": 10015,
+            "records": 64016,
+            "rate": 8496.826788662429
+          }
+        ]
+      },
+      "exact": {
+        "records": 100000,
+        "expected": 100000,
+        "fullFactParity": true,
+        "orderedUnique": true,
+        "pass": true
+      }
+    }
+  ]
+}

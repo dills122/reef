@@ -6,7 +6,6 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.*
 import org.apache.kafka.clients.producer.*
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
@@ -55,6 +54,7 @@ object CalcifyPipeline {
     }
 
     fun run(stage: String) {
+        if (stage == "resolver") { CalcifyResolverRuntime.run(); return }
         val config = Config(stage)
         val input = config.input
         if (stage == "extractor") verifyGeneration(config)
@@ -212,51 +212,7 @@ object CalcifyPipeline {
     }
 
     private fun verifyGeneration(config: Config) {
-        val topicId = AdminClient.create(Properties().apply {
-            put("bootstrap.servers", config.bootstrap)
-        }).use { admin ->
-            require(config.source in admin.listTopics().names().get()) { "Calcify source topic is absent" }
-            admin.describeTopics(listOf(config.source)).allTopicNames().get()
-                .getValue(config.source).topicId().toString()
-        }
-        require(topicId != Uuid.ZERO_UUID.toString()) {
-            "broker did not provide source topic ID"
-        }
-        connection(config).use { db ->
-            db.autoCommit = false
-            try {
-                db.prepareStatement(
-                    "SELECT source_topic, source_topic_id FROM runtime.calcify_source_generations " +
-                        "WHERE source_generation = ? FOR UPDATE"
-                ).use {
-                    it.setInt(1, config.generation)
-                    it.executeQuery().use { rows ->
-                        require(rows.next() && rows.getString(1) == config.source) {
-                            "unregistered Calcify source generation"
-                        }
-                        val registeredId = rows.getString(2)
-                        if (registeredId == null) {
-                            db.prepareStatement(
-                                "UPDATE runtime.calcify_source_generations SET source_topic_id = ? " +
-                                    "WHERE source_generation = ?"
-                            ).use { update ->
-                                update.setString(1, topicId)
-                                update.setInt(2, config.generation)
-                                update.executeUpdate()
-                            }
-                        } else {
-                            require(registeredId == topicId) {
-                                "source topic recreated: register next Calcify source generation"
-                            }
-                        }
-                    }
-                }
-                db.commit()
-            } catch (ex: Exception) {
-                db.rollback()
-                throw ex
-            }
-        }
+        CalcifySourceRegistration.verify(config.bootstrap, config.source, config.generation, config.jdbc, config.dbUser, config.dbPassword)
     }
 
     private fun connection(config: Config) =

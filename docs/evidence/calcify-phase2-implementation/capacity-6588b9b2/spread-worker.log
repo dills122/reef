@@ -1,0 +1,39 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+STATE CREATED -> REBALANCING
+STATE REBALANCING -> RUNNING
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":6,"stagedInputOffset":612,"resolvedCount":613,"pendingCount":0,"indexedCount":1400,"decodedCount":7,"outputBytes":1252778,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":6,"stagedInputOffset":612,"resolvedCount":613,"pendingCount":0,"indexedCount":1400,"decodedCount":7,"outputBytes":1257682,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":13,"stagedInputOffset":1312,"resolvedCount":1313,"pendingCount":0,"indexedCount":2800,"decodedCount":14,"outputBytes":2710210,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":13,"stagedInputOffset":1329,"resolvedCount":1330,"pendingCount":0,"indexedCount":2800,"decodedCount":14,"outputBytes":2734828,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":20,"stagedInputOffset":2057,"resolvedCount":2058,"pendingCount":0,"indexedCount":4200,"decodedCount":21,"outputBytes":4256068,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":20,"stagedInputOffset":2080,"resolvedCount":2081,"pendingCount":0,"indexedCount":4200,"decodedCount":21,"outputBytes":4287173,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":27,"stagedInputOffset":2767,"resolvedCount":2768,"pendingCount":0,"indexedCount":5600,"decodedCount":28,"outputBytes":5707204,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":27,"stagedInputOffset":2789,"resolvedCount":2790,"pendingCount":0,"indexedCount":5600,"decodedCount":28,"outputBytes":5775042,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":34,"stagedInputOffset":3424,"resolvedCount":3425,"pendingCount":0,"indexedCount":7000,"decodedCount":35,"outputBytes":7065282,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":34,"stagedInputOffset":3442,"resolvedCount":3443,"pendingCount":0,"indexedCount":7000,"decodedCount":35,"outputBytes":7130014,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":42,"stagedInputOffset":4208,"resolvedCount":4209,"pendingCount":0,"indexedCount":8600,"decodedCount":43,"outputBytes":8719530,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":41,"stagedInputOffset":4187,"resolvedCount":4188,"pendingCount":0,"indexedCount":8400,"decodedCount":42,"outputBytes":8642440,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":49,"stagedInputOffset":4915,"resolvedCount":4916,"pendingCount":0,"indexedCount":10000,"decodedCount":50,"outputBytes":10186576,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":48,"stagedInputOffset":4898,"resolvedCount":4899,"pendingCount":0,"indexedCount":9800,"decodedCount":49,"outputBytes":10112127,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":56,"stagedInputOffset":5603,"resolvedCount":5604,"pendingCount":0,"indexedCount":11400,"decodedCount":57,"outputBytes":11630524,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":55,"stagedInputOffset":5592,"resolvedCount":5593,"pendingCount":0,"indexedCount":11200,"decodedCount":56,"outputBytes":11562652,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":63,"stagedInputOffset":6355,"resolvedCount":6356,"pendingCount":0,"indexedCount":12800,"decodedCount":64,"outputBytes":13211204,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":63,"stagedInputOffset":6342,"resolvedCount":6343,"pendingCount":0,"indexedCount":12800,"decodedCount":64,"outputBytes":13133147,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":71,"stagedInputOffset":7110,"resolvedCount":7111,"pendingCount":0,"indexedCount":14400,"decodedCount":72,"outputBytes":14798291,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":71,"stagedInputOffset":7101,"resolvedCount":7102,"pendingCount":0,"indexedCount":14400,"decodedCount":72,"outputBytes":14722566,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":78,"stagedInputOffset":7872,"resolvedCount":7873,"pendingCount":0,"indexedCount":15800,"decodedCount":79,"outputBytes":16400008,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":78,"stagedInputOffset":7865,"resolvedCount":7866,"pendingCount":0,"indexedCount":15800,"decodedCount":79,"outputBytes":16322352,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":85,"stagedInputOffset":8583,"resolvedCount":8584,"pendingCount":0,"indexedCount":17200,"decodedCount":86,"outputBytes":17894580,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":86,"stagedInputOffset":8610,"resolvedCount":8611,"pendingCount":0,"indexedCount":17400,"decodedCount":87,"outputBytes":17882463,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":92,"stagedInputOffset":9254,"resolvedCount":9255,"pendingCount":0,"indexedCount":18600,"decodedCount":93,"outputBytes":19230979,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":92,"stagedInputOffset":9251,"resolvedCount":9252,"pendingCount":0,"indexedCount":18600,"decodedCount":93,"outputBytes":19298716,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":99,"stagedInputOffset":9923,"resolvedCount":9924,"pendingCount":0,"indexedCount":20000,"decodedCount":100,"outputBytes":20631924,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":99,"stagedInputOffset":9920,"resolvedCount":9921,"pendingCount":0,"indexedCount":20000,"decodedCount":100,"outputBytes":20705013,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":99,"stagedInputOffset":9999,"resolvedCount":10000,"pendingCount":0,"indexedCount":20000,"decodedCount":100,"outputBytes":20791100,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":99,"stagedInputOffset":9999,"resolvedCount":10000,"pendingCount":0,"indexedCount":20000,"decodedCount":100,"outputBytes":20871100,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+STATE RUNNING -> PENDING_SHUTDOWN
+{"partition":1,"stats":{}}
+{"partition":0,"stats":{}}
+STATE PENDING_SHUTDOWN -> NOT_RUNNING

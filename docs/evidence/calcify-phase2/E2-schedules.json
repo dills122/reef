@@ -1,0 +1,35 @@
+{
+  "verified-led" : {
+    "resolved" : 130,
+    "pausePendingLogicalBytes" : 0,
+    "sourceBatchesRead" : 5,
+    "orderLogicalBytes" : 85898,
+    "retainedBatchLogicalBytes" : 64536,
+    "duplicateReplayNoOutput" : true,
+    "outputParitySha256" : "2e8f2e1410d6c619671ff91b021200cd35e7ec49452a37f486ad024caab9618b"
+  },
+  "source-first" : {
+    "resolved" : 130,
+    "pausePendingLogicalBytes" : 65594,
+    "sourceBatchesRead" : 0,
+    "orderLogicalBytes" : 85898,
+    "retainedBatchLogicalBytes" : 65594,
+    "duplicateReplayNoOutput" : true,
+    "outputParitySha256" : "2e8f2e1410d6c619671ff91b021200cd35e7ec49452a37f486ad024caab9618b"
+  },
+  "links-first" : {
+    "resolved" : 130,
+    "pausePendingLogicalBytes" : 7280,
+    "sourceBatchesRead" : 0,
+    "orderLogicalBytes" : 85898,
+    "retainedBatchLogicalBytes" : 65594,
+    "duplicateReplayNoOutput" : true,
+    "outputParitySha256" : "2e8f2e1410d6c619671ff91b021200cd35e7ec49452a37f486ad024caab9618b"
+  },
+  "checksum" : "lane fault; zero output",
+  "generation" : "lane fault; zero output",
+  "retention" : "lane fault; zero output",
+  "missing-order" : "lane fault; zero output",
+  "future-acceptance" : "lane fault; zero output",
+  "scope" : "TopologyTestDriver with actual Go fixture/RocksDB; transactions and rebalances excluded"
+}

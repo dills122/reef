@@ -274,3 +274,11 @@ Postpone:
 - object-storage snapshot archive until local snapshots and replay prove the operational shape.
 
 Use external matching engines such as Liquibook, exchange-core, or C++ limit-order-book projects as design references only unless a future decision explicitly changes the implementation language or runtime boundary.
+
+## Run scope implementation (2026-09-30)
+
+Matcher book identity now includes exact `runId`, `venueSessionId`, and `instrumentId` on submit, cancel, modify, order-state locking, and batch rollback. Internal keys length-frame all three UTF-8 ID byte strings; empty run remains its own compatibility scope. Instrument diagnostics aggregate all run/session books; session diagnostics aggregate runs in that session. `RestingOrdersInScope` and `SnapshotForScope` select one exact book. No normal product read is redirected to mutable matcher state.
+
+Matching snapshots use `matching-service-snapshot-v3`, framed book keys, and scope-consistent resting-order records. V2/unversioned snapshots with nonempty run IDs are rejected: their shared book cannot safely recover D-042 isolation; rebuild from durable commands. Empty-run legacy snapshots validate their original checksum before migration. Snapshot plus replay must preserve checksum within V3. Matching fact/command wire shape remains unchanged.
+
+Regression evidence: `internal/app/run_scope_test.go` covers cross-run submit/modify/cancel, independent partition replay, same-instrument cross-run rollback, scope reads/restore, framed IDs and legacy migration. `internal/streamdirect/run_scope_test.go` proves exact outcome/checksum replay for partial fills, rejected submit, modify-created trade and 128-trade fanout using intake-compatible partition hashes. This is correctness evidence; throughput qualification follows in Calcify implementation plan.

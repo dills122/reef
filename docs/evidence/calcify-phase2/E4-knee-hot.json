@@ -1,0 +1,45 @@
+{
+  "scope" : "single Java thread RocksDB full-fact inserts/two gets/JSON V1/aged sparse lookup; no source parsing/Kafka/changelog/standby/intake",
+  "agedRows" : 250000,
+  "lanesSequential" : 1,
+  "cacheMiBPerLane" : 32,
+  "memtableMiBPerLane" : 16,
+  "WAL" : false,
+  "seedSeconds" : 0.73151725,
+  "initialDiskBytes" : 37260507,
+  "requestedSeconds" : 20,
+  "requestedTradesPerSecond" : 0,
+  "resolvedTrades" : 951237,
+  "elapsedSeconds" : 20.003558375,
+  "resolvedPerSecond" : 47553.389360406734,
+  "impliedNewAcceptedOrdersPerSecond" : 95106.77872081347,
+  "fullExampleRowJsonBytes" : 646,
+  "fullExampleV1JsonBytes" : 1985,
+  "insertLogicalBytes" : 1254459383,
+  "outputLogicalBytes" : 1889663479,
+  "finalDiskBytes" : 265186150,
+  "physicalGrowthPerNewOrderBytes" : 119.80486619002414,
+  "maxOfferedMinusResolvedTrades" : 0,
+  "sampledLocalServiceP95Micros" : 17.333,
+  "samples" : [ {
+    "seconds" : 5.00000475,
+    "resolved" : 285426,
+    "rateLast5s" : 57085.2,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 10.0000125,
+    "resolved" : 572228,
+    "rateLast5s" : 57360.4,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 15.000005291,
+    "resolved" : 788894,
+    "rateLast5s" : 43333.2,
+    "offeredMinusResolved" : 0
+  }, {
+    "seconds" : 20.000007458,
+    "resolved" : 951237,
+    "rateLast5s" : 32468.6,
+    "offeredMinusResolved" : 0
+  } ]
+}

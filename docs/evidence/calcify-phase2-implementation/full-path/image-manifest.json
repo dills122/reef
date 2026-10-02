@@ -1,0 +1,25 @@
+{
+  "method": "Cached bases plus fresh Linux/arm64 Go artifacts and JDK21 Gradle installDist; registry build unavailable",
+  "head": "665366d0c64aa4cf55870aeb62cdff9159d266a8",
+  "go": "go version go1.26.5 darwin/arm64",
+  "images": [
+    {
+      "Id": "sha256:5af1fc48bbf71497f5b0033f798f407747e64a1e5c3e1f1438ae259a232ccd4f",
+      "RepoTags": [
+        "reef-platform-runtime:calcify-p2-local"
+      ],
+      "Architecture": "arm64",
+      "Created": "2026-09-30T23:48:54.790450219Z"
+    },
+    {
+      "Id": "sha256:9e05ee1b07a362a4e9fecd59166aaf4633edd99c934506b8056efe619aec476d",
+      "RepoTags": [
+        "reef-matching-engine:calcify-p2-local"
+      ],
+      "Architecture": "arm64",
+      "Created": "2026-09-30T23:48:55.426480219Z"
+    }
+  ],
+  "runtimeImageAfterNullKeyFix": "sha256:3c41f227c08ee4653586bdfb28b9f1b6bfa0f7f825bc89ec333127b61f0162bd",
+  "smokeScope": "Cached-base diagnostic, null-key integration fix; before pending queue optimization"
+}
