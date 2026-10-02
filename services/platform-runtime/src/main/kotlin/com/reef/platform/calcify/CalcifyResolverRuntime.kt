@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.streams.StreamsConfig
@@ -22,9 +23,10 @@ internal object CalcifyResolverRuntime {
         val bootstrap=RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS","localhost:9092")
         val source=RuntimeEnv.string("CALCIFY_SOURCE_TOPIC","REEF_VENUE_EVENTS")
         val generation=RuntimeEnv.int("CALCIFY_SOURCE_GENERATION",1,min=1)
-        val topicId=CalcifySourceRegistration.verify(bootstrap,source,generation,
-            RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL","jdbc:postgresql://localhost:5432/reef?currentSchema=runtime"),
-            RuntimeEnv.string("RUNTIME_POSTGRES_USER","reef"),RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD","reef"),bindIfAbsent=false)
+        val jdbcUrl=RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL","jdbc:postgresql://localhost:5432/reef?currentSchema=runtime")
+        val jdbcUser=RuntimeEnv.string("RUNTIME_POSTGRES_USER","reef")
+        val jdbcPassword=RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD","reef")
+        val topicId=CalcifySourceRegistration.verify(bootstrap,source,generation,jdbcUrl,jdbcUser,jdbcPassword,bindIfAbsent=false)
         val settings=ResolverSettings(generation,source,topicId,
             RuntimeEnv.string("CALCIFY_VERIFIED_TOPIC","REEF_VERIFIED_COMMITMENTS_V1"),
             RuntimeEnv.string("CALCIFY_RESOLVED_TOPIC","REEF_MATCH_CONTEXT_RESOLVED_V1"),
@@ -34,7 +36,7 @@ internal object CalcifyResolverRuntime {
         val replication=RuntimeEnv.int("CALCIFY_RESOLVER_REPLICATION_FACTOR",3,min=1).also {require(it<=Short.MAX_VALUE)}
         val broker=ResolverBrokerKind.valueOf(RuntimeEnv.string("CALCIFY_RESOLVER_BROKER_KIND","REDPANDA").uppercase())
         val appId=RuntimeEnv.string("CALCIFY_RESOLVER_APPLICATION_ID","reef-calcify-resolver-v1-g$generation")
-        ensureTopics(bootstrap,settings,replication,broker,appId)
+        ensureTopics(bootstrap,settings,replication,broker,appId,generation,jdbcUrl,jdbcUser,jdbcPassword)
         val config=Properties().apply {
             put(StreamsConfig.APPLICATION_ID_CONFIG,appId);put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG,bootstrap)
             put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,StreamsConfig.EXACTLY_ONCE_V2)
@@ -54,7 +56,15 @@ internal object CalcifyResolverRuntime {
             put(StreamsConfig.consumerPrefix("session.timeout.ms"),RuntimeEnv.int("CALCIFY_RESOLVER_SESSION_TIMEOUT_MS",6000,min=6000))
             put(StreamsConfig.consumerPrefix("heartbeat.interval.ms"),1000)
             put(StreamsConfig.consumerPrefix("max.poll.records"),minOf(100,settings.maxPending/2))
-            put(StreamsConfig.consumerPrefix("auto.offset.reset"),"earliest")
+            // "none" is deliberate: an out-of-range offset must throw, not
+            // silently reset, so ResolverConsumerGate's retention check is
+            // what decides recovery, never Kafka's own default policy.
+            put(StreamsConfig.consumerPrefix("auto.offset.reset"),"none")
+            // Pin the classic group protocol: Kafka 4.3's newer "consumer"
+            // group protocol can manage assignment in a way that bypasses
+            // KafkaClientSupplier.getConsumer, which would silently defeat
+            // ResolverConsumerGate's retention gate.
+            put(StreamsConfig.consumerPrefix("group.protocol"),"classic")
             put(StreamsConfig.consumerPrefix("allow.auto.create.topics"),false)
         }
         val lanes=ConcurrentHashMap<Int,Map<String,Any>>()
@@ -91,21 +101,38 @@ internal object CalcifyResolverRuntime {
         check(!failed.get()) {"Calcify resolver terminated with infrastructure error"}
     }
 
-    private fun ensureTopics(bootstrap:String,settings:ResolverSettings,replication:Int,broker:ResolverBrokerKind,appId:String) {
+    private fun ensureTopics(bootstrap:String,settings:ResolverSettings,replication:Int,broker:ResolverBrokerKind,appId:String,generation:Int,jdbcUrl:String,jdbcUser:String,jdbcPassword:String) {
         AdminClient.create(Properties().apply {put("bootstrap.servers",bootstrap)}).use {admin->
             val names=listOf(settings.sourceTopic,settings.verifiedTopic)
             val existing=admin.describeTopics(names).allTopicNames().get(10,TimeUnit.SECONDS)
             val partitions=existing.getValue(settings.sourceTopic).partitions().size
             require(existing.getValue(settings.verifiedTopic).partitions().size==partitions) {"Calcify source/verified partition count mismatch"}
+            val verifiedTopicId=existing.getValue(settings.verifiedTopic).topicId()
+            require(verifiedTopicId!=Uuid.ZERO_UUID) {"broker did not provide verified topic ID"}
+            CalcifySourceRegistration.verifyTopic(jdbcUrl,jdbcUser,jdbcPassword,generation,"verified",settings.verifiedTopic,verifiedTopicId.toString())
             val listed=admin.listTopics().names().get(10,TimeUnit.SECONDS)
+            val changelog="$appId-resolver-changelog"
+            val changelogExists=changelog in listed
             if(settings.outputTopic !in listed) {
+                // A surviving changelog implies committed state (completed
+                // identities, pending frontier) that assumes a prior
+                // output topic's history. Creating a fresh, empty output
+                // topic here would silently lose that history while this
+                // role keeps reporting healthy - exactly the gap this fix
+                // closes. Fail closed instead; recovery is an explicit,
+                // operator-driven repair, not an automatic recreate.
+                require(!changelogExists) {"Calcify output topic missing but application changelog '$changelog' exists: repair required before recreating output"}
                 try {admin.createTopics(listOf(NewTopic(settings.outputTopic,partitions,replication.toShort()).configs(mapOf("cleanup.policy" to "delete","max.message.bytes" to (settings.maxTargetBytes+1024).toString())+ResolverTopicDurability.topicConfig(broker,replication)))).all().get(10,TimeUnit.SECONDS)} catch(ex:java.util.concurrent.ExecutionException) {if(ex.cause !is org.apache.kafka.common.errors.TopicExistsException) throw ex}
             }
-            val changelog="$appId-resolver-changelog"
-            val topics=names+settings.outputTopic+(if(changelog in listed) listOf(changelog) else emptyList())
+            val topics=names+settings.outputTopic+(if(changelogExists) listOf(changelog) else emptyList())
             val all=admin.describeTopics(topics).allTopicNames().get(10,TimeUnit.SECONDS)
             for((name,description) in all) {
                 require(description.partitions().size==partitions && description.partitions().all {it.replicas().size>=replication}) {"Calcify topic replication/partition mismatch: $name"}
+                if(name==settings.outputTopic) {
+                    val outputTopicId=description.topicId()
+                    require(outputTopicId!=Uuid.ZERO_UUID) {"broker did not provide output topic ID"}
+                    CalcifySourceRegistration.verifyTopic(jdbcUrl,jdbcUser,jdbcPassword,generation,"output",settings.outputTopic,outputTopicId.toString())
+                }
                 val resource=ConfigResource(ConfigResource.Type.TOPIC,name)
                 val config=admin.describeConfigs(listOf(resource)).all().get(10,TimeUnit.SECONDS).getValue(resource)
                 if(name==settings.outputTopic || name==changelog) require((config.get("max.message.bytes")?.value()?.toLongOrNull() ?: 0)>=settings.maxTargetBytes.toLong()+1024) {"Calcify managed topic byte cap too small: $name"}

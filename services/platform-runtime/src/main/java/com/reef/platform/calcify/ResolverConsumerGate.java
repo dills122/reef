@@ -9,9 +9,49 @@ import org.apache.kafka.common.*;
 import org.apache.kafka.common.serialization.*;
 import org.apache.kafka.streams.KafkaClientSupplier;
 
-/** Partition flow control only. Kafka Streams owns transactions and restoration. */
+/**
+ * Partition flow control, plus a fail-closed retention gate on every
+ * rebalance assignment. Kafka Streams owns transactions and restoration;
+ * this class only pauses/resumes partitions for lane-fault backpressure
+ * (unrelated to retention) and validates, before any record is delivered
+ * to Streams, that a restored checkpoint still falls within the broker's
+ * retained range for the verified-topic consumer. auto.offset.reset is
+ * configured as "none" precisely so that an out-of-range offset surfaces
+ * here as a thrown exception instead of a silent, undetectable reset.
+ */
 public final class ResolverConsumerGate implements KafkaClientSupplier {
   static final ThreadLocal<GateConsumer> CURRENT = new ThreadLocal<>();
+  private static final Duration OFFSET_LOOKUP_TIMEOUT = Duration.ofSeconds(3);
+
+  /**
+   * Pure: for each partition with retained range [beginning, end], a
+   * missing committed offset means a brand-new consumer group, seeking
+   * explicitly to beginning rather than relying on any automatic reset
+   * policy. A committed offset outside [beginning, end] means retention
+   * has already advanced past a position Streams still depends on -
+   * that is unrecoverable data loss, not a transient condition, so it
+   * throws rather than silently seeking anywhere.
+   */
+  static Map<TopicPartition, Long> seekTargets(
+      Map<TopicPartition, Long> beginning,
+      Map<TopicPartition, Long> end,
+      Map<TopicPartition, Long> committed) {
+    Map<TopicPartition, Long> seeks = new HashMap<>();
+    for (var entry : beginning.entrySet()) {
+      TopicPartition tp = entry.getKey();
+      long b = entry.getValue();
+      long e = end.getOrDefault(tp, b);
+      Long c = committed.get(tp);
+      if (c == null) {
+        seeks.put(tp, b);
+      } else if (c < b || c > e) {
+        throw new IllegalStateException(
+            "Calcify verified consumer retention lost for " + tp + ": committed=" + c
+                + " beginning=" + b + " end=" + e);
+      }
+    }
+    return seeks;
+  }
 
   public static void blocked(String topic, int partition, boolean blocked) {
     var c = CURRENT.get();
@@ -57,6 +97,44 @@ public final class ResolverConsumerGate implements KafkaClientSupplier {
       List<TopicPartition> ok = new ArrayList<>();
       for (var p : ps) if (!blocked.contains(p)) ok.add(p);
       super.resume(ok);
+    }
+
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+      super.subscribe(topics, gated(listener));
+    }
+
+    public void subscribe(java.util.regex.Pattern pattern, ConsumerRebalanceListener listener) {
+      super.subscribe(pattern, gated(listener));
+    }
+
+    // Wrap Streams' own rebalance listener rather than replace it: Streams
+    // needs onPartitionsAssigned/Revoked/Lost for its own state-restoration
+    // bookkeeping. The retention check runs first, on every assignment, and
+    // only forwards to Streams' listener once it passes (or seeks have been
+    // issued for a brand-new group).
+    private ConsumerRebalanceListener gated(ConsumerRebalanceListener original) {
+      return new ConsumerRebalanceListener() {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+          if (!partitions.isEmpty()) {
+            Map<TopicPartition, Long> beginning = beginningOffsets(partitions, OFFSET_LOOKUP_TIMEOUT);
+            Map<TopicPartition, Long> end = endOffsets(partitions, OFFSET_LOOKUP_TIMEOUT);
+            Map<TopicPartition, Long> committedOffsets = new HashMap<>();
+            committed(new HashSet<>(partitions), OFFSET_LOOKUP_TIMEOUT).forEach((tp, md) -> {
+              if (md != null) committedOffsets.put(tp, md.offset());
+            });
+            seekTargets(beginning, end, committedOffsets).forEach(GateConsumer.this::seek);
+          }
+          original.onPartitionsAssigned(partitions);
+        }
+
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+          original.onPartitionsRevoked(partitions);
+        }
+
+        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+          original.onPartitionsLost(partitions);
+        }
+      };
     }
 
     public ConsumerRecords<byte[], byte[]> poll(Duration timeout) {
