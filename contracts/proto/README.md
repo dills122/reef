@@ -65,9 +65,12 @@ Java lives under `reef/contracts/calcify/v1`; Go retains existing `orderv1` pack
 because generation writes all schemas into one Go directory. Java drift guard
 covers all contract packages.
 
-Order-index identity is lane-local `(sourceGeneration, orderId)`. Within that lane,
-new acceptance of a reused ID is a conflict, even after terminal matcher retention;
-upstream callers must issue distinct IDs for the generation. Identical fact,
+Order-index identity is lane-local `(sourceGeneration, runId, orderId)`. Different
+runs may reuse IDs; conflicting immutable acceptance facts within one run remain
+a fault, even after terminal matcher retention. Same-run identity lifetime still
+needs an upstream no-reuse or explicit-incarnation contract before financial use.
+See [current run-scope contract](../calcify/README.md#resolver-run-scope-and-hidden-limit-compatibility-2026-10-02).
+Identical fact,
 acceptance and command replay preserves earliest provenance. Never overwrite
 original acceptance with modify economics. Both sides must share run/session/
 instrument, source generation/topic UUID/lane and currency. Acceptance in same

@@ -22,6 +22,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 - [Calcify Phases 1 and 2](CALCIFY_PHASES_OVERVIEW.md) explains implemented flow, worker wiring, source facts, managed state, and capacity boundaries.
 - [Calcify discovery](work/CALCIFY_DISCOVERY.md) records open post-match redesign questions, proposed logical flow, and phased proof gates; it is not an approved architecture.
+- [Calcify system RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) proposes full post-trade architecture and bounded financial proofs; [research and review reconciliation](research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md) compares authorities and corrects historical findings against October 2 master. Neither accepts a new architecture or claims capacity qualification.
 - [AI working context](AI_CONTEXT.md) gives agents a task-specific reading path.
 - [Steering index](steering/README.md) links normative architecture and language
   rules. Read the relevant sections for the area being changed.
