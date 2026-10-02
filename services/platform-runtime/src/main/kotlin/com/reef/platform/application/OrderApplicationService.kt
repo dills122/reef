@@ -835,6 +835,7 @@ class OrderApplicationService(
     ) = runtimePersistence.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
 
     fun createInstrument(instrument: Instrument) {
+        require(validQuoteCurrency(instrument.quoteCurrency)) { "quoteCurrency must be a recognized uppercase currency" }
         runtimePersistence.saveInstrument(instrument)
         invalidateReferenceDataCache()
     }
@@ -902,6 +903,11 @@ class OrderApplicationService(
         actorRoleCache.clear()
     }
 
+    fun instrumentCurrencyMatches(command: SubmitOrderCommand): Boolean {
+        val validation = cachedReferenceDataValidation(command.instrumentId, command.participantId, command.accountId)
+        return !validation.instrumentExists || command.currency == validation.instrumentQuoteCurrency
+    }
+
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt
         if (!validQuoteCurrency(command.currency)) {
@@ -926,6 +932,13 @@ class OrderApplicationService(
                     occurredAt = now
                 )
             )
+        }
+
+        if (command.currency != validation.instrumentQuoteCurrency) {
+            return SubmitOrderResult(rejected = EngineOrderRejected(
+                eventId = "evt-reject-currency-${command.commandId}", orderId = command.orderId,
+                code = "CURRENCY_MISMATCH", reason = "currency differs from instrument quote currency", occurredAt = now
+            ))
         }
 
         if (!validation.participantExists) {

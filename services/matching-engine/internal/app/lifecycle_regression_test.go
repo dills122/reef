@@ -219,3 +219,50 @@ func TestIOCResidualRollbackRestoresExactFactsAndState(t *testing.T) {
 		})
 	}
 }
+
+func TestInstrumentQuoteRejectsWrongCurrencyOnEmptyAndDrainedBooks(t *testing.T) {
+	service := NewService()
+	wrong := regressionOrder("wrong-empty", domain.SideBuy, "1")
+	wrong.Currency = "CAD"
+	if result := service.SubmitOrder(wrong); result.Rejected == nil {
+		t.Fatal("CAD accepted for USD instrument on empty book")
+	}
+	service.SubmitOrder(regressionOrder("buy", domain.SideBuy, "1"))
+	service.SubmitOrder(regressionOrder("sell", domain.SideSell, "1"))
+	wrong.OrderID = "wrong-drained"
+	if result := service.SubmitOrder(wrong); result.Rejected == nil {
+		t.Fatal("CAD accepted for USD instrument after book drained")
+	}
+}
+
+func TestInstrumentQuoteCatalogIsImmutableAcrossSnapshotRestore(t *testing.T) {
+	quotes := map[string]string{"AAPL": "CAD"}
+	service := NewService(WithInstrumentQuoteCurrencies(quotes))
+	quotes["AAPL"] = "USD"
+	cad := regressionOrder("cad", domain.SideBuy, "1")
+	cad.Currency = "CAD"
+	if service.SubmitOrder(cad).Accepted == nil {
+		t.Fatal("configured CAD instrument rejected")
+	}
+	service.SubmitOrder(func() domain.SubmitOrder {
+		sell := cad
+		sell.OrderID = "sell-cad"
+		sell.CommandID = "sell-cad"
+		sell.Side = domain.SideSell
+		sell.ParticipantID = "other"
+		return sell
+	}())
+	snapshot := service.Snapshot()
+	if _, ok := Restore(snapshot); ok {
+		t.Fatal("drained CAD snapshot restored under different USD authority")
+	}
+	if _, ok := Restore(snapshot, WithInstrumentQuoteCurrencies(map[string]string{"AAPL": "CAD"})); !ok {
+		t.Fatal("same catalog restore rejected")
+	}
+	unknown := cad
+	unknown.OrderID = "unknown"
+	unknown.InstrumentID = "UNKNOWN"
+	if service.SubmitOrder(unknown).Rejected == nil {
+		t.Fatal("unregistered instrument accepted")
+	}
+}

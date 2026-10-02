@@ -6,6 +6,17 @@ import kotlin.test.assertEquals
 
 class PlatformCommandParsersTest {
     @Test
+    fun instrumentsRetainExplicitQuoteAndRejectInvalidSpecification() {
+        assertEquals("USD", PlatformCommandParsers.instrument("""{"instrumentId":"AAPL","symbol":"AAPL"}""").quoteCurrency)
+        assertEquals("CAD", PlatformCommandParsers.instrument("""{"instrumentId":"CAD-EQUITY","symbol":"CAD-EQUITY","quoteCurrency":"CAD"}""").quoteCurrency)
+        for (quote in listOf("", "usd", "ZZZ", "XXX")) {
+            kotlin.test.assertFailsWith<IllegalArgumentException> {
+                PlatformCommandParsers.instrument("""{"instrumentId":"invalid","symbol":"invalid","quoteCurrency":"$quote"}""")
+            }
+        }
+    }
+
+    @Test
     fun apiV1RejectsUnknownCurrencyBeforeDurableAdmission() {
         for (quote in listOf("ZZZ", "XXX", "usd")) {
             val body = """{"commandId":"cmd","traceId":"trace","correlationId":"corr","actorId":"trader","occurredAt":"2026-10-02T01:00:00Z","orderId":"order","instrumentId":"AAPL","participantId":"participant","accountId":"account","side":"BUY","orderType":"LIMIT","quantityUnits":"10","limitPrice":"100","currency":"$quote","timeInForce":"DAY"}"""

@@ -84,6 +84,8 @@ internal fun PersistableSubmitOutcome.toJsonObject(): String {
         "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
     }
     return "{$fields," +
+        "\"cancelled\":${result.cancelled?.toJsonObject() ?: "null"}," +
+        "\"matchingFacts\":${originalMatchingFactsJson ?: result.matchingFactsJson()}," +
         "\"acceptedOrder\":${acceptedOrder?.toJsonObject() ?: "null"}," +
         "\"executions\":${result.executions.toJsonArray { it.toJsonObject() }}," +
         "\"trades\":${result.trades.toJsonArray { it.toJsonObject() }}," +

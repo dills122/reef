@@ -127,6 +127,10 @@ object PostgresSchemaRequirements {
                 names.projectMarketDataSnapshotsFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
+                PostgresSchemaColumn(PostgresSchemaObject.parse(names.referenceInstruments), "quote_currency", "text"),
+                PostgresSchemaColumn(submitResults, "cancelled", "jsonb"),
+                PostgresSchemaColumn(submitResults, "matching_facts", "jsonb"),
+
                 PostgresSchemaColumn(orders, "client_order_id", "text"),
                 PostgresSchemaColumn(orders, "run_id", "text"),
                 PostgresSchemaColumn(orders, "venue_session_id", "text"),

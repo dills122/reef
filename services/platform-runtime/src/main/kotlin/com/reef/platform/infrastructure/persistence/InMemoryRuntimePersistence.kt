@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.validQuoteCurrency
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
@@ -73,8 +74,20 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun saveInstrument(instrument: Instrument) {
         synchronized(lock) {
+        require(validQuoteCurrency(instrument.quoteCurrency)) { "invalid instrument quote currency" }
+        require(instruments[instrument.instrumentId]?.quoteCurrency?.let { it == instrument.quoteCurrency } != false) { "instrument quote currency is immutable" }
         instruments[instrument.instrumentId] = instrument
         }
+    }
+
+    override fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation = synchronized(lock) {
+        ReferenceDataValidation(
+            instrumentExists = instruments.containsKey(instrumentId),
+            participantExists = participants.containsKey(participantId),
+            accountExists = accounts.containsKey(accountId),
+            accountBelongsToParticipant = accounts[accountId]?.participantId == participantId,
+            instrumentQuoteCurrency = instruments[instrumentId]?.quoteCurrency
+        )
     }
 
     override fun saveParticipant(participant: Participant) {
@@ -586,11 +599,19 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .take(batchSize)
         if (outcomes.isEmpty()) return 0
         outcomes.forEach { outcome ->
+            val result = outcome.toSubmitOrderResult()
             if (projectionStage != ProjectionStage.Timeline) {
-                saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
+                saveSubmitResult(outcome.commandId, result)
+                acceptedOrderFromResultPayload(outcome.resultPayloadJson)?.let { saveAcceptedOrder(it) }
+            }
+            if (includeFills) {
+                saveExecutions(result.executions)
+                saveTrades(result.trades)
             }
             if (projectionStage != ProjectionStage.CommandStatus) {
-                saveEvent(outcome.toRuntimeEvent())
+                val acceptance = outcome.toRuntimeEvent()
+                saveEvent(acceptance)
+                result.cancelled?.let { saveEvent(cancellationEvent(it, acceptance, outcome.commandId)) }
             }
         }
         outcomes
@@ -1030,6 +1051,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             )
         } else {
             SubmitOrderResult(
+                cancelled = cancellationFromResultPayload(resultPayloadJson),
+                executions = executionsFromResultPayload(resultPayloadJson),
+                trades = tradesFromResultPayload(resultPayloadJson),
                 accepted = EngineOrderAccepted(
                     eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
                     orderId = orderId,

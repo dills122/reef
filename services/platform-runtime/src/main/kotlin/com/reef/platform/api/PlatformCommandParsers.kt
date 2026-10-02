@@ -246,7 +246,10 @@ object PlatformCommandParsers {
         val json = JsonCodec.parseObject(body)
         return Instrument(
             instrumentId = json.string("instrumentId"),
-            symbol = json.string("symbol")
+            symbol = json.string("symbol"),
+            quoteCurrency = (if (json.has("quoteCurrency")) json.string("quoteCurrency") else "USD").also {
+                require(validQuoteCurrency(it)) { "quoteCurrency must be a recognized uppercase currency" }
+            }
         )
     }
 

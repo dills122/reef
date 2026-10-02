@@ -178,7 +178,8 @@ data class PersistedOrder(
 
 data class Instrument(
     val instrumentId: String,
-    val symbol: String
+    val symbol: String,
+    val quoteCurrency: String = "USD"
 )
 
 data class Participant(

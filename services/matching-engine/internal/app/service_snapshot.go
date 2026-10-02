@@ -20,13 +20,14 @@ type Snapshot struct {
 const terminalRetentionPolicy = "book-scoped-v1"
 
 type SnapshotMetadata struct {
-	SnapshotVersion         string   `json:"snapshotVersion"`
-	EngineVersion           string   `json:"engineVersion"`
-	BookCount               int      `json:"bookCount"`
-	OrderCount              int      `json:"orderCount"`
-	BookKeys                []string `json:"bookKeys"`
-	TerminalRetentionPolicy string   `json:"terminalRetentionPolicy,omitempty"`
-	TerminalRetentionLimit  int      `json:"terminalRetentionLimit,omitempty"`
+	SnapshotVersion            string   `json:"snapshotVersion"`
+	EngineVersion              string   `json:"engineVersion"`
+	BookCount                  int      `json:"bookCount"`
+	OrderCount                 int      `json:"orderCount"`
+	BookKeys                   []string `json:"bookKeys"`
+	TerminalRetentionPolicy    string   `json:"terminalRetentionPolicy,omitempty"`
+	TerminalRetentionLimit     int      `json:"terminalRetentionLimit,omitempty"`
+	InstrumentQuoteCatalogHash string   `json:"instrumentQuoteCatalogHash,omitempty"`
 }
 
 type SnapshotOrderRecord struct {
@@ -100,13 +101,14 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		return snapshot.Orders[i].RunID < snapshot.Orders[j].RunID
 	})
 	snapshot.Metadata = SnapshotMetadata{
-		SnapshotVersion:         "matching-service-snapshot-v4",
-		TerminalRetentionPolicy: terminalRetentionPolicy,
-		TerminalRetentionLimit:  s.terminalRetention.limit,
-		EngineVersion:           "matching-engine-app-v1",
-		BookCount:               len(snapshot.Books),
-		OrderCount:              len(snapshot.Orders),
-		BookKeys:                bookIDs,
+		SnapshotVersion:            "matching-service-snapshot-v4",
+		TerminalRetentionPolicy:    terminalRetentionPolicy,
+		TerminalRetentionLimit:     s.terminalRetention.limit,
+		InstrumentQuoteCatalogHash: s.instrumentQuoteCatalogHash(),
+		EngineVersion:              "matching-engine-app-v1",
+		BookCount:                  len(snapshot.Books),
+		OrderCount:                 len(snapshot.Orders),
+		BookKeys:                   bookIDs,
 	}
 	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
 	return snapshot
@@ -161,6 +163,9 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 		return nil, false
 	}
 	service := NewService(options...)
+	if snapshot.Metadata.InstrumentQuoteCatalogHash != service.instrumentQuoteCatalogHash() {
+		return nil, false
+	}
 	if snapshot.Metadata.SnapshotVersion == "matching-service-snapshot-v4" {
 		if snapshot.Metadata.TerminalRetentionLimit != service.terminalRetention.limit {
 			return nil, false
@@ -201,7 +206,7 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 			if quote, exists := restingCurrencies[lane]; exists && quote != order.Currency {
 				return nil, false
 			}
-			if !validQuoteCurrency(order.Currency) {
+			if !validQuoteCurrency(order.Currency) || order.Currency != service.instrumentQuote(order.InstrumentID) {
 				return nil, false
 			}
 			restingCurrencies[lane] = order.Currency
@@ -299,6 +304,11 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 		builder.WriteString(snapshot.Metadata.TerminalRetentionPolicy)
 		builder.WriteByte(':')
 		builder.WriteString(strconv.Itoa(snapshot.Metadata.TerminalRetentionLimit))
+		builder.WriteByte(';')
+	}
+	if snapshot.Metadata.InstrumentQuoteCatalogHash != "" {
+		builder.WriteString("quote-catalog:")
+		builder.WriteString(snapshot.Metadata.InstrumentQuoteCatalogHash)
 		builder.WriteByte(';')
 	}
 	bookIDs := make([]string, 0, len(snapshot.Books))

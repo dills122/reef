@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 class OrderApplicationServiceTest {
     @Test
     fun directIntakeRejectsInvalidCurrencyWithoutCallingEngine() {
-        for (quote in listOf("", "ZZZ", "XXX", "usd")) {
+        for (quote in listOf("", "ZZZ", "XXX", "usd", "CAD")) {
             val gateway = RecordingEngineGateway()
             val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
             seedReferenceData(service)

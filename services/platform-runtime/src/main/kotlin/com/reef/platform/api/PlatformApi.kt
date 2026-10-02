@@ -43,6 +43,8 @@ class PlatformApi(
     private val defaultVenueProjectionName = "runtime-normalized-venue-outcomes"
     private val defaultMarketDataProjectionName = "market-data-top-of-book"
 
+    fun instrumentCurrencyMatches(body: String): Boolean = orderService.instrumentCurrencyMatches(PlatformCommandParsers.submitOrder(body))
+
     fun health(): String {
         return """{"service":"platform-runtime","status":"ok"}"""
     }
@@ -369,7 +371,8 @@ class PlatformApi(
         return JsonCodec.writeObject("instruments" to orderService.instruments().map { instrument ->
             mapOf(
                 "instrumentId" to instrument.instrumentId,
-                "symbol" to instrument.symbol
+                "symbol" to instrument.symbol,
+                "quoteCurrency" to instrument.quoteCurrency
             )
         })
     }

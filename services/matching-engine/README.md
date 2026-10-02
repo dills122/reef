@@ -206,10 +206,30 @@ but cannot make V1 and V2 full-log recomputation interchangeable. Upgrade runtim
 consumers before enabling IOC cancellation producers; old consumers ignore the
 additive field and would leave residual exposure open.
 
-Currency safety: core rejects blank, unknown, non-uppercase, or `XXX` quote
-codes and rejects a quote differing from either resting book side before price
-comparison or order mutation. Restore rejects mixed/invalid resting quote
-currencies. No conversion occurs. This defensive invariant does not establish
-an instrument's authoritative quote currency while its book is empty; that
-requires instrument specification/admission binding. Runtime stream projection
-of additive IOC cancellation also requires materializer support before release.
+Currency authority: reference instruments persist immutable `quoteCurrency` (default
+`USD` preserves legacy instrument specification). Instrument creation rejects
+invalid ISO codes; updates may change symbol but cannot change quote units.
+Both public intake paths check cached reference currency before durable reserve,
+capture, or publish; direct orchestration repeats validation before engine call.
+Core checks startup instrument specification before touching a book, including
+empty and drained books, and still checks resting-side units before matching.
+
+Set `MATCHING_ENGINE_INSTRUMENT_QUOTES` to JSON such as
+`{"AAPL":"USD","CAD-EQUITY":"CAD"}` matching persisted reference specifications.
+Explicit catalogs reject unregistered IDs and invalid configuration stops startup.
+Unset configuration retains legacy USD-only instruments. Configure every matcher
+shard consistently before opening lanes; non-USD specifications require explicit
+catalog configuration. Snapshot metadata/checksum binds explicit catalog hash;
+restoration requires identical catalog even after books drain. No FX conversion.
+
+Deploy runtime migrations `0073` and `0074` before cancellation producers.
+`0073` preserves exact cancellation and original matching arrays on command result,
+so retries cannot lose maker execution or acquire later order fills. Stream SQL and
+Kotlin projectors materialize cancellation into existing lifecycle events. Split
+projection stages preserve original response facts even when fill writes are deferred.
+`0074` defaults legacy reference quotes to USD and aborts if retained accepted orders
+contradict configured quote. Guard requires accepted result with matching order/engine
+identity; rejected stream audit rows do not block migration or restart. Provision
+authoritative non-USD reference values before
+retrying migration; never silently relabel historical facts. Old result rows retain
+legacy fallback; do not recompute historical outcomes into existing namespaces.

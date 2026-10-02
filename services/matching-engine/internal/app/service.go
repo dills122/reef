@@ -28,6 +28,7 @@ type Service struct {
 	matchingProfiles  MatchingProfiles
 	stpMode           SelfTradePreventionMode
 	terminalRetention terminalOrderRetention
+	instrumentQuotes  map[string]string
 }
 
 type restingOrder = hotbook.RestingOrder
@@ -117,6 +118,24 @@ type SessionControls struct {
 }
 
 type Option func(*Service)
+
+// WithInstrumentQuoteCurrencies supplies immutable reference quote units.
+// An explicit catalog rejects unregistered instruments; nil preserves legacy USD instruments.
+func WithInstrumentQuoteCurrencies(quotes map[string]string) Option {
+	return func(s *Service) {
+		s.instrumentQuotes = make(map[string]string, len(quotes))
+		for instrument, quote := range quotes {
+			s.instrumentQuotes[instrument] = quote
+		}
+	}
+}
+
+func (s *Service) instrumentQuote(instrument string) string {
+	if s.instrumentQuotes == nil {
+		return "USD"
+	}
+	return s.instrumentQuotes[instrument]
+}
 
 func WithClock(clock func() time.Time) Option {
 	return func(s *Service) {
@@ -222,8 +241,8 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 		return *rejection
 	}
 
-	if !validQuoteCurrency(cmd.Currency) {
-		return rejectedResult("evt-reject-currency", cmd.OrderID, "CURRENCY_MISMATCH", "currency must be a recognized uppercase quote currency", now)
+	if !validQuoteCurrency(cmd.Currency) || cmd.Currency != s.instrumentQuote(cmd.InstrumentID) {
+		return rejectedResult("evt-reject-currency", cmd.OrderID, "CURRENCY_MISMATCH", "currency must equal configured instrument quote currency", now)
 	}
 
 	result := acceptedResult("accepted", cmd.OrderID, now)
