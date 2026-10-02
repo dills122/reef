@@ -72,6 +72,12 @@ verified and output identities are bound in newer runtime, but that is not an
 atomic administrator fence. Measure before adding prefetch; do not replace the
 source reader solely because it is custom.
 
+Independent review additionally identified ambiguous matcher execution/trade ID
+concatenation in `Service.appendMatch` (`service.go:1060–1062` at baseline). Equal
+ordinal with order pairs `("a-b","c")` and `("a","b-c")` can collide. RFC P0 now
+explicitly tests collision-safe authoritative identity, repeated fills and restore;
+this documentation does not fix the source implementation.
+
 ## 2. Primary evidence and consequences
 
 ### Managed Kafka state

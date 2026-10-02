@@ -114,8 +114,11 @@ run reuse, introduce explicit acceptance incarnation in authoritative outcomes a
 trade references, with temporal/sequential resolution. No guessing from latest row.
 
 Audit current matcher execution ID construction before promising batch-invariant
-seed reconstruction. If it depends on publication grouping, add an authoritative
-logical execution sequence/ID in source contract. Existing locator stays provenance;
+seed reconstruction. Include delimiter collisions: current concatenation of buy
+and sell IDs permits `("a-b","c")` and `("a","b-c")` to collide at equal ordinal.
+Test repeated fills/modify outcomes and restore too. Require unambiguous framing
+and authoritative logical execution identity, independent of publication grouping.
+Existing locator stays provenance;
 financial action dedup must not be derived only from a Kafka offset or random UUID.
 
 Do not use Protobuf bytes as a cross-version canonical business digest. Specify
@@ -225,6 +228,23 @@ Proposed liveness mechanism:
    cannot depend on reading another new-work header first.
 4. Persist every staged member and window frontier transactionally. Crash/restore
    must retain incomplete windows and exact input resume positions.
+
+First candidate uses **durable window credits**: gate grants completion adapters
+permission for exact opened window/membership/byte budget. Grant shares gate's
+state transaction, carries namespace/epoch/window ID, and is read committed;
+duplicates do not grant extra capacity. Adapters keep uncredited work in retained
+upstream history and emit only granted members, with reserved seal/control bytes.
+Every admitted window's full completion budget remains available until closure.
+Existing context output can remain upstream; credit-aware adapter belongs to source
+gateway role and need not copy full facts into another persistent payload.
+
+No valid unopened-window burst may consume admitted completion capacity. Credit
+protocol must also cover already-fetched suffix and dependencies needed for closure;
+opening a window whose required dependency cannot be serviced is forbidden. Restore
+reissues same outstanding grants from certified state, not fresh capacity. Alternative
+FIFO/bounded-lookahead implementation requires equivalent proof before substitution.
+Deliberate credit violation takes controlled integrity-fault path preserving source
+executions; it does not carry a healthy-lane progress promise.
 
 This is a candidate algorithm with mandatory adversarial liveness proof, not a
 ready-made Streams property. If upstream cannot identify/bound completion traffic
@@ -345,6 +365,16 @@ punctuation can request CPU work, never choose financial order. Yield records du
 phase/cursor and stages subsequent inputs in bounded managed queue. A large phase
 can span transactions; each continuation is a complete decision with stable ID.
 
+Whenever transaction advances input checkpoint past unfinished input, emit complete
+nonterminal `InputStaged` authority delta in same transaction. It records envelope
+or retained content reference/digest, canonical queue position, dependencies and
+phase context. `evolve` restores that queue from results. Staged action dedup means
+pending, not completed: later `InputDequeued` plus business decision atomically
+removes queue item and records terminal disposition/effects. Identical retry cannot
+queue twice or suppress eventual execution. Decision sequence identifies each
+history record; action identity identifies one eventual business effect. Ordinary
+immediate inputs need no separate staging record.
+
 For clock→two settlements→funding, funding cannot overtake second settlement because
 CPU budget changed. Zero-delay self-rescheduling must terminate or move to later
 declared phase/tick; policy validation rejects unbounded recurrence. Bound due work
@@ -389,7 +419,8 @@ Real-money integrations require separate finality/DvP contract and proof.
 
 ### 8.1 Registered history and bootstrap
 
-Manifest records source/input/result/changelog namespace and topic UUIDs, routing
+Manifest records every required source, context, lifecycle/coverage, credit/control,
+financial input/result and changelog namespace/topic UUID, routing
 and schema/kernel versions, domain membership, application ID, genesis/restore
 mode, exact start/resume positions, policy versions and required history coverage.
 Registration must distinguish brand-new empty histories from partial retained
@@ -410,7 +441,8 @@ for topic deletion and remote recovery. [Transactions](https://docs.redpanda.com
 
 Reconstruction cut certifies domain decision frontier, corresponding input resume
 positions, pending staged envelopes/dependencies/continuation phase, logical clock,
-policy activation, reservations, due/effect/dedup state and checksums. Inspect SQL
+policy activation, reservations, due/effect/dedup state, gate windows/outstanding
+credits and adapter resume positions, plus checksums. Inspect SQL
 progress and rebuild/wait if incompatible. Build in isolated namespace with effects
 disabled; never reset live app then re-emit old settlements to existing outputs.
 Archive chunks copied at unrelated instants are not a certified consistent cut.
@@ -466,10 +498,10 @@ next slice. Pure kernel work can use complete fixtures while source contracts cl
 
 | Gate | Build / measure | Acceptance / stop condition |
 | --- | --- | --- |
-| P0: current contracts | Recognize #461; enforce run-lifetime IDs or approved incarnation; audit execution IDs; genesis/history/routing contracts | Real source fixtures submit/modify/zero-trade, collocated runs, terminal reuse and restore. No claimed live financial correctness until these pass. |
+| P0: current contracts | Recognize #461; enforce run-lifetime IDs or approved incarnation; audit execution IDs; genesis/history/routing contracts | Real source fixtures submit/modify/zero-trade, collocated runs, terminal reuse, delimiter-collision execution IDs and restore. No claimed live financial correctness until these pass. |
 | P1: pure kernel | Tiny constrained gross-DvP domain; complete decisions/evolve; independent simple accounting oracle | Both insufficiencies, reservation competition, overflow, duplicate/conflicting IDs, repair/new attempt, reconstruction and clock continuation invariant. Stop on missing future state or partial effects. |
-| P2: real broker adapter | Pinned production adapter/client/Redpanda, RF3 durability; managed state/input/output and read-committed observer | Inject after each store mutation, serialization/forward boundary, before/after commit and ambiguous ack; multiple decisions per transaction; stale owner, local/changelog loss paths. Exact authority/state agreement and no re-emitted old results. |
-| P3: first useful path | Real venue→source/lifecycle gate→admission→kernel→one SQL bundle→existing API; one funding/repair path | Gate high-water closure proof, zero-trade cancel/amend dependency, offsets with gaps, projection crash after SQL commit, stale projector, finite retention preflight. Preserve every execution; exact business rows/API progress. |
+| P2: real broker adapter | Pinned production adapter/client/Redpanda, RF3 durability; managed state/input/output and read-committed observer | Inject after each store mutation, serialization/forward boundary, before/after commit and ambiguous ack; multiple decisions per transaction; stale owner, local/changelog loss paths; restore committed staging before phase completion without suppressing funding. Exact authority/state agreement and no re-emitted old results. |
+| P3: first useful path | Real venue→source/lifecycle gate→admission→kernel→one SQL bundle→existing API; one funding/repair path | Gate high-water closure under future-window burst and restore, zero-trade cancel/amend dependency, offsets with gaps, projection crash after SQL commit, stale projector, finite retention preflight. Preserve every execution; exact business rows/API progress. |
 | P4: capacity decision | One hot shared-account domain, then independent spread/skew domains; aged state, real payload/journal/API reads; injected failure/catch-up | Freeze objectives/topology; meet hot-domain required rate and recovery headroom. Failure triggers smallest equivalent Postgres comparison, not unreviewed sharding. |
 | Qualification | Unchanged candidate, declared10k/600s and7.5k/900s workload; real upstream path and required observers | No loss/duplicate effect, all stages reconcile, no growing lag, fixed latency/freshness/drain/recovery limits. Distinguish component diagnostic from full-system pass. |
 
@@ -482,6 +514,13 @@ that promise if simulator does not meet it.
 P2 recovery tests retain original result topics; compare semantic state/journal/
 pending queues, not counts only. Admission/continuation states also need certified
 cut proof. Same-run no-reuse is tested at upstream boundary, not only resolver fault.
+
+Explicit staging fixture: commit clock phase, stage funding and its consumed offset,
+lose local/changelog state, reconstruct from certified result cut, finish phase,
+then apply funding exactly once. Explicit gate fixture: pause headers at high water,
+offer unopened-window burst upstream while admitted seal is due, restore gate and
+adapters mid-grant, and prove bounded seal progress without duplicate capacity.
+Also bypass credits to verify controlled fault preserves all executed-source facts.
 
 P4 reports offered trades, durably admitted trades, captured/decided/settled/pending
 counts, journal legs, broker bytes, SQL rows/WAL, CPU/heap/native RSS/disk, source and
