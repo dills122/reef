@@ -51,8 +51,8 @@ No full Phase2/system10k claim. Prior CAL-P1-L9 full Phase1 ~5k commands/s and
 L6/L8 failures, hosted C5 ~10k venue-core commands/s considered; stages/workloads
 not causally comparable. Separate short knees, CPU/RSS resource probe, logical
 changelog sample, fault tests and all corrections:
-[report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md),
-[300s artifact](evidence/calcify-phase2/E4-aged-paced.json),
+[report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md),
+[300s artifact](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase2/E4-aged-paced.json),
 [experiment directory](evidence/calcify-phase2/).
 
 ## Calcify Phase 1 local diagnostic, CAL-P1-L2 (September29)
@@ -65,7 +65,7 @@ it assumed one source batch per command; corrected run passed. This short burst
 uses one instrument, four broker partitions, and no legacy materializer or
 projectors. It is not a sustained capacity or latency qualification and cannot
 be compared causally to C5 venue-core or C2 full-projection hosted runs.
-[Exact settings and attempts](evidence/calcify-phase1-basic-load-2026-09-29.json).
+[Exact settings and attempts](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-basic-load-2026-09-29.json).
 
 Follow-up CAL-P1-L3 traced 6,799–7,001 ms last-commitment-to-last-verified
 delay to verifier's one-transaction-per-link loop. Batching up to 100 links
@@ -74,7 +74,7 @@ difference to 31 and 54 ms in two local repeats; final receipt drain after
 last acceptance measured 960 and 942 ms. All 1,001 trade/link/receipt counts
 reconciled. Same nominal workload and topology, but selected lane partition
 and aged local state differed; no sustained or hosted promotion follows.
-[Before/after evidence and limits](evidence/calcify-phase1-verifier-batch-2026-09-29.json).
+[Before/after evidence and limits](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-verifier-batch-2026-09-29.json).
 
 CAL-P1-L4 paired a fresh 1,000-pair local burst with a 300-second paced run
 at 100 crossing pairs/s through PostgreSQL HTTP intake, Go matching, and all
@@ -85,9 +85,9 @@ trades, commitment links, verified links, and receipts reconciled including
 preflight. Fifty-nine in-load samples had accepted-to-receipt gap p95 and peak
 70 trades with no growth; final drain took 1,923 ms. Frozen local diagnostic
 gate passed. Same single hot lane and local reused volumes; no hosted,
-multi-lane, fault-at-load, or higher-rate capacity claim. [Paced raw report](evidence/calcify-phase1-5m-2026-09-29.json),
-[burst raw report](evidence/calcify-phase1-burst-repeat-2026-09-29.json), and
-[method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#paired-burst-and-five-minute-run-cal-p1-l4).
+multi-lane, fault-at-load, or higher-rate capacity claim. [Paced raw report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-5m-2026-09-29.json),
+[burst raw report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-burst-repeat-2026-09-29.json), and
+[method/limits](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md#paired-burst-and-five-minute-run-cal-p1-l4).
 
 CAL-P1-L5 repeated the same 300-second, single-hot-lane local path at 300
 crossing pairs/s (three times L4's requested rate), on the same code and
@@ -100,8 +100,8 @@ half means were 171.1/171.7. At last acceptance, 89,811 receipts existed;
 final drain took 1,943 ms. The predeclared local gate passed without gap
 growth at this rate. Counts sample in-flight work, not individual latency;
 this does not establish a capacity ceiling or guarantee against growth at
-higher rates or longer duration. [Raw report](evidence/calcify-phase1-5m-300pps-2026-09-29.json),
-[method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#three-times-rate-five-minute-run-cal-p1-l5).
+higher rates or longer duration. [Raw report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-5m-300pps-2026-09-29.json),
+[method/limits](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md#three-times-rate-five-minute-run-cal-p1-l5).
 
 CAL-P1-L6/L7/L8 raised local Phase 1 full-path pressure. Initial 10k/s and 5k/s
 30-second Bun probes failed: client sockets failed and a 500-command matching
@@ -114,7 +114,7 @@ the Bun client needed 52,368 socket retries and delivered only 2,977.08
 orders/s. A pooled Go crossing-pair client then delivered 7,691.22 and
 7,738.65 orders/s in 30-second 10k/s-offered probes with 512 and 1024
 workers; neither met the 10k target. All attempts, including failures, are
-retained in [high-rate attempt ledger](evidence/calcify-phase1-high-rate-attempts-2026-09-29.json).
+retained in [high-rate attempt ledger](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-high-rate-attempts-2026-09-29.json).
 
 CAL-P1-L7 used fresh generation 19 and topics, 200-command matching batches,
 batched receipts, one hot instrument/partition, and the same local 10-CPU
@@ -129,9 +129,9 @@ final drain was 1,133 ms. Intake, accounting, and drain gates passed. Gap
 gate was unproven: accepted count was read before the receipt query, so these
 samples could understate the gap. This is diagnostic single-lane evidence
 for Phase 1 only, not hosted C5's 64-instrument 10k/s venue-core profile,
-per-trade latency, or future post-match phase capacity. [Raw load report](evidence/calcify-phase1-go-7k5-5m.json),
-[exact stage reconciliation](evidence/calcify-phase1-go-7k5-5m-reconciliation.json),
-and [method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#high-rate-calibration-and-five-minute-run-cal-p1-l6-l7-l8-l9).
+per-trade latency, or future post-match phase capacity. [Raw load report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-7k5-5m.json),
+[exact stage reconciliation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-7k5-5m-reconciliation.json),
+and [method/limits](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md#high-rate-calibration-and-five-minute-run-cal-p1-l6-l7-l8-l9).
 
 CAL-P1-L8 corrected sampling by bracketing each receipt query with accepted
 counts and using the conservative upper gap. Fresh generation 20, same runtime
@@ -141,8 +141,8 @@ queue. Intake gate failed. Exact source trades, commitments, verifications,
 and receipts each counted 965,114, with zero matching failures. Conservative
 upper gap p95/peak was 866/1,272 trades and final drain was 1,183 ms. This
 corrected run does not establish sustained 7.5k/s on the increasingly aged
-local volumes. [Raw load report](evidence/calcify-phase1-go-7k5-upper-5m.json),
-[exact stage reconciliation](evidence/calcify-phase1-go-7k5-upper-5m-reconciliation.json).
+local volumes. [Raw load report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-7k5-upper-5m.json),
+[exact stage reconciliation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-7k5-upper-5m-reconciliation.json).
 
 CAL-P1-L9 used fresh generation 21 and the corrected sampler at 5,000
 orders/s offered for 300 seconds. It accepted 1,499,902 load orders in
@@ -154,8 +154,8 @@ and receipts each counted 749,952. Across 60 five-second samples,
 conservative upper-gap p95/peak was 628/846 trades; first/last six sample
 means were 436.17/477.67 trades. Final drain took 1,478 ms. Local 5k/s
 Phase 1 single-lane gate passed. No individual trade latency, fault/restart,
-or later post-match phase capacity was measured. [Raw load report](evidence/calcify-phase1-go-5k-upper-5m.json),
-[exact stage reconciliation](evidence/calcify-phase1-go-5k-upper-5m-reconciliation.json).
+or later post-match phase capacity was measured. [Raw load report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-5k-upper-5m.json),
+[exact stage reconciliation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-5k-upper-5m-reconciliation.json).
 
 ## Current measured baseline — September24, before0053
 
@@ -186,13 +186,13 @@ Allbenchmarkcontainersstoppedaftercleanup; paidDropletstillallocatedforongoingwo
 | H6 | August20 local isolated100,002-outcome drain, single maintainer |Completed within10.383s of container start; conservative>=9,631.32outcomes/s; final queues empty |Upstream stopped; local fixed backlog, not concurrent remote sustained capacity. |
 | H7 | August21, `do-benchmark-20260821T204347Z`, single maintainer5k/60s |299,959 exact canonical stage counts; zero canonical lag |September audit fails downstream drain check: lifecycle/market lastProcessed500/32. |
 
-Sources: [current status](CURRENT_STATUS.md), [July materializer evidence](archive/PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md),
+Sources: [current status](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md), [July materializer evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md),
 [projection gate ladder](PROJECTION_THROUGHPUT_SCALING_PLAN.md#7-expand-the-remote-gate-ladder),
-[local maintainer experiment](archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md),
-[September audit](archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
+[local maintainer experiment](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md),
+[September audit](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence).
 Original H1/H4/H5/H7 report JSON inspected September24; selected exact values,
 relative artifact paths and SHA256 recorded in the
-[artifact index](evidence/throughput-baseline-artifact-index-2026-09-24.json).
+[artifact index](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-baseline-artifact-index-2026-09-24.json).
 H2/H3/H6 here rely on linked historical records; no new raw-artifact verification
 claimed for those entries. Raw reports are local under `reports/do-benchmark/`,
 not guaranteed to exist in a fresh checkout; preserve them before cleanup.
@@ -233,7 +233,7 @@ projectors,canonical batch2000,one lifecycle/market maintainer,0052 installed.
 | C3 | `/tmp/market-query-experiment.log`; stopped C2 fixture, rollback-only current/candidate query comparison |64rows equal in both EXCEPT ALL directions. Current403.553/422.101ms; indexedcandidate115.922/115.487ms. Query-local~3.5x improvement; no end-to-end claim. Implement and rerun C2 workload. |
 
 Selected C1–C3 results and original artifact hashes are preserved in
-[current candidate evidence](evidence/throughput-current-candidate-2026-09-24.json).
+[current candidate evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-current-candidate-2026-09-24.json).
 Current host paths are evidence locators, not durable archives. Retain aggregate
 results and provenance locally before host teardown. Existing durable checkpoint:
 `artifacts/sustained-10k-20260924/`. SQL0053 is implemented and five focused PostgreSQL tests pass. A mixed numeric-scale
@@ -271,7 +271,7 @@ Do not silently remove`lag`from original comparison or promote strictpass.
 The discrepancy's contract treatment remains unresolved. Current measured
 accounting baseline is established; precise downstreamSLO is not established.
 
-[Archived C4 aggregates and original report hash](evidence/throughput-projection-baseline-2026-09-24.json).
+[Archived C4 aggregates and original report hash](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-projection-baseline-2026-09-24.json).
 Original failed fullreference androllback-only diagnostic retained onhost.
 Projection project/volumes retained stopped; nextcorebaseline uses separate
 `reef-core-baseline`project. No optimization applied between baseline runs.
@@ -289,7 +289,7 @@ originalprocess/cleanup/finalexitcodesall0. Total5,999,922commands acrossbothsam
 No fullprojection,downstreamlatencyor10kread-modelclaim.
 
 [Complete selected counts/rates/latencies,originalreportSHA256,runtimeimageIDs,
-allowlistedactualsettings,source/protocolhashesandcleanup](evidence/throughput-core-baseline-2026-09-24.json).
+allowlistedactualsettings,source/protocolhashesandcleanup](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-core-baseline-2026-09-24.json).
 Reports/samplehashesremainseparate. Diagnosticfilenamealiases point toactual
 `report-diagnostics`files so unchangedcheckerrecognizesconfiguredReportOut;
 no measurementsoracceptancecriteria changed. OriginalC4fixture/volumespreserved.
@@ -346,7 +346,7 @@ dirty queues remain nonempty. **Canonical catch-up improved; full downstream
 capacity/freshness still fails.** Projection database recorded31.59GB temporary
 writes. The faster upstream now exposes the downstream limit without claim-cleanup
 serialization. Raw failures retained; writer cleanup passed; C8 volumes preserved.
-[Selected evidence and hashes](evidence/throughput-claim-cleanup-2026-09-24.json).
+[Selected evidence and hashes](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-claim-cleanup-2026-09-24.json).
 
 ## C9 — eliminate remaining market presence/currency scan, query experiment
 
@@ -372,7 +372,7 @@ projection retries/failures or database deadlocks. Lifecycle queue peaks607,427
 and ends514,819, oldest~174s. Full-reference prerequisite fails on nonempty dirty
 queues. Market-query improvement alone does not solve downstream capacity.
 Projection temp writes31.55GB; original failure and cleanup retained.
-[Selected counts and hashes](evidence/throughput-indexed-currency-2026-09-24.json).
+[Selected counts and hashes](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-indexed-currency-2026-09-24.json).
 
 Post-load rollback-only nested lifecycle plans show500-order calls64.107ms cold,
 40.232ms repeat; session work_mem16MB40.017/37.144ms. No lifecycle temp blocks or
@@ -383,7 +383,7 @@ plan-node aggregates retained locally under `artifacts/sustained-10k-20260924/`.
 
 Next one-variable experiment: projection shared_buffers128MB→2GB, same0055 SQL,
 image, workers and300s5k workload. This follows the bounded memory experiment in
-[August20 system overview](archive/research/PROJECTION_THROUGHPUT_SYSTEM_OVERVIEW_2026-08-20.md#gate-2-bounded-configuration-matrix).
+[August20 system overview](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/research/PROJECTION_THROUGHPUT_SYSTEM_OVERVIEW_2026-08-20.md#gate-2-bounded-configuration-matrix).
 Host has32GB RAM; observe actual memory and latency. Initial launcher assertion
 wrongly expected no explicit shared_buffers argument; it failed before traffic.
 Corrected to replace exactly `shared_buffers=128MB`, leaving all other command
@@ -398,7 +398,7 @@ fails again. Projection temp writes31.60GB; HTTP p95 44.60ms,p99 75.70ms.
 Memory observed2.77GiB for projection PostgreSQL on32GB host; SQL SHOW confirms2GB
 shared_buffers. This single run shows no meaningful downstream capacity gain
 against C10; do not promote a cache improvement from final count equality.
-[Selected evidence](evidence/throughput-projection-cache-2026-09-24.json).
+[Selected evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-projection-cache-2026-09-24.json).
 
 Interpretation clarification for C8/C10/C11: canonical equal counts/zero lag are
 **final endpoint observations, after the harness drain period**. The report's
@@ -471,7 +471,7 @@ raw report directories and selected count/hash artifacts remain; their database
 volumes were deleted. Baseline fixtures, C12 and C14 remain intact. Disk returns
 to80GiB free. Full-reference retry uses a separate artifact directory on retained
 C14 state; fresh workload repeat follows with sufficient disk capacity.
-[Selected evidence](evidence/throughput-custom-plan-2026-09-24.json).
+[Selected evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-custom-plan-2026-09-24.json).
 
 C14 reference retry completed after disk cleanup: all1,235,564 lifecycle rows
 match the full rebuild; market64/64 rows exist but56 differ. Example differences
@@ -499,7 +499,7 @@ Host retains60GBfree after load; no disk failure. Freshness upper-bound gate
 still fails. Full business reference explicitly deferred for this capacity-only
 repeat: C14 reference retained and metadata defect being corrected by0057.
 No qualification claim. Same profile advances to7.5k300s, keeping0056 unchanged.
-[Selected evidence](evidence/throughput-clean-5k-repeat-2026-09-24.json).
+[Selected evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-clean-5k-repeat-2026-09-24.json).
 
 ## C16 — 7.5k exposes canonical projection capacity limit
 
@@ -517,7 +517,7 @@ batch, canonical reads14.03–16.70ms per call, transform44.42–45.53ms, commit
 poll10ms/batch500. No cadence fix assumed. Hold10k ladder while profiling SQL.
 C16 fixture used afterward for bounded single-worker nested-plan profiling;
 original load reports remain immutable but fixture is no longer its exact endpoint.
-[Selected result and phase evidence](evidence/throughput-7500-capacity-2026-09-24.json).
+[Selected result and phase evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-7500-capacity-2026-09-24.json).
 
 ## C17 — batch1000 insufficient and restores spills
 
@@ -525,7 +525,7 @@ original load reports remain immutable but fixture is no longer its exact endpoi
 materialized; canonical1,478,504,gap771,425,watermarklag775,425. Zero retries and
 command failures. Projection temp bytes26,119,669,791 versus C16zero. Lifecycle
 queuepeak4,116. Final projected count improves~6.7%, still fails7.5k capacity.
-Return to500 to avoid measured spills. [Evidence](evidence/throughput-batch1000-2026-09-24.json).
+Return to500 to avoid measured spills. [Evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-batch1000-2026-09-24.json).
 
 ## C18 — status query/index comparison, exact aggregate equality
 
@@ -534,7 +534,7 @@ rewrite with existing index946.150/899.534ms, so reject rewrite alone. Adding
 transactional covering(partition_id,stream_sequence) INCLUDE(command_type):
 original348.258/398.034ms; rewrite170.211/153.412ms. All16partition aggregates
 match in both EXCEPT ALL directions. Probe index rolled back. This measures
-queries, not sustained capacity. [Evidence](evidence/throughput-status-query-2026-09-24.json).
+queries, not sustained capacity. [Evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-status-query-2026-09-24.json).
 
 Candidate0058 replaces existing index with same keys plus includedcommand_type;
 no extra index count. Runtime uses bounded partition/max lookups and exact
@@ -561,7 +561,7 @@ block reads fall89,435,435(C16)→24,638,919(C19); mixed changes mean no isolate
 end-to-end attribution. Eight brief aggregate pg_stat_activity samples during
 this diagnostic run show20active canonical CPU/null-wait observations,5transaction
 lock,2DataFileWrite,1DataFileExtend;7lifecycleCPU. Container CPU limits verified
-unset. No raw query payloads exported. [Evidence](evidence/throughput-indexed-status-2026-09-24.json).
+unset. No raw query payloads exported. [Evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-indexed-status-2026-09-24.json).
 
 Next C20 changes only canonical writer count4→8, splitting the same16partitions
 into two per writer, retaining single lifecycle and market maintainers, batch500,
@@ -579,7 +579,7 @@ count64vs16, source/pool/server configuration and other flags. Diagnostics for
 indices4–7 were blocked. Thus the intended one-variable comparison did not occur.
 2,250,005accepted/materialized and reportedprojected1,124,149/lag0 cannot establish
 8-writer capacity: projected metrics/partition scope are incomplete. Preserve
-report failure, not a scaling claim. [Invalid attempt](evidence/throughput-eight-writers-invalid-2026-09-24.json).
+report failure, not a scaling claim. [Invalid attempt](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-eight-writers-invalid-2026-09-24.json).
 
 Raw effective environments remain host-private. Corrected C21 pins all8 services
 to effective benchmark environments from valid workers0/3, changing only names
@@ -603,7 +603,7 @@ concurrency exposed lifecycle capacity deficit. Next diagnostic changes hardware
 c-16→c-32 and concurrency to16 canonical/four lifecycle maintainers for actual10k;
 results must carry the distinct hardware/topology profile, not claim c-16 success.
 
-[Selected counts, phase costs, configuration parity, and CPU samples](evidence/throughput-eight-writers-2026-09-24.json).
+[Selected counts, phase costs, configuration parity, and CPU samples](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-eight-writers-2026-09-24.json).
 
 ### September24 evidence-retention incident during c-32 resize
 
@@ -645,15 +645,15 @@ Early aggregate capture also put a summary in the raw-report root before checker
 finished; it was misclassified as a second report. Original checker log retained;
 summary moved outside that root. Actual report independently fails freshness.
 
-[Selected count, queue, phase/configuration, CPU, and freshness evidence](evidence/throughput-10000-capacity-2026-09-24.json).
+[Selected count, queue, phase/configuration, CPU, and freshness evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-10000-capacity-2026-09-24.json).
 
 ### C22 reference completion and next controlled comparison
 
-Full business reference now PASS:2,471,663 lifecycle rows and64 market rows; before/after runtime-table fact hashes unchanged. Freshness remains unqualified. [Bounded freshness spike](research/PROJECTION_FRESHNESS_SPIKE_2026-09-24.md) selects new worker-group control with batches500, then dedicated lifecycle250 only. Market500 and canonical500 remain fixed. Candidate group image `sha256:a1f3ec30dfb89b844d1c7ae4094406c95c4550c00582fd2060d445dabcf82b4e`; local623 tests pass. Hosted comparisons pending; no new performance claim.
+Full business reference now PASS:2,471,663 lifecycle rows and64 market rows; before/after runtime-table fact hashes unchanged. Freshness remains unqualified. [Bounded freshness spike](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_FRESHNESS_SPIKE_2026-09-24.md) selects new worker-group control with batches500, then dedicated lifecycle250 only. Market500 and canonical500 remain fixed. Candidate group image `sha256:a1f3ec30dfb89b844d1c7ae4094406c95c4550c00582fd2060d445dabcf82b4e`; local623 tests pass. Hosted comparisons pending; no new performance claim.
 
 ## C23 — bounded lifecycle group, batch500 control
 
-Samec32/16canonical/4materializer topology; newimagea1f3 contains four lifecycle loops in one maintainer plus nested market caller (observed maxConcurrent5). Dedicated lifecycle/market/canonical batches500; cadence unchanged. 10k/s300s:2,999,954accepted/materialized/canonical,zero failures/retries/deadlocks,finalqueues0,lifepeak5609. Finalcounts include drain. Canonicalp95777ms; lifecyclep955702/p997210/max8741ms; marketp956662/p997963/max9652ms. FreshnessFAIL and downstreamauthorityFAIL:299/300successfulsamples,maxgap2003ms exceeds frozen2000ms. Caller topology/coverage/clock/generation checks pass. No threshold change. Fullreference deferred for comparison; no new promotion. [Evidence](evidence/throughput-lifecycle-group-control-2026-09-24.json). Persistent raw `/home/reefbench/benchmarks/reef-productive-lifecyclegroup-10000-300s-1`. Next C24 changes only projector0 dedicated lifecycle batch250; canonical/market500 unchanged.
+Samec32/16canonical/4materializer topology; newimagea1f3 contains four lifecycle loops in one maintainer plus nested market caller (observed maxConcurrent5). Dedicated lifecycle/market/canonical batches500; cadence unchanged. 10k/s300s:2,999,954accepted/materialized/canonical,zero failures/retries/deadlocks,finalqueues0,lifepeak5609. Finalcounts include drain. Canonicalp95777ms; lifecyclep955702/p997210/max8741ms; marketp956662/p997963/max9652ms. FreshnessFAIL and downstreamauthorityFAIL:299/300successfulsamples,maxgap2003ms exceeds frozen2000ms. Caller topology/coverage/clock/generation checks pass. No threshold change. Fullreference deferred for comparison; no new promotion. [Evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-lifecycle-group-control-2026-09-24.json). Persistent raw `/home/reefbench/benchmarks/reef-productive-lifecyclegroup-10000-300s-1`. Next C24 changes only projector0 dedicated lifecycle batch250; canonical/market500 unchanged.
 
 ## C24 — dedicated lifecycle250 rejected; control500 restored
 
@@ -682,12 +682,12 @@ Next bounded investigation: compare lifecycle function execution plans/cost for2
 and500 on retained data, separating claim/recompute/shared-key marking; isolate
 measurement-gap cause without altering frozen cadence/limits. Full reference,
 recovery, warm/aged/headroom gates remain required for a winning candidate.
-[Evidence](evidence/throughput-lifecycle-group-250-2026-09-24.json).
+[Evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-lifecycle-group-250-2026-09-24.json).
 Raw `/home/reefbench/benchmarks/reef-productive-lifecyclegroup-250-10000-300s-1`.
 
 ## C25 — timeboxed lifecycle cost spike, no deployed change
 
-Stopped C24 fixture; rollback-only1,000-order/64instrument/5status comparison. Four250calls took195–221ms versus two500calls111–113ms. Claim~1ms; recompute/write dominates.250plan repeatedly evaluates aggregate results under nested joins;500still rescans cached execution totals. Explicit MATERIALIZED on both execution_totals/order_event_state improved250 but regressed500 from118ms to152–155ms; candidateREJECTED. Exact scoped business parity and postrollback function/row/queue hashes pass. Keep500. No new load run or10kqualification. [Method, limitations and next action](research/LIFECYCLE_COST_SPIKE_2026-09-24.md); [aggregate evidence](evidence/lifecycle-cost-spike-2026-09-24.json).
+Stopped C24 fixture; rollback-only1,000-order/64instrument/5status comparison. Four250calls took195–221ms versus two500calls111–113ms. Claim~1ms; recompute/write dominates.250plan repeatedly evaluates aggregate results under nested joins;500still rescans cached execution totals. Explicit MATERIALIZED on both execution_totals/order_event_state improved250 but regressed500 from118ms to152–155ms; candidateREJECTED. Exact scoped business parity and postrollback function/row/queue hashes pass. Keep500. No new load run or10kqualification. [Method, limitations and next action](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/LIFECYCLE_COST_SPIKE_2026-09-24.md); [aggregate evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/lifecycle-cost-spike-2026-09-24.json).
 
 ## C26 — keyed execution SUM candidate rejected after actual10k load
 
@@ -712,8 +712,8 @@ and0056customplan in source/projection benchmark DBs with checksum guards and no
 business DML. Candidateledger entries removed; C26raw/schema proof remain intact
 as historical evidence, with separate rollback proof. Writers remain stopped.
 
-[Hosted evidence](evidence/throughput-keyed-execution-rejected-2026-09-24.json);
-[isolated evidence](evidence/lifecycle-keyed-execution-isolated-2026-09-24.json).
+[Hosted evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-keyed-execution-rejected-2026-09-24.json);
+[isolated evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/lifecycle-keyed-execution-isolated-2026-09-24.json).
 Private raw `/home/reefbench/benchmarks/reef-productive-keyedexecution-10000-300s-1`;
 rollback `/home/reefbench/benchmarks/selected-aggregates/C26-rollback.json`.
 Candidate SQL retained in `artifacts/sustained-10k-20260924/cloud-0052/0059_lifecycle_keyed_execution_totals.sql`
@@ -737,8 +737,8 @@ coverage and cannot recover the missing per-prefix split. No stage bottleneck
 asserted; no SLO reclassification. Smallest next measurement: expose existing
 PendingPrefix.observedThrough and lifecycleCoveredAt on the same emitted marker,
 without queries/cadence/limit/acceptance changes. No runtime/SQL/newload in C27.
-[Detailed attribution and next scope](research/PROJECTION_RESIDENCE_ATTRIBUTION_2026-09-24.md);
-[aggregates](evidence/projection-residence-attribution-2026-09-24.json).
+[Detailed attribution and next scope](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_RESIDENCE_ATTRIBUTION_2026-09-24.md);
+[aggregates](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/projection-residence-attribution-2026-09-24.json).
 
 ## C28 — same-prefix marker timing, full-projection 10k diagnostic
 
@@ -765,9 +765,9 @@ latencies. No prefix preceded its batch's durable commit; marker chronology pass
 Full business reference deferred; C22 remains last full reference pass. Final
 count equality includes drain, not independent in-load capacity proof.
 
-[Method and decision](research/PROJECTION_PREFIX_EXPERIMENT_2026-09-24.md),
-[run aggregate](evidence/throughput-prefix-attribution-c28-2026-09-24.json),
-[paired attribution](evidence/projection-prefix-attribution-c28-2026-09-24.json).
+[Method and decision](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_PREFIX_EXPERIMENT_2026-09-24.md),
+[run aggregate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-prefix-attribution-c28-2026-09-24.json),
+[paired attribution](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/projection-prefix-attribution-c28-2026-09-24.json).
 Private raw `/home/reefbench/benchmarks/reef-productive-c28-prefix-10000-300s-1`,
 report SHA256`85f75657ae6e37851e079bbeee5acbaaea58a599e45a706d587215a432494ba3`.
 The first post-run capture command had a helper-path typo; corrected without
@@ -797,9 +797,9 @@ retention criterion. **Rejected.** Writers stopped; exact four-loop compose
 restored, SHA256`34a571b232dd5cee9ad2398a3caab49b05405504052eec506189d8d3423e2c5e`.
 No full business reference for losing treatment; no promotion claim.
 
-[Method and limits](research/PROJECTION_PREFIX_EXPERIMENT_2026-09-24.md),
-[run aggregate](evidence/throughput-lifecycle8-c29-2026-09-24.json),
-[diagnostic paired attribution](evidence/projection-prefix-attribution-c29-2026-09-24.json).
+[Method and limits](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_PREFIX_EXPERIMENT_2026-09-24.md),
+[run aggregate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/throughput-lifecycle8-c29-2026-09-24.json),
+[diagnostic paired attribution](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/projection-prefix-attribution-c29-2026-09-24.json).
 Private raw `/home/reefbench/benchmarks/reef-productive-c29-lifecycle8-10000-300s-1`,
 report SHA256`a3646886c830556ee3ba5b3b25a99108816a9d4e4b60667bd6e6aa154e9dd102`.
 
@@ -830,8 +830,8 @@ stats show a270MB `idx_submit_results_occurred_typed` with0 scans in this
 write-heavy run; current runtime code reads submit results by command ID.
 This supports one reversible index-ablation A/B only, not an automatic drop.
 
-[Full method, results and decision](research/PROJECTION_CANONICAL_SQL_SPIKE_2026-09-24.md),
-[sanitized statement aggregate](evidence/projection-canonical-sql-c30-2026-09-25.json).
+[Full method, results and decision](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_CANONICAL_SQL_SPIKE_2026-09-24.md),
+[sanitized statement aggregate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/projection-canonical-sql-c30-2026-09-25.json).
 Raw host `/home/reefbench/benchmarks/reef-productive-c30-nested-sql-10000-300s-1`;
 report SHA256`0dc9e95796b8967cbd9218a0e67de44ba4db78f9cc18a6123bdd3aacd83317b5`,
 diagnostics summary SHA256`9728bb27cbe3e5696ec2e88fb424db67bfe182fda21fb34e93ab55d88fc8df8b`.
@@ -873,8 +873,8 @@ host/config slowdown is unsupported. C32 still **failed** unchanged freshness
 establish the cause of C31's extra scans. Index treatment remains rejected;
 the authoritative worktree contains no 0059 diagnostic migration.
 
-[Protocol, correction and limits](research/PROJECTION_SUBMIT_RESULT_INDEX_ABLATION_2026-09-25.md),
-[final three-run phase aggregate](evidence/projection-submit-index-ablation-phases-c31-c32-2026-09-25.json).
+[Protocol, correction and limits](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_SUBMIT_RESULT_INDEX_ABLATION_2026-09-25.md),
+[final three-run phase aggregate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/projection-submit-index-ablation-phases-c31-c32-2026-09-25.json).
 Raw host C31 `/home/reefbench/benchmarks/reef-productive-c31-submitindex-10000-300s-1`,
 report SHA256`1e833077a0b2b2a0de47f93c801187094a5e2c06359e587876d1f9e610926ad0`;
 C32 `/home/reefbench/benchmarks/reef-productive-c32-control-10000-300s-1`,
@@ -1390,7 +1390,7 @@ comparison with C43. Raw evidence and 125-file SHA256 manifests per arm passed
 verification under `artifacts/projection-dirty-f02-20260926/hosted-control/`
 and `artifacts/projection-dirty-f02-20260926/hosted-treatment/`. Further
 interpretation and crash/DDL limits are in
-[F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
+[F02 investigation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
 Disposable droplet `603811601` and firewall
 `0e3d8cf7-d244-4546-a6db-8310a7f8b7c0` were destroyed after local evidence
 verification; both provider lookups returned 404 and OpenTofu state was empty.
@@ -1410,13 +1410,13 @@ firewall were destroyed and provider lists contain neither. Original script,
 hash and result record are under ignored local
 `artifacts/projection-dirty-f02-20260926/droplet-rehearsal-20260926/`;
 interpretation and the excluded backbone setup attempts are in the
-[F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
+[F02 investigation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
 
 ### CAL-P2-I1 follow-ups: transaction batching
 
 Per-trade commit cohort `capacity-6588b9b2` completed spread20k exact at283.62/s; hot and skew timed out with18,412/19,322 measured unique outputs. No loss claim: source and verified backlogs remained; workers stopped after diagnostics. One brief Gradle build overlapped skew; class hash records unchanged already-running processor.
 
-`capacity-47d3f803` removes normal per-trade commit requests and retains configured100ms Streams EOS interval. Same RF3/fsync/two-thread fresh-topic20k workloads and long-ID paired source. Hot/spread/skew all exact20k full-fact contexts, zero duplicate/gap, short active observed hot rate4,214.12/s. No sustained/aged/HTTP claim or causal factor guarantee from one sequential pair. Further bounded8MiB state-cache trial coalesces frequently updated counters/queue keys in transactional changelog; crash/replay gates must still pass. [Batched observations](evidence/calcify-phase2-implementation/capacity-47d3f803/results.json).
+`capacity-47d3f803` removes normal per-trade commit requests and retains configured100ms Streams EOS interval. Same RF3/fsync/two-thread fresh-topic20k workloads and long-ID paired source. Hot/spread/skew all exact20k full-fact contexts, zero duplicate/gap, short active observed hot rate4,214.12/s. No sustained/aged/HTTP claim or causal factor guarantee from one sequential pair. Further bounded8MiB state-cache trial coalesces frequently updated counters/queue keys in transactional changelog; crash/replay gates must still pass. [Batched observations](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase2-implementation/capacity-47d3f803/results.json).
 
 ### CAL-P2-I1 cache, CPU profile and large-state observations
 
@@ -1430,15 +1430,15 @@ Next hypothesis:128KiB producer batches/20ms linger/LZ4 reduce broker fsync/repl
 
 `capacity-863faaaf`:128KiB batches/20ms linger/LZ4,100k hot exact at8,032.08/s (one5s window8,496.83/s). `sustained-1fadb3e2` froze300s/11k offered and failed infrastructure before completing load: all three Redpanda containers exited133 on ENOSPC, observer stalled at1,056,864 outputs and resolver stopped on source metadata timeout. No sustained or full-cohort claim. Docker image-declared anonymous data volumes survived earlier plain Compose down; six exact volumes were inspected read-only and shown to contain only recorded probe/internal topics, then removed with ownership/results/logs preserved. Other user data retained; no broad pruning. Current test Compose uses explicit labeled named volumes and32MiB segments (earlier1MiB). This topology/storage difference prevents causal comparison with prior rates.
 
-`capacity-28900eca`: flow-control pause/resume only on transitions, fresh cleaned test cluster,100k hot exact8,348.93/s. `capacity-a8ded376`: bounded decoded accepted-row LRU256/4MiB serialized,100k hot exact8,718.85/s;5s window9,313.91/s. `capacity-64c101a6`: ready current-target publication avoids transactional pending queue churn,100k hot exact10,638.42/s; one5s window11,386.85/s. Shared checksum field-token memo is bounded128 names/128 UTF-8 bytes per call and preserves canonical bytes. All scopes are read-committed resolver-stage covering rates, including observer cost; not individual latency, sustained qualification, HTTP20k capacity or controlled causal claims. Per-lane ordered full Protobuf equality and length-framed key/value SHA256 recorded. [Latest short record](evidence/calcify-phase2-implementation/capacity-64c101a6/results.json).
+`capacity-28900eca`: flow-control pause/resume only on transitions, fresh cleaned test cluster,100k hot exact8,348.93/s. `capacity-a8ded376`: bounded decoded accepted-row LRU256/4MiB serialized,100k hot exact8,718.85/s;5s window9,313.91/s. `capacity-64c101a6`: ready current-target publication avoids transactional pending queue churn,100k hot exact10,638.42/s; one5s window11,386.85/s. Shared checksum field-token memo is bounded128 names/128 UTF-8 bytes per call and preserves canonical bytes. All scopes are read-committed resolver-stage covering rates, including observer cost; not individual latency, sustained qualification, HTTP20k capacity or controlled causal claims. Per-lane ordered full Protobuf equality and length-framed key/value SHA256 recorded. [Latest short record](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase2-implementation/capacity-64c101a6/results.json).
 
 `sustained-53a64664` started unchanged processor/checksum classes with frozen300s/11k offered, minimum10k durable/s,20k load-end gap,90s drain, exact full-fact reconciliation; hot/spread/skew/aged planned sequentially. Results pending; failure stops later profiles. Large-state/fault repeat and final full-path smoke follow final candidate.
 
-`sustained-53a64664` completed3.3m unique contexts at10,605.80/s active covering rate over311.15s; source pacing33000 waves/300.011s,12,570,920,678B source and7,078,329,400B resolved payload. Independent full Protobuf oracle confirms all3.3m ordered unique contexts. Frozen load-end gap failed:127,510 vs20,000 maximum. Drained within12.43s of observer start+300s, but no four-profile qualification; later profiles intentionally unrun. Exact owned topics deleted only after full oracle; logs, source UUID and manifests retained. [Failed backlog gate](evidence/calcify-phase2-implementation/sustained-53a64664/results.json). Next unchanged-resolver trial offers10.5k/s, retaining minimum10k durable/s,20k end gap and90s drain; adds predeclared100k conservative covering gap using source acknowledgements versus last5s read-committed observation. This upper covering count includes producer/observer delay; not per-trade latency or a continuous physical lag measurement. Freeze expands to all Calcify production/test classes, checksum classes, fixture, harness and broker Compose.
+`sustained-53a64664` completed3.3m unique contexts at10,605.80/s active covering rate over311.15s; source pacing33000 waves/300.011s,12,570,920,678B source and7,078,329,400B resolved payload. Independent full Protobuf oracle confirms all3.3m ordered unique contexts. Frozen load-end gap failed:127,510 vs20,000 maximum. Drained within12.43s of observer start+300s, but no four-profile qualification; later profiles intentionally unrun. Exact owned topics deleted only after full oracle; logs, source UUID and manifests retained. [Failed backlog gate](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase2-implementation/sustained-53a64664/results.json). Next unchanged-resolver trial offers10.5k/s, retaining minimum10k durable/s,20k end gap and90s drain; adds predeclared100k conservative covering gap using source acknowledgements versus last5s read-committed observation. This upper covering count includes producer/observer delay; not per-trade latency or a continuous physical lag measurement. Freeze expands to all Calcify production/test classes, checksum classes, fixture, harness and broker Compose.
 
 Final review also found reused changelog validation gap: runtime previously applied desired settings only on creation. Existing changelog now checks actual RF/backend acknowledgement and16MiB+1024B message cap; new changelog configured with same cap. Unit first failed missing acknowledgement helper, then focused Calcify/checksum tests passed. This role-startup correction does not alter resolver fixture algorithm; final qualification records new classes/config explicitly.
 
-`sustained-fa7fec51` offers10.5k/s for300s, retains10k durable/s and20k end-gap gates, adds frozen100k conservative covering-gap maximum and broader class/harness/fixture hashes. All3,150,000 contexts exact/ordered/unique; rate9,881.14/s, end gap210,491, covering peak274,978 (63 observer windows). Fails rate and both backlog limits; later profiles unrun. Runtime startup changelog byte/durability validation and probe changelog max bytes17MiB differ from prior run. No causal regression inferred from this sequential pair. Full platform check/coverage and Go race gates ran after rate observation completed, during independent full-fact audit; unchanged already-running oracle classes. Owned cohort topics removed after exact audit. [Result](evidence/calcify-phase2-implementation/sustained-fa7fec51/results.json).
+`sustained-fa7fec51` offers10.5k/s for300s, retains10k durable/s and20k end-gap gates, adds frozen100k conservative covering-gap maximum and broader class/harness/fixture hashes. All3,150,000 contexts exact/ordered/unique; rate9,881.14/s, end gap210,491, covering peak274,978 (63 observer windows). Fails rate and both backlog limits; later profiles unrun. Runtime startup changelog byte/durability validation and probe changelog max bytes17MiB differ from prior run. No causal regression inferred from this sequential pair. Full platform check/coverage and Go race gates ran after rate observation completed, during independent full-fact audit; unchanged already-running oracle classes. Owned cohort topics removed after exact audit. [Result](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase2-implementation/sustained-fa7fec51/results.json).
 
 Next bounded hypothesis: canonical checksum dispatch queries JsonNode type once instead of repeated virtual type predicates; identical canonical tokens and all JSON types covered by direct known-byte test. Focused Calcify/checksum tests pass.100k hot backlog trial with32MiB JFR cap follows; profiler changes scope and may affect rate. No sustained or causal improvement claim before measurement.
 

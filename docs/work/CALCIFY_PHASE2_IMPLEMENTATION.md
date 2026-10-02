@@ -1,6 +1,6 @@
 # Calcify Phase 2 implementation plan
 
-Implementation basis: [bounded experiment report](../research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md). User approved six-slice plan on 2026-09-30. Execution status belongs in WORK_PLAN.md.
+Implementation basis: [bounded experiment report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md). User approved six-slice plan on 2026-09-30. Execution status belongs in WORK_PLAN.md.
 
 1. D-042 matching: run/session/instrument books, submit/cancel/modify/rollback, scope-aware reads and snapshot compatibility. Gate: cross-run isolation and deterministic lane replay; existing Go regression/race suites.
 2. Protobuf V1 and pure full-fact resolver: immutable trade and accepted-order facts, identities and exact provenance; acceptance ordering, ID lifetime and duplicate policy. Gate: deterministic wire round-trip plus positive/negative source fixtures.

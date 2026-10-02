@@ -96,7 +96,7 @@ Design rule:
 
 Optional product extension:
 - [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) defines the tournament-style bot arena on top of the simulation control plane. The current implementation includes a separate Arena control-plane artifact, sandboxed qualification/runner paths, registry and run records, separate Arena storage, admission/provisioning workflow, and leaderboard reads while preserving venue command-path parity. External-account admission/onboarding is complete; modular game modes, recorded hosted game evidence, and broader hosted scale remain active work.
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
 
 ### 3.5 Admin operations surface (CLI first)
 

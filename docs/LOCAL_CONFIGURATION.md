@@ -54,7 +54,7 @@ and select profiles `redpanda,calcify-phase1`. This runs independent extractor,
 stub verifier, and receipt worker beside existing post-matching services.
 `CALCIFY_STAGE` is set only inside optional sidecars; default stack behavior
 does not change. [Contract](../contracts/calcify/README.md) and
-[local diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
+[local diagnostic evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
 link semantics, tests, and replay-retention limits.
 
 `CALCIFY_VERIFIER_MAX_POLL_RECORDS` and `CALCIFY_RECEIPT_MAX_POLL_RECORDS`
@@ -85,7 +85,7 @@ measure capacity or exercise financial settlement.
 
 Run `make dev-stress-calcify-basic PAIRS=1000` for a bounded local burst through
 the same path. It checks intake, matched source commands/trades, both link
-streams, final receipts, and stage-end timestamps; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
+streams, final receipts, and stage-end timestamps; [diagnostic evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
 records the observed rate, drain, and limits. This is not a sustained gate.
 
 Run `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`

@@ -277,7 +277,7 @@ bun run arena-admin:dev
 
 Use `make dev-smoke-arena` for the overlay integration smoke. Real GitHub OAuth
 setup is a separate optional flow documented in
-[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
+[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
 
 ### Docs site
 
@@ -340,7 +340,7 @@ Start with:
 - [`../REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md)
 - [`../REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 - [`steering/README.md`](./steering/README.md)
-- [`CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md)
 - [`ENGINEERING_DELIVERY_POLICY.md`](./ENGINEERING_DELIVERY_POLICY.md)
 - [`DECISIONS.md`](./DECISIONS.md)
 

@@ -60,9 +60,9 @@ The first deterministic scenarios now have promoted target stories. P1 proves a 
 ## Learn More
 
 - `docs/README.md` — current documentation entry points
-- `docs/CURRENT_STATUS.md` — full September 4 snapshot behind this page
+- [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) — full September 4 snapshot behind this page
 - `docs/BOT_ARENA_RELEASE_READINESS.md` — current external-submission release gate
-- `docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md` — recorded standalone Reef/Arena boundary evidence
+- [docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md) — recorded standalone Reef/Arena boundary evidence
 - `docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md` — active fork-preview and recorded-run work
 - `docs/DECISIONS.md` — accepted architecture decisions
 - `docs/WORK_PLAN.md` — active execution ladder

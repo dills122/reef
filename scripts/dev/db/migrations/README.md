@@ -57,8 +57,21 @@ Existing routes are `POST /api/v1/orders/lifecycle-state`, followed by
 Use existing deployment external-client authorization (`X-Client-Id`, configured
 bearer token, required `Idempotency-Key`); do not disable auth or substitute an
 admin token for external-client credentials. Full market refresh does not rebuild
-lifecycle. See [recovery runbook](../../../../.planning/sustained-10k/recovery-runbook.md)
-for execution context, authenticated requests, capture, and verification.
+lifecycle. Earlier execution context is preserved in [projection task plan](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/.planning/sustained-10k/task_plan.md); use current routes and validation requirements above.
+
+## Disposable dirty-queue crash regression
+
+Run `bun scripts/dev/projection-dirty-crash-test.mjs` from repository root when
+checking dirty-queue durability across an unclean PostgreSQL restart. Harness
+creates disposable `postgres:16-alpine` container, applies current runtime/auth/
+admin/command-log migrations, and runs
+`PostgresVenueEventBatchMaterializationIntegrationTest.retainsDirtyWorkAcrossUncleanPostgresRestart`
+through service-local Gradle wrapper. Requires Docker and JVM toolchain. Default
+loopback port is `25437`; `REEF_F02_CRASH_TEST_PORT` accepts `20000`–`65535`.
+Harness removes only container it created and its attached volumes in cleanup.
+It does not establish throughput or full-system recovery qualification.
+
+Earlier observations and limits remain in [F02 investigation](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
 
 Local PostgreSQL regression
 `PostgresLifecycleNumericParityIntegrationTest` failed before 0051 (five terminal

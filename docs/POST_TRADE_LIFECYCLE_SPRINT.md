@@ -61,7 +61,7 @@ Make docs explicit:
 
 Acceptance:
 
-- `CURRENT_STATUS.md`, `WORK_PLAN.md`, and Bot Arena docs describe this split.
+- [CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md), `WORK_PLAN.md`, and Bot Arena docs describe this split.
 - post-trade work remains under Reef platform planning.
 
 ### 2. Post-Trade Lifecycle V1
@@ -210,7 +210,7 @@ message schemas remain out of scope.
 
 - update P2 or add P3 post-trade scenario assertions
 - generate reports for happy path and failure/repair paths
-- update `CURRENT_STATUS.md` with evidence
+- update [CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) with evidence
 
 Current next slice:
 

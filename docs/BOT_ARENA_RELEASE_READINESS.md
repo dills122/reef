@@ -85,7 +85,7 @@ recorded-game, scoring, quarantine/recovery, or hosted rehearsal requirements.
 | Participant config surface | Covered by completed onboarding checkpoint | Owner-scoped Admin API/OpenBao flow; approved-fork secret authorization corrected in PR #313 | Preserve ownership/secret-access regression coverage; broader self-service release remains separately gated. |
 | Bot-version venue risk gate | Implemented and tested | `ArenaBotVersionRiskCheck` and boundary tests reject disabled/non-active versions before acceptance | Strong release foundation. |
 | Public leaderboard | Deployed, empty | Hosted `/leaderboard` loaded without console errors and used `/api/v1/arena/leaderboard`; no public scored runs were present | Do not imply an active competition yet. Seed or promote one clearly labelled preview run before launch. |
-| Run correctness and capacity | Corrected local economic evidence; hosted proof pending | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green. `reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json` passes all three economic policies with 30 scoped fills each, complete reconciliation, zero accounting gap, and preserved role attribution. | Local non-zero economic attribution is proven; require hosted matrix/rehearsal evidence before preview promotion. |
+| Run correctness and capacity | Corrected local economic evidence; hosted proof pending | Local positive/negative gates, deterministic score-v1 proof, hosted 15-minute arena run, and short pacing gates are green. [reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json) passes all three economic policies with 30 scoped fills each, complete reconciliation, zero accounting gap, and preserved role attribution. | Local non-zero economic attribution is proven; require hosted matrix/rehearsal evidence before preview promotion. |
 | Projection capacity | Sustained baseline measured; hosted preview workload still needs proof | Venue core has a `10k` materializer baseline; full projection passed `2.5k/5m` but failed `5k/5m` with `757,955` watermark lag; see [`PROJECTION_THROUGHPUT_SCALING_PLAN.md`](./PROJECTION_THROUGHPUT_SCALING_PLAN.md) | Size the preview from its recorded workload/rehearsal; historical `5k/60s` passes do not prove sustained `5k` freshness. |
 | Public self-service onboarding materials | Separate publication checklist | Guided invite admission/onboarding is complete; verify contributor guide, PR template, submission checklist, and scaffold before open intake | Do not confuse open-intake documentation publication with the completed invite onboarding test. |
 | Product messaging | Needs alignment | Hosted landing invites users to submit; public docs say submissions are closed | Use “limited preview” language until the gates in this document are green. |
@@ -110,7 +110,7 @@ secrets or allowing an unreviewed submission to mutate hosted state. Full task
 ordering and acceptance criteria live in
 [`BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md).
 Implementation proceeded after the product/artifact boundary in
-[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+[`REEF_BOT_ARENA_SEPARATION_SPRINT.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 was promoted. Admission, immutable roster/run binding, and policy-lock code is
 now implemented, and external-account admission/onboarding is complete. The
 remaining release work is the recorded-game and hosted evidence campaign.
@@ -149,7 +149,7 @@ codes, emergency-removal rules, and evidence envelope.
 
 ### Required For Invite-Only Fork Preview
 
-- Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
+- Reef-only and Arena-enabled separation gates are promoted from the same commit (passed; see [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md))
 - the hosted backbone is rehearsed with the Arena-enabled image, Arena routes
   and storage readiness pass, and rollback to the last known-good Arena image is documented
 - branch protection requires `registry-diff-and-provision`; ordinary PRs receive a successful no-op result, while bot submissions remain pending until trusted admission/provisioning completes
@@ -208,7 +208,7 @@ completed onboarding bug-fix cycle.
 - `scripts/dev/bot-sdk-test-bot.mjs`
 - `scripts/dev/lib/bot-isolation.mjs`
 - `scripts/dev/run-arena-economic-policy-matrix.mjs`
-- `reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json`
+- [reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/reports/arena-economic-policy-matrix/20260721-role-corrected-v4/manifest.json)
 - `services/arena-control-plane/`
 - `scripts/dev/db/migrations/arena/`
 - `apps/arena-admin/`

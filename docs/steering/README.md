@@ -35,7 +35,7 @@ sections of [project overview](../../REEF_PROJECT_OVERVIEW.md) and
   [onboarding](../ONBOARDING.md) for setup and teardown.
 - [CI operations](../CI_OPERATIONS.md) for required gates and scheduled checks.
 - [Work plan](../WORK_PLAN.md) for the dated execution board;
-  [September 4 status](../CURRENT_STATUS.md) for the implementation snapshot.
+  [September 4 status](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) for the implementation snapshot.
 - [Throughput baselines](../THROUGHPUT_BASELINES.md) and
   [performance learnings](../PERFORMANCE_LEARNINGS.md) before any throughput
   work. Follow their original success/failure and active-plan links.
@@ -45,6 +45,6 @@ sections of [project overview](../../REEF_PROJECT_OVERVIEW.md) and
   post-trade evidence and operator work.
 
 Completed plans, dated audits, research, and benchmark records are indexed in
-[the archive](../archive/README.md). The
+[the archive](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/README.md). The
 [documentation lifecycle](../DOCUMENTATION_CLEANUP_PLAN.md) governs promotion
 and archival.

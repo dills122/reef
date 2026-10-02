@@ -68,7 +68,10 @@ Indicators favoring Stabilization/Refactor Mode:
 ## Definition of Done Gate (Per Feature)
 
 - tests added/updated for new behavior
+- affected contracts, owner docs and latest relevant evidence updated with code
+- guidance, overviews and current work board checked; affected owners updated
+- [completion and retention pass](RECORDS_RETENTION.md#required-completion-pass) completed: superseded records archived and verified before local removal, references/inventories repaired, or explicit no-op reason recorded
+- local context limited to current planning, onboarding, session understanding, system/design, operations and latest verification; historical context retrieved from Records and cited
 - validation updated for any new input shape
 - observability/attribution updated for new runtime dimensions where relevant
 - no regression in legacy/compatible behavior paths
-

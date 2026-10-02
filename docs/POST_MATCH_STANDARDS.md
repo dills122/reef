@@ -18,7 +18,7 @@ Reference anchors:
 - DTCC/NSCC clearing and CNS netting model: [NSCC](https://www.dtcc.com/about/businesses-and-subsidiaries/nscc), [CNS](https://www.dtcc.com/clearing-and-settlement-services/equities-clearing-services/cns)
 - DTCC settlement process overview: [Understanding settlement](https://www.dtcc.com/understanding-settlement/index.html)
 - settlement/clearing strategy and instant-post-trade profile: [`docs/SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
-- internal research notes: [`docs/research/POST_MATCH_REFERENCE_NOTES_2026-05.md`](./archive/research/POST_MATCH_REFERENCE_NOTES_2026-05.md)
+- internal research notes: [`docs/research/POST_MATCH_REFERENCE_NOTES_2026-05.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/research/POST_MATCH_REFERENCE_NOTES_2026-05.md)
 
 ## Role and Permission Baseline
 

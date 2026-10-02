@@ -35,7 +35,7 @@ databases, readiness, and Compose base must not depend on Arena implementations.
 The repository remains a monorepo; artifact exclusion and explicit deployment
 composition provide opt-out, not runtime flags or JVM tree shaking alone. This
 boundary is implemented and promoted; see
-[`docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md)
+[docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md)
 and D-053 in [`docs/DECISIONS.md`](./docs/DECISIONS.md).
 
 ## Vision

@@ -77,10 +77,10 @@ through an API/export boundary.
 Read in this order:
 
 1. [`SYSTEM_OVERVIEW.md`](./SYSTEM_OVERVIEW.md) - this file.
-2. [`SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md) - Hetzner always-on control plane.
-3. [`SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md`](./archive/SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md) - how backbone, run plane, runtime, and simulator connect.
-4. [`SYSTEM_BACKBONE_SERVICES.md`](./archive/SYSTEM_BACKBONE_SERVICES.md) - services inside a running venue runtime stack.
-5. [`SYSTEM_SIMULATOR_ENVIRONMENT.md`](./archive/SYSTEM_SIMULATOR_ENVIRONMENT.md) - simulator tools, profiles, reports, and evidence.
+2. [`SYSTEM_INFRASTRUCTURE_BACKBONE.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md) - Hetzner always-on control plane.
+3. [`SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md) - how backbone, run plane, runtime, and simulator connect.
+4. [`SYSTEM_BACKBONE_SERVICES.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_BACKBONE_SERVICES.md) - services inside a running venue runtime stack.
+5. [`SYSTEM_SIMULATOR_ENVIRONMENT.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_SIMULATOR_ENVIRONMENT.md) - simulator tools, profiles, reports, and evidence.
 
 ## Terms
 
