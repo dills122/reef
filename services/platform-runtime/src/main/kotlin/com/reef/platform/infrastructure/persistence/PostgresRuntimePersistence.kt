@@ -2175,16 +2175,16 @@ class PostgresRuntimePersistence(
         }
         if (bootstrapMode == PostgresBootstrapMode.Compat) {
             canonicalConnection().use { conn ->
-                val sql = requireNotNull(javaClass.getResourceAsStream("/db/0073_runtime_order_run_identity.sql")) {
-                    "missing runtime order identity bootstrap migration"
-                }.bufferedReader().use { it.readText() }
+                val sql = listOf("0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql").joinToString("\n") { migration ->
+                    requireNotNull(javaClass.getResourceAsStream("/db/$migration")) {
+                        "missing runtime bootstrap migration: $migration"
+                    }.bufferedReader().use { it.readText() }
+                }
                 val previousAutoCommit = conn.autoCommit
                 conn.autoCommit = false
                 try {
                     conn.createStatement().use { statement ->
                         statement.execute(sql.replace("runtime.", "${names.runtimeSchemaName}.").replace("'runtime'", "'${names.runtimeSchemaName}'"))
-                        val matchingSql = requireNotNull(javaClass.getResourceAsStream("/db/0074_matching_ioc_cancellation.sql")).bufferedReader().use { it.readText() }
-                        statement.execute(matchingSql.replace("runtime.", "${names.runtimeSchemaName}."))
                     }
                     conn.commit()
                 } catch (error: Exception) {
@@ -2275,8 +2275,8 @@ class PostgresRuntimePersistence(
                                 engineOrderId = rs.getString("engine_order_id"),
                                 occurredAt = rs.getString("occurred_at")
                             ),
-                            executions = rs.getString("matching_facts_json")?.let { executionsFromResultPayload(it) } ?: executionsForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId)),
-                            trades = rs.getString("matching_facts_json")?.let { tradesFromResultPayload(it) } ?: tradesForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId))
+                            executions = rs.getString("matching_facts_json")?.let { executionsFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: executionsForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId)),
+                            trades = rs.getString("matching_facts_json")?.let { tradesFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: tradesForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId))
                         )
                     } else {
                         SubmitOrderResult(
@@ -2327,8 +2327,8 @@ class PostgresRuntimePersistence(
                                 engineOrderId = rs.getString("engine_order_id"),
                                 occurredAt = rs.getString("occurred_at")
                             ),
-                            executions = rs.getString("matching_facts_json")?.let { executionsFromResultPayload(it) } ?: executionsForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId)),
-                            trades = rs.getString("matching_facts_json")?.let { tradesFromResultPayload(it) } ?: tradesForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId))
+                            executions = rs.getString("matching_facts_json")?.let { executionsFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: executionsForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId)),
+                            trades = rs.getString("matching_facts_json")?.let { tradesFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: tradesForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId))
                         )
                     } else {
                         SubmitOrderResult(

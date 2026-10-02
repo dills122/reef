@@ -99,9 +99,11 @@ internal fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
                 payloadJson = resultPayloadJson.ifBlank { "{}" },
                 runId = runtimeRunId
             )
-        ).let { events -> result.cancelled?.let { events + cancellationEvent(it, events.first(), commandId) } ?: events },
-        streamSequence = streamSequence,
-        originalMatchingFactsJson = matchingFactsFromResultPayload(resultPayloadJson)
+        ).let { events ->
+            result.cancelled?.let { events + cancellationEvent(it, events.first(), commandId) } ?: events
+        },
+        originalMatchingFactsJson = matchingFactsFromResultPayload(resultPayloadJson),
+        streamSequence = streamSequence
     )
 }
 

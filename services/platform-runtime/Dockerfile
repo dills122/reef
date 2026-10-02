@@ -7,6 +7,7 @@ RUN ./gradlew --no-daemon dependencies
 
 COPY services/platform-runtime/src src
 COPY scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql /app/scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql
+COPY scripts/dev/db/migrations/runtime/0074_matching_ioc_cancellation.sql /app/scripts/dev/db/migrations/runtime/0074_matching_ioc_cancellation.sql
 RUN ./gradlew --no-daemon installDist \
     && rm -f build/install/platform-runtime/bin/*.bat \
     && jlink \

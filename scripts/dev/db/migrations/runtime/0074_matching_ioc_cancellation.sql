@@ -319,7 +319,8 @@ BEGIN
       stream_sequence,
       member_order,
       jsonb_build_object(
-        'commandId', command_id, 'runId', COALESCE(NULLIF(order_payload->>'runId', ''), command_payload->>'runId', ''),
+        'commandId', command_id,
+        'runId', COALESCE(NULLIF(order_payload->>'runId', ''), command_payload->>'runId', ''),
         'resultType', result_status,
         'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
         'orderId', order_id,
@@ -340,7 +341,10 @@ BEGIN
           THEN jsonb_build_object(
             'orderId', order_id,
             'engineOrderId', CASE WHEN result_status = 'rejected' THEN '' ELSE COALESCE(result_payload #>> '{accepted,engineOrderId}', order_payload->>'engineOrderId', '') END,
-            'runId', COALESCE(NULLIF(order_payload->>'runId', ''), command_payload->>'runId', ''), 'venueSessionId', COALESCE(order_payload->>'venueSessionId', command_payload->>'venueSessionId', ''), 'clientOrderId', COALESCE(order_payload->>'clientOrderId', ''), 'instrumentId', COALESCE(order_payload->>'instrumentId', ''),
+            'runId', COALESCE(NULLIF(order_payload->>'runId', ''), command_payload->>'runId', ''),
+            'venueSessionId', COALESCE(order_payload->>'venueSessionId', command_payload->>'venueSessionId', ''),
+            'clientOrderId', COALESCE(order_payload->>'clientOrderId', ''),
+            'instrumentId', COALESCE(order_payload->>'instrumentId', ''),
             'participantId', COALESCE(order_payload->>'participantId', ''),
             'accountId', COALESCE(order_payload->>'accountId', ''),
             'side', COALESCE(order_payload->>'side', ''),

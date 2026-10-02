@@ -108,16 +108,19 @@ tasks.register<Copy>("resolverProbeDependencies") {
 }
 
 // Compat bootstrap packages same migration-owned order identity SQL as deployment.
-val runtimeOrderIdentityMigration = layout.projectDirectory.file("../../scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql")
-val runtimeMatchingFactsMigration = layout.projectDirectory.file("../../scripts/dev/db/migrations/runtime/0074_matching_ioc_cancellation.sql")
+val runtimeOrderIdentityMigrations = files(
+    "../../scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql",
+    "../../scripts/dev/db/migrations/runtime/0074_matching_ioc_cancellation.sql",
+)
 val verifyRuntimeOrderIdentityMigration = tasks.register("verifyRuntimeOrderIdentityMigration") {
     group = "verification"
     doLast {
-        check(runtimeMatchingFactsMigration.asFile.isFile) { "Missing runtime matching-facts bootstrap migration: ${runtimeMatchingFactsMigration.asFile}" }
-        check(runtimeOrderIdentityMigration.asFile.isFile) { "Missing runtime order identity bootstrap migration: ${runtimeOrderIdentityMigration.asFile}" }
+        runtimeOrderIdentityMigrations.forEach { migration ->
+            check(migration.isFile) { "Missing runtime bootstrap migration: $migration" }
+        }
     }
 }
 tasks.processResources {
     dependsOn(verifyRuntimeOrderIdentityMigration)
-    from(files(runtimeOrderIdentityMigration, runtimeMatchingFactsMigration)) { into("db") }
+    from(runtimeOrderIdentityMigrations) { into("db") }
 }
