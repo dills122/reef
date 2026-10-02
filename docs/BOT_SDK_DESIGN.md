@@ -221,6 +221,16 @@ The helper does not execute HTTP calls. Hosted bots still return proposed action
 
 The deterministic runner is dry-run by default. When passed a venue transport, it sends generated commands through the adapter-owned client and records venue responses on each tick report.
 
+Batch intake contract (`VenueCommandBatchResultV1`):
+
+- `ok` means every request received a successful HTTP response under existing transport classification. It does not prove matching completion.
+- `acceptedResponses` retains the acknowledged prefix on both success and failure; successful `value` remains compatible with existing callers.
+- `outcomes` retains each original request in input order: `accepted` or `rejected` with its response, `unknown` after a thrown transport error, and `not_sent` for remaining requests. Sending stops at the first failure.
+- Both scenario runners reserve command IDs and idempotency keys for every mapped request before sending. Later distinct actions use fresh IDs even after rejection, unknown outcome, or an unsent suffix. Adapter-denied and policy-blocked batches allocate no requests.
+- Tick `venueResponses` retains the accepted prefix; `venueOutcomes` carries intake evidence for the complete mapped batch. Without live order reads, only acknowledged actions update fixture order state. With live order reads, refreshed venue data owns order state. Dry runs preserve simulated action application and report no transport outcomes.
+- An unknown outcome is not rejection or completion. Adapter callers can reconcile through venue reads or retry the retained original request with exactly the same payload, command ID, idempotency key, and timestamp. Runners do not automatically retry unknown requests or rewrite their historical outcomes after later reads. A newly generated bot action is a new command, not a retry.
+
+
 Before live submission, `validateVenuePreflightV1` reports the fixture's required venue seed state: instruments, participant, account, actor role binding, and venue session. The preflight report is an adapter/orchestrator contract; it does not seed runtime data by itself.
 
 Current mapping support:
