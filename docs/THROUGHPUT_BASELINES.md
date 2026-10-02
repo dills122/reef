@@ -32,6 +32,131 @@ Throughput PRs/handoffs must cite baseline IDs, prior attempts considered,
 changed variable, actual result/artifact location, limitations and next decision.
 Read-only evidence review is not a new approval gate for already authorized work.
 
+## Calcify Phase 2 managed resolver diagnostic, CAL-P2-I1 (September30/October1)
+
+Baseline considered: CAL-P2-E4 (~10k local WAL-off joins/s, excluding source decode/broker/Streams), CAL-P1-L9 (~5k successful full-path commands/s), L6/L8 failures. New implementation uses production Protobuf resolver, sequential full JSON/checksum decode, persistent RocksDB index and EOS changelog/output on three local Redpanda26.2.3 brokers. Explicit `write.caching=false`, RF3, two partitions/threads,1MiB probe topic segments; each broker1CPU/1GiB heap/2GiB container limit. Host MacBookPro18,4,10CPU/64GiB; Docker VM15.6GiB. Upstream logs injected from real Go200-outcome/100-trade fixture; no HTTP throughput claim. Source topics fresh, long IDs, two new accepted facts per resolved trade; output~2KiB.
+
+`capacity-e7bec93b` failed before seeding: harness tried parsing empty init output as JSON. Preserve all three setup attempts; no rate result. `capacity-6588b9b2` hot20k backlog emitted18,412 unique contexts in120s timeout; active covering rate155.85/s. Subsequent oracle snapshot18,917 exact contexts, zero duplicates, still incomplete cohort. Normal resolver requested EOS commit per trade. Hypothesis: use configured100ms Streams commit interval to batch transactions while preserving state/output/checkpoint atomicity. Subsequent same-size fresh-topic observations and crash checks must qualify change; no sustained10k or large-state recovery claim yet. [Raw attempts](evidence/calcify-phase2-implementation/).
+
+## Calcify Phase 2 local store/codec diagnostic, CAL-P2-E4 (September30)
+
+Isolated experimental branch at planning base `79dab22b`. Single Java thread,
+RocksDB bounded cache32MiB/memtable16MiB×2, WAL off, JVM1GiB; MacBookPro18,4,
+10CPU/64GiB. One million aged rows before paced300s cohort:3,000,000 joins and
+6,000,000 synthetic new full-fact row inserts, 300.000055s, ~10k joins/s.
+Transient offered-minus-resolved peak165 trades, final exact3m; sampled local
+service p95 25.0µs. Full example JSON row646B/V1 1,985B. Source parsing/checksum,
+Kafka/Streams transactions, changelog/standby, intake and matching excluded.
+No full Phase2/system10k claim. Prior CAL-P1-L9 full Phase1 ~5k commands/s and
+L6/L8 failures, hosted C5 ~10k venue-core commands/s considered; stages/workloads
+not causally comparable. Separate short knees, CPU/RSS resource probe, logical
+changelog sample, fault tests and all corrections:
+[report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md),
+[300s artifact](evidence/calcify-phase2/E4-aged-paced.json),
+[experiment directory](evidence/calcify-phase2/).
+
+## Calcify Phase 1 local diagnostic, CAL-P1-L2 (September29)
+
+On `codex/calcify-phase1`, local one-hot-lane full path accepted 2,000 load
+orders in 1.402 seconds, then drained all 1,001 trades to commitment,
+verification, and receipt stages 8.196 seconds after last acceptance. Two
+attempts are retained: first pipeline reconciled but observer timed out because
+it assumed one source batch per command; corrected run passed. This short burst
+uses one instrument, four broker partitions, and no legacy materializer or
+projectors. It is not a sustained capacity or latency qualification and cannot
+be compared causally to C5 venue-core or C2 full-projection hosted runs.
+[Exact settings and attempts](evidence/calcify-phase1-basic-load-2026-09-29.json).
+
+Follow-up CAL-P1-L3 traced 6,799–7,001 ms last-commitment-to-last-verified
+delay to verifier's one-transaction-per-link loop. Batching up to 100 links
+per poll preserved partition-prefix checkpoints and reduced that endpoint
+difference to 31 and 54 ms in two local repeats; final receipt drain after
+last acceptance measured 960 and 942 ms. All 1,001 trade/link/receipt counts
+reconciled. Same nominal workload and topology, but selected lane partition
+and aged local state differed; no sustained or hosted promotion follows.
+[Before/after evidence and limits](evidence/calcify-phase1-verifier-batch-2026-09-29.json).
+
+CAL-P1-L4 paired a fresh 1,000-pair local burst with a 300-second paced run
+at 100 crossing pairs/s through PostgreSQL HTTP intake, Go matching, and all
+three Calcify stages. Burst accepted 2,000 orders in 1,542 ms, then drained
+1,001 receipts in 1,197 ms. Paced run accepted 60,000 load orders in 299,911
+ms (200.06 orders/s); all 60,002 intake/source commands, 30,001 source
+trades, commitment links, verified links, and receipts reconciled including
+preflight. Fifty-nine in-load samples had accepted-to-receipt gap p95 and peak
+70 trades with no growth; final drain took 1,923 ms. Frozen local diagnostic
+gate passed. Same single hot lane and local reused volumes; no hosted,
+multi-lane, fault-at-load, or higher-rate capacity claim. [Paced raw report](evidence/calcify-phase1-5m-2026-09-29.json),
+[burst raw report](evidence/calcify-phase1-burst-repeat-2026-09-29.json), and
+[method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#paired-burst-and-five-minute-run-cal-p1-l4).
+
+CAL-P1-L5 repeated the same 300-second, single-hot-lane local path at 300
+crossing pairs/s (three times L4's requested rate), on the same code and
+topology with fresh topics and further-aged reused volumes. All 180,000 load
+orders were accepted in 299,975 ms (600.05 orders/s); all 180,002 source
+commands and 90,001 source trades/commitment links/verified links/receipts
+reconciled including preflight. Across 59 five-second samples, gap p95/peak
+was 200 trades. First/last six-sample means were 175.2/163.5; first/last
+half means were 171.1/171.7. At last acceptance, 89,811 receipts existed;
+final drain took 1,943 ms. The predeclared local gate passed without gap
+growth at this rate. Counts sample in-flight work, not individual latency;
+this does not establish a capacity ceiling or guarantee against growth at
+higher rates or longer duration. [Raw report](evidence/calcify-phase1-5m-300pps-2026-09-29.json),
+[method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#three-times-rate-five-minute-run-cal-p1-l5).
+
+CAL-P1-L6/L7/L8 raised local Phase 1 full-path pressure. Initial 10k/s and 5k/s
+30-second Bun probes failed: client sockets failed and a 500-command matching
+batch exceeded Kafka's 1 MiB producer message cap by 504 bytes, leaving a
+20,163-command hot-partition backlog. With matching batches at 200, matching
+reconciled but per-link receipt DB transactions/checkpoints lagged. A per-poll
+receipt batch fixed that backlog: a 300,000-order probe reconciled 150,001
+trades/commitments/verifications/receipts with p95/peak in-load gap 300, but
+the Bun client needed 52,368 socket retries and delivered only 2,977.08
+orders/s. A pooled Go crossing-pair client then delivered 7,691.22 and
+7,738.65 orders/s in 30-second 10k/s-offered probes with 512 and 1024
+workers; neither met the 10k target. All attempts, including failures, are
+retained in [high-rate attempt ledger](evidence/calcify-phase1-high-rate-attempts-2026-09-29.json).
+
+CAL-P1-L7 used fresh generation 19 and topics, 200-command matching batches,
+batched receipts, one hot instrument/partition, and the same local 10-CPU
+Docker host. Over 300 seconds with 7,500 orders/s offered, 2,179,758 orders
+were accepted in 300.299 seconds (7,258.61/s; 96.78% of target), with zero
+request failures/retries. Ingress and matching each counted 2,179,760
+commands including preflight; source trades, commitment links, verified links,
+and receipts each counted 1,089,880. Matching had zero NAKs/failures. Across
+60 five-second samples, the *lower-bound* accepted-pair-to-receipt gap p95 was
+1,025 trades, peak 1,670, first six mean 824.5 and last six mean 460.5;
+final drain was 1,133 ms. Intake, accounting, and drain gates passed. Gap
+gate was unproven: accepted count was read before the receipt query, so these
+samples could understate the gap. This is diagnostic single-lane evidence
+for Phase 1 only, not hosted C5's 64-instrument 10k/s venue-core profile,
+per-trade latency, or future post-match phase capacity. [Raw load report](evidence/calcify-phase1-go-7k5-5m.json),
+[exact stage reconciliation](evidence/calcify-phase1-go-7k5-5m-reconciliation.json),
+and [method/limits](work/CALCIFY_PHASE1_IMPLEMENTATION.md#high-rate-calibration-and-five-minute-run-cal-p1-l6-l7-l8-l9).
+
+CAL-P1-L8 corrected sampling by bracketing each receipt query with accepted
+counts and using the conservative upper gap. Fresh generation 20, same runtime
+code and 7,500/s offered workload, accepted 1,930,226 orders in 300.624
+seconds (6,420.72/s); 159,887 offered pairs dropped at the bounded client
+queue. Intake gate failed. Exact source trades, commitments, verifications,
+and receipts each counted 965,114, with zero matching failures. Conservative
+upper gap p95/peak was 866/1,272 trades and final drain was 1,183 ms. This
+corrected run does not establish sustained 7.5k/s on the increasingly aged
+local volumes. [Raw load report](evidence/calcify-phase1-go-7k5-upper-5m.json),
+[exact stage reconciliation](evidence/calcify-phase1-go-7k5-upper-5m-reconciliation.json).
+
+CAL-P1-L9 used fresh generation 21 and the corrected sampler at 5,000
+orders/s offered for 300 seconds. It accepted 1,499,902 load orders in
+300.098 seconds (4,998.03/s); 49 of 750,000 offered pairs were dropped by
+the bounded client queue, with zero request failures/retries. Exact intake
+and source command counts were 1,499,904 including preflight; matching
+acked all, with zero NAKs/failures. Source trades, commitments, verifications,
+and receipts each counted 749,952. Across 60 five-second samples,
+conservative upper-gap p95/peak was 628/846 trades; first/last six sample
+means were 436.17/477.67 trades. Final drain took 1,478 ms. Local 5k/s
+Phase 1 single-lane gate passed. No individual trade latency, fault/restart,
+or later post-match phase capacity was measured. [Raw load report](evidence/calcify-phase1-go-5k-upper-5m.json),
+[exact stage reconciliation](evidence/calcify-phase1-go-5k-upper-5m-reconciliation.json).
+
 ## Current measured baseline — September24, before0053
 
 Frozen candidate/image/source and0052 settings below; no0053 optimization applied.
@@ -1287,262 +1412,47 @@ hash and result record are under ignored local
 interpretation and the excluded backbone setup attempts are in the
 [F02 investigation](research/PROJECTION_DIRTY_RECOVERY_F02_2026-09-26.md).
 
-## PM-S1 — post-match shadow-worker shakedown
+### CAL-P2-I1 follow-ups: transaction batching
 
-September 27, harness launched from local checkout `24edc510` (merged #383
-and #384), opt-in `REEF_DO_POSTMATCH_SHADOW_DIAGNOSTIC=1` on the
-`materializer-projection` fixture. The first provisioning attempt requested
-`sfo2` `c-16` and DigitalOcean returned 422, "Size is not available in
-this region." Operator checks found empty OpenTofu state and no matching
-provider droplet. This is a setup failure, not a workload result.
+Per-trade commit cohort `capacity-6588b9b2` completed spread20k exact at283.62/s; hot and skew timed out with18,412/19,322 measured unique outputs. No loss claim: source and verified backlogs remained; workers stopped after diagnostics. One brief Gradle build overlapped skew; class hash records unchanged already-running processor.
 
-The retry ran `do-benchmark-20260927T000053Z` on a fresh `sfo3` `c-16`
-(16 vCPU, 32 GiB), 256 load workers, 16 source partitions, four canonical
-projectors, one existing lifecycle/market maintainer, and the isolated
-post-match PostgreSQL with opt-in live and market shadow workers. Source was
-synced and built on the host; smoke passed, then its Compose volumes were
-reset before the measured `2500/s × 60s` strict-lifecycle workload. No
-latency target or sustained-downstream freshness gate was configured.
+`capacity-47d3f803` removes normal per-trade commit requests and retains configured100ms Streams EOS interval. Same RF3/fsync/two-thread fresh-topic20k workloads and long-ID paired source. Hot/spread/skew all exact20k full-fact contexts, zero duplicate/gap, short active observed hot rate4,214.12/s. No sustained/aged/HTTP claim or causal factor guarantee from one sequential pair. Further bounded8MiB state-cache trial coalesces frequently updated counters/queue keys in transactional changelog; crash/replay gates must still pass. [Batched observations](evidence/calcify-phase2-implementation/capacity-47d3f803/results.json).
 
-| Stage / observer | Result |
-| --- | --- |
-| HTTP and canonical pipeline | 149,976 attempted, accepted, direct-acked, materialized, and projected; 0 failures, final projector lag 0; 2,498.46 accepted/s over 60.027s. |
-| Intake latency | p95 180.62ms, p99 418.35ms; recorded, not pass-gated. |
-| Post-match shadow check after source stopped | PASS after 26s: all 16 active source partitions assigned; 149,976 canonical source rows; live and market frontiers equal each partition's source maximum; stable source generation; complete sorted source/live receipt membership SHA-256 equal before and after (`ee42a6f09ffc965858ad05b0d05e46097bb5042b2c856dd0cc39bfdfeb834865`). |
-| Existing downstream cohort observer | Non-authoritative: instrumentation disabled, covering markers absent, no command-weighted in-load lifecycle/market latency. |
+### CAL-P2-I1 cache, CPU profile and large-state observations
 
-The standard fetched-report gates and shadow checker both exited 0. This
-proves closed-cohort shadow wiring and final catch-up for this short fixture,
-not market business-row parity, audit or settlement correctness, in-load
-post-match latency, sustained 5k, or integrated 10k capacity. C4's
-`2500/s × 300s` full-projection accounting baseline and C43's failed
-`10000/s × 300s` full-pipeline gate use different code, workload duration,
-topology, and observers; this run is not a causal comparison to either.
-Complete [shadow result](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/postmatch-shadow-check.json),
-[byte-exact compressed stress report](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/venue-event-materializer-stress-rate-2500-workers-256.json.gz),
-[gate summary](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/do-benchmark-evidence-summary.json),
-and [SHA-256 manifest of all 84 fetched files](../artifacts/postmatch-shadow-20260927/shakedown-2500-60s/raw-report-manifest.sha256)
-are preserved. Full original logs and database diagnostics remain locally under
-ignored `reports/do-benchmark/do-benchmark-20260927T000053Z/`.
-The harness reported successful destruction of droplet `603968676` and
-firewall `a2d6c8fb-df0c-4f75-8731-809aaba201f6`; operator checks found
-empty OpenTofu state and no provider droplet with that name. Host source
-revision and provision/teardown logs were not captured in the versioned
-artifacts, so those lifecycle claims remain operator observations. Future
-hosted runs should save sanitized source revision and resource lifecycle
-evidence. Next: finish
-audit/settlement ownership and route parity, then run the integrated matched
-capacity campaign in the post-match implementation plan.
+`capacity-0ccfefa6` enables bounded8MiB Streams state cache. All20k hot/spread/skew outputs reconcile full facts; active short rates4,466/5,811/4,551 per second. Fresh source topics, differing broker ages and short cohorts limit inference. `capacity-237bc880`100k hot with JFR passed exact at4,537/s; profile highlighted canonical checksum/formatting. `capacity-9858d7fa` preserves canonical tokens with fixed1536-prefix table, direct hex formatting and direct field sorting;100k exact at4,940/s. JFR remains ignored local artifact with summary/hash; no causal improvement or sustained qualification claimed. Golden tests initially omitted object-count payload from manually assembled expected bytes; corrected explicit protocol fixture, no production checksum change. Existing Go source checks remain unchanged and pass.
 
-## PM-S2 — bounded settlement 10k/300s stage diagnostic, FAILED
+`recovery-5545850c` injected5,000 paired batches,1,000,000 accepted rows/500,000 trades; source1,879,510,678B, seed54,832ms. All500k exact full-fact contexts; active covering rate4,251/s over117.61s. Local managed state767,176,186B. After process kill and complete local state loss, same application/changelog reached observed RUNNING in19,971ms (includes group takeover/startup; not isolated physical restore latency). Fresh100-trade catch-up yields500,100 exact contexts, no duplicate or gap. Predeclared diagnostic objective120s/1m rows passed once. Broker RF3/fsync/1MiB-segment fixture scope only; no production p99 recovery SLO, fault-at10k or HTTP20k claim. [Large-state record](evidence/calcify-phase2-implementation/recovery-5545850c/result.json).
 
-September 27, two fresh disposable `sfo3` `c-32` attempts on branch
-`codex/postmatch-settlement-droplet`, after merged #400. This is the same
-64-instrument, five-actor strict-lifecycle fixture as the named materializer
-stress profile, with 384 load workers, 16 source partitions, four canonical
-materializers, four legacy command-status projectors, one configured
-lifecycle/market maintainer, isolated post-match and settlement PostgreSQL,
-and shadow live/market plus intake/obligation/admission/execution workers.
-The benchmark preseeded 325 cash/security openings for instant DvP. Audit
-shadow and public route cutover were off. This topology, code, workload age,
-and observer differ from C5 venue-core, C43/F02 full projection, and PM-S1;
-none is a matched control for this run.
+Next hypothesis:128KiB producer batches/20ms linger/LZ4 reduce broker fsync/replication work versus default small batches; source fixture and state logic unchanged. Producer/output byte caps also align with16MiB resolver budget plus1024B framing allowance. These are coherent configuration changes, not proof of a single cause.
 
-First attempt `do-benchmark-20260927T192439Z` synced `3e71f767` and passed
-smoke/reset/migrations and opening seed, then stopped **before load**:
-settlement PostgreSQL lacked the `pg_stat_statements` preload required by the
-diagnostics collector. No throughput conclusion. The fix added its opt-in
-preload; [compressed failure log](../artifacts/postmatch-settlement-20260927/attempt-1/stage-make-dev-stress-venue-event-materializer.log.gz)
-and [checksum manifest](../artifacts/postmatch-settlement-20260927/attempt-1/evidence.sha256)
-are retained. Droplet `604156104` and firewall
-`39e9053c-e4a5-4cb4-977b-e73e91eca29a` were destroyed; local OpenTofu state
-was empty afterward.
+### CAL-P2-I1 producer, flow control and ready-target observations
 
-Second attempt `do-benchmark-20260927T193902Z` synced committed source
-`0b335009`; smoke/reset and dedicated migrations through settlement `0011`
-passed. The load window was `19:48:38Z–19:53:38Z` (300.034s), fixture SHA-256
-`b6de86e60892ecfb7d85b0d7644d72a4d978952ecbd7e77874dd50842246980a`.
-It ended with 2,999,943 attempted/accepted/direct-acked (9,998.69/s), zero
-HTTP failures, p95/p99 intake 73.43/115.26ms. Those are ingress facts only.
-The materializer reached 2,797,872 (gap 202,071; 9,325.20/s); legacy
-command-status projection reached 1,742,422 (gap 1,055,450 to materialized;
-5,807.42/s), with projector lag 1,261,521. The existing stress guardrails
-failed, including stopped-source drain. Neither canonical nor projection
-10k/s capacity was qualified on this combined topology.
+`capacity-863faaaf`:128KiB batches/20ms linger/LZ4,100k hot exact at8,032.08/s (one5s window8,496.83/s). `sustained-1fadb3e2` froze300s/11k offered and failed infrastructure before completing load: all three Redpanda containers exited133 on ENOSPC, observer stalled at1,056,864 outputs and resolver stopped on source metadata timeout. No sustained or full-cohort claim. Docker image-declared anonymous data volumes survived earlier plain Compose down; six exact volumes were inspected read-only and shown to contain only recorded probe/internal topics, then removed with ownership/results/logs preserved. Other user data retained; no broad pruning. Current test Compose uses explicit labeled named volumes and32MiB segments (earlier1MiB). This topology/storage difference prevents causal comparison with prior rates.
 
-Read-only settlement frontier snapshots summed each of 16 contiguous source
-sequence positions relative to its partition origin. They are stage progress,
-not trade counts or per-record latency:
+`capacity-28900eca`: flow-control pause/resume only on transitions, fresh cleaned test cluster,100k hot exact8,348.93/s. `capacity-a8ded376`: bounded decoded accepted-row LRU256/4MiB serialized,100k hot exact8,718.85/s;5s window9,313.91/s. `capacity-64c101a6`: ready current-target publication avoids transactional pending queue churn,100k hot exact10,638.42/s; one5s window11,386.85/s. Shared checksum field-token memo is bounded128 names/128 UTF-8 bytes per call and preserves canonical bytes. All scopes are read-committed resolver-stage covering rates, including observer cost; not individual latency, sustained qualification, HTTP20k capacity or controlled causal claims. Per-lane ordered full Protobuf equality and length-framed key/value SHA256 recorded. [Latest short record](evidence/calcify-phase2-implementation/capacity-64c101a6/results.json).
 
-| UTC sample | Relative to load | Intake | Obligation | Admission | Execution |
-| --- | --- | ---: | ---: | ---: | ---: |
-| 19:52:24 | During load | 1,129,275 | 1,128,775 | 816,875 | 61,175 |
-| 19:53:47 | 9s after stop | 1,617,275 | 1,615,275 | 1,157,575 | 88,375 |
-| 19:55:08 | 90s after stop | 2,357,775 | 2,357,775 | 1,686,275 | 132,275 |
+`sustained-53a64664` started unchanged processor/checksum classes with frozen300s/11k offered, minimum10k durable/s,20k load-end gap,90s drain, exact full-fact reconciliation; hot/spread/skew/aged planned sequentially. Results pending; failure stops later profiles. Large-state/fault repeat and final full-path smoke follow final candidate.
 
-At `19:56:02Z`, PostgreSQL table statistics reported about 1.27m trade
-intake/obligation inserts, 20,747 admission-window inserts, 71,539 attempt
-inserts, and 286,156 ledger-entry inserts. These statistics are approximate
-snapshots and do not prove exact trade membership, settlement outcome, or four
-balanced legs per trade. The global admission-counter UPDATE had 20,852 calls
-and 2.34m ms cumulative execution time (112.23ms/call); its conflict-tolerant
-INSERT had 20,857 calls and 1.46m ms cumulative time (69.89ms/call).
-Cumulative SQL time across sessions is not elapsed wall time. The post-run
-activity sample included ten active `transactionid` lock waits, while
-settlement and post-match PostgreSQL logged frequent WAL checkpoints.
-These observations support admission contention and high fact-store write
-cost as hypotheses, but do not isolate either as the sole cause of slow
-execution. Projector logs also contain temporary source-coverage misses that
-later recovered. Because the stress guardrail exited nonzero before the
-aggregate report was written, this harness revision skipped the post-match
-and settlement closed-cohort checkers; no final business/replay parity claim
-is made. The harness now recognizes individual measured reports so future
-failed-capacity runs still execute those checks.
+`sustained-53a64664` completed3.3m unique contexts at10,605.80/s active covering rate over311.15s; source pacing33000 waves/300.011s,12,570,920,678B source and7,078,329,400B resolved payload. Independent full Protobuf oracle confirms all3.3m ordered unique contexts. Frozen load-end gap failed:127,510 vs20,000 maximum. Drained within12.43s of observer start+300s, but no four-profile qualification; later profiles intentionally unrun. Exact owned topics deleted only after full oracle; logs, source UUID and manifests retained. [Failed backlog gate](evidence/calcify-phase2-implementation/sustained-53a64664/results.json). Next unchanged-resolver trial offers10.5k/s, retaining minimum10k durable/s,20k end gap and90s drain; adds predeclared100k conservative covering gap using source acknowledgements versus last5s read-committed observation. This upper covering count includes producer/observer delay; not per-trade latency or a continuous physical lag measurement. Freeze expands to all Calcify production/test classes, checksum classes, fixture, harness and broker Compose.
 
-Forensic correction: PM-S2 is not a matched regression against C43/F02. Those
-full-pipeline runs used six materializers and sixteen projector owners; PM-S2
-used four of each. PM-S2 also ran live/market shadow and all settlement workers
-inside the four command-status projector JVMs via the projector-role startup
-gates, sharing the c-32 host with five PostgreSQL services. Separate post-match
-databases did not isolate CPU or host I/O. The post-run SQL snapshot contains
-20,852 admission-counter updates, 44,374 predecessor-completion checks and
-1,673 execution completion inserts. This supports counter contention and an
-execution scheduling/dependency bottleneck, but does not attribute the size of
-either cost or establish batching as the remedy. The in-load downstream sampler
-recorded 300 samples and zero qualified samples because lifecycle/market
-caller instrumentation was disabled; no downstream latency result is available.
-The [capacity recommendation](research/POST_MATCH_SETTLEMENT_CAPACITY_DECISION_2026-09-27.md)
-is suspended pending a matched deployment comparison and direct execution
-timing. PM-S2's ingress success remains valid; its post-trade 10k gate failed.
+Final review also found reused changelog validation gap: runtime previously applied desired settings only on creation. Existing changelog now checks actual RF/backend acknowledgement and16MiB+1024B message cap; new changelog configured with same cap. Unit first failed missing acknowledgement helper, then focused Calcify/checksum tests passed. This role-startup correction does not alter resolver fixture algorithm; final qualification records new classes/config explicitly.
 
-[Original compressed load report](../artifacts/postmatch-settlement-20260927/attempt-2/venue-event-materializer-stress-rate-10000-workers-384.json.gz),
-[compressed stage log](../artifacts/postmatch-settlement-20260927/attempt-2/stage-make-dev-stress-venue-event-materializer.log.gz),
-[compressed settlement SQL statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-pg_stat_statements.csv.gz),
-[compressed table statistics](../artifacts/postmatch-settlement-20260927/attempt-2/post-table-stats.csv.gz),
-[gate summary](../artifacts/postmatch-settlement-20260927/attempt-2/do-benchmark-evidence-summary.json),
-and [checksums](../artifacts/postmatch-settlement-20260927/attempt-2/evidence.sha256)
-are retained; full raw telemetry remains in the ignored local
-`reports/do-benchmark/do-benchmark-20260927T193902Z/`. The source commit is
-the local synced checkout; the remote artifact did not retain its own Git
-revision. Droplet `604158495` and firewall
-`1ea16e99-b8d8-4733-902f-0e05bc01e492` were destroyed; local OpenTofu
-state was empty afterward. Next work should change post-trade ordering and
-execution ownership, then measure the new dataflow with in-load trade and
-frontier telemetry. Repeating the same 10k fixture with small SQL tuning
-does not address the observed execution-stage shortfall.
+`sustained-fa7fec51` offers10.5k/s for300s, retains10k durable/s and20k end-gap gates, adds frozen100k conservative covering-gap maximum and broader class/harness/fixture hashes. All3,150,000 contexts exact/ordered/unique; rate9,881.14/s, end gap210,491, covering peak274,978 (63 observer windows). Fails rate and both backlog limits; later profiles unrun. Runtime startup changelog byte/durability validation and probe changelog max bytes17MiB differ from prior run. No causal regression inferred from this sequential pair. Full platform check/coverage and Go race gates ran after rate observation completed, during independent full-fact audit; unchanged already-running oracle classes. Owned cohort topics removed after exact audit. [Result](evidence/calcify-phase2-implementation/sustained-fa7fec51/results.json).
 
-## PM-S3 attempt 1 — matched post-match comparison invalid
+Next bounded hypothesis: canonical checksum dispatch queries JsonNode type once instead of repeated virtual type predicates; identical canonical tokens and all JSON types covered by direct known-byte test. Focused Calcify/checksum tests pass.100k hot backlog trial with32MiB JFR cap follows; profiler changes scope and may affect rate. No sustained or causal improvement claim before measurement.
 
-September 27, source commit `eb6157aa`: one disposable `sfo3` `c-32`
-droplet, six materializers, sixteen projector owners, 384 load workers, and
-planned 10,000/s for 300 seconds in each arm. Control accepted 2,999,955
-commands (9,999.75/s) and eventually materialized and projected all of them.
-That is final catch-up, not proof of in-load post-trade freshness. The stage
-observer consumed up to 51.3% of a sample interval on source and settlement
-queries (8.0% on settlement alone), above its 10% and 2% limits. Thus the
-control's in-load stage attribution is invalid. Treatment failed during smoke
-before measured load: the previous arm's PostgreSQL volumes were still present,
-and reused stream sequences collided with `idx_canonical_command_outcomes_partition_seq`.
-No treatment throughput or post-match capacity result exists from this attempt.
+`capacity-e1255d3f`: single node-kind dispatch,100k hot exact10,535.25/s with JFR,5s window11,294.84/s. `capacity-906dcd15`: direct byte source parsing plus strict bounded16KiB UTF-8 validation scratch,100k hot exact10,664.64/s with JFR,5s window11,740.58/s. UTF-16/32 and BOM auto-detection initially violated old String parser contract; added failing regression and disabled Jackson charset detection, all focused tests pass. Independent String-source oracle remains unchanged. Sequential short/profiler results do not establish causal gain or sustained qualification. Byte parser preserves old semantic SHA256 and source facts; malformed, overlong, surrogate, truncated UTF-8 and scratch-window boundary covered. Profile now shows canonical digest and timestamp parsing among costs; fixed and per-call bounded token reuse is next hypothesis.
 
-Correction: reset matched topology before each arm's smoke, use PostgreSQL
-table insert statistics for low-cost approximate in-load source outcome samples
-at 60-second intervals, and retain exact closed-cohort trade and settlement
-checks after load. Both arms still use one droplet and the same topology, load,
-and observer. Droplet `604190884` was destroyed; OpenTofu state was empty.
-[Control gate](../artifacts/postmatch-capacity-20260927/attempt-1/control-gate-summary.json),
-[stage summary](../artifacts/postmatch-capacity-20260927/attempt-1/control-stage-summary.json),
-[stage samples](../artifacts/postmatch-capacity-20260927/attempt-1/control-stage-samples.jsonl),
-[compressed load report](../artifacts/postmatch-capacity-20260927/attempt-1/control-load-report.json.gz),
-[treatment smoke log](../artifacts/postmatch-capacity-20260927/attempt-1/treatment-smoke.log.gz),
-[treatment Compose log](../artifacts/postmatch-capacity-20260927/attempt-1/treatment-compose.log.gz),
-and [checksums](../artifacts/postmatch-capacity-20260927/attempt-1/evidence.sha256)
-retain the failed comparison's evidence. Full raw artifacts remain in the
-ignored local `reports/do-benchmark/` directories for the two run IDs.
+`capacity-156d616c`: bounded shared per-digest128 string token memo (fields≤128 UTF-8 bytes, values≤32),100k hot exact11,121.32/s with JFR,5s window12,019.45/s. `capacity-4c565d6d`:512KiB producer batching,100k hot exact10,679.02/s with JFR,5s window11,792.06/s. Sequential short observations do not isolate causality;512KiB trial does not show gain and is reverted to128KiB for next qualification. Direct golden test covers short values after memo saturation; no canonical byte change. All raw records retained.
 
-## PM-S3 attempt 2 — matched post-match comparison blocked by connection ceilings
+Next sustained protocol retains rate/end-gap/covering-gap/drain limits and10.5k offered load. Samples observer every1s instead of5s to reduce conservative covering-gap inflation; max100k covering gap remains fixed. Require source load overrun≤1s beyond300s; this checks actual delivered offered cohort rather than configured pace alone. Freeze adds all generated fact classes, checksum helper classes and dependency jars. Role review found ERROR status could be lost when close transitions to NOT_RUNNING; retain failure flag so supervised infrastructure exit remains nonzero. This operational fix is separate from rate path and needs final role smoke.
 
-September 28, one disposable `sfo3` `c-32` droplet (`604195292`), 10,000/s
-for 300 seconds, 384 workers, six materializers, sixteen projector owners,
-source PostgreSQL `max_connections=200`, and settlement PostgreSQL's default
-100-connection limit. Control
-`postmatch-capacity-control-20260927T235615Z` accepted and eventually
-materialized/projected 2,999,950 commands (9,999.67/s), with final lag zero.
-Its stage observer passed: four in-load rate intervals, maximum total query
-duty 2.96% and settlement query duty 1.52%. This is a valid control under that
-configuration, not a post-match result.
 
-Treatment `postmatch-capacity-treatment-20260927T235615Z` accepted 2,750,574
-commands (9,166.54/s) and materialized 2,589,916 at the end of the load
-report, leaving 160,658 unmaterialized. The stage sampler received
-`FATAL: sorry, too many clients already`; stage telemetry had only
-two samples and no valid in-load intervals. Post-match and settlement exact
-shadow checks failed (32 and 19 failures respectively). The dependency graph
-had 27,622 admissions and maximum depth 27,617, a separate signal of serial
-account dependencies, but its incomplete run cannot establish sustained
-settlement throughput. The treatment failed; the pair does not isolate the
-post-match architecture effect because database connection limits were hit.
+### CAL-P2-I1 nightly checkpoint — sustained delivery gate remains open
 
-After capping each dedicated post-match source pool at two connections in
-`3a053626`, treatment-only
-`postmatch-capacity-treatment-pool2-20260928T0047Z` again exhausted the
-100-connection settlement server during settlement seed, before measured
-traffic. The seed script executes `psql` inside `settlement-postgres`, which
-was initially misidentified as source PostgreSQL. A later treatment-only
-retry with source `max_connections=320` also failed at seed; container
-inspection showed settlement at exactly 100 clients, while source had about
-194 of 320. The source connection increase in `e9b907fc` did not fix this
-failure. A corrected treatment retry sets settlement `max_connections=240`.
-[Attempt 2 evidence](../artifacts/postmatch-capacity-20260928/attempt-2/)
-retains both load reports, gate/stage summaries, failed exact checks, graph,
-pool-two startup log, and checksums. Full raw artifacts remain in ignored
-local `reports/do-benchmark/` directories for the three run IDs.
+`sustained-8ea6c8ce` freezes300s/10.5k offered, minimum10k durable/s,20k end gap,100k covering gap,1s observer windows,≤1s load overrun and90s drain. All3,150,000 contexts reconcile full Protobuf facts in lane order, unique with zero duplicates/gaps. Active read-committed covering rate10,160.50/s over310.024s; source11,997,898,178B, resolved6,754,923,400B. End gap1,184 and conservative covering peak16,842 pass respective count gates. **Actual producer duration310.730s fails301s maximum**, so cohort and four-profile qualification fail; spread/skew/aged remain unrun. Small backlog under delivered load does not establish behavior at frozen10.5k/s. No individual latency or upstream HTTP capacity claim. [Frozen failed result](evidence/calcify-phase2-implementation/sustained-8ea6c8ce/results.json).
 
-## PM-S3 attempt 3 — corrected settlement DB limit, treatment capacity FAILED
+Current fixture producer waits synchronously for each source acknowledgement. Next test-only hypothesis: bounded FIFO source sends, then publish each wave's verifications only after its actual durable source acknowledgement; preserve exact offsets and per-lane order. This change is **not implemented** at nightly checkpoint. Keep frozen thresholds unchanged, record workload delivery differences, and repeat all profiles only after correctness fixes.
 
-September 28, same disposable `sfo3` `c-32` droplet (`604195292`). A new
-320-connection control was stopped during setup before traffic to reserve the
-remaining two-hour slot for treatment. Treatment with source PostgreSQL at 320
-and settlement PostgreSQL at its default 100 passed smoke but failed at
-settlement seed before traffic: `settlement-postgres` had 100/100 clients,
-while source had about 194/320. This identifies the seed failure's actual
-database, correcting the earlier source attribution.
-
-The corrected treatment
-`postmatch-capacity-treatment-settlement240-20260928T0139Z` used source 320,
-settlement 240, six materializers, sixteen projector owners, four dedicated
-live workers, four dedicated settlement workers, 384 load workers, fresh
-volumes, and a 10,000/s target for 300 seconds. Repeat smoke was skipped after
-the same code passed smoke in the immediately preceding setup. Settlement seed
-succeeded. It accepted and direct-acked 2,776,548 commands (9,254.07/s;
-p95 93.15 ms, p99 158.15 ms), below the 9,900/s gate. The load report's
-durable-canonical snapshot held 2,620,026 items, leaving a 156,522 gap;
-downstream cohort proof failed. This is a treatment capacity failure, not a
-matched 320/240 control comparison or final correctness result.
-
-Retained in-load stage samples passed the measurement gate: four intervals,
-maximum total observer duty 3.44% and settlement duty 1.80%. Approximate
-`pg_stat_user_tables.n_tup_ins` rates were 6,255–7,415 source outcomes/s,
-2,018–2,215 settlement intake trades/s, 39–41 admission windows/s, 2.1–2.6
-completion windows/s, and 76–96 transition attempts/s. By the last retained
-sample about three minutes after load, settlement insert statistics showed
-1,220,848 intake trades, 22,211 admissions, 1,300 completions, and 52,564
-attempts. These are not exact closed-cohort counts.
-
-Settlement PostgreSQL diagnostics put the shared admission-counter row first:
-22,465 `UPDATE` calls accumulated 3.41 million ms SQL execution time, and
-22,474 `INSERT ... ON CONFLICT DO NOTHING` calls accumulated 2.05 million ms.
-A live snapshot found ten tuple-lock waits and two transaction-ID waits.
-These are summed concurrent SQL times, not elapsed latency; they support
-counter-row contention as the admission bottleneck. Four worker log snapshots
-each showed about 4,800–4,950 admitted windows but only 285–293 applied
-windows, with roughly 77–80% of readiness checks blocked. This makes ordered
-execution and predecessor readiness a separate bottleneck; faster admission
-alone cannot close the gap. Source materialization
-and projection SQL also had large cumulative costs, so the full ingress-rate
-loss is not yet attributed. Exact post-match and settlement closed-cohort
-checks did not finish before the user-set droplet cutoff. Destruction was
-requested at two hours, completed after provider teardown, and OpenTofu state
-was empty. [Attempt 3 evidence](../artifacts/postmatch-capacity-20260928/attempt-3/)
-retains original reports and logs, DB diagnostics, stage samples, and an
-offline stage-check result.
+Fresh independent source review found fail-closed gaps: expired verified-input checkpoints can reset to earliest, and reused verified/output topic names are not bound to persisted UUIDs. These defects remain open. Earlier nine-case fault evidence covers source retention/UUID only; it does not validate these missing input/output boundaries. Final unchanged-candidate fault/recovery and production-role smoke must follow fixes. Final local platform `check` and61% instruction coverage gate pass at nightly checkpoint, including bounded shared string-token checksum memo and infrastructure failure latch. Actual supervised nonzero failure exit remains unproven.

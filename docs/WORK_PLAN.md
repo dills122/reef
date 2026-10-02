@@ -1,81 +1,5 @@
 # Reef Work Plan
 
-## September 26 priority update
-
-User-directed priority: build the [post-match rearchitecture](work/POST_MATCH_SCALING_IMPLEMENTATION_PLAN_2026-09-26.md)
-before further throughput micro-tuning or unrelated venue feature expansion.
-Land the event-ID and dirty-queue safety fixes, then implement ordered
-canonical-effect consumers for live trading, audit/history, and bounded
-settlement. The September 4 execution ladder below remains its dated snapshot;
-track new implementation and promotion evidence through this plan, the linked
-work packet, and the throughput ledger.
-
-September 26 implementation checkpoint: [#376](https://github.com/dills122/reef/pull/376)
-landed the versioned canonical effect producer and decoder;
-[#377](https://github.com/dills122/reef/pull/377) landed the opt-in isolated
-operational store schema. [#378](https://github.com/dills122/reef/pull/378)
-landed exact source coverage and atomic consumer progress. Live and market
-state, audit and settlement ownership, route cutover, and the integrated
-capacity gate remain ahead of this dated checkpoint.
-
-Live-state slice landed in [#379](https://github.com/dills122/reef/pull/379): bounded batches write final state for each
-affected order plus every execution and trade fact into the isolated store.
-Filled quantity advances from execution facts, so canceling an unfilled
-residual does not count that residual as a fill. Source coverage, facts, and
-frontier commit together. Live read routes and parity cutover remain separate
-follow-on changes.
-
-Market-state slice landed in [#380](https://github.com/dills122/reef/pull/380): the live transaction records a bounded change
-window for each source window; an independent maintainer applies visible
-price-level deltas and best-level snapshots under its own frontier. See the
-[market stage contract](work/POST_MATCH_MARKET_STAGE_CONTRACT_2026-09-26.md).
-Runtime worker wiring, live read-route cutover, and capacity qualification
-still require source-origin proof, parity, and recovery evidence.
-
-[#381](https://github.com/dills122/reef/pull/381) landed opt-in live and
-market shadow workers against the isolated post-match store. They use a stable
-source generation and each partition's encoded offset origin. Public reads
-still use the existing projection.
-
-The next read slice adds participant-scoped operational-store queries for own
-orders and fills, plus a same-snapshot live-frontier token. It does not switch
-public routes: exact response parity, source-lag validation, and bounded work
-for aged participant histories remain cutover gates. The audit and settlement
-consumers remain separate architecture workstreams.
-
-[#382](https://github.com/dills122/reef/pull/382) landed that read slice.
-[#383](https://github.com/dills122/reef/pull/383) and
-[#384](https://github.com/dills122/reef/pull/384) added the opt-in shadow
-diagnostic and full source-partition coverage. The September 27 disposable
-2.5k/s, 60s shakedown passed source-to-live membership and both final
-frontiers; see the [scoped run record](THROUGHPUT_BASELINES.md#pm-s1--post-match-shadow-worker-shakedown).
-This did not measure in-load post-match freshness or qualify 10k/s. Continue
-audit/settlement ownership and live-route parity before integrated cutover.
-
-September 27 continuation: [#385](https://github.com/dills122/reef/pull/385)
-and [#386](https://github.com/dills122/reef/pull/386) landed the independent
-audit owner and consumer. [#387](https://github.com/dills122/reef/pull/387)
-landed an opt-in participant live-read route with strict source/target parity;
-it remains disabled until rebuild, aged-query, and latency gates pass.
-[#388](https://github.com/dills122/reef/pull/388) landed separate canonical
-trade intake and frontier on the settlement store. [#399](https://github.com/dills122/reef/pull/399)
-landed opt-in bounded policy binding and pending obligations with their own
-frontier. [#400](https://github.com/dills122/reef/pull/400) landed the shadow
-ranked admission, keyed account state, bounded instant workflow, DvP legs,
-ledger postings, and separate transition frontier. D-059's admission log
-preserves shared-account replay order; import and replay tests cover recovery.
-
-The September 27 [PM-S2 disposable diagnostic](THROUGHPUT_BASELINES.md#pm-s2--bounded-settlement-10k300s-stage-diagnostic-failed)
-ran the combined shadow path at 10k/s for 300s. Ingress/direct ack held;
-canonical, legacy command-status projection, and post-trade transition did
-not keep up, so no integrated or settlement capacity claim is promoted.
-Next: preserve D-059's durable order, isolate post-match processes from legacy
-projectors, restore the six-materializer/sixteen-projector benchmark topology,
-and measure blocked versus executing settlement work in a matched disposable
-control/treatment pair. Select batching only after dominant cost is measured.
-Durable pre-trade policy authority, repair/retry parity, public read parity,
-audit inclusion, and integrated cutover remain ahead.
-
 ## Purpose
 
 This is Reef's single repository execution ladder. It links to the documents
@@ -93,6 +17,70 @@ Source/test/artifact reconciliation:
 [`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
+
+## Calcify Phase 2 implementation (2026-09-30 branch)
+
+User approved [six-slice implementation plan](work/CALCIFY_PHASE2_IMPLEMENTATION.md). Active branch: `codex/calcify-phase2-implementation`, continuing preserved experiment commits. [Draft PR #433](https://github.com/dills122/reef/pull/433) records nightly checkpoint and merge blockers. D-042 run-scoped matching/V3 snapshots, full-fact Protobuf/pure resolver, managed Streams role, bounded lane faults, source identity/retention guards, and operational configuration implemented. Actual HTTP two-order smoke emits one exact context. Corrected RF3/fsync fault matrix passes nine boundaries; million-row cold recovery reaches observed RUNNING in19.97s with exact catch-up. Those broker cohorts precede final throughput changes and require unchanged-candidate repeat. Latest100k hot diagnostic reaches11.12k/s with JFR and exact full-fact parity. Latest sustained hot3.15m cohort reconciles exact at10.16k/s but producer310.73s fails frozen301s maximum; spread/skew/aged unrun. Final local platform regression/coverage passes. Review found open verified-input retention and verified/output UUID binding gaps. Work paused at [nightly handoff](work/handoffs/2026-09-30-calcify-phase2.md); correctness fixes, unchanged-candidate fault/recovery, production-role smoke and sustained qualification remain; no full-system20k upstream capacity or production availability claim. [Implementation evidence](evidence/calcify-phase2-implementation/README.md) preserves failed attempts, durability correction and exact measurement scope.
+
+## Calcify Phase 2 experiment checkpoint (2026-09-30 branch)
+
+`codex/calcify-phase2-experiments`, based on merged #431, contains isolated source
+fixtures, managed-runtime/fault prototypes and measured local-store diagnostics.
+Recommendation: verified-led one-input Kafka Streams with managed full-fact local
+state/changelog/standby and demand source reader. Scratch D-042 alignment proves
+cross-run isolation/replay fixture; production matching alignment still pending.
+Recovery, topic-generation/retention and two-lane fault probes passed in stated
+local RF1 scope. Five-minute 10k local store/codec joins/s is not full resolver or
+system capacity qualification. [Decision/evidence report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md)
+records remaining implementation gates and reproducible commands. User sync subsequently approved implementation; see implementation checkpoint above. Legacy remains intact.
+
+## Calcify Phase 1 checkpoint (2026-09-29 branch)
+
+`codex/calcify-phase1` adds opt-in matching commitment extraction, stub
+verification, and PostgreSQL processing receipts without switching legacy
+post-matching. Local fixtures, partition-poison isolation, and receipt restart
+passed on two-partition Redpanda. A later four-partition local smoke passed
+PostgreSQL-backed HTTP intake through Go matching to an exact Calcify receipt;
+bounded 2,000-order hot-lane local load also reconciled 1,001 trades, links,
+and receipts after drain. These are diagnostics, not hosted capacity or
+settlement qualification.
+Measured verifier-per-link transaction backlog was corrected by per-poll
+transaction batching: two repeated local 1,000-pair runs drained receipts
+within 960 and 942 ms after last acceptance with exact stage counts.
+Phase 1 paired load gate then passed: 1,000-pair burst plus five minutes at
+100 crossing pairs/s, with 60,000 accepted load orders, 30,001 trades/links/
+receipts including preflight, sampled accepted-to-receipt gap p95/peak 70
+trades, and 1,923 ms final drain. Scope remains local single-lane diagnostic.
+Follow-up five-minute run at 300 crossing pairs/s accepted 180,000 load
+orders; 90,001 trades/links/receipts reconciled, sampled gap p95/peak was
+200 trades with steady first/last half means, and final drain was 1,943 ms.
+Tail stayed bounded at this tested rate; higher-rate and longer-run limits
+remain unproven.
+High-rate CAL-P1-L6 probes exposed a Kafka 1 MiB matching event-batch ceiling,
+per-record receipt transaction/checkpoint backlog, and Bun socket saturation.
+Phase 1 high-rate local setup now uses 200-command matching batches and per-poll
+receipt batches. With pooled Go load, 10k/s-offered 30-second probes reached
+about 7.7k accepted orders/s. First 7.5k/s-offered five-minute run accepted
+7,258.61/s with exact stage counts, but gap samples were lower bounds.
+Corrected 7.5k/s run accepted 6,420.72/s and failed intake gate despite exact
+stage counts. Fresh 5k/s-offered five-minute run passed at 4,998.03 accepted
+orders/s with 749,952 exact trades/links/receipts, conservative upper-gap
+p95/peak 628/846 trades, and 1,478 ms final drain. Repeat sustained plus
+short stress probes for every material post-match phase; 7.5k/s and 10k/s
+local and multi-lane qualification remain open.
+Exact wire contract, corrections, and limits:
+[Calcify Phase 1 implementation](work/CALCIFY_PHASE1_IMPLEMENTATION.md).
+Replay-retention window enforcement and independent source-to-link
+reconciliation remain follow-ups before non-diagnostic use. Repeat
+`make dev-smoke-calcify-full-path` as each post-match slice expands, adding
+assertions for that slice's source identity, durable effect, and replay behavior.
+After each material post-match phase change, run a fresh full-path preflight,
+a 30-second 10k/s-offered probe, and a 300-second 5k/s-offered run through
+`make dev-smoke-calcify-high-rate` and `make dev-soak-calcify-high-rate-load`.
+Use `make dev-verify-calcify-high-rate` for exact final stage counts; record
+offered/accepted rate, dropped pairs, conservative in-load receipt gap, drain,
+failures, and phase-specific effects. Raise sustained target toward 7.5k/s
+only after it passes with the new phase. Retain raw reports for failed runs.
 
 ## Source Of Truth
 

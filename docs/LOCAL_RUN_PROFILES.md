@@ -339,7 +339,7 @@ the required stack shape and validates `materializer-soak` before running.
 | `VENUE_EVENT_MATERIALIZER_BATCH_SIZE` | `1000` | Materializer Postgres commit batch size. |
 | `VENUE_EVENT_MATERIALIZER_POLL_MS` | `10` | Materializer poll interval. |
 | `VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS` | `200` | Materializer fetch timeout. |
-| `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT` | `250000` | Bounds terminal order retention for materializer stress. |
+| `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT` | `250000` | Caps terminal records per run/session/instrument book; total cap scales with retained books (64 books permit 16 million records). Default `0` outside stress preserves all records. Match V4 snapshot limit on restore; size memory before run. |
 | `DEV_STRESS_MATERIALIZER_INSTRUMENTS` | `64` | Generated instrument count for materializer spread config. |
 | `DEV_STRESS_CAPTURE_STREAM_DIRECT` | `1` | Attach direct engine consume deltas. |
 | `DEV_STRESS_CAPTURE_VENUE_EVENT_MATERIALIZER` | `1` | Attach materializer deltas. |

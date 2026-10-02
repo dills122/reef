@@ -83,8 +83,9 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0066_drop_unused_order_event_time_index.sql",
       "runtime/0068_event_replay_conflicts.sql",
       "runtime/0069_logged_projection_dirty_queues.sql",
-      "runtime/0070_postmatch_source_generation.sql",
-      "runtime/0071_independent_canonical_audit_consumer.sql",
+      "runtime/0070_calcify_phase1_receipts.sql",
+      "runtime/0071_calcify_source_topic_identity.sql",
+      "runtime/0072_calcify_topic_identities.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -114,14 +115,9 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0015_command_results_archive.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0006_allocation_confirmation_affirmation_facts.sql"));
-  assert.ok(migrations.some((migration) => migration.id === "settlement/0008_canonical_trade_intake.sql"));
-  assert.ok(migrations.some((migration) => migration.id === "settlement/0009_bounded_obligation_policy.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0002_run_bot_performance_summaries.sql"));
-  assert.ok(migrations.some((migration) => migration.id === "postmatch/0001_operational_effect_foundation.sql"));
-  assert.ok(migrations.some((migration) => migration.id === "postmatch/0002_live_order_execution_trade_state.sql"));
-  assert.ok(migrations.some((migration) => migration.id === "postmatch/0003_market_change_windows.sql"));
 });
 
 test("venue event batch integrity migration removes duplicate index and rejects conflicts", async () => {
@@ -478,19 +474,4 @@ test("routes arena migrations only to arena database target", async () => {
       "arena/0010_arena_run_roster_binding.sql",
     ],
   );
-});
-
-test("routes post-match schema only to its isolated database target", async () => {
-  const migrations = await discoverMigrations(migrationsRoot);
-  const primary = migrationsForTarget({ domains: ["runtime", "settlement"] }, migrations);
-  const postmatch = migrationsForTarget({ domains: ["postmatch"] }, migrations);
-
-  assert.ok(!primary.some((migration) => migration.domain === "postmatch"));
-  assert.deepEqual(postmatch.map((migration) => migration.id), [
-    "postmatch/0001_operational_effect_foundation.sql",
-    "postmatch/0002_live_order_execution_trade_state.sql",
-    "postmatch/0003_market_change_windows.sql",
-    "postmatch/0004_live_read_indexes.sql",
-    "postmatch/0005_live_read_response_text.sql",
-  ]);
 });

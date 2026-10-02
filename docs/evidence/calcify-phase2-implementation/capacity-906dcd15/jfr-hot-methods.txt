@@ -1,0 +1,30 @@
+
+                                          Java Methods that Executes the Most
+
+Method                                                                                                  Samples Percent
+------------------------------------------------------------------------------------------------------- ------- -------
+com.reef.platform.api.JsonCodecKt.updateCanonicalDigest(MessageDigest, JsonNode, Set, Map, boolean)          15   8.93%
+com.fasterxml.jackson.databind.node.ArrayNode.size()                                                          9   5.36%
+java.lang.String.hashCode()                                                                                   9   5.36%
+com.fasterxml.jackson.core.util.TextBuffer.setCurrentAndReturn(int)                                           8   4.76%
+java.util.Iterator.forEachRemaining(Consumer)                                                                 6   3.57%
+java.util.TreeMap.getEntry(Object)                                                                            6   3.57%
+com.fasterxml.jackson.core.json.UTF8StreamJsonParser._finishAndReturnString()                                 6   3.57%
+jdk.internal.util.ArraysSupport.vectorizedMismatch(Object, long, Object, long, int, int)                      5   2.98%
+java.time.format.DateTimeFormatterBuilder$NumberPrinterParser.parse(...)                                      5   2.98%
+com.fasterxml.jackson.core.json.UTF8StreamJsonParser.parseMediumName2(int, int)                               5   2.98%
+com.reef.platform.calcify.MatchContextResolver.parseChecked(...)                                              4   2.38%
+com.fasterxml.jackson.core.sym.ByteQuadsCanonicalizer.calcHash(int[], int)                                    4   2.38%
+java.util.HashMap$HashIterator.<init>(HashMap)                                                                4   2.38%
+com.fasterxml.jackson.databind.deser.std.BaseNodeDeserializer._deserializeContainerNoRecursion(...)           3   1.79%
+com.fasterxml.jackson.core.json.UTF8StreamJsonParser.nextToken()                                              3   1.79%
+com.google.protobuf.Utf8$Processor.encodedLength(String)                                                      3   1.79%
+java.time.format.DateTimeFormatterBuilder$CompositePrinterParser.parse(...)                                   3   1.79%
+java.util.HashMap.getNode(Object)                                                                             3   1.79%
+sun.security.provider.DigestBase.implCompressMultiBlock(byte[], int, int)                                     3   1.79%
+java.util.HashMap.putVal(int, Object, Object, boolean, boolean)                                               3   1.79%
+com.fasterxml.jackson.core.json.UTF8StreamJsonParser._closeArrayScope()                                       2   1.19%
+org.apache.kafka.clients.producer.internals.RecordAccumulator.drainBatchesForOneNode(...)                     2   1.19%
+org.apache.kafka.common.metrics.Sensor.record(double)                                                         2   1.19%
+java.lang.StringCoding.countPositives(byte[], int, int)                                                       2   1.19%
+java.util.HashMap.putMapEntries(Map, boolean)                                                                 2   1.19%

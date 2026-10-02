@@ -48,7 +48,7 @@ func TestTerminalRetentionIsIndependentOfCrossBookCompletionOrder(t *testing.T) 
 		{orderID: "ord-c", occurredAt: "2026-08-20T12:00:03Z"},
 	})
 
-	wantRetained := []string{"ord-b", "ord-c"}
+	wantRetained := []string{"ord-a", "ord-b", "ord-c"}
 	if got := retainedOrderIDs(first); !reflect.DeepEqual(got, wantRetained) {
 		t.Fatalf("first completion order retained %v, want %v", got, wantRetained)
 	}
@@ -62,8 +62,8 @@ func TestTerminalRetentionIsIndependentOfCrossBookCompletionOrder(t *testing.T) 
 
 func TestSnapshotRestorePreservesTerminalRetentionEvictionBoundary(t *testing.T) {
 	original := NewService(WithTerminalOrderRetentionLimit(2))
-	for index, orderID := range []string{"ord-a", "ord-b"} {
-		instrumentID := []string{"AAPL", "MSFT"}[index]
+	for _, orderID := range []string{"ord-a", "ord-b"} {
+		instrumentID := "AAPL"
 		result := original.SubmitOrder(domain.SubmitOrder{
 			OrderID:        orderID,
 			VenueSessionID: "session-1",
@@ -92,7 +92,7 @@ func TestSnapshotRestorePreservesTerminalRetentionEvictionBoundary(t *testing.T)
 		result := service.SubmitOrder(domain.SubmitOrder{
 			OrderID:        "ord-c",
 			VenueSessionID: "session-1",
-			InstrumentID:   "NVDA",
+			InstrumentID:   "AAPL",
 			Side:           domain.SideBuy,
 			QuantityUnits:  "100",
 			LimitPrice:     "100000000000",
@@ -120,7 +120,7 @@ func TestTerminalRetentionOrdersFractionalRFC3339TimestampsChronologically(t *te
 		result := service.SubmitOrder(domain.SubmitOrder{
 			OrderID:        orderID,
 			VenueSessionID: "session-1",
-			InstrumentID:   "AAPL-" + orderID,
+			InstrumentID:   "AAPL",
 			Side:           domain.SideBuy,
 			QuantityUnits:  "100",
 			LimitPrice:     "100000000000",

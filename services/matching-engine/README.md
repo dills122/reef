@@ -58,6 +58,58 @@ The implementation consumes `SubmitOrder`, `ModifyOrder`, and `CancelOrder` comm
 
 Hot book ownership is shard-local. The command router must send all submit/cancel/modify commands for a `runId + venueSessionId + instrumentId` book key to the same durable partition and matching-engine shard owner. The book itself is in-memory Go state; recovery is planned as snapshot plus durable command/event replay with checksum verification. See [`../../docs/HOT_BOOK_SHARDING_PLAN.md`](../../docs/HOT_BOOK_SHARDING_PLAN.md).
 
+### Terminal retention and recovery compatibility
+
+`MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0` preserves all terminal
+records. Positive `N` keeps at most `N` terminal records **per exact
+`(runId, venueSessionId, instrumentId)` book**. Active orders remain retained.
+Terminal event time, then order ID, defines retention rank. An unrelated book
+cannot change a repeated cancel/modify outcome by evicting this book's history.
+A terminal record evicted by its own book still yields `NOT_FOUND`; retained
+cancelled/filled records retain existing `INVALID_STATE` semantics.
+
+Positive retention bounds terminal records by `N × number of retained books`,
+not by `N` across the engine. Neither book count nor active order count is
+bounded by this option. The materializer stress default `250000` across 64
+books permits up to 16 million terminal records per engine; size heap/headroom
+for the actual owned books before running that profile. This change has no
+new throughput qualification.
+
+Retention applies at each terminal transition, independent of publication
+batch size. Failed publication rolls back per-transition heap deltas and
+original order records; work/memory depends on touched batch entries, with
+`O(log N)` heap work per transition and no whole-lane copy. Reservations and
+rollback preimages use `(runId, orderId)`, matching the run-scoped order index.
+A reservation remains held through provisional eviction. Only the same owning
+batch can reuse that run/order identity before commit, including another book
+owned by that batch; another batch in the same run receives `DUPLICATE_ORDER_ID`
+until eviction commits. Different runs may use the same order ID independently.
+Blank run IDs share the legacy namespace. Calcify's stronger no-new-acceptance-of-
+reused-ID contract remains separate.
+
+Callers must serialize all mutations of one book, including the full interval
+from `BeginBatch` through durable publish and `Commit`/`Rollback`. Unrelated
+books may run concurrently. An indeterminate publish must keep that lane
+fenced; rollback after a possibly durable outcome is unsafe.
+
+New snapshots use `matching-service-snapshot-v4`, with checksum-covered
+`terminalRetentionPolicy=book-scoped-v1` and exact `terminalRetentionLimit`.
+Restore requires the same configured limit, including zero. V3/V2/legacy
+snapshots remain readable with retention disabled, subject to existing scope
+checks. They cannot resume enabled retention: metadata cannot prove that the
+old global queue never lost another book's terminal facts. Rebuild from
+retained canonical commands to establish the new policy; do not infer missing
+facts from a checksum or rewrite old metadata to V4. Reading an old snapshot
+with retention disabled preserves its recorded state; it does not recover
+previously evicted history.
+
+Old binaries reject V4 snapshots. Preserve old checkpoints and canonical
+replay coverage before upgrade; binary rollback needs a compatible old
+checkpoint plus replay, not a V4 snapshot. This replay-policy change cannot
+repair canonical outcomes already published under the old policy; qualify a
+new run/source-generation boundary before relying on changed historical
+outcomes. See [fix evidence](../../docs/evidence/terminal-retention-replay-fix/README.md).
+
 Run the engine-only sustained load harness:
 
 ```bash

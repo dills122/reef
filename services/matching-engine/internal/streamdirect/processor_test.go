@@ -53,7 +53,7 @@ func TestProcessorRestoresCommittedCommandsWithoutRepublishingOrCountingLiveTraf
 	if replayed != 1 {
 		t.Fatalf("expected one replayed command, got %d", replayed)
 	}
-	if _, ok := service.OrderState("ord-recovery"); !ok {
+	if _, ok := service.OrderState("", "ord-recovery"); !ok {
 		t.Fatal("expected replay to rebuild order state")
 	}
 	if len(publisher.batches) != 0 {
@@ -173,7 +173,7 @@ func TestProcessorPublishesChecksumBoundWorkFinishedTimeAfterBatchConstruction(t
 		if clockCalls == 1 {
 			return fetchedAt
 		}
-		if _, ok := service.OrderState("ord-work-finished"); !ok {
+		if _, ok := service.OrderState("", "ord-work-finished"); !ok {
 			t.Fatal("work-finished time was captured before batch processing mutated engine state")
 		}
 		return workFinishedAt
@@ -240,7 +240,7 @@ func TestProcessorCommitsKafkaBatchAtomically(t *testing.T) {
 	if delivery.acked != 0 || delivery.nacked != 0 {
 		t.Fatalf("atomic publisher must own offset commit, ack=%d nak=%d", delivery.acked, delivery.nacked)
 	}
-	if _, ok := service.OrderState("ord-atomic"); !ok {
+	if _, ok := service.OrderState("", "ord-atomic"); !ok {
 		t.Fatal("expected committed matching mutation")
 	}
 	if stats := processor.Stats(); stats.Published != 1 || stats.Acked != 1 || stats.AckLag != 0 {
@@ -268,7 +268,7 @@ func TestProcessorRollsBackAbortedKafkaTransaction(t *testing.T) {
 	if _, err := processor.ProcessOnce(context.Background()); err == nil {
 		t.Fatal("expected transaction abort error")
 	}
-	if _, ok := service.OrderState("ord-atomic-abort"); ok {
+	if _, ok := service.OrderState("", "ord-atomic-abort"); ok {
 		t.Fatal("aborted transaction must roll back matching state")
 	}
 	if delivery.nacked != 1 || delivery.acked != 0 {
@@ -301,7 +301,7 @@ func TestProcessorFreezesLaneOnIndeterminateKafkaCommit(t *testing.T) {
 	if !errors.As(err, &fatal) {
 		t.Fatalf("expected fatal lane error, got %v", err)
 	}
-	if _, ok := service.OrderState("ord-atomic-unknown"); !ok {
+	if _, ok := service.OrderState("", "ord-atomic-unknown"); !ok {
 		t.Fatal("indeterminate commit must preserve in-memory state until fenced recovery")
 	}
 	if delivery.nacked != 0 || delivery.acked != 0 {
@@ -662,14 +662,6 @@ func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 		if outcome.InstrumentID != "STK001" || outcome.OrderID != "ord-life-1" {
 			t.Fatalf("unexpected routing fields on outcome %d: %#v", idx, outcome)
 		}
-		if outcome.Result.EffectVersion != 1 || len(outcome.Result.OrderStates) != 1 ||
-			outcome.Result.OrderStates[0].OrderID != "ord-life-1" {
-			t.Fatalf("durable outcome %d must carry versioned changed-order state: %#v", idx, outcome)
-		}
-	}
-	if batch.Outcomes[1].Result.OrderStates[0].OriginalQuantity != "120" ||
-		batch.Outcomes[2].Result.OrderStates[0].Status != domain.OrderStatusCancelled {
-		t.Fatalf("modify/cancel state did not survive the published batch: %#v", batch.Outcomes)
 	}
 	if submit.acked != 1 || modify.acked != 1 || cancel.acked != 1 {
 		t.Fatalf("expected all deliveries acked after publish, got submit=%d modify=%d cancel=%d", submit.acked, modify.acked, cancel.acked)
@@ -723,7 +715,7 @@ func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
 	if _, err := firstProcessor.ProcessOnce(context.Background()); err == nil {
 		t.Fatal("expected publish failure")
 	}
-	if _, ok := service.OrderState("ord-rollback-life"); ok {
+	if _, ok := service.OrderState("run-1", "ord-rollback-life"); ok {
 		t.Fatal("expected multi-command failed batch to remove newly created order state")
 	}
 	if got := service.RestingOrdersInSession("session", "STK001", domain.SideBuy); got != 0 {
@@ -781,7 +773,7 @@ func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
 	if len(successPublisher.batches) != 1 || len(successPublisher.batches[0].Outcomes) != 3 {
 		t.Fatalf("expected redelivered three-outcome batch, got %#v", successPublisher.batches)
 	}
-	state, ok := service.OrderState("ord-rollback-life")
+	state, ok := service.OrderState("run-1", "ord-rollback-life")
 	if !ok || state.Status != domain.OrderStatusCancelled {
 		t.Fatalf("expected redelivered lifecycle to end cancelled, got %#v", state)
 	}
@@ -881,9 +873,6 @@ func TestProcessorPublishesFailedOutcomeForUnsupportedCommands(t *testing.T) {
 	if outcome.Status != "failed" || outcome.CommandID != "cmd-cancel-1" {
 		t.Fatalf("unexpected outcome for unsupported command: %#v", outcome)
 	}
-	if outcome.Result.EffectVersion != 1 {
-		t.Fatalf("expected versioned failed outcome, got %#v", outcome.Result)
-	}
 	if outcome.Result.Rejected == nil || outcome.Result.Rejected.Code != "UNSUPPORTED_COMMAND_TYPE" {
 		t.Fatalf("expected UNSUPPORTED_COMMAND_TYPE reject code, got %#v", outcome.Result.Rejected)
 	}
@@ -922,9 +911,6 @@ func TestProcessorPublishesFailedOutcomeForUndecodableCommand(t *testing.T) {
 	outcome := publisher.batches[0].Outcomes[0]
 	if outcome.Status != "failed" || outcome.CommandID != "cmd-poison-1" {
 		t.Fatalf("unexpected outcome for undecodable command: %#v", outcome)
-	}
-	if outcome.Result.EffectVersion != 1 {
-		t.Fatalf("expected versioned failed outcome, got %#v", outcome.Result)
 	}
 	if outcome.Result.Rejected == nil || outcome.Result.Rejected.Code != "POISON_COMMAND_DECODE_ERROR" {
 		t.Fatalf("expected POISON_COMMAND_DECODE_ERROR reject code, got %#v", outcome.Result.Rejected)
@@ -1111,7 +1097,7 @@ func TestScenario3_MatchingEngineFailsBeforeEventBatchPublishLeavesCommandOffset
 	// The book must not hold a live reservation for a command that was never
 	// durably published: the failed publish should have rolled back
 	// reserveOrder()'s mutation entirely.
-	if _, ok := service.OrderState("ord-scenario3"); ok {
+	if _, ok := service.OrderState("", "ord-scenario3"); ok {
 		t.Fatal("expected the order reservation to be rolled back after the failed publish, but it is still live in engine state")
 	}
 	if resting := service.RestingOrders("STK001", domain.SideSell); resting != 0 {
@@ -1194,10 +1180,10 @@ func TestPublishFailureRollbackRestoresPassiveMatchedLiquidity(t *testing.T) {
 		t.Fatal("expected publish failure")
 	}
 
-	if _, ok := service.OrderState("ord-taking-buy"); ok {
+	if _, ok := service.OrderState("", "ord-taking-buy"); ok {
 		t.Fatal("expected failed-publish taker to be removed from order state")
 	}
-	restored, ok := service.OrderState("ord-resting-sell")
+	restored, ok := service.OrderState("", "ord-resting-sell")
 	if !ok || restored.Status != domain.OrderStatusAccepted || restored.RemainingQuantity != "100" {
 		t.Fatalf("expected passive resting sell restored after rollback, got %#v", restored)
 	}

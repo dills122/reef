@@ -1139,8 +1139,7 @@ class PlatformHttpServer(
             }
             val instrumentId = exchange.queryValue("instrumentId")
             val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
-            val result = api.ownOrdersResult(participantId, openOnly = true, instrumentId = instrumentId, limit = limit)
-            adminSessionAuth.writeJson(exchange, result.status, result.body)
+            adminSessionAuth.writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/api/v1/orders/history") { exchange ->
@@ -1156,8 +1155,7 @@ class PlatformHttpServer(
             }
             val instrumentId = exchange.queryValue("instrumentId")
             val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
-            val result = api.ownOrdersResult(participantId, openOnly = false, instrumentId = instrumentId, limit = limit)
-            adminSessionAuth.writeJson(exchange, result.status, result.body)
+            adminSessionAuth.writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/api/v1/orders/fills") { exchange ->
@@ -1174,8 +1172,7 @@ class PlatformHttpServer(
             val instrumentId = exchange.queryValue("instrumentId")
             val runId = exchange.queryValue("runId")
             val limit = boundedQueryLimit(exchange.queryValue("limit"), defaultValue = 50)
-            val result = api.ownExecutionsResult(participantId, instrumentId = instrumentId, runId = runId, limit = limit)
-            adminSessionAuth.writeJson(exchange, result.status, result.body)
+            adminSessionAuth.writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, runId = runId, limit = limit))
         }
 
         server.createContext("/trades") { exchange ->
@@ -1227,7 +1224,7 @@ class PlatformHttpServer(
     }
 
     internal fun startRuntimeLoops() {
-        if (runtimeRole.commandWorkersEnabled && asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+        if (runtimeRole.backgroundWorkersEnabled && asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val queue = capturedCommandQueue
             if (queue == null) {
                 System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
@@ -1244,41 +1241,11 @@ class PlatformHttpServer(
                 }
             }
         }
-        if (runtimeRole.commandWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
+        if (runtimeRole.backgroundWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             runtimeLoopStarter.startStreamCommandWorkers()
         }
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             runtimeLoopStarter.startCanonicalProjector()
-        }
-        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SHADOW_WORKERS_ENABLED", false)) {
-            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
-                "post-match shadow workers require stream-ack command processing"
-            }
-            PostMatchRuntimeWorkers.fromEnv().start()
-        }
-        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_AUDIT_SHADOW_ENABLED", false)) {
-            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
-                "post-match audit worker requires stream-ack command processing"
-            }
-            PostMatchAuditWorker.fromEnv().start()
-        }
-        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_INTAKE_ENABLED", false)) {
-            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
-                "post-match settlement intake requires stream-ack command processing"
-            }
-            PostMatchSettlementIntakeWorker.fromEnv().start()
-        }
-        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED", false)) {
-            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
-                "post-match settlement obligations require stream-ack command processing"
-            }
-            PostMatchSettlementObligationWorker.fromEnv().start()
-        }
-        if (runtimeRole.postMatchWorkersEnabled && RuntimeEnv.bool("POSTMATCH_SETTLEMENT_TRANSITION_ENABLED", false)) {
-            check(commandProcessingMode == CommandProcessingMode.StreamAck) {
-                "post-match settlement transition requires stream-ack command processing"
-            }
-            PostMatchSettlementTransitionWorker.fromEnv().start()
         }
         if (runtimeLoopStarter.venueEventMaterializerShouldStart()) {
             runtimeLoopStarter.startVenueEventMaterializer()
@@ -1347,7 +1314,7 @@ class PlatformHttpServer(
                 "reason" to if (!enabled || ready) "" else reason
             )
         }
-        val streamWorkerRequired = runtimeRole.commandWorkersEnabled &&
+        val streamWorkerRequired = runtimeRole.backgroundWorkersEnabled &&
             streamCommandWorkerEnabled &&
             commandProcessingMode == CommandProcessingMode.StreamAck
         val streamWorkerReady = streamCommandIntakeStore != null &&
@@ -1822,13 +1789,15 @@ class PlatformHttpServer(
                 boundary.toErrorJson(boundaryError, correlationId(request.headers))
             )
         }
-        val result = api.ownOrdersResult(
+        return PlatformHotPathResponse(
+            status = 200,
+            body = api.ownOrders(
                 participantId = participantId,
                 openOnly = openOnly,
                 instrumentId = queryValue(request.query, "instrumentId"),
                 limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
-        return PlatformHotPathResponse(result.status, result.body)
+        )
     }
 
     private fun readOrderFillsResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse {
@@ -1840,13 +1809,15 @@ class PlatformHttpServer(
                 boundary.toErrorJson(boundaryError, correlationId(request.headers))
             )
         }
-        val result = api.ownExecutionsResult(
+        return PlatformHotPathResponse(
+            status = 200,
+            body = api.ownExecutions(
                 participantId = participantId,
                 instrumentId = queryValue(request.query, "instrumentId"),
                 runId = queryValue(request.query, "runId"),
                 limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
-        return PlatformHotPathResponse(result.status, result.body)
+        )
     }
 
     internal fun handleHotPathRequestAsync(request: PlatformHotPathRequest): CompletableFuture<PlatformHotPathResponse?> {

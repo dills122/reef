@@ -143,26 +143,15 @@ type VenueEventBatch struct {
 }
 
 type CommandOutcomeFact struct {
-	CommandID      string                 `json:"commandId"`
-	CommandType    string                 `json:"commandType"`
-	StreamSequence uint64                 `json:"streamSequence"`
-	DeliveredCount uint64                 `json:"deliveredCount"`
-	PayloadHash    string                 `json:"payloadHash"`
-	InstrumentID   string                 `json:"instrumentId"`
-	OrderID        string                 `json:"orderId"`
-	Status         string                 `json:"status"`
-	Result         CanonicalOutcomeResult `json:"result"`
-}
-
-// Durable batch extension; the engine's direct HTTP result keeps its prior JSON shape.
-type CanonicalOutcomeResult struct {
-	domain.SubmitOrderResult
-	EffectVersion int                 `json:"effectVersion,omitempty"`
-	OrderStates   []domain.OrderState `json:"orderStates,omitempty"`
-}
-
-func canonicalOutcomeResult(result domain.SubmitOrderResult) CanonicalOutcomeResult {
-	return CanonicalOutcomeResult{SubmitOrderResult: result, EffectVersion: result.EffectVersion, OrderStates: result.OrderStates}
+	CommandID      string                   `json:"commandId"`
+	CommandType    string                   `json:"commandType"`
+	StreamSequence uint64                   `json:"streamSequence"`
+	DeliveredCount uint64                   `json:"deliveredCount"`
+	PayloadHash    string                   `json:"payloadHash"`
+	InstrumentID   string                   `json:"instrumentId"`
+	OrderID        string                   `json:"orderId"`
+	Status         string                   `json:"status"`
+	Result         domain.SubmitOrderResult `json:"result"`
 }
 
 func NewProcessor(service *app.Service, source CommandSource, publisher EventBatchPublisher, config ProcessorConfig) *Processor {
@@ -364,14 +353,18 @@ func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt strin
 		deliveryVenueSessionIDs[i] = venueSessionID
 		deliveryInstrumentIDs[i] = instrumentID
 		deliveryCommandTypes[i] = commandTypeFromSubject(subject)
-		scope := app.BookScope{VenueSessionID: venueSessionID, InstrumentID: instrumentID}
+		var routeContext struct {
+			RunID string `json:"runId"`
+		}
+		_ = json.Unmarshal(delivery.Data(), &routeContext)
+		scope := app.BookScope{RunID: routeContext.RunID, VenueSessionID: venueSessionID, InstrumentID: instrumentID}
 		if instrumentID == "" || seenScopes[scope.Key()] {
 			continue
 		}
 		seenScopes[scope.Key()] = true
 		bookScopes = append(bookScopes, scope)
 	}
-	// Snapshot every touched session/instrument book/order records *before* any
+	// Snapshot every touched run/session/instrument book/order records *before* any
 	// command in this batch mutates them, so a subsequent failed publish can
 	// roll the engine's live state back to exactly this point.
 	rollback := p.service.BeginBatch(bookScopes)
@@ -409,7 +402,7 @@ func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt strin
 				InstrumentID:   outcome.InstrumentID,
 				OrderID:        outcome.OrderID,
 				Status:         status,
-				Result:         canonicalOutcomeResult(outcome.Result),
+				Result:         outcome.Result,
 			}
 		}
 
@@ -465,13 +458,12 @@ func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType stri
 		PayloadHash:    sha256Hex(delivery.Data()),
 		InstrumentID:   instrumentID,
 		Status:         "failed",
-		Result: canonicalOutcomeResult(domain.SubmitOrderResult{
-			EffectVersion: 1,
+		Result: domain.SubmitOrderResult{
 			Rejected: &domain.OrderRejected{
 				Code:   code,
 				Reason: reason,
 			},
-		}),
+		},
 	}
 }
 

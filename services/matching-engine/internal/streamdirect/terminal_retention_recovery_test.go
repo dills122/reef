@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
+	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
 
 func TestMultiPartitionRecoveryMatchesLiveBoundedTerminalState(t *testing.T) {
@@ -20,26 +21,25 @@ func TestMultiPartitionRecoveryMatchesLiveBoundedTerminalState(t *testing.T) {
 		terminalCancelDelivery("p01", "MSFT", "ord-b", "2026-08-20T12:00:02Z", 2),
 	}
 
-	live := app.NewService(app.WithTerminalOrderRetentionLimit(2))
+	live := app.NewService(app.WithTerminalOrderRetentionLimit(1))
 	processLiveTerminalLane(t, live, 1, partitionOne)
 	processLiveTerminalLane(t, live, 0, partitionZero)
 
-	recovered := app.NewService(app.WithTerminalOrderRetentionLimit(2))
+	recovered := app.NewService(app.WithTerminalOrderRetentionLimit(1))
 	restoreTerminalLane(t, recovered, 0, partitionZero)
 	restoreTerminalLane(t, recovered, 1, partitionOne)
 
-	if _, ok := live.OrderState("ord-a"); ok {
-		t.Fatal("live bounded state retained chronologically oldest terminal order")
-	}
-	if _, ok := recovered.OrderState("ord-a"); ok {
-		t.Fatal("recovered bounded state retained chronologically oldest terminal order")
-	}
-	for _, orderID := range []string{"ord-b", "ord-c"} {
-		if _, ok := live.OrderState(orderID); !ok {
-			t.Fatalf("live bounded state lost %s", orderID)
+	for _, orderID := range []string{"ord-a", "ord-b", "ord-c"} {
+		if _, ok := live.OrderState("run-1", orderID); !ok {
+			t.Fatalf("live lane-local retention lost %s", orderID)
 		}
-		if _, ok := recovered.OrderState(orderID); !ok {
-			t.Fatalf("recovered bounded state lost %s", orderID)
+		if _, ok := recovered.OrderState("run-1", orderID); !ok {
+			t.Fatalf("recovered lane-local retention lost %s", orderID)
+		}
+		command := domain.CancelOrder{CommandID: "cancel-again-" + orderID, RunID: "run-1", VenueSessionID: "session-1", InstrumentID: map[string]string{"ord-a": "AAPL", "ord-b": "MSFT", "ord-c": "NVDA"}[orderID], ParticipantID: "participant-1", AccountID: "account-1", OrderID: orderID, OccurredAt: "2026-08-20T12:00:04Z"}
+		liveOutcome, recoveredOutcome := live.CancelOrder(command), recovered.CancelOrder(command)
+		if liveOutcome.Rejected == nil || recoveredOutcome.Rejected == nil || liveOutcome.Rejected.Code != "INVALID_STATE" || *liveOutcome.Rejected != *recoveredOutcome.Rejected {
+			t.Fatalf("partition replay changed terminal outcome: live=%+v recovered=%+v", liveOutcome, recoveredOutcome)
 		}
 	}
 	if got, want := recovered.Snapshot().Checksum, live.Snapshot().Checksum; got != want {

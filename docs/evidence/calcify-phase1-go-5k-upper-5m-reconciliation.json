@@ -1,0 +1,26 @@
+{
+  "smokeId": "calcify-5k-upper-20260929",
+  "generation": 21,
+  "expectedCommands": 1499904,
+  "expectedTrades": 749952,
+  "loadReport": "docs/evidence/calcify-phase1-go-5k-upper-5m.json",
+  "intakeRows": 1499904,
+  "source": {
+    "batches": 7503,
+    "commands": 1499904,
+    "trades": 749952,
+    "lastTimestampMs": 1790727156284
+  },
+  "commitmentLinks": 749952,
+  "verifiedLinks": 749952,
+  "receipts": 749952,
+  "matching": {
+    "acked": 1499904,
+    "nacked": 0,
+    "failed": 0
+  },
+  "sourceToCommitmentLastMs": 513,
+  "commitmentToVerifiedLastMs": 31,
+  "verifiedToReceiptLastMs": 505,
+  "pass": true
+}

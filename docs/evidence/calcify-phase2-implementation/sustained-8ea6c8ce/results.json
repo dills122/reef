@@ -1,0 +1,3301 @@
+{
+  "runId": "8ea6c8ce",
+  "policy": {
+    "durationSeconds": 300,
+    "offeredTradesPerSecond": 10500,
+    "targetDurableRate": 10000,
+    "maxEndGap": 20000,
+    "maxCoveringGap": 100000,
+    "observerWindowMs": 1000,
+    "maxLoadOverrunMs": 1000,
+    "maxDrainSeconds": 90,
+    "requiredExactParity": true
+  },
+  "results": [
+    {
+      "shape": "hot",
+      "seed": {
+        "startedEpochMs": 1790821003020,
+        "paceWavesPerSecond": 105,
+        "waves": 31500,
+        "trades": 3150000,
+        "bytes": 11997898178,
+        "elapsedMs": 310730
+      },
+      "loadEndMark": {
+        "records": 3148816,
+        "elapsedMs": 311015
+      },
+      "endGap": 1184,
+      "coveringLag": {
+        "offered": 3150000,
+        "observed": 3150000,
+        "coveringPeak": 16842,
+        "samples": [
+          {
+            "receivedEpochMs": 1790821003862,
+            "offered": 1900,
+            "observed": 0,
+            "gap": 1900
+          },
+          {
+            "receivedEpochMs": 1790821004914,
+            "offered": 11400,
+            "observed": 5719,
+            "gap": 5681
+          },
+          {
+            "receivedEpochMs": 1790821006008,
+            "offered": 22200,
+            "observed": 17748,
+            "gap": 4452
+          },
+          {
+            "receivedEpochMs": 1790821007103,
+            "offered": 33700,
+            "observed": 30816,
+            "gap": 2884
+          },
+          {
+            "receivedEpochMs": 1790821008170,
+            "offered": 45000,
+            "observed": 42990,
+            "gap": 2010
+          },
+          {
+            "receivedEpochMs": 1790821009239,
+            "offered": 56500,
+            "observed": 54616,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821010314,
+            "offered": 67500,
+            "observed": 65650,
+            "gap": 1850
+          },
+          {
+            "receivedEpochMs": 1790821011378,
+            "offered": 78900,
+            "observed": 76915,
+            "gap": 1985
+          },
+          {
+            "receivedEpochMs": 1790821012441,
+            "offered": 90300,
+            "observed": 88416,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821013489,
+            "offered": 101700,
+            "observed": 99749,
+            "gap": 1951
+          },
+          {
+            "receivedEpochMs": 1790821014558,
+            "offered": 113200,
+            "observed": 111416,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821015564,
+            "offered": 123600,
+            "observed": 121616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821016630,
+            "offered": 135200,
+            "observed": 133317,
+            "gap": 1883
+          },
+          {
+            "receivedEpochMs": 1790821017707,
+            "offered": 147100,
+            "observed": 145016,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821018779,
+            "offered": 158800,
+            "observed": 156816,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821019840,
+            "offered": 170400,
+            "observed": 168312,
+            "gap": 2088
+          },
+          {
+            "receivedEpochMs": 1790821020931,
+            "offered": 181700,
+            "observed": 179816,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821021988,
+            "offered": 193200,
+            "observed": 191371,
+            "gap": 1829
+          },
+          {
+            "receivedEpochMs": 1790821023050,
+            "offered": 204800,
+            "observed": 202925,
+            "gap": 1875
+          },
+          {
+            "receivedEpochMs": 1790821024130,
+            "offered": 216600,
+            "observed": 214431,
+            "gap": 2169
+          },
+          {
+            "receivedEpochMs": 1790821025221,
+            "offered": 227900,
+            "observed": 222758,
+            "gap": 5142
+          },
+          {
+            "receivedEpochMs": 1790821026287,
+            "offered": 239600,
+            "observed": 235775,
+            "gap": 3825
+          },
+          {
+            "receivedEpochMs": 1790821027356,
+            "offered": 251100,
+            "observed": 248516,
+            "gap": 2584
+          },
+          {
+            "receivedEpochMs": 1790821028456,
+            "offered": 262600,
+            "observed": 260616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821029553,
+            "offered": 273600,
+            "observed": 271579,
+            "gap": 2021
+          },
+          {
+            "receivedEpochMs": 1790821030586,
+            "offered": 282500,
+            "observed": 280517,
+            "gap": 1983
+          },
+          {
+            "receivedEpochMs": 1790821031669,
+            "offered": 294100,
+            "observed": 292210,
+            "gap": 1890
+          },
+          {
+            "receivedEpochMs": 1790821032668,
+            "offered": 304100,
+            "observed": 303260,
+            "gap": 840
+          },
+          {
+            "receivedEpochMs": 1790821033719,
+            "offered": 315000,
+            "observed": 312993,
+            "gap": 2007
+          },
+          {
+            "receivedEpochMs": 1790821034778,
+            "offered": 326200,
+            "observed": 324416,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821035795,
+            "offered": 335200,
+            "observed": 333716,
+            "gap": 1484
+          },
+          {
+            "receivedEpochMs": 1790821036846,
+            "offered": 345900,
+            "observed": 343921,
+            "gap": 1979
+          },
+          {
+            "receivedEpochMs": 1790821037920,
+            "offered": 357500,
+            "observed": 355454,
+            "gap": 2046
+          },
+          {
+            "receivedEpochMs": 1790821038984,
+            "offered": 368800,
+            "observed": 366722,
+            "gap": 2078
+          },
+          {
+            "receivedEpochMs": 1790821039987,
+            "offered": 378400,
+            "observed": 376318,
+            "gap": 2082
+          },
+          {
+            "receivedEpochMs": 1790821041071,
+            "offered": 387900,
+            "observed": 385916,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821042149,
+            "offered": 399200,
+            "observed": 397116,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821043233,
+            "offered": 410500,
+            "observed": 408609,
+            "gap": 1891
+          },
+          {
+            "receivedEpochMs": 1790821044281,
+            "offered": 422000,
+            "observed": 420117,
+            "gap": 1883
+          },
+          {
+            "receivedEpochMs": 1790821045292,
+            "offered": 431200,
+            "observed": 429311,
+            "gap": 1889
+          },
+          {
+            "receivedEpochMs": 1790821046351,
+            "offered": 442500,
+            "observed": 440512,
+            "gap": 1988
+          },
+          {
+            "receivedEpochMs": 1790821047425,
+            "offered": 454400,
+            "observed": 452317,
+            "gap": 2083
+          },
+          {
+            "receivedEpochMs": 1790821048474,
+            "offered": 466000,
+            "observed": 463911,
+            "gap": 2089
+          },
+          {
+            "receivedEpochMs": 1790821049530,
+            "offered": 477600,
+            "observed": 475594,
+            "gap": 2006
+          },
+          {
+            "receivedEpochMs": 1790821050594,
+            "offered": 488700,
+            "observed": 486716,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821051667,
+            "offered": 500700,
+            "observed": 498521,
+            "gap": 2179
+          },
+          {
+            "receivedEpochMs": 1790821052743,
+            "offered": 511400,
+            "observed": 509200,
+            "gap": 2200
+          },
+          {
+            "receivedEpochMs": 1790821053783,
+            "offered": 523000,
+            "observed": 521043,
+            "gap": 1957
+          },
+          {
+            "receivedEpochMs": 1790821054835,
+            "offered": 534700,
+            "observed": 532593,
+            "gap": 2107
+          },
+          {
+            "receivedEpochMs": 1790821055843,
+            "offered": 545000,
+            "observed": 543316,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821056921,
+            "offered": 556500,
+            "observed": 554438,
+            "gap": 2062
+          },
+          {
+            "receivedEpochMs": 1790821057994,
+            "offered": 567800,
+            "observed": 565821,
+            "gap": 1979
+          },
+          {
+            "receivedEpochMs": 1790821059045,
+            "offered": 579600,
+            "observed": 577516,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821060113,
+            "offered": 590500,
+            "observed": 589316,
+            "gap": 1184
+          },
+          {
+            "receivedEpochMs": 1790821061117,
+            "offered": 601800,
+            "observed": 600117,
+            "gap": 1683
+          },
+          {
+            "receivedEpochMs": 1790821062165,
+            "offered": 613500,
+            "observed": 611615,
+            "gap": 1885
+          },
+          {
+            "receivedEpochMs": 1790821063237,
+            "offered": 625500,
+            "observed": 623616,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821064270,
+            "offered": 636900,
+            "observed": 634716,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821065278,
+            "offered": 647000,
+            "observed": 645416,
+            "gap": 1584
+          },
+          {
+            "receivedEpochMs": 1790821066317,
+            "offered": 658100,
+            "observed": 656016,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821067396,
+            "offered": 669700,
+            "observed": 667534,
+            "gap": 2166
+          },
+          {
+            "receivedEpochMs": 1790821068462,
+            "offered": 680900,
+            "observed": 678719,
+            "gap": 2181
+          },
+          {
+            "receivedEpochMs": 1790821069472,
+            "offered": 690800,
+            "observed": 689016,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821070557,
+            "offered": 698600,
+            "observed": 696421,
+            "gap": 2179
+          },
+          {
+            "receivedEpochMs": 1790821071642,
+            "offered": 709300,
+            "observed": 707233,
+            "gap": 2067
+          },
+          {
+            "receivedEpochMs": 1790821072646,
+            "offered": 719500,
+            "observed": 717651,
+            "gap": 1849
+          },
+          {
+            "receivedEpochMs": 1790821073712,
+            "offered": 730500,
+            "observed": 728522,
+            "gap": 1978
+          },
+          {
+            "receivedEpochMs": 1790821074736,
+            "offered": 740200,
+            "observed": 738216,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821075824,
+            "offered": 748200,
+            "observed": 746216,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821076902,
+            "offered": 759300,
+            "observed": 757171,
+            "gap": 2129
+          },
+          {
+            "receivedEpochMs": 1790821077965,
+            "offered": 770200,
+            "observed": 768315,
+            "gap": 1885
+          },
+          {
+            "receivedEpochMs": 1790821079040,
+            "offered": 780900,
+            "observed": 778666,
+            "gap": 2234
+          },
+          {
+            "receivedEpochMs": 1790821080136,
+            "offered": 790000,
+            "observed": 788816,
+            "gap": 1184
+          },
+          {
+            "receivedEpochMs": 1790821081183,
+            "offered": 799800,
+            "observed": 797619,
+            "gap": 2181
+          },
+          {
+            "receivedEpochMs": 1790821082268,
+            "offered": 810900,
+            "observed": 808417,
+            "gap": 2483
+          },
+          {
+            "receivedEpochMs": 1790821083338,
+            "offered": 821900,
+            "observed": 819266,
+            "gap": 2634
+          },
+          {
+            "receivedEpochMs": 1790821084418,
+            "offered": 833000,
+            "observed": 830419,
+            "gap": 2581
+          },
+          {
+            "receivedEpochMs": 1790821085512,
+            "offered": 843500,
+            "observed": 840911,
+            "gap": 2589
+          },
+          {
+            "receivedEpochMs": 1790821086527,
+            "offered": 853200,
+            "observed": 851316,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821087554,
+            "offered": 862400,
+            "observed": 860522,
+            "gap": 1878
+          },
+          {
+            "receivedEpochMs": 1790821088577,
+            "offered": 871500,
+            "observed": 869717,
+            "gap": 1783
+          },
+          {
+            "receivedEpochMs": 1790821089583,
+            "offered": 881300,
+            "observed": 879643,
+            "gap": 1657
+          },
+          {
+            "receivedEpochMs": 1790821090596,
+            "offered": 889200,
+            "observed": 887215,
+            "gap": 1985
+          },
+          {
+            "receivedEpochMs": 1790821091657,
+            "offered": 900700,
+            "observed": 898716,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821092756,
+            "offered": 912000,
+            "observed": 909916,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821093842,
+            "offered": 923700,
+            "observed": 921449,
+            "gap": 2251
+          },
+          {
+            "receivedEpochMs": 1790821094886,
+            "offered": 935100,
+            "observed": 933554,
+            "gap": 1546
+          },
+          {
+            "receivedEpochMs": 1790821095974,
+            "offered": 946200,
+            "observed": 944000,
+            "gap": 2200
+          },
+          {
+            "receivedEpochMs": 1790821097050,
+            "offered": 957000,
+            "observed": 954816,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821098125,
+            "offered": 968500,
+            "observed": 966612,
+            "gap": 1888
+          },
+          {
+            "receivedEpochMs": 1790821099196,
+            "offered": 980100,
+            "observed": 978016,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821100237,
+            "offered": 989500,
+            "observed": 988116,
+            "gap": 1384
+          },
+          {
+            "receivedEpochMs": 1790821101321,
+            "offered": 1000100,
+            "observed": 998133,
+            "gap": 1967
+          },
+          {
+            "receivedEpochMs": 1790821102375,
+            "offered": 1011800,
+            "observed": 1010021,
+            "gap": 1779
+          },
+          {
+            "receivedEpochMs": 1790821103440,
+            "offered": 1023700,
+            "observed": 1021767,
+            "gap": 1933
+          },
+          {
+            "receivedEpochMs": 1790821104506,
+            "offered": 1035500,
+            "observed": 1033615,
+            "gap": 1885
+          },
+          {
+            "receivedEpochMs": 1790821105588,
+            "offered": 1046900,
+            "observed": 1045116,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821106670,
+            "offered": 1057900,
+            "observed": 1056115,
+            "gap": 1785
+          },
+          {
+            "receivedEpochMs": 1790821107718,
+            "offered": 1069300,
+            "observed": 1067516,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821108778,
+            "offered": 1081200,
+            "observed": 1079300,
+            "gap": 1900
+          },
+          {
+            "receivedEpochMs": 1790821109861,
+            "offered": 1092400,
+            "observed": 1090616,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821110940,
+            "offered": 1103600,
+            "observed": 1101716,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821111994,
+            "offered": 1111900,
+            "observed": 1109615,
+            "gap": 2285
+          },
+          {
+            "receivedEpochMs": 1790821113051,
+            "offered": 1123100,
+            "observed": 1121316,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821114117,
+            "offered": 1134400,
+            "observed": 1132621,
+            "gap": 1779
+          },
+          {
+            "receivedEpochMs": 1790821115141,
+            "offered": 1143300,
+            "observed": 1142215,
+            "gap": 1085
+          },
+          {
+            "receivedEpochMs": 1790821116233,
+            "offered": 1155000,
+            "observed": 1153014,
+            "gap": 1986
+          },
+          {
+            "receivedEpochMs": 1790821117312,
+            "offered": 1166500,
+            "observed": 1164693,
+            "gap": 1807
+          },
+          {
+            "receivedEpochMs": 1790821118396,
+            "offered": 1177900,
+            "observed": 1175985,
+            "gap": 1915
+          },
+          {
+            "receivedEpochMs": 1790821119462,
+            "offered": 1189600,
+            "observed": 1187516,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821120535,
+            "offered": 1200400,
+            "observed": 1198414,
+            "gap": 1986
+          },
+          {
+            "receivedEpochMs": 1790821121591,
+            "offered": 1212000,
+            "observed": 1210698,
+            "gap": 1302
+          },
+          {
+            "receivedEpochMs": 1790821122654,
+            "offered": 1223800,
+            "observed": 1221921,
+            "gap": 1879
+          },
+          {
+            "receivedEpochMs": 1790821123747,
+            "offered": 1235800,
+            "observed": 1233716,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821124818,
+            "offered": 1247600,
+            "observed": 1245442,
+            "gap": 2158
+          },
+          {
+            "receivedEpochMs": 1790821125819,
+            "offered": 1258000,
+            "observed": 1257200,
+            "gap": 800
+          },
+          {
+            "receivedEpochMs": 1790821126881,
+            "offered": 1269000,
+            "observed": 1267316,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821127963,
+            "offered": 1280200,
+            "observed": 1278217,
+            "gap": 1983
+          },
+          {
+            "receivedEpochMs": 1790821129028,
+            "offered": 1291400,
+            "observed": 1289633,
+            "gap": 1767
+          },
+          {
+            "receivedEpochMs": 1790821130101,
+            "offered": 1302200,
+            "observed": 1300910,
+            "gap": 1290
+          },
+          {
+            "receivedEpochMs": 1790821131113,
+            "offered": 1312300,
+            "observed": 1310616,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821132117,
+            "offered": 1322700,
+            "observed": 1320816,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821133214,
+            "offered": 1334400,
+            "observed": 1332216,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821134221,
+            "offered": 1344900,
+            "observed": 1342779,
+            "gap": 2121
+          },
+          {
+            "receivedEpochMs": 1790821135291,
+            "offered": 1354000,
+            "observed": 1352622,
+            "gap": 1378
+          },
+          {
+            "receivedEpochMs": 1790821136293,
+            "offered": 1363600,
+            "observed": 1361716,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821137371,
+            "offered": 1374900,
+            "observed": 1373124,
+            "gap": 1776
+          },
+          {
+            "receivedEpochMs": 1790821138391,
+            "offered": 1382800,
+            "observed": 1380816,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821139459,
+            "offered": 1393900,
+            "observed": 1392021,
+            "gap": 1879
+          },
+          {
+            "receivedEpochMs": 1790821140467,
+            "offered": 1403200,
+            "observed": 1401716,
+            "gap": 1484
+          },
+          {
+            "receivedEpochMs": 1790821141566,
+            "offered": 1413800,
+            "observed": 1411716,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821142630,
+            "offered": 1425100,
+            "observed": 1423179,
+            "gap": 1921
+          },
+          {
+            "receivedEpochMs": 1790821143692,
+            "offered": 1436400,
+            "observed": 1434433,
+            "gap": 1967
+          },
+          {
+            "receivedEpochMs": 1790821144763,
+            "offered": 1447800,
+            "observed": 1445800,
+            "gap": 2000
+          },
+          {
+            "receivedEpochMs": 1790821145826,
+            "offered": 1457800,
+            "observed": 1455619,
+            "gap": 2181
+          },
+          {
+            "receivedEpochMs": 1790821146893,
+            "offered": 1468900,
+            "observed": 1466816,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821147972,
+            "offered": 1480100,
+            "observed": 1478216,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821149028,
+            "offered": 1488200,
+            "observed": 1486344,
+            "gap": 1856
+          },
+          {
+            "receivedEpochMs": 1790821150047,
+            "offered": 1496200,
+            "observed": 1493912,
+            "gap": 2288
+          },
+          {
+            "receivedEpochMs": 1790821151101,
+            "offered": 1507000,
+            "observed": 1504916,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821152115,
+            "offered": 1517300,
+            "observed": 1515010,
+            "gap": 2290
+          },
+          {
+            "receivedEpochMs": 1790821153115,
+            "offered": 1526500,
+            "observed": 1524816,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821154180,
+            "offered": 1535600,
+            "observed": 1533822,
+            "gap": 1778
+          },
+          {
+            "receivedEpochMs": 1790821155188,
+            "offered": 1541200,
+            "observed": 1539916,
+            "gap": 1284
+          },
+          {
+            "receivedEpochMs": 1790821156256,
+            "offered": 1550400,
+            "observed": 1549316,
+            "gap": 1084
+          },
+          {
+            "receivedEpochMs": 1790821157292,
+            "offered": 1559800,
+            "observed": 1558116,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821158310,
+            "offered": 1568500,
+            "observed": 1567116,
+            "gap": 1384
+          },
+          {
+            "receivedEpochMs": 1790821159373,
+            "offered": 1579600,
+            "observed": 1577616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821160406,
+            "offered": 1586800,
+            "observed": 1585214,
+            "gap": 1586
+          },
+          {
+            "receivedEpochMs": 1790821161408,
+            "offered": 1597200,
+            "observed": 1595512,
+            "gap": 1688
+          },
+          {
+            "receivedEpochMs": 1790821162455,
+            "offered": 1608400,
+            "observed": 1606416,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821163520,
+            "offered": 1619800,
+            "observed": 1617914,
+            "gap": 1886
+          },
+          {
+            "receivedEpochMs": 1790821164602,
+            "offered": 1631400,
+            "observed": 1629411,
+            "gap": 1989
+          },
+          {
+            "receivedEpochMs": 1790821165687,
+            "offered": 1641800,
+            "observed": 1639716,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821166743,
+            "offered": 1653100,
+            "observed": 1651117,
+            "gap": 1983
+          },
+          {
+            "receivedEpochMs": 1790821167812,
+            "offered": 1664700,
+            "observed": 1662616,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821168887,
+            "offered": 1676300,
+            "observed": 1674217,
+            "gap": 2083
+          },
+          {
+            "receivedEpochMs": 1790821169956,
+            "offered": 1687500,
+            "observed": 1685316,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821171024,
+            "offered": 1698100,
+            "observed": 1695917,
+            "gap": 2183
+          },
+          {
+            "receivedEpochMs": 1790821172104,
+            "offered": 1709600,
+            "observed": 1707616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821173190,
+            "offered": 1720800,
+            "observed": 1718816,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821174277,
+            "offered": 1732300,
+            "observed": 1730422,
+            "gap": 1878
+          },
+          {
+            "receivedEpochMs": 1790821175290,
+            "offered": 1742000,
+            "observed": 1740151,
+            "gap": 1849
+          },
+          {
+            "receivedEpochMs": 1790821176365,
+            "offered": 1753000,
+            "observed": 1751181,
+            "gap": 1819
+          },
+          {
+            "receivedEpochMs": 1790821177433,
+            "offered": 1764500,
+            "observed": 1762511,
+            "gap": 1989
+          },
+          {
+            "receivedEpochMs": 1790821178509,
+            "offered": 1776100,
+            "observed": 1773922,
+            "gap": 2178
+          },
+          {
+            "receivedEpochMs": 1790821179593,
+            "offered": 1787600,
+            "observed": 1785696,
+            "gap": 1904
+          },
+          {
+            "receivedEpochMs": 1790821180639,
+            "offered": 1797000,
+            "observed": 1794916,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821181732,
+            "offered": 1808300,
+            "observed": 1806193,
+            "gap": 2107
+          },
+          {
+            "receivedEpochMs": 1790821182732,
+            "offered": 1818900,
+            "observed": 1817843,
+            "gap": 1057
+          },
+          {
+            "receivedEpochMs": 1790821183828,
+            "offered": 1830000,
+            "observed": 1828050,
+            "gap": 1950
+          },
+          {
+            "receivedEpochMs": 1790821184889,
+            "offered": 1841600,
+            "observed": 1839600,
+            "gap": 2000
+          },
+          {
+            "receivedEpochMs": 1790821185930,
+            "offered": 1850900,
+            "observed": 1849616,
+            "gap": 1284
+          },
+          {
+            "receivedEpochMs": 1790821187024,
+            "offered": 1861600,
+            "observed": 1859717,
+            "gap": 1883
+          },
+          {
+            "receivedEpochMs": 1790821188098,
+            "offered": 1873500,
+            "observed": 1871516,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821189138,
+            "offered": 1884700,
+            "observed": 1882916,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821190198,
+            "offered": 1894900,
+            "observed": 1893216,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821191217,
+            "offered": 1905400,
+            "observed": 1903519,
+            "gap": 1881
+          },
+          {
+            "receivedEpochMs": 1790821192276,
+            "offered": 1917100,
+            "observed": 1915116,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821193340,
+            "offered": 1928600,
+            "observed": 1926717,
+            "gap": 1883
+          },
+          {
+            "receivedEpochMs": 1790821194394,
+            "offered": 1940100,
+            "observed": 1938216,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821195459,
+            "offered": 1950500,
+            "observed": 1948416,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821196505,
+            "offered": 1961900,
+            "observed": 1960016,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821197567,
+            "offered": 1973200,
+            "observed": 1971317,
+            "gap": 1883
+          },
+          {
+            "receivedEpochMs": 1790821198644,
+            "offered": 1984800,
+            "observed": 1982922,
+            "gap": 1878
+          },
+          {
+            "receivedEpochMs": 1790821199701,
+            "offered": 1996400,
+            "observed": 1994451,
+            "gap": 1949
+          },
+          {
+            "receivedEpochMs": 1790821200779,
+            "offered": 2006900,
+            "observed": 2005016,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821201867,
+            "offered": 2018500,
+            "observed": 2016416,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821202938,
+            "offered": 2029900,
+            "observed": 2028016,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821204005,
+            "offered": 2040900,
+            "observed": 2039016,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821205089,
+            "offered": 2052400,
+            "observed": 2050480,
+            "gap": 1920
+          },
+          {
+            "receivedEpochMs": 1790821206098,
+            "offered": 2061800,
+            "observed": 2060119,
+            "gap": 1681
+          },
+          {
+            "receivedEpochMs": 1790821207169,
+            "offered": 2073100,
+            "observed": 2071211,
+            "gap": 1889
+          },
+          {
+            "receivedEpochMs": 1790821208237,
+            "offered": 2084600,
+            "observed": 2082548,
+            "gap": 2052
+          },
+          {
+            "receivedEpochMs": 1790821209333,
+            "offered": 2096200,
+            "observed": 2094211,
+            "gap": 1989
+          },
+          {
+            "receivedEpochMs": 1790821210426,
+            "offered": 2105700,
+            "observed": 2104000,
+            "gap": 1700
+          },
+          {
+            "receivedEpochMs": 1790821211487,
+            "offered": 2117200,
+            "observed": 2115114,
+            "gap": 2086
+          },
+          {
+            "receivedEpochMs": 1790821212561,
+            "offered": 2128800,
+            "observed": 2126719,
+            "gap": 2081
+          },
+          {
+            "receivedEpochMs": 1790821213562,
+            "offered": 2139500,
+            "observed": 2138022,
+            "gap": 1478
+          },
+          {
+            "receivedEpochMs": 1790821214621,
+            "offered": 2150700,
+            "observed": 2148538,
+            "gap": 2162
+          },
+          {
+            "receivedEpochMs": 1790821215622,
+            "offered": 2159700,
+            "observed": 2157421,
+            "gap": 2279
+          },
+          {
+            "receivedEpochMs": 1790821216688,
+            "offered": 2171300,
+            "observed": 2169323,
+            "gap": 1977
+          },
+          {
+            "receivedEpochMs": 1790821217698,
+            "offered": 2182200,
+            "observed": 2180070,
+            "gap": 2130
+          },
+          {
+            "receivedEpochMs": 1790821218765,
+            "offered": 2193800,
+            "observed": 2191851,
+            "gap": 1949
+          },
+          {
+            "receivedEpochMs": 1790821219841,
+            "offered": 2205600,
+            "observed": 2203616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821220888,
+            "offered": 2214900,
+            "observed": 2213516,
+            "gap": 1384
+          },
+          {
+            "receivedEpochMs": 1790821221973,
+            "offered": 2226300,
+            "observed": 2224221,
+            "gap": 2079
+          },
+          {
+            "receivedEpochMs": 1790821223039,
+            "offered": 2237900,
+            "observed": 2236016,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821224102,
+            "offered": 2249200,
+            "observed": 2247216,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821225160,
+            "offered": 2259300,
+            "observed": 2258111,
+            "gap": 1189
+          },
+          {
+            "receivedEpochMs": 1790821226189,
+            "offered": 2269500,
+            "observed": 2267580,
+            "gap": 1920
+          },
+          {
+            "receivedEpochMs": 1790821227197,
+            "offered": 2278000,
+            "observed": 2275809,
+            "gap": 2191
+          },
+          {
+            "receivedEpochMs": 1790821228278,
+            "offered": 2288800,
+            "observed": 2286915,
+            "gap": 1885
+          },
+          {
+            "receivedEpochMs": 1790821229345,
+            "offered": 2300000,
+            "observed": 2298016,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821230426,
+            "offered": 2310600,
+            "observed": 2308416,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821231497,
+            "offered": 2321800,
+            "observed": 2319933,
+            "gap": 1867
+          },
+          {
+            "receivedEpochMs": 1790821232575,
+            "offered": 2333500,
+            "observed": 2331421,
+            "gap": 2079
+          },
+          {
+            "receivedEpochMs": 1790821233593,
+            "offered": 2342900,
+            "observed": 2340781,
+            "gap": 2119
+          },
+          {
+            "receivedEpochMs": 1790821234655,
+            "offered": 2353800,
+            "observed": 2351624,
+            "gap": 2176
+          },
+          {
+            "receivedEpochMs": 1790821235662,
+            "offered": 2363800,
+            "observed": 2361716,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821236748,
+            "offered": 2374900,
+            "observed": 2372714,
+            "gap": 2186
+          },
+          {
+            "receivedEpochMs": 1790821237763,
+            "offered": 2385200,
+            "observed": 2383222,
+            "gap": 1978
+          },
+          {
+            "receivedEpochMs": 1790821238826,
+            "offered": 2396000,
+            "observed": 2393866,
+            "gap": 2134
+          },
+          {
+            "receivedEpochMs": 1790821239841,
+            "offered": 2406300,
+            "observed": 2403400,
+            "gap": 2900
+          },
+          {
+            "receivedEpochMs": 1790821240842,
+            "offered": 2416300,
+            "observed": 2413312,
+            "gap": 2988
+          },
+          {
+            "receivedEpochMs": 1790821241845,
+            "offered": 2426800,
+            "observed": 2423516,
+            "gap": 3284
+          },
+          {
+            "receivedEpochMs": 1790821242941,
+            "offered": 2438600,
+            "observed": 2435517,
+            "gap": 3083
+          },
+          {
+            "receivedEpochMs": 1790821243958,
+            "offered": 2449900,
+            "observed": 2447312,
+            "gap": 2588
+          },
+          {
+            "receivedEpochMs": 1790821245058,
+            "offered": 2462300,
+            "observed": 2459416,
+            "gap": 2884
+          },
+          {
+            "receivedEpochMs": 1790821246101,
+            "offered": 2472600,
+            "observed": 2470391,
+            "gap": 2209
+          },
+          {
+            "receivedEpochMs": 1790821247116,
+            "offered": 2482800,
+            "observed": 2481017,
+            "gap": 1783
+          },
+          {
+            "receivedEpochMs": 1790821248194,
+            "offered": 2494600,
+            "observed": 2492317,
+            "gap": 2283
+          },
+          {
+            "receivedEpochMs": 1790821249283,
+            "offered": 2505800,
+            "observed": 2503616,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821250370,
+            "offered": 2516200,
+            "observed": 2513816,
+            "gap": 2384
+          },
+          {
+            "receivedEpochMs": 1790821251459,
+            "offered": 2526600,
+            "observed": 2524800,
+            "gap": 1800
+          },
+          {
+            "receivedEpochMs": 1790821252528,
+            "offered": 2538200,
+            "observed": 2535919,
+            "gap": 2281
+          },
+          {
+            "receivedEpochMs": 1790821253588,
+            "offered": 2549400,
+            "observed": 2547316,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821254650,
+            "offered": 2560800,
+            "observed": 2558714,
+            "gap": 2086
+          },
+          {
+            "receivedEpochMs": 1790821255662,
+            "offered": 2568900,
+            "observed": 2567216,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821256734,
+            "offered": 2579500,
+            "observed": 2577724,
+            "gap": 1776
+          },
+          {
+            "receivedEpochMs": 1790821257801,
+            "offered": 2590600,
+            "observed": 2588715,
+            "gap": 1885
+          },
+          {
+            "receivedEpochMs": 1790821258858,
+            "offered": 2601700,
+            "observed": 2599816,
+            "gap": 1884
+          },
+          {
+            "receivedEpochMs": 1790821259941,
+            "offered": 2612900,
+            "observed": 2611216,
+            "gap": 1684
+          },
+          {
+            "receivedEpochMs": 1790821261013,
+            "offered": 2622200,
+            "observed": 2620111,
+            "gap": 2089
+          },
+          {
+            "receivedEpochMs": 1790821262067,
+            "offered": 2633300,
+            "observed": 2631117,
+            "gap": 2183
+          },
+          {
+            "receivedEpochMs": 1790821263139,
+            "offered": 2644400,
+            "observed": 2642551,
+            "gap": 1849
+          },
+          {
+            "receivedEpochMs": 1790821264213,
+            "offered": 2655900,
+            "observed": 2653816,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821265268,
+            "offered": 2664200,
+            "observed": 2663116,
+            "gap": 1084
+          },
+          {
+            "receivedEpochMs": 1790821266282,
+            "offered": 2674700,
+            "observed": 2672719,
+            "gap": 1981
+          },
+          {
+            "receivedEpochMs": 1790821267338,
+            "offered": 2685900,
+            "observed": 2683771,
+            "gap": 2129
+          },
+          {
+            "receivedEpochMs": 1790821268414,
+            "offered": 2697400,
+            "observed": 2695154,
+            "gap": 2246
+          },
+          {
+            "receivedEpochMs": 1790821269507,
+            "offered": 2708600,
+            "observed": 2706616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821270576,
+            "offered": 2719300,
+            "observed": 2717248,
+            "gap": 2052
+          },
+          {
+            "receivedEpochMs": 1790821271650,
+            "offered": 2730700,
+            "observed": 2728617,
+            "gap": 2083
+          },
+          {
+            "receivedEpochMs": 1790821272708,
+            "offered": 2742000,
+            "observed": 2740216,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821273788,
+            "offered": 2752500,
+            "observed": 2750400,
+            "gap": 2100
+          },
+          {
+            "receivedEpochMs": 1790821274851,
+            "offered": 2763900,
+            "observed": 2761916,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821275923,
+            "offered": 2775300,
+            "observed": 2773214,
+            "gap": 2086
+          },
+          {
+            "receivedEpochMs": 1790821276993,
+            "offered": 2786700,
+            "observed": 2784611,
+            "gap": 2089
+          },
+          {
+            "receivedEpochMs": 1790821278068,
+            "offered": 2797800,
+            "observed": 2795616,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821279133,
+            "offered": 2809000,
+            "observed": 2806811,
+            "gap": 2189
+          },
+          {
+            "receivedEpochMs": 1790821280197,
+            "offered": 2819300,
+            "observed": 2817231,
+            "gap": 2069
+          },
+          {
+            "receivedEpochMs": 1790821281295,
+            "offered": 2831200,
+            "observed": 2829121,
+            "gap": 2079
+          },
+          {
+            "receivedEpochMs": 1790821282352,
+            "offered": 2842500,
+            "observed": 2840421,
+            "gap": 2079
+          },
+          {
+            "receivedEpochMs": 1790821283421,
+            "offered": 2853600,
+            "observed": 2851616,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821284520,
+            "offered": 2865200,
+            "observed": 2863116,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821285551,
+            "offered": 2874100,
+            "observed": 2872291,
+            "gap": 1809
+          },
+          {
+            "receivedEpochMs": 1790821286644,
+            "offered": 2885200,
+            "observed": 2883246,
+            "gap": 1954
+          },
+          {
+            "receivedEpochMs": 1790821287700,
+            "offered": 2896400,
+            "observed": 2894417,
+            "gap": 1983
+          },
+          {
+            "receivedEpochMs": 1790821288701,
+            "offered": 2906200,
+            "observed": 2905455,
+            "gap": 745
+          },
+          {
+            "receivedEpochMs": 1790821289770,
+            "offered": 2916300,
+            "observed": 2914622,
+            "gap": 1678
+          },
+          {
+            "receivedEpochMs": 1790821290858,
+            "offered": 2925700,
+            "observed": 2924012,
+            "gap": 1688
+          },
+          {
+            "receivedEpochMs": 1790821291940,
+            "offered": 2935500,
+            "observed": 2933814,
+            "gap": 1686
+          },
+          {
+            "receivedEpochMs": 1790821292955,
+            "offered": 2944800,
+            "observed": 2943010,
+            "gap": 1790
+          },
+          {
+            "receivedEpochMs": 1790821294008,
+            "offered": 2954400,
+            "observed": 2952416,
+            "gap": 1984
+          },
+          {
+            "receivedEpochMs": 1790821295103,
+            "offered": 2964300,
+            "observed": 2962516,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821296154,
+            "offered": 2971500,
+            "observed": 2969716,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821297163,
+            "offered": 2981000,
+            "observed": 2979416,
+            "gap": 1584
+          },
+          {
+            "receivedEpochMs": 1790821298172,
+            "offered": 2990200,
+            "observed": 2988841,
+            "gap": 1359
+          },
+          {
+            "receivedEpochMs": 1790821299245,
+            "offered": 3000400,
+            "observed": 2998616,
+            "gap": 1784
+          },
+          {
+            "receivedEpochMs": 1790821300303,
+            "offered": 3009400,
+            "observed": 3007970,
+            "gap": 1430
+          },
+          {
+            "receivedEpochMs": 1790821301399,
+            "offered": 3020900,
+            "observed": 3018516,
+            "gap": 2384
+          },
+          {
+            "receivedEpochMs": 1790821302468,
+            "offered": 3032200,
+            "observed": 3030116,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821303526,
+            "offered": 3043800,
+            "observed": 3041616,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821304587,
+            "offered": 3055100,
+            "observed": 3052816,
+            "gap": 2284
+          },
+          {
+            "receivedEpochMs": 1790821305687,
+            "offered": 3066300,
+            "observed": 3064216,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821306776,
+            "offered": 3078100,
+            "observed": 3076019,
+            "gap": 2081
+          },
+          {
+            "receivedEpochMs": 1790821307836,
+            "offered": 3089500,
+            "observed": 3087416,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821308895,
+            "offered": 3100700,
+            "observed": 3098711,
+            "gap": 1989
+          },
+          {
+            "receivedEpochMs": 1790821309964,
+            "offered": 3112200,
+            "observed": 3110115,
+            "gap": 2085
+          },
+          {
+            "receivedEpochMs": 1790821311000,
+            "offered": 3120500,
+            "observed": 3118416,
+            "gap": 2084
+          },
+          {
+            "receivedEpochMs": 1790821312080,
+            "offered": 3132100,
+            "observed": 3129815,
+            "gap": 2285
+          },
+          {
+            "receivedEpochMs": 1790821313136,
+            "offered": 3143400,
+            "observed": 3141216,
+            "gap": 2184
+          },
+          {
+            "receivedEpochMs": 1790821314148,
+            "offered": 3150000,
+            "observed": 3148816,
+            "gap": 1184
+          }
+        ]
+      },
+      "measured": {
+        "startedEpochMs": 1790821002829,
+        "expected": 3150000,
+        "records": 3150000,
+        "unique": 3150000,
+        "duplicates": 0,
+        "identityChecks": true,
+        "outputBytes": 6754923400,
+        "elapsedMs": 311421,
+        "activeMs": 310024,
+        "durableRate": 10160.501900408986,
+        "pass": true,
+        "windows": [
+          {
+            "elapsedMs": 1016,
+            "records": 0,
+            "rate": 0
+          },
+          {
+            "elapsedMs": 2084,
+            "records": 5719,
+            "rate": 5358.093758843952
+          },
+          {
+            "elapsedMs": 3179,
+            "records": 17748,
+            "rate": 10985.5954696818
+          },
+          {
+            "elapsedMs": 4273,
+            "records": 30816,
+            "rate": 11938.341862705185
+          },
+          {
+            "elapsedMs": 5341,
+            "records": 42990,
+            "rate": 11407.283668687
+          },
+          {
+            "elapsedMs": 6410,
+            "records": 54616,
+            "rate": 10875.906835679856
+          },
+          {
+            "elapsedMs": 7484,
+            "records": 65650,
+            "rate": 10269.596691000805
+          },
+          {
+            "elapsedMs": 8548,
+            "records": 76915,
+            "rate": 10591.76574110944
+          },
+          {
+            "elapsedMs": 9611,
+            "records": 88416,
+            "rate": 10810.38148164075
+          },
+          {
+            "elapsedMs": 10659,
+            "records": 99749,
+            "rate": 10813.844879817874
+          },
+          {
+            "elapsedMs": 11729,
+            "records": 111416,
+            "rate": 10909.64175941935
+          },
+          {
+            "elapsedMs": 12734,
+            "records": 121616,
+            "rate": 10144.034933223937
+          },
+          {
+            "elapsedMs": 13801,
+            "records": 133317,
+            "rate": 10972.984967709242
+          },
+          {
+            "elapsedMs": 14878,
+            "records": 145016,
+            "rate": 10862.71026535721
+          },
+          {
+            "elapsedMs": 15950,
+            "records": 156816,
+            "rate": 11008.5246908563
+          },
+          {
+            "elapsedMs": 17010,
+            "records": 168312,
+            "rate": 10837.935031834411
+          },
+          {
+            "elapsedMs": 18102,
+            "records": 179816,
+            "rate": 10541.991049538032
+          },
+          {
+            "elapsedMs": 19158,
+            "records": 191371,
+            "rate": 10933.567025089305
+          },
+          {
+            "elapsedMs": 20220,
+            "records": 202925,
+            "rate": 10883.65654687878
+          },
+          {
+            "elapsedMs": 21300,
+            "records": 214431,
+            "rate": 10649.088684475872
+          },
+          {
+            "elapsedMs": 22392,
+            "records": 222758,
+            "rate": 7631.994930720266
+          },
+          {
+            "elapsedMs": 23457,
+            "records": 235775,
+            "rate": 12213.392368951974
+          },
+          {
+            "elapsedMs": 24526,
+            "records": 248516,
+            "rate": 11920.942465276388
+          },
+          {
+            "elapsedMs": 25626,
+            "records": 260616,
+            "rate": 10997.114507113985
+          },
+          {
+            "elapsedMs": 26723,
+            "records": 271579,
+            "rate": 9993.59125751047
+          },
+          {
+            "elapsedMs": 27756,
+            "records": 280517,
+            "rate": 8652.75891243026
+          },
+          {
+            "elapsedMs": 28838,
+            "records": 292210,
+            "rate": 10807.949199033957
+          },
+          {
+            "elapsedMs": 29839,
+            "records": 303260,
+            "rate": 11047.054126264366
+          },
+          {
+            "elapsedMs": 30889,
+            "records": 312993,
+            "rate": 9261.551518899492
+          },
+          {
+            "elapsedMs": 31948,
+            "records": 324416,
+            "rate": 10786.793567065293
+          },
+          {
+            "elapsedMs": 32965,
+            "records": 333716,
+            "rate": 9147.24595043504
+          },
+          {
+            "elapsedMs": 34016,
+            "records": 343921,
+            "rate": 9709.931842558284
+          },
+          {
+            "elapsedMs": 35090,
+            "records": 355454,
+            "rate": 10736.763827778801
+          },
+          {
+            "elapsedMs": 36154,
+            "records": 366722,
+            "rate": 10588.049162541127
+          },
+          {
+            "elapsedMs": 37157,
+            "records": 376318,
+            "rate": 9568.421016651075
+          },
+          {
+            "elapsedMs": 38241,
+            "records": 385916,
+            "rate": 8853.459815224216
+          },
+          {
+            "elapsedMs": 39319,
+            "records": 397116,
+            "rate": 10391.530287488653
+          },
+          {
+            "elapsedMs": 40403,
+            "records": 408609,
+            "rate": 10602.709073812817
+          },
+          {
+            "elapsedMs": 41451,
+            "records": 420117,
+            "rate": 10984.824395416452
+          },
+          {
+            "elapsedMs": 42462,
+            "records": 429311,
+            "rate": 9090.898600788392
+          },
+          {
+            "elapsedMs": 43521,
+            "records": 440512,
+            "rate": 10576.126737897288
+          },
+          {
+            "elapsedMs": 44595,
+            "records": 452317,
+            "rate": 10991.01888048489
+          },
+          {
+            "elapsedMs": 45644,
+            "records": 463911,
+            "rate": 11053.0565064157
+          },
+          {
+            "elapsedMs": 46700,
+            "records": 475594,
+            "rate": 11061.972123883272
+          },
+          {
+            "elapsedMs": 47764,
+            "records": 486716,
+            "rate": 10456.4135579291
+          },
+          {
+            "elapsedMs": 48837,
+            "records": 498521,
+            "rate": 10999.979338115896
+          },
+          {
+            "elapsedMs": 49913,
+            "records": 509200,
+            "rate": 9923.182220229553
+          },
+          {
+            "elapsedMs": 50953,
+            "records": 521043,
+            "rate": 11390.900391869962
+          },
+          {
+            "elapsedMs": 52005,
+            "records": 532593,
+            "rate": 10982.059143391742
+          },
+          {
+            "elapsedMs": 53014,
+            "records": 543316,
+            "rate": 10630.390693872654
+          },
+          {
+            "elapsedMs": 54091,
+            "records": 554438,
+            "rate": 10319.52453680503
+          },
+          {
+            "elapsedMs": 55164,
+            "records": 565821,
+            "rate": 10608.82539097387
+          },
+          {
+            "elapsedMs": 56215,
+            "records": 577516,
+            "rate": 11126.89901320266
+          },
+          {
+            "elapsedMs": 57283,
+            "records": 589316,
+            "rate": 11048.608963745815
+          },
+          {
+            "elapsedMs": 58287,
+            "records": 600117,
+            "rate": 10762.078051474366
+          },
+          {
+            "elapsedMs": 59335,
+            "records": 611615,
+            "rate": 10967.816213900514
+          },
+          {
+            "elapsedMs": 60407,
+            "records": 623616,
+            "rate": 11193.269861122915
+          },
+          {
+            "elapsedMs": 61441,
+            "records": 634716,
+            "rate": 10744.242030022897
+          },
+          {
+            "elapsedMs": 62448,
+            "records": 645416,
+            "rate": 10616.911614412234
+          },
+          {
+            "elapsedMs": 63487,
+            "records": 656016,
+            "rate": 10205.398480764112
+          },
+          {
+            "elapsedMs": 64566,
+            "records": 667534,
+            "rate": 10672.82066559418
+          },
+          {
+            "elapsedMs": 65633,
+            "records": 678719,
+            "rate": 10489.314567604148
+          },
+          {
+            "elapsedMs": 66642,
+            "records": 689016,
+            "rate": 10197.268167999919
+          },
+          {
+            "elapsedMs": 67727,
+            "records": 696421,
+            "rate": 6827.772701350033
+          },
+          {
+            "elapsedMs": 68812,
+            "records": 707233,
+            "rate": 9961.979183222744
+          },
+          {
+            "elapsedMs": 69817,
+            "records": 717651,
+            "rate": 10372.988573666198
+          },
+          {
+            "elapsedMs": 70882,
+            "records": 728522,
+            "rate": 10200.91028265344
+          },
+          {
+            "elapsedMs": 71906,
+            "records": 738216,
+            "rate": 9468.47088955741
+          },
+          {
+            "elapsedMs": 72994,
+            "records": 746216,
+            "rate": 7352.186023172711
+          },
+          {
+            "elapsedMs": 74072,
+            "records": 757171,
+            "rate": 10165.06437013326
+          },
+          {
+            "elapsedMs": 75135,
+            "records": 768315,
+            "rate": 10482.541583788132
+          },
+          {
+            "elapsedMs": 76210,
+            "records": 778666,
+            "rate": 9630.312734464993
+          },
+          {
+            "elapsedMs": 77306,
+            "records": 788816,
+            "rate": 9263.535967283768
+          },
+          {
+            "elapsedMs": 78353,
+            "records": 797619,
+            "rate": 8401.338644848654
+          },
+          {
+            "elapsedMs": 79438,
+            "records": 808417,
+            "rate": 9953.019352116953
+          },
+          {
+            "elapsedMs": 80508,
+            "records": 819266,
+            "rate": 10140.674712974716
+          },
+          {
+            "elapsedMs": 81588,
+            "records": 830419,
+            "rate": 10324.105926456135
+          },
+          {
+            "elapsedMs": 82681,
+            "records": 840911,
+            "rate": 9600.960096009601
+          },
+          {
+            "elapsedMs": 83697,
+            "records": 851316,
+            "rate": 10239.248751170591
+          },
+          {
+            "elapsedMs": 84723,
+            "records": 860522,
+            "rate": 8971.887198619948
+          },
+          {
+            "elapsedMs": 85747,
+            "records": 869717,
+            "rate": 8985.969869551462
+          },
+          {
+            "elapsedMs": 86753,
+            "records": 879643,
+            "rate": 9861.366954134322
+          },
+          {
+            "elapsedMs": 87766,
+            "records": 887215,
+            "rate": 7474.3876145733075
+          },
+          {
+            "elapsedMs": 88827,
+            "records": 898716,
+            "rate": 10840.20929681553
+          },
+          {
+            "elapsedMs": 89926,
+            "records": 909916,
+            "rate": 10191.173215594952
+          },
+          {
+            "elapsedMs": 91012,
+            "records": 921449,
+            "rate": 10617.96582262867
+          },
+          {
+            "elapsedMs": 92056,
+            "records": 933554,
+            "rate": 11601.944523473074
+          },
+          {
+            "elapsedMs": 93144,
+            "records": 944000,
+            "rate": 9599.756284188536
+          },
+          {
+            "elapsedMs": 94220,
+            "records": 954816,
+            "rate": 10049.706521159602
+          },
+          {
+            "elapsedMs": 95295,
+            "records": 966612,
+            "rate": 10976.115293859442
+          },
+          {
+            "elapsedMs": 96366,
+            "records": 978016,
+            "rate": 10651.742023102437
+          },
+          {
+            "elapsedMs": 97406,
+            "records": 988116,
+            "rate": 9702.644364651222
+          },
+          {
+            "elapsedMs": 98491,
+            "records": 998133,
+            "rate": 9235.187866156886
+          },
+          {
+            "elapsedMs": 99545,
+            "records": 1010021,
+            "rate": 11281.36838785113
+          },
+          {
+            "elapsedMs": 100610,
+            "records": 1021767,
+            "rate": 11025.49363805973
+          },
+          {
+            "elapsedMs": 101676,
+            "records": 1033615,
+            "rate": 11114.22844623226
+          },
+          {
+            "elapsedMs": 102758,
+            "records": 1045116,
+            "rate": 10629.981122064853
+          },
+          {
+            "elapsedMs": 103840,
+            "records": 1056115,
+            "rate": 10166.128092176921
+          },
+          {
+            "elapsedMs": 104888,
+            "records": 1067516,
+            "rate": 10883.618619426677
+          },
+          {
+            "elapsedMs": 105948,
+            "records": 1079300,
+            "rate": 11112.869716247158
+          },
+          {
+            "elapsedMs": 107031,
+            "records": 1090616,
+            "rate": 10454.266973503652
+          },
+          {
+            "elapsedMs": 108109,
+            "records": 1101716,
+            "rate": 10289.244016038474
+          },
+          {
+            "elapsedMs": 109164,
+            "records": 1109615,
+            "rate": 7491.355102821789
+          },
+          {
+            "elapsedMs": 110221,
+            "records": 1121316,
+            "rate": 11065.05400195064
+          },
+          {
+            "elapsedMs": 111287,
+            "records": 1132621,
+            "rate": 10604.183638695411
+          },
+          {
+            "elapsedMs": 112310,
+            "records": 1142215,
+            "rate": 9378.34610364006
+          },
+          {
+            "elapsedMs": 113403,
+            "records": 1153014,
+            "rate": 9887.19315962612
+          },
+          {
+            "elapsedMs": 114481,
+            "records": 1164693,
+            "rate": 10824.767108296248
+          },
+          {
+            "elapsedMs": 115566,
+            "records": 1175985,
+            "rate": 10408.450493753773
+          },
+          {
+            "elapsedMs": 116632,
+            "records": 1187516,
+            "rate": 10822.125103193694
+          },
+          {
+            "elapsedMs": 117705,
+            "records": 1198414,
+            "rate": 10152.44701287173
+          },
+          {
+            "elapsedMs": 118761,
+            "records": 1210698,
+            "rate": 11636.965339916393
+          },
+          {
+            "elapsedMs": 119824,
+            "records": 1221921,
+            "rate": 10553.262680654874
+          },
+          {
+            "elapsedMs": 120917,
+            "records": 1233716,
+            "rate": 10798.294888905746
+          },
+          {
+            "elapsedMs": 121988,
+            "records": 1245442,
+            "rate": 10942.6567013076
+          },
+          {
+            "elapsedMs": 122989,
+            "records": 1257200,
+            "rate": 11747.789209296323
+          },
+          {
+            "elapsedMs": 124051,
+            "records": 1267316,
+            "rate": 9523.855476246319
+          },
+          {
+            "elapsedMs": 125133,
+            "records": 1278217,
+            "rate": 10075.123255860972
+          },
+          {
+            "elapsedMs": 126198,
+            "records": 1289633,
+            "rate": 10725.378989665767
+          },
+          {
+            "elapsedMs": 127271,
+            "records": 1300910,
+            "rate": 10507.52395459692
+          },
+          {
+            "elapsedMs": 128283,
+            "records": 1310616,
+            "rate": 9590.479083015423
+          },
+          {
+            "elapsedMs": 129287,
+            "records": 1320816,
+            "rate": 10156.488334414327
+          },
+          {
+            "elapsedMs": 130384,
+            "records": 1332216,
+            "rate": 10391.570397472153
+          },
+          {
+            "elapsedMs": 131390,
+            "records": 1342779,
+            "rate": 10499.354227094631
+          },
+          {
+            "elapsedMs": 132460,
+            "records": 1352622,
+            "rate": 9198.863389448923
+          },
+          {
+            "elapsedMs": 133463,
+            "records": 1361716,
+            "rate": 9068.752221995124
+          },
+          {
+            "elapsedMs": 134539,
+            "records": 1373124,
+            "rate": 10599.000378803703
+          },
+          {
+            "elapsedMs": 135559,
+            "records": 1380816,
+            "rate": 7542.254813378627
+          },
+          {
+            "elapsedMs": 136628,
+            "records": 1392021,
+            "rate": 10481.764781200176
+          },
+          {
+            "elapsedMs": 137637,
+            "records": 1401716,
+            "rate": 9610.265091405938
+          },
+          {
+            "elapsedMs": 138736,
+            "records": 1411716,
+            "rate": 9103.453583740551
+          },
+          {
+            "elapsedMs": 139799,
+            "records": 1423179,
+            "rate": 10776.738205540454
+          },
+          {
+            "elapsedMs": 140862,
+            "records": 1434433,
+            "rate": 10593.46273536418
+          },
+          {
+            "elapsedMs": 141933,
+            "records": 1445800,
+            "rate": 10609.176774390206
+          },
+          {
+            "elapsedMs": 142996,
+            "records": 1455619,
+            "rate": 9237.192363029528
+          },
+          {
+            "elapsedMs": 144063,
+            "records": 1466816,
+            "rate": 10494.899120043434
+          },
+          {
+            "elapsedMs": 145142,
+            "records": 1478216,
+            "rate": 10562.205422291232
+          },
+          {
+            "elapsedMs": 146197,
+            "records": 1486344,
+            "rate": 7705.73564259618
+          },
+          {
+            "elapsedMs": 147217,
+            "records": 1493912,
+            "rate": 7421.222744860788
+          },
+          {
+            "elapsedMs": 148270,
+            "records": 1504916,
+            "rate": 10445.136868763153
+          },
+          {
+            "elapsedMs": 149285,
+            "records": 1515010,
+            "rate": 9952.707218053602
+          },
+          {
+            "elapsedMs": 150285,
+            "records": 1524816,
+            "rate": 9804.22135737823
+          },
+          {
+            "elapsedMs": 151350,
+            "records": 1533822,
+            "rate": 8453.855119013722
+          },
+          {
+            "elapsedMs": 152357,
+            "records": 1539916,
+            "rate": 6049.391532762961
+          },
+          {
+            "elapsedMs": 153426,
+            "records": 1549316,
+            "rate": 8796.63204958314
+          },
+          {
+            "elapsedMs": 154461,
+            "records": 1558116,
+            "rate": 8499.473146635117
+          },
+          {
+            "elapsedMs": 155480,
+            "records": 1567116,
+            "rate": 8837.197827669488
+          },
+          {
+            "elapsedMs": 156543,
+            "records": 1577616,
+            "rate": 9877.573357738778
+          },
+          {
+            "elapsedMs": 157576,
+            "records": 1585214,
+            "rate": 7353.697605432038
+          },
+          {
+            "elapsedMs": 158578,
+            "records": 1595512,
+            "rate": 10280.273375090037
+          },
+          {
+            "elapsedMs": 159624,
+            "records": 1606416,
+            "rate": 10418.285217994902
+          },
+          {
+            "elapsedMs": 160689,
+            "records": 1617914,
+            "rate": 10796.142343600683
+          },
+          {
+            "elapsedMs": 161771,
+            "records": 1629411,
+            "rate": 10626.485806299866
+          },
+          {
+            "elapsedMs": 162856,
+            "records": 1639716,
+            "rate": 9497.672506642788
+          },
+          {
+            "elapsedMs": 163912,
+            "records": 1651117,
+            "rate": 10796.45860551596
+          },
+          {
+            "elapsedMs": 164981,
+            "records": 1662616,
+            "rate": 10756.645775026112
+          },
+          {
+            "elapsedMs": 166057,
+            "records": 1674217,
+            "rate": 10787.210168114872
+          },
+          {
+            "elapsedMs": 167125,
+            "records": 1685316,
+            "rate": 10386.293009885934
+          },
+          {
+            "elapsedMs": 168194,
+            "records": 1695917,
+            "rate": 9922.28045539765
+          },
+          {
+            "elapsedMs": 169273,
+            "records": 1707616,
+            "rate": 10836.218896901351
+          },
+          {
+            "elapsedMs": 170360,
+            "records": 1718816,
+            "rate": 10308.398284295961
+          },
+          {
+            "elapsedMs": 171447,
+            "records": 1730422,
+            "rate": 10678.676219144629
+          },
+          {
+            "elapsedMs": 172459,
+            "records": 1740151,
+            "rate": 9606.618482024889
+          },
+          {
+            "elapsedMs": 173535,
+            "records": 1751181,
+            "rate": 10259.356475902903
+          },
+          {
+            "elapsedMs": 174603,
+            "records": 1762511,
+            "rate": 10606.44386380629
+          },
+          {
+            "elapsedMs": 175678,
+            "records": 1773922,
+            "rate": 10608.885180924486
+          },
+          {
+            "elapsedMs": 176763,
+            "records": 1785696,
+            "rate": 10855.865200654634
+          },
+          {
+            "elapsedMs": 177809,
+            "records": 1794916,
+            "rate": 8815.310051879582
+          },
+          {
+            "elapsedMs": 178901,
+            "records": 1806193,
+            "rate": 10323.48506333102
+          },
+          {
+            "elapsedMs": 179902,
+            "records": 1817843,
+            "rate": 11643.343884531561
+          },
+          {
+            "elapsedMs": 180998,
+            "records": 1828050,
+            "rate": 9312.135946244172
+          },
+          {
+            "elapsedMs": 182058,
+            "records": 1839600,
+            "rate": 10891.514889603293
+          },
+          {
+            "elapsedMs": 183100,
+            "records": 1849616,
+            "rate": 9618.142717973358
+          },
+          {
+            "elapsedMs": 184193,
+            "records": 1859717,
+            "rate": 9236.16443712384
+          },
+          {
+            "elapsedMs": 185268,
+            "records": 1871516,
+            "rate": 10980.5862490607
+          },
+          {
+            "elapsedMs": 186307,
+            "records": 1882916,
+            "rate": 10968.30224440703
+          },
+          {
+            "elapsedMs": 187367,
+            "records": 1893216,
+            "rate": 9717.892954637147
+          },
+          {
+            "elapsedMs": 188387,
+            "records": 1903519,
+            "rate": 10103.777087937813
+          },
+          {
+            "elapsedMs": 189446,
+            "records": 1915116,
+            "rate": 10952.126472175996
+          },
+          {
+            "elapsedMs": 190509,
+            "records": 1926717,
+            "rate": 10910.999745364861
+          },
+          {
+            "elapsedMs": 191564,
+            "records": 1938216,
+            "rate": 10901.426066083319
+          },
+          {
+            "elapsedMs": 192628,
+            "records": 1948416,
+            "rate": 9580.466362337329
+          },
+          {
+            "elapsedMs": 193674,
+            "records": 1960016,
+            "rate": 11091.748360739992
+          },
+          {
+            "elapsedMs": 194737,
+            "records": 1971317,
+            "rate": 10637.843906321785
+          },
+          {
+            "elapsedMs": 195813,
+            "records": 1982922,
+            "rate": 10781.567656901676
+          },
+          {
+            "elapsedMs": 196871,
+            "records": 1994451,
+            "rate": 10899.617913038463
+          },
+          {
+            "elapsedMs": 197949,
+            "records": 2005016,
+            "rate": 9799.783494259815
+          },
+          {
+            "elapsedMs": 199036,
+            "records": 2016416,
+            "rate": 10483.598513582065
+          },
+          {
+            "elapsedMs": 200108,
+            "records": 2028016,
+            "rate": 10826.768862703315
+          },
+          {
+            "elapsedMs": 201174,
+            "records": 2039016,
+            "rate": 10311.46200312212
+          },
+          {
+            "elapsedMs": 202259,
+            "records": 2050480,
+            "rate": 10572.317115080406
+          },
+          {
+            "elapsedMs": 203268,
+            "records": 2060119,
+            "rate": 9554.934103637139
+          },
+          {
+            "elapsedMs": 204338,
+            "records": 2071211,
+            "rate": 10359.05095399654
+          },
+          {
+            "elapsedMs": 205406,
+            "records": 2082548,
+            "rate": 10615.24640434488
+          },
+          {
+            "elapsedMs": 206502,
+            "records": 2094211,
+            "rate": 10640.06705006615
+          },
+          {
+            "elapsedMs": 207595,
+            "records": 2104000,
+            "rate": 8957.669663143057
+          },
+          {
+            "elapsedMs": 208656,
+            "records": 2115114,
+            "rate": 10472.925601740579
+          },
+          {
+            "elapsedMs": 209730,
+            "records": 2126719,
+            "rate": 10805.905120895903
+          },
+          {
+            "elapsedMs": 210732,
+            "records": 2138022,
+            "rate": 11290.084143739561
+          },
+          {
+            "elapsedMs": 211791,
+            "records": 2148538,
+            "rate": 9929.066010291828
+          },
+          {
+            "elapsedMs": 212791,
+            "records": 2157421,
+            "rate": 8876.230400865094
+          },
+          {
+            "elapsedMs": 213857,
+            "records": 2169323,
+            "rate": 11170.629119479796
+          },
+          {
+            "elapsedMs": 214867,
+            "records": 2180070,
+            "rate": 10637.162868747193
+          },
+          {
+            "elapsedMs": 215935,
+            "records": 2191851,
+            "rate": 11037.425653438224
+          },
+          {
+            "elapsedMs": 217010,
+            "records": 2203616,
+            "rate": 10937.429431675093
+          },
+          {
+            "elapsedMs": 218058,
+            "records": 2213516,
+            "rate": 9451.209695126516
+          },
+          {
+            "elapsedMs": 219143,
+            "records": 2224221,
+            "rate": 9866.701980703694
+          },
+          {
+            "elapsedMs": 220208,
+            "records": 2236016,
+            "rate": 11068.965780167946
+          },
+          {
+            "elapsedMs": 221271,
+            "records": 2247216,
+            "rate": 10536.668839033005
+          },
+          {
+            "elapsedMs": 222329,
+            "records": 2258111,
+            "rate": 10296.309500731762
+          },
+          {
+            "elapsedMs": 223358,
+            "records": 2267580,
+            "rate": 9203.730091308313
+          },
+          {
+            "elapsedMs": 224367,
+            "records": 2275809,
+            "rate": 8160.930697171232
+          },
+          {
+            "elapsedMs": 225447,
+            "records": 2286915,
+            "rate": 10277.379038626388
+          },
+          {
+            "elapsedMs": 226514,
+            "records": 2298016,
+            "rate": 10405.272689203255
+          },
+          {
+            "elapsedMs": 227595,
+            "records": 2308416,
+            "rate": 9618.046411507485
+          },
+          {
+            "elapsedMs": 228666,
+            "records": 2319933,
+            "rate": 10754.502623667227
+          },
+          {
+            "elapsedMs": 229744,
+            "records": 2331421,
+            "rate": 10657.208023473131
+          },
+          {
+            "elapsedMs": 230762,
+            "records": 2340781,
+            "rate": 9194.381983495341
+          },
+          {
+            "elapsedMs": 231824,
+            "records": 2351624,
+            "rate": 10213.494263414756
+          },
+          {
+            "elapsedMs": 232831,
+            "records": 2361716,
+            "rate": 10020.20066297766
+          },
+          {
+            "elapsedMs": 233917,
+            "records": 2372714,
+            "rate": 10127.871132326778
+          },
+          {
+            "elapsedMs": 234932,
+            "records": 2383222,
+            "rate": 10348.097319679813
+          },
+          {
+            "elapsedMs": 235996,
+            "records": 2393866,
+            "rate": 10012.097320705096
+          },
+          {
+            "elapsedMs": 237010,
+            "records": 2403400,
+            "rate": 9395.170311693832
+          },
+          {
+            "elapsedMs": 238012,
+            "records": 2413312,
+            "rate": 9899.258001775628
+          },
+          {
+            "elapsedMs": 239014,
+            "records": 2423516,
+            "rate": 10178.341246519847
+          },
+          {
+            "elapsedMs": 240110,
+            "records": 2435517,
+            "rate": 10946.804899609631
+          },
+          {
+            "elapsedMs": 241127,
+            "records": 2447312,
+            "rate": 11600.894802637435
+          },
+          {
+            "elapsedMs": 242227,
+            "records": 2459416,
+            "rate": 11002.364840336066
+          },
+          {
+            "elapsedMs": 243270,
+            "records": 2470391,
+            "rate": 10523.63220648565
+          },
+          {
+            "elapsedMs": 244286,
+            "records": 2481017,
+            "rate": 10465.063028220511
+          },
+          {
+            "elapsedMs": 245362,
+            "records": 2492317,
+            "rate": 10493.094983095563
+          },
+          {
+            "elapsedMs": 246452,
+            "records": 2503616,
+            "rate": 10368.061284754125
+          },
+          {
+            "elapsedMs": 247540,
+            "records": 2513816,
+            "rate": 9379.014597546135
+          },
+          {
+            "elapsedMs": 248628,
+            "records": 2524800,
+            "rate": 10091.287686500242
+          },
+          {
+            "elapsedMs": 249697,
+            "records": 2535919,
+            "rate": 10406.023904704263
+          },
+          {
+            "elapsedMs": 250757,
+            "records": 2547316,
+            "rate": 10746.646109370833
+          },
+          {
+            "elapsedMs": 251820,
+            "records": 2558714,
+            "rate": 10727.701479048099
+          },
+          {
+            "elapsedMs": 252831,
+            "records": 2567216,
+            "rate": 8405.131905431392
+          },
+          {
+            "elapsedMs": 253903,
+            "records": 2577724,
+            "rate": 9806.393030069758
+          },
+          {
+            "elapsedMs": 254970,
+            "records": 2588715,
+            "rate": 10300.720399076768
+          },
+          {
+            "elapsedMs": 256027,
+            "records": 2599816,
+            "rate": 10502.363117794202
+          },
+          {
+            "elapsedMs": 257110,
+            "records": 2611216,
+            "rate": 10523.779179718715
+          },
+          {
+            "elapsedMs": 258182,
+            "records": 2620111,
+            "rate": 8295.991075397571
+          },
+          {
+            "elapsedMs": 259236,
+            "records": 2631117,
+            "rate": 10441.647239583197
+          },
+          {
+            "elapsedMs": 260308,
+            "records": 2642551,
+            "rate": 10671.180450937225
+          },
+          {
+            "elapsedMs": 261382,
+            "records": 2653816,
+            "rate": 10489.660255287305
+          },
+          {
+            "elapsedMs": 262437,
+            "records": 2663116,
+            "rate": 8809.743642399479
+          },
+          {
+            "elapsedMs": 263451,
+            "records": 2672719,
+            "rate": 9474.163222872956
+          },
+          {
+            "elapsedMs": 264507,
+            "records": 2683771,
+            "rate": 10463.300697056344
+          },
+          {
+            "elapsedMs": 265583,
+            "records": 2695154,
+            "rate": 10582.438112339143
+          },
+          {
+            "elapsedMs": 266676,
+            "records": 2706616,
+            "rate": 10483.147459241978
+          },
+          {
+            "elapsedMs": 267745,
+            "records": 2717248,
+            "rate": 9946.079023929075
+          },
+          {
+            "elapsedMs": 268819,
+            "records": 2728617,
+            "rate": 10585.3875749486
+          },
+          {
+            "elapsedMs": 269877,
+            "records": 2740216,
+            "rate": 10963.356900675357
+          },
+          {
+            "elapsedMs": 270957,
+            "records": 2750400,
+            "rate": 9432.204202167746
+          },
+          {
+            "elapsedMs": 272020,
+            "records": 2761916,
+            "rate": 10834.900962983718
+          },
+          {
+            "elapsedMs": 273092,
+            "records": 2773214,
+            "rate": 10533.072889541241
+          },
+          {
+            "elapsedMs": 274162,
+            "records": 2784611,
+            "rate": 10659.209491064132
+          },
+          {
+            "elapsedMs": 275237,
+            "records": 2795616,
+            "rate": 10231.308055154293
+          },
+          {
+            "elapsedMs": 276302,
+            "records": 2806811,
+            "rate": 10511.323387200848
+          },
+          {
+            "elapsedMs": 277366,
+            "records": 2817231,
+            "rate": 9793.596274174612
+          },
+          {
+            "elapsedMs": 278464,
+            "records": 2829121,
+            "rate": 10831.807750494969
+          },
+          {
+            "elapsedMs": 279521,
+            "records": 2840421,
+            "rate": 10685.603194617104
+          },
+          {
+            "elapsedMs": 280590,
+            "records": 2851616,
+            "rate": 10474.539364073527
+          },
+          {
+            "elapsedMs": 281689,
+            "records": 2863116,
+            "rate": 10463.968181791572
+          },
+          {
+            "elapsedMs": 282719,
+            "records": 2872291,
+            "rate": 8905.848912536248
+          },
+          {
+            "elapsedMs": 283813,
+            "records": 2883246,
+            "rate": 10015.171700661303
+          },
+          {
+            "elapsedMs": 284869,
+            "records": 2894417,
+            "rate": 10579.245912658243
+          },
+          {
+            "elapsedMs": 285870,
+            "records": 2905455,
+            "rate": 11034.300750673337
+          },
+          {
+            "elapsedMs": 286939,
+            "records": 2914622,
+            "rate": 8568.854336370065
+          },
+          {
+            "elapsedMs": 288027,
+            "records": 2924012,
+            "rate": 8636.335437210866
+          },
+          {
+            "elapsedMs": 289109,
+            "records": 2933814,
+            "rate": 9058.036647417186
+          },
+          {
+            "elapsedMs": 290124,
+            "records": 2943010,
+            "rate": 9057.663438511543
+          },
+          {
+            "elapsedMs": 291177,
+            "records": 2952416,
+            "rate": 8932.111300982047
+          },
+          {
+            "elapsedMs": 292272,
+            "records": 2962516,
+            "rate": 9222.421291686062
+          },
+          {
+            "elapsedMs": 293323,
+            "records": 2969716,
+            "rate": 6850.885441071261
+          },
+          {
+            "elapsedMs": 294332,
+            "records": 2979416,
+            "rate": 9611.322335883266
+          },
+          {
+            "elapsedMs": 295341,
+            "records": 2988841,
+            "rate": 9341.603229515833
+          },
+          {
+            "elapsedMs": 296414,
+            "records": 2998616,
+            "rate": 9109.083841661757
+          },
+          {
+            "elapsedMs": 297472,
+            "records": 3007970,
+            "rate": 8845.679347639601
+          },
+          {
+            "elapsedMs": 298568,
+            "records": 3018516,
+            "rate": 9618.476306067461
+          },
+          {
+            "elapsedMs": 299637,
+            "records": 3030116,
+            "rate": 10851.88379530038
+          },
+          {
+            "elapsedMs": 300695,
+            "records": 3041616,
+            "rate": 10871.09878212971
+          },
+          {
+            "elapsedMs": 301756,
+            "records": 3052816,
+            "rate": 10557.765825926008
+          },
+          {
+            "elapsedMs": 302856,
+            "records": 3064216,
+            "rate": 10361.330967496096
+          },
+          {
+            "elapsedMs": 303945,
+            "records": 3076019,
+            "rate": 10837.693420586727
+          },
+          {
+            "elapsedMs": 305005,
+            "records": 3087416,
+            "rate": 10752.703805204883
+          },
+          {
+            "elapsedMs": 306063,
+            "records": 3098711,
+            "rate": 10673.77096734259
+          },
+          {
+            "elapsedMs": 307133,
+            "records": 3110115,
+            "rate": 10659.481410976261
+          },
+          {
+            "elapsedMs": 308168,
+            "records": 3118416,
+            "rate": 8019.57894070743
+          },
+          {
+            "elapsedMs": 309249,
+            "records": 3129815,
+            "rate": 10545.945502452285
+          },
+          {
+            "elapsedMs": 310305,
+            "records": 3141216,
+            "rate": 10796.485014103324
+          },
+          {
+            "elapsedMs": 311317,
+            "records": 3148816,
+            "rate": 7510.128477951738
+          }
+        ]
+      },
+      "exact": {
+        "sourceTopicId": "QLYzMh1FQaiIOxaXlmzKVQ",
+        "partitionSha256": {
+          "0": "d88aab85abb6eda1b10767f6c22ca754ba89a7f3512e0fd4bc1bdc04296d02b4"
+        },
+        "records": 3150000,
+        "expected": 3150000,
+        "fullFactParity": true,
+        "orderedUnique": true,
+        "pass": true
+      },
+      "pass": false
+    }
+  ],
+  "pass": false
+}

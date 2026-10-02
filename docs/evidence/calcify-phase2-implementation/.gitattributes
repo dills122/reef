@@ -1,0 +1,3 @@
+# Preserve raw diagnostic whitespace; exclude generated logs from patch rendering.
+*.log -whitespace -diff
+profile-summary.txt -whitespace

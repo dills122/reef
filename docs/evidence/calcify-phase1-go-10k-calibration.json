@@ -1,0 +1,16 @@
+{
+  "smokeId": "calcify-1790724070929",
+  "targetPairs": 150000,
+  "startIndex": 150000,
+  "targetPairsPerSecond": 5000,
+  "scheduledPairs": 150000,
+  "dispatchedPairs": 117670,
+  "droppedPairs": 32330,
+  "completedPairs": 117670,
+  "acceptedOrders": 235340,
+  "acceptedOrdersAtDeadline": 230487,
+  "acceptedOrdersPerSecond": 7691.215634312534,
+  "elapsedMs": 30598,
+  "retries": 0,
+  "failures": 0
+}

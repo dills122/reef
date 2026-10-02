@@ -65,7 +65,7 @@ func FuzzSubmitOrderSingleOrderInvariants(f *testing.F) {
 			return
 		}
 
-		state, ok := service.OrderState(orderID)
+		state, ok := service.OrderState("", orderID)
 		if !ok {
 			t.Fatalf("accepted order has no state: %#v", result)
 		}

@@ -1,0 +1,2 @@
+20957   0.0   2448 /bin/zsh -c tail -2 docs/evidence/calcify-phase2-implementation/sustained-1fadb3e2/hot-observer.log; tail -10 /private/tmp/calcify-p2-flow-build.log; ps -axo pid,pcpu,rss,command | rg 'p2-sus-1fadb3e2' | sed -E 's/(.{250}).*/\1/' >
+20961   0.0    176 rg p2-sus-1fadb3e2

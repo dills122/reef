@@ -1,0 +1,6 @@
+{
+  "failedAction": "start diagnostic engine image staging container with /bin/sh",
+  "reason": "cached engine base is scratch; no shell",
+  "scope": "setup failure; no full-path run",
+  "correction": "commit copied Go binaries from stopped container without starting shell"
+}

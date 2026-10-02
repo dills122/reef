@@ -1,0 +1,5 @@
+--- FAIL: TestTerminalRetentionProvisionalEvictionKeepsGlobalIDReservation (0.00s)
+    terminal_retention_replay_test.go:231: provisional eviction released another lane's ID reservation: {Accepted:0x3e8cca79abc0 Rejected:<nil> AcceptedOrder:<nil> Executions:[] Trades:[]}
+FAIL
+FAIL	github.com/dills122/reef/services/matching-engine/internal/app	0.254s
+FAIL

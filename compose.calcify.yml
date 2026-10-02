@@ -1,0 +1,72 @@
+# Opt-in Calcify sidecars. Use with compose.base.yml and compose.local.yml.
+x-calcify-service: &calcify-service
+  image: ${REEF_PLATFORM_RUNTIME_IMAGE:-reef-platform-runtime}
+  build:
+    context: ./services/platform-runtime
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  profiles: ["calcify-phase1"]
+  environment: &calcify-environment
+    STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+    RUNTIME_POSTGRES_JDBC_URL: "jdbc:postgresql://postgres:5432/reef?currentSchema=runtime"
+    RUNTIME_POSTGRES_USER: "reef"
+    RUNTIME_POSTGRES_PASSWORD: "reef"
+    CALCIFY_SOURCE_TOPIC: "${CALCIFY_SOURCE_TOPIC:-REEF_VENUE_EVENTS}"
+    CALCIFY_COMMITMENT_TOPIC: "${CALCIFY_COMMITMENT_TOPIC:-REEF_MATCH_COMMITMENTS_V1}"
+    CALCIFY_VERIFIED_TOPIC: "${CALCIFY_VERIFIED_TOPIC:-REEF_VERIFIED_COMMITMENTS_V1}"
+    CALCIFY_SOURCE_GENERATION: "${CALCIFY_SOURCE_GENERATION:-1}"
+    CALCIFY_BROKER_KIND: "${CALCIFY_BROKER_KIND:-REDPANDA}"
+    CALCIFY_INTERNAL_TOPIC_REPLICATION_FACTOR: "${CALCIFY_INTERNAL_TOPIC_REPLICATION_FACTOR:-1}"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redpanda:
+      condition: service_healthy
+
+services:
+  calcify-extractor:
+    <<: *calcify-service
+    environment:
+      <<: *calcify-environment
+      CALCIFY_STAGE: "extractor"
+
+  calcify-verifier:
+    <<: *calcify-service
+    environment:
+      <<: *calcify-environment
+      CALCIFY_STAGE: "verifier"
+
+  calcify-receipt:
+    <<: *calcify-service
+    environment:
+      <<: *calcify-environment
+      CALCIFY_STAGE: "receipt"
+
+  calcify-resolver:
+    <<: *calcify-service
+    profiles: ["calcify-phase2"]
+    environment:
+      <<: *calcify-environment
+      CALCIFY_STAGE: "resolver"
+      CALCIFY_RESOLVED_TOPIC: "${CALCIFY_RESOLVED_TOPIC:-REEF_MATCH_CONTEXT_RESOLVED_V1}"
+      CALCIFY_RESOLVER_APPLICATION_ID: "${CALCIFY_RESOLVER_APPLICATION_ID:-reef-calcify-resolver-v1}"
+      CALCIFY_RESOLVER_STATE_DIR: "/app/calcify-state"
+      CALCIFY_RESOLVER_BROKER_KIND: ${CALCIFY_RESOLVER_BROKER_KIND:-REDPANDA}
+      CALCIFY_RESOLVER_REPLICATION_FACTOR: "${CALCIFY_RESOLVER_REPLICATION_FACTOR:-1}"
+      CALCIFY_RESOLVER_STANDBYS: "${CALCIFY_RESOLVER_STANDBYS:-1}"
+      CALCIFY_RESOLVER_SESSION_TIMEOUT_MS: "${CALCIFY_RESOLVER_SESSION_TIMEOUT_MS:-6000}"
+      CALCIFY_RESOLVER_THREADS: "${CALCIFY_RESOLVER_THREADS:-1}"
+      CALCIFY_RESOLVER_MAX_PENDING: "${CALCIFY_RESOLVER_MAX_PENDING:-200}"
+      CALCIFY_RESOLVER_MAX_SOURCE_BYTES: "${CALCIFY_RESOLVER_MAX_SOURCE_BYTES:-4194304}"
+      CALCIFY_RESOLVER_MAX_TARGET_BYTES: "${CALCIFY_RESOLVER_MAX_TARGET_BYTES:-16777216}"
+    volumes:
+      - calcify-resolver-state:/app/calcify-state
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8089/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  calcify-resolver-state:

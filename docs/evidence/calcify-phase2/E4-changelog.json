@@ -1,0 +1,23 @@
+[
+  {
+    "topic": "p2-dfc9d7fa-source",
+    "records": 10,
+    "logicalKeyValueBytes": 442686,
+    "tombstones": 0,
+    "endOffset": 10
+  },
+  {
+    "topic": "p2-dfc9d7fa-app-facts-changelog",
+    "records": 1062,
+    "logicalKeyValueBytes": 345987,
+    "tombstones": 260,
+    "endOffset": 1582
+  },
+  {
+    "topic": "p2-dfc9d7fa-output",
+    "records": 260,
+    "logicalKeyValueBytes": 519538,
+    "tombstones": 0,
+    "endOffset": 780
+  }
+]

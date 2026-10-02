@@ -110,7 +110,7 @@ class PostTradeProfileResolver(
     }
 }
 
-internal val BuiltInPostTradeProfiles = listOf(
+private val BuiltInPostTradeProfiles = listOf(
     PostTradeProfile(
         profileId = "ops-realistic-v1",
         mode = "ops-realistic",

@@ -1,0 +1,92 @@
+[
+  {
+    "boundary": "after-commit",
+    "before": {
+      "records": 130,
+      "unique": 130,
+      "duplicates": 0,
+      "outputBytes": 251303,
+      "outputHash": "da3323dcaf4bce8c2d1eacd244ff86132fcd4665c71fdcb21d35a3821ce094b6",
+      "fullFactParity": true
+    },
+    "afterRestartAndWave2": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "65dfe33cc9d429d61c2557b75eb0f381e0a0dc90949b84fd25d03d01acd7a202",
+      "fullFactParity": true
+    },
+    "restartToWave2Seconds": 8.400985875006882,
+    "sameDisk": true
+  },
+  {
+    "boundary": "state",
+    "before": {
+      "records": 0,
+      "unique": 0,
+      "duplicates": 0,
+      "outputBytes": 0,
+      "outputHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "fullFactParity": false
+    },
+    "afterRestartAndWave2": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "8785cba602b0db86cbd97d22b775e7fe96187bebd5bacaf6e6c9598ccc4f016c",
+      "fullFactParity": true
+    },
+    "restartToWave2Seconds": 10.077737708008499,
+    "sameDisk": true
+  },
+  {
+    "boundary": "forward",
+    "before": {
+      "records": 0,
+      "unique": 0,
+      "duplicates": 0,
+      "outputBytes": 0,
+      "outputHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "fullFactParity": false
+    },
+    "afterRestartAndWave2": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "a595d8d932649e2cb6404cf1e2b1267e5b095ca2c1379298ba9c55dab0a14abf",
+      "fullFactParity": true
+    },
+    "restartToWave2Seconds": 9.974846416997025,
+    "sameDisk": true
+  },
+  {
+    "boundary": "node-loss-empty-disk",
+    "after": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "d658904c024d8c6bb540d1b933f86b2eba7bb6983bd9ecc7bd9d9684d145c680",
+      "fullFactParity": true
+    },
+    "restoreAndWave2Seconds": 8.845230375009123
+  },
+  {
+    "boundary": "output-silent-standby-promoted-state-lag-at-most-one-offset",
+    "after": {
+      "records": 260,
+      "unique": 260,
+      "duplicates": 0,
+      "outputBytes": 517426,
+      "outputHash": "34e27df30cf5db4e80cc8fd0121b2007747f140f4e1c21e01756d4c5f375a8c1",
+      "fullFactParity": true
+    },
+    "failoverAndWave2Seconds": 8.573155791003956
+  },
+  {
+    "stalePublisherFenced": true
+  }
+]

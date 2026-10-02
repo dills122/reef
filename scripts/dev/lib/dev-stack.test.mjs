@@ -124,53 +124,6 @@ test("devUp starts Arena storage only when the Arena overlay is selected", async
   ]);
 });
 
-test("devUp starts isolated post-match storage only with its profile", async () => {
-  const calls = [];
-  const processEnv = {};
-  await devUp({
-    env: envFrom({ JS_RUNTIME: "node", DEV_COMPOSE_PROFILES: "postmatch" }),
-    processEnv,
-    log: () => {},
-    run: async (cmd, args) => calls.push([cmd, args]),
-  });
-
-  assert.equal(processEnv.COMPOSE_PROFILES, "postmatch");
-  assert.deepEqual(calls[0], [
-    "docker",
-    [...compose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices, "postmatch-postgres"],
-  ]);
-});
-
-test("devUp recognizes post-match alongside other Compose profiles", async () => {
-  const calls = [];
-  await devUp({
-    env: envFrom({ JS_RUNTIME: "node", DEV_COMPOSE_PROFILES: "redis, postmatch" }),
-    processEnv: {},
-    log: () => {},
-    run: async (cmd, args) => calls.push([cmd, args]),
-  });
-
-  assert.deepEqual(calls[0], [
-    "docker",
-    [...compose, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices, "postmatch-postgres"],
-  ]);
-});
-
-test("devUp starts dedicated settlement storage before its migrations", async () => {
-  const calls = [];
-  const processEnv = { REEF_SETTLEMENT_POSTGRES_MIGRATIONS: "1" };
-  await devUp({
-    env: envFrom({ JS_RUNTIME: "node", DEV_COMPOSE_PROFILES: "postmatch" }),
-    processEnv,
-    log: () => {},
-    run: async (cmd, args) => calls.push([cmd, args]),
-  });
-
-  assert.deepEqual(calls[0], ["docker", [...compose, "up", "-d", "--remove-orphans",
-    "--wait", "--wait-timeout", "300", ...databaseServices, "postmatch-postgres", "settlement-postgres"]]);
-  assert.deepEqual(calls[1], ["node", ["scripts/dev/db/migrate.mjs"]]);
-});
-
 function envFrom(values) {
   return (name, fallback = "") => {
     const value = values[name];

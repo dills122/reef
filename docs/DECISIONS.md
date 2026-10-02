@@ -668,6 +668,8 @@ Summary:
 - the matching engine should use a Reef-owned book implementation with ordered price levels, FIFO queues per price, and an order-id index for direct cancel/modify unlinking.
 - `github.com/tidwall/btree` is acceptable as a narrow ordered price-level index dependency; matching semantics, replay, event generation, and checksums remain Reef-owned.
 - snapshots are recovery accelerators for shard-local book state, not the source of truth. Recovery must remain snapshot plus durable command/event replay plus checksum verification.
+- 2026-10-01 replay correction: enabled terminal-order retention is bounded per exact run/session/instrument book, not globally across books. Apply retention at each terminal transition with batch-local undo, so cross-book scheduling and publication batch cuts cannot change same-book command outcomes. Provisional evictions retain the engine-wide order-ID reservation until commit/rollback. Snapshot V4 records this policy and exact limit; old snapshots may resume only with retention disabled, and enabling the new policy requires canonical command replay. See [matching-engine recovery compatibility](../services/matching-engine/README.md#terminal-retention-and-recovery-compatibility).
+- 2026-10-01 PR #438 integration clarification: merged PR #436 scopes matcher order identity to `(runId, orderId)`. Provisional reservations and rollback preimages preserve that same scope; different runs remain independent even when IDs collide. This refines the earlier engine-wide reservation wording without changing lane-local retention or Calcify acceptance identity.
 - Redis, Postgres, RocksDB/Pebble, and embedded C++ engines are not accepted hot-book stores for this phase.
 
 Primary references:
@@ -1178,72 +1180,6 @@ Status: implementation under validation
   journals. Caller metrics describe calls and concurrency, not mixed order and
   instrument row counts. Required benchmark health counters must be present and
   valid; missing counters never mean zero failures.
-
-### D-058: Versioned canonical effects for independent post-match consumers
-
-Status: accepted implementation direction; live cutover and capacity remain unqualified
-
-- Preserve Go's deterministic matching and the existing durable venue batch and
-  compact canonical command outcome as source authority. Matching emits a
-  versioned result with final changed-order facts for the incoming order and
-  every affected resting maker, including cancellation by self-trade prevention.
-  This adds no synchronous database write to matching or ingress.
-- Decode each outcome once into a deterministic ordered sequence: command
-  acceptance/rejection, paired maker/taker executions and trade per fill, then
-  changed-order final states. Identity is event stream, source partition,
-  stream sequence, and effect ordinal; source batch and command IDs are retained
-  for audit. Missing, conflicting, or unsupported source versions fail closed.
-- An accepted submit carries immutable order ownership. Other effects resolve
-  participant, account, run, and session by keyed canonical order identity;
-  missing ownership blocks live and settlement progress. Trade facts keep both
-  order IDs and immutable price, quantity, and currency.
-- Live, audit, and settlement own separate effect dedupe and contiguous source
-  checkpoints, committed with their own state changes in one transaction. A
-  consumer cannot skip a source gap, cross a semantic conflict, or claim a
-  combined response is current without causal coverage from required inputs.
-  Direct admin/protective audit events retain their separate durable authority.
-- Existing unversioned outcomes remain on the legacy projection path until a
-  proved backfill/cutover. The old projector stays a comparison and rollback
-  path; new consumers do not dual-write its effect tables. One integrated
-  droplet campaign follows parity and replacement of the old work.
-
-Contract and rollout: [`docs/work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-26.md`](./work/POST_MATCH_CANONICAL_EFFECTS_CONTRACT_2026-09-26.md).
-
-### D-059: Durable settlement admission order for scarce accounts
-
-Status: accepted design on 2026-09-27; shadow implementation landed in #400
-after separate-target restore/replay, independent, and OCR review. The PM-S2
-combined-path diagnostic failed its 10k/s gate. Public-read cutover and
-capacity remain unqualified; see the
-[capacity decision spike](./research/POST_MATCH_SETTLEMENT_CAPACITY_DECISION_2026-09-27.md).
-
-- Matching source facts provide a contiguous order within each partition, not
-  a total order across partitions. Sorted account row locks serialize writes
-  but allow scheduler timing to choose which trade consumes scarce resources.
-- Before any balance-dependent settlement decision, a separate post-trade
-  admission transaction assigns a global rank to a bounded, source-verified
-  obligation window. Rank, source identity/digest, exact account-set digest,
-  dependency digest, dependencies, account memberships, and admission frontier
-  commit atomically.
-  Trades inside one window retain source order. Matching and durable ingress
-  acquire no synchronous database write from this decision.
-- A window waits for completion of its predecessor on each affected account
-  and source partition. Disjoint windows on different partitions can execute
-  in parallel. One settlement transaction commits each window's attempts,
-  balanced four-leg DvP postings or typed breaks, account checkpoints,
-  coverage, completion proof, and execution frontier.
-- Deterministic replay includes the retained canonical admission order.
-  Same-generation rebuilds preserve/import that log and verify exact source,
-  policy, account, and dependency digests. Matching-only readmission after
-  losing the order is a new arbitration history and may choose another scarce
-  account winner. It must never be presented as the same replay.
-- Shadow worker remains default-off. Local contention, replay, rollback, and
-  migration proofs plus independent review precede its PR. Full-pipeline
-  throughput qualification on a disposable droplet follows merge; no
-  venue-core result or local test qualifies settlement capacity or public reads.
-
-Research and contract: [`docs/research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md`](./research/POST_MATCH_ACCOUNT_ARBITRATION_SPIKE_2026-09-27.md),
-[`docs/work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md`](./work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md).
 
 ## 2026-09-24 — Serialize projection invalidations before claiming freshness
 

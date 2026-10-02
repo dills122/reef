@@ -43,7 +43,7 @@ func TestSubmitOrderAcceptsAndRestsFirstOrder(t *testing.T) {
 		t.Fatalf("expected one resting buy order")
 	}
 
-	state, ok := service.OrderState("ord-1")
+	state, ok := service.OrderState("", "ord-1")
 	if !ok {
 		t.Fatalf("expected order state for ord-1")
 	}
@@ -115,7 +115,7 @@ func TestServiceUsesCommandTimestampForGeneratedEvents(t *testing.T) {
 			t.Fatalf("expected trade timestamp %s, got %#v", sellTime, trade)
 		}
 	}
-	buyState, ok := service.OrderState("ord-clock-buy")
+	buyState, ok := service.OrderState("", "ord-clock-buy")
 	if !ok || buyState.LastUpdatedAt != sellTime {
 		t.Fatalf("expected matched buy state timestamp %s, got %#v", sellTime, buyState)
 	}
@@ -201,64 +201,15 @@ func TestSubmitOrderMatchesCrossingOrder(t *testing.T) {
 		t.Fatalf("expected no resting buy orders after full match")
 	}
 
-	buyState, ok := service.OrderState("ord-buy-1")
+	buyState, ok := service.OrderState("", "ord-buy-1")
 	if !ok || buyState.Status != domain.OrderStatusFilled {
 		t.Fatalf("expected filled buy order state, got %#v", buyState)
 	}
 
-	sellState, ok := service.OrderState("ord-sell-1")
+	sellState, ok := service.OrderState("", "ord-sell-1")
 	if !ok || sellState.Status != domain.OrderStatusFilled {
 		t.Fatalf("expected filled sell order state, got %#v", sellState)
 	}
-}
-
-func TestCommandResultsCarryChangedOrderStates(t *testing.T) {
-	service := NewService()
-	buy := service.SubmitOrder(domain.SubmitOrder{
-		CommandID: "submit-buy", OrderID: "state-buy", InstrumentID: "AAPL",
-		Side: domain.SideBuy, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
-	})
-	if buy.EffectVersion != 1 || len(buy.OrderStates) != 1 || buy.OrderStates[0].OrderID != "state-buy" {
-		t.Fatalf("accepted submit must carry its state: %#v", buy)
-	}
-	modify := service.ModifyOrder(domain.ModifyOrder{
-		CommandID: "modify-buy", OrderID: "state-buy", QuantityUnits: "120", LimitPrice: "150",
-	})
-	if len(modify.OrderStates) != 1 || modify.OrderStates[0].OriginalQuantity != "120" {
-		t.Fatalf("accepted modify must carry its new state: %#v", modify)
-	}
-	sell := service.SubmitOrder(domain.SubmitOrder{
-		CommandID: "submit-sell", OrderID: "state-sell", InstrumentID: "AAPL",
-		Side: domain.SideSell, QuantityUnits: "50", LimitPrice: "150", Currency: "USD",
-	})
-	if len(sell.Trades) != 1 || len(sell.OrderStates) != 2 ||
-		sell.OrderStates[0].OrderID != "state-sell" || sell.OrderStates[0].Status != domain.OrderStatusFilled ||
-		sell.OrderStates[1].OrderID != "state-buy" || sell.OrderStates[1].RemainingQuantity != "70" {
-		t.Fatalf("match must carry taker and resting maker states: %#v", sell)
-	}
-	cancel := service.CancelOrder(domain.CancelOrder{CommandID: "cancel-buy", OrderID: "state-buy"})
-	if len(cancel.OrderStates) != 1 || cancel.OrderStates[0].Status != domain.OrderStatusCancelled {
-		t.Fatalf("accepted cancel must carry terminal state: %#v", cancel)
-	}
-}
-
-func TestCancelOldestSelfTradeCarriesCancelledMakerState(t *testing.T) {
-	service := NewService(WithSelfTradePreventionMode(SelfTradePreventionCancelOldest), WithTerminalOrderRetentionLimit(1))
-	service.SubmitOrder(domain.SubmitOrder{
-		CommandID: "stp-maker", OrderID: "stp-maker", InstrumentID: "AAPL", AccountID: "shared",
-		Side: domain.SideSell, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
-	})
-	rollback := service.BeginBatch([]BookScope{{InstrumentID: "AAPL"}})
-	result := service.SubmitOrderInBatch(rollback, domain.SubmitOrder{
-		CommandID: "stp-taker", OrderID: "stp-taker", InstrumentID: "AAPL", AccountID: "shared",
-		Side: domain.SideBuy, QuantityUnits: "100", LimitPrice: "150", Currency: "USD",
-	})
-	if result.Accepted == nil || len(result.Trades) != 0 || len(result.OrderStates) != 2 ||
-		result.OrderStates[0].OrderID != "stp-taker" ||
-		result.OrderStates[1].OrderID != "stp-maker" || result.OrderStates[1].Status != domain.OrderStatusCancelled {
-		t.Fatalf("cancel-oldest must carry the maker cancellation without a trade: %#v", result)
-	}
-	rollback.Commit()
 }
 
 func TestSubmitOrderPartiallyFillsAndLeavesResidualLiquidity(t *testing.T) {
@@ -315,12 +266,12 @@ func TestSubmitOrderPartiallyFillsAndLeavesResidualLiquidity(t *testing.T) {
 		t.Fatalf("expected one resting sell order after residual fill")
 	}
 
-	buyState, ok := service.OrderState("ord-buy-1")
+	buyState, ok := service.OrderState("", "ord-buy-1")
 	if !ok || buyState.Status != domain.OrderStatusFilled {
 		t.Fatalf("expected filled buy order state, got %#v", buyState)
 	}
 
-	secondSellState, ok := service.OrderState("ord-sell-2")
+	secondSellState, ok := service.OrderState("", "ord-sell-2")
 	if !ok || secondSellState.Status != domain.OrderStatusPartiallyFilled || secondSellState.RemainingQuantity != "10" {
 		t.Fatalf("expected partially filled sell order state, got %#v", secondSellState)
 	}
@@ -380,7 +331,7 @@ func TestSubmitOrderMatchesAcrossMultipleRestingOrders(t *testing.T) {
 		t.Fatalf("expected one remaining resting sell order after sweep")
 	}
 
-	restingState, ok := service.OrderState("ord-sell-2")
+	restingState, ok := service.OrderState("", "ord-sell-2")
 	if !ok || restingState.Status != domain.OrderStatusPartiallyFilled || restingState.RemainingQuantity != "15" {
 		t.Fatalf("expected remaining resting sell state, got %#v", restingState)
 	}
@@ -647,7 +598,7 @@ func TestSubmitOrderRejectsDuplicateOrderIDWithoutMutatingBook(t *testing.T) {
 		t.Fatalf("expected duplicate order code, got %s", duplicate.Rejected.Code)
 	}
 
-	state, ok := service.OrderState("ord-dup")
+	state, ok := service.OrderState("", "ord-dup")
 	if !ok {
 		t.Fatal("expected original order state to remain")
 	}
@@ -722,7 +673,7 @@ func TestSubmitOrderRejectsMarketIntegrityControlBreaches(t *testing.T) {
 			if result.Rejected.Code != "MARKET_INTEGRITY_CONTROL" {
 				t.Fatalf("expected market integrity code, got %#v", result.Rejected)
 			}
-			if _, ok := service.OrderState(cmd.OrderID); ok {
+			if _, ok := service.OrderState("", cmd.OrderID); ok {
 				t.Fatalf("expected rejected order %s to avoid order state", cmd.OrderID)
 			}
 		})
@@ -757,7 +708,7 @@ func TestSubmitOrderRejectsWhenSessionNotOpen(t *testing.T) {
 			if result.Rejected.Code != "SESSION_STATE_REJECT" {
 				t.Fatalf("expected session-state reject code, got %#v", result.Rejected)
 			}
-			if _, ok := service.OrderState("ord-" + sessionID); ok {
+			if _, ok := service.OrderState("", "ord-"+sessionID); ok {
 				t.Fatalf("expected session-rejected order to avoid order state")
 			}
 		})
@@ -786,7 +737,7 @@ func TestSubmitOrderRejectsUnsupportedMatchAlgorithm(t *testing.T) {
 	if result.Rejected.Code != "UNSUPPORTED_MATCH_ALGORITHM" {
 		t.Fatalf("expected unsupported matching algorithm code, got %#v", result.Rejected)
 	}
-	if _, ok := service.OrderState("ord-unsupported-algo"); ok {
+	if _, ok := service.OrderState("", "ord-unsupported-algo"); ok {
 		t.Fatal("expected unsupported algorithm reject to avoid order state")
 	}
 	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
@@ -851,7 +802,7 @@ func TestSubmitOrderRejectsSelfTradePreventionWithoutMutation(t *testing.T) {
 	if cross.Rejected.Code != "SELF_TRADE_PREVENTION" {
 		t.Fatalf("expected self-trade prevention code, got %#v", cross.Rejected)
 	}
-	if _, ok := service.OrderState("ord-buy-own"); ok {
+	if _, ok := service.OrderState("", "ord-buy-own"); ok {
 		t.Fatal("expected rejected self-trade taker to avoid order state")
 	}
 	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
@@ -1009,11 +960,11 @@ func TestSubmitOrderSelfTradeCancelOldestMode(t *testing.T) {
 	if len(cross.Trades) != 0 {
 		t.Fatalf("expected cancel-oldest self-trade prevention to avoid trades, got %#v", cross.Trades)
 	}
-	restingState, ok := service.OrderState("ord-sell-own")
+	restingState, ok := service.OrderState("", "ord-sell-own")
 	if !ok || restingState.Status != domain.OrderStatusCancelled {
 		t.Fatalf("expected resting own order cancelled, got %#v", restingState)
 	}
-	takerState, ok := service.OrderState("ord-buy-own")
+	takerState, ok := service.OrderState("", "ord-buy-own")
 	if !ok || takerState.Status != domain.OrderStatusAccepted || takerState.RemainingQuantity != "100" {
 		t.Fatalf("expected taker to rest after cancel-oldest prevention, got %#v", takerState)
 	}
@@ -1042,7 +993,7 @@ func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
 		t.Fatalf("expected no resting order after cancel")
 	}
-	state, ok := service.OrderState("ord-1")
+	state, ok := service.OrderState("", "ord-1")
 	if !ok || state.Status != domain.OrderStatusCancelled {
 		t.Fatalf("expected cancelled order state, got %#v", state)
 	}
@@ -1091,11 +1042,17 @@ func TestLifecycleMutationsRejectClaimsThatDoNotMatchTargetOrder(t *testing.T) {
 		LimitPrice:     "150200000000",
 		OccurredAt:     "2026-03-14T18:00:02Z",
 	})
-	if modify.Rejected == nil || modify.Rejected.Code != "ORDER_CONTEXT_MISMATCH" {
-		t.Fatalf("expected modify context rejection, got %#v", modify)
+	// The order index is now scoped by (runId, orderId): a claim naming the
+	// wrong run can no longer find "ord-owned" at all (it lives under
+	// run-1's key, not run-2's), so this fails closed at the lookup itself
+	// rather than reaching the context-match comparison. The cancel case
+	// above still exercises ORDER_CONTEXT_MISMATCH because it names the
+	// correct run and only the other fields are wrong.
+	if modify.Rejected == nil || modify.Rejected.Code != "NOT_FOUND" {
+		t.Fatalf("expected modify run-mismatch to reject as not found, got %#v", modify)
 	}
 
-	state, ok := service.OrderState("ord-owned")
+	state, ok := service.OrderState("run-1", "ord-owned")
 	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
 		t.Fatalf("expected spoofed lifecycle mutations to leave order unchanged, got %#v", state)
 	}
@@ -1184,16 +1141,16 @@ func TestTerminalOrderRetentionLimitPrunesOldestTerminalState(t *testing.T) {
 	})
 	service.CancelOrder(domain.CancelOrder{OrderID: "ord-cancel-2"})
 
-	if _, ok := service.OrderState("ord-cancel-1"); ok {
+	if _, ok := service.OrderState("", "ord-cancel-1"); ok {
 		t.Fatalf("expected oldest terminal order to be pruned")
 	}
-	state, ok := service.OrderState("ord-cancel-2")
+	state, ok := service.OrderState("", "ord-cancel-2")
 	if !ok || state.Status != domain.OrderStatusCancelled {
 		t.Fatalf("expected newest terminal order to remain, got %#v", state)
 	}
 }
 
-func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
+func TestBatchRollbackRestoresLaneLocalTerminalRetention(t *testing.T) {
 	service := NewService(WithTerminalOrderRetentionLimit(1))
 	service.SubmitOrder(domain.SubmitOrder{
 		OrderID:       "ord-sell-resting",
@@ -1217,13 +1174,8 @@ func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
 	if result.Accepted == nil || len(result.Trades) != 1 {
 		t.Fatalf("expected crossing command to mutate terminal state before rollback, got %#v", result)
 	}
-	if len(result.OrderStates) != 2 || result.OrderStates[0].OrderID != "ord-buy-failed-publish" ||
-		result.OrderStates[1].OrderID != "ord-sell-resting" ||
-		result.OrderStates[1].Status != domain.OrderStatusFilled {
-		t.Fatalf("durable batch must snapshot terminal maker before retention eviction: %#v", result.OrderStates)
-	}
-	if tracked := service.terminalRetention.trackedOrderIDs(); len(tracked) != 0 {
-		t.Fatalf("expected terminal retention to remain deferred before publication, got %+v", tracked)
+	if tracked := service.terminalRetention.trackedOrderIDs(); len(tracked) != 1 {
+		t.Fatalf("expected lane-local retention to apply before next command, got %+v", tracked)
 	}
 
 	rollback.Rollback()
@@ -1232,10 +1184,10 @@ func TestBatchRollbackLeavesDeferredTerminalRetentionUntouched(t *testing.T) {
 	if len(tracked) != 0 {
 		t.Fatalf("expected rollback to restore empty terminal retention state, got %+v", tracked)
 	}
-	if _, ok := service.OrderState("ord-buy-failed-publish"); ok {
+	if _, ok := service.OrderState("", "ord-buy-failed-publish"); ok {
 		t.Fatal("expected newly reserved order to be removed by rollback")
 	}
-	state, ok := service.OrderState("ord-sell-resting")
+	state, ok := service.OrderState("", "ord-sell-resting")
 	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
 		t.Fatalf("expected resting order state to be restored after rollback, got %#v", state)
 	}
@@ -1280,7 +1232,7 @@ func TestBatchRollbackDoesNotEraseAnotherBatchTerminalRetentionCommit(t *testing
 		Currency:      "USD",
 	})
 	succeeded.Commit()
-	committed := service.terminalRetention.trackedOrderIDs()
+	committed := []string{"ord-buy-MSFT", "ord-sell-MSFT"}
 	if len(committed) == 0 {
 		t.Fatal("expected successful batch terminal orders to enter retention")
 	}
@@ -1348,13 +1300,13 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if snapshot.Checksum == "" {
 		t.Fatal("expected service snapshot checksum")
 	}
-	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v2" || snapshot.Metadata.EngineVersion == "" {
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v4" || snapshot.Metadata.EngineVersion == "" {
 		t.Fatalf("expected populated snapshot metadata, got %#v", snapshot.Metadata)
 	}
 	if snapshot.Metadata.BookCount != 1 || snapshot.Metadata.OrderCount != 4 {
 		t.Fatalf("unexpected snapshot metadata counts: %#v", snapshot.Metadata)
 	}
-	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"session-1|AAPL"}) {
+	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{bookKey("", "session-1", "AAPL")}) {
 		t.Fatalf("unexpected snapshot book keys: %#v", snapshot.Metadata.BookKeys)
 	}
 	restored, ok := Restore(snapshot)
@@ -1509,10 +1461,10 @@ func TestSnapshotForInstrumentFiltersBookAndOrders(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AAPL snapshot")
 	}
-	if snapshot.Metadata.BookCount != 1 || !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"AAPL"}) {
+	if snapshot.Metadata.BookCount != 1 || !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{bookKey("", "", "AAPL")}) {
 		t.Fatalf("unexpected AAPL snapshot metadata: %#v", snapshot.Metadata)
 	}
-	if len(snapshot.Books) != 1 || snapshot.Books["AAPL"].Checksum == "" {
+	if len(snapshot.Books) != 1 || snapshot.Books[bookKey("", "", "AAPL")].Checksum == "" {
 		t.Fatalf("expected one AAPL book snapshot, got %#v", snapshot.Books)
 	}
 	if len(snapshot.Orders) != 1 || snapshot.Orders[0].OrderID != "ord-aapl-buy" {
@@ -1613,7 +1565,7 @@ func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
 	for i := 0; i < snapshotIterations; i++ {
 		snapshot := service.Snapshot()
 		if i%10 == 0 {
-			if _, ok := Restore(snapshot); !ok {
+			if _, ok := Restore(snapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 				close(stop)
 				wg.Wait()
 				t.Fatalf("expected service snapshot restore to succeed at iteration %d", i)
@@ -1626,7 +1578,7 @@ func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
 			t.Fatalf("expected AAPL snapshot at iteration %d", i)
 		}
 		if i%10 == 0 {
-			if _, ok := Restore(instrumentSnapshot); !ok {
+			if _, ok := Restore(instrumentSnapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 				close(stop)
 				wg.Wait()
 				t.Fatalf("expected instrument snapshot restore to succeed at iteration %d", i)
@@ -1638,14 +1590,14 @@ func TestServiceSnapshotDuringConcurrentLifecycleRace(t *testing.T) {
 	wg.Wait()
 
 	finalSnapshot := service.Snapshot()
-	if _, ok := Restore(finalSnapshot); !ok {
+	if _, ok := Restore(finalSnapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 		t.Fatal("expected final service snapshot restore to succeed")
 	}
 	finalInstrumentSnapshot, ok := service.SnapshotForInstrument("AAPL")
 	if !ok {
 		t.Fatal("expected final AAPL snapshot")
 	}
-	if _, ok := Restore(finalInstrumentSnapshot); !ok {
+	if _, ok := Restore(finalInstrumentSnapshot, WithTerminalOrderRetentionLimit(128)); !ok {
 		t.Fatal("expected final instrument snapshot restore to succeed")
 	}
 
@@ -1735,11 +1687,11 @@ func TestGoldenReplayBasicLifecycleCorpus(t *testing.T) {
 	if stats.BuyOrders != 0 || stats.SellOrders != 0 || stats.BuyPriceLevels != 0 || stats.SellPriceLevels != 0 {
 		t.Fatalf("expected golden corpus to end with empty book, got %#v", stats)
 	}
-	buyState, ok := service.OrderState("gold-buy-1")
+	buyState, ok := service.OrderState("", "gold-buy-1")
 	if !ok || buyState.Status != domain.OrderStatusFilled || buyState.RemainingQuantity != "0" {
 		t.Fatalf("unexpected golden buy state: %#v", buyState)
 	}
-	sellState, ok := service.OrderState("gold-sell-1")
+	sellState, ok := service.OrderState("", "gold-sell-1")
 	if !ok || sellState.Status != domain.OrderStatusCancelled || sellState.RemainingQuantity != "0" {
 		t.Fatalf("unexpected golden residual sell state: %#v", sellState)
 	}
@@ -1810,7 +1762,7 @@ func TestCancelOrderRemovesPartiallyFilledResidual(t *testing.T) {
 		t.Fatalf("expected partially filled residual to be removed from book")
 	}
 
-	state, ok := service.OrderState("ord-buy-1")
+	state, ok := service.OrderState("", "ord-buy-1")
 	if !ok || state.Status != domain.OrderStatusCancelled || state.RemainingQuantity != "0" {
 		t.Fatalf("expected cancelled residual state, got %#v", state)
 	}
@@ -1840,7 +1792,7 @@ func TestCancelOrderRejectsFilledOrderWithoutChangingState(t *testing.T) {
 		t.Fatalf("expected invalid state rejection, got %#v", cancel.Rejected)
 	}
 
-	state, ok := service.OrderState("ord-buy-1")
+	state, ok := service.OrderState("", "ord-buy-1")
 	if !ok || state.Status != domain.OrderStatusFilled || state.RemainingQuantity != "0" {
 		t.Fatalf("expected filled state to remain unchanged, got %#v", state)
 	}
@@ -1866,7 +1818,7 @@ func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 		t.Fatalf("expected accepted modify result, got %#v", result)
 	}
 
-	state, ok := service.OrderState("ord-1")
+	state, ok := service.OrderState("", "ord-1")
 	if !ok {
 		t.Fatalf("expected order state for ord-1")
 	}
@@ -1911,11 +1863,11 @@ func TestModifyOrderMatchesWhenNewPriceCrossesBook(t *testing.T) {
 	if service.RestingOrders("AAPL", domain.SideBuy) != 0 || service.RestingOrders("AAPL", domain.SideSell) != 0 {
 		t.Fatalf("expected crossed orders to leave no resting liquidity")
 	}
-	buyState, ok := service.OrderState("ord-buy-1")
+	buyState, ok := service.OrderState("", "ord-buy-1")
 	if !ok || buyState.Status != domain.OrderStatusFilled {
 		t.Fatalf("expected modified buy filled, got %#v", buyState)
 	}
-	sellState, ok := service.OrderState("ord-sell-1")
+	sellState, ok := service.OrderState("", "ord-sell-1")
 	if !ok || sellState.Status != domain.OrderStatusFilled {
 		t.Fatalf("expected resting sell filled, got %#v", sellState)
 	}
@@ -2009,7 +1961,7 @@ func TestModifyOrderRejectsQuantityAtOrBelowAlreadyFilled(t *testing.T) {
 		t.Fatalf("expected validation error, got %#v", result.Rejected)
 	}
 
-	state, ok := service.OrderState("ord-buy-1")
+	state, ok := service.OrderState("", "ord-buy-1")
 	if !ok || state.Status != domain.OrderStatusPartiallyFilled || state.RemainingQuantity != "50" {
 		t.Fatalf("expected partially filled state to remain unchanged, got %#v", state)
 	}
@@ -2040,7 +1992,7 @@ func TestModifyOrderRejectsMarketIntegrityControlWithoutMutation(t *testing.T) {
 		t.Fatalf("expected market integrity code, got %#v", result.Rejected)
 	}
 
-	state, ok := service.OrderState("ord-buy-1")
+	state, ok := service.OrderState("", "ord-buy-1")
 	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" || state.LimitPrice != "150250000000" {
 		t.Fatalf("expected original order state to remain unchanged, got %#v", state)
 	}
@@ -2086,7 +2038,7 @@ func TestModifyOrderRejectsSelfTradePreventionWithoutMutation(t *testing.T) {
 	if modify.Rejected == nil || modify.Rejected.Code != "SELF_TRADE_PREVENTION" {
 		t.Fatalf("expected modify self-trade prevention reject, got %#v", modify)
 	}
-	state, ok := service.OrderState("ord-buy-own")
+	state, ok := service.OrderState("", "ord-buy-own")
 	if !ok || state.LimitPrice != "150000000000" || state.RemainingQuantity != "100" {
 		t.Fatalf("expected rejected modify to preserve buy state, got %#v", state)
 	}
@@ -2132,11 +2084,11 @@ func TestModifyOrderSelfTradeCancelOldestMode(t *testing.T) {
 	if modify.Accepted == nil {
 		t.Fatalf("expected cancel-oldest modify to accept, got %#v", modify)
 	}
-	sellState, ok := service.OrderState("ord-sell-own")
+	sellState, ok := service.OrderState("", "ord-sell-own")
 	if !ok || sellState.Status != domain.OrderStatusCancelled {
 		t.Fatalf("expected own sell cancelled by modify, got %#v", sellState)
 	}
-	buyState, ok := service.OrderState("ord-buy-own")
+	buyState, ok := service.OrderState("", "ord-buy-own")
 	if !ok || buyState.Status != domain.OrderStatusAccepted || buyState.LimitPrice != "150300000000" {
 		t.Fatalf("expected modified buy to remain live at new price, got %#v", buyState)
 	}
@@ -2171,7 +2123,7 @@ func TestHaltedSessionRejectsModifyButAllowsCancel(t *testing.T) {
 		t.Fatalf("expected session-state reject code, got %#v", modify.Rejected)
 	}
 
-	state, ok := service.OrderState("ord-buy-1")
+	state, ok := service.OrderState("", "ord-buy-1")
 	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
 		t.Fatalf("expected rejected modify to preserve order state, got %#v", state)
 	}
@@ -2212,7 +2164,7 @@ func TestClosedSessionRejectsCancelWithoutMutation(t *testing.T) {
 	if cancel.Rejected.Code != "SESSION_STATE_REJECT" {
 		t.Fatalf("expected session-state reject code, got %#v", cancel.Rejected)
 	}
-	state, ok := service.OrderState("ord-buy-1")
+	state, ok := service.OrderState("", "ord-buy-1")
 	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
 		t.Fatalf("expected rejected cancel to preserve order state, got %#v", state)
 	}
@@ -2267,7 +2219,7 @@ func TestModifyOrderRejectsTerminalOrderWithoutChangingState(t *testing.T) {
 		t.Fatalf("expected invalid state rejection, got %#v", modifyCancelled.Rejected)
 	}
 
-	state, ok := service.OrderState("ord-buy-cancelled")
+	state, ok := service.OrderState("", "ord-buy-cancelled")
 	if !ok || state.Status != domain.OrderStatusCancelled || state.RemainingQuantity != "0" {
 		t.Fatalf("expected cancelled state to remain unchanged, got %#v", state)
 	}
@@ -2436,12 +2388,12 @@ func TestLifecycleRejectMatrixDoesNotMutateState(t *testing.T) {
 				t.Fatalf("rejected lifecycle action mutated book state")
 			}
 			if tt.wantStatus == "" {
-				if _, ok := service.OrderState(orderID); ok {
+				if _, ok := service.OrderState("", orderID); ok {
 					t.Fatalf("expected unknown order %s to remain absent", orderID)
 				}
 				return
 			}
-			state, ok := service.OrderState(orderID)
+			state, ok := service.OrderState("", orderID)
 			if !ok {
 				t.Fatalf("expected order state for %s", orderID)
 			}

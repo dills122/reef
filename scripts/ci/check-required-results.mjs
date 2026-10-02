@@ -17,6 +17,7 @@ export const FULL_CI_JOBS = [
   "infrastructure-config",
   "go-vulnerability-scan",
   "postgres-schema-placement",
+  "calcify-tests",
 ];
 
 export function validateRequiredResults(needs, { scenarioReplayRequired }) {

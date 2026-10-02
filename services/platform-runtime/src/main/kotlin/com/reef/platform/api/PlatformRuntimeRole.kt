@@ -5,16 +5,12 @@ import com.reef.platform.infrastructure.config.RuntimeEnv
 enum class PlatformRuntimeRole(
     val configValue: String,
     val publicHttpEnabled: Boolean,
-    val commandWorkersEnabled: Boolean
+    val backgroundWorkersEnabled: Boolean
 ) {
-    Api("api", publicHttpEnabled = true, commandWorkersEnabled = false),
-    Worker("worker", publicHttpEnabled = false, commandWorkersEnabled = true),
-    Projector("projector", publicHttpEnabled = false, commandWorkersEnabled = true),
-    Materializer("materializer", publicHttpEnabled = false, commandWorkersEnabled = true),
-    // Reads committed canonical facts; it does not execute ingress commands.
-    PostMatch("postmatch", publicHttpEnabled = false, commandWorkersEnabled = false);
-
-    val postMatchWorkersEnabled: Boolean get() = this == PostMatch
+    Api("api", publicHttpEnabled = true, backgroundWorkersEnabled = false),
+    Worker("worker", publicHttpEnabled = false, backgroundWorkersEnabled = true),
+    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = true),
+    Materializer("materializer", publicHttpEnabled = false, backgroundWorkersEnabled = true);
 
     companion object {
         fun from(raw: String): PlatformRuntimeRole {

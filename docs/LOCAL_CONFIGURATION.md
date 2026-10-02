@@ -37,150 +37,6 @@ make dev-down
 
 `dev-up` starts datastores, applies forward-only migrations, then builds and
 waits for service health. `dev-down` stops containers and preserves volumes.
-Set `DEV_COMPOSE_PROFILES=postmatch,postmatch-workers` to start isolated operational
-Postgres and dedicated post-match JVMs. Set `POSTMATCH_SHADOW_WORKERS_ENABLED=true`
-and an explicit `POSTMATCH_EVENT_STREAM` to run the isolated live and market
-consumers in `platform-postmatch-live-0..3`. Assign disjoint
-`POSTMATCH_WORKER_0..3_PARTITIONS` covering the canonical source partitions.
-Legacy `platform-projector-0..3` instances never start post-match workers,
-even if a global worker flag is enabled. The `postmatch-workers` profile adds
-four live and four settlement JVMs, so budget host CPU, memory, and database
-connections for them. Keep both profiles enabled while running these workers.
-By default, existing live routes and materializers use
-their current stores; the new consumers write shadow state only.
-Set `POSTMATCH_LIVE_READS_ENABLED=true` on an API instance only after the
-isolated store has been migrated through `0005`, replayed for its current
-source generation, and checked against the legacy participant responses.
-Rebuild the isolated post-match database from canonical source after applying
-`0005`; existing frontiers prevent same-generation replay and old rows lack
-exact response text. API reads use `STREAM_ACK_PARTITION_COUNT` to check every
-canonical partition, not a projector instance's assignment. Indexed source
-heads are compared with target frontiers on every flagged read.
-Flagged reads require all live frontiers to equal current canonical source
-heads. A later relaxation needs a measured freshness budget and read-cost evidence.
-Before enabling the flag, compare complete legacy and live responses for open,
-filled, cancelled, modified, and aged participant histories; check query plans
-and read latency with many closed orders and fills. The route path and
-fail-closed gate do not constitute a capacity qualification.
-`/api/v1/orders/current`, `/api/v1/orders/history`, and `/api/v1/orders/fills`
-then read the isolated live store. Responses retain their participant fields
-and add `meta.asOf` with source generation, source heads, and all partition frontiers.
-Missing coverage, source lag, stale generations, or pre-replay rows return 503. Authorization
-still runs before these reads. The flag is off by default.
-Set `POSTMATCH_AUDIT_SHADOW_ENABLED=true` with `POSTMATCH_EVENT_STREAM` to run
-the independent canonical audit consumer in projection PostgreSQL. It uses the
-same partition assignment unless overridden, and writes retained outcomes,
-ordered effects, coverage, and its own frontier. Public history still reads
-the legacy mixed event store, including direct admin and protective events.
-The audit worker uses the dedicated post-match role; its projection database
-does not require the `postmatch` PostgreSQL service, but its container requires
-the `postmatch-workers` profile.
-For controlled shadow validation, set `POSTMATCH_SETTLEMENT_INTAKE_ENABLED=true`
-with `POSTMATCH_EVENT_STREAM` on the dedicated `platform-postmatch-settlement-0..3`
-instances. Intake uses their assigned partitions and writes into the migrated `settlement` schema on
-`SETTLEMENT_POSTGRES_JDBC_URL`. Set this URL to a database distinct from runtime
-PostgreSQL; startup rejects a missing or identical URL.
-Apply `settlement/0008` on the actual settlement target before enabling it.
-For the local dedicated target, start the `postmatch` profile with
-`SETTLEMENT_POSTGRES_JDBC_URL=jdbc:postgresql://settlement-postgres:5432/reef`
-and run migrations with `REEF_SETTLEMENT_POSTGRES_MIGRATIONS=1`. The schema
-placement CI job exercises this separate target.
-Intake records keyed ownership, exact trade facts, receipts, coverage, and its
-own frontier. It does not create obligations or ledger entries and does not
-switch public settlement reads. `POSTMATCH_SETTLEMENT_BATCH_SIZE` and
-`POSTMATCH_SETTLEMENT_POLL_MS` default to `500` and `50` respectively.
-`POSTMATCH_SETTLEMENT_MAX_RESULT_BYTES` defaults to 16 MiB and
-`POSTMATCH_SETTLEMENT_MAX_EFFECTS` to 20,000. The worker shrinks windows that
-exceed the effect cap; a single oversized outcome fails closed. Keep
-the flag off until the bounded policy and ledger transition is wired and its
-parity gate passes.
-After applying `settlement/0009` to the dedicated target, set
-`POSTMATCH_SETTLEMENT_OBLIGATIONS_ENABLED=true` on assigned settlement instances
-to shadow-project immutable policy bindings and pending obligations from the
-committed intake frontier. This stage has its own partition frontier and never
-marks a trade settled. `POSTMATCH_SETTLEMENT_OBLIGATION_BATCH_SIZE` defaults to
-500 source positions, `POSTMATCH_SETTLEMENT_OBLIGATION_MAX_TRADES` to 1000, and
-`POSTMATCH_SETTLEMENT_OBLIGATION_POLL_MS` to 50. Oversized trade windows shrink
-by source position; a single source position over the trade cap fails closed.
-Rebuild the isolated settlement intake from canonical source before enabling
-the obligation worker on a target with receipts written before `0009`: those
-receipts lack the trade manifest and fail closed. Intake and obligation
-frontiers must start from the same source generation.
-Freeze post-trade profile assignments and definitions from run setup until
-intake and obligation frontiers catch up. Current mutable control-plane tables
-cannot prove historical policy before first observation; durable pre-trade
-binding or versioned history is required before public settlement cutover.
-After applying `settlement/0010` and `settlement/0011` to the dedicated target,
-set `POSTMATCH_SETTLEMENT_TRANSITION_ENABLED=true` on assigned settlement instances
-only after local admission, contention, crash, and replay checks pass; this
-shadow path remains default-off. The worker records a durable total admission
-order before balance decisions and consumes only committed obligations.
-Instant trades produce DvP attempts and balanced cash/security
-ledger entries or a typed break; realistic trades remain pending. Opening
-resources are summarized by account when resource positions change.
-Freeze resource setup before the shadow run; changing an opening for an
-already-touched account stops replay. This stage does not change public reads.
-`POSTMATCH_SETTLEMENT_TRANSITION_BATCH_SIZE` defaults to 100 source positions,
-`POSTMATCH_SETTLEMENT_TRANSITION_MAX_OBLIGATIONS` to 1000, and
-`POSTMATCH_SETTLEMENT_TRANSITION_POLL_MS` to 50. The worker uses up to four
-parallel partition loops by default; `POSTMATCH_SETTLEMENT_TRANSITION_WORKERS`
-sets a 1–32 bound, capped by assigned partition count at runtime. An oversized window shrinks
-by source position; a single source position over the obligation cap fails.
-The transition worker checks committed predecessor readiness before re-reading
-the admitted window and source/account proofs. Its transaction still checks the
-full proof and predecessor completions. Every ten seconds, each settlement JVM
-logs cumulative `postmatch_transition_metrics` counts and nanoseconds for
-readiness, admission, and execution, including blocked checks, oldest observed
-blocked head, applied trades, counter SQL call time, and predecessor fan-in.
-Counter call time includes SQL execution and possible row-lock wait; it is not
-an exact lock-wait duration.
-See the [transition contract](work/POST_MATCH_BOUNDED_SETTLEMENT_TRANSITION_CONTRACT_2026-09-27.md).
-
-For an existing **dedicated shadow settlement target** with pre-`0009`
-receipts, apply through `settlement/0011`, then rebootstrap only the canonical
-shadow tables after stopping all three settlement workers. Confirm the connection points to that dedicated target;
-leave legacy settlement facts and the runtime canonical source untouched.
-Once admission rows exist, preserve `canonical_transition_admissions`, their
-dependencies and account memberships, counter, and admission frontiers for a
-same-generation replay. A matching-only readmission after discarding them is a
-new arbitration history and may choose a different scarce-account winner.
-Run this transaction on the settlement target:
-
-```sql
-BEGIN;
-TRUNCATE TABLE
-  settlement.canonical_transition_admission_completions,
-  settlement.canonical_transition_ledger_entries,
-  settlement.canonical_transition_attempts,
-  settlement.canonical_account_checkpoints,
-  settlement.canonical_account_state,
-  settlement.canonical_transition_coverage,
-  settlement.canonical_transition_frontiers,
-  settlement.canonical_settlement_obligations,
-  settlement.canonical_obligation_coverage,
-  settlement.canonical_obligation_frontiers,
-  settlement.canonical_policy_bindings,
-  settlement.canonical_trade_intake,
-  settlement.canonical_order_directory,
-  settlement.canonical_intake_receipts,
-  settlement.canonical_intake_coverage,
-  settlement.canonical_intake_frontiers;
-COMMIT;
-```
-
-Restart intake alone with the same `POSTMATCH_EVENT_STREAM` and assigned
-partitions. Wait until its frontiers reach the runtime canonical source heads;
-require zero from this query on the dedicated target:
-
-```sql
-SELECT COUNT(*) FROM settlement.canonical_intake_receipts
-WHERE trade_count IS NULL OR trade_digest IS NULL;
-```
-
-Keep profile assignments frozen from run setup. Enable the obligation worker only after
-those checks, then enable the transition worker after its obligation frontier
-catches up. This rebootstrap is for local or disposable shadow targets;
-public settlement promotion needs its separate cutover plan.
 Use the same overlay or profile on teardown that was used at startup; Arena has
 `make dev-down-arena`. For a clean local database, `make dev-reset` removes
 local Compose volumes, reapplies migrations, and starts the stack; run
@@ -190,6 +46,52 @@ local Compose volumes, reapplies migrations, and starts the stack; run
 For full contributor dependencies, first-run troubleshooting, endpoints, and
 module tests, use [Onboarding](ONBOARDING.md). For exact active services and
 merged configuration, inspect `make dev-compose-config` before running.
+
+## Calcify Phase 1 sidecars
+
+Apply forward-only migrations, then add `compose.calcify.yml` to `REEF_COMPOSE_FILES`
+and select profiles `redpanda,calcify-phase1`. This runs independent extractor,
+stub verifier, and receipt worker beside existing post-matching services.
+`CALCIFY_STAGE` is set only inside optional sidecars; default stack behavior
+does not change. [Contract](../contracts/calcify/README.md) and
+[local diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
+link semantics, tests, and replay-retention limits.
+
+Run `make dev-smoke-calcify-full-path` for a local functional check through
+PostgreSQL-backed HTTP intake, Redpanda command log, Go matching, and all three
+Calcify stages. It creates isolated topics and registers a local source
+generation, then checks a zero-trade resting batch and one crossing trade against
+its exact receipt. It leaves stack running; use matching `REEF_COMPOSE_FILES` and
+`DEV_COMPOSE_PROFILES` on `make dev-down` when finished. This smoke does not
+measure capacity or exercise financial settlement.
+
+Run `make dev-stress-calcify-basic PAIRS=1000` for a bounded local burst through
+the same path. It checks intake, matched source commands/trades, both link
+streams, final receipts, and stage-end timestamps; [diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
+records the observed rate, drain, and limits. This is not a sustained gate.
+
+Run `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`
+for a five-minute paced local diagnostic. Optional `OUT=/absolute/path.json`
+saves five-second receipt-gap samples and exact final stage counts. This local
+gate requires at least 95% of requested intake rate, sampled receipt gap at
+most two seconds at p95 and five seconds at peak, exact final counts, and final
+drain within five seconds. Compare with the separate burst; neither qualifies
+hosted or production capacity.
+
+For higher-rate single-lane Phase 1 pressure, first create fresh source
+generation with `SMOKE_ID=calcify-highrate-local make dev-smoke-calcify-high-rate`.
+Note generation printed by smoke, then run
+`make dev-soak-calcify-high-rate-load SMOKE_ID=calcify-highrate-local GENERATION=21 DURATION=300s PAIRS_PER_SECOND=2500 WORKERS=512 OUT=/private/tmp/calcify-highrate-load.json`
+with actual printed generation in place of `21`. Check source and both link
+streams with
+`make dev-verify-calcify-high-rate LOAD_REPORT=/private/tmp/calcify-highrate-load.json OUT=/private/tmp/calcify-highrate-verify.json`.
+Load command reports offered, dropped, accepted, five-second conservative
+upper receipt gap, and drain; its gate requires at least 95% requested
+acceptance, at most 5% offered pairs dropped, exact receipts, bounded gap,
+and drain within five seconds. Verification command enforces
+exact intake, source, commitment, verification, receipt, and matching counts.
+Use fresh smoke ID/generation for each run; do not reuse pair ID ranges.
+Run short higher-rate probe and five-minute gate after each material phase.
 
 ## Change configuration
 
@@ -207,3 +109,11 @@ configuration, code revision, workload, and measured stage in any result.
 Hosted configuration belongs to [`infra/CONFIGURATION.md`](../infra/CONFIGURATION.md)
 and the specific infrastructure runbook; no hosted credential is needed for
 normal local development.
+
+Calcify Phase 2 adds `calcify-phase2` profile from same overlay. Start extractor
+first so registered generation binds source topic UUID, then start
+`calcify-resolver`. It publishes Protobuf `REEF_MATCH_CONTEXT_RESOLVED_V1`, using
+named `calcify-resolver-state` volume; local replication factor1 is diagnostic.
+`CALCIFY_RESOLVER_REPLICATION_FACTOR=3` requires RF3 source/verified/output and
+Redpanda `write.caching=false` on canonical topics; Kafka backend instead requires minimum ISR2. Runtime validates actual settings. [Implementation and operations](work/CALCIFY_PHASE2_IMPLEMENTATION.md)
+cover memory budgets, fault disposition, source retention, health and recovery.
