@@ -1,0 +1,190 @@
+{
+  "runId": "5545850c",
+  "scope": "Cold local-state loss, production resolver/changelog on Redpanda RF3/fsync; two partitions/threads, 1MiB probe segments; paired fixture injection; no HTTP or availability guarantee",
+  "waves": 5000,
+  "rows": 1000000,
+  "restoreObjectiveMs": 120000,
+  "seed": {
+    "waves": 5000,
+    "trades": 500000,
+    "bytes": 1879510678,
+    "elapsedMs": 54832
+  },
+  "initialRunningMs": 3891,
+  "initial": {
+    "expected": 500000,
+    "records": 500000,
+    "unique": 500000,
+    "duplicates": 0,
+    "identityChecks": true,
+    "outputBytes": 1056471000,
+    "elapsedMs": 117653,
+    "activeMs": 117613,
+    "durableRate": 4251.210189955691,
+    "pass": true,
+    "windows": [
+      {
+        "elapsedMs": 5069,
+        "records": 26317,
+        "rate": 5191.080462536177
+      },
+      {
+        "elapsedMs": 10101,
+        "records": 55469,
+        "rate": 5793.59622747247
+      },
+      {
+        "elapsedMs": 15138,
+        "records": 74716,
+        "rate": 3820.818400053276
+      },
+      {
+        "elapsedMs": 20228,
+        "records": 93524,
+        "rate": 3695.052504929904
+      },
+      {
+        "elapsedMs": 25248,
+        "records": 116407,
+        "rate": 4558.9604701489
+      },
+      {
+        "elapsedMs": 30257,
+        "records": 141916,
+        "rate": 5092.464535771233
+      },
+      {
+        "elapsedMs": 35277,
+        "records": 169716,
+        "rate": 5537.668153711237
+      },
+      {
+        "elapsedMs": 40281,
+        "records": 194716,
+        "rate": 4995.815380142209
+      },
+      {
+        "elapsedMs": 45312,
+        "records": 212511,
+        "rate": 3537.025843533447
+      },
+      {
+        "elapsedMs": 50365,
+        "records": 226554,
+        "rate": 2779.384614799809
+      },
+      {
+        "elapsedMs": 55370,
+        "records": 241116,
+        "rate": 2909.3196123943967
+      },
+      {
+        "elapsedMs": 60401,
+        "records": 261813,
+        "rate": 4114.409623983287
+      },
+      {
+        "elapsedMs": 65465,
+        "records": 281211,
+        "rate": 3830.058764391412
+      },
+      {
+        "elapsedMs": 70466,
+        "records": 303033,
+        "rate": 4364.0087666140735
+      },
+      {
+        "elapsedMs": 75524,
+        "records": 326606,
+        "rate": 4659.889748922074
+      },
+      {
+        "elapsedMs": 80607,
+        "records": 351113,
+        "rate": 4822.113602617364
+      },
+      {
+        "elapsedMs": 85622,
+        "records": 373916,
+        "rate": 4546.445249212374
+      },
+      {
+        "elapsedMs": 90643,
+        "records": 398416,
+        "rate": 4879.480078452081
+      },
+      {
+        "elapsedMs": 95700,
+        "records": 419510,
+        "rate": 4171.338132632336
+      },
+      {
+        "elapsedMs": 100759,
+        "records": 442512,
+        "rate": 4546.679877855938
+      },
+      {
+        "elapsedMs": 105850,
+        "records": 459360,
+        "rate": 3309.1839798903434
+      },
+      {
+        "elapsedMs": 110878,
+        "records": 478175,
+        "rate": 3742.203484012805
+      },
+      {
+        "elapsedMs": 115931,
+        "records": 495016,
+        "rate": 3332.9388949933145
+      }
+    ]
+  },
+  "initialExact": {
+    "records": 500000,
+    "expected": 500000,
+    "fullFactParity": true,
+    "orderedUnique": true,
+    "pass": true
+  },
+  "localStateBytes": 767176186,
+  "coldRunningObservedMs": 19971,
+  "catchupSeed": {
+    "waves": 1,
+    "trades": 100,
+    "bytes": 376815,
+    "elapsedMs": 671
+  },
+  "after": {
+    "expected": 500100,
+    "records": 500100,
+    "unique": 500100,
+    "duplicates": 0,
+    "identityChecks": true,
+    "outputBytes": 1056682904,
+    "elapsedMs": 11007,
+    "activeMs": 10951,
+    "durableRate": 45665.542578944136,
+    "pass": true,
+    "windows": [
+      {
+        "elapsedMs": 5007,
+        "records": 218114,
+        "rate": 43559.29309453089
+      },
+      {
+        "elapsedMs": 10010,
+        "records": 445796,
+        "rate": 45508.727280658815
+      }
+    ]
+  },
+  "afterExact": {
+    "records": 500100,
+    "expected": 500100,
+    "fullFactParity": true,
+    "orderedUnique": true,
+    "pass": true
+  },
+  "pass": true
+}

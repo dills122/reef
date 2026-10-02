@@ -109,3 +109,11 @@ configuration, code revision, workload, and measured stage in any result.
 Hosted configuration belongs to [`infra/CONFIGURATION.md`](../infra/CONFIGURATION.md)
 and the specific infrastructure runbook; no hosted credential is needed for
 normal local development.
+
+Calcify Phase 2 adds `calcify-phase2` profile from same overlay. Start extractor
+first so registered generation binds source topic UUID, then start
+`calcify-resolver`. It publishes Protobuf `REEF_MATCH_CONTEXT_RESOLVED_V1`, using
+named `calcify-resolver-state` volume; local replication factor1 is diagnostic.
+`CALCIFY_RESOLVER_REPLICATION_FACTOR=3` requires RF3 source/verified/output and
+Redpanda `write.caching=false` on canonical topics; Kafka backend instead requires minimum ISR2. Runtime validates actual settings. [Implementation and operations](work/CALCIFY_PHASE2_IMPLEMENTATION.md)
+cover memory budgets, fault disposition, source retention, health and recovery.

@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-01",
+  "timezone": "America/Toronto",
+  "base_commit": "1e77575a9e916f022beb81b5f8927be962cceeff",
+  "branch": "codex/terminal-retention-replay-fix",
+  "toolchain": "go1.26.5 darwin/arm64",
+  "qualification": "local correctness; no load qualification",
+  "red_commands": [
+    "go test ./internal/app -run '^TestTerminalRetention(DoesNotChangeCrossRunReplayOutcome|LegacySnapshotRequiresUnboundedRestore|SnapshotRejectsChangedLimit)$' -count=1",
+    "go test ./internal/app -run '^TestTerminalRetentionOutcomeDoesNotDependOnBatchCut$' -count=1",
+    "go test ./internal/app -run '^TestTerminalRetentionProvisionalEvictionKeepsGlobalIDReservation$' -count=1",
+    "go test ./internal/app -run '^TestTerminalRetentionCrossBookReuse' -count=1"
+  ],
+  "red_expected_exit": 1,
+  "green_focused_command": "go test ./internal/app ./internal/streamdirect -run 'TestTerminalRetention|TestSnapshotRestorePreservesTerminalRetention|TestBatchRollback|TestServiceSnapshot|TestServiceRestore|TestLegacy|TestRestore|TestRun|TestMultiPartitionRecovery' -count=1",
+  "green_all_command": "go test -race ./... -count=1",
+  "green_exit": 0,
+  "source_sha256": {
+    "services/matching-engine/internal/app/order_index.go": "77bd14ad466bd50db26443296a5303bab73ba0e642f538b17ec014b26844960b",
+    "services/matching-engine/internal/app/service.go": "f4fcc5a97f36153cc2277fda839aafb40d5fc90ac2c3de581c4a2bfc47fd59b1",
+    "services/matching-engine/internal/app/service_snapshot.go": "6193e9ad3d928075a1cf854147c9a2a0f0fd5015cb18485912e36d254f23a9fd",
+    "services/matching-engine/internal/app/terminal_retention.go": "3c2d6ca667106e496730447395bdc8c523c17328cd2d1c453fa5b7bd836f20f9",
+    "services/matching-engine/internal/app/terminal_retention_replay_test.go": "eb19a82c6e26f65a2a591e46dd8ce48cc895ce71be79b369aa472f59fbe9575e",
+    "services/matching-engine/internal/app/terminal_retention_recovery_test.go": "5269dac6ecdcba94607b62145be978c5b776960facdfa8bd9212eecc79ed2dce",
+    "services/matching-engine/internal/app/service_test.go": "1b7e8c9a2a8aa6d6d0809bd933febf8f6da106ea7e3b9041b282c15bf345d77b",
+    "services/matching-engine/internal/app/run_scope_test.go": "edaa9bc9026d4274d55f35c83a08b5e367f916f22648985a3fd68a035d26f90f",
+    "services/matching-engine/internal/streamdirect/terminal_retention_recovery_test.go": "1acac23775b0fbbd3f06d1c2654ca0ad205aa5c76fe5d93754fc0da420949147"
+  },
+  "log_sha256": {
+    "first-race-policy-assertion.log": "637a75b51d4b9232c131268681e34ab9cc93eec80c07d7347cb0ea200f565ff3",
+    "first-reservation-api-build.log": "10a604ac8321c542098d7e2f708d61075e52fc56d35029d2bb8dda4f626b68ae",
+    "green-focused.log": "b236a3c05ae659c346117da68c68e694c133e21c6674a4b9fbd3f9e4ee873380",
+    "green-race-all.log": "0d78e24c5100371a312acb5f2c9b2323494a97beab741998a4cdda2b72f5f91d",
+    "green-race-pre-reservation.log": "3d576c33bc7fbf89ebd681feaaa80a072dfce69ba820c4bba8572387db8b949a",
+    "red-batch-cut.log": "fbeead0f77261a731ee29c5bac6e467de51a58bd7ba6f61a0c7e1665540f230a",
+    "red-multibook-preimage.log": "93167abbd0ec92dc3669fc37350887e6ea1715d0fda42a3296c211f567f12f7d",
+    "red-provisional-reservation.log": "bb5fbfca4c634022ca9f755c35e0b0316990276b8674fe1c91a0795ba145adee",
+    "red.log": "091e24f0955c354016e20077eb7586385807f77528f531aa3fc053f42b71ec79"
+  }
+}

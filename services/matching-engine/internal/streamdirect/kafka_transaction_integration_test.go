@@ -77,7 +77,7 @@ func TestKafkaTransactionalLaneIntegration(t *testing.T) {
 	if _, err := processor.ProcessOnce(context.Background()); err == nil {
 		t.Fatal("expected injected transaction abort")
 	}
-	if _, exists := service.OrderState("ord-2"); exists {
+	if _, exists := service.OrderState("", "ord-2"); exists {
 		t.Fatal("aborted transaction retained matching mutation")
 	}
 	if offset := kafkaIntegrationCommittedOffset(t, config, groupID); offset != 1 {

@@ -1,0 +1,19 @@
+{
+  "runId": "1fadb3e2",
+  "policy": {
+    "durationSeconds": 300,
+    "offeredTradesPerSecond": 11000,
+    "targetDurableRate": 10000,
+    "maxEndGap": 20000,
+    "maxDrainSeconds": 90,
+    "requiredExactParity": true
+  },
+  "results": [
+    {
+      "shape": "hot",
+      "error": "Error: paired-seed exited1",
+      "pass": false
+    }
+  ],
+  "pass": false
+}

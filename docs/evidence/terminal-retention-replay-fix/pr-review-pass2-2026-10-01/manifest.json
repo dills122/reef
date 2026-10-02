@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-01",
+  "timezone": "America/Toronto",
+  "reviewed_head": "997225b75c4eca3b4bf55be6b74f3e7329acbb1b",
+  "merged_master": "24cdc1ded731571577e7c7ad7f7fb28a5be181e7",
+  "toolchain": "go version go1.26.5 darwin/arm64",
+  "run": {
+    "command": "go test -race ./... -count=1",
+    "exit_code": 0,
+    "startedAtUtc": "2026-10-02T03:22:26.208317+00:00",
+    "endedAtUtc": "2026-10-02T03:22:32.471708+00:00"
+  },
+  "runtime_changes": "none relative to reviewed head; master sync changes Kotlin runtime and migration only",
+  "source_sha256": {
+    "services/matching-engine/internal/app/terminal_retention.go": "4320c9f75bf682768644b965d3a257cf4a0e3da2c09fca78f0855b83648f3ae9",
+    "services/matching-engine/internal/app/service.go": "128064615831e00dd86181be1ade3a64e4b3e38231d9c4678f3e7e8001378207",
+    "services/matching-engine/internal/app/service_snapshot.go": "e4fdefbb87ce7b1b4b38193cc398987ec072865b31e8965b94ad8bed56497cbb",
+    "services/matching-engine/internal/app/terminal_retention_replay_test.go": "0318fe7c9a17cf0ec6fc73cd9f6a8c95ddbd608a662808c5588186b13a5f285e"
+  },
+  "log_sha256": {
+    "green-race-all.log": "fa624522381877841ac29825aab3c58b690c1d82142999912fa9b201fa9d17cb"
+  },
+  "comments": [
+    4162556163,
+    4162556191,
+    4162556205
+  ],
+  "disposition": "unsupported; independent review agrees"
+}

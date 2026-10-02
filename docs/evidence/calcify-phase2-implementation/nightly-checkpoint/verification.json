@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-30 America/Toronto",
+  "codeCheckpoint": "d297c240c7eb0641cb5fb1a565c18e6b6bcd6027",
+  "base": "79dab22bda4d89c5a75eb677094f6e999dae303d",
+  "platform": {
+    "command": "JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home ./gradlew check --console=plain",
+    "exitCode": 0,
+    "tests": 685,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "minimumInstructionCoverage": 0.61
+  },
+  "matching": {
+    "command": "go test -race ./...",
+    "exitCode": 0,
+    "cacheUsed": true
+  },
+  "protoGovernance": {
+    "descriptorCompatibility": true,
+    "generatedSourceDrift": true
+  },
+  "sustainedQualified": false,
+  "reviewFindingsOpen": [
+    "verified checkpoint retention reset",
+    "verified/output topic namespace identity"
+  ],
+  "resourceCleanup": {
+    "onlyProject": "reef-calcify-resolver-test",
+    "labeledTestVolumesRemoved": 3,
+    "runningDockerContainersAfter": 0,
+    "reefVolumesPreserved": true
+  },
+  "handoffPathsAndCommitsValidated": true
+}

@@ -1,0 +1,38 @@
+x-broker: &broker
+  image: redpandadata/redpanda:v26.2.3
+  labels:
+    reef.test: calcify-resolver-rf3
+  mem_limit: 2g
+  cpus: 1
+  healthcheck:
+    test: ["CMD", "rpk", "cluster", "info", "-X", "brokers=127.0.0.1:9092"]
+    interval: 3s
+    timeout: 2s
+    retries: 30
+services:
+  rp0:
+    <<: *broker
+    volumes: ["rp0-data:/var/lib/redpanda/data"]
+    ports: ["127.0.0.1:29192:29192"]
+    command: ["redpanda", "start", "--overprovisioned", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--check=false", "--node-id", "0", "--kafka-addr", "internal://0.0.0.0:9092,external://0.0.0.0:29192", "--advertise-kafka-addr", "internal://rp0:9092,external://127.0.0.1:29192", "--rpc-addr", "0.0.0.0:33145", "--advertise-rpc-addr", "rp0:33145", "--seeds", "rp0:33145"]
+  rp1:
+    <<: *broker
+    volumes: ["rp1-data:/var/lib/redpanda/data"]
+    ports: ["127.0.0.1:29292:29292"]
+    command: ["redpanda", "start", "--overprovisioned", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--check=false", "--node-id", "1", "--kafka-addr", "internal://0.0.0.0:9092,external://0.0.0.0:29292", "--advertise-kafka-addr", "internal://rp1:9092,external://127.0.0.1:29292", "--rpc-addr", "0.0.0.0:33145", "--advertise-rpc-addr", "rp1:33145", "--seeds", "rp0:33145"]
+  rp2:
+    <<: *broker
+    volumes: ["rp2-data:/var/lib/redpanda/data"]
+    ports: ["127.0.0.1:29392:29392"]
+    command: ["redpanda", "start", "--overprovisioned", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--check=false", "--node-id", "2", "--kafka-addr", "internal://0.0.0.0:9092,external://0.0.0.0:29392", "--advertise-kafka-addr", "internal://rp2:9092,external://127.0.0.1:29392", "--rpc-addr", "0.0.0.0:33145", "--advertise-rpc-addr", "rp2:33145", "--seeds", "rp0:33145"]
+
+volumes:
+  rp0-data:
+    labels:
+      reef.test: calcify-resolver-rf3
+  rp1-data:
+    labels:
+      reef.test: calcify-resolver-rf3
+  rp2-data:
+    labels:
+      reef.test: calcify-resolver-rf3

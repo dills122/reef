@@ -1,0 +1,13 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+STATE CREATED -> REBALANCING
+STATE REBALANCING -> RUNNING
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":179,"stagedInputOffset":17999,"resolvedCount":18000,"pendingCount":0,"indexedCount":36000,"decodedCount":180,"outputBytes":37337420,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":19,"stagedInputOffset":1999,"resolvedCount":2000,"pendingCount":0,"indexedCount":4000,"decodedCount":20,"outputBytes":4161580,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":1,"stats":{"generation":1,"partition":1,"sourceCursor":19,"stagedInputOffset":1999,"resolvedCount":2000,"pendingCount":0,"indexedCount":4000,"decodedCount":20,"outputBytes":4161580,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+{"partition":0,"stats":{"generation":1,"partition":0,"sourceCursor":179,"stagedInputOffset":17999,"resolvedCount":18000,"pendingCount":0,"indexedCount":36000,"decodedCount":180,"outputBytes":37337420,"faultSuffixCount":0,"faultInputOffset":-1,"fault":""}}
+STATE RUNNING -> PENDING_SHUTDOWN
+{"partition":1,"stats":{}}
+{"partition":0,"stats":{}}
+STATE PENDING_SHUTDOWN -> NOT_RUNNING

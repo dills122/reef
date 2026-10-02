@@ -1,0 +1,143 @@
+--- a/internal/app/service.go
++++ b/internal/app/service.go
+@@ -1,6 +1,7 @@
+ package app
+ 
+ import (
++ "fmt"
+ 	"crypto/sha256"
+ 	"encoding/hex"
+ 	"math"
+@@ -104,12 +105,13 @@
+ }
+ 
+ type BookScope struct {
++ RunID string
+ 	VenueSessionID string
+ 	InstrumentID   string
+ }
+ 
+ func (s BookScope) Key() string {
+-	return bookKey(s.VenueSessionID, s.InstrumentID)
++	return bookKey(s.VenueSessionID, s.InstrumentID, s.RunID)
+ }
+ 
+ type MatchAlgorithm string
+@@ -249,7 +251,7 @@
+ 
+ 	result := acceptedResult("accepted", cmd.OrderID, now)
+ 
+-	book := s.bookFor(cmd.VenueSessionID, cmd.InstrumentID)
++	book := s.bookFor(cmd.VenueSessionID, cmd.InstrumentID, cmd.RunID)
+ 	book.mu.Lock()
+ 	defer book.mu.Unlock()
+ 
+@@ -317,7 +319,7 @@
+ 	if rejection := s.validateSessionForCancel(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
+ 		return *rejection
+ 	}
+-	book := s.bookFor(record.VenueSessionID, record.InstrumentID)
++	book := s.bookFor(record.VenueSessionID, record.InstrumentID, record.RunID)
+ 	book.mu.Lock()
+ 	defer book.mu.Unlock()
+ 
+@@ -384,7 +386,7 @@
+ 	if rejection := s.validateSessionForModify(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
+ 		return *rejection
+ 	}
+-	book := s.bookFor(record.VenueSessionID, record.InstrumentID)
++	book := s.bookFor(record.VenueSessionID, record.InstrumentID, record.RunID)
+ 	book.mu.Lock()
+ 	defer book.mu.Unlock()
+ 
+@@ -574,7 +576,7 @@
+ 	if !ok {
+ 		return domain.OrderState{}, false
+ 	}
+-	book := s.bookFor(record.VenueSessionID, record.InstrumentID)
++	book := s.bookFor(record.VenueSessionID, record.InstrumentID, record.RunID)
+ 	book.mu.Lock()
+ 	defer book.mu.Unlock()
+ 
+@@ -791,22 +793,22 @@
+ 	return service, true
+ }
+ 
+-func (s *Service) loadBook(venueSessionID string, instrumentID string) (*orderBook, bool) {
++func (s *Service) loadBook(venueSessionID string, instrumentID string, runID ...string) (*orderBook, bool) {
+ 	s.booksMu.RLock()
+-	existing, ok := s.books[bookKey(venueSessionID, instrumentID)]
++	existing, ok := s.books[bookKey(venueSessionID, instrumentID, runID...)]
+ 	s.booksMu.RUnlock()
+ 	return existing, ok
+ }
+ 
+-func (s *Service) bookFor(venueSessionID string, instrumentID string) *orderBook {
+-	existing, ok := s.loadBook(venueSessionID, instrumentID)
++func (s *Service) bookFor(venueSessionID string, instrumentID string, runID ...string) *orderBook {
++	existing, ok := s.loadBook(venueSessionID, instrumentID, runID...)
+ 	if ok {
+ 		return existing
+ 	}
+ 
+ 	s.booksMu.Lock()
+ 	defer s.booksMu.Unlock()
+-	key := bookKey(venueSessionID, instrumentID)
++	key := bookKey(venueSessionID, instrumentID, runID...)
+ 	if existing, ok := s.books[key]; ok {
+ 		return existing
+ 	}
+@@ -815,7 +817,8 @@
+ 	return book
+ }
+ 
+-func bookKey(venueSessionID string, instrumentID string) string {
++func bookKey(venueSessionID string, instrumentID string, runID ...string) string {
++ if len(runID)>0 && runID[0]!="" { return fmt.Sprintf("%d:%s|%d:%s|%s",len(runID[0]),runID[0],len(venueSessionID),venueSessionID,instrumentID) }
+ 	if venueSessionID == "" {
+ 		return instrumentID
+ 	}
+@@ -1069,11 +1072,11 @@
+ 		if scope.InstrumentID == "" {
+ 			continue
+ 		}
+-		key := bookKey(scope.VenueSessionID, scope.InstrumentID)
++		key := bookKey(scope.VenueSessionID, scope.InstrumentID, scope.RunID)
+ 		if _, ok := rollback.instruments[key]; ok {
+ 			continue
+ 		}
+-		book := s.bookFor(scope.VenueSessionID, scope.InstrumentID)
++		book := s.bookFor(scope.VenueSessionID, scope.InstrumentID, scope.RunID)
+ 		book.mu.Lock()
+ 		nextSequence := book.book.NextSequence()
+ 		book.mu.Unlock()
+@@ -1159,7 +1162,7 @@
+ 	if rb == nil || record == nil {
+ 		return
+ 	}
+-	snap := rb.instrument(bookKey(record.VenueSessionID, record.InstrumentID), book)
++	snap := rb.instrument(bookKey(record.VenueSessionID, record.InstrumentID, record.RunID), book)
+ 	if snap == nil {
+ 		return
+ 	}
+@@ -1173,7 +1176,7 @@
+ 	if rb == nil || record == nil {
+ 		return
+ 	}
+-	snap := rb.instrument(bookKey(record.VenueSessionID, record.InstrumentID), book)
++	snap := rb.instrument(bookKey(record.VenueSessionID, record.InstrumentID, record.RunID), book)
+ 	if snap == nil {
+ 		return
+ 	}
+--- a/internal/streamdirect/processor.go
++++ b/internal/streamdirect/processor.go
+@@ -353,7 +353,8 @@
+ 		deliveryVenueSessionIDs[i] = venueSessionID
+ 		deliveryInstrumentIDs[i] = instrumentID
+ 		deliveryCommandTypes[i] = commandTypeFromSubject(subject)
+-		scope := app.BookScope{VenueSessionID: venueSessionID, InstrumentID: instrumentID}
++		var routeContext struct { RunID string `json:"runId"` }; _ = json.Unmarshal(delivery.Data(), &routeContext)
++ scope := app.BookScope{RunID: routeContext.RunID, VenueSessionID: venueSessionID, InstrumentID: instrumentID}
+ 		if instrumentID == "" || seenScopes[scope.Key()] {
+ 			continue
+ 		}

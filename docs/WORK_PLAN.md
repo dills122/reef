@@ -18,6 +18,22 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify Phase 2 implementation (2026-09-30 branch)
+
+User approved [six-slice implementation plan](work/CALCIFY_PHASE2_IMPLEMENTATION.md). Active branch: `codex/calcify-phase2-implementation`, continuing preserved experiment commits. [Draft PR #433](https://github.com/dills122/reef/pull/433) records nightly checkpoint and merge blockers. D-042 run-scoped matching/V3 snapshots, full-fact Protobuf/pure resolver, managed Streams role, bounded lane faults, source identity/retention guards, and operational configuration implemented. Actual HTTP two-order smoke emits one exact context. Corrected RF3/fsync fault matrix passes nine boundaries; million-row cold recovery reaches observed RUNNING in19.97s with exact catch-up. Those broker cohorts precede final throughput changes and require unchanged-candidate repeat. Latest100k hot diagnostic reaches11.12k/s with JFR and exact full-fact parity. Latest sustained hot3.15m cohort reconciles exact at10.16k/s but producer310.73s fails frozen301s maximum; spread/skew/aged unrun. Final local platform regression/coverage passes. Review found open verified-input retention and verified/output UUID binding gaps. Work paused at [nightly handoff](work/handoffs/2026-09-30-calcify-phase2.md); correctness fixes, unchanged-candidate fault/recovery, production-role smoke and sustained qualification remain; no full-system20k upstream capacity or production availability claim. [Implementation evidence](evidence/calcify-phase2-implementation/README.md) preserves failed attempts, durability correction and exact measurement scope.
+
+## Calcify Phase 2 experiment checkpoint (2026-09-30 branch)
+
+`codex/calcify-phase2-experiments`, based on merged #431, contains isolated source
+fixtures, managed-runtime/fault prototypes and measured local-store diagnostics.
+Recommendation: verified-led one-input Kafka Streams with managed full-fact local
+state/changelog/standby and demand source reader. Scratch D-042 alignment proves
+cross-run isolation/replay fixture; production matching alignment still pending.
+Recovery, topic-generation/retention and two-lane fault probes passed in stated
+local RF1 scope. Five-minute 10k local store/codec joins/s is not full resolver or
+system capacity qualification. [Decision/evidence report](research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md)
+records remaining implementation gates and reproducible commands. User sync subsequently approved implementation; see implementation checkpoint above. Legacy remains intact.
+
 ## Calcify Phase 1 checkpoint (2026-09-29 branch)
 
 `codex/calcify-phase1` adds opt-in matching commitment extraction, stub

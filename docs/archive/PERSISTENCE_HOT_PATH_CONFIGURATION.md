@@ -287,7 +287,13 @@ Current local evidence for durable materializer path:
 - Projector persistence and fill-depth toggles are functional; lightweight and full projection rungs reached zero projection lag after fixes.
 - The current local ceiling for completed accepted throughput in this profile is about 11.5k/sec under 15k offered load.
 
-Matching-engine terminal retention:
+Matching-engine terminal retention (historical configuration at this run):
+
+2026-10-01 correction: current positive limit is per exact run/session/instrument
+book. The global bound described below is historical and did not protect
+intermediate command outcomes. New snapshot policy and migration limits are
+[documented separately](../../services/matching-engine/README.md#terminal-retention-and-recovery-compatibility);
+these old measurements do not qualify the new policy.
 
 - `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0`: default, preserve all terminal order records.
 - `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=250000`: stress profile default, keep recent terminal order records bounded while preserving active order state. Bounded retention uses the deterministic terminal event-time and order-id key, so cross-partition completion scheduling and sequential recovery retain the same terminal set. Snapshot restore reconstructs this bounded set from retained terminal records before accepting more work.

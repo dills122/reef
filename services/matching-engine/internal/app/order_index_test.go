@@ -13,13 +13,13 @@ func TestOrderIndexReserveLoadRelease(t *testing.T) {
 	if !idx.reserve(record) {
 		t.Fatal("expected first reserve to succeed")
 	}
-	loaded, ok := idx.load("ord-1")
+	loaded, ok := idx.load("", "ord-1")
 	if !ok || loaded != record {
 		t.Fatalf("expected loaded record to be the reserved pointer, got %#v ok=%v", loaded, ok)
 	}
 
-	idx.release("ord-1")
-	if _, ok := idx.load("ord-1"); ok {
+	idx.release("", "ord-1")
+	if _, ok := idx.load("", "ord-1"); ok {
 		t.Fatal("expected order to be gone after release")
 	}
 }
@@ -35,7 +35,7 @@ func TestOrderIndexReserveRejectsDuplicateID(t *testing.T) {
 	if idx.reserve(second) {
 		t.Fatal("expected duplicate order ID reserve to fail")
 	}
-	loaded, ok := idx.load("ord-dup")
+	loaded, ok := idx.load("", "ord-dup")
 	if !ok || loaded != first {
 		t.Fatalf("expected duplicate reserve to leave original record in place, got %#v", loaded)
 	}
@@ -48,7 +48,7 @@ func TestOrderIndexRestoreOverwritesExisting(t *testing.T) {
 	replacement := &orderRecord{OrderID: "ord-1", Status: "FILLED"}
 	idx.restore(replacement)
 
-	loaded, ok := idx.load("ord-1")
+	loaded, ok := idx.load("", "ord-1")
 	if !ok || loaded != replacement || loaded.Status != "FILLED" {
 		t.Fatalf("expected restore to overwrite existing record, got %#v", loaded)
 	}
@@ -60,14 +60,14 @@ func TestOrderIndexRestoreOrDeleteBothBranches(t *testing.T) {
 	idx.reserve(&orderRecord{OrderID: "ord-drop", Status: "ACCEPTED"})
 
 	restored := &orderRecord{OrderID: "ord-keep", Status: "CANCELLED"}
-	idx.restoreOrDelete("ord-keep", true, restored)
-	idx.restoreOrDelete("ord-drop", false, nil)
+	idx.restoreOrDelete("", "ord-keep", true, restored)
+	idx.restoreOrDelete("", "ord-drop", false, nil)
 
-	loaded, ok := idx.load("ord-keep")
+	loaded, ok := idx.load("", "ord-keep")
 	if !ok || loaded != restored {
 		t.Fatalf("expected ord-keep restored to the given record, got %#v ok=%v", loaded, ok)
 	}
-	if _, ok := idx.load("ord-drop"); ok {
+	if _, ok := idx.load("", "ord-drop"); ok {
 		t.Fatal("expected ord-drop removed by restoreOrDelete(existed=false)")
 	}
 }
@@ -138,12 +138,12 @@ func TestOrderIndexConcurrentReserveLoadReleaseRace(t *testing.T) {
 					t.Errorf("expected reserve to succeed for %s", orderID)
 					return
 				}
-				if _, ok := idx.load(orderID); !ok {
+				if _, ok := idx.load("", orderID); !ok {
 					t.Errorf("expected to load just-reserved %s", orderID)
 					return
 				}
-				idx.release(orderID)
-				if _, ok := idx.load(orderID); ok {
+				idx.release("", orderID)
+				if _, ok := idx.load("", orderID); ok {
 					t.Errorf("expected %s to be gone after release", orderID)
 					return
 				}

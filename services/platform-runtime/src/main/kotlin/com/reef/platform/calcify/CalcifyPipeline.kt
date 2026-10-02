@@ -6,7 +6,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.*
 import org.apache.kafka.clients.producer.*
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
@@ -35,9 +35,17 @@ object CalcifyPipeline {
         val verified = RuntimeEnv.string("CALCIFY_VERIFIED_TOPIC", "REEF_VERIFIED_COMMITMENTS_V1")
         val generation = RuntimeEnv.int("CALCIFY_SOURCE_GENERATION", 1, min = 1)
         val instance = RuntimeEnv.string("CALCIFY_INSTANCE_ID", System.getenv("HOSTNAME") ?: "local")
-        val reset = RuntimeEnv.string("CALCIFY_AUTO_OFFSET_RESET", "earliest").also {
-            require(it == "earliest" || it == "latest")
-        }
+        // Internal-topic durability. There is no legitimate reset policy
+        // other than fail-closed: an out-of-range offset must throw (via
+        // the retention gate in run()'s rebalance listener), never silently
+        // skip unprocessed commitments. See Finding 5/CalcifyResolverRuntime.
+        val broker = ResolverBrokerKind.valueOf(RuntimeEnv.string("CALCIFY_BROKER_KIND", "REDPANDA").uppercase())
+        val replication = RuntimeEnv.int("CALCIFY_INTERNAL_TOPIC_REPLICATION_FACTOR", 3, min = 1)
+        // Conservative stopgap default (7 days), not a run-duration-aware
+        // guarantee - CAL-09's max-run-duration/replay-window sizing is
+        // still open. Operators running longer than this must raise it
+        // explicitly.
+        val retentionMs = RuntimeEnv.long("CALCIFY_INTERNAL_TOPIC_RETENTION_MS", 7L * 24 * 60 * 60 * 1000, min = 1)
         val jdbc = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "jdbc:postgresql://localhost:5432/reef?currentSchema=runtime")
         val dbUser = RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef")
         val dbPassword = RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef")
@@ -55,6 +63,7 @@ object CalcifyPipeline {
     }
 
     fun run(stage: String) {
+        if (stage == "resolver") { CalcifyResolverRuntime.run(); return }
         val config = Config(stage)
         val input = config.input
         if (stage == "extractor") verifyGeneration(config)
@@ -67,6 +76,20 @@ object CalcifyPipeline {
                 }
                 override fun onPartitionsAssigned(partitions: Collection<TopicPartition>) {
                     if (stage == "extractor") verifyGeneration(config)
+                    if (partitions.isNotEmpty()) {
+                        val lookup = Duration.ofSeconds(3)
+                        val beginning = consumer.beginningOffsets(partitions, lookup)
+                        val end = consumer.endOffsets(partitions, lookup)
+                        val committedOffsets = consumer.committed(partitions.toSet(), lookup)
+                            .mapNotNull { (tp, md) -> md?.let { tp to it.offset() } }.toMap()
+                        // Same retention-range gate as the Phase 2 resolver's
+                        // verified consumer: a missing checkpoint seeks to
+                        // beginning explicitly; a committed offset outside
+                        // [beginning, end] throws instead of letting
+                        // auto.offset.reset silently skip unprocessed input.
+                        ResolverConsumerGate.seekTargets(beginning, end, committedOffsets)
+                            .forEach { (tp, offset) -> consumer.seek(tp, offset) }
+                    }
                     consumer.pause(partitions.filter { it in blocked })
                 }
             })
@@ -212,51 +235,7 @@ object CalcifyPipeline {
     }
 
     private fun verifyGeneration(config: Config) {
-        val topicId = AdminClient.create(Properties().apply {
-            put("bootstrap.servers", config.bootstrap)
-        }).use { admin ->
-            require(config.source in admin.listTopics().names().get()) { "Calcify source topic is absent" }
-            admin.describeTopics(listOf(config.source)).allTopicNames().get()
-                .getValue(config.source).topicId().toString()
-        }
-        require(topicId != Uuid.ZERO_UUID.toString()) {
-            "broker did not provide source topic ID"
-        }
-        connection(config).use { db ->
-            db.autoCommit = false
-            try {
-                db.prepareStatement(
-                    "SELECT source_topic, source_topic_id FROM runtime.calcify_source_generations " +
-                        "WHERE source_generation = ? FOR UPDATE"
-                ).use {
-                    it.setInt(1, config.generation)
-                    it.executeQuery().use { rows ->
-                        require(rows.next() && rows.getString(1) == config.source) {
-                            "unregistered Calcify source generation"
-                        }
-                        val registeredId = rows.getString(2)
-                        if (registeredId == null) {
-                            db.prepareStatement(
-                                "UPDATE runtime.calcify_source_generations SET source_topic_id = ? " +
-                                    "WHERE source_generation = ?"
-                            ).use { update ->
-                                update.setString(1, topicId)
-                                update.setInt(2, config.generation)
-                                update.executeUpdate()
-                            }
-                        } else {
-                            require(registeredId == topicId) {
-                                "source topic recreated: register next Calcify source generation"
-                            }
-                        }
-                    }
-                }
-                db.commit()
-            } catch (ex: Exception) {
-                db.rollback()
-                throw ex
-            }
-        }
+        CalcifySourceRegistration.verify(config.bootstrap, config.source, config.generation, config.jdbc, config.dbUser, config.dbPassword)
     }
 
     private fun connection(config: Config) =
@@ -269,12 +248,34 @@ object CalcifyPipeline {
                 .getValue(config.source).partitions().size
             for (topic in listOf(config.commitments, config.verified)) {
                 try {
-                    admin.createTopics(listOf(NewTopic(topic, count, 1.toShort()))).all().get()
+                    admin.createTopics(listOf(NewTopic(topic, count, config.replication.toShort()).configs(
+                        mapOf("cleanup.policy" to "delete", "retention.ms" to config.retentionMs.toString()) +
+                            ResolverTopicDurability.topicConfig(config.broker, config.replication)
+                    ))).all().get()
                 } catch (ex: ExecutionException) {
                     if (ex.cause !is TopicExistsException) throw ex
                 }
-                require(admin.describeTopics(listOf(topic)).allTopicNames().get().getValue(topic).partitions().size == count) {
-                    "Calcify topic partition count mismatch: " + topic
+                val description = admin.describeTopics(listOf(topic)).allTopicNames().get().getValue(topic)
+                require(description.partitions().size == count) { "Calcify topic partition count mismatch: " + topic }
+                // Pre-existing topics (e.g. a local volume from before this
+                // check existed) can legitimately fail here. Deliberately
+                // fail closed rather than warn-and-continue: silently
+                // running against an under-replicated/non-durable topic is
+                // exactly the drift this check exists to catch. Remediation
+                // is to delete and let ensureTopics recreate the topic with
+                // the required config (local dev: make dev-down already
+                // drops volumes).
+                val remediation = "delete topic '$topic' and let ensureTopics recreate it with the required config (local dev: make dev-down, then restart)"
+                require(description.partitions().all { it.replicas().size >= config.replication }) {
+                    "Calcify topic replication mismatch: $topic; $remediation"
+                }
+                val resource = ConfigResource(ConfigResource.Type.TOPIC, topic)
+                val values = admin.describeConfigs(listOf(resource)).all().get().getValue(resource)
+                    .entries().associate { it.name() to it.value() }
+                try {
+                    ResolverTopicDurability.validate(values, config.broker, config.replication, true)
+                } catch (ex: IllegalArgumentException) {
+                    throw IllegalArgumentException("Calcify topic $topic does not meet required durability: ${ex.message}; $remediation", ex)
                 }
             }
         }
@@ -290,7 +291,7 @@ object CalcifyPipeline {
             put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name)
             put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
             put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
-            put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, config.reset)
+            put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
             put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100)
         })
 

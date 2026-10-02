@@ -29,6 +29,7 @@ RUN groupadd --system --gid 10001 reef \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=reef:reef /opt/jre /opt/java/openjdk
 COPY --from=build --chown=reef:reef /app/build/install/platform-runtime /app/platform-runtime
+RUN install -d -o reef -g reef /app/calcify-state
 USER 10001:10001
 
 EXPOSE 8080

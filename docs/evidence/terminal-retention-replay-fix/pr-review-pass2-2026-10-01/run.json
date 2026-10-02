@@ -1,0 +1,6 @@
+{
+  "command": "go test -race ./... -count=1",
+  "exit_code": 0,
+  "startedAtUtc": "2026-10-02T03:22:26.208317+00:00",
+  "endedAtUtc": "2026-10-02T03:22:32.471708+00:00"
+}

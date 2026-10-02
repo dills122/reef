@@ -1,0 +1,7 @@
+=== RUN   TestCalcifyExperiment
+    calcify_experiment_test.go:41: cross-run trades=0 partitions=0/1
+    calcify_experiment_test.go:69: partition-order replay parity=true
+    calcify_experiment_test.go:114: 5 batches; 130 trades; full replay parity
+--- PASS: TestCalcifyExperiment (0.02s)
+PASS
+ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	0.315s

@@ -56,7 +56,7 @@ func TestProcessorTimingRetryAfterDurablePublishLostResponsePreservesSemanticIde
 	if len(publisher.batches) != 1 || first.acked != 0 || first.nacked != 1 {
 		t.Fatalf("durable output must precede failed response and source retry: batches=%d ack=%d nak=%d", len(publisher.batches), first.acked, first.nacked)
 	}
-	if _, ok := service.OrderState("ord-timing-retry"); ok {
+	if _, ok := service.OrderState("", "ord-timing-retry"); ok {
 		t.Fatal("failed publish response must roll back engine order state")
 	}
 	if got := service.RestingOrders("STK001", domain.SideSell); got != 0 {
