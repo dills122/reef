@@ -172,13 +172,15 @@ class OrderApplicationServiceTest {
                 quantityUnits = "100",
                 limitPrice = "150250000000",
                 currency = "USD",
-                timeInForce = "DAY"
+                timeInForce = "DAY",
+                runId = "run-unauthorized"
             )
         )
 
         assertNotNull(result.rejected)
         assertEquals("AUTHORIZATION_ERROR", result.rejected?.code)
         assertEquals("actorId missing permission order.submit", result.rejected?.reason)
+        assertEquals("run-unauthorized", service.persistedTraceEvents("trace-unauthorized-submit-1").single().runId)
         assertEquals(0, gateway.submitCalls)
         assertEquals(listOf("OrderRejected"), service.persistedTraceEvents("trace-unauthorized-submit-1").map { it.eventType })
     }
@@ -265,7 +267,8 @@ class OrderApplicationServiceTest {
                 actorId = "trader-unauthorized",
                 occurredAt = "2026-03-14T18:00:00Z",
                 orderId = "ord-unauthorized-cancel-1",
-                reason = "user requested"
+                reason = "user requested",
+                runId = "run-cancel"
             )
         )
         val modify = service.modifyOrder(
@@ -278,7 +281,8 @@ class OrderApplicationServiceTest {
                 occurredAt = "2026-03-14T18:00:00Z",
                 orderId = "ord-unauthorized-modify-1",
                 quantityUnits = "120",
-                limitPrice = "150250000001"
+                limitPrice = "150250000001",
+                runId = "run-modify"
             )
         )
 
@@ -286,6 +290,8 @@ class OrderApplicationServiceTest {
         assertEquals("actorId missing permission order.cancel", cancel.rejected?.reason)
         assertEquals("AUTHORIZATION_ERROR", modify.rejected?.code)
         assertEquals("actorId missing permission order.modify", modify.rejected?.reason)
+        assertEquals("run-cancel", service.persistedTraceEvents("trace-unauthorized-cancel-1").single().runId)
+        assertEquals("run-modify", service.persistedTraceEvents("trace-unauthorized-modify-1").single().runId)
         assertEquals(0, gateway.submitCalls)
     }
 

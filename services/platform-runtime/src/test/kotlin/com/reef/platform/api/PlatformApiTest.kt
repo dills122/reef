@@ -22,6 +22,19 @@ import kotlin.test.assertNotNull
 
 class PlatformApiTest {
     @Test
+    fun orderLookupAndHistoryUseExplicitRunWhenOrderIdRepeats() {
+        val persistence = InMemoryRuntimePersistence()
+        com.reef.platform.infrastructure.persistence.assertRunOrderHistoryIsolation(persistence)
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        assertEquals(false, api.orderWithStatus("shared").found)
+        assertContains(api.orderWithStatus("shared", "run-a").body, "buyer-run-a")
+        assertContains(api.orderWithStatus("shared", "run-b").body, "buyer-run-b")
+        assertContains(api.orderEvents("shared", "run-a"), "OrderModified-run-a")
+        assertContains(api.orderEvents("shared", "run-b"), "OrderCancelled-run-b")
+        assertEquals(false, api.orderEvents("shared", "run-b").contains("OrderModified-run-a"))
+    }
+
+    @Test
     fun healthReturnsExpectedPayload() {
         val api = PlatformApi()
 
@@ -796,7 +809,8 @@ class PlatformApiTest {
                     executionPrice = "150",
                     currency = "USD",
                     occurredAt = "2026-03-14T18:00:03Z",
-                    liquidityRole = "MAKER"
+                    liquidityRole = "MAKER",
+                    runId = "run-current"
                 ),
                 ExecutionCreated(
                     eventId = "evt-exec-msft",
@@ -806,7 +820,8 @@ class PlatformApiTest {
                     quantityUnits = "10",
                     executionPrice = "300",
                     currency = "USD",
-                    occurredAt = "2026-03-14T18:00:04Z"
+                    occurredAt = "2026-03-14T18:00:04Z",
+                    runId = "run-current"
                 ),
                 ExecutionCreated(
                     eventId = "evt-exec-previous-run",
@@ -816,7 +831,8 @@ class PlatformApiTest {
                     quantityUnits = "25",
                     executionPrice = "149",
                     currency = "USD",
-                    occurredAt = "2026-03-14T17:00:01Z"
+                    occurredAt = "2026-03-14T17:00:01Z",
+                    runId = "run-previous"
                 ),
                 ExecutionCreated(
                     eventId = "evt-exec-other",

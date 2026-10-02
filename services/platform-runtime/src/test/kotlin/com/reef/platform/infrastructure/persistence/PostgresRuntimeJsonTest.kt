@@ -86,7 +86,7 @@ class PostgresRuntimeJsonTest {
         assertEquals(
             "{\"eventId\":\"evt-exec-1\", \"executionId\":\"exec-1\", \"orderId\":\"ord-1\", " +
                 "\"instrumentId\":\"AAPL\", \"quantityUnits\":\"100\", \"executionPrice\":\"150250000000\", " +
-                "\"currency\":\"USD\", \"occurredAt\":\"2026-07-07T00:00:00Z\", \"liquidityRole\":\"UNSPECIFIED\"}",
+                "\"currency\":\"USD\", \"occurredAt\":\"2026-07-07T00:00:00Z\", \"liquidityRole\":\"UNSPECIFIED\", \"runId\":\"\"}",
             json
         )
     }
@@ -98,7 +98,7 @@ class PostgresRuntimeJsonTest {
             "{\"eventId\":\"evt-trade-1\", \"tradeId\":\"trade-1\", \"executionId\":\"exec-1\", " +
                 "\"buyOrderId\":\"ord-1\", \"sellOrderId\":\"ord-2\", \"instrumentId\":\"AAPL\", " +
                 "\"quantityUnits\":\"100\", \"price\":\"150250000000\", \"currency\":\"USD\", " +
-                "\"occurredAt\":\"2026-07-07T00:00:00Z\"}",
+                "\"occurredAt\":\"2026-07-07T00:00:00Z\", \"runId\":\"\"}",
             json
         )
     }
@@ -110,7 +110,7 @@ class PostgresRuntimeJsonTest {
             "{\"eventId\":\"evt-1\",\"eventType\":\"OrderAccepted\",\"orderId\":\"ord-1\"," +
                 "\"traceId\":\"trace-1\",\"causationId\":\"cmd-1\",\"correlationId\":\"corr-1\"," +
                 "\"actorId\":\"actor-1\",\"producer\":\"platform-runtime\",\"schemaVersion\":\"v1\"," +
-                "\"occurredAt\":\"2026-07-07T00:00:00Z\",\"payloadJson\":{\"key\":\"value\"}}",
+                "\"occurredAt\":\"2026-07-07T00:00:00Z\",\"runId\":\"\",\"payloadJson\":{\"key\":\"value\"}}",
             json
         )
     }

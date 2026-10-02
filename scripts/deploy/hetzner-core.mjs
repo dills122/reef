@@ -1070,7 +1070,7 @@ switch (command) {
       target,
       [
         "set -euo pipefail",
-        "cd /opt/reef-build/services/platform-runtime && docker build -t reef-platform-runtime:local .",
+        "cd /opt/reef-build && docker build -f services/platform-runtime/Dockerfile -t reef-platform-runtime:local .",
         "cd /opt/reef-build/services/matching-engine && docker build --network=host -t reef-matching-engine:local .",
         "cd /opt/reef-build/services/simulator && docker build --network=host -t reef-simulator:local .",
         `cd ${remoteDeployDir}`,

@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+import com.reef.platform.domain.RuntimeOrderIdentity
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.ExecutionCreated
@@ -42,6 +43,10 @@ class PlatformApi(
     private val defaultProjectionSource = "venue-event-batch"
     private val defaultVenueProjectionName = "runtime-normalized-venue-outcomes"
     private val defaultMarketDataProjectionName = "market-data-top-of-book"
+
+    internal fun bindCapturedCommandPayloadLookup(lookup: (String) -> String?) {
+        orderService.bindCapturedCommandPayloadLookup(lookup)
+    }
 
     fun health(): String {
         return """{"service":"platform-runtime","status":"ok"}"""
@@ -410,8 +415,8 @@ class PlatformApi(
         })
     }
 
-    fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
-        return orderService.findOrderByClientOrderId(participantId, clientOrderId)
+    fun findOrderByClientOrderId(participantId: String, clientOrderId: String, runId: String? = null): PersistedOrder? {
+        return orderService.findOrderByClientOrderId(participantId, clientOrderId, runId)
     }
 
     fun order(orderId: String): String = orderWithStatus(orderId).body
@@ -420,8 +425,8 @@ class PlatformApi(
     // should use this instead of sniffing the "error" field out of order()'s
     // JSON string: that string-matching approach breaks silently if the
     // success-path payload ever legitimately contains the same substring.
-    fun orderWithStatus(orderId: String): ApiLookupResult {
-        val order = orderService.persistedOrder(orderId)
+    fun orderWithStatus(orderId: String, runId: String? = null): ApiLookupResult {
+        val order = orderService.persistedOrder(orderId, runId)
         if (order == null) {
             return ApiLookupResult(
                 found = false,
@@ -433,17 +438,21 @@ class PlatformApi(
             found = true,
             body = JsonCodec.writeObject(
                 "order" to toOrderMap(order),
-                "lifecycleState" to orderService.orderLifecycleState(orderId)?.toMap(),
-                "executions" to orderService.persistedExecutions(orderId).map { it.toMap() },
-                "trades" to orderService.persistedTrades(orderId).map { it.toMap() }
+                "lifecycleState" to orderService.orderLifecycleState(RuntimeOrderIdentity(order.runId, order.orderId))?.toMap(),
+                "executions" to orderService.persistedExecutions(RuntimeOrderIdentity(order.runId, order.orderId)).map { it.toMap() },
+                "trades" to orderService.persistedTrades(RuntimeOrderIdentity(order.runId, order.orderId)).map { it.toMap() }
             )
         )
     }
 
-    fun orderEvents(orderId: String): String {
+    fun orderEvents(orderId: String, runId: String? = null): String {
+        val order = orderService.persistedOrder(orderId, runId)
+        val events = if (order == null) emptyList() else orderService.persistedEvents(
+            RuntimeOrderIdentity(order.runId, order.orderId)
+        )
         return JsonCodec.writeObject(
             "orderId" to orderId,
-            "events" to orderService.persistedEvents(orderId).map { it.toMap() }
+            "events" to events.map { it.toMap() }
         )
     }
 

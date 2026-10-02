@@ -2,8 +2,8 @@
 x-calcify-service: &calcify-service
   image: ${REEF_PLATFORM_RUNTIME_IMAGE:-reef-platform-runtime}
   build:
-    context: ./services/platform-runtime
-    dockerfile: Dockerfile
+    context: .
+    dockerfile: services/platform-runtime/Dockerfile
   restart: unless-stopped
   profiles: ["calcify-phase1"]
   environment: &calcify-environment

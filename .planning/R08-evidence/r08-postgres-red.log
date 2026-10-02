@@ -1,0 +1,30 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :verifyNoTestSourceExclusions
+> Task :compileTestKotlin
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+> Task :test FAILED
+
+PostgresRunOrderIsolationIntegrationTest > sameOrderIdPreservesBothRunAcceptances() FAILED
+    org.opentest4j.AssertionFailedError at PostgresRunOrderIsolationIntegrationTest.kt:27
+
+1 test completed, 1 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 3s
+7 actionable tasks: 3 executed, 4 up-to-date

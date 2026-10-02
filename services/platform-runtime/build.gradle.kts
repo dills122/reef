@@ -106,3 +106,16 @@ tasks.register<Copy>("resolverProbeDependencies") {
     from(configurations.testRuntimeClasspath)
     into(layout.buildDirectory.dir("resolver-probe-deps"))
 }
+
+// Compat bootstrap packages same migration-owned order identity SQL as deployment.
+val runtimeOrderIdentityMigration = layout.projectDirectory.file("../../scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql")
+val verifyRuntimeOrderIdentityMigration = tasks.register("verifyRuntimeOrderIdentityMigration") {
+    group = "verification"
+    doLast {
+        check(runtimeOrderIdentityMigration.asFile.isFile) { "Missing runtime order identity bootstrap migration: ${runtimeOrderIdentityMigration.asFile}" }
+    }
+}
+tasks.processResources {
+    dependsOn(verifyRuntimeOrderIdentityMigration)
+    from(files(runtimeOrderIdentityMigration)) { into("db") }
+}

@@ -1,0 +1,653 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.76kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/gradle:9.8.0-jdk21
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#3 DONE 0.3s
+
+#2 [internal] load metadata for docker.io/library/gradle:9.8.0-jdk21
+#2 DONE 0.3s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 101B done
+#4 DONE 0.0s
+
+#5 [build 1/8] FROM docker.io/library/gradle:9.8.0-jdk21@sha256:4debe478645a3ad9208f3403ac021859fdf4d1a819d59970d75309b098f28f76
+#5 DONE 0.0s
+
+#6 [stage-1 1/6] FROM docker.io/library/debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 38.45kB 0.0s done
+#7 DONE 0.0s
+
+#8 [build 2/8] WORKDIR /app/services/platform-runtime
+#8 CACHED
+
+#9 [build 3/8] COPY services/platform-runtime/gradle gradle
+#9 CACHED
+
+#10 [build 4/8] COPY services/platform-runtime/gradlew services/platform-runtime/settings.gradle.kts services/platform-runtime/build.gradle.kts ./
+#10 DONE 0.0s
+
+#11 [build 5/8] RUN ./gradlew --no-daemon dependencies
+#11 0.136 Fetching distribution.
+#11 0.136 Downloading https://services.gradle.org/distributions/gradle-9.8.0-bin.zip
+#11 0.779 ..............10%..............20%...............30%..............40%...............50%..............60%...............70%..............80%...............90%..............100%
+#11 8.277 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+#11 8.777 Daemon will be stopped at the end of the build
+#11 28.28
+#11 28.28 > Task :dependencies
+#11 28.28
+#11 28.28 ------------------------------------------------------------
+#11 28.28 Root project 'platform-runtime'
+#11 28.28 ------------------------------------------------------------
+#11 28.28
+#11 28.28 annotationProcessor - Annotation processors and their dependencies for source set 'main'.
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 api - API dependencies for 'main'. (n)
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 apiElements - API elements for the 'main' feature. (n)
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 apiElements-published (n)
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 compileClasspath - Compile classpath for 'main'.
+#11 28.28 +--- org.jetbrains.kotlin:kotlin-stdlib -> 2.4.20
+#11 28.28 |    \--- org.jetbrains:annotations:13.0 -> 23.0.0
+#11 28.28 +--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0
+#11 28.28 |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0
+#11 28.28 |         +--- org.jetbrains:annotations:23.0.0
+#11 28.28 |         +--- org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.11.0
+#11 28.28 |         |    +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0 (c)
+#11 28.28 |         |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0 (c)
+#11 28.28 |         \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.20 -> 2.4.20 (*)
+#11 28.28 +--- com.fasterxml.jackson.core:jackson-databind:2.22.3
+#11 28.28 |    +--- com.fasterxml.jackson.core:jackson-annotations:2.22
+#11 28.28 |    +--- com.fasterxml.jackson.core:jackson-core:2.22.3
+#11 28.28 |    |    \--- com.fasterxml.jackson:jackson-bom:2.22.3
+#11 28.28 |    |         +--- com.fasterxml.jackson.core:jackson-annotations:2.22 (c)
+#11 28.28 |    |         +--- com.fasterxml.jackson.core:jackson-core:2.22.3 (c)
+#11 28.28 |    |         \--- com.fasterxml.jackson.core:jackson-databind:2.22.3 (c)
+#11 28.28 |    \--- com.fasterxml.jackson:jackson-bom:2.22.3 (*)
+#11 28.28 +--- org.postgresql:postgresql:42.7.13
+#11 28.28 +--- com.zaxxer:HikariCP:7.1.0
+#11 28.28 |    \--- org.slf4j:slf4j-api:2.0.17
+#11 28.28 +--- io.grpc:grpc-netty-shaded:1.84.0
+#11 28.28 |    \--- io.grpc:grpc-core:1.84.0
+#11 28.28 |         \--- io.grpc:grpc-api:1.84.0
+#11 28.28 |              +--- com.google.code.findbugs:jsr305:3.0.2
+#11 28.28 |              \--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 28.28 +--- io.grpc:grpc-protobuf:1.84.0
+#11 28.28 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 28.28 |    +--- com.google.code.findbugs:jsr305:3.0.2
+#11 28.28 |    +--- com.google.protobuf:protobuf-java:3.25.9 -> 4.36.2
+#11 28.28 |    \--- com.google.api.grpc:proto-google-common-protos:2.64.1
+#11 28.28 |         \--- com.google.protobuf:protobuf-java:3.25.8 -> 4.36.2
+#11 28.28 +--- io.grpc:grpc-stub:1.84.0
+#11 28.28 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 28.28 |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 28.28 |    \--- com.google.guava:guava:33.6.0-android
+#11 28.28 |         +--- com.google.guava:failureaccess:1.0.3
+#11 28.28 |         +--- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+#11 28.28 |         +--- org.jspecify:jspecify:1.0.0
+#11 28.28 |         +--- com.google.errorprone:error_prone_annotations:2.47.0 -> 2.50.0
+#11 28.28 |         \--- com.google.j2objc:j2objc-annotations:3.1
+#11 28.28 +--- io.nats:jnats:2.26.3
+#11 28.28 |    +--- org.bouncycastle:bcprov-lts8on:2.73.12.1
+#11 28.28 |    \--- org.jspecify:jspecify:1.0.0
+#11 28.28 +--- org.apache.kafka:kafka-clients:4.3.1
+#11 28.28 +--- org.apache.kafka:kafka-streams:4.3.1
+#11 28.28 |    +--- org.apache.kafka:kafka-clients:4.3.1
+#11 28.28 |    \--- org.rocksdb:rocksdbjni:10.1.3
+#11 28.28 +--- com.google.protobuf:protobuf-java:4.36.2
+#11 28.28 \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (c)
+#11 28.28
+#11 28.28 compileOnly - Compile only dependencies for 'main'. (n)
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 default - Configuration for default artifacts. (n)
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 implementation - Implementation only dependencies for 'main'. (n)
+#11 28.28 +--- org.jetbrains.kotlin:kotlin-stdlib (n)
+#11 28.28 +--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0 (n)
+#11 28.28 +--- com.fasterxml.jackson.core:jackson-databind:2.22.3 (n)
+#11 28.28 +--- org.postgresql:postgresql:42.7.13 (n)
+#11 28.28 +--- com.zaxxer:HikariCP:7.1.0 (n)
+#11 28.28 +--- io.grpc:grpc-netty-shaded:1.84.0 (n)
+#11 28.28 +--- io.grpc:grpc-protobuf:1.84.0 (n)
+#11 28.28 +--- io.grpc:grpc-stub:1.84.0 (n)
+#11 28.28 +--- io.nats:jnats:2.26.3 (n)
+#11 28.28 +--- org.apache.kafka:kafka-clients:4.3.1 (n)
+#11 28.28 +--- org.apache.kafka:kafka-streams:4.3.1 (n)
+#11 28.28 \--- com.google.protobuf:protobuf-java:4.36.2 (n)
+#11 28.28
+#11 28.28 implementationDependenciesMetadata
+#11 28.28 No dependencies
+#11 28.28
+#11 28.28 jacocoAgent - The Jacoco agent to use to get coverage data.
+#11 28.28 \--- org.jacoco:org.jacoco.agent:0.8.15
+#11 28.28
+#11 28.28 jacocoAnt - The Jacoco ant tasks to use to get execute Gradle tasks.
+#11 28.68 \--- org.jacoco:org.jacoco.ant:0.8.15
+#11 28.68      +--- org.jacoco:org.jacoco.core:0.8.15
+#11 28.68      |    +--- org.ow2.asm:asm:9.10.1
+#11 28.68      |    +--- org.ow2.asm:asm-commons:9.10.1
+#11 28.68      |    |    +--- org.ow2.asm:asm:9.10.1
+#11 28.68      |    |    \--- org.ow2.asm:asm-tree:9.10.1
+#11 28.68      |    |         \--- org.ow2.asm:asm:9.10.1
+#11 28.68      |    \--- org.ow2.asm:asm-tree:9.10.1 (*)
+#11 28.68      +--- org.jacoco:org.jacoco.report:0.8.15
+#11 28.68      |    \--- org.jacoco:org.jacoco.core:0.8.15 (*)
+#11 28.68      \--- org.jacoco:org.jacoco.agent:0.8.15
+#11 28.68
+#11 28.68 kotlinAbiValidationCompatClasspath
+#11 29.18 +--- org.jetbrains.kotlin:kotlin-build-tools-compat:2.4.20
+#11 29.18 |    \--- org.jetbrains.kotlin:kotlin-tooling-core:2.4.20
+#11 29.18 \--- org.jetbrains.kotlin:kotlin-build-tools-impl:{strictly 2.4.0} -> 2.4.0
+#11 29.18      +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0
+#11 29.18      +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.0
+#11 29.18      |    \--- org.jetbrains:annotations:13.0
+#11 29.18      +--- org.jetbrains.kotlin:kotlin-build-tools-cri-impl:2.4.0
+#11 29.18      |    +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0
+#11 29.18      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.0 (*)
+#11 29.18      +--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.0
+#11 29.18      |    +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0
+#11 29.18      |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.0 (*)
+#11 29.18      |    +--- org.jetbrains.kotlin:kotlin-script-runtime:2.4.0
+#11 29.18      |    +--- org.jetbrains.kotlin:kotlin-reflect:1.6.10
+#11 29.18      |    +--- org.jetbrains.kotlin:kotlin-daemon-embeddable:2.4.0
+#11 29.18      |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.18      \--- org.jetbrains.kotlin:kotlin-compiler-runner:2.4.0
+#11 29.18           +--- org.jetbrains.kotlin:kotlin-daemon-client:2.4.0
+#11 29.18           |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.21 -> 2.4.0 (*)
+#11 29.18           +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.18           \--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.0 (*)
+#11 29.18
+#11 29.18 kotlinBuildToolsApiClasspath
+#11 29.58 +--- org.jetbrains.kotlin:kotlin-build-tools-compat:2.4.20
+#11 29.58 |    \--- org.jetbrains.kotlin:kotlin-tooling-core:2.4.20
+#11 29.58 \--- org.jetbrains.kotlin:kotlin-build-tools-impl:{strictly 2.4.20} -> 2.4.20
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20
+#11 29.58      |    \--- org.jetbrains:annotations:13.0
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-build-tools-cri-impl:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.58      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-tooling-core:2.4.20
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-script-runtime:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-reflect:1.6.10
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-daemon-embeddable:2.4.20
+#11 29.58      |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.58      \--- org.jetbrains.kotlin:kotlin-compiler-runner:2.4.20
+#11 29.58           +--- org.jetbrains.kotlin:kotlin-daemon-client:2.4.20
+#11 29.58           |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.21 -> 2.4.20 (*)
+#11 29.58           +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.58           \--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20 (*)
+#11 29.58
+#11 29.58 kotlinCompilerClasspath
+#11 29.58 +--- org.jetbrains.kotlin:kotlin-build-tools-compat:2.4.20
+#11 29.58 |    \--- org.jetbrains.kotlin:kotlin-tooling-core:2.4.20
+#11 29.58 \--- org.jetbrains.kotlin:kotlin-build-tools-impl:2.4.20
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20
+#11 29.58      |    \--- org.jetbrains:annotations:13.0
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-build-tools-cri-impl:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.58      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-tooling-core:2.4.20
+#11 29.58      +--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-script-runtime:2.4.20
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-reflect:1.6.10
+#11 29.58      |    +--- org.jetbrains.kotlin:kotlin-daemon-embeddable:2.4.20
+#11 29.58      |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.58      \--- org.jetbrains.kotlin:kotlin-compiler-runner:2.4.20
+#11 29.58           +--- org.jetbrains.kotlin:kotlin-daemon-client:2.4.20
+#11 29.58           |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.21 -> 2.4.20 (*)
+#11 29.58           +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.58           \--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20 (*)
+#11 29.58
+#11 29.58 kotlinCompilerPluginClasspath
+#11 29.58 No dependencies
+#11 29.58
+#11 29.58 kotlinCompilerPluginClasspathMain - Kotlin compiler plugins for compilation
+#11 29.78 \--- org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:2.4.20
+#11 29.78      +--- org.jetbrains.kotlin:kotlin-scripting-common:2.4.20
+#11 29.78      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20
+#11 29.78      |         \--- org.jetbrains:annotations:13.0
+#11 29.78      +--- org.jetbrains.kotlin:kotlin-scripting-jvm:2.4.20
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-script-runtime:2.4.20
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.78      |    \--- org.jetbrains.kotlin:kotlin-scripting-common:2.4.20 (*)
+#11 29.78      +--- org.jetbrains.kotlin:kotlin-scripting-compiler-impl-embeddable:2.4.20
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-scripting-common:2.4.20 (*)
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-scripting-jvm:2.4.20 (*)
+#11 29.78      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.78      \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.78
+#11 29.78 kotlinCompilerPluginClasspathTest - Kotlin compiler plugins for compilation
+#11 29.78 \--- org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:2.4.20
+#11 29.78      +--- org.jetbrains.kotlin:kotlin-scripting-common:2.4.20
+#11 29.78      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20
+#11 29.78      |         \--- org.jetbrains:annotations:13.0
+#11 29.78      +--- org.jetbrains.kotlin:kotlin-scripting-jvm:2.4.20
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-script-runtime:2.4.20
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.78      |    \--- org.jetbrains.kotlin:kotlin-scripting-common:2.4.20 (*)
+#11 29.78      +--- org.jetbrains.kotlin:kotlin-scripting-compiler-impl-embeddable:2.4.20
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-scripting-common:2.4.20 (*)
+#11 29.78      |    +--- org.jetbrains.kotlin:kotlin-scripting-jvm:2.4.20 (*)
+#11 29.78      |    \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.78      \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.78
+#11 29.78 kotlinKlibCommonizerClasspath
+#11 29.88 \--- org.jetbrains.kotlin:kotlin-klib-commonizer-embeddable:2.4.20
+#11 29.88      +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20
+#11 29.88      |    \--- org.jetbrains:annotations:13.0
+#11 29.88      \--- org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20
+#11 29.88           +--- org.jetbrains.kotlin:kotlin-build-tools-api:2.4.20
+#11 29.88           +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 29.88           +--- org.jetbrains.kotlin:kotlin-script-runtime:2.4.20
+#11 29.88           +--- org.jetbrains.kotlin:kotlin-reflect:1.6.10
+#11 29.88           +--- org.jetbrains.kotlin:kotlin-daemon-embeddable:2.4.20
+#11 29.88           \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0
+#11 29.88
+#11 29.88 kotlinNativeCompilerPluginClasspath
+#11 29.88 No dependencies
+#11 29.88
+#11 29.88 kotlinScriptDef - Script filename extensions discovery classpath configuration (n)
+#11 29.88 No dependencies
+#11 29.88
+#11 29.88 kotlinScriptDefExtensions
+#11 29.88 No dependencies
+#11 29.88
+#11 29.88 mainSourceElements - List of source directories contained in the Main SourceSet. (n)
+#11 29.88 No dependencies
+#11 29.88
+#11 29.88 runtimeClasspath - Runtime classpath of 'main'.
+#11 30.58 +--- org.jetbrains.kotlin:kotlin-stdlib -> 2.4.20
+#11 30.58 |    \--- org.jetbrains:annotations:13.0 -> 23.0.0
+#11 30.58 +--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0
+#11 30.58 |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0
+#11 30.58 |         +--- org.jetbrains:annotations:23.0.0
+#11 30.58 |         +--- org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.11.0
+#11 30.58 |         |    +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0 (c)
+#11 30.58 |         |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0 (c)
+#11 30.58 |         \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.20 -> 2.4.20 (*)
+#11 30.58 +--- com.fasterxml.jackson.core:jackson-databind:2.22.3
+#11 30.58 |    +--- com.fasterxml.jackson.core:jackson-annotations:2.22
+#11 30.58 |    +--- com.fasterxml.jackson.core:jackson-core:2.22.3
+#11 30.58 |    |    \--- com.fasterxml.jackson:jackson-bom:2.22.3
+#11 30.58 |    |         +--- com.fasterxml.jackson.core:jackson-annotations:2.22 (c)
+#11 30.58 |    |         +--- com.fasterxml.jackson.core:jackson-core:2.22.3 (c)
+#11 30.58 |    |         \--- com.fasterxml.jackson.core:jackson-databind:2.22.3 (c)
+#11 30.58 |    \--- com.fasterxml.jackson:jackson-bom:2.22.3 (*)
+#11 30.58 +--- org.postgresql:postgresql:42.7.13
+#11 30.58 |    \--- org.checkerframework:checker-qual:3.55.1
+#11 30.58 +--- com.zaxxer:HikariCP:7.1.0
+#11 30.58 |    \--- org.slf4j:slf4j-api:2.0.17
+#11 30.58 +--- io.grpc:grpc-netty-shaded:1.84.0
+#11 30.58 |    +--- io.grpc:grpc-util:1.84.0
+#11 30.58 |    |    +--- io.grpc:grpc-api:1.84.0
+#11 30.58 |    |    |    +--- com.google.code.findbugs:jsr305:3.0.2
+#11 30.58 |    |    |    +--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 30.58 |    |    |    \--- com.google.guava:guava:33.6.0-android
+#11 30.58 |    |    |         +--- com.google.guava:failureaccess:1.0.3
+#11 30.58 |    |    |         +--- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+#11 30.58 |    |    |         +--- org.jspecify:jspecify:1.0.0
+#11 30.58 |    |    |         +--- com.google.errorprone:error_prone_annotations:2.47.0 -> 2.50.0
+#11 30.58 |    |    |         \--- com.google.j2objc:j2objc-annotations:3.1
+#11 30.58 |    |    +--- io.grpc:grpc-core:1.84.0
+#11 30.58 |    |    |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 30.58 |    |    |    +--- com.google.code.gson:gson:2.14.0
+#11 30.58 |    |    |    |    \--- com.google.errorprone:error_prone_annotations:2.48.0 -> 2.50.0
+#11 30.58 |    |    |    +--- com.google.android:annotations:4.1.1.4
+#11 30.58 |    |    |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 30.58 |    |    |    +--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 30.58 |    |    |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 30.58 |    |    |    +--- io.perfmark:perfmark-api:0.27.0
+#11 30.58 |    |    |    \--- io.grpc:grpc-context:1.84.0
+#11 30.58 |    |    |         \--- io.grpc:grpc-api:1.84.0 (*)
+#11 30.58 |    |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 30.58 |    |    \--- com.google.guava:guava:33.6.0-android (*)
+#11 30.58 |    +--- io.grpc:grpc-core:1.84.0 (*)
+#11 30.58 |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 30.58 |    +--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 30.58 |    +--- io.perfmark:perfmark-api:0.27.0
+#11 30.58 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 30.58 |    \--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 30.58 +--- io.grpc:grpc-protobuf:1.84.0
+#11 30.58 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 30.58 |    +--- com.google.code.findbugs:jsr305:3.0.2
+#11 30.58 |    +--- com.google.protobuf:protobuf-java:3.25.9 -> 4.36.2
+#11 30.58 |    +--- com.google.api.grpc:proto-google-common-protos:2.64.1
+#11 30.58 |    |    \--- com.google.protobuf:protobuf-java:3.25.8 -> 4.36.2
+#11 30.58 |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 30.58 |    \--- io.grpc:grpc-protobuf-lite:1.84.0
+#11 30.58 |         +--- io.grpc:grpc-api:1.84.0 (*)
+#11 30.58 |         +--- com.google.code.findbugs:jsr305:3.0.2
+#11 30.58 |         \--- com.google.guava:guava:33.6.0-android (*)
+#11 30.58 +--- io.grpc:grpc-stub:1.84.0
+#11 30.58 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 30.58 |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 30.58 |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 30.58 |    \--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 30.58 +--- io.nats:jnats:2.26.3
+#11 30.58 |    +--- org.bouncycastle:bcprov-lts8on:2.73.12.1
+#11 30.58 |    \--- org.jspecify:jspecify:1.0.0
+#11 30.58 +--- org.apache.kafka:kafka-clients:4.3.1
+#11 30.58 |    +--- com.github.luben:zstd-jni:1.5.6-10
+#11 30.58 |    +--- at.yawk.lz4:lz4-java:1.10.2
+#11 30.58 |    +--- org.xerial.snappy:snappy-java:1.1.10.7
+#11 30.58 |    \--- org.slf4j:slf4j-api:1.7.36 -> 2.0.17
+#11 30.58 +--- org.apache.kafka:kafka-streams:4.3.1
+#11 30.58 |    +--- com.fasterxml.jackson.core:jackson-annotations:2.21 -> 2.22
+#11 30.58 |    +--- com.fasterxml.jackson.core:jackson-databind:2.21.2 -> 2.22.3 (*)
+#11 30.58 |    +--- org.slf4j:slf4j-api:1.7.36 -> 2.0.17
+#11 30.58 |    +--- org.apache.kafka:kafka-clients:4.3.1 (*)
+#11 30.58 |    \--- org.rocksdb:rocksdbjni:10.1.3
+#11 30.58 +--- com.google.protobuf:protobuf-java:4.36.2
+#11 30.58 \--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (c)
+#11 30.58
+#11 30.58 runtimeElements - Runtime elements for the 'main' feature. (n)
+#11 30.58 No dependencies
+#11 30.58
+#11 30.58 runtimeElements-published (n)
+#11 30.58 No dependencies
+#11 30.58
+#11 30.58 runtimeOnly - Runtime only dependencies for 'main'. (n)
+#11 30.58 No dependencies
+#11 30.58
+#11 30.58 testAnnotationProcessor - Annotation processors and their dependencies for source set 'test'.
+#11 30.58 No dependencies
+#11 30.58
+#11 30.58 testApi - API dependencies for 'test'. (n)
+#11 30.58 No dependencies
+#11 30.58
+#11 30.58 testCompileClasspath - Compile classpath for 'test'.
+#11 31.18 +--- org.jetbrains.kotlin:kotlin-stdlib -> 2.4.20
+#11 31.18 |    \--- org.jetbrains:annotations:13.0 -> 23.0.0
+#11 31.18 +--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0
+#11 31.18 |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0
+#11 31.18 |         +--- org.jetbrains:annotations:23.0.0
+#11 31.18 |         +--- org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.11.0
+#11 31.18 |         |    +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0 (c)
+#11 31.18 |         |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0 (c)
+#11 31.18 |         \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.20 -> 2.4.20 (*)
+#11 31.18 +--- com.fasterxml.jackson.core:jackson-databind:2.22.3
+#11 31.18 |    +--- com.fasterxml.jackson.core:jackson-annotations:2.22
+#11 31.18 |    +--- com.fasterxml.jackson.core:jackson-core:2.22.3
+#11 31.18 |    |    \--- com.fasterxml.jackson:jackson-bom:2.22.3
+#11 31.18 |    |         +--- com.fasterxml.jackson.core:jackson-annotations:2.22 (c)
+#11 31.18 |    |         +--- com.fasterxml.jackson.core:jackson-core:2.22.3 (c)
+#11 31.18 |    |         \--- com.fasterxml.jackson.core:jackson-databind:2.22.3 (c)
+#11 31.18 |    \--- com.fasterxml.jackson:jackson-bom:2.22.3 (*)
+#11 31.18 +--- org.postgresql:postgresql:42.7.13
+#11 31.18 +--- com.zaxxer:HikariCP:7.1.0
+#11 31.18 |    \--- org.slf4j:slf4j-api:2.0.17
+#11 31.18 +--- io.grpc:grpc-netty-shaded:1.84.0
+#11 31.18 |    \--- io.grpc:grpc-core:1.84.0
+#11 31.18 |         \--- io.grpc:grpc-api:1.84.0
+#11 31.18 |              +--- com.google.code.findbugs:jsr305:3.0.2
+#11 31.18 |              \--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 31.18 +--- io.grpc:grpc-protobuf:1.84.0
+#11 31.18 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.18 |    +--- com.google.code.findbugs:jsr305:3.0.2
+#11 31.18 |    +--- com.google.protobuf:protobuf-java:3.25.9 -> 4.36.2
+#11 31.18 |    \--- com.google.api.grpc:proto-google-common-protos:2.64.1
+#11 31.18 |         \--- com.google.protobuf:protobuf-java:3.25.8 -> 4.36.2
+#11 31.18 +--- io.grpc:grpc-stub:1.84.0
+#11 31.18 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.18 |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 31.18 |    \--- com.google.guava:guava:33.6.0-android
+#11 31.18 |         +--- com.google.guava:failureaccess:1.0.3
+#11 31.18 |         +--- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+#11 31.18 |         +--- org.jspecify:jspecify:1.0.0
+#11 31.18 |         +--- com.google.errorprone:error_prone_annotations:2.47.0 -> 2.50.0
+#11 31.18 |         \--- com.google.j2objc:j2objc-annotations:3.1
+#11 31.18 +--- io.nats:jnats:2.26.3
+#11 31.18 |    +--- org.bouncycastle:bcprov-lts8on:2.73.12.1
+#11 31.18 |    \--- org.jspecify:jspecify:1.0.0
+#11 31.18 +--- org.apache.kafka:kafka-clients:4.3.1
+#11 31.18 +--- org.apache.kafka:kafka-streams:4.3.1
+#11 31.18 |    +--- org.apache.kafka:kafka-clients:4.3.1
+#11 31.18 |    \--- org.rocksdb:rocksdbjni:10.1.3
+#11 31.18 +--- com.google.protobuf:protobuf-java:4.36.2
+#11 31.18 +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (c)
+#11 31.18 +--- org.apache.kafka:kafka-streams-test-utils:4.3.1
+#11 31.18 |    +--- org.apache.kafka:kafka-streams:4.3.1 (*)
+#11 31.18 |    \--- org.apache.kafka:kafka-clients:4.3.1
+#11 31.18 +--- org.jetbrains.kotlin:kotlin-test -> 2.4.20
+#11 31.18 |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 31.18 |    \--- org.jetbrains.kotlin:kotlin-test-junit5:2.4.20
+#11 31.18 |         +--- org.jetbrains.kotlin:kotlin-test:2.4.20 (*)
+#11 31.18 |         \--- org.junit.jupiter:junit-jupiter-api:5.10.1
+#11 31.18 |              +--- org.junit:junit-bom:5.10.1
+#11 31.18 |              |    +--- org.junit.jupiter:junit-jupiter-api:5.10.1 (c)
+#11 31.18 |              |    \--- org.junit.platform:junit-platform-commons:1.10.1 (c)
+#11 31.18 |              +--- org.opentest4j:opentest4j:1.3.0
+#11 31.18 |              +--- org.junit.platform:junit-platform-commons:1.10.1
+#11 31.18 |              |    +--- org.junit:junit-bom:5.10.1 (*)
+#11 31.18 |              |    \--- org.apiguardian:apiguardian-api:1.1.2
+#11 31.18 |              \--- org.apiguardian:apiguardian-api:1.1.2
+#11 31.18 +--- org.jetbrains.kotlin:kotlin-test:2.4.20 (*)
+#11 31.18 \--- org.jetbrains.kotlin:kotlin-test:2.4.20 (c)
+#11 31.18
+#11 31.18 testCompileOnly - Compile only dependencies for 'test'. (n)
+#11 31.18 No dependencies
+#11 31.18
+#11 31.18 testImplementation - Implementation only dependencies for 'test'. (n)
+#11 31.18 +--- org.apache.kafka:kafka-streams-test-utils:4.3.1 (n)
+#11 31.18 \--- org.jetbrains.kotlin:kotlin-test (n)
+#11 31.18
+#11 31.18 testImplementationDependenciesMetadata
+#11 31.18 No dependencies
+#11 31.18
+#11 31.18 testKotlinScriptDef - Script filename extensions discovery classpath configuration (n)
+#11 31.18 No dependencies
+#11 31.18
+#11 31.18 testKotlinScriptDefExtensions
+#11 31.18 No dependencies
+#11 31.18
+#11 31.18 testRuntimeClasspath - Runtime classpath of 'test'.
+#11 31.58 +--- org.jetbrains.kotlin:kotlin-stdlib -> 2.4.20
+#11 31.58 |    \--- org.jetbrains:annotations:13.0 -> 23.0.0
+#11 31.58 +--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0
+#11 31.58 |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0
+#11 31.58 |         +--- org.jetbrains:annotations:23.0.0
+#11 31.58 |         +--- org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.11.0
+#11 31.58 |         |    +--- org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0 (c)
+#11 31.58 |         |    \--- org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0 (c)
+#11 31.58 |         \--- org.jetbrains.kotlin:kotlin-stdlib:2.2.20 -> 2.4.20 (*)
+#11 31.58 +--- com.fasterxml.jackson.core:jackson-databind:2.22.3
+#11 31.58 |    +--- com.fasterxml.jackson.core:jackson-annotations:2.22
+#11 31.58 |    +--- com.fasterxml.jackson.core:jackson-core:2.22.3
+#11 31.58 |    |    \--- com.fasterxml.jackson:jackson-bom:2.22.3
+#11 31.58 |    |         +--- com.fasterxml.jackson.core:jackson-annotations:2.22 (c)
+#11 31.58 |    |         +--- com.fasterxml.jackson.core:jackson-core:2.22.3 (c)
+#11 31.58 |    |         \--- com.fasterxml.jackson.core:jackson-databind:2.22.3 (c)
+#11 31.58 |    \--- com.fasterxml.jackson:jackson-bom:2.22.3 (*)
+#11 31.58 +--- org.postgresql:postgresql:42.7.13
+#11 31.58 |    \--- org.checkerframework:checker-qual:3.55.1
+#11 31.58 +--- com.zaxxer:HikariCP:7.1.0
+#11 31.58 |    \--- org.slf4j:slf4j-api:2.0.17
+#11 31.58 +--- io.grpc:grpc-netty-shaded:1.84.0
+#11 31.58 |    +--- io.grpc:grpc-util:1.84.0
+#11 31.58 |    |    +--- io.grpc:grpc-api:1.84.0
+#11 31.58 |    |    |    +--- com.google.code.findbugs:jsr305:3.0.2
+#11 31.58 |    |    |    +--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 31.58 |    |    |    \--- com.google.guava:guava:33.6.0-android
+#11 31.58 |    |    |         +--- com.google.guava:failureaccess:1.0.3
+#11 31.58 |    |    |         +--- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+#11 31.58 |    |    |         +--- org.jspecify:jspecify:1.0.0
+#11 31.58 |    |    |         +--- com.google.errorprone:error_prone_annotations:2.47.0 -> 2.50.0
+#11 31.58 |    |    |         \--- com.google.j2objc:j2objc-annotations:3.1
+#11 31.58 |    |    +--- io.grpc:grpc-core:1.84.0
+#11 31.58 |    |    |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.58 |    |    |    +--- com.google.code.gson:gson:2.14.0
+#11 31.58 |    |    |    |    \--- com.google.errorprone:error_prone_annotations:2.48.0 -> 2.50.0
+#11 31.58 |    |    |    +--- com.google.android:annotations:4.1.1.4
+#11 31.58 |    |    |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 31.58 |    |    |    +--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 31.58 |    |    |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 31.58 |    |    |    +--- io.perfmark:perfmark-api:0.27.0
+#11 31.58 |    |    |    \--- io.grpc:grpc-context:1.84.0
+#11 31.58 |    |    |         \--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.58 |    |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 31.58 |    |    \--- com.google.guava:guava:33.6.0-android (*)
+#11 31.58 |    +--- io.grpc:grpc-core:1.84.0 (*)
+#11 31.58 |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 31.58 |    +--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 31.58 |    +--- io.perfmark:perfmark-api:0.27.0
+#11 31.58 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.58 |    \--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 31.58 +--- io.grpc:grpc-protobuf:1.84.0
+#11 31.58 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.58 |    +--- com.google.code.findbugs:jsr305:3.0.2
+#11 31.58 |    +--- com.google.protobuf:protobuf-java:3.25.9 -> 4.36.2
+#11 31.58 |    +--- com.google.api.grpc:proto-google-common-protos:2.64.1
+#11 31.58 |    |    \--- com.google.protobuf:protobuf-java:3.25.8 -> 4.36.2
+#11 31.58 |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 31.58 |    \--- io.grpc:grpc-protobuf-lite:1.84.0
+#11 31.58 |         +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.58 |         +--- com.google.code.findbugs:jsr305:3.0.2
+#11 31.58 |         \--- com.google.guava:guava:33.6.0-android (*)
+#11 31.58 +--- io.grpc:grpc-stub:1.84.0
+#11 31.58 |    +--- io.grpc:grpc-api:1.84.0 (*)
+#11 31.58 |    +--- org.codehaus.mojo:animal-sniffer-annotations:1.27
+#11 31.58 |    +--- com.google.guava:guava:33.6.0-android (*)
+#11 31.58 |    \--- com.google.errorprone:error_prone_annotations:2.50.0
+#11 31.58 +--- io.nats:jnats:2.26.3
+#11 31.58 |    +--- org.bouncycastle:bcprov-lts8on:2.73.12.1
+#11 31.58 |    \--- org.jspecify:jspecify:1.0.0
+#11 31.58 +--- org.apache.kafka:kafka-clients:4.3.1
+#11 31.58 |    +--- com.github.luben:zstd-jni:1.5.6-10
+#11 31.58 |    +--- at.yawk.lz4:lz4-java:1.10.2
+#11 31.58 |    +--- org.xerial.snappy:snappy-java:1.1.10.7
+#11 31.58 |    \--- org.slf4j:slf4j-api:1.7.36 -> 2.0.17
+#11 31.58 +--- org.apache.kafka:kafka-streams:4.3.1
+#11 31.58 |    +--- com.fasterxml.jackson.core:jackson-annotations:2.21 -> 2.22
+#11 31.58 |    +--- com.fasterxml.jackson.core:jackson-databind:2.21.2 -> 2.22.3 (*)
+#11 31.58 |    +--- org.slf4j:slf4j-api:1.7.36 -> 2.0.17
+#11 31.58 |    +--- org.apache.kafka:kafka-clients:4.3.1 (*)
+#11 31.58 |    \--- org.rocksdb:rocksdbjni:10.1.3
+#11 31.58 +--- com.google.protobuf:protobuf-java:4.36.2
+#11 31.58 +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (c)
+#11 31.58 +--- org.apache.kafka:kafka-streams-test-utils:4.3.1
+#11 31.58 |    +--- org.slf4j:slf4j-api:1.7.36 -> 2.0.17
+#11 31.58 |    +--- org.apache.kafka:kafka-streams:4.3.1 (*)
+#11 31.58 |    \--- org.apache.kafka:kafka-clients:4.3.1 (*)
+#11 31.58 +--- org.jetbrains.kotlin:kotlin-test -> 2.4.20
+#11 31.58 |    +--- org.jetbrains.kotlin:kotlin-stdlib:2.4.20 (*)
+#11 31.58 |    \--- org.jetbrains.kotlin:kotlin-test-junit5:2.4.20
+#11 31.58 |         +--- org.jetbrains.kotlin:kotlin-test:2.4.20 (*)
+#11 31.58 |         +--- org.junit.jupiter:junit-jupiter-engine:5.10.1
+#11 31.58 |         |    +--- org.junit:junit-bom:5.10.1
+#11 31.58 |         |    |    +--- org.junit.jupiter:junit-jupiter-api:5.10.1 (c)
+#11 31.58 |         |    |    +--- org.junit.jupiter:junit-jupiter-engine:5.10.1 (c)
+#11 31.58 |         |    |    +--- org.junit.platform:junit-platform-engine:1.10.1 (c)
+#11 31.58 |         |    |    +--- org.junit.platform:junit-platform-launcher:1.10.1 (c)
+#11 31.58 |         |    |    \--- org.junit.platform:junit-platform-commons:1.10.1 (c)
+#11 31.58 |         |    +--- org.junit.platform:junit-platform-engine:1.10.1
+#11 31.58 |         |    |    +--- org.junit:junit-bom:5.10.1 (*)
+#11 31.58 |         |    |    +--- org.opentest4j:opentest4j:1.3.0
+#11 31.58 |         |    |    \--- org.junit.platform:junit-platform-commons:1.10.1
+#11 31.58 |         |    |         \--- org.junit:junit-bom:5.10.1 (*)
+#11 31.58 |         |    \--- org.junit.jupiter:junit-jupiter-api:5.10.1
+#11 31.58 |         |         +--- org.junit:junit-bom:5.10.1 (*)
+#11 31.58 |         |         +--- org.opentest4j:opentest4j:1.3.0
+#11 31.58 |         |         \--- org.junit.platform:junit-platform-commons:1.10.1 (*)
+#11 31.58 |         \--- org.junit.platform:junit-platform-launcher:1.10.1
+#11 31.58 |              +--- org.junit:junit-bom:5.10.1 (*)
+#11 31.58 |              \--- org.junit.platform:junit-platform-engine:1.10.1 (*)
+#11 31.58 +--- org.jetbrains.kotlin:kotlin-test:2.4.20 (*)
+#11 31.58 \--- org.jetbrains.kotlin:kotlin-test:2.4.20 (c)
+#11 31.58
+#11 31.58 testRuntimeOnly - Runtime only dependencies for 'test'. (n)
+#11 31.58 No dependencies
+#11 31.58
+#11 31.58 (c) - A dependency constraint, not a dependency. The dependency affected by the constraint occurs elsewhere in the tree.
+#11 31.58 (*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+#11 31.58
+#11 31.58 (n) - A dependency or dependency configuration that cannot be resolved.
+#11 31.58
+#11 31.58 A web-based, searchable dependency report is available by adding the --scan option.
+#11 31.58
+#11 31.58 BUILD SUCCESSFUL in 31s
+#11 31.58 1 actionable task: 1 executed
+#11 31.58 Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html
+#11 DONE 31.8s
+
+#12 [build 6/8] COPY services/platform-runtime/src src
+#12 DONE 0.0s
+
+#13 [build 7/8] COPY scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql /app/scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql
+#13 DONE 0.0s
+
+#14 [build 8/8] RUN ./gradlew --no-daemon installDist     && rm -f build/install/platform-runtime/bin/*.bat     && jlink         --add-modules java.se,java.net.http,jdk.charsets,jdk.crypto.ec,jdk.httpserver,jdk.management,jdk.naming.dns,jdk.security.auth,jdk.unsupported,jdk.zipfs         --strip-debug         --no-header-files         --no-man-pages         --compress=zip-6         --output /opt/jre
+#14 0.429 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+#14 1.028 Daemon will be stopped at the end of the build
+#14 3.629 > Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+#14 20.13 > Task :verifyRuntimeOrderIdentityMigration
+#14 20.13 > Task :processResources
+#14 33.63 > Task :compileKotlin
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/JsonCodec.kt:232:18 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:50:25 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:51:50 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:51:88 'constructor(): NioEventLoopGroup' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:70:30 'fun addLast(p0: EventExecutorGroup!, vararg p1: ChannelHandler!): ChannelPipeline!' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:32:25 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:33:50 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:33:88 'constructor(): NioEventLoopGroup' is deprecated. Deprecated in Java.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandPublishing.kt:172:37 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandPublishing.kt:198:69 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+#14 41.93 w: file:///app/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/BrokerVenueSourceReader.kt:63:23 'fun close(p0: Duration!): Unit' is deprecated. Deprecated in Java.
+#14 46.93
+#14 46.93 > Task :compileJava
+#14 46.93 > Task :classes
+#14 47.13 > Task :jar
+#14 50.53 > Task :startScripts
+#14 50.89 > Task :installDist
+#14 50.89
+#14 50.89 [Incubating] Problems report is available at: file:///app/services/platform-runtime/build/reports/problems/problems-report.html
+#14 50.89
+#14 50.89 BUILD SUCCESSFUL in 50s
+#14 50.89 7 actionable tasks: 7 executed
+#14 50.89 Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html
+#14 DONE 55.4s
+
+#15 [stage-1 2/6] WORKDIR /app
+#15 CACHED
+
+#16 [stage-1 3/6] RUN groupadd --system --gid 10001 reef     && useradd --system --uid 10001 --gid reef --home-dir /app --shell /usr/sbin/nologin reef     && apt-get update     && apt-get install -y --no-install-recommends ca-certificates curl     && rm -rf /var/lib/apt/lists/*
+#16 CACHED
+
+#17 [stage-1 4/6] COPY --from=build --chown=reef:reef /opt/jre /opt/java/openjdk
+#17 CACHED
+
+#18 [stage-1 5/6] COPY --from=build --chown=reef:reef /app/services/platform-runtime/build/install/platform-runtime /app/platform-runtime
+#18 CACHED
+
+#19 [stage-1 6/6] RUN install -d -o reef -g reef /app/calcify-state
+#19 CACHED
+
+#20 exporting to image
+#20 exporting layers done
+#20 writing image sha256:199f9a4b7b28ee8d41ce6cfe2cdfdee6e254e894f324f1fcfd2cfbb9576d3031 done
+#20 naming to docker.io/reef/r08-runtime-ci:check done
+#20 DONE 0.0s

@@ -1,0 +1,30 @@
+BEGIN
+ runtime_materialize_venue_event_batch
+---------------------------------------
+                                     2
+(1 row)
+
+ runtime_project_canonical_command_outcome_members
+---------------------------------------------------
+                                                 2
+(1 row)
+
+ run_id | participant_id
+--------+----------------
+ run-a  | buyer-run-a
+ run-b  | buyer-run-b
+(2 rows)
+
+ run_id | count
+--------+-------
+ run-a  |     1
+ run-b  |     1
+(2 rows)
+
+ run_id | count
+--------+-------
+ run-a  |     1
+ run-b  |     1
+(2 rows)
+
+ROLLBACK

@@ -68,7 +68,7 @@ jobs:
       matrix:
         include:
           - image: reef-platform-runtime
-            context: services/platform-runtime
+            context: .
             dockerfile: services/platform-runtime/Dockerfile
           - image: reef-arena-platform-runtime
             context: .

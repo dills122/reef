@@ -41,6 +41,7 @@ Current implementation checkpoint:
 - `/api/v1/orders/fills` remains participant-owned and accepts an optional
   `runId` filter; callers producing run evidence should supply it so retained
   executions from another run cannot enter the result
+- order diagnostics and cancel-by-client-order use [run-scoped runtime order identity](../RUNTIME_ORDER_IDENTITY.md); ambiguous unscoped order/client-order lookups return not-found
 - writes require `X-Client-Id` and `Idempotency-Key`
 - auth, rate-limit, idempotency, account-risk, abuse-protection, and command-capture hooks exist in the runtime boundary layer
 - durable boundary storage uses explicit migration-owned `boundary.*` table names in Docker/local startup

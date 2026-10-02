@@ -1,11 +1,12 @@
 FROM gradle:9.8.0-jdk21 AS build
-WORKDIR /app
+WORKDIR /app/services/platform-runtime
 
-COPY gradle gradle
-COPY gradlew settings.gradle.kts build.gradle.kts ./
+COPY services/platform-runtime/gradle gradle
+COPY services/platform-runtime/gradlew services/platform-runtime/settings.gradle.kts services/platform-runtime/build.gradle.kts ./
 RUN ./gradlew --no-daemon dependencies
 
-COPY src src
+COPY services/platform-runtime/src src
+COPY scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql /app/scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql
 RUN ./gradlew --no-daemon installDist \
     && rm -f build/install/platform-runtime/bin/*.bat \
     && jlink \
@@ -28,7 +29,7 @@ RUN groupadd --system --gid 10001 reef \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=reef:reef /opt/jre /opt/java/openjdk
-COPY --from=build --chown=reef:reef /app/build/install/platform-runtime /app/platform-runtime
+COPY --from=build --chown=reef:reef /app/services/platform-runtime/build/install/platform-runtime /app/platform-runtime
 RUN install -d -o reef -g reef /app/calcify-state
 USER 10001:10001
 
