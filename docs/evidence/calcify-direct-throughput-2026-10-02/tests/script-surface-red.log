@@ -1,0 +1,2 @@
+script tests not wired into Makefile, package.json, or CI:
+  - scripts/dev/calcify-direct-capacity.test.mjs

@@ -1,0 +1,6 @@
+{
+  "files": 156,
+  "secretPatternFindings": [],
+  "scope": "task-generated synthetic benchmark data/local config/hashes/test logs",
+  "repository": "https://github.com/dills122/reef"
+}

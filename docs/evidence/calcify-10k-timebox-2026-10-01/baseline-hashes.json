@@ -1,0 +1,11 @@
+{
+  "commit": "037971d63ebee882799e0bd78b7dd0035af1c3a6",
+  "hashes": {
+    "services/platform-runtime/build/install/platform-runtime/lib/platform-runtime.jar": "e28987b958ee60654535a6cb3937b254136b06df2c0e3ae7e617f10bb4438f5c",
+    "services/simulator/cmd/calcify-load/main.go": "604194778face104ed74dd5cd37f2370f57622e6fe3b622729bfe5abd2721e1c",
+    "scripts/dev/calcify-full-path-smoke.mjs": "922a1761f47b3db6a0493a18a05ce9016bbeb1d9eb562a79bb4631122056f714",
+    "compose.base.yml": "deb0e38bd5ed2f11aa5938be16ba90e872877b90089ecdd50580f074465f6673",
+    "compose.local.yml": "207b9d892fd6b9725640b3e9046d4e1e3b21a94cddace48c2de71a7f0616c4da",
+    "compose.calcify.yml": "3b813d6bb3273f8f78448965f8973ce723d3a1b39f7ee278b408fd98416fd2a2"
+  }
+}

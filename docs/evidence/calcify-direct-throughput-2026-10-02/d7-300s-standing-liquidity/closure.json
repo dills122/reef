@@ -1,0 +1,34 @@
+{
+  "owned": [
+    {
+      "name": "reef-calcify-direct-20261002-calcify-resolver-1",
+      "status": "Exited (143) Less than a second ago"
+    },
+    {
+      "name": "reef-calcify-direct-20261002-calcify-extractor-1",
+      "status": "Exited (143) Less than a second ago"
+    },
+    {
+      "name": "reef-calcify-direct-20261002-calcify-verifier-1",
+      "status": "Exited (143) Less than a second ago"
+    },
+    {
+      "name": "reef-platform-api",
+      "status": "Exited (143) Less than a second ago"
+    },
+    {
+      "name": "reef-matching-engine",
+      "status": "Exited (0) Less than a second ago"
+    },
+    {
+      "name": "reef-redpanda",
+      "status": "Exited (0) Less than a second ago"
+    },
+    {
+      "name": "reef-postgres",
+      "status": "Exited (0) Less than a second ago"
+    }
+  ],
+  "unrelatedPausedPostgresPresent": false,
+  "preserveVolumes": true
+}

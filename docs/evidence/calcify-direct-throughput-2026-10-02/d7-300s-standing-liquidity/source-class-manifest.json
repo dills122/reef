@@ -1,0 +1,22 @@
+{
+  "head": "080f0eda0ee1798d744669f88125d98056890f32",
+  "files": {
+    "services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/CalcifyPipeline.kt": "3200befcd2ea66ad55f49d5bb89190a4a8e7267d667ce166aaf8e68b57fe44ac",
+    "services/matching-engine/internal/streamdirect/kafka.go": "48bbe14e1c6e8503fbce65c420afd6e29911cca8c2f14f3481d92549691e0085",
+    "services/simulator/cmd/calcify-load/main.go": "92bc5cb94e4d7cfa330dc1ed2a1ffe464a2e5afdb94fa1057e778384dd0cb8b2",
+    "scripts/dev/calcify-direct-bootstrap.mjs": "2b10d01369364b9b11a6fcc562f38e57f8703ed8f352dec3754d20d5dacb16ed",
+    "scripts/dev/calcify-direct-capacity.mjs": "5ee5217d9ebc7ed913a812837515fa133d5884a68ce475b1f452296e5aa1373c",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyVerifiedVisibilityObserver$Mark.class": "570cf0e22f00e25fa80391a2aec1f89248ec2c0015629e112fbf07954f3d1437",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyVerifiedVisibilityObserver$Start.class": "9c8531220a12b9afaa1b829fb1781defc2e123af9180135246de61621a7ee33d",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyActualFullFactObserver.class": "6af6853078fdcf86dc69d73e1d4d20cbf3b1cb191f18f655a1e8691e148040f4",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyActualFullFactObserver$Facts.class": "e512bf56b3a1f7dca45d9f43688efbf74cdb7bb9ec0273aada0e4fba5213766e",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyActualFullFactObserver$FrozenReader.class": "22fcce5c61cb8fc4aa5d1bc2781cf376780305dc6f62c01f9bd2aa73e60a714b",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyVerifiedVisibilityObserver$SourceLane.class": "f8394412fb2cd57fa3f970321ac51f9d7a93f249fdbc79c28c4f5ac2c3638095",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyVerifiedVisibilityObserver.class": "6e4ab71fcb0ef8cb1afa0914278125758b3f27c8cc60f750488de0e02ea3381b",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyVerifiedVisibilityObserver$MillisecondLatencyHistogram.class": "fd2ee57fa46a7f870c99b46ebe9ce1477fe3f7f4e4d3cdc9a9fe04cb179fd1e9",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyVerifiedVisibilityObserverTest.class": "a83e6a27f2a7de655ac8b4bfb984c29149ef618531c96a94bf2557805b8dfc76",
+    "services/platform-runtime/build/classes/kotlin/test/com/reef/platform/calcify/CalcifyActualFullFactObserverTest.class": "e31883d9bca398c99b5b92740b50ed36e21254af72f6d2c26556d03a4244acd1"
+  },
+  "guest": "10 CPUs 16745824256 bytes",
+  "clusterWriteCachingDefault": "false"
+}

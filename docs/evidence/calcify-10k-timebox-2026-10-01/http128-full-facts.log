@@ -1,0 +1,4 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+{"result":{"sourceTopic":"REEF_CALC10K-HTTP128-20261001_EVENTS","resolvedTopic":"REEF_CALC10K-HTTP128-20261001_RESOLVED","sourceTopicId":"UCmvacAKQv-r7B6OSu-EfQ","generation":3,"policyVersion":1,"sourceBatches":2164,"acceptedOrders":432304,"records":216152,"expected":216152,"fullFactParity":true,"orderedUnique":true,"independentFactDecoder":true,"checksumValidator":"shared CalcifySourceBatch.checked","sourceCommittedEnds":{"2":6492,"1":0,"3":0,"0":0},"resolvedCommittedEnds":{"0":0,"1":0,"2":217136,"3":0},"partitionSha256":{"2":"d11546afe439ee651fc22e683bf64f1d8cfc6d7e0294cd18613e67faee954e74"},"pass":true}}

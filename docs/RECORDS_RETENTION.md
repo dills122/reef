@@ -30,6 +30,7 @@ If current work needs a durable lesson, add concise verified fact to current own
 - Active execution in `WORK_PLAN.md`, Calcify overview/discovery/current Phase 2 implementation plan and current handoff; latest October 1 architecture reviews.
 - Latest Phase 1 evidence for 300-pair pacing, corrected 5k and 7.5k runs with reconciliation companions, and 10k calibration.
 - Phase 2 implementation: latest corrected broker fault cohort `broker-a9bc0494`; latest multi-shape short cohort `capacity-0ccfefa6`; last candidate `capacity-156d616c` and last producer-batch comparison `capacity-4c565d6d`; latest sustained attempt `sustained-8ea6c8ce`; latest large recovery `recovery-5545850c`; full-path and nightly-checkpoint bundles. Latest failed attempts remain failures; retention does not upgrade their qualification.
+- Latest master Calcify direct-throughput and joined-10k campaign bundles, including failed attempts, corrections, source manifests and current handoff. These are separate profiles from earlier phase diagnostics; campaign outcomes retain their recorded scope.
 - Complete terminal-retention red/green proof and latest PR review pass2.
 - Source fixtures consumed by current scripts, original checksum/provenance manifests and correction notes. These are required companions, not obsolete bulk.
 

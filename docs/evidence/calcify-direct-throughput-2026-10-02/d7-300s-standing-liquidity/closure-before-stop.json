@@ -1,0 +1,13 @@
+{
+  "owned": [
+    "reef-calcify-direct-20261002-calcify-resolver-1",
+    "reef-calcify-direct-20261002-calcify-extractor-1",
+    "reef-calcify-direct-20261002-calcify-verifier-1",
+    "reef-platform-api",
+    "reef-matching-engine",
+    "reef-redpanda",
+    "reef-postgres"
+  ],
+  "otherContainers": [],
+  "preserveVolumes": true
+}

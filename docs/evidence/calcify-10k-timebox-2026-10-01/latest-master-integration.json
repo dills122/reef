@@ -1,0 +1,13 @@
+{
+  "master": "16e15340",
+  "branchCompatibility": "482846d0",
+  "fullPathSmoke": "PASS",
+  "capacityClaim": false,
+  "images": {
+    "/reef-platform-api": "sha256:8effbfbf21c21749cfd333650aacc3ca38c2d4056f402c7b02c02a2a74b8810c",
+    "/reef-matching-engine": "sha256:27fce31b400fcc11993cd8463338f863d2d8adb860ddc9203fd78986020f8fea",
+    "/reef-calcify-10k-20261001-calcify-resolver-1": "sha256:8effbfbf21c21749cfd333650aacc3ca38c2d4056f402c7b02c02a2a74b8810c"
+  },
+  "runtimeJarSha256": "5d41ae5bba8b69a393808fffe664faa2e3e78c747d6d7309b31329cbf44a9a0c",
+  "matcherLinuxBinarySha256": "15536c34e162a63a8249f07f830a5ddd8ee3bafbf27398fb48851a1073cda26d"
+}

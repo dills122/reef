@@ -18,13 +18,19 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify joined10k checkpoint (2026-10-02)
+
+**Configuration correction:** campaign tested PostgreSQL-backed smoke ingress, not documented in-memory-intake/publish-pipeline performance shape. Intended fast-ingress+Calcify capacity remains unmeasured. Verify explicit profile/accounting before further tuning;7,708.36/s is scoped SQL-smoke result.
+
+Two-hour frozen-base campaign fails10k accepted-order target. Best300s **7,708.36durable order ACKs/s**,1,158,676 exact resolved contexts and Phase1 counts, bounded drain, zero failures. Final higher-concurrency attempt aborts on Docker guest-disk ENOSPC. Latest-master correctness fixes integrated and separately checked; no capacity transfer. [Campaign evidence/next gates](research/CALCIFY_10K_TIMEBOX_2026-10-02.md), [handoff](work/handoffs/2026-10-02-calcify-10k-timebox.md). Restore guest storage headroom and repeated-state controls before further sustained load; durable-intake batching remains measured hypothesis. Older checkpoints below retain dated scope.
+
 ## Records separation (2026-10-02)
 
 Reef Records bootstrap and archive import landed in [Records PR #2](https://github.com/dills122/reef-records/pull/2). 386 historical files (39.36 MiB) preserved byte-for-byte at pinned archive commit; Reef cleanup on `codex/extract-historical-records` retains 89 current evidence files plus active code/docs and required fixtures. [Retention policy](RECORDS_RETENTION.md) and relocation inventory own selection and lookup. Local archive hashes, retained checksums, active links and five retention failure-path tests pass; no new runtime or performance qualification claimed.
 
 ## Records CI follow-up (2026-10-02)
 
-PR #467 script-surface gate flagged retained `scripts/dev/projection-dirty-crash-test.mjs` after its only research-doc reference moved to Records. Current migration runbook now documents executable harness, prerequisites, isolation and limits, with archived F02 evidence link. Script-surface check passes; exact Node dev-tooling CI suite passes 87 tests. Retention pass: current runbook updated; no evidence bundle replaced or additional historical import needed. Retained evidence and archive references check unchanged.
+PR #467 script-surface gate flagged retained `scripts/dev/projection-dirty-crash-test.mjs` after its only research-doc reference moved to Records. Current migration runbook now documents executable harness, prerequisites, isolation and limits, with archived F02 evidence link. Script-surface check passes; exact Node dev-tooling CI suite passes 87 tests. Retention pass: current runbook updated; no evidence bundle replaced or additional historical import needed. Later master merge `9b2a4861` conflicted only at work-board insertion; both current Calcify checkpoint and Records sections preserved. One new upstream link repaired to pinned Records; 228 newly merged evidence companions added to retained completeness inventory. Retention check, script-surface and exact 98-test Node CI suite pass after merge.
 
 ## Ongoing records guidance (2026-10-02)
 
