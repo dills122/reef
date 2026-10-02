@@ -30,13 +30,13 @@ func TestMultiPartitionRecoveryMatchesLiveBoundedTerminalState(t *testing.T) {
 	restoreTerminalLane(t, recovered, 1, partitionOne)
 
 	for _, orderID := range []string{"ord-a", "ord-b", "ord-c"} {
-		if _, ok := live.OrderState(orderID); !ok {
+		if _, ok := live.OrderState("run-1", orderID); !ok {
 			t.Fatalf("live lane-local retention lost %s", orderID)
 		}
-		if _, ok := recovered.OrderState(orderID); !ok {
+		if _, ok := recovered.OrderState("run-1", orderID); !ok {
 			t.Fatalf("recovered lane-local retention lost %s", orderID)
 		}
-		command := domain.CancelOrder{CommandID: "cancel-again-" + orderID, OrderID: orderID, OccurredAt: "2026-08-20T12:00:04Z"}
+		command := domain.CancelOrder{CommandID: "cancel-again-" + orderID, RunID: "run-1", VenueSessionID: "session-1", InstrumentID: map[string]string{"ord-a": "AAPL", "ord-b": "MSFT", "ord-c": "NVDA"}[orderID], ParticipantID: "participant-1", AccountID: "account-1", OrderID: orderID, OccurredAt: "2026-08-20T12:00:04Z"}
 		liveOutcome, recoveredOutcome := live.CancelOrder(command), recovered.CancelOrder(command)
 		if liveOutcome.Rejected == nil || recoveredOutcome.Rejected == nil || liveOutcome.Rejected.Code != "INVALID_STATE" || *liveOutcome.Rejected != *recoveredOutcome.Rejected {
 			t.Fatalf("partition replay changed terminal outcome: live=%+v recovered=%+v", liveOutcome, recoveredOutcome)

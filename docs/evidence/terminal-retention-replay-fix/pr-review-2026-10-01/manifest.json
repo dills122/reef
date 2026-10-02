@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-01",
+  "timezone": "America/Toronto",
+  "original_pr_head": "9778e84705f0c2f7b0e4fe54864e1fc49ce03623",
+  "merged_master": "92cdd20b6c78e7a8f1384d0576667a120fc2b4a6",
+  "branch": "codex/terminal-retention-replay-fix",
+  "toolchain": "go version go1.26.5 darwin/arm64",
+  "command": "go test -race ./... -count=1",
+  "command_workdir": "services/matching-engine",
+  "exit_code": 0,
+  "startedAtUtc": "2026-10-02T03:10:35.936032+00:00",
+  "endedAtUtc": "2026-10-02T03:10:42.953255+00:00",
+  "review": "Independent source review clear; OCR claims unsupported; nil-batch call guard clarified",
+  "source_sha256": {
+    "services/matching-engine/internal/app/book_scope.go": "5796fade98f87a92a8c3b50e66fe1a9bcdfc3b40101110ff87c07ad8a060f40f",
+    "services/matching-engine/internal/app/order_index.go": "c9029d1fbafb38cef8b9d29d8a90406280e304e3e8b2ec479ca149774f609bb8",
+    "services/matching-engine/internal/app/order_index_test.go": "6d1f89da7539568d90146bbbf470afee6b3a9ea1177cf7537b86e96075326258",
+    "services/matching-engine/internal/app/run_scope_test.go": "80aa6950151e29e29ea2edcca96cd3f397b500e203ec0afe5a0426b5c20a7fed",
+    "services/matching-engine/internal/app/service.go": "128064615831e00dd86181be1ade3a64e4b3e38231d9c4678f3e7e8001378207",
+    "services/matching-engine/internal/app/service_fuzz_test.go": "5d096a889d5b1ebb50ef0fffa6b169ce09c8e4c7ce00e76dddfa04a610cdf8ba",
+    "services/matching-engine/internal/app/service_snapshot.go": "e4fdefbb87ce7b1b4b38193cc398987ec072865b31e8965b94ad8bed56497cbb",
+    "services/matching-engine/internal/app/service_test.go": "620a18e0d8df1dd5b9bc9f042342b2a5b97c9ebf327d59a24d7934b0541dd613",
+    "services/matching-engine/internal/app/terminal_retention.go": "4320c9f75bf682768644b965d3a257cf4a0e3da2c09fca78f0855b83648f3ae9",
+    "services/matching-engine/internal/app/terminal_retention_replay_test.go": "1eb4e82e19c5d48c26d2f106598584de3bcab011fbff0a58e432345d70695229",
+    "services/matching-engine/internal/streamdirect/kafka_transaction_integration_test.go": "78de1b01caf47a690a241c8f0204ba2ab37f13c725870a4a6055a2406c7c65ba",
+    "services/matching-engine/internal/streamdirect/processor_test.go": "6da8e83b98c681ca794bf2cdfe213130c3a76893bba739b551eb66d0781d70ff",
+    "services/matching-engine/internal/streamdirect/terminal_retention_recovery_test.go": "67e530a68d38a0206e26a5d08d50465d261203eb8505a1bd060a25e43851d5d0",
+    "services/matching-engine/internal/streamdirect/timing_retry_test.go": "4a6262e87cd7fb59bbf330dbe7a920299f5deb9fecd8478a1dc34ed5d396b893"
+  },
+  "log_sha256": {
+    "green-race-all.log": "76f1bc466b597b276951e3b3575562d574979090ae4789364f80314be09355c7"
+  }
+}

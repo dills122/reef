@@ -20,6 +20,7 @@ const fullCiJobs = [
   "infrastructure-config",
   "go-vulnerability-scan",
   "postgres-schema-placement",
+  "calcify-tests",
 ];
 
 function needsWith(result = "success") {

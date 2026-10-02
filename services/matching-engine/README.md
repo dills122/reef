@@ -78,13 +78,14 @@ new throughput qualification.
 Retention applies at each terminal transition, independent of publication
 batch size. Failed publication rolls back per-transition heap deltas and
 original order records; work/memory depends on touched batch entries, with
-`O(log N)` heap work per transition and no whole-lane copy. The shard-global
-order-ID reservation remains held through provisional eviction. Only the
-same owning batch can reuse that ID before commit, including another book
-owned by that batch; another batch receives `DUPLICATE_ORDER_ID` until eviction
-commits. This preserves the
-existing engine-wide order-ID namespace and does not change Calcify's stronger
-no-new-acceptance-of-reused-ID contract.
+`O(log N)` heap work per transition and no whole-lane copy. Reservations and
+rollback preimages use `(runId, orderId)`, matching the run-scoped order index.
+A reservation remains held through provisional eviction. Only the same owning
+batch can reuse that run/order identity before commit, including another book
+owned by that batch; another batch in the same run receives `DUPLICATE_ORDER_ID`
+until eviction commits. Different runs may use the same order ID independently.
+Blank run IDs share the legacy namespace. Calcify's stronger no-new-acceptance-of-
+reused-ID contract remains separate.
 
 Callers must serialize all mutations of one book, including the full interval
 from `BeginBatch` through durable publish and `Commit`/`Rollback`. Unrelated

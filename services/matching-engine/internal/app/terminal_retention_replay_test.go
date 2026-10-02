@@ -134,7 +134,7 @@ func TestTerminalRetentionIsolatedAcrossEveryBookDimension(t *testing.T) {
 				if r.Rejected == nil || r.Rejected.Code != "INVALID_STATE" {
 					t.Fatalf("other lane lost cancel history: %+v", r)
 				}
-				r = service.ModifyOrder(domain.ModifyOrder{OrderID: "a", QuantityUnits: "1", LimitPrice: "101", OccurredAt: "2026-09-30T00:00:03Z"})
+				r = service.ModifyOrder(domain.ModifyOrder{RunID: scope.RunID, VenueSessionID: scope.VenueSessionID, InstrumentID: scope.InstrumentID, OrderID: "a", QuantityUnits: "1", LimitPrice: "101", OccurredAt: "2026-09-30T00:00:03Z"})
 				if r.Rejected == nil || r.Rejected.Code != "INVALID_STATE" {
 					t.Fatalf("other lane lost modify history: %+v", r)
 				}
@@ -170,10 +170,10 @@ func TestTerminalRetentionBatchRollbackRestoresEvictionsAndReusedID(t *testing.T
 			if before.Checksum != after.Checksum {
 				t.Fatalf("rollback changed lane: before=%s after=%s", before.Checksum, after.Checksum)
 			}
-			if _, ok := s.OrderState("b"); ok {
+			if _, ok := s.OrderState(scope.RunID, "b"); ok {
 				t.Fatal("rolled-back order remains")
 			}
-			if r, ok := s.OrderState("c"); !ok || r.Status != domain.OrderStatusCancelled {
+			if r, ok := s.OrderState(other.RunID, "c"); !ok || r.Status != domain.OrderStatusCancelled {
 				t.Fatal("other commit lost")
 			}
 			// Retry failed publication's exact commands after rollback.
@@ -217,10 +217,10 @@ func TestTerminalRetentionFilledAndSTPRollback(t *testing.T) {
 	}
 }
 
-func TestTerminalRetentionProvisionalEvictionKeepsGlobalIDReservation(t *testing.T) {
+func TestTerminalRetentionProvisionalEvictionKeepsRunIDReservation(t *testing.T) {
 	s := NewService(WithTerminalOrderRetentionLimit(1))
 	a := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "AAPL"}
-	b := BookScope{RunID: "run-b", VenueSessionID: "session", InstrumentID: "AAPL"}
+	b := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "MSFT"}
 	retentionSubmit(t, s, nil, "a", a, domain.SideBuy, "")
 	retentionCancel(t, s, nil, "a", a, "2026-09-30T00:00:01Z")
 	failed := s.BeginBatch([]BookScope{a})
@@ -235,10 +235,10 @@ func TestTerminalRetentionProvisionalEvictionKeepsGlobalIDReservation(t *testing
 	retentionSubmit(t, s, committed, "c", b, domain.SideBuy, "")
 	committed.Commit()
 	failed.Rollback()
-	if restored, ok := s.loadOrder("a"); !ok || restored.RunID != a.RunID || restored.Status != domain.OrderStatusCancelled {
+	if restored, ok := s.loadOrder(a.RunID, "a"); !ok || restored.RunID != a.RunID || restored.Status != domain.OrderStatusCancelled {
 		t.Fatal("rollback lost original reservation")
 	}
-	if _, ok := s.OrderState("c"); !ok {
+	if _, ok := s.OrderState(b.RunID, "c"); !ok {
 		t.Fatal("rollback lost other lane commit")
 	}
 	retry := s.BeginBatch([]BookScope{a})
@@ -269,7 +269,7 @@ func TestTerminalRetentionSnapshotPolicyIsChecksumCoveredAndValidated(t *testing
 
 func TestTerminalRetentionCrossBookReuseDoesNotDependOnBatchCut(t *testing.T) {
 	a := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "AAPL"}
-	b := BookScope{RunID: "run-b", VenueSessionID: "session", InstrumentID: "AAPL"}
+	b := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "MSFT"}
 	run := func(oneBatch bool) domain.SubmitOrderResult {
 		s := NewService(WithTerminalOrderRetentionLimit(1))
 		retentionSubmit(t, s, nil, "a", a, domain.SideBuy, "")
@@ -291,12 +291,12 @@ func TestTerminalRetentionCrossBookReuseDoesNotDependOnBatchCut(t *testing.T) {
 	}
 }
 
-func TestTerminalRetentionCrossBookReuseRollbackRestoresGlobalPreimage(t *testing.T) {
+func TestTerminalRetentionCrossBookReuseRollbackRestoresRunLocalPreimage(t *testing.T) {
 	for _, preexisting := range []bool{true, false} {
 		t.Run(fmt.Sprint(preexisting), func(t *testing.T) {
 			s := NewService(WithTerminalOrderRetentionLimit(1))
 			a := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "AAPL"}
-			b := BookScope{RunID: "run-b", VenueSessionID: "session", InstrumentID: "AAPL"}
+			b := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "MSFT"}
 			// Establish both empty books before checkpoint so rollback equality checks
 			// order/book content rather than journal-created empty book map entries.
 			s.bookFor(a.RunID, a.VenueSessionID, a.InstrumentID)
@@ -317,8 +317,95 @@ func TestTerminalRetentionCrossBookReuseRollbackRestoresGlobalPreimage(t *testin
 			rb.Rollback()
 			rb.Commit()
 			if before.Checksum != s.Snapshot().Checksum {
-				t.Fatal("cross-book reuse rollback lost global preimage")
+				t.Fatal("cross-book reuse rollback lost run-local preimage")
 			}
 		})
+	}
+}
+
+func TestTerminalRetentionSameIDAcrossRunsSurvivesPendingEvictionAndRestore(t *testing.T) {
+	s := NewService(WithTerminalOrderRetentionLimit(1))
+	a := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "AAPL"}
+	b := BookScope{RunID: "run-b", VenueSessionID: "session", InstrumentID: "AAPL"}
+	retentionSubmit(t, s, nil, "shared", a, domain.SideBuy, "")
+	retentionCancel(t, s, nil, "shared", a, "2026-09-30T00:00:01Z")
+	failed := s.BeginBatch([]BookScope{a})
+	retentionSubmit(t, s, failed, "new-a", a, domain.SideBuy, "")
+	retentionCancel(t, s, failed, "new-a", a, "2026-09-30T00:00:02Z")
+	committed := s.BeginBatch([]BookScope{b})
+	// Run A's provisional reservation must not reserve the same ID in run B.
+	retentionSubmit(t, s, committed, "shared", b, domain.SideBuy, "")
+	retentionCancel(t, s, committed, "shared", b, "2026-09-30T00:00:03Z")
+	committed.Commit()
+	failed.Rollback()
+	snapshot := s.Snapshot()
+	restored, ok := Restore(snapshot, WithTerminalOrderRetentionLimit(1))
+	if !ok {
+		t.Fatal("V4 restore rejected independent same-ID terminal facts")
+	}
+	for _, service := range []*Service{s, restored} {
+		for _, scope := range []BookScope{a, b} {
+			state, ok := service.OrderState(scope.RunID, "shared")
+			if !ok || state.Status != domain.OrderStatusCancelled {
+				t.Fatalf("run %s lost shared terminal order: %+v", scope.RunID, state)
+			}
+			result := service.CancelOrder(domain.CancelOrder{CommandID: "again", RunID: scope.RunID, VenueSessionID: scope.VenueSessionID, InstrumentID: scope.InstrumentID, OrderID: "shared", OccurredAt: "2026-09-30T00:00:04Z"})
+			if result.Rejected == nil || result.Rejected.Code != "INVALID_STATE" {
+				t.Fatalf("run %s lost repeat outcome: %+v", scope.RunID, result)
+			}
+		}
+		if _, ok := service.OrderState(a.RunID, "new-a"); ok {
+			t.Fatal("failed run retained new order")
+		}
+	}
+	if snapshot.Checksum != restored.Snapshot().Checksum {
+		t.Fatal("run-local V4 snapshot checksum drift")
+	}
+}
+
+func TestTerminalRetentionSameIDRunLocalPreimagesInOneBatch(t *testing.T) {
+	s := NewService(WithTerminalOrderRetentionLimit(1))
+	a := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "AAPL"}
+	b := BookScope{RunID: "run-b", VenueSessionID: "session", InstrumentID: "AAPL"}
+	retentionSubmit(t, s, nil, "shared", a, domain.SideBuy, "")
+	retentionSubmit(t, s, nil, "shared", b, domain.SideBuy, "")
+	before := s.Snapshot()
+	rb := s.BeginBatch([]BookScope{a, b})
+	for _, scope := range []BookScope{a, b} {
+		retentionCancel(t, s, rb, "shared", scope, "2026-09-30T00:00:01Z")
+		retentionSubmit(t, s, rb, "replacement", scope, domain.SideBuy, "")
+		retentionCancel(t, s, rb, "replacement", scope, "2026-09-30T00:00:02Z")
+	}
+	rb.Rollback()
+	if before.Checksum != s.Snapshot().Checksum {
+		t.Fatal("one batch shared an initial preimage across runs")
+	}
+	for _, scope := range []BookScope{a, b} {
+		if _, ok := s.OrderState(scope.RunID, "replacement"); ok {
+			t.Fatal("rollback deleted new ID in wrong run")
+		}
+	}
+	restored, ok := Restore(s.Snapshot(), WithTerminalOrderRetentionLimit(1))
+	if !ok {
+		t.Fatal("same-ID resting snapshot rejected")
+	}
+	if before.Checksum != restored.Snapshot().Checksum {
+		t.Fatal("same-ID resting restore changed state")
+	}
+}
+
+func TestTerminalRetentionDirectEvictionAndReuseWithoutBatch(t *testing.T) {
+	s := NewService(WithTerminalOrderRetentionLimit(1))
+	scope := BookScope{RunID: "run-a", VenueSessionID: "session", InstrumentID: "AAPL"}
+	retentionSubmit(t, s, nil, "a", scope, domain.SideBuy, "")
+	retentionCancel(t, s, nil, "a", scope, "2026-09-30T00:00:01Z")
+	retentionSubmit(t, s, nil, "b", scope, domain.SideBuy, "")
+	retentionCancel(t, s, nil, "b", scope, "2026-09-30T00:00:02Z")
+	if _, ok := s.OrderState(scope.RunID, "a"); ok {
+		t.Fatal("direct eviction retained older terminal record")
+	}
+	retentionSubmit(t, s, nil, "a", scope, domain.SideBuy, "")
+	if _, ok := s.OrderState(scope.RunID, "b"); !ok {
+		t.Fatal("direct ID reuse removed unrelated retained terminal order")
 	}
 }

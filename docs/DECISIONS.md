@@ -669,6 +669,7 @@ Summary:
 - `github.com/tidwall/btree` is acceptable as a narrow ordered price-level index dependency; matching semantics, replay, event generation, and checksums remain Reef-owned.
 - snapshots are recovery accelerators for shard-local book state, not the source of truth. Recovery must remain snapshot plus durable command/event replay plus checksum verification.
 - 2026-10-01 replay correction: enabled terminal-order retention is bounded per exact run/session/instrument book, not globally across books. Apply retention at each terminal transition with batch-local undo, so cross-book scheduling and publication batch cuts cannot change same-book command outcomes. Provisional evictions retain the engine-wide order-ID reservation until commit/rollback. Snapshot V4 records this policy and exact limit; old snapshots may resume only with retention disabled, and enabling the new policy requires canonical command replay. See [matching-engine recovery compatibility](../services/matching-engine/README.md#terminal-retention-and-recovery-compatibility).
+- 2026-10-01 PR #438 integration clarification: merged PR #436 scopes matcher order identity to `(runId, orderId)`. Provisional reservations and rollback preimages preserve that same scope; different runs remain independent even when IDs collide. This refines the earlier engine-wide reservation wording without changing lane-local retention or Calcify acceptance identity.
 - Redis, Postgres, RocksDB/Pebble, and embedded C++ engines are not accepted hot-book stores for this phase.
 
 Primary references:

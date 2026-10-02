@@ -31,8 +31,9 @@ type Service struct {
 type restingOrder = hotbook.RestingOrder
 
 type orderBook struct {
-	mu   sync.Mutex
-	book *hotbook.Book
+	mu    sync.Mutex
+	RunID string
+	book  *hotbook.Book
 }
 
 type orderRecord struct {
@@ -247,7 +248,7 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 		rollback.trackCreatedOrder(book, record)
 	}
 	if accepted, rejection := s.applySelfTradePrevention(rollback, book, record, now); !accepted {
-		s.releaseOrder(record.OrderID)
+		s.releaseOrder(record.RunID, record.OrderID)
 		return rejection
 	}
 	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
@@ -279,7 +280,7 @@ func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) d
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
 
-	record, ok := s.loadOrder(cmd.OrderID)
+	record, ok := s.loadOrder(cmd.RunID, cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
 	}
@@ -343,7 +344,7 @@ func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) d
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
 
-	record, ok := s.loadOrder(cmd.OrderID)
+	record, ok := s.loadOrder(cmd.RunID, cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
 	}
@@ -561,8 +562,8 @@ func restingOrdersInBook(book *orderBook, side domain.Side) int {
 	return book.book.Len(domain.SideSell)
 }
 
-func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
-	record, ok := s.loadOrder(orderID)
+func (s *Service) OrderState(runID string, orderID string) (domain.OrderState, bool) {
+	record, ok := s.loadOrder(runID, orderID)
 	if !ok {
 		return domain.OrderState{}, false
 	}
@@ -659,7 +660,7 @@ func (s *Service) bookFor(runID string, venueSessionID string, instrumentID stri
 	if existing, ok := s.books[key]; ok {
 		return existing
 	}
-	book := newOrderBook()
+	book := newOrderBook(runID)
 	s.books[key] = book
 	return book
 }
@@ -745,7 +746,7 @@ func (s *Service) reachableSelfTradeRestingRecords(book *orderBook, incoming *or
 		if remaining <= 0 {
 			return false
 		}
-		restingRecord, ok := s.loadOrder(resting.OrderID)
+		restingRecord, ok := s.loadOrder(incoming.RunID, resting.OrderID)
 		if !ok || restingRecord.OrderID == incoming.OrderID {
 			return true
 		}
@@ -779,10 +780,17 @@ func sameSelfTradeIdentity(a *orderRecord, b *orderRecord) bool {
 type BatchRollback struct {
 	service           *Service
 	instruments       map[string]*instrumentRollback
-	records           map[string]*orderRollback
+	records           map[orderIdentity]*orderRollback
 	terminalMutations []terminalRetentionMutation
 	closed            bool
-	reservedEvictions map[string]struct{}
+	reservedEvictions map[orderIdentity]struct{}
+}
+
+// orderIdentity names one order within its run. Reservations and initial
+// index preimages carry both fields so independent runs may reuse an ID.
+type orderIdentity struct {
+	RunID   string
+	OrderID string
 }
 
 type instrumentRollback struct {
@@ -808,7 +816,7 @@ func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
 	rollback := &BatchRollback{
 		service:     s,
 		instruments: make(map[string]*instrumentRollback),
-		records:     make(map[string]*orderRollback),
+		records:     make(map[orderIdentity]*orderRollback),
 	}
 	for _, scope := range scopes {
 		if scope.InstrumentID == "" {
@@ -851,16 +859,17 @@ func (rb *BatchRollback) Rollback() {
 		snap.book.mu.Unlock()
 	}
 
-	// Restore the global index once per ID, after per-book undo. Reuse across
-	// two books in one batch must not make restoration depend on map iteration.
+	// Restore the index once per (RunID, OrderID), after per-book undo. Reuse
+	// across books in one run must not depend on map iteration; another run
+	// with the same OrderID must not share this initial preimage.
 
-	for orderID, entry := range rb.records {
+	for id, entry := range rb.records {
 		var record *orderRecord
 		if entry.existed {
 			recordCopy := entry.record
 			record = &recordCopy
 		}
-		rb.service.orderIndex.restoreOrDelete(orderID, entry.existed, record)
+		rb.service.orderIndex.restoreOrDelete(id.RunID, id.OrderID, entry.existed, record)
 	}
 	rb.releaseReservations()
 	rb.closed = true
@@ -878,8 +887,8 @@ func (rb *BatchRollback) Commit() {
 }
 
 func (rb *BatchRollback) releaseReservations() {
-	for orderID := range rb.reservedEvictions {
-		rb.service.orderIndex.releaseReservation(orderID, rb)
+	for id := range rb.reservedEvictions {
+		rb.service.orderIndex.releaseReservation(id.RunID, id.OrderID, rb)
 	}
 	rb.reservedEvictions = nil
 }
@@ -888,8 +897,8 @@ func (rb *BatchRollback) trackCreatedOrder(book *orderBook, record *orderRecord)
 	if rb == nil || record == nil {
 		return
 	}
-	if _, ok := rb.records[record.OrderID]; !ok {
-		rb.records[record.OrderID] = &orderRollback{}
+	if _, ok := rb.records[orderIdentity{RunID: record.RunID, OrderID: record.OrderID}]; !ok {
+		rb.records[orderIdentity{RunID: record.RunID, OrderID: record.OrderID}] = &orderRollback{}
 	}
 	snap := rb.instrument(bookKey(record.RunID, record.VenueSessionID, record.InstrumentID), book)
 	if snap == nil {
@@ -931,7 +940,7 @@ func (rb *BatchRollback) trackOrderInInstrument(snap *instrumentRollback, orderI
 	if record != nil {
 		entry.existed = true
 		entry.record = *record
-	} else if current, ok := rb.service.loadOrder(orderID); ok {
+	} else if current, ok := rb.service.loadOrder(snap.book.RunID, orderID); ok {
 		entry.existed = true
 		entry.record = *current
 	}
@@ -940,8 +949,9 @@ func (rb *BatchRollback) trackOrderInInstrument(snap *instrumentRollback, orderI
 		entry.restingSide = side
 		entry.restingOrder = resting
 	}
-	if _, ok := rb.records[orderID]; !ok {
-		rb.records[orderID] = &orderRollback{existed: entry.existed, record: entry.record}
+	id := orderIdentity{RunID: snap.book.RunID, OrderID: orderID}
+	if _, ok := rb.records[id]; !ok {
+		rb.records[id] = &orderRollback{existed: entry.existed, record: entry.record}
 	}
 	snap.orders[orderID] = entry
 }
@@ -950,10 +960,10 @@ func (rb *BatchRollback) trackOrderRecord(record *orderRecord) {
 	if rb == nil || record == nil {
 		return
 	}
-	if _, ok := rb.records[record.OrderID]; ok {
+	if _, ok := rb.records[orderIdentity{RunID: record.RunID, OrderID: record.OrderID}]; ok {
 		return
 	}
-	rb.records[record.OrderID] = &orderRollback{
+	rb.records[orderIdentity{RunID: record.RunID, OrderID: record.OrderID}] = &orderRollback{
 		existed: true,
 		record:  *record,
 	}
@@ -985,8 +995,13 @@ func (rb *BatchRollback) instrumentForBook(book *orderBook) *instrumentRollback 
 	return nil
 }
 
+// match executes incoming against the resting book on the opposite side.
+// Buy and sell only differ in which side of the book they cross and the
+// direction of the price-improvement comparison; encoding both sides in one
+// function avoids the two implementations drifting when one is patched and
+// the other is not.
 func (s *Service) match(rollback *BatchRollback, book *orderBook, incoming restingOrder, side domain.Side, result *domain.SubmitOrderResult, occurredAt string) {
-	incomingRecord, ok := s.loadOrder(incoming.OrderID)
+	incomingRecord, ok := s.loadOrder(book.RunID, incoming.OrderID)
 	if !ok {
 		return
 	}
@@ -1001,7 +1016,7 @@ func (s *Service) match(rollback *BatchRollback, book *orderBook, incoming resti
 		if !ok {
 			return
 		}
-		restingRecord, ok := s.loadOrder(resting.OrderID)
+		restingRecord, ok := s.loadOrder(book.RunID, resting.OrderID)
 		if !ok {
 			if rollback != nil {
 				rollback.trackRestingOrder(book, resting.OrderID)
@@ -1108,21 +1123,21 @@ func (s *Service) refreshOrderStatus(rollback *BatchRollback, record *orderRecor
 }
 
 func (s *Service) trackTerminalOrder(rollback *BatchRollback, record *orderRecord) {
-	mutation := s.terminalRetention.track(record, func(evictID string) {
-		evictRecord, ok := s.loadOrder(evictID)
+	mutation := s.terminalRetention.track(record, func(evictRunID string, evictID string) {
+		evictRecord, ok := s.loadOrder(evictRunID, evictID)
 		if !ok {
 			return
 		}
 		if evictRecord.Status == domain.OrderStatusFilled || evictRecord.Status == domain.OrderStatusCancelled {
-			rollback.trackOrderRecord(evictRecord)
 			if rollback != nil {
+				rollback.trackOrderRecord(evictRecord)
 				if rollback.reservedEvictions == nil {
-					rollback.reservedEvictions = make(map[string]struct{})
+					rollback.reservedEvictions = make(map[orderIdentity]struct{})
 				}
-				rollback.reservedEvictions[evictID] = struct{}{}
+				rollback.reservedEvictions[orderIdentity{RunID: evictRunID, OrderID: evictID}] = struct{}{}
 				s.orderIndex.releaseInBatch(evictRecord, rollback)
 			} else {
-				s.orderIndex.release(evictID)
+				s.orderIndex.release(evictRunID, evictID)
 			}
 		}
 	})
@@ -1178,9 +1193,10 @@ func priceCollarBand(referencePrice int64, bandBps int64) int64 {
 	return int64(quotient)
 }
 
-func newOrderBook() *orderBook {
+func newOrderBook(runID string) *orderBook {
 	return &orderBook{
-		book: hotbook.New(),
+		RunID: runID,
+		book:  hotbook.New(),
 	}
 }
 
@@ -1222,16 +1238,16 @@ func (s *Service) removeRestingOrder(rollback *BatchRollback, book *orderBook, r
 	book.book.Remove(record.OrderID)
 }
 
-func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {
-	return s.orderIndex.load(orderID)
+func (s *Service) loadOrder(runID string, orderID string) (*orderRecord, bool) {
+	return s.orderIndex.load(runID, orderID)
 }
 
 func (s *Service) reserveOrder(record *orderRecord, owner *BatchRollback) bool {
 	return s.orderIndex.reserveInBatch(record, owner)
 }
 
-func (s *Service) releaseOrder(orderID string) {
-	s.orderIndex.release(orderID)
+func (s *Service) releaseOrder(runID string, orderID string) {
+	s.orderIndex.release(runID, orderID)
 }
 
 func envInt(name string, fallback int) int {

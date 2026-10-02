@@ -20,6 +20,7 @@ type terminalOrderRetention struct {
 }
 
 type terminalRetentionEntry struct {
+	runID      string
 	orderID    string
 	terminalAt string
 	index      int
@@ -37,11 +38,17 @@ type terminalRetentionHeap []*terminalRetentionEntry
 
 func (h terminalRetentionHeap) Len() int { return len(h) }
 
+// Less breaks ties on orderID with runID so ordering stays deterministic
+// even when two different runs reach a terminal state for the same order
+// ID at the same terminalAt - order IDs are only unique within one run.
 func (h terminalRetentionHeap) Less(i int, j int) bool {
 	if h[i].terminalAt != h[j].terminalAt {
 		return h[i].terminalAt < h[j].terminalAt
 	}
-	return h[i].orderID < h[j].orderID
+	if h[i].orderID != h[j].orderID {
+		return h[i].orderID < h[j].orderID
+	}
+	return h[i].runID < h[j].runID
 }
 
 func (h terminalRetentionHeap) Swap(i int, j int) {
@@ -67,7 +74,7 @@ func (h *terminalRetentionHeap) Pop() any {
 
 // track applies retention at the terminal transition, even inside a batch:
 // changing a publication batch cut must not change subsequent command outcomes.
-func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID string)) *terminalRetentionMutation {
+func (t *terminalOrderRetention) track(record *orderRecord, evict func(runID string, orderID string)) *terminalRetentionMutation {
 	if t.limit <= 0 || record.terminalTracked {
 		return nil
 	}
@@ -86,12 +93,12 @@ func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID s
 		entries = &terminalRetentionHeap{}
 		t.lanes[lane] = entries
 	}
-	entry := &terminalRetentionEntry{orderID: record.OrderID, terminalAt: normalizedTerminalTime(record.LastUpdatedAt), index: -1}
+	entry := &terminalRetentionEntry{runID: record.RunID, orderID: record.OrderID, terminalAt: normalizedTerminalTime(record.LastUpdatedAt), index: -1}
 	mutation := &terminalRetentionMutation{lane: lane, added: entry}
 	heap.Push(entries, entry)
 	if entries.Len() > t.limit {
 		mutation.evicted = heap.Pop(entries).(*terminalRetentionEntry)
-		evict(mutation.evicted.orderID)
+		evict(mutation.evicted.runID, mutation.evicted.orderID)
 	}
 	return mutation
 }

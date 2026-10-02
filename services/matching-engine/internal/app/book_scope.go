@@ -12,6 +12,16 @@ func bookKey(runID, venueSessionID, instrumentID string) string {
 
 func framedID(id string) string { return strconv.Itoa(len(id)) + ":" + id }
 
+// orderIndexKey scopes an order ID to its run, so two different runs may
+// reuse the same order ID without colliding in the order index, the
+// terminal-retention tracker, or snapshot validation. Blank runID is an
+// ordinary key component, not a special case: every pre-existing caller
+// that never supplied a run keeps colliding (and being globally unique)
+// among itself exactly as before.
+func orderIndexKey(runID, orderID string) string {
+	return framedID(runID) + framedID(orderID)
+}
+
 func parseBookKey(key string) (BookScope, bool) {
 	var values [3]string
 	for i := range values {
