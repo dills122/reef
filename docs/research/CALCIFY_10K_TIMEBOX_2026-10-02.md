@@ -1,5 +1,7 @@
 # Calcify joined10k campaign — 2026-10-02
 
+**Scope correction:** measured PostgreSQL-backed functional-smoke ingress. Intended in-memory-intake/durable-broker fast path unmeasured; no Calcify/matcher capacity ceiling established. See appended correction.
+
 Local frozen-base joined campaign **did not qualify sustained10k**. Best completed300s cohort: **7,708.36 durably accepted order commands/s**, exact1,158,676 resolved trade contexts, bounded receipt/resolved drain. Final higher-concurrency attempt stopped at200.974s when Docker disk filled; no sustained rate inferred. Latest-master integration passes regression/coverage and matcher race checks; correctness smoke recorded separately.
 
 Campaign window: **03:38:05–05:38:05 UTC, 2026-10-02**. Baseline `037971d63ebee882799e0bd78b7dd0035af1c3a6`, branch `codex/calcify-10k-timebox`. [Frozen policy](../evidence/calcify-10k-timebox-2026-10-01/campaign-policy.json), [baseline hashes](../evidence/calcify-10k-timebox-2026-10-01/baseline-hashes.json).
@@ -89,3 +91,12 @@ Best q2 is73.4% of10.5k offered /77.1% of10k required. Data prove exact Phase1/2
 Next bounded work: restore equal logical/physical dataset and guest storage headroom; isolate Netty, PostgreSQL pool and measured group-commit settings with repeated controls. Investigate batched durable PostgreSQL reservations/transaction/index cost, requiring each202 to await its actual durable intake and broker ACK; preserve idempotency/same-lane order. Q3 intermediate waits include WALWrite100, relation-extension38 and buffer locks. Current evidence does not establish codec replacement as primary remaining fix. Re-run new-master hot/balanced/skew/aged300s profiles and unchanged-candidate fault/recovery gates before raising qualification.
 
 Final latest-master full-path smoke **PASS**: two PostgreSQL-backed commands, one exact receipt and complete resolved context. [Integration images/hashes](../evidence/calcify-10k-timebox-2026-10-01/latest-master-integration.json), [smoke](../evidence/calcify-10k-timebox-2026-10-01/smoke-master461.log), [platform check/coverage](../evidence/calcify-10k-timebox-2026-10-01/latest-master-platform-check.log), [matcher race](../evidence/calcify-10k-timebox-2026-10-01/latest-master-matcher-race.log). No post-merge sustained cohort run.
+
+
+## Configuration correction — October2, after campaign
+
+User challenged PostgreSQL ingress assumption. Verified code and frozen q2 environment: campaign reused `calcify-full-path-smoke.mjs`, which calls `applyStackProfile("stream-ack")` then unconditionally sets RUNTIME_PERSISTENCE, EXTERNAL_API_IDEMPOTENCY_STORE and STREAM_ACK_INTAKE_STORE to postgres. Frozen q2 also has STREAM_ACK_PUBLISH_PIPELINE_ENABLED=false. This functional smoke profile adds synchronous SQL reservation before broker publication; PostgreSQL is not required for durable command-log acknowledgment.
+
+Documented direct-ingress/materializer performance shape uses in-memory intake and enabled partitioned publish pipeline (scripts/dev/lib/dev-stack-profiles.mjs236–250; docs/LOCAL_RUN_PROFILES.md323–330). D-040 keeps durable Kafka/Redpanda append plus direct Go consumer; D-042 keeps matching books in Go memory. In-memory queue/store is not itself durable:202 must still await configured broker ACK. Phase1 receipt persistence may remain PostgreSQL independently of upstream intake.
+
+Correction:7,708.36/s and PostgreSQL wait diagnosis apply only to measured PostgreSQL-backed smoke configuration. They do not establish matching-engine or intended Calcify direct-ingress capacity ceiling. Intended fast-ingress+Calcify combination was not measured in this campaign. Selecting smoke as capacity profile was setup error; preserve all historical artifacts and scope rather than rewriting results. Before further throughput changes, build explicit direct-ingress+Calcify profile and freeze actual flags, durability/idempotency retention, routing and stage accounting. Existing phase1 audit hardcodes PostgreSQL intake counts and needs profile-aware checks; do not merely turn off SQL and call existing checks equivalent. No new benchmark or stack restart performed during this configuration review.

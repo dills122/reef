@@ -21,6 +21,8 @@ PostgreSQL fsync,synchronous_commit,full_page_writes stay on; five timed-cohort 
 Docker guest150GB reached35MB free even with host space. Exact ten oldest fully-audited test topics removed with cleanup proof; best q2 data and all PG volumes preserved,~1.7GB guest free remains inadequate for another sustained run. No global prune/user-data removal. Historical early cached topics and sampled deadline artifacts remain unchanged. q3 storage failure confounds concurrency comparison. No latency p99 measured; sampled gaps/drain are conservative bounds. No RF3/hosted/real-verifier/settlement or latest-master capacity qualification.
 
 ## Immediate Next Actions
+**First reconcile ingress profile.** User clarified intended fast ingress; campaign smoke forcibly added PostgreSQL intake/idempotency and disabled publish pipeline. Documented fast path uses in-memory intake, broker-durable ACK and direct Go consumer. Existing measured SQL waits do not establish intended-path ceiling. See report correction; adapt profile-aware intake accounting without weakening stage facts/idempotency/durable202.
+
 1. Read guest disk usage/ownership and size required headroom before starting any load; preserve best q2 and all unrelated project data. Do not infer guest space from host df.
 2. Restore equal dataset/physical state; repeat bounded controls on integrated latest code. Compare Netty,pool and measured group delay separately. Investigate batched durable PG reservations/index/WAL cost while every202 awaits actual durable intake plus broker ACK; preserve idempotency/order.
 3. Re-run hot/balanced/skew/aged300s plus unchanged-candidate fault/recovery/retention/rebalance gates. New state version2 requires fresh namespace, not restoring old version1 state.
