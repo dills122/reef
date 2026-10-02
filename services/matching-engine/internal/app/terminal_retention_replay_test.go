@@ -409,3 +409,71 @@ func TestTerminalRetentionDirectEvictionAndReuseWithoutBatch(t *testing.T) {
 		t.Fatal("direct ID reuse removed unrelated retained terminal order")
 	}
 }
+
+func TestTerminalRetentionLegacySnapshotDefaultRestoreUsesConfiguredLimit(t *testing.T) {
+	service := NewService(WithTerminalOrderRetentionLimit(0))
+	scope := BookScope{RunID: "run-default", VenueSessionID: "session", InstrumentID: "AAPL"}
+	retentionSubmit(t, service, nil, "a", scope, domain.SideBuy, "")
+	snapshot := service.Snapshot()
+	snapshot.Metadata.SnapshotVersion = "matching-service-snapshot-v3"
+	snapshot.Metadata.TerminalRetentionPolicy = ""
+	snapshot.Metadata.TerminalRetentionLimit = 0
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+	for _, tc := range []struct {
+		name, limit string
+		allowed     bool
+	}{
+		{"unset-default", "", true}, {"disabled", "0", true}, {"enabled", "3", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", tc.limit)
+			restored, ok := Restore(snapshot)
+			if ok != tc.allowed {
+				t.Fatalf("default restore with limit %q: allowed=%v, want=%v", tc.limit, ok, tc.allowed)
+			}
+			if ok {
+				got := restored.Snapshot()
+				if got.Metadata.SnapshotVersion != "matching-service-snapshot-v4" || got.Metadata.TerminalRetentionLimit != 0 {
+					t.Fatalf("unbounded legacy restore metadata: %+v", got.Metadata)
+				}
+				if _, exists := restored.OrderState(scope.RunID, "a"); !exists {
+					t.Fatal("legacy order lost")
+				}
+			}
+		})
+	}
+}
+
+func TestTerminalRetentionRollbackRestoresAfterMultipleHeapReorders(t *testing.T) {
+	s := NewService(WithTerminalOrderRetentionLimit(3))
+	scope := BookScope{RunID: "run-heap", VenueSessionID: "session", InstrumentID: "AAPL"}
+	for i, id := range []string{"a", "b", "c"} {
+		retentionSubmit(t, s, nil, id, scope, domain.SideBuy, "")
+		retentionCancel(t, s, nil, id, scope, fmt.Sprintf("2026-09-30T00:00:%02dZ", []int{3, 1, 2}[i]))
+	}
+	before := s.Snapshot()
+	rb := s.BeginBatch([]BookScope{scope})
+	for i, id := range []string{"d", "e", "f", "g", "h"} {
+		retentionSubmit(t, s, rb, id, scope, domain.SideBuy, "")
+		retentionCancel(t, s, rb, id, scope, fmt.Sprintf("2026-09-30T00:00:%02dZ", []int{6, 4, 8, 5, 7}[i]))
+	}
+	rb.Rollback()
+	if got := s.Snapshot().Checksum; got != before.Checksum {
+		t.Fatalf("rollback after heap reorders: got=%s want=%s", got, before.Checksum)
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		state, exists := s.OrderState(scope.RunID, id)
+		if !exists || state.Status != domain.OrderStatusCancelled {
+			t.Fatalf("original terminal %s lost: %+v", id, state)
+		}
+	}
+	for _, id := range []string{"d", "e", "f", "g", "h"} {
+		if _, exists := s.OrderState(scope.RunID, id); exists {
+			t.Fatalf("rolled-back order %s remains", id)
+		}
+	}
+	restored, ok := Restore(s.Snapshot(), WithTerminalOrderRetentionLimit(3))
+	if !ok || restored.Snapshot().Checksum != before.Checksum {
+		t.Fatal("rolled-back state did not survive restore")
+	}
+}

@@ -82,3 +82,5 @@ diagnostics. [Manifest](manifest.json) records commands and source/log hashes.
 ## PR #438 master integration
 
 Original evidence above describes source at `9778e847` on base `1e77575a`; original manifest and logs remain historical. Master `92cdd20b` includes PR #436 run-scoped order identity. Updated reservations/preimages use `(runId, orderId)`; previous engine-wide namespace boundary is superseded for different runs. [Review and integration evidence](pr-review-2026-10-01/README.md) records OCR triage and final checks after conflict resolution.
+
+Second [OCR review pass](pr-review-pass2-2026-10-01/README.md) assesses three additional unsupported claims, adds default-environment restore and multi-entry rollback coverage, and records passing matcher race suite after master24cdc1de sync. Matcher runtime safeguards unchanged.
