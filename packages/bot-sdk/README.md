@@ -23,3 +23,8 @@ bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/simple-market-mak
 ```
 
 The fixture scenario runner uses `packages/bot-sdk/fixtures/aapl-multi-tick.json` as the first deterministic multi-tick market-data fixture.
+
+Transport batches retain acknowledged prefixes and per-command outcomes on failure.
+Runners reserve mapped command IDs before sending; retries must reuse original
+requests unchanged. See [batch intake contract](../../docs/BOT_SDK_DESIGN.md#venue-adapter)
+for unknown-outcome reconciliation and dry-run behavior.
