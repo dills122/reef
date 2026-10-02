@@ -625,6 +625,43 @@ jobs:
         if: always()
         run: docker compose -f compose.base.yml -f compose.local.yml -f compose.arena.yml down --volumes --remove-orphans
 
+  calcify-tests:
+    # Calcify is opt-in/WIP, but its real-Postgres-backed receipt tests must
+    # not silently no-op in CI: without these env vars set,
+    # CalcifyReceiptStoreTest returns before any assertion runs. See
+    # docs/research/CALCIFY_PHASE1_2_ARCHITECTURE_REVIEW_2026-10-01.md
+    # Finding 3.
+    needs: change-scope
+    if: needs.change-scope.outputs.run-full-ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+      - name: Start Postgres
+        run: docker compose -f compose.base.yml -f compose.local.yml up -d postgres --wait --wait-timeout 120
+      - name: Apply runtime migrations
+        run: JS_RUNTIME=node make dev-db-migrate
+      - name: Run Calcify tests against real Postgres
+        env:
+          RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
+          RUNTIME_POSTGRES_USER_TEST: reef
+          RUNTIME_POSTGRES_PASSWORD_TEST: reef
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.calcify.*"
+      - name: Dump Postgres logs on failure
+        if: failure()
+        run: docker compose -f compose.base.yml -f compose.local.yml logs postgres
+      - name: Stop Postgres
+        if: always()
+        run: docker compose -f compose.base.yml -f compose.local.yml down --volumes --remove-orphans
+
   ci-required:
     name: ci-required
     if: always()
@@ -646,6 +683,7 @@ jobs:
       - infrastructure-config
       - go-vulnerability-scan
       - postgres-schema-placement
+      - calcify-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
