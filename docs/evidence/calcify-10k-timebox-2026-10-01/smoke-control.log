@@ -1,0 +1,768 @@
+starting full-path Calcify smoke calc10k-control-20261001
+stream-ack runtime settings:
+  processingMode=stream-ack
+  logProvider=redpanda
+  kafkaBootstrapServers=redpanda:9092
+  kafkaPublishMaxInFlight=16384
+  kafkaMaxInFlightRequestsPerConnection=5
+  kafkaLingerMs=1
+  kafkaBatchSize=65536
+  kafkaCompression=lz4
+  stream=REEF_CALC10K-CONTROL-20261001_COMMANDS
+  subjectPrefix=reef.calcify.calc10k-control-20261001.cmd.v1
+  partitions=4
+  intakeStore=postgres
+  publishPipeline=false
+  publishPipelineQueueCapacity=4096
+  publishPipelineInFlightPerLane=256
+  workerEnabled=true
+  worker0Partitions=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+  worker1Partitions=16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+  worker2Partitions=32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+  worker3Partitions=48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63
+  workerBatchSize=1000
+  workerAckWaitMs=60000
+  workerMaxAckPending=4000
+  canonicalEventRows=false
+  canonicalQueryIndexes=false
+  projectorEnabled=true
+  projector0Partitions=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+  projector1Partitions=16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+  projector2Partitions=32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+  projector3Partitions=48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63
+  projectorBatchSize=2000
+  orderLifecycleProjectorEnabled=false
+  marketDataProjectorEnabled=false
+  backpressureSampleMs=100
+  drainBackpressureSampleMs=500
+  drainBackpressurePolicy=venue-core
+  maxWorkerStreamLag=50000
+  maxProjectorLag=0
+  markPublishedMode=worker
+  streamIntakeApiPool=16/64
+  streamIntakeBackgroundPool=0/4
+  boundaryJdbcUrl=jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary
+  projectionJdbcUrl=jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime
+ Network reef-calcify-10k-20261001_default Creating 
+ Volume reef-calcify-10k-20261001_reef-projection-postgres-data Creating 
+ Volume reef-calcify-10k-20261001_reef-projection-postgres-data Creating 
+ Volume reef-calcify-10k-20261001_reef-postgres-data Creating 
+ Volume reef-calcify-10k-20261001_reef-postgres-data Creating 
+ Network reef-calcify-10k-20261001_default Creating 
+ Volume reef-calcify-10k-20261001_reef-boundary-postgres-data Creating 
+ Volume reef-calcify-10k-20261001_reef-boundary-postgres-data Creating 
+ Volume reef-calcify-10k-20261001_reef-projection-postgres-data Created 
+ Volume reef-calcify-10k-20261001_reef-projection-postgres-data Created 
+ Volume reef-calcify-10k-20261001_reef-boundary-postgres-data Created 
+ Volume reef-calcify-10k-20261001_reef-boundary-postgres-data Created 
+ Volume reef-calcify-10k-20261001_reef-postgres-data Created 
+ Volume reef-calcify-10k-20261001_reef-postgres-data Created 
+ Network reef-calcify-10k-20261001_default Created 
+ Network reef-calcify-10k-20261001_default Created 
+ Container reef-projection-postgres Creating 
+ Container reef-postgres Creating 
+ Container reef-boundary-postgres Creating 
+ Container reef-projection-postgres Created 
+ Container reef-postgres Created 
+ Container reef-boundary-postgres Created 
+ Container reef-boundary-postgres Starting 
+ Container reef-projection-postgres Starting 
+ Container reef-postgres Starting 
+ Container reef-projection-postgres Started 
+ Container reef-postgres Started 
+ Container reef-boundary-postgres Started 
+ Container reef-projection-postgres Waiting 
+ Container reef-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-projection-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-postgres Healthy 
+apply runtime/0001_runtime_init.sql
+apply runtime/0002_event_backbone.sql
+apply runtime/0003_live_runtime_persistence.sql
+NOTICE:  schema "runtime" already exists, skipping
+NOTICE:  relation "runtime_events" already exists, skipping
+NOTICE:  column "actor_id" of relation "runtime_events" already exists, skipping
+NOTICE:  column "payload_json" of relation "runtime_events" already exists, skipping
+apply runtime/0004_bulk_submit_outcomes.sql
+apply runtime/0005_set_based_submit_outcomes.sql
+apply runtime/0006_canonical_append_store.sql
+apply runtime/0007_projection_watermarks.sql
+apply runtime/0008_partitioned_projection_batching.sql
+apply runtime/0009_runtime_canonical_event_row_toggle.sql
+apply runtime/0010_venue_event_batch_materialization.sql
+apply runtime/0011_canonical_command_outcome_projection.sql
+apply runtime/0012_cap_command_outcome_projection_batch.sql
+apply runtime/0013_scope_venue_event_batch_identity.sql
+NOTICE:  identifier "canonical_command_outcomes_event_stream_batch_id_stream_sequence_key" will be truncated to "canonical_command_outcomes_event_stream_batch_id_stream_sequenc"
+apply runtime/0014_lifecycle_command_outcome_projection.sql
+apply runtime/0015_market_data_snapshots.sql
+apply runtime/0016_order_lifecycle_state.sql
+apply runtime/0017_project_execution_trade_fills.sql
+apply runtime/0018_projector_fill_depth_toggle.sql
+apply runtime/0019_reject_order_lifecycle.sql
+apply runtime/0020_order_lifecycle_incremental.sql
+apply runtime/0021_market_data_snapshot_incremental.sql
+apply runtime/0022_trade_tape.sql
+apply runtime/0023_project_orders_from_event_batch_payload.sql
+apply runtime/0024_scope_command_outcome_projection_stream.sql
+apply runtime/0025_orders_client_order_lookup.sql
+apply runtime/0026_contiguous_command_outcome_projection_watermarks.sql
+apply runtime/0027_audit_persistence_hardening.sql
+apply runtime/0028_typed_top_of_book_facts.sql
+apply runtime/0029_typed_runtime_event_facts.sql
+NOTICE:  trigger "runtime_events_set_typed_facts" for relation "runtime.runtime_events" does not exist, skipping
+apply runtime/0030_typed_submit_result_facts.sql
+NOTICE:  trigger "submit_results_set_typed_facts" for relation "runtime.submit_results" does not exist, skipping
+apply runtime/0031_typed_execution_trade_facts.sql
+NOTICE:  trigger "executions_set_typed_facts" for relation "runtime.executions" does not exist, skipping
+NOTICE:  trigger "trades_set_typed_facts" for relation "runtime.trades" does not exist, skipping
+apply runtime/0032_typed_order_facts.sql
+NOTICE:  trigger "orders_set_typed_facts" for relation "runtime.orders" does not exist, skipping
+apply runtime/0033_typed_canonical_time_facts.sql
+NOTICE:  trigger "canonical_command_results_set_typed_facts" for relation "runtime.canonical_command_results" does not exist, skipping
+NOTICE:  trigger "canonical_venue_events_set_typed_facts" for relation "runtime.canonical_venue_events" does not exist, skipping
+NOTICE:  trigger "canonical_venue_event_batches_set_typed_facts" for relation "runtime.canonical_venue_event_batches" does not exist, skipping
+NOTICE:  trigger "canonical_command_outcomes_set_typed_facts" for relation "runtime.canonical_command_outcomes" does not exist, skipping
+apply runtime/0034_post_trade_profile_references.sql
+apply runtime/0035_drop_batch_payload_gin_lookup_index.sql
+NOTICE:  index "idx_canonical_venue_event_batches_payload_json_gin" does not exist, skipping
+apply runtime/0036_canonical_archive_tables.sql
+apply runtime/0037_runtime_event_trade_archive_tables.sql
+apply runtime/0038_projection_dirty_lock_order.sql
+apply runtime/0039_command_outcome_projection_metadata.sql
+NOTICE:  function runtime.runtime_project_canonical_command_outcomes(text,pg_catalog.int4,pg_catalog.int4[],pg_catalog.bool) does not exist, skipping
+apply runtime/0040_split_submit_outcome_projection_stages.sql
+apply runtime/0041_deterministic_timeline_projection_sequence.sql
+apply runtime/0042_unlogged_projection_dirty_queues.sql
+apply runtime/0043_runtime_event_payload_cold_table.sql
+apply runtime/0044_idempotent_lifecycle_projection.sql
+apply runtime/0045_drop_legacy_runtime_event_indexes.sql
+apply runtime/0046_order_modified_lifecycle_index.sql
+apply runtime/0047_venue_event_batch_integrity.sql
+apply runtime/0048_execution_liquidity_role.sql
+apply runtime/0049_execution_replay_conflicts.sql
+apply runtime/0050_projection_batch_claims.sql
+apply runtime/0051_lifecycle_terminal_numeric_parity.sql
+apply runtime/0052_projection_dirty_serialization.sql
+apply runtime/0053_market_data_indexed_top_of_book.sql
+apply runtime/0054_projection_claim_cleanup_skip_locked.sql
+apply runtime/0055_market_data_indexed_currency.sql
+apply runtime/0056_lifecycle_parameter_sensitive_plans.sql
+apply runtime/0057_market_data_idle_metadata.sql
+apply runtime/0058_canonical_status_covering_index.sql
+apply runtime/0059_trade_replay_and_parse.sql
+apply runtime/0060_canonical_sequence_prefix_guard.sql
+apply runtime/0061_canonical_sequence_uniqueness.sql
+apply runtime/0062_consolidate_canonical_sequence_index.sql
+apply runtime/0063_reuse_materialized_batch_outcomes.sql
+apply runtime/0064_fail_closed_batch_outcome_insert.sql
+apply runtime/0065_lock_only_projection_dirty_conflicts.sql
+apply runtime/0066_drop_unused_order_event_time_index.sql
+apply runtime/0068_event_replay_conflicts.sql
+apply runtime/0069_logged_projection_dirty_queues.sql
+apply runtime/0070_calcify_phase1_receipts.sql
+apply runtime/0071_calcify_source_topic_identity.sql
+apply runtime/0072_calcify_topic_identities.sql
+apply auth/0001_auth_init.sql
+apply auth/0002_live_auth_tables.sql
+NOTICE:  schema "auth" already exists, skipping
+apply admin/0001_admin_init.sql
+apply admin/0002_post_trade_profiles.sql
+apply admin/0003_admin_identity.sql
+NOTICE:  schema "admin" already exists, skipping
+apply admin/0004_admin_auth_sessions.sql
+apply admin/0004_remove_legacy_arena_entitlements.sql
+apply boundary/0001_boundary_init.sql
+apply boundary/0002_live_boundary_tables.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply boundary/0003_command_capture_live_shape.sql
+apply boundary/0004_command_capture_legacy_defaults.sql
+apply boundary/0005_stream_command_intake.sql
+apply boundary/0006_account_risk_controls.sql
+apply boundary/0007_command_circuit_breakers.sql
+apply boundary/0008_account_risk_limits.sql
+apply boundary/0009_instrument_price_collars.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply boundary/0010_boundary_rejections.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply boundary/0011_stream_command_intake_scope_columns.sql
+apply boundary/0012_restore_account_risk_tables.sql
+NOTICE:  relation "account_risk_controls" already exists, skipping
+NOTICE:  relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "max_quantity_units" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "max_notional" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "currency" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "quantity_units" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "limit_price" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "currency" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  relation "idx_account_risk_decisions_scope_time" already exists, skipping
+apply command_log/0001_commands.sql
+apply command_log/0002_command_results.sql
+apply command_log/0003_queue_result_split.sql
+apply command_log/0004_terminal_results_active_queue.sql
+NOTICE:  constraint "command_results_status_check" of relation "command_results" does not exist, skipping
+apply command_log/0005_result_terminal_metadata.sql
+apply command_log/0006_command_append_function.sql
+NOTICE:  function command_log.command_append(text,text,text,text,text,text,text,text,timestamptz,jsonb) does not exist, skipping
+apply command_log/0007_retention_pins.sql
+apply command_log/0008_command_append_queue_timestamp.sql
+apply command_log/0009_run_metadata.sql
+NOTICE:  function command_log.command_append(text,text,text,text,text,text,text,text,text,text,text,timestamptz,jsonb) does not exist, skipping
+apply command_log/0010_drop_legacy_status_index.sql
+apply command_log/0011_unlogged_active_queue.sql
+apply command_log/0012_command_payloads.sql
+apply command_log/0013_drop_hot_path_foreign_keys.sql
+apply command_log/0014_integrity_audit_views.sql
+apply command_log/0015_command_results_archive.sql
+apply orchestration/0001_orchestration_init.sql
+NOTICE:  extension "pgcrypto" already exists, skipping
+apply settlement/0001_p2_exception_facts.sql
+NOTICE:  column "post_trade_profile_id" of relation "obligations" already exists, skipping
+NOTICE:  column "post_trade_policy_version" of relation "obligations" already exists, skipping
+NOTICE:  column "post_trade_profile_id" of relation "instructions" already exists, skipping
+NOTICE:  column "post_trade_policy_version" of relation "instructions" already exists, skipping
+NOTICE:  column "settlement_instruction_id" of relation "attempts" already exists, skipping
+NOTICE:  column "post_trade_profile_id" of relation "attempts" already exists, skipping
+NOTICE:  column "post_trade_policy_version" of relation "attempts" already exists, skipping
+NOTICE:  column "post_trade_profile_id" of relation "breaks" already exists, skipping
+NOTICE:  column "post_trade_policy_version" of relation "breaks" already exists, skipping
+NOTICE:  column "post_trade_profile_id" of relation "repairs" already exists, skipping
+NOTICE:  column "post_trade_policy_version" of relation "repairs" already exists, skipping
+NOTICE:  column "post_trade_profile_id" of relation "resolutions" already exists, skipping
+NOTICE:  column "post_trade_policy_version" of relation "resolutions" already exists, skipping
+apply settlement/0002_instant_finality_facts.sql
+apply settlement/0003_resource_positions_and_fails.sql
+apply settlement/0004_security_repair_actions.sql
+apply settlement/0005_operator_actions.sql
+apply settlement/0006_allocation_confirmation_affirmation_facts.sql
+apply settlement/0007_clearing_novation_facts.sql
+apply analytics/0001_simulation_run_exports.sql
+NOTICE:  schema "analytics" already exists, skipping
+apply analytics/0002_run_bot_performance_summaries.sql
+migrating projection database (projection-postgres)
+apply projection:runtime/0001_runtime_init.sql
+apply projection:runtime/0002_event_backbone.sql
+apply projection:runtime/0003_live_runtime_persistence.sql
+NOTICE:  schema "runtime" already exists, skipping
+NOTICE:  relation "runtime_events" already exists, skipping
+NOTICE:  column "actor_id" of relation "runtime_events" already exists, skipping
+NOTICE:  column "payload_json" of relation "runtime_events" already exists, skipping
+apply projection:runtime/0004_bulk_submit_outcomes.sql
+apply projection:runtime/0005_set_based_submit_outcomes.sql
+apply projection:runtime/0006_canonical_append_store.sql
+apply projection:runtime/0007_projection_watermarks.sql
+apply projection:runtime/0008_partitioned_projection_batching.sql
+apply projection:runtime/0009_runtime_canonical_event_row_toggle.sql
+apply projection:runtime/0010_venue_event_batch_materialization.sql
+apply projection:runtime/0011_canonical_command_outcome_projection.sql
+apply projection:runtime/0012_cap_command_outcome_projection_batch.sql
+apply projection:runtime/0013_scope_venue_event_batch_identity.sql
+NOTICE:  identifier "canonical_command_outcomes_event_stream_batch_id_stream_sequence_key" will be truncated to "canonical_command_outcomes_event_stream_batch_id_stream_sequenc"
+apply projection:runtime/0014_lifecycle_command_outcome_projection.sql
+apply projection:runtime/0015_market_data_snapshots.sql
+apply projection:runtime/0016_order_lifecycle_state.sql
+apply projection:runtime/0017_project_execution_trade_fills.sql
+apply projection:runtime/0018_projector_fill_depth_toggle.sql
+apply projection:runtime/0019_reject_order_lifecycle.sql
+apply projection:runtime/0020_order_lifecycle_incremental.sql
+apply projection:runtime/0021_market_data_snapshot_incremental.sql
+apply projection:runtime/0022_trade_tape.sql
+apply projection:runtime/0023_project_orders_from_event_batch_payload.sql
+apply projection:runtime/0024_scope_command_outcome_projection_stream.sql
+apply projection:runtime/0025_orders_client_order_lookup.sql
+apply projection:runtime/0026_contiguous_command_outcome_projection_watermarks.sql
+apply projection:runtime/0027_audit_persistence_hardening.sql
+apply projection:runtime/0028_typed_top_of_book_facts.sql
+apply projection:runtime/0029_typed_runtime_event_facts.sql
+NOTICE:  trigger "runtime_events_set_typed_facts" for relation "runtime.runtime_events" does not exist, skipping
+apply projection:runtime/0030_typed_submit_result_facts.sql
+NOTICE:  trigger "submit_results_set_typed_facts" for relation "runtime.submit_results" does not exist, skipping
+apply projection:runtime/0031_typed_execution_trade_facts.sql
+NOTICE:  trigger "executions_set_typed_facts" for relation "runtime.executions" does not exist, skipping
+NOTICE:  trigger "trades_set_typed_facts" for relation "runtime.trades" does not exist, skipping
+apply projection:runtime/0032_typed_order_facts.sql
+NOTICE:  trigger "orders_set_typed_facts" for relation "runtime.orders" does not exist, skipping
+apply projection:runtime/0033_typed_canonical_time_facts.sql
+NOTICE:  trigger "canonical_command_results_set_typed_facts" for relation "runtime.canonical_command_results" does not exist, skipping
+NOTICE:  trigger "canonical_venue_events_set_typed_facts" for relation "runtime.canonical_venue_events" does not exist, skipping
+NOTICE:  trigger "canonical_venue_event_batches_set_typed_facts" for relation "runtime.canonical_venue_event_batches" does not exist, skipping
+NOTICE:  trigger "canonical_command_outcomes_set_typed_facts" for relation "runtime.canonical_command_outcomes" does not exist, skipping
+apply projection:runtime/0034_post_trade_profile_references.sql
+apply projection:runtime/0035_drop_batch_payload_gin_lookup_index.sql
+NOTICE:  index "idx_canonical_venue_event_batches_payload_json_gin" does not exist, skipping
+apply projection:runtime/0036_canonical_archive_tables.sql
+apply projection:runtime/0037_runtime_event_trade_archive_tables.sql
+apply projection:runtime/0038_projection_dirty_lock_order.sql
+apply projection:runtime/0039_command_outcome_projection_metadata.sql
+NOTICE:  function runtime.runtime_project_canonical_command_outcomes(text,pg_catalog.int4,pg_catalog.int4[],pg_catalog.bool) does not exist, skipping
+apply projection:runtime/0040_split_submit_outcome_projection_stages.sql
+apply projection:runtime/0041_deterministic_timeline_projection_sequence.sql
+apply projection:runtime/0042_unlogged_projection_dirty_queues.sql
+apply projection:runtime/0043_runtime_event_payload_cold_table.sql
+apply projection:runtime/0044_idempotent_lifecycle_projection.sql
+apply projection:runtime/0045_drop_legacy_runtime_event_indexes.sql
+apply projection:runtime/0046_order_modified_lifecycle_index.sql
+apply projection:runtime/0047_venue_event_batch_integrity.sql
+apply projection:runtime/0048_execution_liquidity_role.sql
+apply projection:runtime/0049_execution_replay_conflicts.sql
+apply projection:runtime/0050_projection_batch_claims.sql
+apply projection:runtime/0051_lifecycle_terminal_numeric_parity.sql
+apply projection:runtime/0052_projection_dirty_serialization.sql
+apply projection:runtime/0053_market_data_indexed_top_of_book.sql
+apply projection:runtime/0054_projection_claim_cleanup_skip_locked.sql
+apply projection:runtime/0055_market_data_indexed_currency.sql
+apply projection:runtime/0056_lifecycle_parameter_sensitive_plans.sql
+apply projection:runtime/0057_market_data_idle_metadata.sql
+apply projection:runtime/0058_canonical_status_covering_index.sql
+apply projection:runtime/0059_trade_replay_and_parse.sql
+apply projection:runtime/0060_canonical_sequence_prefix_guard.sql
+apply projection:runtime/0061_canonical_sequence_uniqueness.sql
+apply projection:runtime/0062_consolidate_canonical_sequence_index.sql
+apply projection:runtime/0063_reuse_materialized_batch_outcomes.sql
+apply projection:runtime/0064_fail_closed_batch_outcome_insert.sql
+apply projection:runtime/0065_lock_only_projection_dirty_conflicts.sql
+apply projection:runtime/0066_drop_unused_order_event_time_index.sql
+apply projection:runtime/0068_event_replay_conflicts.sql
+apply projection:runtime/0069_logged_projection_dirty_queues.sql
+apply projection:runtime/0070_calcify_phase1_receipts.sql
+apply projection:runtime/0071_calcify_source_topic_identity.sql
+apply projection:runtime/0072_calcify_topic_identities.sql
+apply projection:auth/0001_auth_init.sql
+apply projection:auth/0002_live_auth_tables.sql
+NOTICE:  schema "auth" already exists, skipping
+apply projection:admin/0001_admin_init.sql
+apply projection:admin/0002_post_trade_profiles.sql
+apply projection:admin/0003_admin_identity.sql
+NOTICE:  schema "admin" already exists, skipping
+apply projection:admin/0004_admin_auth_sessions.sql
+apply projection:admin/0004_remove_legacy_arena_entitlements.sql
+apply projection:boundary/0001_boundary_init.sql
+apply projection:boundary/0002_live_boundary_tables.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply projection:boundary/0003_command_capture_live_shape.sql
+apply projection:boundary/0004_command_capture_legacy_defaults.sql
+apply projection:boundary/0005_stream_command_intake.sql
+apply projection:boundary/0006_account_risk_controls.sql
+apply projection:boundary/0007_command_circuit_breakers.sql
+apply projection:boundary/0008_account_risk_limits.sql
+apply projection:boundary/0009_instrument_price_collars.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply projection:boundary/0010_boundary_rejections.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply projection:boundary/0011_stream_command_intake_scope_columns.sql
+apply projection:boundary/0012_restore_account_risk_tables.sql
+NOTICE:  relation "account_risk_controls" already exists, skipping
+NOTICE:  relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "max_quantity_units" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "max_notional" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "currency" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "quantity_units" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "limit_price" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "currency" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  relation "idx_account_risk_decisions_scope_time" already exists, skipping
+apply projection:command_log/0001_commands.sql
+apply projection:command_log/0002_command_results.sql
+apply projection:command_log/0003_queue_result_split.sql
+apply projection:command_log/0004_terminal_results_active_queue.sql
+NOTICE:  constraint "command_results_status_check" of relation "command_results" does not exist, skipping
+apply projection:command_log/0005_result_terminal_metadata.sql
+apply projection:command_log/0006_command_append_function.sql
+NOTICE:  function command_log.command_append(text,text,text,text,text,text,text,text,timestamptz,jsonb) does not exist, skipping
+apply projection:command_log/0007_retention_pins.sql
+apply projection:command_log/0008_command_append_queue_timestamp.sql
+apply projection:command_log/0009_run_metadata.sql
+NOTICE:  function command_log.command_append(text,text,text,text,text,text,text,text,text,text,text,timestamptz,jsonb) does not exist, skipping
+apply projection:command_log/0010_drop_legacy_status_index.sql
+apply projection:command_log/0011_unlogged_active_queue.sql
+apply projection:command_log/0012_command_payloads.sql
+apply projection:command_log/0013_drop_hot_path_foreign_keys.sql
+apply projection:command_log/0014_integrity_audit_views.sql
+apply projection:command_log/0015_command_results_archive.sql
+apply projection:orchestration/0001_orchestration_init.sql
+NOTICE:  extension "pgcrypto" already exists, skipping
+apply projection:analytics/0001_simulation_run_exports.sql
+NOTICE:  schema "analytics" already exists, skipping
+apply projection:analytics/0002_run_bot_performance_summaries.sql
+migrating boundary database (boundary-postgres)
+apply boundary:runtime/0001_runtime_init.sql
+apply boundary:runtime/0002_event_backbone.sql
+apply boundary:runtime/0003_live_runtime_persistence.sql
+NOTICE:  schema "runtime" already exists, skipping
+NOTICE:  relation "runtime_events" already exists, skipping
+NOTICE:  column "actor_id" of relation "runtime_events" already exists, skipping
+NOTICE:  column "payload_json" of relation "runtime_events" already exists, skipping
+apply boundary:runtime/0004_bulk_submit_outcomes.sql
+apply boundary:runtime/0005_set_based_submit_outcomes.sql
+apply boundary:runtime/0006_canonical_append_store.sql
+apply boundary:runtime/0007_projection_watermarks.sql
+apply boundary:runtime/0008_partitioned_projection_batching.sql
+apply boundary:runtime/0009_runtime_canonical_event_row_toggle.sql
+apply boundary:runtime/0010_venue_event_batch_materialization.sql
+apply boundary:runtime/0011_canonical_command_outcome_projection.sql
+apply boundary:runtime/0012_cap_command_outcome_projection_batch.sql
+apply boundary:runtime/0013_scope_venue_event_batch_identity.sql
+NOTICE:  identifier "canonical_command_outcomes_event_stream_batch_id_stream_sequence_key" will be truncated to "canonical_command_outcomes_event_stream_batch_id_stream_sequenc"
+apply boundary:runtime/0014_lifecycle_command_outcome_projection.sql
+apply boundary:runtime/0015_market_data_snapshots.sql
+apply boundary:runtime/0016_order_lifecycle_state.sql
+apply boundary:runtime/0017_project_execution_trade_fills.sql
+apply boundary:runtime/0018_projector_fill_depth_toggle.sql
+apply boundary:runtime/0019_reject_order_lifecycle.sql
+apply boundary:runtime/0020_order_lifecycle_incremental.sql
+apply boundary:runtime/0021_market_data_snapshot_incremental.sql
+apply boundary:runtime/0022_trade_tape.sql
+apply boundary:runtime/0023_project_orders_from_event_batch_payload.sql
+apply boundary:runtime/0024_scope_command_outcome_projection_stream.sql
+apply boundary:runtime/0025_orders_client_order_lookup.sql
+apply boundary:runtime/0026_contiguous_command_outcome_projection_watermarks.sql
+apply boundary:runtime/0027_audit_persistence_hardening.sql
+apply boundary:runtime/0028_typed_top_of_book_facts.sql
+apply boundary:runtime/0029_typed_runtime_event_facts.sql
+NOTICE:  trigger "runtime_events_set_typed_facts" for relation "runtime.runtime_events" does not exist, skipping
+apply boundary:runtime/0030_typed_submit_result_facts.sql
+NOTICE:  trigger "submit_results_set_typed_facts" for relation "runtime.submit_results" does not exist, skipping
+apply boundary:runtime/0031_typed_execution_trade_facts.sql
+NOTICE:  trigger "executions_set_typed_facts" for relation "runtime.executions" does not exist, skipping
+NOTICE:  trigger "trades_set_typed_facts" for relation "runtime.trades" does not exist, skipping
+apply boundary:runtime/0032_typed_order_facts.sql
+NOTICE:  trigger "orders_set_typed_facts" for relation "runtime.orders" does not exist, skipping
+apply boundary:runtime/0033_typed_canonical_time_facts.sql
+NOTICE:  trigger "canonical_command_results_set_typed_facts" for relation "runtime.canonical_command_results" does not exist, skipping
+NOTICE:  trigger "canonical_venue_events_set_typed_facts" for relation "runtime.canonical_venue_events" does not exist, skipping
+NOTICE:  trigger "canonical_venue_event_batches_set_typed_facts" for relation "runtime.canonical_venue_event_batches" does not exist, skipping
+NOTICE:  trigger "canonical_command_outcomes_set_typed_facts" for relation "runtime.canonical_command_outcomes" does not exist, skipping
+apply boundary:runtime/0034_post_trade_profile_references.sql
+apply boundary:runtime/0035_drop_batch_payload_gin_lookup_index.sql
+NOTICE:  index "idx_canonical_venue_event_batches_payload_json_gin" does not exist, skipping
+apply boundary:runtime/0036_canonical_archive_tables.sql
+apply boundary:runtime/0037_runtime_event_trade_archive_tables.sql
+apply boundary:runtime/0038_projection_dirty_lock_order.sql
+apply boundary:runtime/0039_command_outcome_projection_metadata.sql
+NOTICE:  function runtime.runtime_project_canonical_command_outcomes(text,pg_catalog.int4,pg_catalog.int4[],pg_catalog.bool) does not exist, skipping
+apply boundary:runtime/0040_split_submit_outcome_projection_stages.sql
+apply boundary:runtime/0041_deterministic_timeline_projection_sequence.sql
+apply boundary:runtime/0042_unlogged_projection_dirty_queues.sql
+apply boundary:runtime/0043_runtime_event_payload_cold_table.sql
+apply boundary:runtime/0044_idempotent_lifecycle_projection.sql
+apply boundary:runtime/0045_drop_legacy_runtime_event_indexes.sql
+apply boundary:runtime/0046_order_modified_lifecycle_index.sql
+apply boundary:runtime/0047_venue_event_batch_integrity.sql
+apply boundary:runtime/0048_execution_liquidity_role.sql
+apply boundary:runtime/0049_execution_replay_conflicts.sql
+apply boundary:runtime/0050_projection_batch_claims.sql
+apply boundary:runtime/0051_lifecycle_terminal_numeric_parity.sql
+apply boundary:runtime/0052_projection_dirty_serialization.sql
+apply boundary:runtime/0053_market_data_indexed_top_of_book.sql
+apply boundary:runtime/0054_projection_claim_cleanup_skip_locked.sql
+apply boundary:runtime/0055_market_data_indexed_currency.sql
+apply boundary:runtime/0056_lifecycle_parameter_sensitive_plans.sql
+apply boundary:runtime/0057_market_data_idle_metadata.sql
+apply boundary:runtime/0058_canonical_status_covering_index.sql
+apply boundary:runtime/0059_trade_replay_and_parse.sql
+apply boundary:runtime/0060_canonical_sequence_prefix_guard.sql
+apply boundary:runtime/0061_canonical_sequence_uniqueness.sql
+apply boundary:runtime/0062_consolidate_canonical_sequence_index.sql
+apply boundary:runtime/0063_reuse_materialized_batch_outcomes.sql
+apply boundary:runtime/0064_fail_closed_batch_outcome_insert.sql
+apply boundary:runtime/0065_lock_only_projection_dirty_conflicts.sql
+apply boundary:runtime/0066_drop_unused_order_event_time_index.sql
+apply boundary:runtime/0068_event_replay_conflicts.sql
+apply boundary:runtime/0069_logged_projection_dirty_queues.sql
+apply boundary:runtime/0070_calcify_phase1_receipts.sql
+apply boundary:runtime/0071_calcify_source_topic_identity.sql
+apply boundary:runtime/0072_calcify_topic_identities.sql
+apply boundary:auth/0001_auth_init.sql
+apply boundary:auth/0002_live_auth_tables.sql
+NOTICE:  schema "auth" already exists, skipping
+apply boundary:admin/0001_admin_init.sql
+apply boundary:admin/0002_post_trade_profiles.sql
+apply boundary:admin/0003_admin_identity.sql
+NOTICE:  schema "admin" already exists, skipping
+apply boundary:admin/0004_admin_auth_sessions.sql
+apply boundary:admin/0004_remove_legacy_arena_entitlements.sql
+apply boundary:boundary/0001_boundary_init.sql
+apply boundary:boundary/0002_live_boundary_tables.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply boundary:boundary/0003_command_capture_live_shape.sql
+apply boundary:boundary/0004_command_capture_legacy_defaults.sql
+apply boundary:boundary/0005_stream_command_intake.sql
+apply boundary:boundary/0006_account_risk_controls.sql
+apply boundary:boundary/0007_command_circuit_breakers.sql
+apply boundary:boundary/0008_account_risk_limits.sql
+apply boundary:boundary/0009_instrument_price_collars.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply boundary:boundary/0010_boundary_rejections.sql
+NOTICE:  schema "boundary" already exists, skipping
+apply boundary:boundary/0011_stream_command_intake_scope_columns.sql
+apply boundary:boundary/0012_restore_account_risk_tables.sql
+NOTICE:  relation "account_risk_controls" already exists, skipping
+NOTICE:  relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "max_quantity_units" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "max_notional" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "currency" of relation "account_risk_controls" already exists, skipping
+NOTICE:  column "quantity_units" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "limit_price" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  column "currency" of relation "account_risk_decisions" already exists, skipping
+NOTICE:  relation "idx_account_risk_decisions_scope_time" already exists, skipping
+apply boundary:command_log/0001_commands.sql
+apply boundary:command_log/0002_command_results.sql
+apply boundary:command_log/0003_queue_result_split.sql
+apply boundary:command_log/0004_terminal_results_active_queue.sql
+NOTICE:  constraint "command_results_status_check" of relation "command_results" does not exist, skipping
+apply boundary:command_log/0005_result_terminal_metadata.sql
+apply boundary:command_log/0006_command_append_function.sql
+NOTICE:  function command_log.command_append(text,text,text,text,text,text,text,text,timestamptz,jsonb) does not exist, skipping
+apply boundary:command_log/0007_retention_pins.sql
+apply boundary:command_log/0008_command_append_queue_timestamp.sql
+apply boundary:command_log/0009_run_metadata.sql
+NOTICE:  function command_log.command_append(text,text,text,text,text,text,text,text,text,text,text,timestamptz,jsonb) does not exist, skipping
+apply boundary:command_log/0010_drop_legacy_status_index.sql
+apply boundary:command_log/0011_unlogged_active_queue.sql
+apply boundary:command_log/0012_command_payloads.sql
+apply boundary:command_log/0013_drop_hot_path_foreign_keys.sql
+apply boundary:command_log/0014_integrity_audit_views.sql
+apply boundary:command_log/0015_command_results_archive.sql
+apply boundary:orchestration/0001_orchestration_init.sql
+NOTICE:  extension "pgcrypto" already exists, skipping
+apply boundary:analytics/0001_simulation_run_exports.sql
+NOTICE:  schema "analytics" already exists, skipping
+apply boundary:analytics/0002_run_bot_performance_summaries.sql
+ Container reef-postgres Running 
+ Container reef-projection-postgres Running 
+ Container reef-boundary-postgres Running 
+ Volume reef-calcify-10k-20261001_reef-nats-data Creating 
+ Volume reef-calcify-10k-20261001_reef-redpanda-data Creating 
+ Volume reef-calcify-10k-20261001_reef-redpanda-data Creating 
+ Volume reef-calcify-10k-20261001_reef-nats-data Creating 
+ Volume reef-calcify-10k-20261001_reef-redpanda-data Created 
+ Volume reef-calcify-10k-20261001_reef-redpanda-data Created 
+ Container reef-redpanda Creating 
+ Volume reef-calcify-10k-20261001_reef-nats-data Created 
+ Volume reef-calcify-10k-20261001_reef-nats-data Created 
+ Container reef-nats Creating 
+ Container reef-nats Created 
+ Container reef-matching-engine Creating 
+ Container reef-redpanda Created 
+ Container reef-matching-engine Created 
+ Container reef-platform-projector-1 Creating 
+ Container reef-platform-api Creating 
+ Container reef-platform-worker-1 Creating 
+ Container reef-platform-worker-3 Creating 
+ Container reef-platform-projector-2 Creating 
+ Container reef-platform-projector-0 Creating 
+ Container reef-platform-worker-0 Creating 
+ Container reef-platform-projector-3 Creating 
+ Container reef-platform-worker-2 Creating 
+ Container reef-platform-worker-3 Created 
+ Container reef-platform-projector-1 Created 
+ Container reef-platform-api Created 
+ Container reef-platform-projector-2 Created 
+ Container reef-platform-worker-1 Created 
+ Container reef-platform-projector-0 Created 
+ Container reef-platform-worker-2 Created 
+ Container reef-platform-projector-3 Created 
+ Container reef-platform-worker-0 Created 
+ Container reef-nats Starting 
+ Container reef-redpanda Starting 
+ Container reef-redpanda Started 
+ Container reef-nats Started 
+ Container reef-nats Waiting 
+ Container reef-postgres Waiting 
+ Container reef-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-matching-engine Starting 
+ Container reef-matching-engine Started 
+ Container reef-nats Waiting 
+ Container reef-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-nats Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-nats Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-postgres Waiting 
+ Container reef-nats Waiting 
+ Container reef-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-postgres Waiting 
+ Container reef-nats Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-nats Waiting 
+ Container reef-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-nats Waiting 
+ Container reef-postgres Waiting 
+ Container reef-nats Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-nats Waiting 
+ Container reef-postgres Waiting 
+ Container reef-postgres Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-projection-postgres Waiting 
+ Container reef-boundary-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-nats Healthy 
+ Container reef-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-postgres Healthy 
+ Container reef-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-postgres Healthy 
+ Container reef-postgres Healthy 
+ Container reef-nats Healthy 
+ Container reef-postgres Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-projector-0 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-worker-3 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-worker-1 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-api Starting 
+ Container reef-platform-worker-0 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-projector-3 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-worker-2 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-projector-1 Starting 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-projector-2 Starting 
+ Container reef-platform-projector-0 Started 
+ Container reef-platform-worker-0 Started 
+ Container reef-platform-projector-1 Started 
+ Container reef-platform-projector-2 Started 
+ Container reef-platform-projector-3 Started 
+ Container reef-platform-api Started 
+ Container reef-platform-worker-1 Started 
+ Container reef-platform-worker-3 Started 
+ Container reef-platform-worker-2 Started 
+ Container reef-projection-postgres Waiting 
+ Container reef-platform-worker-3 Waiting 
+ Container reef-platform-api Waiting 
+ Container reef-platform-worker-2 Waiting 
+ Container reef-platform-worker-1 Waiting 
+ Container reef-postgres Waiting 
+ Container reef-nats Waiting 
+ Container reef-platform-projector-3 Waiting 
+ Container reef-matching-engine Waiting 
+ Container reef-redpanda Waiting 
+ Container reef-platform-projector-1 Waiting 
+ Container reef-platform-projector-0 Waiting 
+ Container reef-platform-projector-2 Waiting 
+ Container reef-platform-worker-0 Waiting 
+ Container reef-boundary-postgres Waiting 
+ Container reef-nats Healthy 
+ Container reef-redpanda Healthy 
+ Container reef-boundary-postgres Healthy 
+ Container reef-projection-postgres Healthy 
+ Container reef-postgres Healthy 
+ Container reef-matching-engine Healthy 
+ Container reef-platform-projector-0 Healthy 
+ Container reef-platform-projector-3 Healthy 
+ Container reef-platform-worker-1 Healthy 
+ Container reef-platform-api Healthy 
+ Container reef-platform-projector-1 Healthy 
+ Container reef-platform-worker-0 Healthy 
+ Container reef-platform-projector-2 Healthy 
+ Container reef-platform-worker-3 Healthy 
+ Container reef-platform-worker-2 Healthy 
+Redpanda/Kafka stream REEF_CALC10K-CONTROL-20261001_COMMANDS will be created by the runtime producer if needed.
+ Container reef-calcify-10k-20261001-calcify-verifier-1 Creating 
+ Container reef-calcify-10k-20261001-calcify-extractor-1 Creating 
+ Container reef-calcify-10k-20261001-calcify-receipt-1 Creating 
+ Container reef-calcify-10k-20261001-calcify-extractor-1 Created 
+ Container reef-calcify-10k-20261001-calcify-receipt-1 Created 
+ Container reef-calcify-10k-20261001-calcify-verifier-1 Created 
+ Container reef-calcify-10k-20261001-calcify-receipt-1 Starting 
+ Container reef-calcify-10k-20261001-calcify-extractor-1 Starting 
+ Container reef-calcify-10k-20261001-calcify-verifier-1 Starting 
+ Container reef-calcify-10k-20261001-calcify-receipt-1 Started 
+ Container reef-calcify-10k-20261001-calcify-verifier-1 Started 
+ Container reef-calcify-10k-20261001-calcify-extractor-1 Started 
+ Volume reef-calcify-10k-20261001_calcify-resolver-state Creating 
+ Volume reef-calcify-10k-20261001_calcify-resolver-state Creating 
+ Volume reef-calcify-10k-20261001_calcify-resolver-state Created 
+ Volume reef-calcify-10k-20261001_calcify-resolver-state Created 
+ Container reef-calcify-10k-20261001-calcify-resolver-1 Creating 
+ Container reef-calcify-10k-20261001-calcify-resolver-1 Created 
+ Container reef-calcify-10k-20261001-calcify-resolver-1 Starting 
+ Container reef-calcify-10k-20261001-calcify-resolver-1 Started 
+Calcify full-path smoke passed
+{
+  "smokeId": "calc10k-control-20261001",
+  "commandTopic": "REEF_CALC10K-CONTROL-20261001_COMMANDS",
+  "sourceTopic": "REEF_CALC10K-CONTROL-20261001_EVENTS",
+  "commitmentTopic": "REEF_CALC10K-CONTROL-20261001_COMMITMENTS",
+  "verifiedTopic": "REEF_CALC10K-CONTROL-20261001_VERIFIED",
+  "generation": 2,
+  "resting": {
+    "partition": 0,
+    "offset": 1,
+    "trades": 0
+  },
+  "matching": {
+    "partition": 0,
+    "offset": 4,
+    "trades": 1,
+    "tradeId": "trade-buyer-order-calc10k-control-20261001-seller-order-calc10k-control-20261001-1"
+  },
+  "receipt": "2\t0\t4\t0\t1",
+  "resolved": {
+    "fullFactParity": true,
+    "generation": 2,
+    "partition": 0,
+    "offset": 4,
+    "tradeId": "trade-buyer-order-calc10k-control-20261001-seller-order-calc10k-control-20261001-1",
+    "buyOrderId": "buyer-order-calc10k-control-20261001",
+    "sellOrderId": "seller-order-calc10k-control-20261001",
+    "bytes": 1956
+  },
+  "intakeRows": 2,
+  "profile": "PostgreSQL HTTP intake + Redpanda + Go matching + Calcify verification + managed full-fact resolver",
+  "capacityClaim": false
+}

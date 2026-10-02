@@ -1,0 +1,37 @@
+{
+  "smokeId": "c10k-h384-b450",
+  "generation": 6,
+  "expectedCommands": 287944,
+  "expectedTrades": 143972,
+  "loadReport": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.json",
+  "intakeRows": 288219,
+  "source": {
+    "batches": 647,
+    "commands": 288219,
+    "trades": 143972,
+    "lastTimestampMs": 1790915836338
+  },
+  "commitmentLinks": 143972,
+  "verifiedLinks": 143972,
+  "receipts": 143972,
+  "matching": {
+    "acked": 288219,
+    "nacked": 0,
+    "failed": 0
+  },
+  "sourceToCommitmentLastMs": 517,
+  "commitmentToVerifiedLastMs": 508,
+  "verifiedToReceiptLastMs": 503,
+  "pass": false
+}
+54 |   source.trades === expectedTrades && commitments.count === expectedTrades &&
+55 |   verified.count === expectedTrades && receipts === expectedTrades &&
+56 |   matchingTotals.acked === expectedCommands && matchingTotals.nacked === 0 && matchingTotals.failed === 0;
+57 | await writeFile(reportPath, JSON.stringify(result, null, 2) + "\n");
+58 | console.log(JSON.stringify(result, null, 2));
+59 | if (!result.pass) throw new Error("Calcify high-rate full-path accounting failed");
+                                 ^
+error: Calcify high-rate full-path accounting failed
+      at /Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/calcify-verify-existing.mjs:59:29
+
+Bun v1.3.14 (macOS arm64)

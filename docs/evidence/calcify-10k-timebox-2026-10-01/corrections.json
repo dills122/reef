@@ -1,0 +1,8 @@
+{
+  "measurementCorrection": "Historical artifacts unchanged. Initial campaigncontrol/http128/poll1000 diagnostics used old loader whose sampled deadline count could include late ACKs and whose drain origin followed progress-query shutdown. These diagnostic total rates/fullfacts remain descriptive; no strictdeadline qualification claim.",
+  "newLoader": "Each validated HTTP ACK classified strictly before fixed monotonic deadline; workercompletion starts drain before final observer query wait. RED and GREEN tests plus race detector recorded.",
+  "brokerDiscovery": "Initial joined diagnostic command/source/link topics inherited Redpanda write.caching=true. Later sync350 owned topics explicitly setwrite.caching=false; not a controlled causal comparison with priorcachedruns.",
+  "unit": "10k ordercommands/s default fromoriginalvenue target; pairedflow corresponds approximately5k resolvedtrades/s. Stubverifier andlocalRF1 scopes explicit.",
+  "admissionCorrection": "Before gen6, smoke inherited64 disabled legacy-worker durable groups. Gen6 onward monitors four actual Go groups reef-engine-direct-p00..03. Existing50k maxlag unchanged; gen6 produced429 at51068lag and fails honestly.",
+  "timingFormatCorrection": "sync350-batch-timing.txt retains initial Python repr; sync350-batch-timing.json contains same observations as valid JSON. Timing includes source arrival and excludes checksum from reported workMicros; no isolated transaction-latency inference."
+}

@@ -1,0 +1,6 @@
+commit_delay|1000|
+commit_siblings|5|
+fsync|on|
+full_page_writes|on|
+synchronous_commit|on|
+wal_sync_method|fdatasync|

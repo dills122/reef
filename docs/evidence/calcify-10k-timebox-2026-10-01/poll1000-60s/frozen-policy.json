@@ -1,0 +1,20 @@
+{
+  "runId": "014d6877",
+  "smokeId": "calc10k-poll1000-20261001",
+  "generation": 4,
+  "source": "REEF_CALC10K-POLL1000-20261001_EVENTS",
+  "output": "REEF_CALC10K-POLL1000-20261001_RESOLVED",
+  "scope": "Local RF1 joined Phase1/2, HTTP128/intakepool128/verifier+receiptpoll1000, hot paired lane, stub verifier; diagnostic60s",
+  "policy": {
+    "seconds": 60,
+    "offeredOrderCommandsPerSecond": 10500,
+    "minimumAcceptedAtDeadlinePerSecond": 10000,
+    "maxLoadOverrunMs": 1000,
+    "maxReceiptDrainMs": 5000,
+    "maxResolvedDrainMs": 5000,
+    "maxResolvedEndGapTrades": 10500,
+    "fullFactParityRequired": true
+  },
+  "harnessSha256": "890e7421c028651c248b143fa3929131c79bc9b79ac9bccd3ad343f748d7eaf0",
+  "pass": false
+}

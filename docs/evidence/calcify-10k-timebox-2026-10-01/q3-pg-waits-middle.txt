@@ -1,0 +1,8 @@
+LWLock|WALWrite|100
+Lock|extend|38
+LWLock|BufferMapping|12
+LWLock|BufferContent|10
+LWLock|CheckpointerComm|5
+||4
+IO|DataFileWrite|3
+IO|WALSync|1

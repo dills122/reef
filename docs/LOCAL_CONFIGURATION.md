@@ -57,6 +57,24 @@ does not change. [Contract](../contracts/calcify/README.md) and
 [local diagnostic evidence](work/CALCIFY_PHASE1_IMPLEMENTATION.md) describe
 link semantics, tests, and replay-retention limits.
 
+`CALCIFY_VERIFIER_MAX_POLL_RECORDS` and `CALCIFY_RECEIPT_MAX_POLL_RECORDS`
+accept1–1000, default100, and reject malformed explicit values before startup.
+They bound verifier transaction and receipt batch sizes; extractor remains100
+source records per poll and publishes valid partition prefixes plus source offsets
+in one transaction. Zero-trade source records checkpoint without producing links.
+Larger values require measured backlog/latency and poison-prefix replay checks.
+
+
+For durable direct-ingress capacity work, use `scripts/dev/calcify-direct-bootstrap.mjs`
+and `scripts/dev/calcify-direct-capacity.mjs`; their frozen evidence and exact setup
+are recorded in [direct throughput campaign](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
+This route reuses C5 in-memory intake and direct matching controls, runs Calcify
+through managed resolved output, and omits receipt/legacy SQL settlement workers.
+Source generation/topic identity SQL remains startup/rebalance control work.
+`MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES` defaults to 1 MiB; explicit larger values
+must coordinate source topic `max.message.bytes` and consumer source-byte budgets.
+This setting changes neither command batch size nor transaction ordering.
+
 Run `make dev-smoke-calcify-full-path` for a local functional check through
 PostgreSQL-backed HTTP intake, Redpanda command log, Go matching, and all three
 Calcify stages. It creates isolated topics and registers a local source
@@ -92,6 +110,26 @@ and drain within five seconds. Verification command enforces
 exact intake, source, commitment, verification, receipt, and matching counts.
 Use fresh smoke ID/generation for each run; do not reuse pair ID ranges.
 Run short higher-rate probe and five-minute gate after each material phase.
+Loader now classifies every validated HTTP acknowledgement against fixed monotonic
+deadline, excluding late/equal acknowledgements. Receipt drain starts at HTTP
+worker completion, before waiting for final progress query. Reports include
+start/deadline/completion epoch timestamps and definitions. Older artifacts retain
+their original sampled-deadline and post-sampler-drain measurements.
+
+Joined Phase1/2 measurements use `scripts/dev/calcify-joined-capacity.mjs`,
+a prebuilt Go load binary, and compiled test observers. Each run requires fresh
+evidence directory, source generation and topics. Lightweight resolved counter
+runs during load; independent source-to-Protobuf full-fact audit and exact Phase1
+accounting run afterward. Scope and actual broker durability must be frozen;
+RF1 local results do not qualify RF3/hosted capacity.
+Optional `--instrument-ids` CSV on Go loader spreads complete pairs across instruments;
+seed extras with `DEV_CALCIFY_FULL_PATH_INSTRUMENT_IDS` and pass same list via
+`CALCIFY_JOINED_INSTRUMENT_IDS`. Default remains single `AAPL-<smoke-id>` lane.
+Observe actual partition spread; distinct instruments need not map to distinct partitions.
+`REEF_BOUNDARY_PG_SHARED_BUFFERS` defaults128MB; `REEF_BOUNDARY_PG_COMMIT_DELAY_MICROS`
+defaults0. Nonzero commit delay groups concurrent WAL flushes while keeping
+`fsync` and `synchronous_commit` on; record actual settings and latency tradeoff.
+See [PostgreSQL WAL configuration](https://www.postgresql.org/docs/16/runtime-config-wal.html).
 
 ## Change configuration
 

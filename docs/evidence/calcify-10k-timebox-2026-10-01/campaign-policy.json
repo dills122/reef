@@ -1,0 +1,28 @@
+{
+  "startUtc": "2026-10-02T03:38:05Z",
+  "deadlineUtc": "2026-10-02T05:38:05Z",
+  "baselineCommit": "037971d63ebee882799e0bd78b7dd0035af1c3a6",
+  "targetUnit": "HTTP-durably-accepted order commands per second through Phase1 and Phase2",
+  "unitStatus": "original venue order-command target assumed; clarification pending",
+  "qualification": {
+    "durationSeconds": 300,
+    "minimumAcceptedAtDeadlinePerSecond": 10000,
+    "offeredPairsPerSecond": 5250,
+    "orderCommandsPerPair": 2,
+    "maxRequestFailures": 0,
+    "maxReceiptDrainMs": 5000,
+    "maxResolvedDrainMs": 5000,
+    "requiredExactCountsAndFullResolvedFacts": true,
+    "maxReceiptGapP95Trades": 10500,
+    "maxReceiptGapPeakTrades": 26250,
+    "maxResolvedEndGapTrades": 10500,
+    "notes": "Existing load gate permits95% of offered rate; campaign additionally requires>=10000 actual accepted-at-deadline /300s. Gap counts are conservative coverage, not per-trade latency. Full resolved oracle after load avoids audit perturbing throughput. No target/limit relaxation during campaign.",
+    "maxLoadOverrunMs": 1000,
+    "drainOrigin": "Corrected Go HTTP worker completion, before waiting for final progress sampler; historical artifacts unchanged",
+    "accounting": "Exact intake/source/commitment/verified/receipt counts and independent full resolved facts, after timed load"
+  },
+  "scope": "local Docker RF1 joined HTTP+Go+Calcify Phase1 stub-verifier+Phase2 managed resolver; no hosted/RF3/full settlement capacity claim",
+  "faultScope": "merged replay/offset identity safeguards; campaign is capacity tuning, not renewed RF3 fault qualification",
+  "clarificationUtc": "2026-10-02T04:08:00Z, before first qualification run",
+  "aggregateWorkloadDecision": "2026-10-02T04:46Z: aggregate venue10k uses multiple instrument lanes; single-hot-lane diagnostics retained separately. Same-lane ordering unchanged."
+}

@@ -1,0 +1,11 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/dills122/reef/services/matching-engine/internal/streamdirect
+cpu: Apple M1 Max
+BenchmarkVenueEventBatchChecksum200-10    	     178	   3196643 ns/op	 2517380 B/op	   69168 allocs/op
+BenchmarkVenueEventBatchChecksum200-10    	     187	   3707448 ns/op	 2452951 B/op	   69166 allocs/op
+BenchmarkVenueEventBatchChecksum200-10    	     190	   3256513 ns/op	 2474178 B/op	   69167 allocs/op
+BenchmarkVenueEventBatchChecksum200-10    	     188	   3158495 ns/op	 2481459 B/op	   69167 allocs/op
+BenchmarkVenueEventBatchChecksum200-10    	     177	   4861410 ns/op	 2466753 B/op	   69167 allocs/op
+PASS
+ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	5.311s

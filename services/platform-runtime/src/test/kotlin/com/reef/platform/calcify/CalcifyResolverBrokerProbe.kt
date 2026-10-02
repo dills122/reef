@@ -24,19 +24,21 @@ import reef.contracts.calcify.v1.MatchContextResolvedV1
 
 /** Test-only external process harness; production classes own resolution/state/source reads. */
 object CalcifyResolverBrokerProbe {
+    private data class SourceWave(val wave: Int, val partition: Int, val checksum: String, val bytes: Int)
+    private data class MeasurementMark(val records: Int, val receivedNanos: Long)
     private val mapper=JsonMapper.builder().build()
     private val excluded=setOf("createdAt","workFinishedAt","timingChecksum","payloadChecksum","payloadChecksumAlgorithm")
     private val idFields=setOf("batchId","commandId","eventId","orderId","engineOrderId","clientOrderId","buyOrderId","sellOrderId","tradeId","executionId","participantId","accountId")
     @JvmStatic fun main(args:Array<String>) {
         val mode=args[0];val broker=args[1];val prefix=args[2]
         val props=Properties().apply {put("bootstrap.servers",broker)}
-        val source="$prefix-source";val verified="$prefix-verified";val output="$prefix-resolved"
+        val source="$prefix-source";val verified="$prefix-verified";val output=if(mode=="actual-measure") prefix else "$prefix-resolved"
         when(mode) {
             "init"->AdminClient.create(props).use {admin->admin.createTopics(listOf(source,verified,output).map {NewTopic(it,2,3.toShort()).configs(mapOf("cleanup.policy" to "delete","write.caching" to "false","segment.bytes" to "33554432","max.message.bytes" to "16778240"))}).all().get(20,TimeUnit.SECONDS)}
             "seed"->{
                 val wave=args[3].toInt();val partition=args[4].toInt()
                 KafkaProducer(props,ByteArraySerializer(),ByteArraySerializer()).use {producer->
-                    for(original in Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines()) {
+                    for(original in CalcifySourceFixtures.currentBodies()) {
                         val node=mapper.readTree(original) as ObjectNode
                         suffix(node,"-w$wave-p$partition")
                         node.put("partition",partition);node.put("eventStream",source)
@@ -52,10 +54,25 @@ object CalcifyResolverBrokerProbe {
             }
             "paired-seed" -> {
                 val waves=args[3].toInt();val shape=args[4];val firstWave=args.getOrNull(5)?.toInt() ?: 0;val pace=args.getOrNull(6)?.toInt() ?: 0
+                val maxInFlight=args.getOrNull(7)?.toInt() ?: System.getenv("CALCIFY_PAIRED_SOURCE_IN_FLIGHT")?.toInt() ?: 16
+                require(maxInFlight in 1..16) { "source in-flight bound must be between1 and16" }
                 val originals=Path.of("../../docs/evidence/calcify-phase2-implementation/paired-source-fixture.jsonl").readLines()
                 val config=Properties().apply {putAll(props);put("acks","all");put("compression.type","lz4");put("linger.ms",5);put("buffer.memory",64*1024*1024)}
                 var bytes=0L;val epoch=System.currentTimeMillis();val started=System.nanoTime()
+                val verificationFailure=java.util.concurrent.atomic.AtomicReference<Exception?>(null)
+                var peakPending=0
+                println(JsonCodec.writeObject("configuration" to mapOf("maxInFlightSourceSends" to maxInFlight,"sourceAcknowledgements" to "durable FIFO before verification")))
                 KafkaProducer(config,ByteArraySerializer(),ByteArraySerializer()).use {producer->
+                    val pending=BoundedSourceAcknowledgements<SourceWave,RecordMetadata>(maxInFlight) { wave,metadata ->
+                        println(JsonCodec.writeObject("source" to mapOf("wave" to wave.wave,"partition" to wave.partition,"offset" to metadata.offset(),"checksum" to wave.checksum,"bytes" to wave.bytes)))
+                        repeat(100) {ordinal->
+                            val id=CommitmentId(1,wave.partition,metadata.offset(),ordinal)
+                            producer.send(ProducerRecord(verified,wave.partition,CalcifyWire.commitment(id),CalcifyWire.passed(CommitmentVerificationPassed(id,1)))) {_,failure->
+                                if(failure!=null) verificationFailure.compareAndSet(null,failure)
+                            }
+                        }
+                        verificationFailure.get()?.let {throw IllegalStateException("verification publication failed",it)}
+                    }
                     repeat(waves) {index ->
                         val wave=firstWave+index
                         if(pace>0) {val remaining=started+index*1_000_000_000L/pace-System.nanoTime();if(remaining>0)TimeUnit.NANOSECONDS.sleep(remaining)}
@@ -68,14 +85,15 @@ object CalcifyResolverBrokerProbe {
                             node.get("outcomes").forEachIndexed {index,row->(row as ObjectNode).put("streamSequence",wave.toLong()*200+index+1)}
                             node.put("payloadChecksum",JsonDocument(node).semanticSha256(excluded))
                             val body=mapper.writeValueAsBytes(node);bytes+=body.size
-                            val metadata=producer.send(ProducerRecord(source,partition,null,body)).get(20,TimeUnit.SECONDS)
-                            println(JsonCodec.writeObject("source" to mapOf("wave" to wave,"partition" to partition,"offset" to metadata.offset(),"checksum" to node.get("payloadChecksum").asText(),"bytes" to body.size)))
-                            repeat(100) {ordinal->val id=CommitmentId(1,partition,metadata.offset(),ordinal);producer.send(ProducerRecord(verified,partition,CalcifyWire.commitment(id),CalcifyWire.passed(CommitmentVerificationPassed(id,1))))}
+                            pending.add(SourceWave(wave,partition,node.get("payloadChecksum").asText(),body.size),producer.send(ProducerRecord(source,partition,null,body)))
                         }
                     }
+                    pending.drain()
+                    peakPending=pending.peakPending
                     producer.flush()
+                    verificationFailure.get()?.let {throw IllegalStateException("verification publication failed",it)}
                 }
-                println(JsonCodec.writeObject("startedEpochMs" to epoch,"paceWavesPerSecond" to pace,"waves" to waves,"trades" to waves*100,"bytes" to bytes,"elapsedMs" to (System.nanoTime()-started)/1_000_000))
+                println(JsonCodec.writeObject("startedEpochMs" to epoch,"paceWavesPerSecond" to pace,"waves" to waves,"trades" to waves*100,"bytes" to bytes,"maxInFlightSourceSends" to maxInFlight,"peakPendingSourceSends" to peakPending,"elapsedMs" to (System.nanoTime()-started)/1_000_000))
             }
             "paired-oracle" -> {
                 val expected=args[3].toInt()
@@ -121,30 +139,43 @@ object CalcifyResolverBrokerProbe {
                 } finally {readers.values.forEach {it.close()}}
                 println(JsonCodec.writeObject("result" to mapOf("sourceTopicId" to uuid,"partitionSha256" to hashes.toSortedMap().mapValues {java.util.HexFormat.of().formatHex(it.value.digest())},"records" to count,"expected" to expected,"fullFactParity" to true,"orderedUnique" to true,"pass" to (count==expected))))
             }
-            "measure" -> {
+            "measure", "actual-measure" -> {
                 val expected=args[3].toInt();val timeout=args[4].toLong();val tailOnly=args.getOrNull(5)=="true";val windowMs=args.getOrNull(6)?.toLong() ?: 5000L
+                val expectedGeneration=args.getOrNull(7)?.toInt() ?: 1
                 val config=Properties().apply {putAll(props);put("enable.auto.commit",false);put("isolation.level","read_committed");put("auto.offset.reset","earliest");put("fetch.max.bytes",32*1024*1024)}
                 KafkaConsumer(config,ByteArrayDeserializer(),ByteArrayDeserializer()).use {consumer->
                     val partitions=consumer.partitionsFor(output).map {TopicPartition(output,it.partition())};consumer.assign(partitions);if(tailOnly) consumer.seekToEnd(partitions) else consumer.seekToBeginning(partitions)
                     partitions.forEach {consumer.position(it)}
                     val epoch=System.currentTimeMillis();val started=System.nanoTime();var first=0L;var last=0L;var count=0;var bytes=0L
-                    val marker=java.util.concurrent.atomic.AtomicBoolean(false)
-                    Thread {System.`in`.bufferedReader().forEachLine {if(it=="mark")marker.set(true)}}.apply {isDaemon=true;start()}
+                    val marker=java.util.concurrent.atomic.AtomicReference<MeasurementMark?>(null)
+                    val observedCount=java.util.concurrent.atomic.AtomicInteger(0)
+                    val completion=if(mode=="actual-measure") ActualMeasureCompletion() else null
+                    Thread {System.`in`.bufferedReader().forEachLine {line->
+                        val observed=observedCount.get();val received=System.nanoTime()
+                        if(line=="mark") marker.set(MeasurementMark(observed,received))
+                        else if(line.startsWith("finish")) completion?.accept(line,received,observed)
+                    }}.apply {isDaemon=true;start()}
                     println("OBSERVER_READY")
                     val keys=mutableSetOf<String>();var valid=true;val windows=mutableListOf<Map<String,Any>>();var previous=started;var previousCount=0
-                    while((System.nanoTime()-started)/1_000_000<timeout && count<expected) {
+                    var printedFinish=false;var lastMark:MeasurementMark?=null
+                    while((System.nanoTime()-started)/1_000_000<timeout && (completion?.awaiting(count) ?: (count<expected))) {
                         for(record in consumer.poll(Duration.ofMillis(100))) {
                             val now=System.nanoTime();if(first==0L)first=now;last=now;count++;bytes+=record.value().size;keys.add(key(record.key()))
                             val row=MatchContextResolvedV1.parseFrom(record.value());val id=CalcifyWire.readCommitment(record.key())
-                            valid=valid && row.commitment.sourceOffset==id.sourceOffset && row.commitment.tradeOrdinal==id.tradeOrdinal && row.commitment.sourcePartition==record.partition() && row.buyAcceptedOrder.fact.orderId==row.trade.fact.buyOrderId && row.sellAcceptedOrder.fact.orderId==row.trade.fact.sellOrderId
+                            valid=valid && id.sourceGeneration==expectedGeneration && row.commitment.sourceGeneration==expectedGeneration && row.commitment.sourceOffset==id.sourceOffset && row.commitment.tradeOrdinal==id.tradeOrdinal && row.commitment.sourcePartition==record.partition() && row.buyAcceptedOrder.fact.orderId==row.trade.fact.buyOrderId && row.sellAcceptedOrder.fact.orderId==row.trade.fact.sellOrderId
+                            observedCount.set(count)
                         }
                         val now=System.nanoTime()
-                        if(marker.getAndSet(false)) println(JsonCodec.writeObject("mark" to mapOf("records" to count,"elapsedMs" to (now-started)/1_000_000)))
+                        marker.getAndSet(null)?.let {mark->lastMark=mark;println(JsonCodec.writeObject("mark" to mapOf("records" to mark.records,"elapsedMs" to (mark.receivedNanos-started)/1_000_000)))}
+                        completion?.finish()?.let {finish->if(!printedFinish) {printedFinish=true;println(JsonCodec.writeObject("finish" to mapOf("records" to finish.observedRecords,"expected" to finish.expected,"elapsedMs" to (finish.receivedNanos-started)/1_000_000)))}}
                         if(now-previous>=windowMs*1_000_000L) {
                             val window=mapOf("elapsedMs" to (now-started)/1_000_000,"records" to count,"rate" to (count-previousCount)*1_000_000_000.0/(now-previous));windows.add(window);println(JsonCodec.writeObject("window" to window));previous=now;previousCount=count
                         }
                     }
-                    println(JsonCodec.writeObject("result" to mapOf("startedEpochMs" to epoch,"expected" to expected,"records" to count,"unique" to keys.size,"duplicates" to count-keys.size,"identityChecks" to valid,"outputBytes" to bytes,"elapsedMs" to (System.nanoTime()-started)/1_000_000,"activeMs" to (if(first==0L)0 else (last-first)/1_000_000),"durableRate" to (if(last>first)count*1_000_000_000.0/(last-first) else 0),"pass" to (count==expected && keys.size==expected && valid),"windows" to windows)))
+                    marker.getAndSet(null)?.let {mark->lastMark=mark;println(JsonCodec.writeObject("mark" to mapOf("records" to mark.records,"elapsedMs" to (mark.receivedNanos-started)/1_000_000)))}
+                    val finish=completion?.finish();val actualExpected=finish?.expected ?: expected
+                    if(finish!=null && !printedFinish) println(JsonCodec.writeObject("finish" to mapOf("records" to finish.observedRecords,"expected" to finish.expected,"elapsedMs" to (finish.receivedNanos-started)/1_000_000)))
+                    println(JsonCodec.writeObject("result" to mapOf("startedEpochMs" to epoch,"expected" to actualExpected,"offeredExpected" to expected,"records" to count,"unique" to keys.size,"duplicates" to count-keys.size,"identityChecks" to valid,"outputBytes" to bytes,"elapsedMs" to (System.nanoTime()-started)/1_000_000,"activeMs" to (if(first==0L)0 else (last-first)/1_000_000),"durableRate" to (if(last>first)count*1_000_000_000.0/(last-first) else 0),"finishReceived" to (finish!=null),"finishError" to completion?.error(),"finishElapsedMs" to finish?.let {(it.receivedNanos-started)/1_000_000},"drainAfterFinishMs" to finish?.let {(last-it.receivedNanos).coerceAtLeast(0)/1_000_000},"drainAfterMarkMs" to lastMark?.let {(last-it.receivedNanos).coerceAtLeast(0)/1_000_000},"pass" to (count==actualExpected && keys.size==actualExpected && valid && (completion==null || (finish!=null && completion.error()==null))),"windows" to windows)))
                 }
             }
             "poison"->KafkaProducer(props,ByteArraySerializer(),ByteArraySerializer()).use {producer->
