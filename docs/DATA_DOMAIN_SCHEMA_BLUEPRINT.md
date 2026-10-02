@@ -68,8 +68,8 @@ Do not put synchronous normalized order, trade, execution, or UI table writes ba
 
 These tables are query/read projections unless a later decision explicitly promotes a field into compact canonical persistence. All identifier, quantity, price, and timestamp fields are stored as `TEXT` for compatibility; numeric/time-typed *companion* columns (suffixed `_num`, `_ts`, `_uuid`) were added later (`runtime/0028`-`0032`) purely to support native ordering/index use and are populated by insert/update triggers alongside the text columns.
 
-1. `runtime.orders` (`runtime/0003`, `0025`, `0032`)
-- `order_id text pk`
+1. `runtime.orders` (`runtime/0003`, `0025`, `0032`, `0073`)
+- `order_id text not null`; primary key `(run_id, order_id)`
 - `engine_order_id text not null`
 - `instrument_id text not null`
 - `participant_id text not null`
@@ -87,11 +87,13 @@ These tables are query/read projections unless a later decision explicitly promo
 - typed companions: `quantity_units_num numeric`, `limit_price_num numeric`, `accepted_at_ts timestamptz`
 - partial index `runtime_orders_participant_client_order_id (participant_id, client_order_id) where client_order_id <> ''`
 
+Run-scoped joins and legacy recovery policy: [Runtime order identity](RUNTIME_ORDER_IDENTITY.md). Executions, trades, runtime events, archives and submit-result rows gain `run_id text not null default ''` in `0073`.
+
 There is no `status` or `updated_at` column on `runtime.orders` — it is an immutable accepted-order fact row. Current order status/remaining-quantity state lives in the separate `runtime.order_lifecycle_state` table below.
 
-2. `runtime.order_lifecycle_state` (`runtime/0016`, `0020`, `0028`)
+2. `runtime.order_lifecycle_state` (`runtime/0016`, `0020`, `0028`, `0073`)
 - rebuildable lifecycle projection derived from `runtime.orders` + `runtime.executions` + `runtime.runtime_events`, refreshed incrementally via `runtime.order_lifecycle_dirty` tracking and `runtime.runtime_project_order_lifecycle_state(...)`.
-- `order_id text pk`
+- `run_id text not null default ''`, `order_id text not null`; primary key `(run_id, order_id)`
 - `engine_order_id text not null`
 - `instrument_id text not null`
 - `participant_id text not null`
@@ -112,7 +114,7 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - index `idx_order_lifecycle_state_book (instrument_id, status, side, limit_price)`
 
 3. `runtime.order_lifecycle_dirty` (`runtime/0020`)
-- dirty-tracking queue driving incremental lifecycle projection: `order_id text pk`, `dirtied_at timestamptz not null default now()`.
+- dirty-tracking queue driving incremental lifecycle projection: `run_id text not null default ''`, `order_id text not null`, primary key `(run_id, order_id)`, `dirtied_at timestamptz not null default now()`.
 
 4. `runtime.market_data_snapshots` (`runtime/0015`, `0028`)
 - top-of-book snapshot projection (this is where "market data" actually lives — there is no `market_data` schema).

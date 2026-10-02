@@ -1,0 +1,534 @@
+BEGIN
+CREATE SCHEMA
+NOTICE:  extension "pgcrypto" already exists, skipping
+CREATE EXTENSION
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  schema "r08_review2_rollback" already exists, skipping
+CREATE SCHEMA
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+NOTICE:  relation "runtime_events" already exists, skipping
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "actor_id" of relation "runtime_events" already exists, skipping
+NOTICE:  column "payload_json" of relation "runtime_events" already exists, skipping
+ALTER TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TABLE
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+NOTICE:  identifier "canonical_command_outcomes_event_stream_batch_id_stream_sequence_key" will be truncated to "canonical_command_outcomes_event_stream_batch_id_stream_sequenc"
+ALTER TABLE
+DROP INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+CREATE INDEX
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+DROP INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+UPDATE 0
+CREATE FUNCTION
+DROP TRIGGER
+NOTICE:  trigger "runtime_events_set_typed_facts" for relation "r08_review2_rollback.runtime_events" does not exist, skipping
+CREATE TRIGGER
+CREATE INDEX
+CREATE INDEX
+ALTER TABLE
+UPDATE 0
+CREATE FUNCTION
+DROP TRIGGER
+NOTICE:  trigger "submit_results_set_typed_facts" for relation "r08_review2_rollback.submit_results" does not exist, skipping
+CREATE TRIGGER
+CREATE INDEX
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  trigger "executions_set_typed_facts" for relation "r08_review2_rollback.executions" does not exist, skipping
+DROP TRIGGER
+DROP TRIGGER
+NOTICE:  trigger "trades_set_typed_facts" for relation "r08_review2_rollback.trades" does not exist, skipping
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+ALTER TABLE
+UPDATE 0
+CREATE FUNCTION
+NOTICE:  trigger "orders_set_typed_facts" for relation "r08_review2_rollback.orders" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+UPDATE 0
+UPDATE 0
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+NOTICE:  trigger "canonical_command_results_set_typed_facts" for relation "r08_review2_rollback.canonical_command_results" does not exist, skipping
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+NOTICE:  trigger "canonical_venue_events_set_typed_facts" for relation "r08_review2_rollback.canonical_venue_events" does not exist, skipping
+NOTICE:  trigger "canonical_venue_event_batches_set_typed_facts" for relation "r08_review2_rollback.canonical_venue_event_batches" does not exist, skipping
+NOTICE:  trigger "canonical_command_outcomes_set_typed_facts" for relation "r08_review2_rollback.canonical_command_outcomes" does not exist, skipping
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+NOTICE:  index "idx_canonical_venue_event_batches_payload_json_gin" does not exist, skipping
+DROP INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+DROP FUNCTION
+NOTICE:  function r08_review2_rollback.runtime_project_canonical_command_outcomes(text,pg_catalog.int4,pg_catalog.int4[],pg_catalog.bool) does not exist, skipping
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+ALTER TABLE
+INSERT 0 0
+UPDATE 0
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DROP INDEX
+DROP INDEX
+DROP INDEX
+CREATE INDEX
+DROP INDEX
+CREATE FUNCTION
+DROP INDEX
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE INDEX
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+DROP INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+SET
+SET
+DO
+SET
+CREATE INDEX
+DO
+SET
+SET
+CREATE INDEX
+DO
+DROP INDEX
+ALTER INDEX
+DROP INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DROP INDEX
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+INSERT 0 1
+CREATE TABLE
+ALTER TABLE
+CREATE TABLE
+ runtime_persist_submit_outcomes
+---------------------------------
+                               1
+(1 row)
+
+NOTICE:  column "payload_sha256" of relation "runtime_events" already exists, skipping
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+NOTICE:  relation "order_lifecycle_dirty" already exists, skipping
+CREATE TABLE
+NOTICE:  relation "market_data_snapshot_dirty" already exists, skipping
+ALTER TABLE
+DO
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+ run_id |   event_id
+--------+--------------
+        | fill-review2
+(1 row)
+
+ERROR:  execution replay conflict for existing event_id fill-review2
+CONTEXT:  PL/pgSQL function r08_review2_rollback.runtime_reject_execution_replay_conflict(text) line 3 at RAISE
+SQL statement "WITH outcomes AS (
+    SELECT outcome, ordinality::BIGINT AS outcome_ordinality
+    FROM jsonb_array_elements(p_outcomes) WITH ORDINALITY AS outcome_rows(outcome, ordinality)
+  ),
+  parsed_trades AS MATERIALIZED (
+    SELECT trade, COALESCE(outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '') AS run_id
+    FROM outcomes
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(outcome->'trades') = 'array' THEN outcome->'trades'
+        ELSE '[]'::jsonb
+      END
+    ) AS trade
+  ),
+  upsert_results AS (
+    INSERT INTO r08_review2_rollback.submit_results(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at, run_id)
+    SELECT
+      outcome->>'commandId',
+      outcome->>'resultType',
+      outcome->>'eventId',
+      outcome->>'orderId',
+      outcome->>'engineOrderId',
+      outcome->>'code',
+      outcome->>'reason',
+      outcome->>'occurredAt',
+      COALESCE(outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '')
+    FROM outcomes
+    ON CONFLICT (command_id) DO UPDATE SET
+      command_id = r08_review2_rollback.runtime_reject_submit_result_replay_conflict(EXCLUDED.command_id)
+    WHERE ROW(
+      r08_review2_rollback.submit_results.run_id,
+      r08_review2_rollback.submit_results.result_type,
+      r08_review2_rollback.submit_results.event_id,
+      r08_review2_rollback.submit_results.order_id,
+      r08_review2_rollback.submit_results.engine_order_id,
+      r08_review2_rollback.submit_results.code,
+      r08_review2_rollback.submit_results.reason,
+      r08_review2_rollback.submit_results.occurred_at
+    ) IS DISTINCT FROM ROW(
+      EXCLUDED.run_id,
+      EXCLUDED.result_type,
+      EXCLUDED.event_id,
+      EXCLUDED.order_id,
+      EXCLUDED.engine_order_id,
+      EXCLUDED.code,
+      EXCLUDED.reason,
+      EXCLUDED.occurred_at
+    )
+    RETURNING 1
+  ),
+  accepted_orders AS (
+    SELECT NULLIF(outcome->'acceptedOrder', 'null'::jsonb) AS accepted_order
+    FROM outcomes
+  ),
+  upsert_orders AS (
+    INSERT INTO r08_review2_rollback.orders(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id)
+    SELECT
+      accepted_order->>'orderId',
+      accepted_order->>'engineOrderId',
+      accepted_order->>'instrumentId',
+      accepted_order->>'participantId',
+      accepted_order->>'accountId',
+      accepted_order->>'side',
+      accepted_order->>'orderType',
+      accepted_order->>'quantityUnits',
+      accepted_order->>'limitPrice',
+      accepted_order->>'currency',
+      accepted_order->>'timeInForce',
+      accepted_order->>'acceptedAt',
+      COALESCE(accepted_order->>'clientOrderId', ''),
+      COALESCE(accepted_order->>'runId', ''),
+      COALESCE(accepted_order->>'venueSessionId', '')
+    FROM accepted_orders
+    WHERE accepted_order IS NOT NULL
+      AND jsonb_typeof(accepted_order) = 'object'
+    ON CONFLICT (run_id, order_id) DO UPDATE SET
+      engine_order_id = EXCLUDED.engine_order_id,
+      instrument_id = EXCLUDED.instrument_id,
+      participant_id = EXCLUDED.participant_id,
+      account_id = EXCLUDED.account_id,
+      side = EXCLUDED.side,
+      order_type = EXCLUDED.order_type,
+      quantity_units = EXCLUDED.quantity_units,
+      limit_price = EXCLUDED.limit_price,
+      currency = EXCLUDED.currency,
+      time_in_force = EXCLUDED.time_in_force,
+      accepted_at = EXCLUDED.accepted_at,
+      client_order_id = EXCLUDED.client_order_id,
+      run_id = EXCLUDED.run_id,
+      venue_session_id = EXCLUDED.venue_session_id
+    RETURNING 1
+  ),
+  insert_executions AS (
+    INSERT INTO r08_review2_rollback.executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role, run_id)
+    SELECT
+      execution->>'eventId',
+      execution->>'executionId',
+      execution->>'orderId',
+      execution->>'instrumentId',
+      execution->>'quantityUnits',
+      execution->>'executionPrice',
+      execution->>'currency',
+      execution->>'occurredAt',
+      COALESCE(NULLIF(execution->>'liquidityRole', ''), 'UNSPECIFIED'),
+      COALESCE(NULLIF(execution->>'runId', ''), outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '')
+    FROM outcomes
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(outcome->'executions') = 'array' THEN outcome->'executions'
+        ELSE '[]'::jsonb
+      END
+    ) AS execution
+    ON CONFLICT (event_id) DO UPDATE SET
+      event_id = r08_review2_rollback.runtime_reject_execution_replay_conflict(EXCLUDED.event_id)
+    WHERE ROW(
+      r08_review2_rollback.executions.execution_id,
+      r08_review2_rollback.executions.order_id,
+      r08_review2_rollback.executions.instrument_id,
+      r08_review2_rollback.executions.quantity_units,
+      r08_review2_rollback.executions.execution_price,
+      r08_review2_rollback.executions.currency,
+      r08_review2_rollback.executions.run_id,
+      r08_review2_rollback.executions.occurred_at,
+      r08_review2_rollback.executions.liquidity_role
+    ) IS DISTINCT FROM ROW(
+      EXCLUDED.execution_id,
+      EXCLUDED.order_id,
+      EXCLUDED.instrument_id,
+      EXCLUDED.quantity_units,
+      EXCLUDED.execution_price,
+      EXCLUDED.currency,
+      EXCLUDED.run_id,
+      EXCLUDED.occurred_at,
+      EXCLUDED.liquidity_role
+    )
+    RETURNING 1
+  ),
+  insert_trades AS (
+    INSERT INTO r08_review2_rollback.trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at, run_id)
+    SELECT
+      trade->>'eventId',
+      trade->>'tradeId',
+      trade->>'executionId',
+      trade->>'buyOrderId',
+      trade->>'sellOrderId',
+      trade->>'instrumentId',
+      trade->>'quantityUnits',
+      trade->>'price',
+      trade->>'currency',
+      trade->>'occurredAt',
+      COALESCE(NULLIF(trade->>'runId', ''), run_id)
+    FROM parsed_trades
+    ON CONFLICT (event_id) DO UPDATE SET
+      event_id = r08_review2_rollback.runtime_reject_trade_replay_conflict(EXCLUDED.event_id)
+    WHERE ROW(
+      r08_review2_rollback.trades.trade_id,
+      r08_review2_rollback.trades.execution_id,
+      r08_review2_rollback.trades.buy_order_id,
+      r08_review2_rollback.trades.sell_order_id,
+      r08_review2_rollback.trades.instrument_id,
+      r08_review2_rollback.trades.quantity_units,
+      r08_review2_rollback.trades.price,
+      r08_review2_rollback.trades.currency,
+      r08_review2_rollback.trades.run_id,
+      r08_review2_rollback.trades.occurred_at
+    ) IS DISTINCT FROM ROW(
+      EXCLUDED.trade_id,
+      EXCLUDED.execution_id,
+      EXCLUDED.buy_order_id,
+      EXCLUDED.sell_order_id,
+      EXCLUDED.instrument_id,
+      EXCLUDED.quantity_units,
+      EXCLUDED.price,
+      EXCLUDED.currency,
+      EXCLUDED.run_id,
+      EXCLUDED.occurred_at
+    )
+    RETURNING 1
+  ),
+  dirty_ids AS (
+    SELECT DISTINCT run_id, order_id FROM (
+      SELECT COALESCE(outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '') AS run_id, outcome->>'orderId' AS order_id FROM outcomes
+      UNION ALL
+      SELECT COALESCE(NULLIF(trade->>'runId', ''), run_id), trade_order.order_id
+      FROM parsed_trades
+      CROSS JOIN LATERAL (VALUES (trade->>'buyOrderId'), (trade->>'sellOrderId')) AS trade_order(order_id)
+    ) ids
+    WHERE COALESCE(order_id, '') <> ''
+  ),
+  mark_dirty AS (
+    INSERT INTO r08_review2_rollback.order_lifecycle_dirty AS dirty(run_id, order_id)
+    SELECT run_id, order_id FROM dirty_ids
+    ORDER BY run_id, order_id
+    ON CONFLICT (run_id, order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at WHERE FALSE
+    RETURNING 1
+  )
+  SELECT COUNT(*)                      FROM outcomes"
+PL/pgSQL function r08_review2_rollback.runtime_persist_submit_outcome_status_stage(jsonb) line 13 at SQL statement
+PL/pgSQL function r08_review2_rollback.runtime_persist_submit_outcomes(jsonb,text) line 7 at assignment
+PL/pgSQL function r08_review2_rollback.runtime_persist_submit_outcomes(jsonb) line 3 at RETURN
+ROLLBACK

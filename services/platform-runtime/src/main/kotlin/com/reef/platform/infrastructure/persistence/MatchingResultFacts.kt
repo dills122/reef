@@ -19,7 +19,8 @@ internal fun executionsFromResultPayload(json: String): List<ExecutionCreated> {
             executionPrice = execution.string("executionPrice"),
             currency = execution.string("currency"),
             occurredAt = execution.string("occurredAt"),
-            liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" }
+            liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" },
+            runId = execution.string("runId")
         )
     }
 }
@@ -36,7 +37,8 @@ internal fun tradesFromResultPayload(json: String): List<TradeCreated> {
             quantityUnits = trade.string("quantityUnits"),
             price = trade.string("price"),
             currency = trade.string("currency"),
-            occurredAt = trade.string("occurredAt")
+            occurredAt = trade.string("occurredAt"),
+            runId = trade.string("runId")
         )
     }
 }

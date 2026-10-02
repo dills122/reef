@@ -49,24 +49,43 @@ func venueEventBatchChecksum(batch VenueEventBatch) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
+// Scratch and memo belong to one checksum call: concurrent batches share no
+// mutable writer state. Cache only short field names and cap cardinality so
+// dynamic JSON cannot turn this optimization into an unbounded dictionary.
+const canonicalFieldMemoLimit = 128
+const canonicalFieldMemoMaxBytes = 128
+
+type canonicalWriter struct {
+	digest hash.Hash
+	header [32]byte
+	count  [24]byte
+	text   [256]byte
+	fields map[string][]byte
+}
+
 func writeCanonicalValue(digest hash.Hash, value any) error {
+	writer := canonicalWriter{digest: digest}
+	return writer.value(value)
+}
+
+func (w *canonicalWriter) value(value any) error {
 	switch typed := value.(type) {
 	case nil:
-		writeCanonicalToken(digest, 'n', nil)
+		w.token('n', nil)
 	case bool:
 		if typed {
-			writeCanonicalToken(digest, 'b', []byte{'1'})
+			w.stringToken('b', "1")
 		} else {
-			writeCanonicalToken(digest, 'b', []byte{'0'})
+			w.stringToken('b', "0")
 		}
 	case string:
-		writeCanonicalToken(digest, 's', []byte(typed))
+		w.stringToken('s', typed)
 	case json.Number:
-		writeCanonicalToken(digest, 'd', []byte(typed.String()))
+		w.stringToken('d', typed.String())
 	case []any:
-		writeCanonicalToken(digest, 'a', []byte(strconv.Itoa(len(typed))))
+		w.token('a', strconv.AppendInt(w.count[:0], int64(len(typed)), 10))
 		for _, entry := range typed {
-			if err := writeCanonicalValue(digest, entry); err != nil {
+			if err := w.value(entry); err != nil {
 				return err
 			}
 		}
@@ -76,10 +95,10 @@ func writeCanonicalValue(digest hash.Hash, value any) error {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		writeCanonicalToken(digest, 'o', []byte(strconv.Itoa(len(keys))))
+		w.token('o', strconv.AppendInt(w.count[:0], int64(len(keys)), 10))
 		for _, key := range keys {
-			writeCanonicalToken(digest, 's', []byte(key))
-			if err := writeCanonicalValue(digest, typed[key]); err != nil {
+			w.field(key)
+			if err := w.value(typed[key]); err != nil {
 				return err
 			}
 		}
@@ -89,11 +108,54 @@ func writeCanonicalValue(digest hash.Hash, value any) error {
 	return nil
 }
 
-func writeCanonicalToken(digest hash.Hash, kind byte, value []byte) {
-	_, _ = digest.Write([]byte{kind})
-	_, _ = digest.Write([]byte(strconv.Itoa(len(value))))
-	_, _ = digest.Write([]byte{':'})
-	_, _ = digest.Write(value)
+func (w *canonicalWriter) field(name string) {
+	if cached, ok := w.fields[name]; ok {
+		_, _ = w.digest.Write(cached)
+		return
+	}
+	if len(name) <= canonicalFieldMemoMaxBytes && len(w.fields) < canonicalFieldMemoLimit {
+		if w.fields == nil {
+			w.fields = make(map[string][]byte)
+		}
+		token := make([]byte, 1, len(name)+24)
+		token[0] = 's'
+		token = strconv.AppendInt(token, int64(len(name)), 10)
+		token = append(token, ':')
+		token = append(token, name...)
+		w.fields[name] = token
+		_, _ = w.digest.Write(token)
+		return
+	}
+	w.stringToken('s', name)
+}
+
+func (w *canonicalWriter) writeHeader(kind byte, length int) {
+	w.header[0] = kind
+	header := strconv.AppendInt(w.header[:1], int64(length), 10)
+	header = append(header, ':')
+	_, _ = w.digest.Write(header)
+}
+
+func (w *canonicalWriter) token(kind byte, value []byte) {
+	w.writeHeader(kind, len(value))
+	if len(value) > 0 {
+		_, _ = w.digest.Write(value)
+	}
+}
+
+func (w *canonicalWriter) stringToken(kind byte, value string) {
+	w.writeHeader(kind, len(value))
+	// Copy bounded chunks into reusable scratch rather than allocating a byte
+	// slice for every string. Hash observes exactly the original UTF-8 bytes.
+	for len(value) > 0 {
+		size := len(value)
+		if size > len(w.text) {
+			size = len(w.text)
+		}
+		copy(w.text[:size], value[:size])
+		_, _ = w.digest.Write(w.text[:size])
+		value = value[size:]
+	}
 }
 
 // Timing is integrity-bound to semantic membership without changing retry identity.

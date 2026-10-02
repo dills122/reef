@@ -1,0 +1,1028 @@
+{
+  "runId": "7646b238",
+  "smokeId": "c10k-h384-b450",
+  "generation": 6,
+  "source": "REEF_C10K-H384-B450_EVENTS",
+  "output": "REEF_C10K-H384-B450_RESOLVED",
+  "scope": "LocalRF1/fsync; HTTP384/pool192/PGmax256/healthsample500ms/matching450/verifier+receiptpoll1000; actualGo admission consumers; baseline checksum; hot paired lane stub verifier60s",
+  "policy": {
+    "seconds": 60,
+    "offeredOrderCommandsPerSecond": 10500,
+    "minimumAcceptedAtDeadlinePerSecond": 10000,
+    "maxLoadOverrunMs": 1000,
+    "maxReceiptDrainMs": 5000,
+    "maxResolvedDrainMs": 5000,
+    "maxResolvedEndGapTrades": 10500,
+    "fullFactParityRequired": true
+  },
+  "harnessSha256": "8cb51608880353ac261561dcad9baaeabc53af49b5529672fef25bff0e12dfb0",
+  "pass": false,
+  "loadSpawnEpochMs": 1790915772841,
+  "loadExitCode": 1,
+  "loadResultReceivedEpochMs": 1790915832723,
+  "load": {
+    "smokeId": "c10k-h384-b450",
+    "targetPairs": 315000,
+    "startIndex": 0,
+    "targetPairsPerSecond": 5250,
+    "scheduledPairs": 313216,
+    "dispatchedPairs": 146314,
+    "droppedPairs": 166902,
+    "completedPairs": 143971,
+    "acceptedOrders": 288217,
+    "acceptedOrdersAtDeadline": 288217,
+    "deadlineAccounting": "validated durable HTTP acknowledgement observed strictly before fixed monotonic load-start plus requested duration; late/equal acknowledgements count only in acceptedOrders; epoch fields expose wall time from those same Go instants",
+    "loadStartedEpochMs": 1790915772848,
+    "scheduledDeadlineEpochMs": 1790915832848,
+    "acceptedAllEpochMs": 1790915832716,
+    "receiptDrainAccounting": "drainMs runs from HTTP worker completion before stopping the progress observer through successful receipt reconciliation; includes any outstanding observer query wait; acceptedAllEpochMs records worker completion even if requests failed",
+    "acceptedOrdersPerSecond": 4814.221115361465,
+    "elapsedMs": 59867,
+    "retries": 0,
+    "failures": 2343,
+    "firstError": "buyer-load-311162-c10k-h384-b450 status 429: {\n  \"code\":\"STREAM_COMMAND_WORKER_BACKPRESSURE\",\n  \"message\":\"stream command intake rejected because worker stream lag is 51068\",\n  \"correlationId\":\"\"\n}",
+    "receiptGeneration": 6,
+    "samples": [
+      {
+        "elapsedMs": 5000,
+        "completedPairsBefore": 2773,
+        "completedPairs": 2954,
+        "receipts": 2216,
+        "acceptedToReceiptGapLower": 558,
+        "acceptedToReceiptGapUpper": 739,
+        "receiptQueryMs": 312
+      },
+      {
+        "elapsedMs": 10001,
+        "completedPairsBefore": 7598,
+        "completedPairs": 8068,
+        "receipts": 7327,
+        "acceptedToReceiptGapLower": 272,
+        "acceptedToReceiptGapUpper": 742,
+        "receiptQueryMs": 309
+      },
+      {
+        "elapsedMs": 15000,
+        "completedPairsBefore": 14683,
+        "completedPairs": 15295,
+        "receipts": 13403,
+        "acceptedToReceiptGapLower": 1281,
+        "acceptedToReceiptGapUpper": 1893,
+        "receiptQueryMs": 371
+      },
+      {
+        "elapsedMs": 20000,
+        "completedPairsBefore": 22490,
+        "completedPairs": 22900,
+        "receipts": 20376,
+        "acceptedToReceiptGapLower": 2115,
+        "acceptedToReceiptGapUpper": 2525,
+        "receiptQueryMs": 380
+      },
+      {
+        "elapsedMs": 25000,
+        "completedPairsBefore": 30012,
+        "completedPairs": 30101,
+        "receipts": 27129,
+        "acceptedToReceiptGapLower": 2884,
+        "acceptedToReceiptGapUpper": 2973,
+        "receiptQueryMs": 245
+      },
+      {
+        "elapsedMs": 30001,
+        "completedPairsBefore": 36893,
+        "completedPairs": 37071,
+        "receipts": 34108,
+        "acceptedToReceiptGapLower": 2786,
+        "acceptedToReceiptGapUpper": 2964,
+        "receiptQueryMs": 321
+      },
+      {
+        "elapsedMs": 35000,
+        "completedPairsBefore": 44948,
+        "completedPairs": 45491,
+        "receipts": 41311,
+        "acceptedToReceiptGapLower": 3638,
+        "acceptedToReceiptGapUpper": 4181,
+        "receiptQueryMs": 204
+      },
+      {
+        "elapsedMs": 40000,
+        "completedPairsBefore": 60575,
+        "completedPairs": 61055,
+        "receipts": 52549,
+        "acceptedToReceiptGapLower": 8027,
+        "acceptedToReceiptGapUpper": 8507,
+        "receiptQueryMs": 164
+      },
+      {
+        "elapsedMs": 45000,
+        "completedPairsBefore": 80629,
+        "completedPairs": 81167,
+        "receipts": 68515,
+        "acceptedToReceiptGapLower": 12115,
+        "acceptedToReceiptGapUpper": 12653,
+        "receiptQueryMs": 136
+      },
+      {
+        "elapsedMs": 50000,
+        "completedPairsBefore": 101865,
+        "completedPairs": 102279,
+        "receipts": 85868,
+        "acceptedToReceiptGapLower": 15998,
+        "acceptedToReceiptGapUpper": 16412,
+        "receiptQueryMs": 114
+      },
+      {
+        "elapsedMs": 55000,
+        "completedPairsBefore": 123045,
+        "completedPairs": 123311,
+        "receipts": 102283,
+        "acceptedToReceiptGapLower": 20763,
+        "acceptedToReceiptGapUpper": 21029,
+        "receiptQueryMs": 98
+      }
+    ],
+    "p95AcceptedToReceiptGap": 21029,
+    "maxAcceptedToReceiptGap": 21029,
+    "gatePassed": false,
+    "gateReasons": [
+      "request failures or retries",
+      "accepted intake below 95% requested rate at deadline",
+      "scheduler dropped more than 5% of offered pairs",
+      "final receipt count mismatch",
+      "receipt drain exceeded five seconds",
+      "receipt gap p95 exceeded two seconds of requested trade rate"
+    ]
+  },
+  "goStartAfterParentSpawnMs": 7,
+  "observerMark": {
+    "records": 117816,
+    "elapsedMs": 59885,
+    "receivedEpochMs": 1790915832816
+  },
+  "observerResultReceivedEpochMs": 1790915838320,
+  "observerExitCode": 0,
+  "observer": {
+    "startedEpochMs": 1790915772838,
+    "expected": 143972,
+    "offeredExpected": 315001,
+    "records": 143972,
+    "unique": 143972,
+    "duplicates": 0,
+    "identityChecks": true,
+    "outputBytes": 277886907,
+    "elapsedMs": 65474,
+    "activeMs": 65207,
+    "durableRate": 2207.8904765965267,
+    "finishReceived": true,
+    "finishError": null,
+    "finishElapsedMs": 59887,
+    "drainAfterFinishMs": 5587,
+    "drainAfterMarkMs": 5589,
+    "pass": true,
+    "windows": [
+      {
+        "elapsedMs": 1025,
+        "records": 1,
+        "rate": 0.9754530098396638
+      },
+      {
+        "elapsedMs": 2133,
+        "records": 98,
+        "rate": 87.5108124006816
+      },
+      {
+        "elapsedMs": 3231,
+        "records": 256,
+        "rate": 143.87848811129686
+      },
+      {
+        "elapsedMs": 4254,
+        "records": 912,
+        "rate": 641.2752248970054
+      },
+      {
+        "elapsedMs": 5321,
+        "records": 1312,
+        "rate": 374.95576693686917
+      },
+      {
+        "elapsedMs": 6337,
+        "records": 2224,
+        "rate": 897.4786818454271
+      },
+      {
+        "elapsedMs": 7386,
+        "records": 2666,
+        "rate": 421.2307109499156
+      },
+      {
+        "elapsedMs": 8440,
+        "records": 3955,
+        "rate": 1223.9823129029348
+      },
+      {
+        "elapsedMs": 9445,
+        "records": 5092,
+        "rate": 1131.1530697822952
+      },
+      {
+        "elapsedMs": 10485,
+        "records": 6449,
+        "rate": 1304.014937741921
+      },
+      {
+        "elapsedMs": 11596,
+        "records": 8132,
+        "rate": 1515.9633275842534
+      },
+      {
+        "elapsedMs": 12696,
+        "records": 9805,
+        "rate": 1520.5925878560702
+      },
+      {
+        "elapsedMs": 13714,
+        "records": 10726,
+        "rate": 904.9926039454878
+      },
+      {
+        "elapsedMs": 14757,
+        "records": 12183,
+        "rate": 1396.9314797937543
+      },
+      {
+        "elapsedMs": 15857,
+        "records": 13968,
+        "rate": 1622.4700124071328
+      },
+      {
+        "elapsedMs": 16950,
+        "records": 15293,
+        "rate": 1212.0123219959924
+      },
+      {
+        "elapsedMs": 18042,
+        "records": 17025,
+        "rate": 1586.1767560354062
+      },
+      {
+        "elapsedMs": 19049,
+        "records": 18357,
+        "rate": 1322.6636466614648
+      },
+      {
+        "elapsedMs": 20139,
+        "records": 19497,
+        "rate": 1046.004709315062
+      },
+      {
+        "elapsedMs": 21186,
+        "records": 20621,
+        "rate": 1073.6476679757502
+      },
+      {
+        "elapsedMs": 22193,
+        "records": 22594,
+        "rate": 1958.1525530356762
+      },
+      {
+        "elapsedMs": 23334,
+        "records": 24229,
+        "rate": 1433.496920231817
+      },
+      {
+        "elapsedMs": 24334,
+        "records": 25694,
+        "rate": 1464.5692950679986
+      },
+      {
+        "elapsedMs": 25371,
+        "records": 26679,
+        "rate": 949.62630064795
+      },
+      {
+        "elapsedMs": 26465,
+        "records": 27435,
+        "rate": 691.0198868905743
+      },
+      {
+        "elapsedMs": 27513,
+        "records": 29150,
+        "rate": 1636.2900830210367
+      },
+      {
+        "elapsedMs": 28584,
+        "records": 30734,
+        "rate": 1479.9490960670396
+      },
+      {
+        "elapsedMs": 29591,
+        "records": 32765,
+        "rate": 2016.555411570366
+      },
+      {
+        "elapsedMs": 30621,
+        "records": 33708,
+        "rate": 915.5702771661432
+      },
+      {
+        "elapsedMs": 31655,
+        "records": 34781,
+        "rate": 1037.1497099228068
+      },
+      {
+        "elapsedMs": 32657,
+        "records": 35686,
+        "rate": 903.2646398445489
+      },
+      {
+        "elapsedMs": 33663,
+        "records": 37932,
+        "rate": 2233.8122266711684
+      },
+      {
+        "elapsedMs": 34721,
+        "records": 39971,
+        "rate": 1926.6906328083
+      },
+      {
+        "elapsedMs": 35828,
+        "records": 41770,
+        "rate": 1624.967962433342
+      },
+      {
+        "elapsedMs": 36862,
+        "records": 44014,
+        "rate": 2171.4194010384012
+      },
+      {
+        "elapsedMs": 37885,
+        "records": 46951,
+        "rate": 2869.694071842169
+      },
+      {
+        "elapsedMs": 38886,
+        "records": 49178,
+        "rate": 2224.9279424066603
+      },
+      {
+        "elapsedMs": 39971,
+        "records": 51461,
+        "rate": 2104.513330716135
+      },
+      {
+        "elapsedMs": 40971,
+        "records": 54559,
+        "rate": 3096.8386823972623
+      },
+      {
+        "elapsedMs": 41994,
+        "records": 57290,
+        "rate": 2671.305341277964
+      },
+      {
+        "elapsedMs": 43045,
+        "records": 60910,
+        "rate": 3444.2210218016744
+      },
+      {
+        "elapsedMs": 44055,
+        "records": 64555,
+        "rate": 3606.817176571383
+      },
+      {
+        "elapsedMs": 45061,
+        "records": 67630,
+        "rate": 3057.0196285325082
+      },
+      {
+        "elapsedMs": 46087,
+        "records": 71312,
+        "rate": 3589.88344015063
+      },
+      {
+        "elapsedMs": 47140,
+        "records": 74564,
+        "rate": 3086.22216009455
+      },
+      {
+        "elapsedMs": 48167,
+        "records": 78859,
+        "rate": 4182.473173317622
+      },
+      {
+        "elapsedMs": 49198,
+        "records": 82481,
+        "rate": 3513.3671241779416
+      },
+      {
+        "elapsedMs": 50238,
+        "records": 85560,
+        "rate": 2961.350954725073
+      },
+      {
+        "elapsedMs": 51317,
+        "records": 89251,
+        "rate": 3421.5734697678477
+      },
+      {
+        "elapsedMs": 52373,
+        "records": 92629,
+        "rate": 3199.0539831050382
+      },
+      {
+        "elapsedMs": 53423,
+        "records": 96212,
+        "rate": 3410.0899662535953
+      },
+      {
+        "elapsedMs": 54431,
+        "records": 99803,
+        "rate": 3564.2970280397085
+      },
+      {
+        "elapsedMs": 55504,
+        "records": 103204,
+        "rate": 3169.22087869259
+      },
+      {
+        "elapsedMs": 56506,
+        "records": 106569,
+        "rate": 3358.8886398342556
+      },
+      {
+        "elapsedMs": 57555,
+        "records": 109725,
+        "rate": 3009.582312687037
+      },
+      {
+        "elapsedMs": 58595,
+        "records": 113819,
+        "rate": 3934.4884644209906
+      },
+      {
+        "elapsedMs": 59641,
+        "records": 116754,
+        "rate": 2806.531932555857
+      },
+      {
+        "elapsedMs": 60715,
+        "records": 123234,
+        "rate": 6034.220685692354
+      },
+      {
+        "elapsedMs": 61722,
+        "records": 131828,
+        "rate": 8535.826914097332
+      },
+      {
+        "elapsedMs": 62760,
+        "records": 138279,
+        "rate": 6209.679186642185
+      },
+      {
+        "elapsedMs": 63778,
+        "records": 143254,
+        "rate": 4887.498301692582
+      },
+      {
+        "elapsedMs": 64869,
+        "records": 143692,
+        "rate": 401.46671298969255
+      }
+    ]
+  },
+  "windows": [
+    {
+      "elapsedMs": 1025,
+      "records": 1,
+      "rate": 0.9754530098396638,
+      "receivedEpochMs": 1790915773936
+    },
+    {
+      "elapsedMs": 2133,
+      "records": 98,
+      "rate": 87.5108124006816,
+      "receivedEpochMs": 1790915774989
+    },
+    {
+      "elapsedMs": 3231,
+      "records": 256,
+      "rate": 143.87848811129686,
+      "receivedEpochMs": 1790915776078
+    },
+    {
+      "elapsedMs": 4254,
+      "records": 912,
+      "rate": 641.2752248970054,
+      "receivedEpochMs": 1790915777140
+    },
+    {
+      "elapsedMs": 5321,
+      "records": 1312,
+      "rate": 374.95576693686917,
+      "receivedEpochMs": 1790915778176
+    },
+    {
+      "elapsedMs": 6337,
+      "records": 2224,
+      "rate": 897.4786818454271,
+      "receivedEpochMs": 1790915779177
+    },
+    {
+      "elapsedMs": 7386,
+      "records": 2666,
+      "rate": 421.2307109499156,
+      "receivedEpochMs": 1790915780233
+    },
+    {
+      "elapsedMs": 8440,
+      "records": 3955,
+      "rate": 1223.9823129029348,
+      "receivedEpochMs": 1790915781301
+    },
+    {
+      "elapsedMs": 9445,
+      "records": 5092,
+      "rate": 1131.1530697822952,
+      "receivedEpochMs": 1790915782286
+    },
+    {
+      "elapsedMs": 10485,
+      "records": 6449,
+      "rate": 1304.014937741921,
+      "receivedEpochMs": 1790915783337
+    },
+    {
+      "elapsedMs": 11596,
+      "records": 8132,
+      "rate": 1515.9633275842534,
+      "receivedEpochMs": 1790915784448
+    },
+    {
+      "elapsedMs": 12696,
+      "records": 9805,
+      "rate": 1520.5925878560702,
+      "receivedEpochMs": 1790915785561
+    },
+    {
+      "elapsedMs": 13714,
+      "records": 10726,
+      "rate": 904.9926039454878,
+      "receivedEpochMs": 1790915786563
+    },
+    {
+      "elapsedMs": 14757,
+      "records": 12183,
+      "rate": 1396.9314797937543,
+      "receivedEpochMs": 1790915787603
+    },
+    {
+      "elapsedMs": 15857,
+      "records": 13968,
+      "rate": 1622.4700124071328,
+      "receivedEpochMs": 1790915788700
+    },
+    {
+      "elapsedMs": 16950,
+      "records": 15293,
+      "rate": 1212.0123219959924,
+      "receivedEpochMs": 1790915789795
+    },
+    {
+      "elapsedMs": 18042,
+      "records": 17025,
+      "rate": 1586.1767560354062,
+      "receivedEpochMs": 1790915790907
+    },
+    {
+      "elapsedMs": 19049,
+      "records": 18357,
+      "rate": 1322.6636466614648,
+      "receivedEpochMs": 1790915791894
+    },
+    {
+      "elapsedMs": 20139,
+      "records": 19497,
+      "rate": 1046.004709315062,
+      "receivedEpochMs": 1790915792997
+    },
+    {
+      "elapsedMs": 21186,
+      "records": 20621,
+      "rate": 1073.6476679757502,
+      "receivedEpochMs": 1790915794032
+    },
+    {
+      "elapsedMs": 22193,
+      "records": 22594,
+      "rate": 1958.1525530356762,
+      "receivedEpochMs": 1790915795034
+    },
+    {
+      "elapsedMs": 23334,
+      "records": 24229,
+      "rate": 1433.496920231817,
+      "receivedEpochMs": 1790915796218
+    },
+    {
+      "elapsedMs": 24334,
+      "records": 25694,
+      "rate": 1464.5692950679986,
+      "receivedEpochMs": 1790915797176
+    },
+    {
+      "elapsedMs": 25371,
+      "records": 26679,
+      "rate": 949.62630064795,
+      "receivedEpochMs": 1790915798220
+    },
+    {
+      "elapsedMs": 26465,
+      "records": 27435,
+      "rate": 691.0198868905743,
+      "receivedEpochMs": 1790915799311
+    },
+    {
+      "elapsedMs": 27513,
+      "records": 29150,
+      "rate": 1636.2900830210367,
+      "receivedEpochMs": 1790915800360
+    },
+    {
+      "elapsedMs": 28584,
+      "records": 30734,
+      "rate": 1479.9490960670396,
+      "receivedEpochMs": 1790915801424
+    },
+    {
+      "elapsedMs": 29591,
+      "records": 32765,
+      "rate": 2016.555411570366,
+      "receivedEpochMs": 1790915802457
+    },
+    {
+      "elapsedMs": 30621,
+      "records": 33708,
+      "rate": 915.5702771661432,
+      "receivedEpochMs": 1790915803462
+    },
+    {
+      "elapsedMs": 31655,
+      "records": 34781,
+      "rate": 1037.1497099228068,
+      "receivedEpochMs": 1790915804528
+    },
+    {
+      "elapsedMs": 32657,
+      "records": 35686,
+      "rate": 903.2646398445489,
+      "receivedEpochMs": 1790915805505
+    },
+    {
+      "elapsedMs": 33663,
+      "records": 37932,
+      "rate": 2233.8122266711684,
+      "receivedEpochMs": 1790915806511
+    },
+    {
+      "elapsedMs": 34721,
+      "records": 39971,
+      "rate": 1926.6906328083,
+      "receivedEpochMs": 1790915807581
+    },
+    {
+      "elapsedMs": 35828,
+      "records": 41770,
+      "rate": 1624.967962433342,
+      "receivedEpochMs": 1790915808673
+    },
+    {
+      "elapsedMs": 36862,
+      "records": 44014,
+      "rate": 2171.4194010384012,
+      "receivedEpochMs": 1790915809703
+    },
+    {
+      "elapsedMs": 37885,
+      "records": 46951,
+      "rate": 2869.694071842169,
+      "receivedEpochMs": 1790915810727
+    },
+    {
+      "elapsedMs": 38886,
+      "records": 49178,
+      "rate": 2224.9279424066603,
+      "receivedEpochMs": 1790915811734
+    },
+    {
+      "elapsedMs": 39971,
+      "records": 51461,
+      "rate": 2104.513330716135,
+      "receivedEpochMs": 1790915812811
+    },
+    {
+      "elapsedMs": 40971,
+      "records": 54559,
+      "rate": 3096.8386823972623,
+      "receivedEpochMs": 1790915813815
+    },
+    {
+      "elapsedMs": 41994,
+      "records": 57290,
+      "rate": 2671.305341277964,
+      "receivedEpochMs": 1790915814835
+    },
+    {
+      "elapsedMs": 43045,
+      "records": 60910,
+      "rate": 3444.2210218016744,
+      "receivedEpochMs": 1790915815890
+    },
+    {
+      "elapsedMs": 44055,
+      "records": 64555,
+      "rate": 3606.817176571383,
+      "receivedEpochMs": 1790915816897
+    },
+    {
+      "elapsedMs": 45061,
+      "records": 67630,
+      "rate": 3057.0196285325082,
+      "receivedEpochMs": 1790915817902
+    },
+    {
+      "elapsedMs": 46087,
+      "records": 71312,
+      "rate": 3589.88344015063,
+      "receivedEpochMs": 1790915818927
+    },
+    {
+      "elapsedMs": 47140,
+      "records": 74564,
+      "rate": 3086.22216009455,
+      "receivedEpochMs": 1790915819982
+    },
+    {
+      "elapsedMs": 48167,
+      "records": 78859,
+      "rate": 4182.473173317622,
+      "receivedEpochMs": 1790915821009
+    },
+    {
+      "elapsedMs": 49198,
+      "records": 82481,
+      "rate": 3513.3671241779416,
+      "receivedEpochMs": 1790915822043
+    },
+    {
+      "elapsedMs": 50238,
+      "records": 85560,
+      "rate": 2961.350954725073,
+      "receivedEpochMs": 1790915823079
+    },
+    {
+      "elapsedMs": 51317,
+      "records": 89251,
+      "rate": 3421.5734697678477,
+      "receivedEpochMs": 1790915824162
+    },
+    {
+      "elapsedMs": 52373,
+      "records": 92629,
+      "rate": 3199.0539831050382,
+      "receivedEpochMs": 1790915825213
+    },
+    {
+      "elapsedMs": 53423,
+      "records": 96212,
+      "rate": 3410.0899662535953,
+      "receivedEpochMs": 1790915826265
+    },
+    {
+      "elapsedMs": 54431,
+      "records": 99803,
+      "rate": 3564.2970280397085,
+      "receivedEpochMs": 1790915827271
+    },
+    {
+      "elapsedMs": 55504,
+      "records": 103204,
+      "rate": 3169.22087869259,
+      "receivedEpochMs": 1790915828344
+    },
+    {
+      "elapsedMs": 56506,
+      "records": 106569,
+      "rate": 3358.8886398342556,
+      "receivedEpochMs": 1790915829346
+    },
+    {
+      "elapsedMs": 57555,
+      "records": 109725,
+      "rate": 3009.582312687037,
+      "receivedEpochMs": 1790915830397
+    },
+    {
+      "elapsedMs": 58595,
+      "records": 113819,
+      "rate": 3934.4884644209906,
+      "receivedEpochMs": 1790915831436
+    },
+    {
+      "elapsedMs": 59641,
+      "records": 116754,
+      "rate": 2806.531932555857,
+      "receivedEpochMs": 1790915832486
+    },
+    {
+      "elapsedMs": 60715,
+      "records": 123234,
+      "rate": 6034.220685692354,
+      "receivedEpochMs": 1790915833555
+    },
+    {
+      "elapsedMs": 61722,
+      "records": 131828,
+      "rate": 8535.826914097332,
+      "receivedEpochMs": 1790915834563
+    },
+    {
+      "elapsedMs": 62760,
+      "records": 138279,
+      "rate": 6209.679186642185,
+      "receivedEpochMs": 1790915835601
+    },
+    {
+      "elapsedMs": 63778,
+      "records": 143254,
+      "rate": 4887.498301692582,
+      "receivedEpochMs": 1790915836619
+    },
+    {
+      "elapsedMs": 64869,
+      "records": 143692,
+      "rate": 401.46671298969255,
+      "receivedEpochMs": 1790915837712
+    }
+  ],
+  "resolvedCoveredBeforeConservativeDeadline": 116754,
+  "resolvedEndGapUpperTrades": 27218,
+  "resolvedDrainUpperMs": 5612,
+  "resolvedDrainFromScheduledDeadlineUpperMs": 5479,
+  "acceptedAtDeadlinePerSecond": 4803.616666666667,
+  "oracleExitCode": 0,
+  "oracle": {
+    "sourceTopic": "REEF_C10K-H384-B450_EVENTS",
+    "resolvedTopic": "REEF_C10K-H384-B450_RESOLVED",
+    "sourceTopicId": "stXdcriXSqmi4K7_HbtGdw",
+    "generation": 6,
+    "policyVersion": 1,
+    "sourceBatches": 647,
+    "sourceBytes": 514312766,
+    "maxSourceRecordBytes": 926269,
+    "acceptedOrders": 288219,
+    "records": 143972,
+    "expected": 143972,
+    "fullFactParity": true,
+    "orderedUnique": true,
+    "independentFactDecoder": true,
+    "checksumValidator": "shared CalcifySourceBatch.checked",
+    "sourceCommittedEnds": {
+      "0": 0,
+      "1": 1941,
+      "2": 0,
+      "3": 0
+    },
+    "resolvedCommittedEnds": {
+      "0": 0,
+      "1": 144558,
+      "2": 0,
+      "3": 0
+    },
+    "partitionSha256": {
+      "1": "3c7049b22f6aa0c3d06dd2302957537ef8f664b60deca37b24452eecdd2a5af3"
+    },
+    "pass": true
+  },
+  "accountingExitCode": 1,
+  "accounting": {
+    "smokeId": "c10k-h384-b450",
+    "generation": 6,
+    "expectedCommands": 287944,
+    "expectedTrades": 143972,
+    "loadReport": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.json",
+    "intakeRows": 288219,
+    "source": {
+      "batches": 647,
+      "commands": 288219,
+      "trades": 143972,
+      "lastTimestampMs": 1790915836338
+    },
+    "commitmentLinks": 143972,
+    "verifiedLinks": 143972,
+    "receipts": 143972,
+    "matching": {
+      "acked": 288219,
+      "nacked": 0,
+      "failed": 0
+    },
+    "sourceToCommitmentLastMs": 517,
+    "commitmentToVerifiedLastMs": 508,
+    "verifiedToReceiptLastMs": 503,
+    "pass": false
+  },
+  "commands": [
+    {
+      "name": "resolved-count",
+      "command": "docker",
+      "args": [
+        "run",
+        "--name",
+        "calcify-joined-7646b238-count",
+        "--label",
+        "reef.test=calcify-joined",
+        "--rm",
+        "-i",
+        "--network",
+        "reef-calcify-10k-20261001_default",
+        "-v",
+        "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/services/platform-runtime/build/classes/kotlin/test:/tmp/calcify-test-classes:ro",
+        "--entrypoint",
+        "java",
+        "reef-platform-runtime:calcify-10k-poll1000",
+        "-Xms128m",
+        "-Xmx2g",
+        "-cp",
+        "/tmp/calcify-test-classes:/app/platform-runtime/lib/*",
+        "com.reef.platform.calcify.CalcifyResolverBrokerProbe",
+        "actual-measure",
+        "redpanda:9092",
+        "REEF_C10K-H384-B450_RESOLVED",
+        "315001",
+        "150000",
+        "false",
+        "1000",
+        "6"
+      ]
+    },
+    {
+      "name": "load",
+      "command": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/.planning/calcify-10k-timebox/calcify-load",
+      "args": [
+        "--smoke-id",
+        "c10k-h384-b450",
+        "--receipt-generation",
+        "6",
+        "--duration",
+        "60s",
+        "--pairs-per-second",
+        "5250",
+        "--workers",
+        "512",
+        "--report-out",
+        "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.json"
+      ]
+    },
+    {
+      "name": "full-facts",
+      "command": "docker",
+      "args": [
+        "run",
+        "--name",
+        "calcify-joined-7646b238-facts",
+        "--label",
+        "reef.test=calcify-joined",
+        "--rm",
+        "-i",
+        "--network",
+        "reef-calcify-10k-20261001_default",
+        "-v",
+        "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/services/platform-runtime/build/classes/kotlin/test:/tmp/calcify-test-classes:ro",
+        "--entrypoint",
+        "java",
+        "reef-platform-runtime:calcify-10k-poll1000",
+        "-Xms128m",
+        "-Xmx2g",
+        "-cp",
+        "/tmp/calcify-test-classes:/app/platform-runtime/lib/*",
+        "com.reef.platform.calcify.CalcifyActualFullFactObserver",
+        "redpanda:9092",
+        "REEF_C10K-H384-B450_EVENTS",
+        "REEF_C10K-H384-B450_RESOLVED",
+        "6",
+        "143972",
+        "600"
+      ]
+    },
+    {
+      "name": "phase1-accounting",
+      "command": "bun",
+      "args": [
+        "scripts/dev/calcify-verify-existing.mjs"
+      ]
+    }
+  ]
+}

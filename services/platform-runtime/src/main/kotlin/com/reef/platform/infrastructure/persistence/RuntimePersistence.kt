@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.RuntimeOrderIdentity
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
@@ -253,6 +254,20 @@ enum class ProjectionStage(val configValue: String) {
 }
 
 interface RuntimePersistence {
+    fun bindCapturedCommandPayloadLookup(lookup: (String) -> String?) {}
+
+    fun acceptedOrder(identity: RuntimeOrderIdentity): PersistedOrder? =
+        acceptedOrders().singleOrNull { it.runId == identity.runId && it.orderId == identity.orderId }
+    fun acceptedOrdersByIdentity(identities: Set<RuntimeOrderIdentity>): Map<RuntimeOrderIdentity, PersistedOrder> =
+        identities.mapNotNull { identity -> acceptedOrder(identity)?.let { identity to it } }.toMap()
+    fun executionsForOrder(identity: RuntimeOrderIdentity): List<ExecutionCreated> =
+        executionsForOrder(identity.orderId).filter { it.runId == identity.runId }
+    fun tradesForOrder(identity: RuntimeOrderIdentity): List<TradeCreated> =
+        tradesForOrder(identity.orderId).filter { it.runId == identity.runId }
+    fun eventsForOrder(identity: RuntimeOrderIdentity): List<RuntimeEvent> =
+        eventsForOrder(identity.orderId).filter { it.runId == identity.runId }
+    fun orderLifecycleState(identity: RuntimeOrderIdentity): OrderLifecycleState? = null
+
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
     fun saveInstrument(instrument: Instrument)
@@ -432,7 +447,7 @@ interface RuntimePersistence {
         }.toMap()
     }
     fun acceptedOrders(): List<PersistedOrder>
-    fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? = null
+    fun findOrderByClientOrderId(participantId: String, clientOrderId: String, runId: String? = null): PersistedOrder? = null
     fun executionsForOrder(orderId: String): List<ExecutionCreated>
     fun trades(): List<TradeCreated>
     fun recentTrades(limit: Int): List<TradeCreated>

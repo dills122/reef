@@ -85,6 +85,7 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.executions.run_id:text",
                 "runtime.executions.event_id:text",
                 "runtime.executions.event_id_uuid:uuid",
                 "runtime.executions.quantity_units_num:numeric",
@@ -100,6 +101,7 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.trades.run_id:text",
                 "runtime.trades.event_id:text",
                 "runtime.trades.event_id_uuid:uuid",
                 "runtime.trades.quantity_units_num:numeric",
@@ -127,6 +129,7 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.runtime_events.run_id:text",
                 "runtime.runtime_events.event_id:text",
                 "runtime.runtime_events.event_id_uuid:uuid",
                 "runtime.runtime_events.occurred_at:text",
@@ -172,6 +175,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.submit_results.event_id_uuid:uuid",
                 "runtime.submit_results.occurred_at:text",
                 "runtime.submit_results.occurred_at_ts:timestamp with time zone",
+                "runtime.submit_results.run_id:text",
                 "runtime.submit_results.result_type:text",
                 "runtime.submit_results.cancelled:jsonb",
                 "runtime.submit_results.matching_facts:jsonb"
@@ -291,6 +295,7 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.order_lifecycle_state.run_id:text",
                 "runtime.order_lifecycle_state.order_id:text",
                 "runtime.order_lifecycle_state.original_quantity_units_num:numeric",
                 "runtime.order_lifecycle_state.remaining_quantity_units:text",

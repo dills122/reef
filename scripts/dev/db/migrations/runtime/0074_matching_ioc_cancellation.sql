@@ -54,7 +54,7 @@ BEGIN
     FROM jsonb_array_elements(p_outcomes) WITH ORDINALITY AS outcome_rows(outcome, ordinality)
   ),
   parsed_trades AS MATERIALIZED (
-    SELECT trade
+    SELECT trade, COALESCE(outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '') AS run_id
     FROM outcomes
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE
@@ -64,7 +64,7 @@ BEGIN
     ) AS trade
   ),
   upsert_results AS (
-    INSERT INTO runtime.submit_results(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at, cancelled, matching_facts)
+    INSERT INTO runtime.submit_results(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at, run_id, cancelled, matching_facts)
     SELECT
       outcome->>'commandId',
       outcome->>'resultType',
@@ -74,12 +74,14 @@ BEGIN
       outcome->>'code',
       outcome->>'reason',
       outcome->>'occurredAt',
+      COALESCE(outcome->>'runId', outcome#>>'{acceptedOrder,runId}', ''),
       NULLIF(outcome->'cancelled', 'null'::jsonb),
       COALESCE(outcome->'matchingFacts', jsonb_build_object('executions', COALESCE(outcome->'executions', '[]'::jsonb), 'trades', COALESCE(outcome->'trades', '[]'::jsonb)))
     FROM outcomes
     ON CONFLICT (command_id) DO UPDATE SET
       command_id = runtime.runtime_reject_submit_result_replay_conflict(EXCLUDED.command_id)
     WHERE ROW(
+      runtime.submit_results.run_id,
       runtime.submit_results.result_type,
       runtime.submit_results.event_id,
       runtime.submit_results.order_id,
@@ -90,6 +92,7 @@ BEGIN
       runtime.submit_results.cancelled,
       runtime.submit_results.matching_facts
     ) IS DISTINCT FROM ROW(
+      EXCLUDED.run_id,
       EXCLUDED.result_type,
       EXCLUDED.event_id,
       EXCLUDED.order_id,
@@ -127,7 +130,7 @@ BEGIN
     FROM accepted_orders
     WHERE accepted_order IS NOT NULL
       AND jsonb_typeof(accepted_order) = 'object'
-    ON CONFLICT (order_id) DO UPDATE SET
+    ON CONFLICT (run_id, order_id) DO UPDATE SET
       engine_order_id = EXCLUDED.engine_order_id,
       instrument_id = EXCLUDED.instrument_id,
       participant_id = EXCLUDED.participant_id,
@@ -145,7 +148,7 @@ BEGIN
     RETURNING 1
   ),
   insert_executions AS (
-    INSERT INTO runtime.executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role)
+    INSERT INTO runtime.executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role, run_id)
     SELECT
       execution->>'eventId',
       execution->>'executionId',
@@ -155,7 +158,8 @@ BEGIN
       execution->>'executionPrice',
       execution->>'currency',
       execution->>'occurredAt',
-      COALESCE(NULLIF(execution->>'liquidityRole', ''), 'UNSPECIFIED')
+      COALESCE(NULLIF(execution->>'liquidityRole', ''), 'UNSPECIFIED'),
+      COALESCE(NULLIF(execution->>'runId', ''), outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '')
     FROM outcomes
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE
@@ -172,6 +176,7 @@ BEGIN
       runtime.executions.quantity_units,
       runtime.executions.execution_price,
       runtime.executions.currency,
+      runtime.executions.run_id,
       runtime.executions.occurred_at,
       runtime.executions.liquidity_role
     ) IS DISTINCT FROM ROW(
@@ -181,13 +186,14 @@ BEGIN
       EXCLUDED.quantity_units,
       EXCLUDED.execution_price,
       EXCLUDED.currency,
+      EXCLUDED.run_id,
       EXCLUDED.occurred_at,
       EXCLUDED.liquidity_role
     )
     RETURNING 1
   ),
   insert_trades AS (
-    INSERT INTO runtime.trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
+    INSERT INTO runtime.trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at, run_id)
     SELECT
       trade->>'eventId',
       trade->>'tradeId',
@@ -198,7 +204,8 @@ BEGIN
       trade->>'quantityUnits',
       trade->>'price',
       trade->>'currency',
-      trade->>'occurredAt'
+      trade->>'occurredAt',
+      COALESCE(NULLIF(trade->>'runId', ''), run_id)
     FROM parsed_trades
     ON CONFLICT (event_id) DO UPDATE SET
       event_id = runtime.runtime_reject_trade_replay_conflict(EXCLUDED.event_id)
@@ -211,6 +218,7 @@ BEGIN
       runtime.trades.quantity_units,
       runtime.trades.price,
       runtime.trades.currency,
+      runtime.trades.run_id,
       runtime.trades.occurred_at
     ) IS DISTINCT FROM ROW(
       EXCLUDED.trade_id,
@@ -221,25 +229,26 @@ BEGIN
       EXCLUDED.quantity_units,
       EXCLUDED.price,
       EXCLUDED.currency,
+      EXCLUDED.run_id,
       EXCLUDED.occurred_at
     )
     RETURNING 1
   ),
   dirty_ids AS (
-    SELECT DISTINCT order_id FROM (
-      SELECT outcome->>'orderId' AS order_id FROM outcomes
+    SELECT DISTINCT run_id, order_id FROM (
+      SELECT COALESCE(outcome->>'runId', outcome#>>'{acceptedOrder,runId}', '') AS run_id, outcome->>'orderId' AS order_id FROM outcomes
       UNION ALL
-      SELECT trade_order.order_id
+      SELECT COALESCE(NULLIF(trade->>'runId', ''), run_id), trade_order.order_id
       FROM parsed_trades
       CROSS JOIN LATERAL (VALUES (trade->>'buyOrderId'), (trade->>'sellOrderId')) AS trade_order(order_id)
     ) ids
     WHERE COALESCE(order_id, '') <> ''
   ),
   mark_dirty AS (
-    INSERT INTO runtime.order_lifecycle_dirty AS dirty(order_id)
-    SELECT order_id FROM dirty_ids
-    ORDER BY order_id
-    ON CONFLICT (order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at WHERE FALSE
+    INSERT INTO runtime.order_lifecycle_dirty AS dirty(run_id, order_id)
+    SELECT run_id, order_id FROM dirty_ids
+    ORDER BY run_id, order_id
+    ON CONFLICT (run_id, order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at WHERE FALSE
     RETURNING 1
   )
   SELECT COUNT(*) INTO persisted_count FROM outcomes;
@@ -311,6 +320,7 @@ BEGIN
       member_order,
       jsonb_build_object(
         'commandId', command_id,
+        'runId', COALESCE(NULLIF(order_payload->>'runId', ''), command_payload->>'runId', ''),
         'resultType', result_status,
         'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
         'orderId', order_id,
@@ -331,6 +341,9 @@ BEGIN
           THEN jsonb_build_object(
             'orderId', order_id,
             'engineOrderId', CASE WHEN result_status = 'rejected' THEN '' ELSE COALESCE(result_payload #>> '{accepted,engineOrderId}', order_payload->>'engineOrderId', '') END,
+            'runId', COALESCE(NULLIF(order_payload->>'runId', ''), command_payload->>'runId', ''),
+            'venueSessionId', COALESCE(order_payload->>'venueSessionId', command_payload->>'venueSessionId', ''),
+            'clientOrderId', COALESCE(order_payload->>'clientOrderId', ''),
             'instrumentId', COALESCE(order_payload->>'instrumentId', ''),
             'participantId', COALESCE(order_payload->>'participantId', ''),
             'accountId', COALESCE(order_payload->>'accountId', ''),

@@ -1,0 +1,12 @@
+{
+  "smokeId": "calcify-10k-q3-20261002",
+  "instrumentIds": "AAPL-calcify-10k-q3-20261002,AAPL-calcify-10k-q3-20261002-lane1,AAPL-calcify-10k-q3-20261002-lane4,AAPL-calcify-10k-q3-20261002-lane5",
+  "expectedRouting": {
+    "0": "AAPL-calcify-10k-q3-20261002",
+    "1": "AAPL-calcify-10k-q3-20261002-lane1",
+    "2": "AAPL-calcify-10k-q3-20261002-lane4",
+    "3": "AAPL-calcify-10k-q3-20261002-lane5"
+  },
+  "groupCommitMicros": 100,
+  "rationale": "Half205us measured one8KB fdatasync screen, rounded100us perPG16 starting-point guidance; one-second screens are descriptive, no causal or guaranteed optimal value."
+}

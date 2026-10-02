@@ -53,6 +53,10 @@ setValue("STREAM_ACK_INTAKE_STORE", "postgres");
 setValue("STREAM_ACK_WORKER_ENABLED", "false");
 setValue("STREAM_ACK_PROJECTOR_ENABLED", "false");
 setValue("MATCHING_ENGINE_DIRECT_STREAM_ENABLED", "true");
+// Admission lag follows actual Go consumers, not disabled legacy worker groups.
+const directDurablePrefix = env("MATCHING_ENGINE_DIRECT_STREAM_DURABLE_PREFIX", "reef-engine-direct");
+setValue("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", [0, 1, 2, 3]
+  .map((partition) => `${directDurablePrefix}-p${String(partition).padStart(2, "0")}`).join(","));
 await devUp();
 for (const action of afterUp) await action();
 await waitForHttp(`${runtimeUrl}/health`, 120);
@@ -226,7 +230,17 @@ async function runBasicLoad(generation, partition) {
 
 async function seedReferenceData() {
   const internal = { "X-Reef-Internal-Route": "true" };
-  await post("/reference/instruments", { instrumentId, symbol: instrumentId, assetClass: "US_EQ", currency: "USD" }, internal);
+  const explicit = env("DEV_CALCIFY_FULL_PATH_INSTRUMENT_IDS", "");
+  const extraInstruments = explicit === "" ? [] : explicit.split(",").map(value => value.trim());
+  if (extraInstruments.length > 64 || extraInstruments.some(value => value === "" || Buffer.byteLength(value, "utf8") > 128) ||
+      new Set(extraInstruments).size !== extraInstruments.length) {
+    throw new Error("DEV_CALCIFY_FULL_PATH_INSTRUMENT_IDS requires at most 64 unique nonempty IDs of at most 128 UTF-8 bytes");
+  }
+  // Existing preflight always uses base instrument and produces one trade.
+  // Additional references change only available load lanes, not preflight.
+  for (const seedInstrumentId of new Set([instrumentId, ...extraInstruments])) {
+    await post("/reference/instruments", { instrumentId: seedInstrumentId, symbol: seedInstrumentId, assetClass: "US_EQ", currency: "USD" }, internal);
+  }
   for (const party of ["buyer", "seller"]) {
     await post("/reference/participants", { participantId: `${party}-${smokeId}`, name: party }, internal);
     await post("/reference/accounts", { accountId: `${party}-account-${smokeId}`, participantId: `${party}-${smokeId}`, accountType: "HOUSE" }, internal);

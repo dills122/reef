@@ -1,0 +1,11 @@
+{
+  "smokeId": "calcify-10k-q2-20261002",
+  "instrumentIds": "AAPL-calcify-10k-q2-20261002,AAPL-calcify-10k-q2-20261002-lane1,AAPL-calcify-10k-q2-20261002-lane9,AAPL-calcify-10k-q2-20261002-lane2",
+  "expectedRouting": {
+    "0": "AAPL-calcify-10k-q2-20261002",
+    "1": "AAPL-calcify-10k-q2-20261002-lane1",
+    "3": "AAPL-calcify-10k-q2-20261002-lane2",
+    "2": "AAPL-calcify-10k-q2-20261002-lane9"
+  },
+  "routing": "SHA256(runId|sessionId|instrumentId), first8 bigendian masked positive modulo4"
+}

@@ -1,0 +1,8 @@
+reef-platform-api 235.10% 666.1MiB / 15.6GiB
+reef-matching-engine 109.82% 309.6MiB / 15.6GiB
+reef-boundary-postgres 200.59% 1.574GiB / 15.6GiB
+reef-redpanda 64.39% 1.839GiB / 15.6GiB
+reef-calcify-10k-20261001-calcify-extractor-1 20.62% 255.2MiB / 15.6GiB
+reef-calcify-10k-20261001-calcify-verifier-1 7.53% 119.7MiB / 15.6GiB
+reef-calcify-10k-20261001-calcify-receipt-1 13.96% 136MiB / 15.6GiB
+reef-calcify-10k-20261001-calcify-resolver-1 71.77% 884.3MiB / 15.6GiB

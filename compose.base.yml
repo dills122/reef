@@ -1,6 +1,6 @@
 x-platform-runtime-build: &platform-runtime-build
-  context: ./services/platform-runtime
-  dockerfile: Dockerfile
+  context: .
+  dockerfile: services/platform-runtime/Dockerfile
 
 x-platform-runtime-environment: &platform-runtime-environment
   PLATFORM_RUNTIME_PORT: "8080"
@@ -253,6 +253,7 @@ services:
       STREAM_ACK_KAFKA_LINGER_MS: "${STREAM_ACK_KAFKA_LINGER_MS:-1}"
       STREAM_ACK_KAFKA_BATCH_SIZE: "${STREAM_ACK_KAFKA_BATCH_SIZE:-65536}"
       STREAM_ACK_KAFKA_COMPRESSION_TYPE: "${STREAM_ACK_KAFKA_COMPRESSION_TYPE:-lz4}"
+      MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES: "${MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES:-1048576}"
       MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE: "${MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE:-}"
       STREAM_ACK_COMMAND_STREAM: "${STREAM_ACK_COMMAND_STREAM:-REEF_COMMANDS}"
       STREAM_ACK_SUBJECT_PREFIX: "${STREAM_ACK_SUBJECT_PREFIX:-reef.cmd.v1}"

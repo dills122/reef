@@ -7,7 +7,7 @@ DO $$ BEGIN
     SELECT 1 FROM runtime.orders o JOIN runtime.reference_instruments i USING (instrument_id)
     WHERE o.currency <> i.quote_currency AND EXISTS (
       SELECT 1 FROM runtime.submit_results result
-      WHERE result.order_id = o.order_id AND result.engine_order_id = o.engine_order_id
+      WHERE result.run_id = o.run_id AND result.order_id = o.order_id AND result.engine_order_id = o.engine_order_id
         AND result.result_type = 'accepted'
     )
   ) THEN

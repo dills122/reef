@@ -1,0 +1,7 @@
+--- FAIL: TestAcknowledgementDeadlineIsStrictAndIndependentOfSnapshotTime (0.00s)
+    main_test.go:147: before deadline=3 want1
+--- FAIL: TestSubmitPairClassifiesEachValidatedHTTPAcknowledgementAtObservation (0.00s)
+    main_test.go:165: ACK clocks=2 total=2 pairs=1 beforeDeadline=2
+FAIL
+FAIL	github.com/dills122/reef/services/simulator/cmd/calcify-load	0.334s
+FAIL

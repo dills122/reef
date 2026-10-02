@@ -30,6 +30,47 @@ class MatchingCancellationPersistenceTest {
     }
 
     @Test
+    fun cancellationProjectionKeepsSameOrderIdIsolatedAcrossRunsInMemory() {
+        checkRunScopedCancellation(InMemoryRuntimePersistence())
+    }
+
+    @Test
+    fun cancellationProjectionKeepsSameOrderIdIsolatedAcrossRunsInPostgres() {
+        source().use { source ->
+            val names = PostgresRuntimeSqlNames(runtimeSchema = "ioc_runs_${UUID.randomUUID().toString().replace("-", "")}")
+            try {
+                checkRunScopedCancellation(PostgresRuntimePersistence(source, names))
+            } finally {
+                source.connection.use { conn -> conn.createStatement().use { it.execute("DROP SCHEMA ${names.runtimeSchemaName} CASCADE") } }
+            }
+        }
+    }
+
+    private fun checkRunScopedCancellation(store: RuntimePersistence) {
+        for ((index, run) in listOf("ioc-run-a", "ioc-run-b").withIndex()) {
+            val order = order("shared-ioc").copy(runId = run)
+            val fill = com.reef.platform.domain.ExecutionCreated("fill-$run", "fill-$run", order.orderId, "AAPL", "4", "100", "USD", order.acceptedAt)
+            val expected = result(order).copy(
+                accepted = result(order).accepted!!.copy(eventId = "accepted-$run"),
+                cancelled = if (index == 0) result(order).cancelled!!.copy(eventId = "cancelled-$run", cancelledQuantityUnits = "6") else null,
+                executions = listOf(fill)
+            )
+            val payload = """{"accepted":{"eventId":"accepted-$run","orderId":"${order.orderId}","engineOrderId":"${order.orderId}","occurredAt":"${order.acceptedAt}"},"acceptedOrder":${order.toJsonObject()},"cancelled":${expected.cancelled?.toJsonObject() ?: "null"},"executions":[${fill.toJsonObject()}],"trades":[]}"""
+            val sequence = index + 1L
+            val outcome = VenueCommandOutcomeFact("cmd-$run", "SubmitOrder", sequence, 1, "hash-$run", "AAPL", order.orderId, "accepted", resultPayloadJson = payload)
+            store.materializeVenueEventBatch(VenueEventBatchFact("batch-$run", "shard", 0, "commands", "ioc-runs", sequence, sequence, 1, order.acceptedAt, payloadChecksum = "checksum-$run", outcomes = listOf(outcome)))
+            store.projectCanonicalCommandOutcomes("ioc-runs", 100)
+            assertEquals(expected.copy(executions = listOf(fill.copy(runId = run))), store.submitResult("cmd-$run"))
+        }
+        store.rebuildOrderLifecycleState()
+        assertEquals("CANCELLED", store.orderLifecycleState(com.reef.platform.domain.RuntimeOrderIdentity("ioc-run-a", "shared-ioc"))?.status)
+        assertEquals("PARTIALLY_FILLED", store.orderLifecycleState(com.reef.platform.domain.RuntimeOrderIdentity("ioc-run-b", "shared-ioc"))?.status)
+        assertEquals(2, store.projectCanonicalCommandOutcomes("ioc-runs-replay", 100))
+        assertEquals(listOf("accepted-ioc-run-a", "cancelled-ioc-run-a"), store.eventsForOrder(com.reef.platform.domain.RuntimeOrderIdentity("ioc-run-a", "shared-ioc")).map { it.eventId })
+        assertEquals(listOf("accepted-ioc-run-b"), store.eventsForOrder(com.reef.platform.domain.RuntimeOrderIdentity("ioc-run-b", "shared-ioc")).map { it.eventId })
+    }
+
+    @Test
     fun canonicalStreamPartialAndFullFillsKeepExactResults() {
         for (filled in listOf("4", "10")) {
             val store = InMemoryRuntimePersistence()
@@ -85,7 +126,7 @@ class MatchingCancellationPersistenceTest {
             source.connection.use { conn -> conn.createStatement().use { sql ->
                 sql.execute("CREATE SCHEMA IF NOT EXISTS command_log")
                 sql.execute("CREATE TABLE IF NOT EXISTS command_log.command_payloads(command_id TEXT PRIMARY KEY, payload_json JSONB)")
-                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_matching_ioc_cancellation.sql", "0074_instrument_quote_currency.sql")) {
+                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql", "0075_instrument_quote_currency.sql")) {
                     sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/$migration")))
                 }
             } }
@@ -133,7 +174,7 @@ class MatchingCancellationPersistenceTest {
                     sql.execute("DELETE FROM runtime.canonical_command_outcomes WHERE command_id = 'cmd-${order.orderId}'")
                 }
                 sql.execute("UPDATE runtime.submit_results SET matching_facts = NULL WHERE command_id = 'cmd-${order.orderId}'")
-                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_matching_ioc_cancellation.sql")) {
+                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql")) {
                     sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/$migration")))
                 }
             } }
@@ -145,7 +186,7 @@ class MatchingCancellationPersistenceTest {
                 assertEquals(expected, restarted.submitResult("cmd-${order.orderId}"))
                 // Reinstall deployed strict replay function after exercising compatibility bootstrap.
                 source.connection.use { conn -> conn.createStatement().use { sql ->
-                    sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0073_matching_ioc_cancellation.sql")))
+                    sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0074_matching_ioc_cancellation.sql")))
                 } }
             }
             source.connection.use { conn -> conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_status_stage(?::jsonb)").use { sql ->
@@ -186,7 +227,7 @@ class MatchingCancellationPersistenceTest {
             store.saveSubmitResult("cmd-${historical.orderId}", result(historical))
             kotlin.test.assertFailsWith<IllegalStateException> { PostgresRuntimePersistence(source, names, PostgresBootstrapMode.Compat) }
             source.connection.use { conn -> conn.createStatement().use { sql ->
-                val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0074_instrument_quote_currency.sql"))
+                val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0075_instrument_quote_currency.sql"))
                 kotlin.test.assertFails { sql.execute(migration.replace("runtime.", "${names.runtimeSchemaName}.")) }
             } }
             assertEquals("CAD", store.acceptedOrders(setOf(historical.orderId))[historical.orderId]?.currency)
@@ -203,7 +244,7 @@ class MatchingCancellationPersistenceTest {
     @Test
     fun rejectedStreamQuoteDoesNotBlockMigration() = withRejectedQuoteHistory { names, store, source ->
         source.connection.use { conn -> conn.createStatement().use { sql ->
-            val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0074_instrument_quote_currency.sql"))
+            val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0075_instrument_quote_currency.sql"))
             sql.execute(migration.replace("runtime.", "${names.runtimeSchemaName}."))
         } }
         assertEquals("CAD", store.acceptedOrders(setOf("wrong-quote"))["wrong-quote"]?.currency)
