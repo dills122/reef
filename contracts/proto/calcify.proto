@@ -45,6 +45,8 @@ message AcceptedOrderSourceV1 {
 }
 
 message TradeSourceV1 {
+  // Authoritative validated command run; required for namespaced acceptance lookup.
+  string run_id = 3;
   reef.contracts.orderexecution.v1.TradeCreated fact = 1;
   SourceProvenanceV1 source = 2;
 }

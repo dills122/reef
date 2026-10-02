@@ -143,6 +143,7 @@ type VenueEventBatch struct {
 }
 
 type CommandOutcomeFact struct {
+	RunID          string                   `json:"runId,omitempty"`
 	CommandID      string                   `json:"commandId"`
 	CommandType    string                   `json:"commandType"`
 	StreamSequence uint64                   `json:"streamSequence"`
@@ -394,6 +395,7 @@ func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt strin
 				status = "accepted"
 			}
 			fact = CommandOutcomeFact{
+				RunID:          outcome.RunID,
 				CommandID:      outcome.CommandID,
 				CommandType:    commandType,
 				StreamSequence: delivery.StreamSequence(),
@@ -480,6 +482,7 @@ func bestEffortCommandID(data []byte) string {
 }
 
 type processedOutcome struct {
+	RunID          string
 	CommandID      string
 	VenueSessionID string
 	InstrumentID   string
@@ -516,6 +519,7 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 		result := p.service.SubmitOrderInBatch(rollback, command)
 		result.AcceptedOrder = acceptedOrderFact(command, result)
 		return processedOutcome{
+			RunID:          command.RunID,
 			CommandID:      command.CommandID,
 			VenueSessionID: command.VenueSessionID,
 			InstrumentID:   command.InstrumentID,
@@ -537,6 +541,7 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 		command.VenueSessionID = venueSessionID
 		command.InstrumentID = instrumentID
 		return processedOutcome{
+			RunID:          command.RunID,
 			CommandID:      command.CommandID,
 			VenueSessionID: venueSessionID,
 			InstrumentID:   instrumentID,
@@ -554,6 +559,7 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 		command.VenueSessionID = venueSessionID
 		command.InstrumentID = instrumentID
 		return processedOutcome{
+			RunID:          command.RunID,
 			CommandID:      command.CommandID,
 			VenueSessionID: venueSessionID,
 			InstrumentID:   instrumentID,

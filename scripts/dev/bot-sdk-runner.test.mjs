@@ -24,7 +24,6 @@ await assertAggressiveTakerLowSpreadBudgetRun();
 await assertAggressiveTakerWarmupRun();
 await assertPolicyBlockedRunDoesNotSendOrApply();
 
-console.log("bot SDK scenario runner checks passed");
 
 async function assertSimpleMarketMakerRun() {
   const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/simple-market-maker.ts")).href);
@@ -438,3 +437,109 @@ async function assertPolicyBlockedRunDoesNotSendOrApply() {
   assert.equal(report.finalOrders.length, 0);
   assert.equal(transport.requests.length, 0);
 }
+
+// R09: every allocated command ID belongs permanently to its original payload.
+await assertPartialBatchCommandIdentity();
+async function assertPartialBatchCommandIdentity() {
+  for (const failurePosition of [1, 0, 2]) {
+    for (const failureKind of ["http", "transport"]) {
+      class PartialBatchBot {
+        tick = 0;
+        async onStart() {}
+        async onStop() {}
+        async onTick() {
+          const price = 100 + this.tick++;
+          return [{ type: "noop" }, ...[0, 1, 2].map((index) => ({
+            type: "submit_limit",
+            order: { instrumentId: "AAPL", side: "BUY", quantity: 1,
+              limitPrice: price + index, clientOrderId: `partial-${this.tick}-${index}` },
+          }))];
+        }
+      }
+      const sent = [];
+      const transport = { async send(request) {
+        const position = sent.length;
+        sent.push(request);
+        if (position === failurePosition && failureKind === "transport") {
+          throw new Error("response lost after send");
+        }
+        return { route: request.route, commandId: request.body.commandId,
+          status: position === failurePosition ? 503 : 202, body: "" };
+      } };
+      const run = () => runBotScenarioV1({
+        BotClass: PartialBatchBot,
+        fixture: { ...fixture, initialOrders: [], ticks: fixture.ticks.slice(0, 2),
+          policy: { maxOrderActionsPerTick: 10, maxTradeCommandsPerSecond: 100 } },
+        venueTransport: transport,
+      });
+      const report = await run();
+      assert.equal(report.status, "do_not_merge");
+      assert.equal(report.ticks[0].venueResponses.length, failurePosition,
+        `${failureKind} failure must retain accepted prefix`);
+      assert.equal(report.ticks[0].ordersAfterTick.length, failurePosition);
+      assert.equal(report.finalOrders.length, failurePosition + 3);
+      const allocated = report.ticks.flatMap((tick) => tick.venueCommands);
+      assert.equal(new Set(allocated.map((request) => request.body.commandId)).size, 6);
+      assert.equal(new Set(allocated.map((request) => request.headers["Idempotency-Key"])).size, 6);
+      assert.notEqual(allocated[0].body.limitPrice, allocated[3].body.limitPrice);
+      assert.deepEqual(report.ticks[0].venueOutcomes.map((outcome) => outcome.status),
+        [...Array(failurePosition).fill("accepted"),
+          failureKind === "http" ? "rejected" : "unknown",
+          ...Array(2 - failurePosition).fill("not_sent")]);
+      assert.deepEqual(report.ticks[1].venueOutcomes.map((outcome) => outcome.status),
+        ["accepted", "accepted", "accepted"]);
+      // Replay same fixture/failure schedule allocates identical requests.
+      sent.length = 0;
+      const replay = await run();
+      assert.deepEqual(replay, report);
+    }
+  }
+}
+
+
+
+await assertUnknownOutcomeReconcilesThroughLiveReads();
+async function assertUnknownOutcomeReconcilesThroughLiveReads() {
+  class LiveUnknownBot {
+    tick = 0;
+    async onStart() {}
+    async onStop() {}
+    async onTick(context) {
+      const tick = this.tick++;
+      if (tick === 1) {
+        const current = await context.orders.current();
+        assert.equal(current.ok, true);
+        assert.deepEqual(current.value.map((order) => order.orderId), ["live-0-0", "live-0-1"]);
+      }
+      return [0, 1].map((index) => ({ type: "submit_limit", order: {
+        instrumentId: "AAPL", side: "BUY", quantity: 1,
+        limitPrice: 100 + tick, clientOrderId: `live-${tick}-${index}`,
+      } }));
+    }
+  }
+  const venueOrders = [];
+  const sent = [];
+  const report = await runBotScenarioV1({
+    BotClass: LiveUnknownBot,
+    fixture: { ...fixture, initialOrders: [], ticks: fixture.ticks.slice(0, 2) },
+    readClients: { orders: {
+      async current() { return { ok: true, value: [...venueOrders] }; },
+      async history() { return { ok: true, value: [...venueOrders] }; },
+    } },
+    venueTransport: { async send(request) {
+      sent.push(request);
+      venueOrders.push({ orderId: request.body.orderId, instrumentId: "AAPL", side: "BUY",
+        quantity: 1, remainingQuantity: 1, limitPrice: 100, status: "OPEN" });
+      if (sent.length === 2) throw new Error("accepted at venue, response lost");
+      return { route: request.route, commandId: request.body.commandId, status: 202, body: "" };
+    } },
+  });
+  assert.equal(report.status, "do_not_merge");
+  assert.equal(report.ticks[0].venueResponses.length, 1);
+  assert.deepEqual(report.ticks[0].venueOutcomes.map((outcome) => outcome.status), ["accepted", "unknown"]);
+  assert.equal(report.ticks[0].ordersAfterTick.length, 0, "transport must not manufacture live order facts");
+  assert.equal(report.ticks[1].ordersAfterTick.length, 2, "next venue read reconciles actual orders");
+  assert.equal(new Set(sent.map((request) => request.body.commandId)).size, 4);
+  assert.equal(new Set(sent.map((request) => request.headers["Idempotency-Key"])).size, 4);
+}
+console.log("bot SDK scenario runner checks passed");

@@ -22,7 +22,9 @@ import {
   type VenueCommandRequestV1,
 } from "./venue-adapter";
 import {
+  acceptedVenueActionPrefixV1,
   sendVenueCommandRequestsV1,
+  type VenueCommandOutcomeV1,
   type VenueCommandResponseV1,
   type VenueCommandTransportV1,
 } from "./venue-client";
@@ -87,6 +89,7 @@ export interface BotScenarioTickReportV1 {
   readonly actions: readonly BotActionV1[];
   readonly venueCommands: readonly VenueCommandRequestV1[];
   readonly venueResponses: readonly VenueCommandResponseV1[];
+  readonly venueOutcomes: readonly VenueCommandOutcomeV1[];
   readonly denials: readonly BotDenialV1[];
   readonly dataCalls: number;
   readonly ordersAfterTick: readonly OwnOrderV1[];
@@ -179,9 +182,11 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       : toVenueCommandRequestsV1(expandedActions, venueContext(options.fixture, fixtureTick.occurredAt, commandSequence));
     const venueCommands = venueResult.ok ? Array.from(venueResult.value) : [];
     let venueResponses: readonly VenueCommandResponseV1[] = [];
-    let venueAccepted = venueResult.ok && !tickBlocked;
+    let venueOutcomes: readonly VenueCommandOutcomeV1[] = [];
+    let acceptedCommandCount = venueCommands.length;
+    // Reserve every mapped ID before transport; later payloads must never reuse it.
+    commandSequence += venueCommands.length;
     if (!venueResult.ok) {
-      venueAccepted = false;
       denials.push(venueResult.denial);
       issues.push({
         code: "venue_adapter_denial",
@@ -190,10 +195,10 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       });
     } else if (options.venueTransport !== undefined && venueCommands.length > 0) {
       const sendResult = await sendVenueCommandRequestsV1(venueCommands, options.venueTransport);
-      if (sendResult.ok) {
-        venueResponses = sendResult.value;
-      } else {
-        venueAccepted = false;
+      venueResponses = sendResult.acceptedResponses;
+      venueOutcomes = sendResult.outcomes;
+      acceptedCommandCount = venueResponses.length;
+      if (!sendResult.ok) {
         denials.push(sendResult.denial);
         issues.push({
           code: "venue_send_denial",
@@ -203,11 +208,10 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       }
     }
 
-    if (venueAccepted && options.readClients?.orders === undefined) {
-      applyActionsToOrderState(expandedActions, orderState, orderHistory, tick);
-      commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
-    } else if (venueAccepted) {
-      commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
+    if (options.readClients?.orders === undefined) {
+      applyActionsToOrderState(
+        acceptedVenueActionPrefixV1(expandedActions, acceptedCommandCount), orderState, orderHistory, tick,
+      );
     }
 
     tickReports.push({
@@ -216,6 +220,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       actions: expandedActions,
       venueCommands,
       venueResponses,
+      venueOutcomes,
       denials: denials.slice(tickDenialsStart),
       dataCalls: counters.dataCalls,
       ordersAfterTick: Array.from(orderState.values()),
