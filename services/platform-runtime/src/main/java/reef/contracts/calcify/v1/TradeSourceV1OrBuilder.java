@@ -11,6 +11,26 @@ public interface TradeSourceV1OrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * Authoritative validated command run; required for namespaced acceptance lookup.
+   * </pre>
+   *
+   * <code>string run_id = 3;</code>
+   * @return The runId.
+   */
+  java.lang.String getRunId();
+  /**
+   * <pre>
+   * Authoritative validated command run; required for namespaced acceptance lookup.
+   * </pre>
+   *
+   * <code>string run_id = 3;</code>
+   * @return The bytes for runId.
+   */
+  com.google.protobuf.ByteString
+      getRunIdBytes();
+
+  /**
    * <code>.reef.contracts.orderexecution.v1.TradeCreated fact = 1;</code>
    * @return Whether the fact field is set.
    */

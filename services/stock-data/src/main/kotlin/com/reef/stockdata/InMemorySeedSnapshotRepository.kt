@@ -7,7 +7,8 @@ class InMemorySeedSnapshotRepository : SeedSnapshotRepository {
 
     override fun find(gameSeedId: String): StockSeedSnapshotBatch? = batches[gameSeedId]
 
-    override fun save(batch: StockSeedSnapshotBatch) {
-        batches[batch.gameSeedId] = batch
+    override fun createOrExisting(batch: StockSeedSnapshotBatch): StockSeedSnapshotBatch {
+        val candidate = batch.canonicalCandidate()
+        return batches.putIfAbsent(candidate.gameSeedId, candidate) ?: candidate
     }
 }

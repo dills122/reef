@@ -1009,6 +1009,7 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
+                backfillLegacyMatchingResultFacts(stmt, names)
                 ProjectionBatchClaimBootstrap.install(stmt, names)
                 stmt.execute(
                     """

@@ -20,3 +20,32 @@ Fixture mapping, with sourceGeneration 1 and sourcePartition 2:
 | many | 82 | 2, 0, 3 | 0, 1, 2, 3, 4 | 21 |
 
 `CalcifyContractTest` constructs checksum-valid source fixtures and asserts mapping, wire sizes, round trips, and malformed-input rejection. Contract is deliberately a compact binary link rather than a Protobuf trade payload; original matching facts stay in source event stream.
+
+## Resolver run scope and hidden limit compatibility (2026-10-02)
+
+`TradeSourceV1.run_id` (additive protobuf field 3) carries authoritative run identity
+from the checksum-covered `CommandOutcomeFact.runId`. Matching publishes this field
+from the decoded SubmitOrder, ModifyOrder or CancelOrder command, including modify
+outcomes without accepted-order facts. Successful acceptance outcome run must match
+`AcceptedOrderFactV1.run_id`; both trade acceptances must match trade run. Resolver
+keys full immutable acceptances by source generation, run ID and order ID within
+its partition-owned store. UTF-8 byte lengths delimit both IDs; IDs containing
+colons remain unambiguous. Different runs may reuse order IDs; conflicting immutable
+facts within one run remain a durable fault.
+
+For old SubmitOrder source records, `result.acceptedOrder.runId` supplies the same
+authoritative run. Old trade-producing ModifyOrder records without outcome run
+metadata cannot safely identify a run; resolver faults instead of guessing from
+available order IDs. Current producer fixtures cover both submit and modify paths.
+
+`LIMIT_HIDDEN` is a public alias for hidden limit behavior, identical to `LIMIT`.
+Both checksum-valid source spellings decode to `ORDER_TYPE_LIMIT`; original source
+bytes/checksum remain unchanged. Unknown order types still fault. Canonical and
+alias facts therefore share immutable acceptance equality during replay.
+
+Managed resolver state version 2 adds run-scoped acceptance keys and run-bearing
+target checkpoints. Empty stores acquire version 2; restored nonempty stores with
+missing/different version fault and retain index, cursor, pending and fault suffix
+evidence. No automatic key rename, fault clearing, source-generation bump or new
+application namespace is allowed. See recovery procedure in
+[Phase 2 implementation](../../docs/work/CALCIFY_PHASE2_IMPLEMENTATION.md).

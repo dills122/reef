@@ -57,3 +57,38 @@ internal fun acceptedOrderFromResultPayload(payload: String): PersistedOrder? {
         order.string("acceptedAt"), order.string("clientOrderId"), order.string("runId"), order.string("venueSessionId")
     )
 }
+
+internal fun backfillLegacyMatchingResultFacts(statement: java.sql.Statement, names: PostgresRuntimeSqlNames) {
+    statement.execute(
+        """
+        -- Legacy NULL means unknown original facts, not an empty matching result.
+        -- Restore only from immutable command facts, never later order projections.
+        WITH original_results AS (
+          SELECT command_id, result_status, result_payload, 1 AS source_priority
+          FROM ${names.canonicalCommandOutcomes}
+          UNION ALL
+          SELECT command_id, result_status, result_payload, 2 AS source_priority
+          FROM ${names.canonicalCommandOutcomesArchive}
+          UNION ALL
+          SELECT command_id, result_status, result_payload, 3 AS source_priority
+          FROM ${names.canonicalCommandResults}
+        ), recoverable AS (
+          SELECT DISTINCT ON (stored.command_id) stored.command_id, original.result_payload
+          FROM ${names.submitResults} stored
+          JOIN original_results original ON original.command_id = stored.command_id
+          WHERE stored.matching_facts IS NULL
+            AND stored.result_type = original.result_status
+            AND stored.event_id = COALESCE(original.result_payload #>> '{accepted,eventId}', original.result_payload #>> '{rejected,eventId}')
+            AND stored.order_id = COALESCE(original.result_payload #>> '{accepted,orderId}', original.result_payload #>> '{rejected,orderId}')
+          ORDER BY stored.command_id, original.source_priority
+        )
+        UPDATE ${names.submitResults} stored
+        SET matching_facts = jsonb_build_object(
+              'executions', COALESCE(NULLIF(original.result_payload->'executions', 'null'::jsonb), '[]'::jsonb),
+              'trades', COALESCE(NULLIF(original.result_payload->'trades', 'null'::jsonb), '[]'::jsonb)),
+            cancelled = COALESCE(stored.cancelled, NULLIF(original.result_payload->'cancelled', 'null'::jsonb))
+        FROM recoverable original
+        WHERE stored.command_id = original.command_id;
+        """.trimIndent()
+    )
+}

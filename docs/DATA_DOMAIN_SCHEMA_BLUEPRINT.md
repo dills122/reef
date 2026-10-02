@@ -140,7 +140,7 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - `command_id text pk`, `result_type text not null`, `event_id text not null`, `order_id text not null`, `engine_order_id text not null`, `code text not null`, `reason text not null`, `occurred_at text not null`.
 - typed companions: `event_id_uuid uuid`, `occurred_at_ts timestamptz`.
 
-- `cancelled jsonb` stores exact IOC terminal fact; `matching_facts jsonb` preserves original execution/trade arrays for immutable retry response, independent of later order fills. Legacy null rows use existing fallback.
+- `cancelled jsonb` stores exact IOC terminal fact; `matching_facts jsonb` preserves original execution/trade arrays for immutable retry response, independent of later order fills. Migration/bootstrap backfills legacy null facts from retained canonical command results (live or archived), preserving exact replay checks. Rows without retained source facts keep existing read fallback; null is not treated as an empty result during replay.
 
 9. Reference tables (`runtime/0003`, `0034`, `0074`): `runtime.reference_instruments (instrument_id text pk, symbol text, quote_currency text not null default 'USD')`, `runtime.reference_participants (participant_id text pk, name text)`, `runtime.reference_accounts (account_id text pk, participant_id text)`, `runtime.reference_scenario_runs (scenario_run_id text pk, post_trade_profile_id text, updated_at timestamptz)`, `runtime.reference_venue_sessions (venue_session_id text pk, post_trade_profile_id text, updated_at timestamptz)`.
 

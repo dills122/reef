@@ -110,6 +110,56 @@ class MatchingCancellationPersistenceTest {
     }
 
     @Test
+    fun migrationBackfillsLegacyCanonicalFactsBeforeExactReplay() = checkLegacyReplay(archived = false, compatibilityBootstrap = false)
+
+    @Test
+    fun migrationBackfillsArchivedCanonicalFactsBeforeExactReplay() = checkLegacyReplay(archived = true, compatibilityBootstrap = false)
+
+    @Test
+    fun compatibilityBootstrapBackfillsLegacyCanonicalFacts() = checkLegacyReplay(archived = false, compatibilityBootstrap = true)
+
+    private fun checkLegacyReplay(archived: Boolean, compatibilityBootstrap: Boolean) {
+        val source = source()
+        source.use {
+            val store = PostgresRuntimePersistence(source)
+            val order = order("legacy-replay-${UUID.randomUUID()}")
+            val expected = result(order).copy(cancelled = null, executions = listOf(
+                com.reef.platform.domain.ExecutionCreated("legacy-exec-${order.orderId}", "legacy-exec-${order.orderId}", order.orderId, "AAPL", "4", "100", "USD", order.acceptedAt)))
+            store.materializeVenueEventBatch(batch(order, expected))
+            store.persistSubmitOutcome("cmd-${order.orderId}", expected, order, emptyList())
+            source.connection.use { conn -> conn.createStatement().use { sql ->
+                if (archived) {
+                    sql.execute("INSERT INTO runtime.canonical_command_outcomes_archive SELECT canonical.*, now() FROM runtime.canonical_command_outcomes canonical WHERE command_id = 'cmd-${order.orderId}'")
+                    sql.execute("DELETE FROM runtime.canonical_command_outcomes WHERE command_id = 'cmd-${order.orderId}'")
+                }
+                sql.execute("UPDATE runtime.submit_results SET matching_facts = NULL WHERE command_id = 'cmd-${order.orderId}'")
+                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_matching_ioc_cancellation.sql")) {
+                    sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/$migration")))
+                }
+            } }
+            if (compatibilityBootstrap) {
+                source.connection.use { conn -> conn.createStatement().use { sql ->
+                    sql.execute("UPDATE runtime.submit_results SET matching_facts = NULL WHERE command_id = 'cmd-${order.orderId}'")
+                } }
+                val restarted = PostgresRuntimePersistence(source)
+                assertEquals(expected, restarted.submitResult("cmd-${order.orderId}"))
+                // Reinstall deployed strict replay function after exercising compatibility bootstrap.
+                source.connection.use { conn -> conn.createStatement().use { sql ->
+                    sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0073_matching_ioc_cancellation.sql")))
+                } }
+            }
+            source.connection.use { conn -> conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_status_stage(?::jsonb)").use { sql ->
+                sql.setString(1, "[${PersistableSubmitOutcome("cmd-${order.orderId}", expected, order, emptyList()).toJsonObject()}]")
+                sql.executeQuery().close()
+                val changed = expected.copy(executions = expected.executions.map { it.copy(quantityUnits = "5") })
+                sql.setString(1, "[${PersistableSubmitOutcome("cmd-${order.orderId}", changed, order, emptyList()).toJsonObject()}]")
+                kotlin.test.assertFails { sql.executeQuery() }
+            } }
+            assertEquals(expected, store.submitResult("cmd-${order.orderId}"))
+        }
+    }
+
+    @Test
     fun persistedInstrumentQuoteSurvivesRestartAndCannotChange() {
         val source = source()
         source.use {

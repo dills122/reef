@@ -2,6 +2,35 @@
 ALTER TABLE runtime.submit_results ADD COLUMN IF NOT EXISTS cancelled JSONB,
   ADD COLUMN IF NOT EXISTS matching_facts JSONB;
 
+-- Legacy NULL means unknown original facts, not an empty matching result.
+-- Restore only from immutable command facts, never later order projections.
+WITH original_results AS (
+  SELECT command_id, result_status, result_payload, 1 AS source_priority
+  FROM runtime.canonical_command_outcomes
+  UNION ALL
+  SELECT command_id, result_status, result_payload, 2 AS source_priority
+  FROM runtime.canonical_command_outcomes_archive
+  UNION ALL
+  SELECT command_id, result_status, result_payload, 3 AS source_priority
+  FROM runtime.canonical_command_results
+), recoverable AS (
+  SELECT DISTINCT ON (stored.command_id) stored.command_id, original.result_payload
+  FROM runtime.submit_results stored
+  JOIN original_results original ON original.command_id = stored.command_id
+  WHERE stored.matching_facts IS NULL
+    AND stored.result_type = original.result_status
+    AND stored.event_id = COALESCE(original.result_payload #>> '{accepted,eventId}', original.result_payload #>> '{rejected,eventId}')
+    AND stored.order_id = COALESCE(original.result_payload #>> '{accepted,orderId}', original.result_payload #>> '{rejected,orderId}')
+  ORDER BY stored.command_id, original.source_priority
+)
+UPDATE runtime.submit_results stored
+SET matching_facts = jsonb_build_object(
+      'executions', COALESCE(NULLIF(original.result_payload->'executions', 'null'::jsonb), '[]'::jsonb),
+      'trades', COALESCE(NULLIF(original.result_payload->'trades', 'null'::jsonb), '[]'::jsonb)),
+    cancelled = COALESCE(stored.cancelled, NULLIF(original.result_payload->'cancelled', 'null'::jsonb))
+FROM recoverable original
+WHERE stored.command_id = original.command_id;
+
 CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcome_status_stage(
   p_outcomes JSONB
 )

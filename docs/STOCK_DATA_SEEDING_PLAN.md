@@ -21,6 +21,20 @@ The expected call pattern is low volume:
 - the seed workflow persists the normalized snapshots and provider metadata
 - the game starts from those persisted values
 
+The repository publishes a complete immutable batch with atomic
+`createOrExisting` semantics keyed by `gameSeedId`. Concurrent first fetches
+may produce different candidates, but all successful calls return one persisted
+winner; a losing candidate cannot append symbols or overwrite facts. PostgreSQL
+claims the batch header using its primary key, inserts children only when that
+claim succeeds, and commits both together. A conflict loser reads the committed
+winner at READ COMMITTED isolation. There is no global seed lock.
+
+Both stores order snapshots by symbol and truncate timestamps to microseconds
+before publication and hash calculation, matching PostgreSQL storage precision.
+Repositories reject empty batches, duplicate symbols, and cross-seed children.
+Schema remains unchanged; existing seed facts are replayed rather than rewritten.
+Any prior inconsistent batch requires separate audit/repair.
+
 The service should not poll continuously, stream quotes, or refresh prices for
 an already seeded game unless a future product requirement explicitly adds a
 separate live-market synchronization mode.

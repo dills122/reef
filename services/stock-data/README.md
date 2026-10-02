@@ -59,7 +59,18 @@ structured `{"error": {"symbol", "category", "message"}}` body on a failed
 seed - see the plan doc's "Failure Behavior" section for the full list of
 `category` values. Calling again with the same `gameSeedId` always replays
 the persisted batch and never re-calls the provider, even if a different
-symbol list is passed.
+symbol list is passed. Concurrent first requests may both fetch provider data;
+exactly one whole batch wins publication. Both successful responses and replay
+return that persisted winner, including its hash and snapshot set. Losing
+candidates cannot replace rows or add symbols. Publication uses per-seed
+PostgreSQL uniqueness and one transaction; unrelated seed IDs remain concurrent.
+
+Canonical snapshots are ordered by symbol, immutable after publication, and
+use microsecond timestamp precision (truncated before hashing) in both stores.
+Empty batches, duplicate symbols, or children belonging to another seed are
+rejected before publication. No schema migration is needed for this contract;
+existing timestamp columns already support microseconds. Previously corrupted
+batches require a separate audit/repair; this change does not rewrite seed facts.
 
 Non-loopback callers must send `Authorization: Bearer $STOCK_DATA_API_TOKEN`.
 Requests are rejected before provider/database work when the body exceeds
@@ -76,7 +87,20 @@ uppercase ticker syntax.
 ```
 
 Uses `FakeStockDataProvider` and a scripted `TiingoHttpClient` test double -
-no real network calls or Tiingo credentials required.
+no external network calls or Tiingo credentials required. Real PostgreSQL tests
+run separately against an isolated disposable database; missing JDBC configuration
+fails explicitly:
+
+```bash
+STOCK_DATA_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://localhost:55457/seed_winner_test \
+STOCK_DATA_POSTGRES_USER_TEST=reef STOCK_DATA_POSTGRES_PASSWORD_TEST=reef \
+./gradlew --no-daemon postgresTest
+```
+
+`postgresTest` applies the existing stock-data migration and uses unique seed IDs.
+Its rollback fault test temporarily adds a CHECK constraint, so use only an
+isolated test database. Default `test` excludes the `postgres` tag; run both tasks
+for persistence qualification.
 
 ## What's implemented vs. deferred
 
