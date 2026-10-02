@@ -1,0 +1,17 @@
+{
+  "startedUtc": "2026-10-02T05:54:53Z",
+  "deadlineUtc": "2026-10-02T07:54:53Z",
+  "baseline": "C5 ~9999 accepted commands/s; hosted c-16; 16 partitions; 64 instruments; 1024 load workers",
+  "primaryUnit": "full-fact resolved matched trades/second; verified commitment trades/second reported alongside",
+  "supportingUnit": "accepted order commands/second",
+  "targetPrimaryPerSecond": 10000,
+  "minimumSustainedSeconds": 300,
+  "durability": "HTTP202 only after Redpanda durable append; write caching false; matching consume direct; read_committed Calcify transactional outputs",
+  "measurementDifferences": [
+    "local Docker guest10CPU/15.6GiB versus hosted c-16",
+    "paired BUY/SELL full-fact workload two accepted commands per trade",
+    "legacy materializers replaced with Calcify extractor/verifier/resolver",
+    "startup-only SQL topic identity registration retained; receipt worker and SQL intake disabled"
+  ],
+  "timing": "matching batch workFinishedAt integrity checked via timingChecksum to read_committed verified observer visibility; observer upper-bound delay disclosed; acceptedAt is semantic event time"
+}

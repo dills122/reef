@@ -1,0 +1,20 @@
+{
+  "runId": "98589108",
+  "smokeId": "c10k-sync-20261002",
+  "generation": 5,
+  "source": "REEF_C10K-SYNC-20261002_EVENTS",
+  "output": "REEF_C10K-SYNC-20261002_RESOLVED",
+  "scope": "LocalRF1 all owned topics write.caching=false; joined Phase1/2 HTTP256/pool128/matching350/verifier+receiptpoll1000; hot paired lane/stub verifier; corrected per-ack deadline diagnostic60s",
+  "policy": {
+    "seconds": 60,
+    "offeredOrderCommandsPerSecond": 10500,
+    "minimumAcceptedAtDeadlinePerSecond": 10000,
+    "maxLoadOverrunMs": 1000,
+    "maxReceiptDrainMs": 5000,
+    "maxResolvedDrainMs": 5000,
+    "maxResolvedEndGapTrades": 10500,
+    "fullFactParityRequired": true
+  },
+  "harnessSha256": "8cb51608880353ac261561dcad9baaeabc53af49b5529672fef25bff0e12dfb0",
+  "pass": false
+}

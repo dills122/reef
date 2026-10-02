@@ -1,0 +1,42 @@
+{
+  "runId": "1bbdd6d7",
+  "config": {
+    "smokeId": "d5",
+    "generation": 6,
+    "seconds": 60,
+    "pace": 5250,
+    "workers": 1024,
+    "preflightContexts": 0,
+    "out": "/private/tmp/calcify-direct-d5-run",
+    "image": "reef-platform-runtime:calcify-direct-pollbatch",
+    "network": "reef-calcify-direct-20261002_default",
+    "binary": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/.planning/calcify-10k-timebox/calcify-load",
+    "scope": "Extractor bounded-poll batching A/B; identical durable C5 ingress/matching/paired60s workload",
+    "bootstrap": "redpanda:9092",
+    "baseUrl": "http://127.0.0.1:8080",
+    "instruments": "I0-d5,I1-d5,I2-d5,I3-d5,I4-d5,I5-d5,I6-d5,I7-d5,I8-d5,I9-d5,I10-d5,I11-d5,I12-d5,I13-d5,I14-d5,I15-d5,I16-d5,I17-d5,I18-d5,I19-d5,I20-d5,I21-d5,I22-d5,I23-d5,I24-d5,I25-d5,I26-d5,I28-d5,I29-d5,I30-d5,I31-d5,I33-d5,I34-d5,I35-d5,I36-d5,I37-d5,I38-d5,I39-d5,I40-d5,I41-d5,I45-d5,I46-d5,I47-d5,I48-d5,I49-d5,I50-d5,I51-d5,I52-d5,I53-d5,I55-d5,I56-d5,I57-d5,I59-d5,I64-d5,I65-d5,I75-d5,I76-d5,I81-d5,I83-d5,I84-d5,I87-d5,I97-d5,I116-d5,I154-d5",
+    "source": "REEF_D5_EVENTS",
+    "verified": "REEF_D5_VERIFIED",
+    "resolved": "REEF_D5_RESOLVED"
+  },
+  "policy": {
+    "seconds": 60,
+    "targetContextsPerSecond": 10000,
+    "offeredPairsPerSecond": 5250,
+    "offeredOrdersPerSecond": 10500,
+    "preflightContexts": 0,
+    "maxLoadOverrunMs": 1000,
+    "maxDrainMs": 5000,
+    "units": "one crossing pair = one trade = one verified commitment = one resolved context = two submitted orders",
+    "deadlineMeasurement": "read_committed counts received before parent monotonic spawn+duration, minus preflight; conservative lower bound",
+    "drainMeasurement": "last observed full count minus parent spawn+Go HTTP elapsed; conservative upper bound, not per-trade latency",
+    "fullFactParityRequired": true,
+    "receiptSqlEnabled": false
+  },
+  "harnessSha256": "9c094ed5ead457c3739691da8d0cf237870d8046a797f9f38ed2cf7987f5f0bd",
+  "loaderSha256": "08ec2e1cffaeb1811acb565853306744aedc91556bf8b8f49247ff35331ec949",
+  "commands": [],
+  "streams": {},
+  "pass": false,
+  "capacityClaim": false
+}

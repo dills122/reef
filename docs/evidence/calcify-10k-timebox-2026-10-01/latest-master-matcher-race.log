@@ -1,0 +1,12 @@
+ok  	github.com/dills122/reef/services/matching-engine/cmd/http-healthcheck	1.470s
+?   	github.com/dills122/reef/services/matching-engine/cmd/matching-engine	[no test files]
+?   	github.com/dills122/reef/services/matching-engine/cmd/matching-engine-load	[no test files]
+ok  	github.com/dills122/reef/services/matching-engine/cmd/proto-compat-check	1.257s
+ok  	github.com/dills122/reef/services/matching-engine/internal/app	1.745s
+ok  	github.com/dills122/reef/services/matching-engine/internal/book	1.442s
+?   	github.com/dills122/reef/services/matching-engine/internal/domain	[no test files]
+ok  	github.com/dills122/reef/services/matching-engine/internal/loadtest	1.942s
+ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	5.319s
+ok  	github.com/dills122/reef/services/matching-engine/internal/transport/grpc	1.345s
+?   	github.com/dills122/reef/services/matching-engine/internal/transport/grpc/pb/contracts/proto	[no test files]
+ok  	github.com/dills122/reef/services/matching-engine/internal/transport/http	1.619s

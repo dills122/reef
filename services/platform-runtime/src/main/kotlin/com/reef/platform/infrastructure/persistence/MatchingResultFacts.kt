@@ -4,7 +4,6 @@ import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.SubmitOrderResult
-import com.reef.platform.domain.PersistedOrder
 
 internal fun SubmitOrderResult.matchingFactsJson(): String = "{\"executions\":${executions.toJsonArray { it.toJsonObject() }},\"trades\":${trades.toJsonArray { it.toJsonObject() }}}"
 
@@ -19,7 +18,8 @@ internal fun executionsFromResultPayload(json: String): List<ExecutionCreated> {
             executionPrice = execution.string("executionPrice"),
             currency = execution.string("currency"),
             occurredAt = execution.string("occurredAt"),
-            liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" }
+            liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" },
+            runId = execution.string("runId")
         )
     }
 }
@@ -36,7 +36,8 @@ internal fun tradesFromResultPayload(json: String): List<TradeCreated> {
             quantityUnits = trade.string("quantityUnits"),
             price = trade.string("price"),
             currency = trade.string("currency"),
-            occurredAt = trade.string("occurredAt")
+            occurredAt = trade.string("occurredAt"),
+            runId = trade.string("runId")
         )
     }
 }
@@ -45,17 +46,6 @@ internal fun tradesFromResultPayload(json: String): List<TradeCreated> {
 internal fun matchingFactsFromResultPayload(payload: String): String {
     val document = JsonCodec.parseLegacyObjectOrEmpty(payload)
     return "{\"executions\":${document.raw("executions").ifBlank { "[]" }},\"trades\":${document.raw("trades").ifBlank { "[]" }}}"
-}
-
-internal fun acceptedOrderFromResultPayload(payload: String): PersistedOrder? {
-    val order = JsonCodec.parseLegacyObjectOrEmpty(payload).obj("acceptedOrder")
-    if (order.string("orderId").isBlank()) return null
-    return PersistedOrder(
-        order.string("orderId"), order.string("engineOrderId"), order.string("instrumentId"),
-        order.string("participantId"), order.string("accountId"), order.string("side"), order.string("orderType"),
-        order.string("quantityUnits"), order.string("limitPrice"), order.string("currency"), order.string("timeInForce"),
-        order.string("acceptedAt"), order.string("clientOrderId"), order.string("runId"), order.string("venueSessionId")
-    )
 }
 
 internal fun backfillLegacyMatchingResultFacts(statement: java.sql.Statement, names: PostgresRuntimeSqlNames) {

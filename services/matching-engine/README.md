@@ -222,12 +222,12 @@ shard consistently before opening lanes; non-USD specifications require explicit
 catalog configuration. Snapshot metadata/checksum binds explicit catalog hash;
 restoration requires identical catalog even after books drain. No FX conversion.
 
-Deploy runtime migrations `0073` and `0074` before cancellation producers.
-`0073` preserves exact cancellation and original matching arrays on command result,
+Deploy runtime migrations `0074` and `0075` after run-identity migration `0073` before cancellation producers.
+`0074` preserves exact cancellation and original matching arrays on command result,
 so retries cannot lose maker execution or acquire later order fills. Stream SQL and
 Kotlin projectors materialize cancellation into existing lifecycle events. Split
 projection stages preserve original response facts even when fill writes are deferred.
-`0074` defaults legacy reference quotes to USD and aborts if retained accepted orders
+`0075` defaults legacy reference quotes to USD and aborts if retained accepted orders
 contradict configured quote. Guard requires accepted result with matching order/engine
 identity; rejected stream audit rows do not block migration or restart. Provision
 authoritative non-USD reference values before

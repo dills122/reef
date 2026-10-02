@@ -1,0 +1,579 @@
+{
+  "instrumentIds": [
+    "AAPL-calcify-10k-q2-20261002",
+    "AAPL-calcify-10k-q2-20261002-lane1",
+    "AAPL-calcify-10k-q2-20261002-lane9",
+    "AAPL-calcify-10k-q2-20261002-lane2"
+  ],
+  "smokeId": "calcify-10k-q2-20261002",
+  "targetPairs": 1575000,
+  "startIndex": 0,
+  "targetPairsPerSecond": 5250,
+  "scheduledPairs": 1575000,
+  "dispatchedPairs": 1158675,
+  "droppedPairs": 416325,
+  "completedPairs": 1158675,
+  "acceptedOrders": 2317350,
+  "acceptedOrdersAtDeadline": 2312509,
+  "deadlineAccounting": "validated durable HTTP acknowledgement observed strictly before fixed monotonic load-start plus requested duration; late/equal acknowledgements count only in acceptedOrders; epoch fields expose wall time from those same Go instants",
+  "loadStartedEpochMs": 1790917670576,
+  "scheduledDeadlineEpochMs": 1790917970576,
+  "acceptedAllEpochMs": 1790917971176,
+  "receiptDrainAccounting": "drainMs runs from HTTP worker completion before stopping the progress observer through successful receipt reconciliation; includes any outstanding observer query wait; acceptedAllEpochMs records worker completion even if requests failed",
+  "acceptedOrdersPerSecond": 7709.114486581439,
+  "elapsedMs": 300598,
+  "retries": 0,
+  "failures": 0,
+  "receiptGeneration": 8,
+  "samples": [
+    {
+      "elapsedMs": 5000,
+      "completedPairsBefore": 6115,
+      "completedPairs": 6268,
+      "receipts": 4994,
+      "acceptedToReceiptGapLower": 1122,
+      "acceptedToReceiptGapUpper": 1275,
+      "receiptQueryMs": 108
+    },
+    {
+      "elapsedMs": 10000,
+      "completedPairsBefore": 20812,
+      "completedPairs": 20992,
+      "receipts": 19225,
+      "acceptedToReceiptGapLower": 1588,
+      "acceptedToReceiptGapUpper": 1768,
+      "receiptQueryMs": 71
+    },
+    {
+      "elapsedMs": 15000,
+      "completedPairsBefore": 37809,
+      "completedPairs": 38158,
+      "receipts": 35767,
+      "acceptedToReceiptGapLower": 2043,
+      "acceptedToReceiptGapUpper": 2392,
+      "receiptQueryMs": 129
+    },
+    {
+      "elapsedMs": 20000,
+      "completedPairsBefore": 56081,
+      "completedPairs": 56362,
+      "receipts": 54499,
+      "acceptedToReceiptGapLower": 1583,
+      "acceptedToReceiptGapUpper": 1864,
+      "receiptQueryMs": 108
+    },
+    {
+      "elapsedMs": 25000,
+      "completedPairsBefore": 74805,
+      "completedPairs": 75244,
+      "receipts": 73545,
+      "acceptedToReceiptGapLower": 1261,
+      "acceptedToReceiptGapUpper": 1700,
+      "receiptQueryMs": 151
+    },
+    {
+      "elapsedMs": 30000,
+      "completedPairsBefore": 94263,
+      "completedPairs": 94810,
+      "receipts": 93154,
+      "acceptedToReceiptGapLower": 1110,
+      "acceptedToReceiptGapUpper": 1657,
+      "receiptQueryMs": 138
+    },
+    {
+      "elapsedMs": 35000,
+      "completedPairsBefore": 114032,
+      "completedPairs": 114360,
+      "receipts": 111975,
+      "acceptedToReceiptGapLower": 2058,
+      "acceptedToReceiptGapUpper": 2386,
+      "receiptQueryMs": 118
+    },
+    {
+      "elapsedMs": 40000,
+      "completedPairsBefore": 133348,
+      "completedPairs": 133699,
+      "receipts": 131756,
+      "acceptedToReceiptGapLower": 1593,
+      "acceptedToReceiptGapUpper": 1944,
+      "receiptQueryMs": 102
+    },
+    {
+      "elapsedMs": 45000,
+      "completedPairsBefore": 153877,
+      "completedPairs": 154308,
+      "receipts": 152247,
+      "acceptedToReceiptGapLower": 1631,
+      "acceptedToReceiptGapUpper": 2062,
+      "receiptQueryMs": 138
+    },
+    {
+      "elapsedMs": 50000,
+      "completedPairsBefore": 173863,
+      "completedPairs": 174290,
+      "receipts": 171664,
+      "acceptedToReceiptGapLower": 2200,
+      "acceptedToReceiptGapUpper": 2627,
+      "receiptQueryMs": 141
+    },
+    {
+      "elapsedMs": 55000,
+      "completedPairsBefore": 194502,
+      "completedPairs": 195008,
+      "receipts": 192292,
+      "acceptedToReceiptGapLower": 2211,
+      "acceptedToReceiptGapUpper": 2717,
+      "receiptQueryMs": 115
+    },
+    {
+      "elapsedMs": 60000,
+      "completedPairsBefore": 214819,
+      "completedPairs": 215308,
+      "receipts": 212954,
+      "acceptedToReceiptGapLower": 1866,
+      "acceptedToReceiptGapUpper": 2355,
+      "receiptQueryMs": 132
+    },
+    {
+      "elapsedMs": 65000,
+      "completedPairsBefore": 234165,
+      "completedPairs": 234675,
+      "receipts": 233080,
+      "acceptedToReceiptGapLower": 1086,
+      "acceptedToReceiptGapUpper": 1596,
+      "receiptQueryMs": 188
+    },
+    {
+      "elapsedMs": 70000,
+      "completedPairsBefore": 253756,
+      "completedPairs": 254379,
+      "receipts": 251658,
+      "acceptedToReceiptGapLower": 2099,
+      "acceptedToReceiptGapUpper": 2722,
+      "receiptQueryMs": 151
+    },
+    {
+      "elapsedMs": 75000,
+      "completedPairsBefore": 270240,
+      "completedPairs": 270772,
+      "receipts": 268625,
+      "acceptedToReceiptGapLower": 1616,
+      "acceptedToReceiptGapUpper": 2148,
+      "receiptQueryMs": 142
+    },
+    {
+      "elapsedMs": 80000,
+      "completedPairsBefore": 289731,
+      "completedPairs": 290297,
+      "receipts": 288055,
+      "acceptedToReceiptGapLower": 1677,
+      "acceptedToReceiptGapUpper": 2243,
+      "receiptQueryMs": 179
+    },
+    {
+      "elapsedMs": 85000,
+      "completedPairsBefore": 308208,
+      "completedPairs": 308709,
+      "receipts": 306210,
+      "acceptedToReceiptGapLower": 1999,
+      "acceptedToReceiptGapUpper": 2500,
+      "receiptQueryMs": 155
+    },
+    {
+      "elapsedMs": 90000,
+      "completedPairsBefore": 327399,
+      "completedPairs": 327951,
+      "receipts": 326154,
+      "acceptedToReceiptGapLower": 1246,
+      "acceptedToReceiptGapUpper": 1798,
+      "receiptQueryMs": 186
+    },
+    {
+      "elapsedMs": 95000,
+      "completedPairsBefore": 348186,
+      "completedPairs": 348747,
+      "receipts": 347143,
+      "acceptedToReceiptGapLower": 1044,
+      "acceptedToReceiptGapUpper": 1605,
+      "receiptQueryMs": 204
+    },
+    {
+      "elapsedMs": 100000,
+      "completedPairsBefore": 367099,
+      "completedPairs": 367505,
+      "receipts": 365239,
+      "acceptedToReceiptGapLower": 1861,
+      "acceptedToReceiptGapUpper": 2267,
+      "receiptQueryMs": 130
+    },
+    {
+      "elapsedMs": 105000,
+      "completedPairsBefore": 389404,
+      "completedPairs": 389780,
+      "receipts": 387476,
+      "acceptedToReceiptGapLower": 1929,
+      "acceptedToReceiptGapUpper": 2305,
+      "receiptQueryMs": 134
+    },
+    {
+      "elapsedMs": 110000,
+      "completedPairsBefore": 410379,
+      "completedPairs": 410859,
+      "receipts": 408465,
+      "acceptedToReceiptGapLower": 1915,
+      "acceptedToReceiptGapUpper": 2395,
+      "receiptQueryMs": 125
+    },
+    {
+      "elapsedMs": 115000,
+      "completedPairsBefore": 432761,
+      "completedPairs": 433105,
+      "receipts": 431040,
+      "acceptedToReceiptGapLower": 1722,
+      "acceptedToReceiptGapUpper": 2066,
+      "receiptQueryMs": 148
+    },
+    {
+      "elapsedMs": 120000,
+      "completedPairsBefore": 454206,
+      "completedPairs": 454768,
+      "receipts": 453058,
+      "acceptedToReceiptGapLower": 1149,
+      "acceptedToReceiptGapUpper": 1711,
+      "receiptQueryMs": 195
+    },
+    {
+      "elapsedMs": 125000,
+      "completedPairsBefore": 477258,
+      "completedPairs": 477930,
+      "receipts": 475631,
+      "acceptedToReceiptGapLower": 1628,
+      "acceptedToReceiptGapUpper": 2300,
+      "receiptQueryMs": 195
+    },
+    {
+      "elapsedMs": 130000,
+      "completedPairsBefore": 498902,
+      "completedPairs": 499373,
+      "receipts": 497165,
+      "acceptedToReceiptGapLower": 1738,
+      "acceptedToReceiptGapUpper": 2209,
+      "receiptQueryMs": 179
+    },
+    {
+      "elapsedMs": 135000,
+      "completedPairsBefore": 519059,
+      "completedPairs": 519601,
+      "receipts": 517980,
+      "acceptedToReceiptGapLower": 1080,
+      "acceptedToReceiptGapUpper": 1622,
+      "receiptQueryMs": 186
+    },
+    {
+      "elapsedMs": 140002,
+      "completedPairsBefore": 537271,
+      "completedPairs": 537926,
+      "receipts": 535809,
+      "acceptedToReceiptGapLower": 1463,
+      "acceptedToReceiptGapUpper": 2118,
+      "receiptQueryMs": 213
+    },
+    {
+      "elapsedMs": 145000,
+      "completedPairsBefore": 554487,
+      "completedPairs": 555166,
+      "receipts": 552760,
+      "acceptedToReceiptGapLower": 1728,
+      "acceptedToReceiptGapUpper": 2407,
+      "receiptQueryMs": 205
+    },
+    {
+      "elapsedMs": 150000,
+      "completedPairsBefore": 568341,
+      "completedPairs": 569010,
+      "receipts": 566813,
+      "acceptedToReceiptGapLower": 1529,
+      "acceptedToReceiptGapUpper": 2198,
+      "receiptQueryMs": 615
+    },
+    {
+      "elapsedMs": 155002,
+      "completedPairsBefore": 576757,
+      "completedPairs": 577569,
+      "receipts": 575553,
+      "acceptedToReceiptGapLower": 1205,
+      "acceptedToReceiptGapUpper": 2017,
+      "receiptQueryMs": 426
+    },
+    {
+      "elapsedMs": 160000,
+      "completedPairsBefore": 586114,
+      "completedPairs": 586717,
+      "receipts": 584592,
+      "acceptedToReceiptGapLower": 1523,
+      "acceptedToReceiptGapUpper": 2126,
+      "receiptQueryMs": 262
+    },
+    {
+      "elapsedMs": 165000,
+      "completedPairsBefore": 600617,
+      "completedPairs": 601121,
+      "receipts": 599050,
+      "acceptedToReceiptGapLower": 1568,
+      "acceptedToReceiptGapUpper": 2072,
+      "receiptQueryMs": 216
+    },
+    {
+      "elapsedMs": 170000,
+      "completedPairsBefore": 618799,
+      "completedPairs": 619535,
+      "receipts": 616339,
+      "acceptedToReceiptGapLower": 2461,
+      "acceptedToReceiptGapUpper": 3197,
+      "receiptQueryMs": 293
+    },
+    {
+      "elapsedMs": 175001,
+      "completedPairsBefore": 635599,
+      "completedPairs": 636157,
+      "receipts": 633538,
+      "acceptedToReceiptGapLower": 2062,
+      "acceptedToReceiptGapUpper": 2620,
+      "receiptQueryMs": 234
+    },
+    {
+      "elapsedMs": 180000,
+      "completedPairsBefore": 648233,
+      "completedPairs": 649022,
+      "receipts": 647189,
+      "acceptedToReceiptGapLower": 1045,
+      "acceptedToReceiptGapUpper": 1834,
+      "receiptQueryMs": 271
+    },
+    {
+      "elapsedMs": 185001,
+      "completedPairsBefore": 666040,
+      "completedPairs": 666609,
+      "receipts": 663730,
+      "acceptedToReceiptGapLower": 2311,
+      "acceptedToReceiptGapUpper": 2880,
+      "receiptQueryMs": 364
+    },
+    {
+      "elapsedMs": 190000,
+      "completedPairsBefore": 683808,
+      "completedPairs": 684465,
+      "receipts": 682372,
+      "acceptedToReceiptGapLower": 1437,
+      "acceptedToReceiptGapUpper": 2094,
+      "receiptQueryMs": 218
+    },
+    {
+      "elapsedMs": 195000,
+      "completedPairsBefore": 704236,
+      "completedPairs": 704985,
+      "receipts": 703000,
+      "acceptedToReceiptGapLower": 1237,
+      "acceptedToReceiptGapUpper": 1986,
+      "receiptQueryMs": 197
+    },
+    {
+      "elapsedMs": 200000,
+      "completedPairsBefore": 724812,
+      "completedPairs": 725643,
+      "receipts": 723488,
+      "acceptedToReceiptGapLower": 1325,
+      "acceptedToReceiptGapUpper": 2156,
+      "receiptQueryMs": 290
+    },
+    {
+      "elapsedMs": 205000,
+      "completedPairsBefore": 743794,
+      "completedPairs": 744409,
+      "receipts": 741861,
+      "acceptedToReceiptGapLower": 1934,
+      "acceptedToReceiptGapUpper": 2549,
+      "receiptQueryMs": 181
+    },
+    {
+      "elapsedMs": 210000,
+      "completedPairsBefore": 761117,
+      "completedPairs": 761624,
+      "receipts": 759819,
+      "acceptedToReceiptGapLower": 1299,
+      "acceptedToReceiptGapUpper": 1806,
+      "receiptQueryMs": 277
+    },
+    {
+      "elapsedMs": 215000,
+      "completedPairsBefore": 773540,
+      "completedPairs": 774194,
+      "receipts": 771995,
+      "acceptedToReceiptGapLower": 1546,
+      "acceptedToReceiptGapUpper": 2200,
+      "receiptQueryMs": 372
+    },
+    {
+      "elapsedMs": 220000,
+      "completedPairsBefore": 793726,
+      "completedPairs": 794735,
+      "receipts": 792262,
+      "acceptedToReceiptGapLower": 1465,
+      "acceptedToReceiptGapUpper": 2474,
+      "receiptQueryMs": 253
+    },
+    {
+      "elapsedMs": 225000,
+      "completedPairsBefore": 818117,
+      "completedPairs": 818800,
+      "receipts": 816248,
+      "acceptedToReceiptGapLower": 1870,
+      "acceptedToReceiptGapUpper": 2553,
+      "receiptQueryMs": 171
+    },
+    {
+      "elapsedMs": 230000,
+      "completedPairsBefore": 841906,
+      "completedPairs": 842756,
+      "receipts": 840032,
+      "acceptedToReceiptGapLower": 1875,
+      "acceptedToReceiptGapUpper": 2725,
+      "receiptQueryMs": 202
+    },
+    {
+      "elapsedMs": 235000,
+      "completedPairsBefore": 864410,
+      "completedPairs": 865162,
+      "receipts": 862436,
+      "acceptedToReceiptGapLower": 1975,
+      "acceptedToReceiptGapUpper": 2727,
+      "receiptQueryMs": 231
+    },
+    {
+      "elapsedMs": 240000,
+      "completedPairsBefore": 887395,
+      "completedPairs": 888303,
+      "receipts": 885712,
+      "acceptedToReceiptGapLower": 1684,
+      "acceptedToReceiptGapUpper": 2592,
+      "receiptQueryMs": 221
+    },
+    {
+      "elapsedMs": 245000,
+      "completedPairsBefore": 910965,
+      "completedPairs": 911750,
+      "receipts": 909154,
+      "acceptedToReceiptGapLower": 1812,
+      "acceptedToReceiptGapUpper": 2597,
+      "receiptQueryMs": 197
+    },
+    {
+      "elapsedMs": 250000,
+      "completedPairsBefore": 934185,
+      "completedPairs": 935283,
+      "receipts": 932621,
+      "acceptedToReceiptGapLower": 1565,
+      "acceptedToReceiptGapUpper": 2663,
+      "receiptQueryMs": 237
+    },
+    {
+      "elapsedMs": 255000,
+      "completedPairsBefore": 957953,
+      "completedPairs": 958788,
+      "receipts": 956409,
+      "acceptedToReceiptGapLower": 1545,
+      "acceptedToReceiptGapUpper": 2380,
+      "receiptQueryMs": 199
+    },
+    {
+      "elapsedMs": 260000,
+      "completedPairsBefore": 981028,
+      "completedPairs": 981800,
+      "receipts": 979159,
+      "acceptedToReceiptGapLower": 1870,
+      "acceptedToReceiptGapUpper": 2642,
+      "receiptQueryMs": 205
+    },
+    {
+      "elapsedMs": 265000,
+      "completedPairsBefore": 1004156,
+      "completedPairs": 1004877,
+      "receipts": 1002267,
+      "acceptedToReceiptGapLower": 1890,
+      "acceptedToReceiptGapUpper": 2611,
+      "receiptQueryMs": 189
+    },
+    {
+      "elapsedMs": 270000,
+      "completedPairsBefore": 1027373,
+      "completedPairs": 1028264,
+      "receipts": 1025533,
+      "acceptedToReceiptGapLower": 1841,
+      "acceptedToReceiptGapUpper": 2732,
+      "receiptQueryMs": 228
+    },
+    {
+      "elapsedMs": 275000,
+      "completedPairsBefore": 1048969,
+      "completedPairs": 1049502,
+      "receipts": 1047069,
+      "acceptedToReceiptGapLower": 1901,
+      "acceptedToReceiptGapUpper": 2434,
+      "receiptQueryMs": 180
+    },
+    {
+      "elapsedMs": 280000,
+      "completedPairsBefore": 1072206,
+      "completedPairs": 1073081,
+      "receipts": 1070339,
+      "acceptedToReceiptGapLower": 1868,
+      "acceptedToReceiptGapUpper": 2743,
+      "receiptQueryMs": 229
+    },
+    {
+      "elapsedMs": 285000,
+      "completedPairsBefore": 1094039,
+      "completedPairs": 1094861,
+      "receipts": 1092904,
+      "acceptedToReceiptGapLower": 1136,
+      "acceptedToReceiptGapUpper": 1958,
+      "receiptQueryMs": 225
+    },
+    {
+      "elapsedMs": 290000,
+      "completedPairsBefore": 1113385,
+      "completedPairs": 1114452,
+      "receipts": 1111784,
+      "acceptedToReceiptGapLower": 1602,
+      "acceptedToReceiptGapUpper": 2669,
+      "receiptQueryMs": 246
+    },
+    {
+      "elapsedMs": 295000,
+      "completedPairsBefore": 1134892,
+      "completedPairs": 1135472,
+      "receipts": 1133201,
+      "acceptedToReceiptGapLower": 1692,
+      "acceptedToReceiptGapUpper": 2272,
+      "receiptQueryMs": 173
+    },
+    {
+      "elapsedMs": 300000,
+      "completedPairsBefore": 1156117,
+      "completedPairs": 1156938,
+      "receipts": 1154714,
+      "acceptedToReceiptGapLower": 1404,
+      "acceptedToReceiptGapUpper": 2225,
+      "receiptQueryMs": 261
+    }
+  ],
+  "finalReceipts": 1158676,
+  "drainMs": 1191,
+  "p95AcceptedToReceiptGap": 2732,
+  "maxAcceptedToReceiptGap": 3197,
+  "gatePassed": false,
+  "gateReasons": [
+    "accepted intake below 95% requested rate at deadline",
+    "scheduler dropped more than 5% of offered pairs"
+  ]
+}

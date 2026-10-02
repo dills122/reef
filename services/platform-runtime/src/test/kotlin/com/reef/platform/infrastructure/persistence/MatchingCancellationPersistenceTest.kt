@@ -84,8 +84,8 @@ class MatchingCancellationPersistenceTest {
             val store = PostgresRuntimePersistence(source)
             source.connection.use { conn -> conn.createStatement().use { sql ->
                 sql.execute("CREATE SCHEMA IF NOT EXISTS command_log")
-                sql.execute("CREATE TABLE IF NOT EXISTS command_log.command_payloads(command_id TEXT PRIMARY KEY, payload_json JSONB)")
-                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_matching_ioc_cancellation.sql", "0074_instrument_quote_currency.sql")) {
+                sql.execute("CREATE TABLE IF NOT EXISTS command_log.command_payloads(command_id TEXT PRIMARY KEY, payload_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql", "0075_instrument_quote_currency.sql")) {
                     sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/$migration")))
                 }
             } }
@@ -133,7 +133,7 @@ class MatchingCancellationPersistenceTest {
                     sql.execute("DELETE FROM runtime.canonical_command_outcomes WHERE command_id = 'cmd-${order.orderId}'")
                 }
                 sql.execute("UPDATE runtime.submit_results SET matching_facts = NULL WHERE command_id = 'cmd-${order.orderId}'")
-                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_matching_ioc_cancellation.sql")) {
+                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql")) {
                     sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/$migration")))
                 }
             } }
@@ -145,7 +145,7 @@ class MatchingCancellationPersistenceTest {
                 assertEquals(expected, restarted.submitResult("cmd-${order.orderId}"))
                 // Reinstall deployed strict replay function after exercising compatibility bootstrap.
                 source.connection.use { conn -> conn.createStatement().use { sql ->
-                    sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0073_matching_ioc_cancellation.sql")))
+                    sql.execute(java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0074_matching_ioc_cancellation.sql")))
                 } }
             }
             source.connection.use { conn -> conn.prepareStatement("SELECT runtime.runtime_persist_submit_outcome_status_stage(?::jsonb)").use { sql ->
@@ -186,7 +186,7 @@ class MatchingCancellationPersistenceTest {
             store.saveSubmitResult("cmd-${historical.orderId}", result(historical))
             kotlin.test.assertFailsWith<IllegalStateException> { PostgresRuntimePersistence(source, names, PostgresBootstrapMode.Compat) }
             source.connection.use { conn -> conn.createStatement().use { sql ->
-                val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0074_instrument_quote_currency.sql"))
+                val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0075_instrument_quote_currency.sql"))
                 kotlin.test.assertFails { sql.execute(migration.replace("runtime.", "${names.runtimeSchemaName}.")) }
             } }
             assertEquals("CAD", store.acceptedOrders(setOf(historical.orderId))[historical.orderId]?.currency)
@@ -203,7 +203,7 @@ class MatchingCancellationPersistenceTest {
     @Test
     fun rejectedStreamQuoteDoesNotBlockMigration() = withRejectedQuoteHistory { names, store, source ->
         source.connection.use { conn -> conn.createStatement().use { sql ->
-            val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0074_instrument_quote_currency.sql"))
+            val migration = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/0075_instrument_quote_currency.sql"))
             sql.execute(migration.replace("runtime.", "${names.runtimeSchemaName}."))
         } }
         assertEquals("CAD", store.acceptedOrders(setOf("wrong-quote"))["wrong-quote"]?.currency)

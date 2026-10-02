@@ -32,7 +32,8 @@ internal fun ExecutionCreated.toJsonObject(): String = jsonObject(
     "executionPrice" to executionPrice,
     "currency" to currency,
     "occurredAt" to occurredAt,
-    "liquidityRole" to liquidityRole
+    "liquidityRole" to liquidityRole,
+    "runId" to runId
 )
 
 internal fun TradeCreated.toJsonObject(): String = jsonObject(
@@ -45,7 +46,8 @@ internal fun TradeCreated.toJsonObject(): String = jsonObject(
     "quantityUnits" to quantityUnits,
     "price" to price,
     "currency" to currency,
-    "occurredAt" to occurredAt
+    "occurredAt" to occurredAt,
+    "runId" to runId
 )
 
 internal fun RuntimeEvent.toJsonObject(): String {
@@ -59,7 +61,8 @@ internal fun RuntimeEvent.toJsonObject(): String {
         "actorId" to actorId,
         "producer" to producer,
         "schemaVersion" to schemaVersion,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "runId" to runId
     ).joinToString(",") { (key, value) ->
         "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
     }
@@ -72,6 +75,7 @@ internal fun PersistableSubmitOutcome.toJsonObject(): String {
     val resultType = if (accepted != null) "accepted" else "rejected"
     val fields = listOf(
         "commandId" to commandId,
+        "runId" to (acceptedOrder?.runId ?: lifecycleEvents.firstOrNull()?.runId ?: runId),
         "resultType" to resultType,
         "eventId" to (accepted?.eventId ?: rejected?.eventId.orEmpty()),
         "orderId" to (accepted?.orderId ?: rejected?.orderId.orEmpty()),

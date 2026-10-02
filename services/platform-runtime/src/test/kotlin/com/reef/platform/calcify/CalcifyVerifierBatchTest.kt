@@ -43,6 +43,32 @@ class CalcifyVerifierBatchTest {
         assertEquals(listOf(1, 2), plan.outputs.map { it.partition() })
     }
 
+    @Test
+    fun thousandRecordPollKeepsPoisonPrefixAndHealthyPartitionOrder() {
+        val blocked = mutableSetOf<TopicPartition>()
+        val records = (0L until 600L).map { record(1, it, CommitmentId(7, 1, 12, it.toInt())) } +
+            record(1, 600, CommitmentId(7, 2, 12, 600)) +
+            (601L until 801L).map { record(1, it, CommitmentId(7, 1, 12, it.toInt())) } +
+            (0L until 199L).map { record(2, it, CommitmentId(7, 2, 13, it.toInt())) }
+        assertEquals(1000, records.size)
+
+        val plan = CalcifyPipeline.planVerifierPoll(records, "verified", blocked)
+
+        assertEquals(799, plan.outputs.size)
+        assertEquals(600L, plan.offsets.getValue(TopicPartition("commitments", 1)).offset())
+        assertEquals(199L, plan.offsets.getValue(TopicPartition("commitments", 2)).offset())
+        assertEquals((0 until 600).toList(), plan.outputs.filter { it.partition() == 1 }.map {
+            CalcifyWire.readPassed(it.value()).commitmentId.tradeOrdinal
+        })
+        assertEquals((0 until 199).toList(), plan.outputs.filter { it.partition() == 2 }.map {
+            CalcifyWire.readPassed(it.value()).commitmentId.tradeOrdinal
+        })
+        assertEquals(setOf(TopicPartition("commitments", 1)), blocked)
+        assertEquals(listOf(600L), plan.poisoned.map { it.second })
+        val followup = CalcifyPipeline.planVerifierPoll(listOf(record(1, 801, CommitmentId(7, 1, 12, 801))), "verified", blocked)
+        assertEquals(0, followup.outputs.size)
+    }
+
     private fun record(partition: Int, offset: Long, id: CommitmentId) =
         ConsumerRecord<ByteArray, ByteArray>(
             "commitments", partition, offset, null, CalcifyWire.commitment(id)

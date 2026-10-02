@@ -1,0 +1,162 @@
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":51887,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":25859,"elapsedMs":5000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":104652,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":52283,"elapsedMs":10000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":157424,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":78698,"elapsedMs":15000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":209794,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":104870,"elapsedMs":20000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":262416,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":131193,"elapsedMs":25000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":314699,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":157287,"elapsedMs":30000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":367332,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":183640,"elapsedMs":35000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":419887,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":209926,"elapsedMs":40000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":472370,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":236170,"elapsedMs":45000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":524864,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":262405,"elapsedMs":50001,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":577357,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":288655,"elapsedMs":55000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":629509,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":314693,"elapsedMs":60000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_RESULT {
+  "instrumentIds": [
+    "I0-d4",
+    "I1-d4",
+    "I2-d4",
+    "I3-d4",
+    "I4-d4",
+    "I5-d4",
+    "I6-d4",
+    "I7-d4",
+    "I8-d4",
+    "I9-d4",
+    "I10-d4",
+    "I11-d4",
+    "I12-d4",
+    "I13-d4",
+    "I14-d4",
+    "I15-d4",
+    "I16-d4",
+    "I17-d4",
+    "I18-d4",
+    "I19-d4",
+    "I20-d4",
+    "I21-d4",
+    "I22-d4",
+    "I23-d4",
+    "I24-d4",
+    "I25-d4",
+    "I26-d4",
+    "I27-d4",
+    "I28-d4",
+    "I29-d4",
+    "I30-d4",
+    "I31-d4",
+    "I32-d4",
+    "I33-d4",
+    "I35-d4",
+    "I36-d4",
+    "I38-d4",
+    "I39-d4",
+    "I40-d4",
+    "I41-d4",
+    "I42-d4",
+    "I43-d4",
+    "I45-d4",
+    "I46-d4",
+    "I48-d4",
+    "I49-d4",
+    "I51-d4",
+    "I52-d4",
+    "I54-d4",
+    "I57-d4",
+    "I64-d4",
+    "I65-d4",
+    "I66-d4",
+    "I74-d4",
+    "I76-d4",
+    "I78-d4",
+    "I79-d4",
+    "I84-d4",
+    "I85-d4",
+    "I94-d4",
+    "I104-d4",
+    "I106-d4",
+    "I109-d4",
+    "I112-d4"
+  ],
+  "smokeId": "d4",
+  "targetPairs": 315000,
+  "startIndex": 0,
+  "targetPairsPerSecond": 5250,
+  "scheduledPairs": 315000,
+  "dispatchedPairs": 315000,
+  "droppedPairs": 0,
+  "completedPairs": 315000,
+  "acceptedOrders": 630000,
+  "acceptedOrdersAtDeadline": 629509,
+  "deadlineAccounting": "validated durable HTTP acknowledgement observed strictly before fixed monotonic load-start plus requested duration; late/equal acknowledgements count only in acceptedOrders; epoch fields expose wall time from those same Go instants",
+  "loadStartedEpochMs": 1790922470104,
+  "scheduledDeadlineEpochMs": 1790922530104,
+  "acceptedAllEpochMs": 1790922530146,
+  "receiptDrainAccounting": "drainMs runs from HTTP worker completion before stopping the progress observer through successful receipt reconciliation; includes any outstanding observer query wait; acceptedAllEpochMs records worker completion even if requests failed",
+  "acceptedOrdersPerSecond": 10492.759412957394,
+  "elapsedMs": 60041,
+  "retries": 0,
+  "failures": 0,
+  "samples": [
+    {
+      "elapsedMs": 5000,
+      "completedPairsBefore": 25859,
+      "completedPairs": 25859
+    },
+    {
+      "elapsedMs": 10000,
+      "completedPairsBefore": 52283,
+      "completedPairs": 52283
+    },
+    {
+      "elapsedMs": 15000,
+      "completedPairsBefore": 78698,
+      "completedPairs": 78698
+    },
+    {
+      "elapsedMs": 20000,
+      "completedPairsBefore": 104870,
+      "completedPairs": 104870
+    },
+    {
+      "elapsedMs": 25000,
+      "completedPairsBefore": 131193,
+      "completedPairs": 131193
+    },
+    {
+      "elapsedMs": 30000,
+      "completedPairsBefore": 157287,
+      "completedPairs": 157287
+    },
+    {
+      "elapsedMs": 35000,
+      "completedPairsBefore": 183640,
+      "completedPairs": 183640
+    },
+    {
+      "elapsedMs": 40000,
+      "completedPairsBefore": 209926,
+      "completedPairs": 209926
+    },
+    {
+      "elapsedMs": 45000,
+      "completedPairsBefore": 236170,
+      "completedPairs": 236170
+    },
+    {
+      "elapsedMs": 50001,
+      "completedPairsBefore": 262405,
+      "completedPairs": 262405
+    },
+    {
+      "elapsedMs": 55000,
+      "completedPairsBefore": 288655,
+      "completedPairs": 288655
+    },
+    {
+      "elapsedMs": 60000,
+      "completedPairsBefore": 314693,
+      "completedPairs": 314693
+    }
+  ],
+  "gatePassed": true
+}

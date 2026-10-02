@@ -1,0 +1,103 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.27kB done
+#1 DONE 0.0s
+
+#2 [auth] library/debian:pull token for registry-1.docker.io
+#2 DONE 0.0s
+
+#3 [auth] library/gradle:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/gradle:9.8.0-jdk21
+#4 DONE 0.4s
+
+#5 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#5 DONE 0.4s
+
+#6 [internal] load .dockerignore
+#6 transferring context: 101B done
+#6 DONE 0.0s
+
+#7 [build  1/12] FROM docker.io/library/gradle:9.8.0-jdk21@sha256:4debe478645a3ad9208f3403ac021859fdf4d1a819d59970d75309b098f28f76
+#7 DONE 0.0s
+
+#8 [stage-1 1/8] FROM docker.io/library/debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251
+#8 DONE 0.0s
+
+#9 [internal] load build context
+#9 transferring context: 643.98kB 0.0s done
+#9 DONE 0.0s
+
+#10 [build  3/12] COPY services/platform-runtime/gradle gradle
+#10 CACHED
+
+#11 [build  7/12] COPY scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql /app/scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql
+#11 CACHED
+
+#12 [build  2/12] WORKDIR /app/services/platform-runtime
+#12 CACHED
+
+#13 [build  5/12] RUN ./gradlew --no-daemon dependencies
+#13 CACHED
+
+#14 [build  6/12] COPY services/platform-runtime/src src
+#14 CACHED
+
+#15 [build  4/12] COPY services/platform-runtime/gradlew services/platform-runtime/settings.gradle.kts services/platform-runtime/build.gradle.kts ./
+#15 CACHED
+
+#16 [build  8/12] RUN ./gradlew --no-daemon installDist     && rm -f build/install/platform-runtime/bin/*.bat     && jlink         --add-modules java.se,java.net.http,jdk.charsets,jdk.crypto.ec,jdk.httpserver,jdk.management,jdk.naming.dns,jdk.security.auth,jdk.unsupported,jdk.zipfs         --strip-debug         --no-header-files         --no-man-pages         --compress=zip-6         --output /opt/jre
+#16 CACHED
+
+#17 [build  9/12] WORKDIR /app/services/arena-control-plane
+#17 DONE 0.0s
+
+#18 [build 10/12] COPY services/arena-control-plane/settings.gradle.kts services/arena-control-plane/build.gradle.kts ./
+#18 DONE 0.0s
+
+#19 [build 11/12] COPY services/arena-control-plane/src src
+#19 DONE 0.0s
+
+#20 [build 12/12] RUN ../platform-runtime/gradlew --no-daemon -p . jar
+#20 0.439 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+#20 1.035 Daemon will be stopped at the end of the build
+#20 7.536 > Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+#20 8.335 > Task :processResources
+#20 18.64 > Task :compileKotlin
+#20 18.64 > Task :compileJava NO-SOURCE
+#20 18.64 > Task :classes
+#20 18.69 > Task :jar
+#20 18.69
+#20 18.69 BUILD SUCCESSFUL in 18s
+#20 18.69 3 actionable tasks: 3 executed
+#20 18.69 Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html
+#20 DONE 19.1s
+
+#21 [stage-1 6/8] COPY --from=build --chown=reef:reef /app/services/arena-control-plane/build/libs/arena-control-plane.jar /app/platform-runtime/lib/arena-control-plane.jar
+#21 CACHED
+
+#22 [stage-1 7/8] COPY --chown=reef:reef services/arena-control-plane/docker-entrypoint.sh /app/arena-platform-runtime
+#22 CACHED
+
+#23 [stage-1 2/8] WORKDIR /app
+#23 CACHED
+
+#24 [stage-1 3/8] RUN groupadd --system --gid 10001 reef     && useradd --system --uid 10001 --gid reef --home-dir /app --shell /usr/sbin/nologin reef     && apt-get update     && apt-get install -y --no-install-recommends ca-certificates curl     && rm -rf /var/lib/apt/lists/*
+#24 CACHED
+
+#25 [stage-1 5/8] COPY --from=build --chown=reef:reef /app/services/platform-runtime/build/install/platform-runtime /app/platform-runtime
+#25 CACHED
+
+#26 [stage-1 4/8] COPY --from=build --chown=reef:reef /opt/jre /opt/java/openjdk
+#26 CACHED
+
+#27 [stage-1 8/8] RUN chmod 0555 /app/arena-platform-runtime
+#27 CACHED
+
+#28 exporting to image
+#28 exporting layers done
+#28 writing image sha256:afe13d99f78398ece1f2fa003e5e03103deef8e1ba284ac284ea38bad8d49ede done
+#28 naming to docker.io/reef/r08-arena-ci:check done
+#28 DONE 0.0s

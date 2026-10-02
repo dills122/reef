@@ -1,0 +1,6 @@
+commit_delay|0|
+commit_siblings|5|
+fsync|on|
+synchronous_commit|on|
+wal_buffers|2048|8kB
+wal_sync_method|fdatasync|

@@ -33,7 +33,7 @@ jobs:
             context: services/matching-engine
             dockerfile: services/matching-engine/Dockerfile
           - name: platform-runtime
-            context: services/platform-runtime
+            context: .
             dockerfile: services/platform-runtime/Dockerfile
           - name: arena-platform-runtime
             context: .

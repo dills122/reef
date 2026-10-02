@@ -59,7 +59,7 @@ class MatchingFactsReconciliationIntegrationTest {
             val streamStore = PostgresRuntimePersistence(source, PostgresRuntimeSqlNames(streamSchema, "matching_auth_$key", "matching_admin_$key"), PostgresBootstrapMode.Compat)
             source.connection.use { conn -> conn.createStatement().use { sql ->
                 // Compat bootstrap omits deployed split-stage overload; apply existing migration to isolated schema.
-                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_matching_ioc_cancellation.sql")) {
+                for (migration in listOf("0020_order_lifecycle_incremental.sql", "0040_split_submit_outcome_projection_stages.sql", "0041_deterministic_timeline_projection_sequence.sql", "0049_execution_replay_conflicts.sql", "0059_trade_replay_and_parse.sql", "0068_event_replay_conflicts.sql", "0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql")) {
                     val sourceSql = java.nio.file.Files.readString(java.nio.file.Path.of("../../scripts/dev/db/migrations/runtime/$migration"))
                     sql.execute(sourceSql.replace("runtime.", "$streamSchema."))
                 }
@@ -91,6 +91,15 @@ class MatchingFactsReconciliationIntegrationTest {
             assertEquals(setOf("USD"), facts.ledgerEntries.filter { it.assetType == "CASH" }.map { it.assetId }.toSet())
             materializer.materialize(run)
             assertEquals(facts, settlement.factsByScenarioRunId(run), "settlement replay must preserve exact facts")
+            val emptyIoc = command("empty-$key", "BUY", "1", "IOC")
+            val emptyResult = service.submitOrder(emptyIoc)
+            assertEquals("1", emptyResult.cancelled?.cancelledQuantityUnits)
+            assertEquals(emptyResult, service.submitOrder(emptyIoc), "zero-fill retry must retain run scope")
+            assertEquals(emptyResult, restarted.submitOrder(emptyIoc), "zero-fill restart retry must retain run scope")
+            val otherRun = emptyIoc.copy(commandId = "cmd-other-$key", runId = "other-$run", venueSessionId = "other-$run")
+            val otherResult = service.submitOrder(otherRun)
+            assertNotNull(otherResult.accepted, "same order ID must work in separate run")
+            assertEquals(otherResult, service.submitOrder(otherRun))
         }
     }
 }

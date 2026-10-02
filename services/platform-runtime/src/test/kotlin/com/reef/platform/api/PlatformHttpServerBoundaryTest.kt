@@ -54,6 +54,32 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
 class PlatformHttpServerBoundaryTest {
+    @Test
+    fun defaultMemoryCanonicalProjectorUsesConfiguredCapturedSource() {
+        val sources = listOf(
+            InMemoryCommandCaptureStore(),
+            CommandLogCommandCaptureStore(InMemoryCommandCaptureStore(), InMemoryCommandLogStore())
+        )
+        sources.forEach { captured ->
+            val persistence = InMemoryRuntimePersistence()
+            val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+            val server = PlatformHttpServer(
+                port = 0, api = api, boundary = ExternalApiBoundary(),
+                idempotencyStore = InMemoryIdempotencyStore(),
+                idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+                commandCaptureStore = captured
+            ).start()
+            try {
+                com.reef.platform.infrastructure.persistence.assertCanonicalRunOrderLifecycleIsolation(persistence) { commandId, payload ->
+                    val route = if (JsonCodec.parseObject(payload).string("commandType") == "CancelOrder") "/orders/cancel" else "/orders/modify"
+                    captured.reserveReceived("client", route, commandId, commandId, payload)
+                }
+            } finally {
+                server.stop(0)
+            }
+        }
+    }
+
     private fun apiReadHeaders(
         clientId: String = "client-1",
         participantId: String = "participant-1"
@@ -3576,7 +3602,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-materialize"
                 )
             )
         )
@@ -3716,7 +3743,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-materialize-fail"
                 )
             )
         )
@@ -3902,7 +3930,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-materialize-security-fail"
                 )
             )
         )
@@ -4056,7 +4085,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-force-settle"
                 )
             )
         )

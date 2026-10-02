@@ -1,0 +1,20 @@
+{
+  "runId": "a98c312d",
+  "smokeId": "calcify-10k-q1-20261002",
+  "generation": 7,
+  "source": "REEF_CALCIFY-10K-Q1-20261002_EVENTS",
+  "output": "REEF_CALCIFY-10K-Q1-20261002_RESOLVED",
+  "scope": "local Docker10CPU RF1 all five topics write.caching=false, PostgreSQL intake cache1GB HTTP256/pool128, four instruments/four command partitions, matching350 canonical checksum, Phase1 poll1000 stub verifier, Phase2 two threads; disabled legacy roles stopped; retained aged intake; no hosted/RF3 capacity claim",
+  "policy": {
+    "seconds": 300,
+    "offeredOrderCommandsPerSecond": 10500,
+    "minimumAcceptedAtDeadlinePerSecond": 10000,
+    "maxLoadOverrunMs": 1000,
+    "maxReceiptDrainMs": 5000,
+    "maxResolvedDrainMs": 5000,
+    "maxResolvedEndGapTrades": 10500,
+    "fullFactParityRequired": true
+  },
+  "harnessSha256": "5e3c5880343b386686b1d8fd8d145367e7cb42a60eafb2f6e253866672ea8f35",
+  "pass": false
+}

@@ -1,0 +1,146 @@
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":6155,"acceptedToReceiptGapLower":558,"acceptedToReceiptGapUpper":739,"completedPairs":2954,"elapsedMs":5000,"failures":0,"receiptQueryMs":312,"receipts":2216,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":16379,"acceptedToReceiptGapLower":272,"acceptedToReceiptGapUpper":742,"completedPairs":8068,"elapsedMs":10001,"failures":0,"receiptQueryMs":309,"receipts":7327,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":30851,"acceptedToReceiptGapLower":1281,"acceptedToReceiptGapUpper":1893,"completedPairs":15295,"elapsedMs":15000,"failures":0,"receiptQueryMs":371,"receipts":13403,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":46047,"acceptedToReceiptGapLower":2115,"acceptedToReceiptGapUpper":2525,"completedPairs":22900,"elapsedMs":20000,"failures":0,"receiptQueryMs":380,"receipts":20376,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":60485,"acceptedToReceiptGapLower":2884,"acceptedToReceiptGapUpper":2973,"completedPairs":30101,"elapsedMs":25000,"failures":0,"receiptQueryMs":245,"receipts":27129,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":74383,"acceptedToReceiptGapLower":2786,"acceptedToReceiptGapUpper":2964,"completedPairs":37071,"elapsedMs":30001,"failures":0,"receiptQueryMs":321,"receipts":34108,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":91216,"acceptedToReceiptGapLower":3638,"acceptedToReceiptGapUpper":4181,"completedPairs":45491,"elapsedMs":35000,"failures":0,"receiptQueryMs":204,"receipts":41311,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":122410,"acceptedToReceiptGapLower":8027,"acceptedToReceiptGapUpper":8507,"completedPairs":61055,"elapsedMs":40000,"failures":0,"receiptQueryMs":164,"receipts":52549,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":162580,"acceptedToReceiptGapLower":12115,"acceptedToReceiptGapUpper":12653,"completedPairs":81167,"elapsedMs":45000,"failures":0,"receiptQueryMs":136,"receipts":68515,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":204812,"acceptedToReceiptGapLower":15998,"acceptedToReceiptGapUpper":16412,"completedPairs":102279,"elapsedMs":50000,"failures":0,"receiptQueryMs":114,"receipts":85868,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":246842,"acceptedToReceiptGapLower":20763,"acceptedToReceiptGapUpper":21029,"completedPairs":123311,"elapsedMs":55000,"failures":0,"receiptQueryMs":98,"receipts":102283,"retries":0,"sampleError":""}
+CALCIFY_LOAD_RESULT {
+  "smokeId": "c10k-h384-b450",
+  "targetPairs": 315000,
+  "startIndex": 0,
+  "targetPairsPerSecond": 5250,
+  "scheduledPairs": 313216,
+  "dispatchedPairs": 146314,
+  "droppedPairs": 166902,
+  "completedPairs": 143971,
+  "acceptedOrders": 288217,
+  "acceptedOrdersAtDeadline": 288217,
+  "deadlineAccounting": "validated durable HTTP acknowledgement observed strictly before fixed monotonic load-start plus requested duration; late/equal acknowledgements count only in acceptedOrders; epoch fields expose wall time from those same Go instants",
+  "loadStartedEpochMs": 1790915772848,
+  "scheduledDeadlineEpochMs": 1790915832848,
+  "acceptedAllEpochMs": 1790915832716,
+  "receiptDrainAccounting": "drainMs runs from HTTP worker completion before stopping the progress observer through successful receipt reconciliation; includes any outstanding observer query wait; acceptedAllEpochMs records worker completion even if requests failed",
+  "acceptedOrdersPerSecond": 4814.221115361465,
+  "elapsedMs": 59867,
+  "retries": 0,
+  "failures": 2343,
+  "firstError": "buyer-load-311162-c10k-h384-b450 status 429: {\n  \"code\":\"STREAM_COMMAND_WORKER_BACKPRESSURE\",\n  \"message\":\"stream command intake rejected because worker stream lag is 51068\",\n  \"correlationId\":\"\"\n}",
+  "receiptGeneration": 6,
+  "samples": [
+    {
+      "elapsedMs": 5000,
+      "completedPairsBefore": 2773,
+      "completedPairs": 2954,
+      "receipts": 2216,
+      "acceptedToReceiptGapLower": 558,
+      "acceptedToReceiptGapUpper": 739,
+      "receiptQueryMs": 312
+    },
+    {
+      "elapsedMs": 10001,
+      "completedPairsBefore": 7598,
+      "completedPairs": 8068,
+      "receipts": 7327,
+      "acceptedToReceiptGapLower": 272,
+      "acceptedToReceiptGapUpper": 742,
+      "receiptQueryMs": 309
+    },
+    {
+      "elapsedMs": 15000,
+      "completedPairsBefore": 14683,
+      "completedPairs": 15295,
+      "receipts": 13403,
+      "acceptedToReceiptGapLower": 1281,
+      "acceptedToReceiptGapUpper": 1893,
+      "receiptQueryMs": 371
+    },
+    {
+      "elapsedMs": 20000,
+      "completedPairsBefore": 22490,
+      "completedPairs": 22900,
+      "receipts": 20376,
+      "acceptedToReceiptGapLower": 2115,
+      "acceptedToReceiptGapUpper": 2525,
+      "receiptQueryMs": 380
+    },
+    {
+      "elapsedMs": 25000,
+      "completedPairsBefore": 30012,
+      "completedPairs": 30101,
+      "receipts": 27129,
+      "acceptedToReceiptGapLower": 2884,
+      "acceptedToReceiptGapUpper": 2973,
+      "receiptQueryMs": 245
+    },
+    {
+      "elapsedMs": 30001,
+      "completedPairsBefore": 36893,
+      "completedPairs": 37071,
+      "receipts": 34108,
+      "acceptedToReceiptGapLower": 2786,
+      "acceptedToReceiptGapUpper": 2964,
+      "receiptQueryMs": 321
+    },
+    {
+      "elapsedMs": 35000,
+      "completedPairsBefore": 44948,
+      "completedPairs": 45491,
+      "receipts": 41311,
+      "acceptedToReceiptGapLower": 3638,
+      "acceptedToReceiptGapUpper": 4181,
+      "receiptQueryMs": 204
+    },
+    {
+      "elapsedMs": 40000,
+      "completedPairsBefore": 60575,
+      "completedPairs": 61055,
+      "receipts": 52549,
+      "acceptedToReceiptGapLower": 8027,
+      "acceptedToReceiptGapUpper": 8507,
+      "receiptQueryMs": 164
+    },
+    {
+      "elapsedMs": 45000,
+      "completedPairsBefore": 80629,
+      "completedPairs": 81167,
+      "receipts": 68515,
+      "acceptedToReceiptGapLower": 12115,
+      "acceptedToReceiptGapUpper": 12653,
+      "receiptQueryMs": 136
+    },
+    {
+      "elapsedMs": 50000,
+      "completedPairsBefore": 101865,
+      "completedPairs": 102279,
+      "receipts": 85868,
+      "acceptedToReceiptGapLower": 15998,
+      "acceptedToReceiptGapUpper": 16412,
+      "receiptQueryMs": 114
+    },
+    {
+      "elapsedMs": 55000,
+      "completedPairsBefore": 123045,
+      "completedPairs": 123311,
+      "receipts": 102283,
+      "acceptedToReceiptGapLower": 20763,
+      "acceptedToReceiptGapUpper": 21029,
+      "receiptQueryMs": 98
+    }
+  ],
+  "p95AcceptedToReceiptGap": 21029,
+  "maxAcceptedToReceiptGap": 21029,
+  "gatePassed": false,
+  "gateReasons": [
+    "request failures or retries",
+    "accepted intake below 95% requested rate at deadline",
+    "scheduler dropped more than 5% of offered pairs",
+    "final receipt count mismatch",
+    "receipt drain exceeded five seconds",
+    "receipt gap p95 exceeded two seconds of requested trade rate"
+  ]
+}

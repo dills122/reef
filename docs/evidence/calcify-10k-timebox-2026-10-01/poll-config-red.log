@@ -1,0 +1,33 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :processTestResources UP-TO-DATE
+> Task :verifyNoTestSourceExclusions
+> Task :compileKotlin
+> Task :compileJava UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar
+> Task :compileTestKotlin
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+> Task :test FAILED
+
+CalcifyPipelineConfigTest > limitsApplyOnlyToTheirOwnStageAndAcceptBounds() FAILED
+    org.opentest4j.AssertionFailedError at CalcifyPipelineConfigTest.kt:22
+
+CalcifyPipelineConfigTest > explicitMalformedOrOutOfRangeLimitsFailBeforeStartup() FAILED
+    org.opentest4j.AssertionFailedError at CalcifyPipelineConfigTest.kt:34
+
+3 tests completed, 2 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/services/platform-runtime/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 3s
+7 actionable tasks: 5 executed, 2 up-to-date

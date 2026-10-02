@@ -154,3 +154,29 @@ func TestKafkaDeliveryGetters(t *testing.T) {
 		t.Errorf("DeliveredCount() = %d", d.DeliveredCount())
 	}
 }
+
+func TestKafkaMaxMessageBytesOverrideAndInvalidFallback(t *testing.T) {
+	for _, test := range []struct {
+		name, raw string
+		want      int
+	}{
+		{"default", "", 1 << 20}, {"four MiB", "4194304", 4 << 20},
+		{"trimmed", " 4194304 ", 4 << 20}, {"zero", "0", 1 << 20},
+		{"negative", "-1", 1 << 20}, {"nonnumeric", "oops", 1 << 20},
+		{"overflow", "9999999999999999999999999", 1 << 20},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES", test.raw)
+			cfg := newKafkaTransactionalClientConfig("test-client", "test-txn")
+			if cfg.Producer.MaxMessageBytes != test.want {
+				t.Fatalf("max message bytes=%d want%d", cfg.Producer.MaxMessageBytes, test.want)
+			}
+			if !cfg.Producer.Idempotent || cfg.Producer.RequiredAcks != sarama.WaitForAll || cfg.Net.MaxOpenRequests != 1 || cfg.Producer.Transaction.ID != "test-txn" {
+				t.Fatal("message ceiling changed durable transaction/ordering config")
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("configured producer invalid: %v", err)
+			}
+		})
+	}
+}

@@ -1,0 +1,19 @@
+42 |   child.stdin.on('error', error => { (evidence.stdinErrors ??= []).push(String(error)); });
+43 |   const timer = setTimeout(() => child.kill('SIGKILL'), (name === 'full-facts' ? 660 : seconds + 150) * 1000);
+44 |   child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false });
+45 |   createInterface({ input: child.stdout }).on('line', line => {
+46 |     if (line === 'OBSERVER_READY') readyResolve();
+47 |     if (line.startsWith('{')) { try { visit(JSON.parse(line), Date.now()); } catch (error) { console.error(error); child.kill('SIGTERM'); } }
+                                                      ^
+SyntaxError: JSON Parse error: Expected '}'
+      at <anonymous> (/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/calcify-joined-capacity.mjs:47:50)
+      at emit (node:events:95:22)
+      at [_onLine] (node:readline:584:16)
+      at [_normalWrite] (node:readline:674:22)
+      at onData (node:readline:462:38)
+      at emit (node:events:95:22)
+      at addChunk (internal:streams/readable:264:47)
+      at readableAddChunkPushByteMode (internal:streams/readable:242:18)
+      at handleNumberResult (internal:streams/native-readable:69:18)
+
+{"out":"/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s","acceptedAtDeadlinePerSecond":6974.833333333333,"resolvedEndGapUpperTrades":47296,"resolvedDrainUpperMs":7873,"exact":true,"pass":false}
