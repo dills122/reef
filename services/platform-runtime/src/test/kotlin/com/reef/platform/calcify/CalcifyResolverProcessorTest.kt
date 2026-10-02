@@ -11,7 +11,7 @@ import org.apache.kafka.streams.TopologyTestDriver
 import reef.contracts.calcify.v1.MatchContextResolvedV1
 
 class CalcifyResolverProcessorTest {
-    private val bodies=Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines()
+    private val bodies=CalcifySourceFixtures.currentBodies()
     private fun settings()=ResolverSettings(generation=1,sourceTopic="source",sourceTopicId="topic-uuid",verifiedTopic="verified",outputTopic="resolved")
     private fun driver(reader: VenueSourceReader, blocked: (Int, Boolean)->Unit = {_,_->}) = TopologyTestDriver(
         CalcifyResolverProcessor.topology(settings(), {reader}, blocked),

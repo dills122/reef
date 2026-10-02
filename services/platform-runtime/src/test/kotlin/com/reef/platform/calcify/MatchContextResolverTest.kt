@@ -6,7 +6,7 @@ import kotlin.test.*
 import reef.contracts.calcify.v1.MatchContextResolvedV1
 
 class MatchContextResolverTest {
-    private fun fixture() = Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines()
+    private fun fixture() = CalcifySourceFixtures.currentBodies()
         .mapIndexed { offset, body -> MatchContextResolver.parseBatch(body, "source", "topic-uuid", 1, 0, offset.toLong()) }
 
     @Test fun fullFactsAndWireReplay() {
@@ -51,7 +51,7 @@ class MatchContextResolverTest {
     }
 
     @Test fun corruptMalformedAndMisroutedSourceFailClosed() {
-        val original=Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines().first()
+        val original=CalcifySourceFixtures.currentBodies().first()
         assertFailsWith<IllegalArgumentException> { MatchContextResolver.parseBatch(original,"source","uuid",1,1,0) }
         assertFailsWith<IllegalArgumentException> { MatchContextResolver.parseBatch(original.replace("rest-buy","changed"),"source","uuid",1,0,0) }
         val altered=original.replace("\"quantityUnits\":\"1000\"","\"quantityUnits\":\"zero\"")
@@ -59,7 +59,7 @@ class MatchContextResolverTest {
         assertFailsWith<IllegalArgumentException> { MatchContextResolver.parseBatch(corrected,"source","uuid",1,0,0) }
     }
     @Test fun byteAndStringSourcePathsYieldIdenticalFullFacts() {
-        Path.of("../../docs/evidence/calcify-phase2/source-fixture.jsonl").readLines().forEachIndexed { offset, body ->
+        CalcifySourceFixtures.currentBodies().forEachIndexed { offset, body ->
             assertEquals(MatchContextResolver.parseBatch(body,"source","uuid",1,0,offset.toLong()), MatchContextResolver.parseBatch(body.toByteArray(),"source","uuid",1,0,offset.toLong()))
         }
     }
