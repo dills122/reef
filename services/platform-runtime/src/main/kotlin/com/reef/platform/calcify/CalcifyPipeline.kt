@@ -257,8 +257,17 @@ object CalcifyPipeline {
                 }
                 val description = admin.describeTopics(listOf(topic)).allTopicNames().get().getValue(topic)
                 require(description.partitions().size == count) { "Calcify topic partition count mismatch: " + topic }
+                // Pre-existing topics (e.g. a local volume from before this
+                // check existed) can legitimately fail here. Deliberately
+                // fail closed rather than warn-and-continue: silently
+                // running against an under-replicated/non-durable topic is
+                // exactly the drift this check exists to catch. Remediation
+                // is to delete and let ensureTopics recreate the topic with
+                // the required config (local dev: make dev-down already
+                // drops volumes).
+                val remediation = "delete topic '$topic' and let ensureTopics recreate it with the required config (local dev: make dev-down, then restart)"
                 require(description.partitions().all { it.replicas().size >= config.replication }) {
-                    "Calcify topic replication mismatch: " + topic
+                    "Calcify topic replication mismatch: $topic; $remediation"
                 }
                 val resource = ConfigResource(ConfigResource.Type.TOPIC, topic)
                 val values = admin.describeConfigs(listOf(resource)).all().get().getValue(resource)
@@ -266,7 +275,7 @@ object CalcifyPipeline {
                 try {
                     ResolverTopicDurability.validate(values, config.broker, config.replication, true)
                 } catch (ex: IllegalArgumentException) {
-                    throw IllegalArgumentException("Calcify topic $topic: ${ex.message}", ex)
+                    throw IllegalArgumentException("Calcify topic $topic does not meet required durability: ${ex.message}; $remediation", ex)
                 }
             }
         }
