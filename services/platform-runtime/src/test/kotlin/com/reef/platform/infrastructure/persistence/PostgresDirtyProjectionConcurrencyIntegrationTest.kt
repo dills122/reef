@@ -23,8 +23,8 @@ class PostgresDirtyProjectionConcurrencyIntegrationTest {
         try {
             PostgresRuntimePersistence(source, names, PostgresBootstrapMode.Compat)
             source.connection.use { connection ->
-                connection.exec("CREATE TABLE ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
-                connection.exec("CREATE TABLE ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                connection.exec("CREATE TABLE IF NOT EXISTS ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                connection.exec("CREATE TABLE IF NOT EXISTS ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
                 listOf("runtime_reject_execution_replay_conflict", "runtime_reject_submit_result_replay_conflict", "runtime_reject_trade_replay_conflict", "runtime_persist_submit_outcome_status_stage", "runtime_project_order_lifecycle_state")
                     .forEach { name -> connection.exec(latestFunction(name).replace("runtime.", "$schema.")) }
                 applyLockOnlyMigration(connection, schema)
@@ -68,8 +68,8 @@ class PostgresDirtyProjectionConcurrencyIntegrationTest {
         try {
             val persistence = PostgresRuntimePersistence(source, names, PostgresBootstrapMode.Compat)
             source.connection.use { observer ->
-                observer.exec("CREATE TABLE ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
-                observer.exec("CREATE TABLE ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                observer.exec("CREATE TABLE IF NOT EXISTS ${names.orderLifecycleDirty}(order_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                observer.exec("CREATE TABLE IF NOT EXISTS ${names.marketDataSnapshotDirty}(instrument_id TEXT PRIMARY KEY, dirtied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
                 val functionNames = listOf("runtime_reject_execution_replay_conflict", "runtime_reject_submit_result_replay_conflict", "runtime_reject_trade_replay_conflict", "runtime_persist_submit_outcome_status_stage", "runtime_project_order_lifecycle_state", "runtime_project_market_data_snapshots")
                 functionNames.forEach { name -> observer.exec(latestFunction(name).replace("runtime.", "$schema.")) }
                 val planMigration = Path.of(System.getenv("REEF_DIRTY_PROJECTION_MIGRATION_DIR_TEST") ?: "../../scripts/dev/db/migrations/runtime")
@@ -192,7 +192,18 @@ class PostgresDirtyProjectionConcurrencyIntegrationTest {
     private fun applyLockOnlyMigration(connection: Connection, schema: String) {
         val migration = Path.of(System.getenv("REEF_DIRTY_PROJECTION_MIGRATION_DIR_TEST") ?: "../../scripts/dev/db/migrations/runtime")
             .resolve("0065_lock_only_projection_dirty_conflicts.sql")
-        if (Files.exists(migration)) connection.exec(Files.readString(migration).replace("runtime.", "$schema."))
+        if (Files.exists(migration)) {
+            // New lifecycle SQL already scopes and optimizes dirty conflicts.
+            // Apply historical optimizer to fixture functions without adding WHERE twice.
+            val sql = Files.readString(migration)
+                .replace("ON CONFLICT (order_id)", "ON CONFLICT (run_id, order_id)")
+                .replace(
+                    "EXECUTE replace(function_definition, old_arm, old_arm || ' WHERE FALSE');",
+                    "IF position(old_arm || ' WHERE FALSE' IN function_definition) = 0 THEN " +
+                        "EXECUTE replace(function_definition, old_arm, old_arm || ' WHERE FALSE'); END IF;"
+                )
+            connection.exec(sql.replace("runtime.", "$schema."))
+        }
     }
 
     private fun waitUntil(description: String, future: Future<*>? = null, condition: () -> Boolean) {

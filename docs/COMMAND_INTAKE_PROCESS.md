@@ -107,7 +107,7 @@ POST /api/v1/orders/cancel-by-client-order
   -> emit normal CancelOrder with routing, ownership, and order identity
 ```
 
-The slower resolver is not part of the throughput target.
+The slower resolver is not part of the throughput target. It accepts optional `runId`; a participant reusing `clientOrderId` across runs must provide scope. Ambiguous unscoped resolution returns not-found. See [runtime order identity](RUNTIME_ORDER_IDENTITY.md).
 
 ## Acceptance Response
 

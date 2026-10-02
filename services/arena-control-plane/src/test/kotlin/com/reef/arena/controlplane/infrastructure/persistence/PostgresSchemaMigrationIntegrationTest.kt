@@ -356,8 +356,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 ps.executeUpdate()
             }
 
-            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?)").use { ps ->
-                ps.setString(1, orderId)
+            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(run_id, order_id) VALUES (?, ?)").use { ps ->
+                ps.setString(1, "run-$suffix")
+                ps.setString(2, orderId)
                 ps.executeUpdate()
             }
 
@@ -377,16 +378,18 @@ class PostgresSchemaMigrationIntegrationTest {
                 """
                 UPDATE runtime.order_lifecycle_state
                 SET updated_at = ?::timestamptz
-                WHERE order_id = ?
+                WHERE run_id = ? AND order_id = ?
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, sentinelUpdatedAt)
-                ps.setString(2, orderId)
+                ps.setString(2, "run-$suffix")
+                ps.setString(3, orderId)
                 assertEquals(1, ps.executeUpdate())
             }
 
-            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(order_id) VALUES (?)").use { ps ->
-                ps.setString(1, orderId)
+            conn.prepareStatement("INSERT INTO runtime.order_lifecycle_dirty(run_id, order_id) VALUES (?, ?)").use { ps ->
+                ps.setString(1, "run-$suffix")
+                ps.setString(2, orderId)
                 ps.executeUpdate()
             }
 
@@ -403,13 +406,13 @@ class PostgresSchemaMigrationIntegrationTest {
                   EXISTS (
                     SELECT 1
                     FROM runtime.order_lifecycle_state
-                    WHERE order_id = ?
+                    WHERE run_id = ? AND order_id = ?
                       AND updated_at = ?::timestamptz
                   ) AS updated_at_preserved,
                   (
                     SELECT COUNT(*)
                     FROM runtime.order_lifecycle_dirty
-                    WHERE order_id = ?
+                    WHERE run_id = ? AND order_id = ?
                   ) AS dirty_rows,
                   (
                     SELECT COUNT(*)
@@ -418,10 +421,12 @@ class PostgresSchemaMigrationIntegrationTest {
                   ) AS market_dirty_rows
                 """.trimIndent()
             ).use { ps ->
-                ps.setString(1, orderId)
-                ps.setString(2, sentinelUpdatedAt)
-                ps.setString(3, orderId)
-                ps.setString(4, instrumentId)
+                ps.setString(1, "run-$suffix")
+                ps.setString(2, orderId)
+                ps.setString(3, sentinelUpdatedAt)
+                ps.setString(4, "run-$suffix")
+                ps.setString(5, orderId)
+                ps.setString(6, instrumentId)
                 ps.executeQuery().use { rs ->
                     assertTrue(rs.next())
                     assertTrue(rs.getBoolean("updated_at_preserved"))

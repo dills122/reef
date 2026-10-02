@@ -1,0 +1,197 @@
+TAP version 13
+# Subtest: discovers deterministic domain migrations
+ok 1 - discovers deterministic domain migrations
+  ---
+  duration_ms: 78.290667
+  type: 'test'
+  ...
+# Subtest: venue event batch integrity migration removes duplicate index and rejects conflicts
+ok 2 - venue event batch integrity migration removes duplicate index and rejects conflicts
+  ---
+  duration_ms: 47.934959
+  type: 'test'
+  ...
+# Subtest: audit hardening migration preserves first command outcome and counts actual canonical inserts
+ok 3 - audit hardening migration preserves first command outcome and counts actual canonical inserts
+  ---
+  duration_ms: 41.804666
+  type: 'test'
+  ...
+# Subtest: command-log integrity audit migration replaces dropped hot-path foreign key checks
+ok 4 - command-log integrity audit migration replaces dropped hot-path foreign key checks
+  ---
+  duration_ms: 42.6585
+  type: 'test'
+  ...
+# Subtest: typed top-of-book migration adds native numeric facts and indexes
+ok 5 - typed top-of-book migration adds native numeric facts and indexes
+  ---
+  duration_ms: 31.7615
+  type: 'test'
+  ...
+# Subtest: typed runtime event migration adds native UUID and timestamp facts
+ok 6 - typed runtime event migration adds native UUID and timestamp facts
+  ---
+  duration_ms: 33.119125
+  type: 'test'
+  ...
+# Subtest: typed submit result migration adds native audit facts
+ok 7 - typed submit result migration adds native audit facts
+  ---
+  duration_ms: 39.088333
+  type: 'test'
+  ...
+# Subtest: typed execution and trade migration adds native market facts
+ok 8 - typed execution and trade migration adds native market facts
+  ---
+  duration_ms: 23.367625
+  type: 'test'
+  ...
+# Subtest: execution liquidity-role migration preserves canonical maker/taker attribution
+ok 9 - execution liquidity-role migration preserves canonical maker/taker attribution
+  ---
+  duration_ms: 29.845084
+  type: 'test'
+  ...
+# Subtest: execution replay migration rejects conflicting immutable facts
+ok 10 - execution replay migration rejects conflicting immutable facts
+  ---
+  duration_ms: 39.01075
+  type: 'test'
+  ...
+# Subtest: projection batch claim migration guards effects on both projection paths
+ok 11 - projection batch claim migration guards effects on both projection paths
+  ---
+  duration_ms: 23.035042
+  type: 'test'
+  ...
+# Subtest: typed order migration adds native order facts
+ok 12 - typed order migration adds native order facts
+  ---
+  duration_ms: 39.398334
+  type: 'test'
+  ...
+# Subtest: typed canonical time migration adds native audit timestamps
+ok 13 - typed canonical time migration adds native audit timestamps
+  ---
+  duration_ms: 35.104208
+  type: 'test'
+  ...
+# Subtest: batch payload gin index is removed from hot canonical materialization
+ok 14 - batch payload gin index is removed from hot canonical materialization
+  ---
+  duration_ms: 29.449792
+  type: 'test'
+  ...
+# Subtest: command-log archive migration creates partitioned terminal result archive
+ok 15 - command-log archive migration creates partitioned terminal result archive
+  ---
+  duration_ms: 19.566375
+  type: 'test'
+  ...
+# Subtest: runtime archive migrations create partitioned cold-history targets
+ok 16 - runtime archive migrations create partitioned cold-history targets
+  ---
+  duration_ms: 20.153125
+  type: 'test'
+  ...
+# Subtest: runtime projection lock-order migration hardens dirty queues
+ok 17 - runtime projection lock-order migration hardens dirty queues
+  ---
+  duration_ms: 23.9885
+  type: 'test'
+  ...
+# Subtest: runtime dirty queue migration moves rebuildable queues out of WAL
+ok 18 - runtime dirty queue migration moves rebuildable queues out of WAL
+  ---
+  duration_ms: 23.997875
+  type: 'test'
+  ...
+# Subtest: runtime event payload migration moves event JSON off hot rows
+ok 19 - runtime event payload migration moves event JSON off hot rows
+  ---
+  duration_ms: 18.977167
+  type: 'test'
+  ...
+# Subtest: idempotent lifecycle projection migration skips no-op row rewrites
+ok 20 - idempotent lifecycle projection migration skips no-op row rewrites
+  ---
+  duration_ms: 22.3205
+  type: 'test'
+  ...
+# Subtest: runtime event index migration drops legacy all-event indexes
+ok 21 - runtime event index migration drops legacy all-event indexes
+  ---
+  duration_ms: 26.734292
+  type: 'test'
+  ...
+# Subtest: command outcome projection preserves command correlation metadata
+ok 22 - command outcome projection preserves command correlation metadata
+  ---
+  duration_ms: 32.164916
+  type: 'test'
+  ...
+# Subtest: submit outcome projection migration splits command-status and timeline stages
+ok 23 - submit outcome projection migration splits command-status and timeline stages
+  ---
+  duration_ms: 45.163708
+  type: 'test'
+  ...
+# Subtest: wraps migration SQL with checksum ledger insert
+ok 24 - wraps migration SQL with checksum ledger insert
+  ---
+  duration_ms: 75.687667
+  type: 'test'
+  ...
+# Subtest: routes arena migrations only to arena database target
+ok 25 - routes arena migrations only to arena database target
+  ---
+  duration_ms: 39.724708
+  type: 'test'
+  ...
+# dev profile checks passed
+# Subtest: scripts/dev/lib/dev-profiles.test.mjs
+ok 2 - scripts/dev/lib/dev-profiles.test.mjs
+  ---
+  duration_ms: 71.760292
+  type: 'test'
+  ...
+# Subtest: devUp starts postgres, runs migrations, then starts full stack
+ok 27 - devUp starts postgres, runs migrations, then starts full stack
+  ---
+  duration_ms: 1.102667
+  type: 'test'
+  ...
+# Subtest: devUp fails before full stack when migrations fail
+ok 28 - devUp fails before full stack when migrations fail
+  ---
+  duration_ms: 0.415292
+  type: 'test'
+  ...
+# Subtest: devReset wipes volumes, migrates, starts stack, and can run smoke
+ok 29 - devReset wipes volumes, migrates, starts stack, and can run smoke
+  ---
+  duration_ms: 0.223417
+  type: 'test'
+  ...
+# Subtest: devReset skips smoke by default
+ok 30 - devReset skips smoke by default
+  ---
+  duration_ms: 0.130458
+  type: 'test'
+  ...
+# Subtest: devUp starts Arena storage only when the Arena overlay is selected
+ok 31 - devUp starts Arena storage only when the Arena overlay is selected
+  ---
+  duration_ms: 0.266417
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 962.094584

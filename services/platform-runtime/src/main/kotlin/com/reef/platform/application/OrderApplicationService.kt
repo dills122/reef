@@ -1,5 +1,6 @@
 package com.reef.platform.application
 
+import com.reef.platform.domain.RuntimeOrderIdentity
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
@@ -75,6 +76,10 @@ class OrderApplicationService(
         }
     }
 
+    internal fun bindCapturedCommandPayloadLookup(lookup: (String) -> String?) {
+        runtimePersistence.bindCapturedCommandPayloadLookup(lookup)
+    }
+
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         return HotPathMetrics.time("runtime.submitOrder.total") {
             val outcome = coalesceByCommandId(command.commandId) {
@@ -147,7 +152,8 @@ class OrderApplicationService(
                 orderId = command.orderId,
                 occurredAt = command.occurredAt,
                 permission = Permission.ORDER_SUBMIT,
-                rejectedEventType = "OrderRejected"
+                rejectedEventType = "OrderRejected",
+                runId = command.runId
             )
         }
         if (authorizationError != null) {
@@ -170,7 +176,8 @@ class OrderApplicationService(
                         correlationId = command.correlationId,
                         occurredAt = rejected.occurredAt,
                         actorId = command.actorId,
-                        payloadJson = commandPayload(command.commandId)
+                        payloadJson = commandPayload(command.commandId),
+                        runId = command.runId
                     )
                 )
             } else {
@@ -226,7 +233,8 @@ class OrderApplicationService(
                     correlationId = command.correlationId,
                     occurredAt = accepted.occurredAt,
                     actorId = command.actorId,
-                    payloadJson = commandPayload(command.commandId)
+                    payloadJson = commandPayload(command.commandId),
+                    runId = command.runId
                 )
             )
             result.executions.forEach { execution ->
@@ -240,7 +248,8 @@ class OrderApplicationService(
                         correlationId = command.correlationId,
                         occurredAt = execution.occurredAt,
                         actorId = command.actorId,
-                        payloadJson = commandPayload(command.commandId)
+                        payloadJson = commandPayload(command.commandId),
+                        runId = command.runId
                     )
                 )
             }
@@ -255,7 +264,8 @@ class OrderApplicationService(
                         correlationId = command.correlationId,
                         occurredAt = trade.occurredAt,
                         actorId = command.actorId,
-                        payloadJson = commandPayload(command.commandId)
+                        payloadJson = commandPayload(command.commandId),
+                        runId = command.runId
                     )
                 )
             }
@@ -289,7 +299,8 @@ class OrderApplicationService(
                         correlationId = command.correlationId,
                         occurredAt = rejected.occurredAt,
                         actorId = command.actorId,
-                        payloadJson = commandPayload(command.commandId)
+                        payloadJson = commandPayload(command.commandId),
+                        runId = command.runId
                     )
                 )
             }
@@ -297,7 +308,10 @@ class OrderApplicationService(
 
         return PersistableSubmitOutcome(
             commandId = command.commandId,
-            result = result,
+            result = result.copy(
+                executions = result.executions.map { it.copy(runId = command.runId) },
+                trades = result.trades.map { it.copy(runId = command.runId) }
+            ),
             acceptedOrder = acceptedOrder,
             lifecycleEvents = lifecycleEvents
         )
@@ -431,7 +445,8 @@ class OrderApplicationService(
                 orderId = command.orderId,
                 occurredAt = command.occurredAt,
                 permission = Permission.ORDER_CANCEL,
-                rejectedEventType = "OrderCancelRejected"
+                rejectedEventType = "OrderCancelRejected",
+                runId = command.runId
             )
         }
         if (authorizationError != null) {
@@ -450,7 +465,8 @@ class OrderApplicationService(
             traceId = traceId,
             result = result,
             acceptedEventType = "OrderCancelled",
-            rejectedEventType = "OrderCancelRejected"
+            rejectedEventType = "OrderCancelRejected",
+            runId = command.runId
         )
     }
 
@@ -494,7 +510,8 @@ class OrderApplicationService(
                 orderId = command.orderId,
                 occurredAt = command.occurredAt,
                 permission = Permission.ORDER_MODIFY,
-                rejectedEventType = "OrderModifyRejected"
+                rejectedEventType = "OrderModifyRejected",
+                runId = command.runId
             )
         }
         if (authorizationError != null) {
@@ -513,7 +530,8 @@ class OrderApplicationService(
             traceId = traceId,
             result = result,
             acceptedEventType = "OrderModified",
-            rejectedEventType = "OrderModifyRejected"
+            rejectedEventType = "OrderModifyRejected",
+            runId = command.runId
         )
     }
 
@@ -525,7 +543,8 @@ class OrderApplicationService(
         traceId: String,
         result: SubmitOrderResult,
         acceptedEventType: String,
-        rejectedEventType: String
+        rejectedEventType: String,
+        runId: String
     ): PersistableSubmitOutcome {
         val events = mutableListOf<RuntimeEvent>()
         appendLifecycleEvent(
@@ -544,7 +563,7 @@ class OrderApplicationService(
             commandId = commandId,
             result = result,
             acceptedOrder = null,
-            lifecycleEvents = events
+            lifecycleEvents = events.map { it.copy(runId = runId) }
         )
     }
 
@@ -602,7 +621,8 @@ class OrderApplicationService(
         orderId: String,
         occurredAt: String,
         permission: String,
-        rejectedEventType: String
+        rejectedEventType: String,
+        runId: String
     ): PersistableSubmitOutcome? {
         if (hasPermission(actorId, permission)) {
             return null
@@ -624,7 +644,8 @@ class OrderApplicationService(
                     correlationId = correlationId,
                     occurredAt = occurredAt,
                     actorId = actorId,
-                    payloadJson = commandPayload(commandId)
+                    payloadJson = commandPayload(commandId),
+                    runId = runId
                 )
             )
         )
@@ -638,7 +659,8 @@ class OrderApplicationService(
         orderId: String,
         occurredAt: String,
         permission: String,
-        rejectedEventType: String
+        rejectedEventType: String,
+        runId: String
     ): PersistableSubmitOutcome? {
         if (hasPermission(actorId, permission)) {
             return null
@@ -665,7 +687,8 @@ class OrderApplicationService(
                     correlationId = correlationId,
                     occurredAt = occurredAt,
                     actorId = actorId,
-                    payloadJson = commandPayload(commandId)
+                    payloadJson = commandPayload(commandId),
+                    runId = runId
                 )
             )
         )
@@ -721,7 +744,8 @@ class OrderApplicationService(
         correlationId: String,
         occurredAt: String,
         actorId: String = "",
-        payloadJson: String = "{}"
+        payloadJson: String = "{}",
+        runId: String = ""
     ): RuntimeEvent {
         return RuntimeEvent(
             eventId = eventId,
@@ -734,7 +758,8 @@ class OrderApplicationService(
             schemaVersion = eventSchemaVersion,
             occurredAt = occurredAt,
             actorId = actorId,
-            payloadJson = payloadJson
+            payloadJson = payloadJson,
+            runId = runId
         )
     }
 
@@ -746,14 +771,20 @@ class OrderApplicationService(
         return traceId.ifBlank { orderId }
     }
 
-    fun persistedOrder(orderId: String) = runtimePersistence.acceptedOrder(orderId)
+    fun persistedOrder(orderId: String, runId: String? = null) =
+        if (runId == null) runtimePersistence.acceptedOrder(orderId)
+        else runtimePersistence.acceptedOrder(RuntimeOrderIdentity(runId, orderId))
 
     fun persistedOrders() = runtimePersistence.acceptedOrders()
 
-    fun findOrderByClientOrderId(participantId: String, clientOrderId: String) =
-        runtimePersistence.findOrderByClientOrderId(participantId, clientOrderId)
+    fun findOrderByClientOrderId(participantId: String, clientOrderId: String, runId: String? = null) =
+        runtimePersistence.findOrderByClientOrderId(participantId, clientOrderId, runId)
+
+    fun persistedExecutions(identity: RuntimeOrderIdentity) = runtimePersistence.executionsForOrder(identity)
 
     fun persistedExecutions(orderId: String) = runtimePersistence.executionsForOrder(orderId)
+
+    fun persistedTrades(identity: RuntimeOrderIdentity) = runtimePersistence.tradesForOrder(identity)
 
     fun persistedTrades(orderId: String) = runtimePersistence.tradesForOrder(orderId)
 
@@ -773,6 +804,8 @@ class OrderApplicationService(
     fun executionsForParticipant(participantId: String, instrumentId: String = "", runId: String = "", limit: Int = 0) =
         runtimePersistence.executionsForParticipant(participantId, instrumentId, runId, limit)
 
+    fun persistedEvents(identity: RuntimeOrderIdentity) = runtimePersistence.eventsForOrder(identity)
+
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
 
     fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)
@@ -791,6 +824,8 @@ class OrderApplicationService(
     fun projectionDirtyQueueMarkerStats() = runtimePersistence.projectionDirtyQueueMarkerStats()
     fun projectionLagUpTo(projectionName: String, partitions: List<Int>, source: String, threshold: Long) =
         runtimePersistence.projectionLagUpTo(projectionName, partitions, source, threshold)
+
+    fun orderLifecycleState(identity: RuntimeOrderIdentity) = runtimePersistence.orderLifecycleState(identity)
 
     fun orderLifecycleState(orderId: String) = runtimePersistence.orderLifecycleState(orderId)
 

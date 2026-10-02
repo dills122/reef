@@ -1,0 +1,54 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :processTestResources
+> Task :verifyNoTestSourceExclusions
+
+> Task :compileKotlin
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/JsonCodec.kt:232:18 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:50:25 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:51:50 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:51:88 'constructor(): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:70:30 'fun addLast(p0: EventExecutorGroup!, vararg p1: ChannelHandler!): ChannelPipeline!' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:32:25 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:33:50 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:33:88 'constructor(): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandPublishing.kt:172:37 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandPublishing.kt:198:69 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/BrokerVenueSourceReader.kt:63:23 'fun close(p0: Duration!): Unit' is deprecated. Deprecated in Java.
+
+> Task :compileJava
+> Task :classes
+> Task :jar
+
+> Task :compileTestKotlin
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:180:60 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:181:80 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:374:61 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:409:61 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:410:83 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt:232:32 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/infrastructure/engine/EngineTransportTest.kt:64:54 Unnecessary non-null assertion (!!) on a non-null receiver of type 'EngineOrderAccepted'.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses
+
+> Task :test FAILED
+
+InMemoryRuntimePersistenceTest > sameOrderIdPreservesBothRunAcceptances() FAILED
+    org.opentest4j.AssertionFailedError at InMemoryRuntimePersistenceTest.kt:30
+
+1 test completed, 1 failed
+
+[Incubating] Problems report is available at: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///Users/dsteele/.codex/worktrees/runtime-order-run-isolation/reef/services/platform-runtime/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 30s
+7 actionable tasks: 7 executed

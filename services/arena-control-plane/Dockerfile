@@ -6,6 +6,7 @@ COPY services/platform-runtime/gradlew services/platform-runtime/settings.gradle
 RUN ./gradlew --no-daemon dependencies
 
 COPY services/platform-runtime/src src
+COPY scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql /app/scripts/dev/db/migrations/runtime/0073_runtime_order_run_identity.sql
 RUN ./gradlew --no-daemon installDist \
     && rm -f build/install/platform-runtime/bin/*.bat \
     && jlink \

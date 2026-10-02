@@ -1,5 +1,6 @@
 package com.reef.platform.application.settlement
 
+import com.reef.platform.domain.RuntimeOrderIdentity
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.TradeCreated
@@ -64,14 +65,14 @@ class TradeSettlementObligationMaterializer(
         val resourceChecksEnabled = existingFacts.resourcePositions.isNotEmpty()
         val scenarioRunProfileId = runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId).orEmpty()
         val venueSessionProfileIds = mutableMapOf<String, String>()
-        val acceptedOrdersById = runtimePersistence.acceptedOrders(
-            trades.flatMap { listOf(it.buyOrderId, it.sellOrderId) }.toSet()
+        val acceptedOrdersById = runtimePersistence.acceptedOrdersByIdentity(
+            trades.flatMap { listOf(RuntimeOrderIdentity(it.runId, it.buyOrderId), RuntimeOrderIdentity(it.runId, it.sellOrderId)) }.toSet()
         )
         var skipped = 0
 
         trades.forEach { trade ->
-            val buyOrder = acceptedOrdersById[trade.buyOrderId]
-            val sellOrder = acceptedOrdersById[trade.sellOrderId]
+            val buyOrder = acceptedOrdersById[RuntimeOrderIdentity(trade.runId, trade.buyOrderId)]
+            val sellOrder = acceptedOrdersById[RuntimeOrderIdentity(trade.runId, trade.sellOrderId)]
             if (buyOrder == null || sellOrder == null) {
                 skipped += 1
                 return@forEach
