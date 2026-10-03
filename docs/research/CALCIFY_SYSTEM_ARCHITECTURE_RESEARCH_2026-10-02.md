@@ -224,8 +224,8 @@ Original seed/oracle logs for `sustained-8ea6c8ce` and previous
 `sustained-53a64664`, plus L9 raw report, inspected for this review. Other values
 above retain their ledger/report attribution. Sources: [throughput ledger](../THROUGHPUT_BASELINES.md),
 [resolver artifacts](../evidence/calcify-phase2-implementation/README.md),
-[L9 report](../evidence/calcify-phase1-go-5k-upper-5m.json),
-[E4 report](CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md).
+[L9 report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/calcify-phase1-go-5k-upper-5m.json),
+[E4 report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md).
 
 No new timing result. Proposed workload adds actual shared-account state, journal,
 reservations, due work, SQL financial bundle and API load. It differs materially
