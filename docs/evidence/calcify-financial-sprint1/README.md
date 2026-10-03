@@ -233,3 +233,9 @@ Latest fetched master64f51936 merges planning PR#466; initial open-PR snapshot r
 historical. Planning merge changes docs only; original executed source head85f0ce8c
 and runtime/test provenance remain unchanged. Instance2 reviews corrected complete
 branch before publication; no authority cutover or successful E0 tooling claim.
+
+[Fresh review instance2of3](reviews/instance-2.md) returns Ready with non-blocking
+follow-ups for PR publication of preparation checkpoint. Prior P2 closed; no new
+actionable findings. [Author response](reviews/instance-2-author-response.md) accepts
+scoped verdict and carries disclosed E1/tool/runtime gaps forward. Final delivery
+adds review records/status only; no material change after reviewed headeccdef96.

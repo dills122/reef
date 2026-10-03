@@ -33,6 +33,11 @@ Byte-capture correction and2 regression tests pass; review2 checks corrected bra
 before PR publication. Planning PR#466 now merged; doc-only master sync leaves
 original executed production-source85f0ce8c provenance intact.
 
+Fresh independent review2of3 accepts scoped preparation checkpoint with non-blocking
+follow-ups; prior recorder P2 fixed and verified, no new actionable findings.
+[Report](evidence/calcify-financial-sprint1/reviews/instance-2.md) retained; E0 tool
+gate and later financial/broker proofs remain pending. PR publication authorized.
+
 ## CI dependency throttling recovery (2026-10-02)
 
 Master `2af704d7` CI recovered on [failed-job rerun](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2).
