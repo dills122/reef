@@ -2,7 +2,9 @@ package app
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"golang.org/x/text/currency"
 	"math"
 	"math/bits"
 	"os"
@@ -26,6 +28,7 @@ type Service struct {
 	matchingProfiles  MatchingProfiles
 	stpMode           SelfTradePreventionMode
 	terminalRetention terminalOrderRetention
+	instrumentQuotes  map[string]string
 }
 
 type restingOrder = hotbook.RestingOrder
@@ -115,6 +118,24 @@ type SessionControls struct {
 }
 
 type Option func(*Service)
+
+// WithInstrumentQuoteCurrencies supplies immutable reference quote units.
+// An explicit catalog rejects unregistered instruments; nil preserves legacy USD instruments.
+func WithInstrumentQuoteCurrencies(quotes map[string]string) Option {
+	return func(s *Service) {
+		s.instrumentQuotes = make(map[string]string, len(quotes))
+		for instrument, quote := range quotes {
+			s.instrumentQuotes[instrument] = quote
+		}
+	}
+}
+
+func (s *Service) instrumentQuote(instrument string) string {
+	if s.instrumentQuotes == nil {
+		return "USD"
+	}
+	return s.instrumentQuotes[instrument]
+}
 
 func WithClock(clock func() time.Time) Option {
 	return func(s *Service) {
@@ -220,11 +241,24 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 		return *rejection
 	}
 
+	if !validQuoteCurrency(cmd.Currency) || cmd.Currency != s.instrumentQuote(cmd.InstrumentID) {
+		return rejectedResult("evt-reject-currency", cmd.OrderID, "CURRENCY_MISMATCH", "currency must equal configured instrument quote currency", now)
+	}
+
 	result := acceptedResult("accepted", cmd.OrderID, now)
 
 	book := s.bookFor(cmd.RunID, cmd.VenueSessionID, cmd.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
+	// Unit comparison precedes price comparison or state mutation. Inspect
+	// only each side's best order: admission preserves one currency per book.
+	for _, side := range []domain.Side{domain.SideBuy, domain.SideSell} {
+		if resting, exists := book.book.Best(side); exists {
+			if existing, found := s.loadOrder(book.RunID, resting.OrderID); found && existing.Currency != cmd.Currency {
+				return rejectedResult("evt-reject-currency", cmd.OrderID, "CURRENCY_MISMATCH", "currency differs from resting instrument quote currency", now)
+			}
+		}
+	}
 
 	record := &orderRecord{
 		OrderID:           cmd.OrderID,
@@ -254,11 +288,22 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 
 	s.match(rollback, book, incoming, record.Side, &result, now)
-	if record.RemainingQuantity > 0 {
-		book.book.Add(record.Side, incoming)
+	if record.RemainingQuantity > 0 && cmd.TimeInForce == "IOC" {
+		result.Cancelled = &domain.OrderCancelled{
+			EventID:                "evt-ioc-" + matchIdentity(record, record, incoming.Sequence, 0),
+			OrderID:                record.OrderID,
+			CancelledQuantityUnits: strconv.FormatInt(record.RemainingQuantity, 10),
+			Reason:                 "IOC_RESIDUAL", OccurredAt: now,
+		}
+		record.RemainingQuantity = 0
+		record.Status = domain.OrderStatusCancelled
+		s.trackTerminalOrder(rollback, record)
+	} else {
+		if record.RemainingQuantity > 0 {
+			book.book.Add(record.Side, incoming)
+		}
+		s.refreshOrderStatus(rollback, record)
 	}
-
-	s.refreshOrderStatus(rollback, record)
 
 	return result
 }
@@ -1039,9 +1084,9 @@ func (s *Service) match(rollback *BatchRollback, book *orderBook, incoming resti
 		matchedUnits := minInt64(incomingRecord.RemainingQuantity, restingRecord.RemainingQuantity)
 		executionPrice := restingRecord.LimitPrice
 		if side == domain.SideBuy {
-			s.appendMatch(result, incomingRecord, restingRecord, incomingRecord.OrderID, matchedUnits, executionPrice, occurredAt)
+			s.appendMatch(result, incomingRecord, restingRecord, incomingRecord.OrderID, incoming.Sequence, matchedUnits, executionPrice, occurredAt)
 		} else {
-			s.appendMatch(result, restingRecord, incomingRecord, incomingRecord.OrderID, matchedUnits, executionPrice, occurredAt)
+			s.appendMatch(result, restingRecord, incomingRecord, incomingRecord.OrderID, incoming.Sequence, matchedUnits, executionPrice, occurredAt)
 		}
 
 		incomingRecord.RemainingQuantity -= matchedUnits
@@ -1056,10 +1101,10 @@ func (s *Service) match(rollback *BatchRollback, book *orderBook, incoming resti
 	}
 }
 
-func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, incomingOrderID string, matchedUnits int64, executionPrice int64, occurredAt string) {
-	seq := strconv.Itoa(len(result.Trades) + 1)
-	executionID := "exec-" + buyOrder.OrderID + "-" + sellOrder.OrderID + "-" + seq
-	tradeID := "trade-" + buyOrder.OrderID + "-" + sellOrder.OrderID + "-" + seq
+func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, incomingOrderID string, incomingSequence int64, matchedUnits int64, executionPrice int64, occurredAt string) {
+	identity := matchIdentity(buyOrder, sellOrder, incomingSequence, len(result.Trades)+1)
+	executionID := "exec-v2-" + identity
+	tradeID := "trade-v2-" + identity
 	matchedUnitsStr := strconv.FormatInt(matchedUnits, 10)
 	executionPriceStr := strconv.FormatInt(executionPrice, 10)
 	buyLiquidityRole := "MAKER"
@@ -1260,4 +1305,23 @@ func envInt(name string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+// matchIdentity frames every component before hashing; delimiters inside IDs
+// cannot change tuple boundaries. Book sequence identifies the incoming
+// occurrence and is preserved by snapshots and provisional batch rollback.
+func matchIdentity(buy, sell *orderRecord, incomingSequence int64, ordinal int) string {
+	digest := sha256.New()
+	for _, component := range []string{"matching-fact-v2", buy.RunID, buy.VenueSessionID, buy.InstrumentID, buy.OrderID, sell.OrderID, strconv.FormatInt(incomingSequence, 10), strconv.Itoa(ordinal)} {
+		var length [8]byte
+		binary.BigEndian.PutUint64(length[:], uint64(len(component)))
+		digest.Write(length[:])
+		digest.Write([]byte(component))
+	}
+	return hex.EncodeToString(digest.Sum(nil))
+}
+
+func validQuoteCurrency(quote string) bool {
+	unit, err := currency.ParseISO(quote)
+	return err == nil && unit != currency.XXX && unit.String() == quote
 }

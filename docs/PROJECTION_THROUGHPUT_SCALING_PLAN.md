@@ -7,7 +7,7 @@ fix sequence for scaling read-model freshness toward the proven venue-core
 materializer baseline.
 
 The sustained August follow-up and current recommendation are recorded in
-[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](./archive/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
+[`docs/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/research/PROJECTION_THROUGHPUT_SPIKE_2026-08-20.md).
 That spike supersedes the older assumption that a `5k/60s` pass was sufficient
 promotion evidence: `2.5k/5m` is green, while `5k/5m` accumulated about `758k`
 of projection watermark lag despite exact intake and canonical materialization.
@@ -16,7 +16,7 @@ September 4 artifact reconciliation also recovered August 21 instrumented
 one-maintainer remote short runs. `2.5k/60s` passes the current checker;
 `5k/60s` reaches exact stage counts and zero canonical-projector lag but fails
 downstream lifecycle/market-data drain checks. See the
-[status audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
+[status audit](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md#recovered-august-21-projection-evidence)
 for counts, settings and checker requirements. The first remote topology
 comparison is complete; sustained `5k` promotion remains open.
 
@@ -215,7 +215,7 @@ no new performance claim supersedes the sustained baseline.
 
 Corrected instrumentation A/Bv5 passed all12checks (maximum measured change
 0.507998%, below frozen1%); Task2 isolated measurements and CheckpointA were
-completed before capacity tuning. See `.planning/sustained-10k/task_plan.md` and
+completed before capacity tuning. See [.planning/sustained-10k/task_plan.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/.planning/sustained-10k/task_plan.md) and
 [authoritative throughput ledger](THROUGHPUT_BASELINES.md). Earlier local A/B
 p95 failure remains valid historical evidence, not an active block on the
 already-authorized tuning workstream.
@@ -235,7 +235,7 @@ and three >=20% headroom drains remain required before promotion.
 
 ## Local SQL hot-path follow-up — 2026-09-25
 
-[Local SQL diagnostic](research/PROJECTION_SQL_HOT_PATH_LOCAL_2026-09-25.md)
+[Local SQL diagnostic](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_SQL_HOT_PATH_LOCAL_2026-09-25.md)
 added a lag-only backpressure read so that sampling skips the exact
 `submit_results` count while public status retains it. A disposable PostgreSQL
 16.15 fixture confirmed lag parity, exposed the active status/fill statement's
@@ -255,7 +255,7 @@ C28-topology run reduced projection `submit_results` sequential scans from
 10k gate still failed. Both stages caught up after the gate and the business
 reference passed. See [C38 evidence](THROUGHPUT_BASELINES.md#c38--reviewed-sql-remediation-on-clean-c28-topology-timed-fail).
 
-The [aged status/fill profile](research/PROJECTION_STATUS_FILL_AGED_PROFILE_2026-09-25.md)
+The [aged status/fill profile](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/PROJECTION_STATUS_FILL_AGED_PROFILE_2026-09-25.md)
 used a copy of C32's 13GB projection database. Five mixed writes all cost time;
 16 stage-only writers processed 240,000 synthetic outcomes at about 53k/s in
 the bounded probe. This does not reproduce C30's full-pipeline delay or qualify
@@ -857,7 +857,7 @@ the August sustained failure or justify an unchanged rerun.
    versus `2.15s` transform, `2.05s` canonical read, `1.59s` commit, and `0.20s`
    watermark time, with zero connection waiters. Treat this as attribution and
    workflow evidence, not portable capacity evidence. See
-   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](./archive/research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
+   [`research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/research/PROJECTION_DRAIN_LOCAL_VALIDATION_2026-08-20.md).
    The named remote projection gate now also preloads
    `pg_stat_statements`, tracks nested PL/pgSQL statements, enables I/O and
    WAL-I/O timing, records the relevant settings, and requires pre/post
@@ -895,7 +895,7 @@ the August sustained failure or justify an unchanged rerun.
    evidence also identified repeated exact `submit_results` counts as a
    concrete scan source.
    See
-   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](./archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
+   [`research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/research/PROJECTION_MAINTAINER_CARDINALITY_LOCAL_VALIDATION_2026-08-20.md).
 10. Add maintained depth/top-of-book projections.
 11. Rerun `5k` freshness gates after each meaningful reduction in rows/WAL/temp
    work per projected outcome.

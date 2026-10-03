@@ -94,6 +94,25 @@ class TradeSettlementObligationMaterializerTest {
     }
 
     @Test
+    fun reusingOrderIdsPreservesEarlierSettlementOwnership() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-a", venueSessionId = "shared-session")
+        persistence.saveAcceptedOrder(order("buy-order-1", "buyer-b", "run-b", "shared-session"))
+        persistence.saveAcceptedOrder(order("sell-order-1", "seller-b", "run-b", "shared-session"))
+        val materializer = TradeSettlementObligationMaterializer(persistence, store)
+
+        val result = materializer.materialize("run-a", "shared-session")
+        materializer.materialize("run-a", "shared-session")
+        val obligation = store.factsByScenarioRunId("run-a").obligations.single()
+
+        assertEquals(1, result.materializedObligations)
+        assertEquals("buyer-1", obligation.buyerParticipantId)
+        assertEquals("seller-1", obligation.sellerParticipantId)
+        assertEquals(0, materializer.materialize("run-b", "shared-session").materializedObligations)
+    }
+
+    @Test
     fun materializationScansOnlyCandidateTradesForScenarioRun() {
         val persistence = InMemoryRuntimePersistence()
         val store = InMemorySettlementFactStore()
@@ -441,7 +460,8 @@ class TradeSettlementObligationMaterializerTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = runId
                 )
             )
         )
@@ -455,7 +475,8 @@ class TradeSettlementObligationMaterializerTest {
                 correlationId = "corr-1",
                 producer = "platform-runtime",
                 schemaVersion = "v1",
-                occurredAt = "2026-01-01T00:00:00Z"
+                occurredAt = "2026-01-01T00:00:00Z",
+                runId = runId
             )
         )
     }

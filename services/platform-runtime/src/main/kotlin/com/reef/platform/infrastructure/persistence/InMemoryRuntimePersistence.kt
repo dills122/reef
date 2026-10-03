@@ -1,6 +1,10 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.validQuoteCurrency
 import com.reef.platform.api.JsonCodec
+import com.reef.platform.domain.RuntimeOrderIdentity
+import com.reef.platform.domain.identity
+import com.reef.platform.domain.orderIdentity
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
@@ -24,7 +28,10 @@ import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
 
-class InMemoryRuntimePersistence : RuntimePersistence {
+/** Captured payload lookup binds canonical replay to command scope; absent payloads retain legacy scope. */
+class InMemoryRuntimePersistence(
+    private var capturedCommandPayloadLookup: (String) -> String? = { null }
+) : RuntimePersistence {
     private val lock = Any()
     private val databaseGeneration = java.util.UUID.randomUUID().toString()
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
@@ -41,15 +48,15 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private var activePostTradeProfileId = ""
     private val scenarioRunPostTradeProfiles = linkedMapOf<String, ScenarioRunPostTradeProfile>()
     private val venueSessionPostTradeProfiles = linkedMapOf<String, VenueSessionPostTradeProfile>()
-    private val orders = linkedMapOf<String, PersistedOrder>()
+    private val orders = linkedMapOf<RuntimeOrderIdentity, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
     private val events = mutableListOf<RuntimeEvent>()
     private val eventById = mutableMapOf<String, RuntimeEvent>()
     private val traceSequences = mutableMapOf<String, Long>()
     private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
-    private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
-    private val orderLifecycleDirty = linkedSetOf<String>()
+    private val orderLifecycleStates = linkedMapOf<RuntimeOrderIdentity, OrderLifecycleState>()
+    private val orderLifecycleDirty = linkedSetOf<RuntimeOrderIdentity>()
     private val marketDataSnapshotDirty = linkedSetOf<String>()
     private val intradayBarIntervalDurations = mapOf(
         "1m" to Duration.ofMinutes(1),
@@ -58,6 +65,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         "1h" to Duration.ofHours(1)
     )
     private val intradayBarOrigin: Instant = Instant.parse("2000-01-01T00:00:00Z")
+
+    override fun bindCapturedCommandPayloadLookup(lookup: (String) -> String?) {
+        synchronized(lock) {
+            capturedCommandPayloadLookup = lookup
+        }
+    }
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         synchronized(lock) {
@@ -73,8 +86,20 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun saveInstrument(instrument: Instrument) {
         synchronized(lock) {
+        require(validQuoteCurrency(instrument.quoteCurrency)) { "invalid instrument quote currency" }
+        require(instruments[instrument.instrumentId]?.quoteCurrency?.let { it == instrument.quoteCurrency } != false) { "instrument quote currency is immutable" }
         instruments[instrument.instrumentId] = instrument
         }
+    }
+
+    override fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation = synchronized(lock) {
+        ReferenceDataValidation(
+            instrumentExists = instruments.containsKey(instrumentId),
+            participantExists = participants.containsKey(participantId),
+            accountExists = accounts.containsKey(accountId),
+            accountBelongsToParticipant = accounts[accountId]?.participantId == participantId,
+            instrumentQuoteCurrency = instruments[instrumentId]?.quoteCurrency
+        )
     }
 
     override fun saveParticipant(participant: Participant) {
@@ -222,24 +247,36 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
         synchronized(lock) {
-        orders[order.orderId] = order
-        orderLifecycleDirty.add(order.orderId)
+        orders[order.identity] = order
+        orderLifecycleDirty.add(order.identity)
         }
     }
 
     override fun saveExecutions(executions: List<ExecutionCreated>) {
         synchronized(lock) {
-        this.executions.addAll(executions)
-        executions.forEach { orderLifecycleDirty.add(it.orderId) }
+        require(executions.map { it.eventId }.toSet().size == executions.size) { "duplicate execution event ID in batch" }
+        executions.forEach { execution ->
+            val existing = this.executions.firstOrNull { it.eventId == execution.eventId }
+            require(existing == null || existing == execution) { "execution replay conflict for existing event_id ${execution.eventId}" }
+        }
+        val newExecutions = executions.filterNot { execution -> this.executions.any { it.eventId == execution.eventId } }
+        this.executions.addAll(newExecutions)
+        newExecutions.forEach { orderLifecycleDirty.add(it.orderIdentity) }
         }
     }
 
     override fun saveTrades(trades: List<TradeCreated>) {
         synchronized(lock) {
-        this.trades.addAll(trades)
-        trades.forEach {
-            orderLifecycleDirty.add(it.buyOrderId)
-            orderLifecycleDirty.add(it.sellOrderId)
+        require(trades.map { it.eventId }.toSet().size == trades.size) { "duplicate trade event ID in batch" }
+        trades.forEach { trade ->
+            val existing = this.trades.firstOrNull { it.eventId == trade.eventId }
+            require(existing == null || existing == trade) { "trade replay conflict for existing event_id ${trade.eventId}" }
+        }
+        val newTrades = trades.filterNot { trade -> this.trades.any { it.eventId == trade.eventId } }
+        this.trades.addAll(newTrades)
+        newTrades.forEach {
+            orderLifecycleDirty.add(RuntimeOrderIdentity(it.runId, it.buyOrderId))
+            orderLifecycleDirty.add(RuntimeOrderIdentity(it.runId, it.sellOrderId))
         }
         }
     }
@@ -263,21 +300,26 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 val stored = event.copy(sequenceNumber = nextSequence)
                 this.events.add(stored)
                 eventById[event.eventId] = stored
-                if (event.orderId.isNotBlank()) orderLifecycleDirty.add(event.orderId)
+                if (event.orderId.isNotBlank()) orderLifecycleDirty.add(event.orderIdentity)
             }
         }
     }
 
+    override fun acceptedOrder(identity: RuntimeOrderIdentity): PersistedOrder? = synchronized(lock) { orders[identity] }
+
+    override fun orderLifecycleState(identity: RuntimeOrderIdentity): OrderLifecycleState? =
+        synchronized(lock) { orderLifecycleStates[identity] }
+
     override fun acceptedOrder(orderId: String): PersistedOrder? {
         synchronized(lock) {
-        return orders[orderId]
+        return orders.values.singleOrNull { it.orderId == orderId }
         }
     }
 
     override fun acceptedOrders(orderIds: Set<String>): Map<String, PersistedOrder> {
         synchronized(lock) {
         return orderIds.mapNotNull { orderId ->
-            orders[orderId]?.let { orderId to it }
+            orders.values.singleOrNull { it.orderId == orderId }?.let { orderId to it }
         }.toMap()
         }
     }
@@ -288,12 +330,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         }
     }
 
-    override fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
-        synchronized(lock) {
-        return orders.values
-            .filter { it.participantId == participantId && it.clientOrderId == clientOrderId }
-            .maxByOrNull { it.acceptedAt }
+    override fun findOrderByClientOrderId(participantId: String, clientOrderId: String, runId: String?): PersistedOrder? = synchronized(lock) {
+        val candidates = orders.values.filter {
+            it.participantId == participantId && it.clientOrderId == clientOrderId && (runId == null || it.runId == runId)
         }
+        if (candidates.map { it.runId }.distinct().size > 1) null else candidates.maxByOrNull { it.acceptedAt }
     }
 
     override fun ordersForParticipant(
@@ -308,7 +349,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .filter { it.participantId == participantId }
             .filter { instrumentId.isBlank() || it.instrumentId == instrumentId }
             .mapNotNull { order ->
-                val state = orderLifecycleStates[order.orderId] ?: return@mapNotNull null
+                val state = orderLifecycleStates[order.identity] ?: return@mapNotNull null
                 if (openOnly && state.status !in OpenLifecycleStatuses) return@mapNotNull null
                 OwnOrderView(
                     orderId = order.orderId,
@@ -336,12 +377,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .filter { it.participantId == participantId }
             .filter { instrumentId.isBlank() || it.instrumentId == instrumentId }
             .filter { runId.isBlank() || it.runId == runId }
-            .associateBy { it.orderId }
+            .associateBy { it.identity }
         val views = executions
-            .filter { participantOrders.containsKey(it.orderId) }
+            .filter { participantOrders.containsKey(it.orderIdentity) }
             .sortedWith(compareBy<ExecutionCreated> { it.occurredAt }.thenBy { it.executionId })
             .mapNotNull { execution ->
-                val order = participantOrders[execution.orderId] ?: return@mapNotNull null
+                val order = participantOrders[execution.orderIdentity] ?: return@mapNotNull null
                 OwnExecutionView(
                     executionId = execution.executionId,
                     orderId = execution.orderId,
@@ -373,8 +414,8 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun tradesForSettlementMaterialization(scenarioRunId: String, venueSessionId: String): List<TradeCreated> {
         synchronized(lock) {
         return trades.filter { trade ->
-            val buyOrder = orders[trade.buyOrderId] ?: return@filter false
-            val sellOrder = orders[trade.sellOrderId] ?: return@filter false
+            val buyOrder = orders[RuntimeOrderIdentity(trade.runId, trade.buyOrderId)] ?: return@filter false
+            val sellOrder = orders[RuntimeOrderIdentity(trade.runId, trade.sellOrderId)] ?: return@filter false
             val tradeRunId = sharedSettlementMetadata(buyOrder.runId, sellOrder.runId) ?: return@filter false
             val effectiveScenarioRunId = tradeRunId.ifBlank { scenarioRunId }
             if (effectiveScenarioRunId != scenarioRunId) return@filter false
@@ -586,11 +627,16 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .take(batchSize)
         if (outcomes.isEmpty()) return 0
         outcomes.forEach { outcome ->
+            val commandPayload = capturedCommandPayloadLookup(outcome.commandId) ?: "{}"
             if (projectionStage != ProjectionStage.Timeline) {
-                saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
+                val projected = outcome.toPersistableSubmitOutcome(commandPayload, includeFills = includeFills)
+                saveSubmitResult(outcome.commandId, outcome.toPersistableSubmitOutcome(commandPayload, includeFills = true).result)
+                projected.acceptedOrder?.let { saveAcceptedOrder(it) }
+                saveExecutions(projected.result.executions)
+                saveTrades(projected.result.trades)
             }
             if (projectionStage != ProjectionStage.CommandStatus) {
-                saveEvent(outcome.toRuntimeEvent())
+                saveEvents(outcome.toPersistableSubmitOutcome(commandPayload, includeFills = false).lifecycleEvents)
             }
         }
         outcomes
@@ -804,7 +850,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         synchronized(lock) {
         orderLifecycleStates.clear()
         orders.values.forEach { order ->
-            orderLifecycleStates[order.orderId] = computeLifecycleState(order)
+            orderLifecycleStates[order.identity] = computeLifecycleState(order)
         }
         orderLifecycleDirty.clear()
         return orderLifecycleStates.size.toLong()
@@ -827,12 +873,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     private fun computeLifecycleState(order: PersistedOrder): OrderLifecycleState {
-        val orderExecutions = executions.filter { it.orderId == order.orderId }
+        val orderExecutions = executions.filter { it.orderIdentity == order.identity }
         val filledQuantity = orderExecutions
             .mapNotNull { it.quantityUnits.toBigDecimalOrNull() }
             .fold(BigDecimal.ZERO, BigDecimal::add)
         val orderEvents = events
-            .filter { it.orderId == order.orderId }
+            .filter { it.orderIdentity == order.identity }
             .sortedWith(compareBy<RuntimeEvent> { it.occurredAt }.thenBy { it.sequenceNumber }.thenBy { it.eventId })
         val latestModify = orderEvents.lastOrNull { it.eventType == "OrderModified" }
         val currentQuantity = jsonString(latestModify?.payloadJson.orEmpty(), "quantityUnits")
@@ -873,7 +919,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
         synchronized(lock) {
-        return orderLifecycleStates[orderId]
+        return orderLifecycleStates.filterKeys { it.orderId == orderId }.values.singleOrNull()
         }
     }
 
@@ -1015,46 +1061,6 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             updatedAt = updatedAt
         )
         }
-    }
-
-    private fun CanonicalCommandOutcome.toSubmitOrderResult(): SubmitOrderResult {
-        return if (resultStatus == "rejected" || resultStatus == "failed") {
-            SubmitOrderResult(
-                rejected = EngineOrderRejected(
-                    eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
-                    orderId = orderId,
-                    code = rejectCode,
-                    reason = jsonString(resultPayloadJson, "reason"),
-                    occurredAt = jsonString(resultPayloadJson, "occurredAt")
-                )
-            )
-        } else {
-            SubmitOrderResult(
-                accepted = EngineOrderAccepted(
-                    eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
-                    orderId = orderId,
-                    engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
-                    occurredAt = jsonString(resultPayloadJson, "occurredAt")
-                )
-            )
-        }
-    }
-
-    private fun CanonicalCommandOutcome.toRuntimeEvent(): RuntimeEvent {
-        val rejected = resultStatus == "rejected" || resultStatus == "failed"
-        return RuntimeEvent(
-            eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
-            eventType = lifecycleEventType(commandType, rejected),
-            orderId = orderId,
-            traceId = commandId,
-            causationId = commandId,
-            correlationId = commandId,
-            producer = "venue-event-batch-projector",
-            schemaVersion = "v1",
-            occurredAt = jsonString(resultPayloadJson, "occurredAt"),
-            actorId = "",
-            payloadJson = resultPayloadJson.ifBlank { "{}" }
-        )
     }
 
     private fun jsonString(json: String, key: String): String {

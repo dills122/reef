@@ -1,0 +1,5 @@
+--- FAIL: TestCanonicalWriterReducesAllocations (0.00s)
+    semantic_checksum_test.go:160: canonical allocations=11214 exceeds half reference=11214
+FAIL
+FAIL	github.com/dills122/reef/services/matching-engine/internal/streamdirect	0.448s
+FAIL

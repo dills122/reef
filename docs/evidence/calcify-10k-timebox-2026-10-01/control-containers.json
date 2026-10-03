@@ -1,0 +1,2814 @@
+[
+    {
+        "Id": "e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3",
+        "Created": "2026-10-02T03:48:08.516349263Z",
+        "Path": "/app/platform-runtime/bin/platform-runtime",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 15650,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:19.948113879Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-10-02T03:49:25.568917965Z",
+                        "End": "2026-10-02T03:49:25.614953174Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:30.615362509Z",
+                        "End": "2026-10-02T03:49:30.656672676Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:35.656966428Z",
+                        "End": "2026-10-02T03:49:35.701820137Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:40.702959375Z",
+                        "End": "2026-10-02T03:49:40.739791333Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:45.743219002Z",
+                        "End": "2026-10-02T03:49:45.78286796Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+        "ResolvConfPath": "/var/lib/docker/containers/e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3/hostname",
+        "HostsPath": "/var/lib/docker/containers/e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3/hosts",
+        "LogPath": "/var/lib/docker/containers/e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3/e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3-json.log",
+        "Name": "/reef-platform-api",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {
+                "8080/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "8080"
+                    }
+                ],
+                "8090/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "8090"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "e1213c7e55a574cda6dabbdb8e50bbe4fda24280b08d508cec1adb2ec5be4cb3",
+                "LowerDir": "/var/lib/docker/overlay2/4eae801a3a34ec7aaa773ce32b3d975aab028e62389406e13a455ba36242fecc-init/diff:/var/lib/docker/overlay2/b93133ad16a48a4792a837c149e4cec5f89626c928ddd0ac54b28ad82cc1e6cd/diff:/var/lib/docker/overlay2/64c6bc37eb0ba9a55547df7b1260bd44770c1ed33edd6e1feed34f9bd43604b8/diff:/var/lib/docker/overlay2/pnqpniuwl89jklitjkceqwrm0/diff:/var/lib/docker/overlay2/u7ulg0jdo6bwc0b1eemdea3tw/diff:/var/lib/docker/overlay2/9rftte7402fsdu5m68qpgoidl/diff:/var/lib/docker/overlay2/92ktwlripe4e91vv3n0mdp5q6/diff:/var/lib/docker/overlay2/d25dd8af2d283713354b472ea528a6021fe5735e94bc560ecc4791edd49fd8e0/diff",
+                "MergedDir": "/var/lib/docker/overlay2/4eae801a3a34ec7aaa773ce32b3d975aab028e62389406e13a455ba36242fecc/merged",
+                "UpperDir": "/var/lib/docker/overlay2/4eae801a3a34ec7aaa773ce32b3d975aab028e62389406e13a455ba36242fecc/diff",
+                "WorkDir": "/var/lib/docker/overlay2/4eae801a3a34ec7aaa773ce32b3d975aab028e62389406e13a455ba36242fecc/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [],
+        "Config": {
+            "Hostname": "e1213c7e55a5",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8080/tcp": {},
+                "8090/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=allow-all",
+                "STREAM_ACK_BACKPRESSURE_WORKER_DURABLES=reef-stream-worker-w0-p00,reef-stream-worker-w0-p01,reef-stream-worker-w0-p02,reef-stream-worker-w0-p03,reef-stream-worker-w0-p04,reef-stream-worker-w0-p05,reef-stream-worker-w0-p06,reef-stream-worker-w0-p07,reef-stream-worker-w0-p08,reef-stream-worker-w0-p09,reef-stream-worker-w0-p10,reef-stream-worker-w0-p11,reef-stream-worker-w0-p12,reef-stream-worker-w0-p13,reef-stream-worker-w0-p14,reef-stream-worker-w0-p15,reef-stream-worker-w1-p16,reef-stream-worker-w1-p17,reef-stream-worker-w1-p18,reef-stream-worker-w1-p19,reef-stream-worker-w1-p20,reef-stream-worker-w1-p21,reef-stream-worker-w1-p22,reef-stream-worker-w1-p23,reef-stream-worker-w1-p24,reef-stream-worker-w1-p25,reef-stream-worker-w1-p26,reef-stream-worker-w1-p27,reef-stream-worker-w1-p28,reef-stream-worker-w1-p29,reef-stream-worker-w1-p30,reef-stream-worker-w1-p31,reef-stream-worker-w2-p32,reef-stream-worker-w2-p33,reef-stream-worker-w2-p34,reef-stream-worker-w2-p35,reef-stream-worker-w2-p36,reef-stream-worker-w2-p37,reef-stream-worker-w2-p38,reef-stream-worker-w2-p39,reef-stream-worker-w2-p40,reef-stream-worker-w2-p41,reef-stream-worker-w2-p42,reef-stream-worker-w2-p43,reef-stream-worker-w2-p44,reef-stream-worker-w2-p45,reef-stream-worker-w2-p46,reef-stream-worker-w2-p47,reef-stream-worker-w3-p48,reef-stream-worker-w3-p49,reef-stream-worker-w3-p50,reef-stream-worker-w3-p51,reef-stream-worker-w3-p52,reef-stream-worker-w3-p53,reef-stream-worker-w3-p54,reef-stream-worker-w3-p55,reef-stream-worker-w3-p56,reef-stream-worker-w3-p57,reef-stream-worker-w3-p58,reef-stream-worker-w3-p59,reef-stream-worker-w3-p60,reef-stream-worker-w3-p61,reef-stream-worker-w3-p62,reef-stream-worker-w3-p63",
+                "LOCAL_DEV_ADMIN_UI_BASE_URL=http://localhost:5174",
+                "STREAM_ACK_PUBLISH_MODE=sync",
+                "EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=1",
+                "STREAM_ACK_PARTITION_COUNT=4",
+                "ENGINE_GRPC_STREAM_QUEUE_CAPACITY=100000",
+                "ADMIN_POSTGRES_USER=",
+                "EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED=true",
+                "STREAM_ACK_PROJECTOR_INCLUDE_FILLS=true",
+                "EXTERNAL_API_COMMAND_LOG_MODE=disabled",
+                "GITHUB_OAUTH_CLIENT_SECRET=",
+                "EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=false",
+                "STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY=4096",
+                "STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100",
+                "STREAM_ACK_PROJECTION_SOURCE=canonical-submit",
+                "RUNTIME_POSTGRES_USER=reef",
+                "VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE=false",
+                "EXTERNAL_API_ABUSE_BREAKER_ENABLED=true",
+                "EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS=1000",
+                "MATCHING_ENGINE_GRPC_TARGET=matching-engine:9081",
+                "RUNTIME_DB_POOL_ASYNC_RUNTIME_MIN_IDLE=",
+                "STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION=5",
+                "STREAM_ACK_MAX_WORKER_STREAM_LAG=50000",
+                "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318",
+                "ADMIN_SESSION_COOKIE_NAME=reef_admin_session",
+                "RUNTIME_DB_POOL_RUNTIME_MIN_IDLE=",
+                "STREAM_ACK_NATS_URL=nats://nats:4222",
+                "VENUE_EVENT_MATERIALIZER_TOPIC=REEF_VENUE_EVENTS",
+                "EXTERNAL_API_ABUSE_BREAKER_ROUTES=/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel",
+                "STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY=500000",
+                "EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS=30",
+                "STREAM_ACK_COMMAND_STREAM=REEF_CALC10K-CONTROL-20261001_COMMANDS",
+                "EXTERNAL_API_IDEMPOTENCY_STORE=postgres",
+                "MATCHING_ENGINE_BASE_URL=http://matching-engine:8081",
+                "STREAM_INGRESS_BACKLOG=1024",
+                "EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=25",
+                "ENGINE_GRPC_DEADLINE_MS=2000",
+                "STREAM_ACK_PUBLISH_MAX_IN_FLIGHT=4096",
+                "MARKET_DATA_PROJECTOR_ENABLED=false",
+                "VENUE_EVENT_MATERIALIZER_ENABLED=false",
+                "STREAM_ACK_PROJECTOR_DB_RETRY_HORIZON_MS=60000",
+                "STREAM_ACK_PUBLISHER=",
+                "ADMIN_API_TOKEN=",
+                "EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS=60",
+                "STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS=500",
+                "PLATFORM_RUNTIME_ROLE=api",
+                "STREAM_INGRESS_PORT=8090",
+                "RUNTIME_DB_POOL_IDEMPOTENCY_MIN_IDLE=",
+                "MARKET_DATA_PROJECTOR_BATCH_SIZE=500",
+                "ADMIN_POSTGRES_PASSWORD=",
+                "STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES=67108864",
+                "STREAM_ACK_INMEMORY_INTAKE_SHARDS=64",
+                "EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0",
+                "PLATFORM_HTTP_THREADS=64",
+                "PLATFORM_NETTY_WORKER_THREADS=0",
+                "STREAM_ACK_MARK_PUBLISHED_WORKERS=4",
+                "PLATFORM_NETTY_BOSS_THREADS=1",
+                "STREAM_INGRESS_ENABLED=false",
+                "STREAM_ACK_KAFKA_MAX_BLOCK_MS=250",
+                "EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=allow-all",
+                "STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE=256",
+                "PLATFORM_HTTP_SERVER=jdk",
+                "RUNTIME_DB_POOL_COMMAND_LOG_MIN_IDLE=",
+                "PLATFORM_ADMIN_AUTH_ENABLED=false",
+                "STREAM_ACK_PROJECTION_EVENT_STREAM=",
+                "EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING=0",
+                "RUNTIME_DB_POOL_RUNTIME_MAX=",
+                "STREAM_ACK_PROJECTOR_BATCH_SIZE=2000",
+                "RUNTIME_PROJECTION_POSTGRES_PASSWORD=reef",
+                "RUNTIME_PROJECTION_POSTGRES_USER=reef",
+                "EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=100",
+                "EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS=30000",
+                "RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE=16",
+                "STREAM_ACK_WORKER_PARTITIONS=0",
+                "MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME=runtime-normalized-venue-outcomes",
+                "RUNTIME_DB_POOL_MIN_IDLE=16",
+                "STREAM_ACK_SUBJECT_PREFIX=reef.calcify.calc10k-control-20261001.cmd.v1",
+                "RUNTIME_PROJECTION_POSTGRES_JDBC_URL=jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime",
+                "RUNTIME_DB_POOL_ASYNC_RUNTIME_MAX=",
+                "STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=venue-core",
+                "STREAM_ACK_KAFKA_REQUEST_TIMEOUT_MS=1000",
+                "STREAM_ACK_INTAKE_STORE=postgres",
+                "GITHUB_OAUTH_REDIRECT_URI=",
+                "STREAM_INGRESS_WORKER_THREADS=0",
+                "RUNTIME_DB_POOL_COMMAND_CAPTURE_MAX=",
+                "EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS=50",
+                "VENUE_EVENT_MATERIALIZER_POLL_MS=25",
+                "STREAM_ACK_WORKER_DURABLE_PREFIX=reef-stream-worker",
+                "VENUE_EVENT_MATERIALIZER_KAFKA_CLIENT_ID=reef-platform-runtime-venue-event-materializer",
+                "ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE=500",
+                "VENUE_EVENT_MATERIALIZER_BATCH_SIZE=100",
+                "STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE=false",
+                "EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled",
+                "STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE=false",
+                "STREAM_ACK_KAFKA_LINGER_MS=1",
+                "EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false",
+                "EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=false",
+                "STREAM_INGRESS_DEFAULT_CLIENT_ID=stream-ingress",
+                "RUNTIME_DB_POOL_CONN_TIMEOUT_MS=2000",
+                "STREAM_ACK_PROJECTION_NAME=runtime-normalized-submit",
+                "STREAM_ACK_PROJECTION_STAGE=full",
+                "STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT=16384",
+                "PLATFORM_INTERNAL_HTTP_MODE=enabled",
+                "STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=0",
+                "RUNTIME_DB_POOL_COMMAND_LOG_MAX=",
+                "PROJECTION_DOWNSTREAM_INSTRUMENTATION_ENABLED=false",
+                "GITHUB_OAUTH_CLIENT_ID=",
+                "RUNTIME_DB_POOL_MAX=48",
+                "RUNTIME_DB_PASSWORD=reef",
+                "PLATFORM_NETTY_APPLICATION_THREADS=",
+                "ENGINE_GRPC_STREAM_LANES=16",
+                "EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS=",
+                "RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX=24",
+                "STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95",
+                "EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS=100",
+                "STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true",
+                "EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000",
+                "STREAM_ACK_KAFKA_DELIVERY_TIMEOUT_MS=30000",
+                "LOCAL_DEV_ADMIN_AUTH_BYPASS=false",
+                "STREAM_ACK_PUBLISH_PIPELINE_ENABLED=false",
+                "EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32",
+                "STREAM_ACK_PROJECTION_STATUS_ONLY_DIAGNOSTIC=false",
+                "STREAM_ACK_PROJECTOR_POLL_MS=10",
+                "VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE=false",
+                "RUNTIME_DB_POOL_IDEMPOTENCY_MAX=",
+                "EXTERNAL_API_ABUSE_BREAKER_MODE=off",
+                "STREAM_ACK_MAX_PROJECTOR_LAG=0",
+                "STREAM_ACK_KAFKA_CLIENT_ID=reef-platform-runtime-command-producer",
+                "JAVA_TOOL_OPTIONS=-Xms256m -Xmx3g -XX:+ExitOnOutOfMemoryError",
+                "EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES=",
+                "EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS=1000",
+                "STREAM_ACK_WORKER_POLL_MS=10",
+                "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf",
+                "STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED=false",
+                "ORDER_LIFECYCLE_PROJECTOR_ENABLED=false",
+                "STREAM_ACK_LOG_PROVIDER=redpanda",
+                "STREAM_ACK_KAFKA_BATCH_SIZE=65536",
+                "EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table",
+                "VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS=200",
+                "STREAM_ACK_KAFKA_COMPRESSION_TYPE=lz4",
+                "STREAM_ACK_MARK_PUBLISHED_MODE=worker",
+                "STREAM_ACK_WORKER_ENABLED=false",
+                "PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS=2048",
+                "RUNTIME_DB_POOL_STREAM_RUNTIME_MAX=24",
+                "EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES=INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR",
+                "EXTERNAL_API_ACCEPTED_ASYNC_OFFER_WAIT_MAX_CONCURRENCY=8",
+                "RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE=8",
+                "EXTERNAL_API_BOUNDARY_REJECTION_LOG=auto",
+                "EXTERNAL_API_ACCEPTED_ASYNC_LANES=16",
+                "ORDER_LIFECYCLE_PROJECTOR_POLL_MS=250",
+                "RUNTIME_DB_URL=jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary",
+                "EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS=1000",
+                "RUNTIME_DB_USER=reef",
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack",
+                "STREAM_ACK_WORKER_MAX_ACK_PENDING=4000",
+                "STREAM_ACK_WORKER_ACK_WAIT_MS=60000",
+                "EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS=",
+                "RUNTIME_PERSISTENCE=postgres",
+                "MARKET_DATA_PROJECTOR_PROJECTION_NAME=market-data-top-of-book",
+                "STREAM_INGRESS_MAX_FRAME_BYTES=1048576",
+                "STREAM_ACK_PROJECTOR_DB_RETRY_BACKOFF_MS=25",
+                "STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED=false",
+                "RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE=8",
+                "VENUE_EVENT_MATERIALIZER_KAFKA_MAX_POLL_RECORDS=100",
+                "ADMIN_SESSION_COOKIE_SECURE=false",
+                "EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all",
+                "ORDER_LIFECYCLE_PROJECTOR_WORKERS=1",
+                "RUNTIME_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=runtime",
+                "STREAM_ACK_PROJECTOR_DB_RETRY_ATTEMPTS=3",
+                "RUNTIME_DB_POOL_COMMAND_CAPTURE_MIN_IDLE=",
+                "PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true",
+                "STREAM_ACK_PUBLISH_PIPELINE_BATCH_SIZE=1",
+                "PLATFORM_RUNTIME_PORT=8080",
+                "RUNTIME_DB_POOL_STREAM_INTAKE_MAX=64",
+                "STREAM_ACK_PROJECTOR_ENABLED=false",
+                "RUNTIME_DB_BOOTSTRAP_MODE=validate",
+                "RUNTIME_POSTGRES_PASSWORD=reef",
+                "LOCAL_DEV_BOT_CONFIG_STORE=memory",
+                "OTEL_SERVICE_NAME=reef-platform-api",
+                "STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS=0",
+                "STREAM_ACK_WORKER_FETCH_TIMEOUT_MS=200",
+                "ANALYTICS_EXPORT_API_TOKEN=",
+                "STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS=2000",
+                "EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS=",
+                "REEF_ENV=local",
+                "MARKET_DATA_PROJECTOR_POLL_MS=250",
+                "STREAM_ACK_WORKER_BATCH_SIZE=1000",
+                "VENUE_EVENT_MATERIALIZER_GROUP_ID=reef-venue-event-batch-materializer",
+                "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+                "ADMIN_POSTGRES_JDBC_URL=",
+                "EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS=0",
+                "EXTERNAL_API_COMMAND_LOG_APPEND_MODE=inline",
+                "ENGINE_TRANSPORT=grpc",
+                "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "JAVA_HOME=/opt/java/openjdk"
+            ],
+            "Cmd": [],
+            "Healthcheck": {
+                "Test": [
+                    "CMD-SHELL",
+                    "curl -fsS http://localhost:8080/healthz \u003e/dev/null || exit 1"
+                ],
+                "Interval": 5000000000,
+                "Timeout": 1000000000,
+                "Retries": 20
+            },
+            "Image": "reef-platform-runtime:calcify-10k-037971d6",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "/app/platform-runtime/bin/platform-runtime"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "6284cf827d3592ad31445da013a15aaed9c965cde1b978b8147a7b7205b2d46b",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "projection-postgres:service_healthy:false,matching-engine:service_healthy:false,nats:service_healthy:false,postgres:service_healthy:false,boundary-postgres:service_healthy:false",
+                "com.docker.compose.image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "platform-api",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.description": "Reef platform runtime",
+                "org.opencontainers.image.source": "https://github.com/dills122/reef"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "e866ffa5854f9e5ea219160f2602cf36ff71cca3ab4274a351e6d998b37c6d39",
+            "SandboxKey": "/var/run/docker/netns/e866ffa5854f",
+            "Ports": {
+                "8080/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "8080"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "8080"
+                    }
+                ],
+                "8090/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "8090"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "8090"
+                    }
+                ]
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-platform-api",
+                        "platform-api"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "d3b9662902866ce270ce34378d21b391a45ea60996c6c07dc9be5b58414650c4",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.13",
+                    "MacAddress": "42:d0:2c:c5:9e:7a",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-platform-api",
+                        "platform-api",
+                        "e1213c7e55a5"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9",
+        "Created": "2026-10-02T03:48:08.28455843Z",
+        "Path": "/usr/local/bin/matching-engine",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 15132,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:14.293070376Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-10-02T03:49:24.823660923Z",
+                        "End": "2026-10-02T03:49:24.861608631Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:29.863184384Z",
+                        "End": "2026-10-02T03:49:29.902135717Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:34.90272972Z",
+                        "End": "2026-10-02T03:49:34.933988553Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:39.934773597Z",
+                        "End": "2026-10-02T03:49:39.979319389Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:44.98215596Z",
+                        "End": "2026-10-02T03:49:45.019360335Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:63fd8c1c594647eceaa6d1096964fdae39d465006032745fb6080dea535f13a2",
+        "ResolvConfPath": "/var/lib/docker/containers/a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9/hostname",
+        "HostsPath": "/var/lib/docker/containers/a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9/hosts",
+        "LogPath": "/var/lib/docker/containers/a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9/a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9-json.log",
+        "Name": "/reef-matching-engine",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {
+                "8081/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "8081"
+                    }
+                ],
+                "9081/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "9081"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "a5f39cfa689e3893984d51ff20495793a6bda0e09c71307ffcfa889b5033bfc9",
+                "LowerDir": "/var/lib/docker/overlay2/0016927b222ef8b5aa3925f04dddbed6ddeaed893bdd89720975cc55ec6decea-init/diff:/var/lib/docker/overlay2/f479c649ksi3aq6kww0mp4c1z/diff:/var/lib/docker/overlay2/459204c947e4312156f124669ff079971b31044ee9b29f7ab9bc95d07a9fbc24/diff:/var/lib/docker/overlay2/uuc4nyblujzgeh3xsm903kp4y/diff:/var/lib/docker/overlay2/djdaxyy7uhrivzif2m1q6pq3w/diff:/var/lib/docker/overlay2/y6olbxbclx1d4duxu87441di1/diff:/var/lib/docker/overlay2/uxmxwjgdqh9k2ipixg06868z4/diff",
+                "MergedDir": "/var/lib/docker/overlay2/0016927b222ef8b5aa3925f04dddbed6ddeaed893bdd89720975cc55ec6decea/merged",
+                "UpperDir": "/var/lib/docker/overlay2/0016927b222ef8b5aa3925f04dddbed6ddeaed893bdd89720975cc55ec6decea/diff",
+                "WorkDir": "/var/lib/docker/overlay2/0016927b222ef8b5aa3925f04dddbed6ddeaed893bdd89720975cc55ec6decea/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [],
+        "Config": {
+            "Hostname": "a5f39cfa689e",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8081/tcp": {},
+                "9081/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING=4000",
+                "MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE=false",
+                "MATCHING_ENGINE_ADDR=:8081",
+                "MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true",
+                "STREAM_ACK_SUBJECT_PREFIX=reef.calcify.calc10k-control-20261001.cmd.v1",
+                "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+                "MATCHING_ENGINE_DIRECT_STREAM_DURABLE_PREFIX=reef-engine-direct",
+                "MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=20000",
+                "MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE=false",
+                "STREAM_ACK_PARTITION_COUNT=4",
+                "MATCHING_ENGINE_ENABLE_GRPC=1",
+                "STREAM_ACK_LOG_PROVIDER=redpanda",
+                "STREAM_ACK_KAFKA_COMPRESSION_TYPE=lz4",
+                "MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE=",
+                "STREAM_ACK_NATS_URL=nats://nats:4222",
+                "MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE=false",
+                "OTEL_SERVICE_NAME=reef-matching-engine",
+                "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf",
+                "MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE=200",
+                "MATCHING_ENGINE_EVENT_STREAM=REEF_CALC10K-CONTROL-20261001_EVENTS",
+                "MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0..3",
+                "STREAM_ACK_KAFKA_BATCH_SIZE=65536",
+                "MATCHING_ENGINE_DIRECT_TEST_FAIL_PUBLISH_ONCE=false",
+                "MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.calcify.calc10k-control-20261001.event.v1",
+                "STREAM_ACK_COMMAND_STREAM=REEF_CALC10K-CONTROL-20261001_COMMANDS",
+                "MATCHING_ENGINE_SHARD_ID=engine-0",
+                "MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS=60000",
+                "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318",
+                "STREAM_ACK_KAFKA_LINGER_MS=1",
+                "MATCHING_ENGINE_DIRECT_STREAM_POLL_MS=5",
+                "MATCHING_ENGINE_DIRECT_STREAM_FETCH_TIMEOUT_MS=200",
+                "MATCHING_ENGINE_GRPC_ADDR=:9081",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": null,
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "/usr/local/bin/http-healthcheck",
+                    "http://127.0.0.1:8081/health"
+                ],
+                "Interval": 5000000000,
+                "Timeout": 3000000000,
+                "Retries": 20
+            },
+            "Image": "reef-matching-engine:calcify-10k-037971d6",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "/usr/local/bin/matching-engine"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "cb2dd4c78905a6261b70c009c7cb0daac001cd32da68cc8f57846d8a13cfaf02",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "nats:service_healthy:false,postgres:service_healthy:false",
+                "com.docker.compose.image": "sha256:63fd8c1c594647eceaa6d1096964fdae39d465006032745fb6080dea535f13a2",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "matching-engine",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.description": "Reef matching engine",
+                "org.opencontainers.image.source": "https://github.com/dills122/reef"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "40ca8721fedc32d121c256cf809d7f3913cd6130745e3a52f75c00f056e8b932",
+            "SandboxKey": "/var/run/docker/netns/40ca8721fedc",
+            "Ports": {
+                "8081/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "8081"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "8081"
+                    }
+                ],
+                "9081/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "9081"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "9081"
+                    }
+                ]
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-matching-engine",
+                        "matching-engine"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "cfa59ed730305bf2e6e5e21bee85f9483d27a4abd5f3b46d3981f4b6de45649e",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.7",
+                    "MacAddress": "ce:0d:49:9c:26:72",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-matching-engine",
+                        "matching-engine",
+                        "a5f39cfa689e"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054",
+        "Created": "2026-10-02T03:48:07.899891721Z",
+        "Path": "/entrypoint.sh",
+        "Args": [
+            "redpanda",
+            "start",
+            "--overprovisioned",
+            "--smp",
+            "2",
+            "--memory",
+            "2G",
+            "--reserve-memory",
+            "0M",
+            "--node-id",
+            "0",
+            "--check=false",
+            "--kafka-addr",
+            "PLAINTEXT://0.0.0.0:9092",
+            "--advertise-kafka-addr",
+            "PLAINTEXT://redpanda:9092",
+            "--pandaproxy-addr",
+            "0.0.0.0:8082",
+            "--advertise-pandaproxy-addr",
+            "redpanda:8082",
+            "--schema-registry-addr",
+            "0.0.0.0:8081"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 14882,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:08.642532055Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-10-02T03:49:24.420875756Z",
+                        "End": "2026-10-02T03:49:24.471552048Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:29.475354175Z",
+                        "End": "2026-10-02T03:49:29.538171467Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:34.538778969Z",
+                        "End": "2026-10-02T03:49:34.586897719Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:39.589533555Z",
+                        "End": "2026-10-02T03:49:39.642356139Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:44.645595793Z",
+                        "End": "2026-10-02T03:49:44.705072085Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:0ceda3e98968e814705a75569063c7dc64ce74c1345681624f47bd8d6a6eb3c6",
+        "ResolvConfPath": "/var/lib/docker/containers/f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054/hostname",
+        "HostsPath": "/var/lib/docker/containers/f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054/hosts",
+        "LogPath": "/var/lib/docker/containers/f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054/f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054-json.log",
+        "Name": "/reef-redpanda",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "reef-calcify-10k-20261001_reef-redpanda-data:/var/lib/redpanda/data:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {
+                "8081/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "18083"
+                    }
+                ],
+                "8082/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "18082"
+                    }
+                ],
+                "9092/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "9092"
+                    }
+                ],
+                "9644/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "19644"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "f8d1702f2e23fae122d76fd1e15d1b6351ebaf4d6e5e94670a6e787beb2eb054",
+                "LowerDir": "/var/lib/docker/overlay2/34b9bce065a644785f9501524a750ac583f1c85f3a21a545ed1924bdd7f90c28-init/diff:/var/lib/docker/overlay2/429a6b56c5746428638e0afade8e23fc947beac25bcdc31941cdeb115fbc5798/diff:/var/lib/docker/overlay2/2a0b841e61f63dd0077f860871c413c403c1d1e1d586f2d5623c3060674377c6/diff:/var/lib/docker/overlay2/4e8651842484685fff4946fe0a6fae39171b5f44279ed9878fac202f42d5ce98/diff:/var/lib/docker/overlay2/a95b44c16387a88025dc249374e720b667a4efa56ae5ff5af4348c00df86f4df/diff:/var/lib/docker/overlay2/b707d6a449a07c913a24c60f5f1b0e426ce9e87426f7c7e60201d0dee2e64381/diff:/var/lib/docker/overlay2/a5de7e7e00431ad8be6129b4bcdf5ed000d3663819e3792c2f3d3fb2074cfda8/diff",
+                "MergedDir": "/var/lib/docker/overlay2/34b9bce065a644785f9501524a750ac583f1c85f3a21a545ed1924bdd7f90c28/merged",
+                "UpperDir": "/var/lib/docker/overlay2/34b9bce065a644785f9501524a750ac583f1c85f3a21a545ed1924bdd7f90c28/diff",
+                "WorkDir": "/var/lib/docker/overlay2/34b9bce065a644785f9501524a750ac583f1c85f3a21a545ed1924bdd7f90c28/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "reef-calcify-10k-20261001_reef-redpanda-data",
+                "Source": "/var/lib/docker/volumes/reef-calcify-10k-20261001_reef-redpanda-data/_data",
+                "Destination": "/var/lib/redpanda/data",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "f8d1702f2e23",
+            "Domainname": "",
+            "User": "redpanda",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8081/tcp": {},
+                "8082/tcp": {},
+                "9092/tcp": {},
+                "9644/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "EDITOR=nano"
+            ],
+            "Cmd": [
+                "redpanda",
+                "start",
+                "--overprovisioned",
+                "--smp",
+                "2",
+                "--memory",
+                "2G",
+                "--reserve-memory",
+                "0M",
+                "--node-id",
+                "0",
+                "--check=false",
+                "--kafka-addr",
+                "PLAINTEXT://0.0.0.0:9092",
+                "--advertise-kafka-addr",
+                "PLAINTEXT://redpanda:9092",
+                "--pandaproxy-addr",
+                "0.0.0.0:8082",
+                "--advertise-pandaproxy-addr",
+                "redpanda:8082",
+                "--schema-registry-addr",
+                "0.0.0.0:8081"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD-SHELL",
+                    "rpk cluster info --brokers=localhost:9092 \u003e/dev/null 2\u003e\u00261"
+                ],
+                "Interval": 5000000000,
+                "Timeout": 5000000000,
+                "Retries": 30
+            },
+            "Image": "redpandadata/redpanda:v26.2.3",
+            "Volumes": {
+                "/var/lib/redpanda/data": {}
+            },
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "0176cd3affbf09ee9f7b47dfc8d9d10f60336e86827dbcf45fe11fa4c211795f",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:0ceda3e98968e814705a75569063c7dc64ce74c1345681624f47bd8d6a6eb3c6",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "redpanda",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.authors": "Redpanda Data \u003chi@redpanda.com\u003e"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "5284bfedb6ebeadba616c69bc330771a65ff1bf1c2ba0f819d5bb1e955ee8a12",
+            "SandboxKey": "/var/run/docker/netns/5284bfedb6eb",
+            "Ports": {
+                "8081/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "18083"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "18083"
+                    }
+                ],
+                "8082/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "18082"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "18082"
+                    }
+                ],
+                "9092/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "9092"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "9092"
+                    }
+                ],
+                "9644/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "19644"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "19644"
+                    }
+                ]
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-redpanda",
+                        "redpanda"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "1d00163c2bd69aa7e77f489b9163672eefddb3dc03ee8f2fd07c5c24c980b0c5",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.5",
+                    "MacAddress": "ee:02:cd:82:b0:b2",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-redpanda",
+                        "redpanda",
+                        "f8d1702f2e23"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20",
+        "Created": "2026-10-02T03:47:03.027027469Z",
+        "Path": "docker-entrypoint.sh",
+        "Args": [
+            "postgres",
+            "-c",
+            "max_connections=200",
+            "-c",
+            "max_wal_size=16GB",
+            "-c",
+            "min_wal_size=4GB",
+            "-c",
+            "checkpoint_timeout=15min",
+            "-c",
+            "checkpoint_completion_target=0.9",
+            "-c",
+            "wal_compression=on",
+            "-c",
+            "log_checkpoints=on",
+            "-c",
+            "shared_preload_libraries=",
+            "-c",
+            "track_io_timing=off",
+            "-c",
+            "track_wal_io_timing=off",
+            "-c",
+            "shared_buffers=128MB",
+            "-c",
+            "work_mem=4MB",
+            "-c",
+            "pg_stat_statements.track=top"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 1083,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:47:03.086199885Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-10-02T03:49:24.025535714Z",
+                        "End": "2026-10-02T03:49:24.059150464Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:29.060663425Z",
+                        "End": "2026-10-02T03:49:29.093029425Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:34.094674136Z",
+                        "End": "2026-10-02T03:49:34.129923011Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:39.130149722Z",
+                        "End": "2026-10-02T03:49:39.165374805Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:44.168301876Z",
+                        "End": "2026-10-02T03:49:44.200276751Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:c05eced0bdb41ea9b95a656472a6aa4d50cad0d8a2e33d14eb1c53fd6204f2ae",
+        "ResolvConfPath": "/var/lib/docker/containers/27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20/hostname",
+        "HostsPath": "/var/lib/docker/containers/27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20/hosts",
+        "LogPath": "/var/lib/docker/containers/27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20/27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20-json.log",
+        "Name": "/reef-postgres",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "reef-calcify-10k-20261001_reef-postgres-data:/var/lib/postgresql/data:rw",
+                "/host_mnt/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/db/init:/docker-entrypoint-initdb.d:ro"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {
+                "5432/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "5432"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "27db189425e195aa1f5bba99a902cb27a9593a465e5666e497018dfc75f6bc20",
+                "LowerDir": "/var/lib/docker/overlay2/55461f5fc5f27138fd5cf85471ef492cc47529af6e7bc6c0dbacd69beaf215c8-init/diff:/var/lib/docker/overlay2/0e9b9bd8c8183a0290cb50be781f56b805b45f4e12699e99ffe85c264a272c74/diff:/var/lib/docker/overlay2/143290a21c0d556db6fcb84da8092f61d4362ca3a357f0474d46f481819c3a07/diff:/var/lib/docker/overlay2/ea028dc0e999636c044694c580adc6dd0fd5d4d4d287537bcc395a1773c9e35e/diff:/var/lib/docker/overlay2/4e1ff349df0402a810649f1a7f928dd420c1ed51022dde696dd18e559d5ba14f/diff:/var/lib/docker/overlay2/f8f9dde1ed20be15cf5713642ff6c6db2c642d57ce8d92b286a0a7a8545b3ee0/diff:/var/lib/docker/overlay2/d8d1e82e43d1ec87d17f20632822fe0c51937498511125b82fcae163d5422d4e/diff:/var/lib/docker/overlay2/e9c225ed4f5dc6146078b1d3f304dbbfbd408061c5e091f1af3aab0968ce9221/diff:/var/lib/docker/overlay2/f7cbc6891f950904aabecb1f8089b61085469d371136bf7b37d5ea042cb3821b/diff:/var/lib/docker/overlay2/f7f97cfcae9f111bab3712b738a8c6591fb5dbc08b62914260c0234bc5a26ea2/diff:/var/lib/docker/overlay2/9eb7fadfdca9c437b0fd16f0818a6f8badcfa63fc91d25de86012cea2cb37854/diff:/var/lib/docker/overlay2/e5f8457ca446323123f3bf2bf58ae8548d82d1227e69a19e13a8107a35faf76d/diff",
+                "MergedDir": "/var/lib/docker/overlay2/55461f5fc5f27138fd5cf85471ef492cc47529af6e7bc6c0dbacd69beaf215c8/merged",
+                "UpperDir": "/var/lib/docker/overlay2/55461f5fc5f27138fd5cf85471ef492cc47529af6e7bc6c0dbacd69beaf215c8/diff",
+                "WorkDir": "/var/lib/docker/overlay2/55461f5fc5f27138fd5cf85471ef492cc47529af6e7bc6c0dbacd69beaf215c8/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "reef-calcify-10k-20261001_reef-postgres-data",
+                "Source": "/var/lib/docker/volumes/reef-calcify-10k-20261001_reef-postgres-data/_data",
+                "Destination": "/var/lib/postgresql/data",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "bind",
+                "Source": "/host_mnt/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/db/init",
+                "Destination": "/docker-entrypoint-initdb.d",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            }
+        ],
+        "Config": {
+            "Hostname": "27db189425e1",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "5432/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "POSTGRES_DB=reef",
+                "POSTGRES_USER=reef",
+                "POSTGRES_PASSWORD=reef",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "GOSU_VERSION=1.19",
+                "LANG=en_US.utf8",
+                "PG_MAJOR=16",
+                "PG_VERSION=16.15",
+                "PG_SHA256=c1575341fa7bd40f5274ea465b34390f4dc64cdd0770af327005caaeb9f6b7ed",
+                "DOCKER_PG_LLVM_DEPS=llvm21-dev \t\tclang21",
+                "PGDATA=/var/lib/postgresql/data"
+            ],
+            "Cmd": [
+                "postgres",
+                "-c",
+                "max_connections=200",
+                "-c",
+                "max_wal_size=16GB",
+                "-c",
+                "min_wal_size=4GB",
+                "-c",
+                "checkpoint_timeout=15min",
+                "-c",
+                "checkpoint_completion_target=0.9",
+                "-c",
+                "wal_compression=on",
+                "-c",
+                "log_checkpoints=on",
+                "-c",
+                "shared_preload_libraries=",
+                "-c",
+                "track_io_timing=off",
+                "-c",
+                "track_wal_io_timing=off",
+                "-c",
+                "shared_buffers=128MB",
+                "-c",
+                "work_mem=4MB",
+                "-c",
+                "pg_stat_statements.track=top"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD-SHELL",
+                    "pg_isready -U reef -d reef"
+                ],
+                "Interval": 5000000000,
+                "Timeout": 3000000000,
+                "Retries": 20
+            },
+            "Image": "postgres:16-alpine",
+            "Volumes": {
+                "/var/lib/postgresql/data": {}
+            },
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "5bbe46a7935c998de1d9edc6d8c7c9ece46ddab6d0c3f88c8735fdb571f03798",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:c05eced0bdb41ea9b95a656472a6aa4d50cad0d8a2e33d14eb1c53fd6204f2ae",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "postgres",
+                "com.docker.compose.version": "5.4.0"
+            },
+            "StopSignal": "SIGINT"
+        },
+        "NetworkSettings": {
+            "SandboxID": "78e1d66fbb1aacdd9d4720e1ca47bca85c116e382af68b42ec5105c16c90938a",
+            "SandboxKey": "/var/run/docker/netns/78e1d66fbb1a",
+            "Ports": {
+                "5432/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "5432"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "5432"
+                    }
+                ]
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-postgres",
+                        "postgres"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "3733cc523ee347c908a58bd87ee223a359880abd66fa1458538dd6675b46cebf",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.2",
+                    "MacAddress": "e6:02:1b:ec:0d:b8",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-postgres",
+                        "postgres",
+                        "27db189425e1"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f",
+        "Created": "2026-10-02T03:47:03.027081719Z",
+        "Path": "docker-entrypoint.sh",
+        "Args": [
+            "postgres",
+            "-c",
+            "max_connections=160",
+            "-c",
+            "max_wal_size=16GB",
+            "-c",
+            "min_wal_size=4GB",
+            "-c",
+            "checkpoint_timeout=15min",
+            "-c",
+            "checkpoint_completion_target=0.9",
+            "-c",
+            "wal_compression=on",
+            "-c",
+            "log_checkpoints=on"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 1080,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:47:03.085796177Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-10-02T03:49:24.024917256Z",
+                        "End": "2026-10-02T03:49:24.059312339Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:29.060625842Z",
+                        "End": "2026-10-02T03:49:29.09431405Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:34.094616886Z",
+                        "End": "2026-10-02T03:49:34.127534511Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:39.128727722Z",
+                        "End": "2026-10-02T03:49:39.16584893Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:44.16886846Z",
+                        "End": "2026-10-02T03:49:44.200338001Z",
+                        "ExitCode": 0,
+                        "Output": "/var/run/postgresql:5432 - accepting connections\n"
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:c05eced0bdb41ea9b95a656472a6aa4d50cad0d8a2e33d14eb1c53fd6204f2ae",
+        "ResolvConfPath": "/var/lib/docker/containers/66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f/hostname",
+        "HostsPath": "/var/lib/docker/containers/66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f/hosts",
+        "LogPath": "/var/lib/docker/containers/66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f/66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f-json.log",
+        "Name": "/reef-boundary-postgres",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/db/init:/docker-entrypoint-initdb.d:ro",
+                "reef-calcify-10k-20261001_reef-boundary-postgres-data:/var/lib/postgresql/data:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {
+                "5432/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "5434"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "66544bd7ed49666c1aeedcb54aa81e985ad23fee37b33f1732f4e2cbf9272f0f",
+                "LowerDir": "/var/lib/docker/overlay2/2140c2abdaf54fb703452bbba8350826cf734ed1e966e2cc1c6a2a88801ae01e-init/diff:/var/lib/docker/overlay2/0e9b9bd8c8183a0290cb50be781f56b805b45f4e12699e99ffe85c264a272c74/diff:/var/lib/docker/overlay2/143290a21c0d556db6fcb84da8092f61d4362ca3a357f0474d46f481819c3a07/diff:/var/lib/docker/overlay2/ea028dc0e999636c044694c580adc6dd0fd5d4d4d287537bcc395a1773c9e35e/diff:/var/lib/docker/overlay2/4e1ff349df0402a810649f1a7f928dd420c1ed51022dde696dd18e559d5ba14f/diff:/var/lib/docker/overlay2/f8f9dde1ed20be15cf5713642ff6c6db2c642d57ce8d92b286a0a7a8545b3ee0/diff:/var/lib/docker/overlay2/d8d1e82e43d1ec87d17f20632822fe0c51937498511125b82fcae163d5422d4e/diff:/var/lib/docker/overlay2/e9c225ed4f5dc6146078b1d3f304dbbfbd408061c5e091f1af3aab0968ce9221/diff:/var/lib/docker/overlay2/f7cbc6891f950904aabecb1f8089b61085469d371136bf7b37d5ea042cb3821b/diff:/var/lib/docker/overlay2/f7f97cfcae9f111bab3712b738a8c6591fb5dbc08b62914260c0234bc5a26ea2/diff:/var/lib/docker/overlay2/9eb7fadfdca9c437b0fd16f0818a6f8badcfa63fc91d25de86012cea2cb37854/diff:/var/lib/docker/overlay2/e5f8457ca446323123f3bf2bf58ae8548d82d1227e69a19e13a8107a35faf76d/diff",
+                "MergedDir": "/var/lib/docker/overlay2/2140c2abdaf54fb703452bbba8350826cf734ed1e966e2cc1c6a2a88801ae01e/merged",
+                "UpperDir": "/var/lib/docker/overlay2/2140c2abdaf54fb703452bbba8350826cf734ed1e966e2cc1c6a2a88801ae01e/diff",
+                "WorkDir": "/var/lib/docker/overlay2/2140c2abdaf54fb703452bbba8350826cf734ed1e966e2cc1c6a2a88801ae01e/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/scripts/dev/db/init",
+                "Destination": "/docker-entrypoint-initdb.d",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "reef-calcify-10k-20261001_reef-boundary-postgres-data",
+                "Source": "/var/lib/docker/volumes/reef-calcify-10k-20261001_reef-boundary-postgres-data/_data",
+                "Destination": "/var/lib/postgresql/data",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "66544bd7ed49",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "5432/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "POSTGRES_DB=reef",
+                "POSTGRES_USER=reef",
+                "POSTGRES_PASSWORD=reef",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "GOSU_VERSION=1.19",
+                "LANG=en_US.utf8",
+                "PG_MAJOR=16",
+                "PG_VERSION=16.15",
+                "PG_SHA256=c1575341fa7bd40f5274ea465b34390f4dc64cdd0770af327005caaeb9f6b7ed",
+                "DOCKER_PG_LLVM_DEPS=llvm21-dev \t\tclang21",
+                "PGDATA=/var/lib/postgresql/data"
+            ],
+            "Cmd": [
+                "postgres",
+                "-c",
+                "max_connections=160",
+                "-c",
+                "max_wal_size=16GB",
+                "-c",
+                "min_wal_size=4GB",
+                "-c",
+                "checkpoint_timeout=15min",
+                "-c",
+                "checkpoint_completion_target=0.9",
+                "-c",
+                "wal_compression=on",
+                "-c",
+                "log_checkpoints=on"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD-SHELL",
+                    "pg_isready -U reef -d reef"
+                ],
+                "Interval": 5000000000,
+                "Timeout": 3000000000,
+                "Retries": 20
+            },
+            "Image": "postgres:16-alpine",
+            "Volumes": {
+                "/var/lib/postgresql/data": {}
+            },
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "33888553843a15f7994d763bf5fd525f25f3d94fae06e35b69ea394f932b139c",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:c05eced0bdb41ea9b95a656472a6aa4d50cad0d8a2e33d14eb1c53fd6204f2ae",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "boundary-postgres",
+                "com.docker.compose.version": "5.4.0"
+            },
+            "StopSignal": "SIGINT"
+        },
+        "NetworkSettings": {
+            "SandboxID": "6ad1bc244e0d372e12c148a4d94f3f3ec7b1d257c5554c0ff7a2ed303932516a",
+            "SandboxKey": "/var/run/docker/netns/6ad1bc244e0d",
+            "Ports": {
+                "5432/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "5434"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "5434"
+                    }
+                ]
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-boundary-postgres",
+                        "boundary-postgres"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "25c5cc18e71b4b0bd440f3b79a111fd3f3c48da2e18d263d2c7c04f16a91d029",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.4",
+                    "MacAddress": "92:dc:ba:21:cc:88",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-boundary-postgres",
+                        "boundary-postgres",
+                        "66544bd7ed49"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c",
+        "Created": "2026-10-02T03:48:27.046935174Z",
+        "Path": "/app/platform-runtime/bin/platform-runtime",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 17313,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:27.087073758Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-10-02T03:49:22.583606422Z",
+                        "End": "2026-10-02T03:49:22.616941005Z",
+                        "ExitCode": 0,
+                        "Output": "{\"alive\":true,\"state\":\"RUNNING\"}"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:27.617746383Z",
+                        "End": "2026-10-02T03:49:27.649141424Z",
+                        "ExitCode": 0,
+                        "Output": "{\"alive\":true,\"state\":\"RUNNING\"}"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:32.649582594Z",
+                        "End": "2026-10-02T03:49:32.693411177Z",
+                        "ExitCode": 0,
+                        "Output": "{\"alive\":true,\"state\":\"RUNNING\"}"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:37.695789554Z",
+                        "End": "2026-10-02T03:49:37.727175346Z",
+                        "ExitCode": 0,
+                        "Output": "{\"alive\":true,\"state\":\"RUNNING\"}"
+                    },
+                    {
+                        "Start": "2026-10-02T03:49:42.729353834Z",
+                        "End": "2026-10-02T03:49:42.760310501Z",
+                        "ExitCode": 0,
+                        "Output": "{\"alive\":true,\"state\":\"RUNNING\"}"
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+        "ResolvConfPath": "/var/lib/docker/containers/6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c/hostname",
+        "HostsPath": "/var/lib/docker/containers/6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c/hosts",
+        "LogPath": "/var/lib/docker/containers/6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c/6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c-json.log",
+        "Name": "/reef-calcify-10k-20261001-calcify-resolver-1",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "reef-calcify-10k-20261001_calcify-resolver-state:/app/calcify-state:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "6308c41e6f6f505dbce7eb3cebd8ab63eb149dff883b7627d64cc54962ac0e7c",
+                "LowerDir": "/var/lib/docker/overlay2/40588b796ea37c8a35e146aca69e3d043f0bcf61b3ab14eabb75c9b376192154-init/diff:/var/lib/docker/overlay2/b93133ad16a48a4792a837c149e4cec5f89626c928ddd0ac54b28ad82cc1e6cd/diff:/var/lib/docker/overlay2/64c6bc37eb0ba9a55547df7b1260bd44770c1ed33edd6e1feed34f9bd43604b8/diff:/var/lib/docker/overlay2/pnqpniuwl89jklitjkceqwrm0/diff:/var/lib/docker/overlay2/u7ulg0jdo6bwc0b1eemdea3tw/diff:/var/lib/docker/overlay2/9rftte7402fsdu5m68qpgoidl/diff:/var/lib/docker/overlay2/92ktwlripe4e91vv3n0mdp5q6/diff:/var/lib/docker/overlay2/d25dd8af2d283713354b472ea528a6021fe5735e94bc560ecc4791edd49fd8e0/diff",
+                "MergedDir": "/var/lib/docker/overlay2/40588b796ea37c8a35e146aca69e3d043f0bcf61b3ab14eabb75c9b376192154/merged",
+                "UpperDir": "/var/lib/docker/overlay2/40588b796ea37c8a35e146aca69e3d043f0bcf61b3ab14eabb75c9b376192154/diff",
+                "WorkDir": "/var/lib/docker/overlay2/40588b796ea37c8a35e146aca69e3d043f0bcf61b3ab14eabb75c9b376192154/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "reef-calcify-10k-20261001_calcify-resolver-state",
+                "Source": "/var/lib/docker/volumes/reef-calcify-10k-20261001_calcify-resolver-state/_data",
+                "Destination": "/app/calcify-state",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "6308c41e6f6f",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8080/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "CALCIFY_RESOLVER_BROKER_KIND=REDPANDA",
+                "RUNTIME_POSTGRES_PASSWORD=reef",
+                "CALCIFY_RESOLVER_REPLICATION_FACTOR=1",
+                "CALCIFY_SOURCE_GENERATION=2",
+                "CALCIFY_RESOLVER_STATE_DIR=/app/calcify-state",
+                "CALCIFY_RESOLVER_MAX_TARGET_BYTES=16777216",
+                "CALCIFY_RESOLVER_STANDBYS=1",
+                "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+                "CALCIFY_RESOLVED_TOPIC=REEF_CALC10K-CONTROL-20261001_RESOLVED",
+                "CALCIFY_RESOLVER_SESSION_TIMEOUT_MS=6000",
+                "CALCIFY_SOURCE_TOPIC=REEF_CALC10K-CONTROL-20261001_EVENTS",
+                "CALCIFY_STAGE=resolver",
+                "CALCIFY_AUTO_OFFSET_RESET=earliest",
+                "CALCIFY_RESOLVER_APPLICATION_ID=reef-calcify-resolver-smoke-calc10k-control-20261001-g2",
+                "RUNTIME_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=runtime",
+                "CALCIFY_VERIFIED_TOPIC=REEF_CALC10K-CONTROL-20261001_VERIFIED",
+                "RUNTIME_POSTGRES_USER=reef",
+                "CALCIFY_RESOLVER_THREADS=1",
+                "CALCIFY_RESOLVER_MAX_PENDING=200",
+                "CALCIFY_RESOLVER_MAX_SOURCE_BYTES=4194304",
+                "CALCIFY_COMMITMENT_TOPIC=REEF_CALC10K-CONTROL-20261001_COMMITMENTS",
+                "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "JAVA_HOME=/opt/java/openjdk"
+            ],
+            "Cmd": [],
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "curl",
+                    "-fsS",
+                    "http://127.0.0.1:8089/healthz"
+                ],
+                "Interval": 5000000000,
+                "Timeout": 3000000000,
+                "StartPeriod": 30000000000,
+                "Retries": 12
+            },
+            "Image": "reef-platform-runtime:calcify-10k-037971d6",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "/app/platform-runtime/bin/platform-runtime"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "a0069d26a5bc4aaddc52ae72a1e33255d0bceeffcf259f3f79e50ee64aed2439",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "calcify-resolver",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.description": "Reef platform runtime",
+                "org.opencontainers.image.source": "https://github.com/dills122/reef"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "0ef25c8343aa9220a5849ee6da0450a367c177aadba4a66423be6cadceb001b9",
+            "SandboxKey": "/var/run/docker/netns/0ef25c8343aa",
+            "Ports": {
+                "8080/tcp": null
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-calcify-10k-20261001-calcify-resolver-1",
+                        "calcify-resolver"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "aab85f43734667e060237d0df0615dd35087e1db710ac399ee8793e4faff3fd8",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.20",
+                    "MacAddress": "3e:c1:ed:53:2f:ca",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-calcify-10k-20261001-calcify-resolver-1",
+                        "calcify-resolver",
+                        "6308c41e6f6f"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca",
+        "Created": "2026-10-02T03:48:26.288030174Z",
+        "Path": "/app/platform-runtime/bin/platform-runtime",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 17060,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:26.340522882Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+        "ResolvConfPath": "/var/lib/docker/containers/bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca/hostname",
+        "HostsPath": "/var/lib/docker/containers/bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca/hosts",
+        "LogPath": "/var/lib/docker/containers/bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca/bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca-json.log",
+        "Name": "/reef-calcify-10k-20261001-calcify-extractor-1",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "bec4ecd0da59a92877593a1956fb1407ab52e5f4a76dbc88126a54364bf53cca",
+                "LowerDir": "/var/lib/docker/overlay2/98b541469488425c4767d40477a6768f8459a112c95633397ffc0144566f69a8-init/diff:/var/lib/docker/overlay2/b93133ad16a48a4792a837c149e4cec5f89626c928ddd0ac54b28ad82cc1e6cd/diff:/var/lib/docker/overlay2/64c6bc37eb0ba9a55547df7b1260bd44770c1ed33edd6e1feed34f9bd43604b8/diff:/var/lib/docker/overlay2/pnqpniuwl89jklitjkceqwrm0/diff:/var/lib/docker/overlay2/u7ulg0jdo6bwc0b1eemdea3tw/diff:/var/lib/docker/overlay2/9rftte7402fsdu5m68qpgoidl/diff:/var/lib/docker/overlay2/92ktwlripe4e91vv3n0mdp5q6/diff:/var/lib/docker/overlay2/d25dd8af2d283713354b472ea528a6021fe5735e94bc560ecc4791edd49fd8e0/diff",
+                "MergedDir": "/var/lib/docker/overlay2/98b541469488425c4767d40477a6768f8459a112c95633397ffc0144566f69a8/merged",
+                "UpperDir": "/var/lib/docker/overlay2/98b541469488425c4767d40477a6768f8459a112c95633397ffc0144566f69a8/diff",
+                "WorkDir": "/var/lib/docker/overlay2/98b541469488425c4767d40477a6768f8459a112c95633397ffc0144566f69a8/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [],
+        "Config": {
+            "Hostname": "bec4ecd0da59",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8080/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "RUNTIME_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=runtime",
+                "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+                "RUNTIME_POSTGRES_PASSWORD=reef",
+                "CALCIFY_SOURCE_TOPIC=REEF_CALC10K-CONTROL-20261001_EVENTS",
+                "CALCIFY_STAGE=extractor",
+                "CALCIFY_SOURCE_GENERATION=2",
+                "RUNTIME_POSTGRES_USER=reef",
+                "CALCIFY_COMMITMENT_TOPIC=REEF_CALC10K-CONTROL-20261001_COMMITMENTS",
+                "CALCIFY_AUTO_OFFSET_RESET=earliest",
+                "CALCIFY_VERIFIED_TOPIC=REEF_CALC10K-CONTROL-20261001_VERIFIED",
+                "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "JAVA_HOME=/opt/java/openjdk"
+            ],
+            "Cmd": [],
+            "Image": "reef-platform-runtime:calcify-10k-037971d6",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "/app/platform-runtime/bin/platform-runtime"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "f28b8cdba160500d18dda51faa79f2125c58a74de099708e01da09676d1c89f6",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "calcify-extractor",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.description": "Reef platform runtime",
+                "org.opencontainers.image.source": "https://github.com/dills122/reef"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "69f867fd77c9cd3a14a3b663746835fb358cf4191e2cd18c28d10cc89e2a7665",
+            "SandboxKey": "/var/run/docker/netns/69f867fd77c9",
+            "Ports": {
+                "8080/tcp": null
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-calcify-10k-20261001-calcify-extractor-1",
+                        "calcify-extractor"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "4ea1e81534d1a34b650ab588bf6b9c9f90d25b75a572398312d1e1bbde0907c5",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.19",
+                    "MacAddress": "ce:ff:2d:5a:94:09",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-calcify-10k-20261001-calcify-extractor-1",
+                        "calcify-extractor",
+                        "bec4ecd0da59"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9",
+        "Created": "2026-10-02T03:48:26.287665549Z",
+        "Path": "/app/platform-runtime/bin/platform-runtime",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 17058,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:26.340991757Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+        "ResolvConfPath": "/var/lib/docker/containers/56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9/hostname",
+        "HostsPath": "/var/lib/docker/containers/56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9/hosts",
+        "LogPath": "/var/lib/docker/containers/56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9/56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9-json.log",
+        "Name": "/reef-calcify-10k-20261001-calcify-verifier-1",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "56ded4fa5946f39cf6a31c906f9efcb9754dca491bb833f574245d1d816260b9",
+                "LowerDir": "/var/lib/docker/overlay2/9ef445b38bea206a9aa059a37fdd3d6b9fdb5bbc130c46f8c0ab1c51e4062533-init/diff:/var/lib/docker/overlay2/b93133ad16a48a4792a837c149e4cec5f89626c928ddd0ac54b28ad82cc1e6cd/diff:/var/lib/docker/overlay2/64c6bc37eb0ba9a55547df7b1260bd44770c1ed33edd6e1feed34f9bd43604b8/diff:/var/lib/docker/overlay2/pnqpniuwl89jklitjkceqwrm0/diff:/var/lib/docker/overlay2/u7ulg0jdo6bwc0b1eemdea3tw/diff:/var/lib/docker/overlay2/9rftte7402fsdu5m68qpgoidl/diff:/var/lib/docker/overlay2/92ktwlripe4e91vv3n0mdp5q6/diff:/var/lib/docker/overlay2/d25dd8af2d283713354b472ea528a6021fe5735e94bc560ecc4791edd49fd8e0/diff",
+                "MergedDir": "/var/lib/docker/overlay2/9ef445b38bea206a9aa059a37fdd3d6b9fdb5bbc130c46f8c0ab1c51e4062533/merged",
+                "UpperDir": "/var/lib/docker/overlay2/9ef445b38bea206a9aa059a37fdd3d6b9fdb5bbc130c46f8c0ab1c51e4062533/diff",
+                "WorkDir": "/var/lib/docker/overlay2/9ef445b38bea206a9aa059a37fdd3d6b9fdb5bbc130c46f8c0ab1c51e4062533/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [],
+        "Config": {
+            "Hostname": "56ded4fa5946",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8080/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "CALCIFY_AUTO_OFFSET_RESET=earliest",
+                "CALCIFY_STAGE=verifier",
+                "CALCIFY_SOURCE_GENERATION=2",
+                "CALCIFY_VERIFIED_TOPIC=REEF_CALC10K-CONTROL-20261001_VERIFIED",
+                "RUNTIME_POSTGRES_USER=reef",
+                "RUNTIME_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=runtime",
+                "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+                "CALCIFY_COMMITMENT_TOPIC=REEF_CALC10K-CONTROL-20261001_COMMITMENTS",
+                "RUNTIME_POSTGRES_PASSWORD=reef",
+                "CALCIFY_SOURCE_TOPIC=REEF_CALC10K-CONTROL-20261001_EVENTS",
+                "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "JAVA_HOME=/opt/java/openjdk"
+            ],
+            "Cmd": [],
+            "Image": "reef-platform-runtime:calcify-10k-037971d6",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "/app/platform-runtime/bin/platform-runtime"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "34be58ea1fc3e6cdedbae9bc448d38c740d771da7f478492b24009aed1639692",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "calcify-verifier",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.description": "Reef platform runtime",
+                "org.opencontainers.image.source": "https://github.com/dills122/reef"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "baf6efebe09809c848efdae06e488ed0be8fc1804a7573cb9ca2c542e7256a85",
+            "SandboxKey": "/var/run/docker/netns/baf6efebe098",
+            "Ports": {
+                "8080/tcp": null
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-calcify-10k-20261001-calcify-verifier-1",
+                        "calcify-verifier"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "5b4aca4133afe7133983442dfe528026639be9692d92734fdb24248fc8dac615",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.18",
+                    "MacAddress": "5e:9f:bf:19:af:29",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-calcify-10k-20261001-calcify-verifier-1",
+                        "calcify-verifier",
+                        "56ded4fa5946"
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "Id": "023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3",
+        "Created": "2026-10-02T03:48:26.287780382Z",
+        "Path": "/app/platform-runtime/bin/platform-runtime",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 17059,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-02T03:48:26.341503132Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+        "ResolvConfPath": "/var/lib/docker/containers/023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3/hostname",
+        "HostsPath": "/var/lib/docker/containers/023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3/hosts",
+        "LogPath": "/var/lib/docker/containers/023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3/023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3-json.log",
+        "Name": "/reef-calcify-10k-20261001-calcify-receipt-1",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "reef-calcify-10k-20261001_default",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "023d42b73f2036c02ded1d4873e47ed44a067daeea3b3e6de67c62b701d3caf3",
+                "LowerDir": "/var/lib/docker/overlay2/bf17ac3fae9288bcbbb9bbe7b3d0959bd93ccb5f434799071fa78230648fc611-init/diff:/var/lib/docker/overlay2/b93133ad16a48a4792a837c149e4cec5f89626c928ddd0ac54b28ad82cc1e6cd/diff:/var/lib/docker/overlay2/64c6bc37eb0ba9a55547df7b1260bd44770c1ed33edd6e1feed34f9bd43604b8/diff:/var/lib/docker/overlay2/pnqpniuwl89jklitjkceqwrm0/diff:/var/lib/docker/overlay2/u7ulg0jdo6bwc0b1eemdea3tw/diff:/var/lib/docker/overlay2/9rftte7402fsdu5m68qpgoidl/diff:/var/lib/docker/overlay2/92ktwlripe4e91vv3n0mdp5q6/diff:/var/lib/docker/overlay2/d25dd8af2d283713354b472ea528a6021fe5735e94bc560ecc4791edd49fd8e0/diff",
+                "MergedDir": "/var/lib/docker/overlay2/bf17ac3fae9288bcbbb9bbe7b3d0959bd93ccb5f434799071fa78230648fc611/merged",
+                "UpperDir": "/var/lib/docker/overlay2/bf17ac3fae9288bcbbb9bbe7b3d0959bd93ccb5f434799071fa78230648fc611/diff",
+                "WorkDir": "/var/lib/docker/overlay2/bf17ac3fae9288bcbbb9bbe7b3d0959bd93ccb5f434799071fa78230648fc611/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [],
+        "Config": {
+            "Hostname": "023d42b73f20",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8080/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "CALCIFY_SOURCE_TOPIC=REEF_CALC10K-CONTROL-20261001_EVENTS",
+                "RUNTIME_POSTGRES_PASSWORD=reef",
+                "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+                "CALCIFY_COMMITMENT_TOPIC=REEF_CALC10K-CONTROL-20261001_COMMITMENTS",
+                "CALCIFY_VERIFIED_TOPIC=REEF_CALC10K-CONTROL-20261001_VERIFIED",
+                "CALCIFY_STAGE=receipt",
+                "CALCIFY_AUTO_OFFSET_RESET=earliest",
+                "RUNTIME_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=runtime",
+                "RUNTIME_POSTGRES_USER=reef",
+                "CALCIFY_SOURCE_GENERATION=2",
+                "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "JAVA_HOME=/opt/java/openjdk"
+            ],
+            "Cmd": [],
+            "Image": "reef-platform-runtime:calcify-10k-037971d6",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "/app/platform-runtime/bin/platform-runtime"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "9cc14d8d4965d0192fa2c41c2a0895ffc7170e2749d8363ed0ffcc9ed13385aa",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:b1c91df4ca65c0490881f261d17355fd375c6d40a8a362564341e5825a067c34",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "reef-calcify-10k-20261001",
+                "com.docker.compose.project.config_files": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.base.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.local.yml,/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/compose.calcify.yml",
+                "com.docker.compose.project.working_dir": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef",
+                "com.docker.compose.service": "calcify-receipt",
+                "com.docker.compose.version": "5.4.0",
+                "org.opencontainers.image.description": "Reef platform runtime",
+                "org.opencontainers.image.source": "https://github.com/dills122/reef"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "6d49aa751df605fd5dc0d2a6c30f56e466825b2a48d0108b422d02526bc50d3b",
+            "SandboxKey": "/var/run/docker/netns/6d49aa751df6",
+            "Ports": {
+                "8080/tcp": null
+            },
+            "Networks": {
+                "reef-calcify-10k-20261001_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "reef-calcify-10k-20261001-calcify-receipt-1",
+                        "calcify-receipt"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "049adeeb0affc1f82fb5491d95b8bb898ec86c2376b229a473abeed920dbaf75",
+                    "EndpointID": "e4809c24cd66646fe95f03adce29c8ddf7348a31a96448ad984186d604d5f6d0",
+                    "Gateway": "172.22.0.1",
+                    "IPAddress": "172.22.0.17",
+                    "MacAddress": "9a:15:7f:11:13:bf",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "reef-calcify-10k-20261001-calcify-receipt-1",
+                        "calcify-receipt",
+                        "023d42b73f20"
+                    ]
+                }
+            }
+        }
+    }
+]

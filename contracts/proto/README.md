@@ -87,3 +87,10 @@ or rolls back.
 Snapshot V4 carries checksum-covered `book-scoped-v1` policy and exact retention
 limit; restore rejects changed limits and old snapshots with enabled retention.
 See [matching-engine recovery contract](../../services/matching-engine/README.md#terminal-retention-and-recovery-compatibility).
+
+IOC result contract: `SubmitOrderResult.cancelled` is additive and coexists with
+accepted outcome and any fills. `OrderCancelled.cancelled_quantity` records
+exact unfilled residual, `reason` is `IOC_RESIDUAL`, and `occurred_at` preserves
+command time. Runtime must create terminal `OrderCancelled` lifecycle fact after
+fill facts; full IOC fills have no cancellation. Consumers must support this
+field before producer cutover. See [IOC/identity compatibility](../../services/matching-engine/README.md#ioc-lifecycle-and-match-identity-v2).

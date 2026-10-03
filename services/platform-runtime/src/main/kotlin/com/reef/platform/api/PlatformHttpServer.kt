@@ -492,6 +492,12 @@ class PlatformHttpServer(
         } else {
             null
         }
+    init {
+        (commandCaptureStore as? CapturedCommandPayloadLookup)?.let { source ->
+            api.bindCapturedCommandPayloadLookup(source::capturedCommandPayloadJson)
+        }
+    }
+
     private val runtimeLoopStarter = RuntimeLoopStarter(
         api = api,
         runtimeRole = runtimeRole,
@@ -918,12 +924,12 @@ class PlatformHttpServer(
             val path = exchange.requestURI.path.removePrefix("/orders/")
             if (path.endsWith("/events")) {
                 val orderId = path.removeSuffix("/events").trimEnd('/')
-                adminSessionAuth.writeJson(exchange, 200, api.orderEvents(orderId))
+                adminSessionAuth.writeJson(exchange, 200, api.orderEvents(orderId, exchange.queryValue("runId").ifBlank { null }))
                 return@createContext
             }
 
             val orderId = path.trimEnd('/')
-            val result = api.orderWithStatus(orderId)
+            val result = api.orderWithStatus(orderId, exchange.queryValue("runId").ifBlank { null })
             adminSessionAuth.writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
@@ -2035,6 +2041,11 @@ class PlatformHttpServer(
             return
         }
 
+        if (route == "/api/v1/orders/submit" && !api.instrumentCurrencyMatches(body)) {
+            adminSessionAuth.writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "CURRENCY_MISMATCH", "currency differs from instrument quote currency"), correlationId))
+            return
+        }
+
         if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
             handleAcceptedAsyncMutation(exchange, route, clientId, idempotencyKey, correlationId, body)
             return
@@ -2465,6 +2476,12 @@ class PlatformHttpServer(
             return PreparedApiV1MutationResult.Rejected(
                 PlatformHotPathResponse(identityViolation.status, boundary.toErrorJson(identityViolation, correlationId))
             )
+        }
+
+        if (route == "/api/v1/orders/submit" && !api.instrumentCurrencyMatches(body)) {
+            return PreparedApiV1MutationResult.Rejected(PlatformHotPathResponse(
+                400, boundary.toErrorJson(BoundaryError(400, "CURRENCY_MISMATCH", "currency differs from instrument quote currency"), correlationId)
+            ))
         }
 
         return PreparedApiV1MutationResult.Prepared(
@@ -3155,7 +3172,7 @@ class PlatformHttpServer(
             )
             return
         }
-        val resolved = api.findOrderByClientOrderId(participantId, clientOrderId)
+        val resolved = api.findOrderByClientOrderId(participantId, clientOrderId, request.string("runId").ifBlank { null })
         if (resolved == null || resolved.runId.isBlank() || resolved.venueSessionId.isBlank()) {
             adminSessionAuth.writeJson(exchange, 404, simpleErrorJson("client order not found"))
             return

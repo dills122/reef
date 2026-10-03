@@ -1,4 +1,0 @@
-SLF4J(W): No SLF4J providers were found.
-SLF4J(W): Defaulting to no-operation (NOP) logger implementation
-SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
-{"deletedTopics":["p2-sus-53a64664-hot-app-resolver-changelog","p2-sus-53a64664-hot-resolved","p2-sus-53a64664-hot-source","p2-sus-53a64664-hot-verified"]}

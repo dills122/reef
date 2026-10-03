@@ -215,7 +215,7 @@ The [work plan](./docs/WORK_PLAN.md) is the execution board; read its alignment
 date and verify newer code and run evidence before repeating status. Throughput
 claims require the [baseline ledger](./docs/THROUGHPUT_BASELINES.md) and its
 linked original successes and failures. The September 4
-[current-status snapshot](./docs/CURRENT_STATUS.md) is orientation, not a live
+[current-status snapshot](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) is orientation, not a live
 release or capacity report.
 
 ## Recommended Next Gates

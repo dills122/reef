@@ -1,0 +1,26 @@
+{
+  "smokeId": "calcify-10k-q1-20261002",
+  "generation": 7,
+  "expectedCommands": 1880090,
+  "expectedTrades": 940045,
+  "loadReport": "/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/load.json",
+  "intakeRows": 1880090,
+  "source": {
+    "batches": 5451,
+    "commands": 1880090,
+    "trades": 940045,
+    "lastTimestampMs": 1790917290648
+  },
+  "commitmentLinks": 940045,
+  "verifiedLinks": 940045,
+  "receipts": 940045,
+  "matching": {
+    "acked": 1880090,
+    "nacked": 0,
+    "failed": 0
+  },
+  "sourceToCommitmentLastMs": 335,
+  "commitmentToVerifiedLastMs": 24,
+  "verifiedToReceiptLastMs": 39,
+  "pass": true
+}

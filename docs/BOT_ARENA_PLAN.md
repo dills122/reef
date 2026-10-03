@@ -91,7 +91,7 @@ Historical-scope note: this section records the initial same-repository
 provisioning design. The current fork-safe pending/approval handoff supersedes
 its statements that fork PRs are rejected or that branch protection is still a
 manual gap. Use
-[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md) and
+[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md) and
 [`BOT_ARENA_RELEASE_READINESS.md`](./BOT_ARENA_RELEASE_READINESS.md) for the
 current contract.
 
@@ -193,7 +193,7 @@ The current working direction is:
 - use TypeScript as the first public bot authoring SDK — implemented as the TypeScript-only `ReefBotV1` (`packages/bot-sdk`)
 - use SES compartments as the first sandbox boundary — implemented in `packages/bot-sdk/src/hosted-runner.ts` (`createSesCompartmentFactoryV1`); container/WASM boundaries remain a possible later addition for a stronger threat model, not a currently open question
 - keep the durable bot-runtime contract language-neutral through protobuf-defined snapshots, actions, outcomes, and resource reports
-- today's shipped runner-pool prototype (`scripts/dev/arena-runner-pool-smoke.mjs`, see `docs/archive/BOT_ARENA_RUNNER_BENCH.md`) uses a JSON-line protocol over each worker's stdin/stdout; a dedicated gRPC/protobuf protocol between sandbox workers and the arena orchestrator remains a future intent, not yet decided or implemented — no arena proto files exist under `contracts/proto/` today
+- today's shipped runner-pool prototype (`scripts/dev/arena-runner-pool-smoke.mjs`, see [docs/archive/BOT_ARENA_RUNNER_BENCH.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_RUNNER_BENCH.md)) uses a JSON-line protocol over each worker's stdin/stdout; a dedicated gRPC/protobuf protocol between sandbox workers and the arena orchestrator remains a future intent, not yet decided or implemented — no arena proto files exist under `contracts/proto/` today
 - do not allow bot code to create REST or gRPC clients to Reef services
 - preserve venue command semantics, validation, idempotency, abuse controls, and audit metadata for every bot-originated action
 - model arena runs as real interactive markets with controlled market makers, controlled background traffic, and user competitor bots
@@ -203,8 +203,8 @@ The current working direction is:
 - keep arena metadata, leaderboards, bot registry, run history, and replay indexes outside the trading hot-path database
 - use Redis only for ephemeral coordination, rate limits, leases, and live caches, not as the sole durable store for competition records
 - design the run plane for early horizontal scale by tournament run, shard, instrument group, sandbox worker, and matching-engine partition
-- inherit the throughput scaling target from [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./archive/THROUGHPUT_SCALING_WORK_PLAN.md): at least `7500` completed commands/sec per runtime + engine instance, preferably `10000`, with zero silent accepted-command loss
-- use [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md) as the target venue-ingress design for high-throughput bot traffic
+- inherit the throughput scaling target from [docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md): at least `7500` completed commands/sec per runtime + engine instance, preferably `10000`, with zero silent accepted-command loss
+- use [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) as the target venue-ingress design for high-throughput bot traffic
 
 This direction can change, but changing it should update this document and any accepted decision records that later depend on it.
 
@@ -736,7 +736,7 @@ Performance posture:
 - make scale tests part of arena acceptance, including single-run throughput, multi-run throughput, worker saturation, replay reconstruction, and leaderboard aggregation lag
 
 First local stress baseline:
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ## Rollout Plan
 
@@ -761,8 +761,8 @@ First local stress baseline:
 - add a small leaderboard report
 
 Detailed execution plan and benchmark evidence for this phase live in:
-- [`docs/archive/BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./archive/BOT_ARENA_PHASE_1_READINESS_PLAN.md) — the detailed Phase 1 work order: current foundations, the concrete local arena run path, and the smoke gate that proves it uses normal Reef venue commands.
-- [`docs/archive/BOT_ARENA_RUNNER_BENCH.md`](./archive/BOT_ARENA_RUNNER_BENCH.md) — benchmark evidence and reproducible commands for the grouped TypeScript-capable bot runner shape this phase depends on.
+- [docs/archive/BOT_ARENA_PHASE_1_READINESS_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_PHASE_1_READINESS_PLAN.md) — the detailed Phase 1 work order: current foundations, the concrete local arena run path, and the smoke gate that proves it uses normal Reef venue commands.
+- [docs/archive/BOT_ARENA_RUNNER_BENCH.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_RUNNER_BENCH.md) — benchmark evidence and reproducible commands for the grouped TypeScript-capable bot runner shape this phase depends on.
 
 ### Phase 2: Sandbox Execution
 

@@ -1,0 +1,106 @@
+# Calcify joined10k campaign — 2026-10-02
+
+**Scope correction:** measured PostgreSQL-backed functional-smoke ingress. Intended in-memory-intake/durable-broker fast path unmeasured; no Calcify/matcher capacity ceiling established. See appended correction.
+
+Local frozen-base joined campaign **did not qualify sustained10k**. Best completed300s cohort: **7,708.36 durably accepted order commands/s**, exact1,158,676 resolved trade contexts, bounded receipt/resolved drain. Final higher-concurrency attempt stopped at200.974s when Docker disk filled; no sustained rate inferred. Latest-master integration passes regression/coverage and matcher race checks; correctness smoke recorded separately.
+
+Campaign window: **03:38:05–05:38:05 UTC, 2026-10-02**. Baseline `037971d63ebee882799e0bd78b7dd0035af1c3a6`, branch `codex/calcify-10k-timebox`. [Frozen policy](../evidence/calcify-10k-timebox-2026-10-01/campaign-policy.json), [baseline hashes](../evidence/calcify-10k-timebox-2026-10-01/baseline-hashes.json).
+
+## Units, wiring and gates
+
+Target means **10,000 durably accepted HTTP order commands/s**, measured over fixed300s deadline. Paired workload offers5,250 crossing pairs/s, two commands per pair:10,500 offered commands/s, approximately5,000 resulting trades/s at target. One seeded crossing pair adds two commands and one trade to reconciliation. This differs from earlier resolver-only10k **trade contexts/s** target; no conversion between those claims without workload evidence.
+
+Actual path: HTTP order API → durable boundary intake → Go matching/source batches → Phase1 commitment extraction → **stub verifier** → verified links/receipt persistence; verified links also drive Phase2 source catch-up and full-context resolution. HTTP acceptance, Phase1 receipts and durable resolved facts are separate observations. Stub verification asserts structural linkage, not trade eligibility, settlement or business verification.
+
+Frozen joined gates:300s+, accepted-at-deadline≥10,000commands/s, load overrun≤1s, zero request failures/retries, receipt/resolved drain≤5s, exact source/intake/link/receipt counts and independent full resolved facts. Receipt gap p95≤10,500trades; peak≤26,250; resolved conservative deadline gap≤10,500. Gap counts and sampled drain bounds include observer/transport effects; neither measures individual trade latency. Drain starts at HTTP worker completion; scheduled-deadline drain bound recorded separately. No threshold relaxed.
+
+Scope: one local Docker host, **RF1**, joined current Phase1/2. Later owned topic cohorts explicitly use `write.caching=false`; early diagnostics inherited caching. RF1/fsync acknowledgements retain local scope and do not establish RF3 broker-loss safety or hosted capacity. Full-fact audit follows measured cohort; lightweight count observer remains part of measured load.
+
+## Retained diagnostics
+
+Firstfive rows60s; q1/q2 request300s. Intake-rate methods differ as explained below; sequential rows change multiple settings and do not isolate causal gains.
+
+| Cohort / generation | Configuration difference | Recorded intake commands/s | Phase1 final receipts / exact resolved contexts | Gate outcome |
+| --- | --- | ---: | ---: | --- |
+| [Control /2](../evidence/calcify-10k-timebox-2026-10-01/control-60s.json) | Refreshed merged baseline, one hot instrument | 5,861.90† | 177,875 /177,875 | Intake/drop gates fail; receipt drain2,107ms |
+| [HTTP128 /3](../evidence/calcify-10k-timebox-2026-10-01/http128-60s.json) | HTTP128; retained pool snapshot still64 | 7,132.51† | 216,152 /216,152 | Intake/drop and receipt gap/drain fail; receipt drain9,153ms |
+| [Poll1000 /4](../evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/results.json) | Actual pool128, verifier/receipt poll1000 | 8,055.85‡ | 244,104 /244,104 | Intake/backlog fail; resolved gap78,131, drain upper13,615ms |
+| [Sync350 /5](../evidence/calcify-10k-timebox-2026-10-01/sync350-60s/results.json) | Strict ACK deadline, owned topics caching=false, HTTP256/pool128, matching350 | 6,974.83 | 211,641 /211,641 | Intake/backlog fail; resolved gap47,296, drain upper7,873ms |
+| [HTTP384/batch450 /6](../evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/results.json) | HTTP384/pool192, PostgreSQL max256, health sample500ms, matching450; original checksum | 4,803.62 | 143,972 /143,972 | 2,343 request failures;429 worker-backpressure at lag51,068; pair/command accounting fails |
+| [Qualification q1 /7](../evidence/calcify-10k-timebox-2026-10-01/q1-300s/results.json) |300s, four instruments mapped to three actual partitions0/2/3; HTTP256/pool128, matching350/new checksum, Phase1 poll1000, Phase2 two threads |6,250.80 |940,045 /940,045 | Intake/drop gates fail; receipt789ms, resolved drain upper2,065ms, gap6,417 pass |
+| [Qualification q2 /8](../evidence/calcify-10k-timebox-2026-10-01/q2-300s/results.json) |300s, balanced four partitions, Netty256/pool128, PostgreSQL commit_delay1000µs; same matching/checksum/polls |7,708.36 |1,158,676 /1,158,676 |Intake/drop FAIL; zero errors, receipt drain1,191ms; resolved gap6,215/drain upper1,652ms; exact accounting PASS |
+
+† Control/HTTP128 rate is total accepted commands divided by worker-completion elapsed time, not strict deadline count. ‡ Poll1000 uses old sampled `acceptedOrdersAtDeadline /60s`; snapshot could include late ACKs. **Only generation5+ classifies each validated ACK strictly before fixed monotonic deadline.** Old results stay historical diagnostics, not strict-deadline qualification. Receipt drain origin also moved before final progress-query shutdown. [Dated corrections](../evidence/calcify-10k-timebox-2026-10-01/corrections.json), [RED test](../evidence/calcify-10k-timebox-2026-10-01/loader-deadline-red.log), [GREEN test](../evidence/calcify-10k-timebox-2026-10-01/loader-deadline-green.log), [race check](../evidence/calcify-10k-timebox-2026-10-01/loader-race.log).
+
+Control and HTTP128 full-fact audits pass for every observed trade: [control](../evidence/calcify-10k-timebox-2026-10-01/control-full-facts.log), [HTTP128](../evidence/calcify-10k-timebox-2026-10-01/http128-full-facts.log). Poll1000 and Sync350 also reconcile exact intake/source/commitment/verified/receipt counts. HTTP384/batch450 retains143,972 exact trade contexts/receipts, but275 accepted first-leg orders exceed completed-pair expectation:288,219 seeded intake/source commands versus287,944 expected. Its [command accounting fails](../evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/phase1-accounting.json); full-trade parity does not erase that failure.
+
+## Six differences that matter
+
+1. **Actual runtime settings, not requested environment.** HTTP128 trial still had pool64 and11 waiting threads; later pool128 is a different cohort. Increasing concurrency exposed waiting rather than proving linear throughput. [Pool snapshot](../evidence/calcify-10k-timebox-2026-10-01/http128-db-pools.json).
+2. **Phase1 batch/poll bounds.** Poll1000 with actual pool128 increased descriptive intake rate, but244,104 exact trade receipts arrived with failed13.5s receipt drain and large backlog. Larger polls alone did not qualify joined path.
+3. **Durability/config correction.** Sync350 explicitly disabled owned topic caching. Earlier cached cohorts are not controlled comparisons with this fsync profile; rate reduction cannot be attributed solely to batch size or deadline fix.
+4. **Matching delivery and lane shape.** Sync350 sample of30 batches shows10.05ms mean work versus86.52ms mean batch cycle. Cycle includes transaction/next fetch/possible ingress waiting; difference is not isolated checksum cost. Batch450/concurrency384 hit backpressure. q1 four instruments actually occupied only partitions0/2/3; q2 deliberately balances all four. Distributed workload tests lane distribution, not hot-lane10k proof. [Batch timing](../evidence/calcify-10k-timebox-2026-10-01/sync350-batch-timing.json).
+5. **Canonical checksum implementation.** Bounded Go canonical writer reduces allocations without switching JSON library or changing checksum protocol; actual350-field-rich payload benchmark below is more relevant than vendor claims.
+6. **Measurement and oracle controls.** Strict per-ACK deadline replaces late sampled count. Actual-topic observer waits explicit final expected count, snapshots mark count at stdin receipt, and reports conservative windows. Post-load oracle walks all committed source/output partitions, independently maps every acceptance/trade/provenance field, compares complete Protobuf contexts, checks missing/extra/duplicate/order violations, UUIDs and frozen endpoints. Acceptance history uses temporary disk-backed RocksDB; envelope/checksum validation remains shared and is disclosed. No synthetic fixture-only full-path claim.
+
+Test-only paired source producer additionally supports bounded FIFO1/control versus16/treatment: verification publication follows actual durable source ACK and metadata offset, retaining lane order and final drain. Joined HTTP qualification does not use this synthetic producer; no FIFO throughput improvement is claimed here.
+
+## Bounded checksum evidence and record-size safety
+
+Go benchmarks on Apple M1 Max/darwin arm64 compare retained reference and optimized canonical checksum, alternating order. Small screen, consumed outputs; medians descriptive, not platform capacity estimates.
+
+| Payload / rounds | Reference median | Optimized median | Time reduction | Bytes/op reduction | Allocations/op reduction |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Paired200, four reference/treatment pairs |3.704ms |2.815ms |24.0% |19.8% |70.0% |
+| Captured actual350, two pairs |13.234ms |10.182ms |23.1% |24.7% |70.4% |
+
+[Paired200 raw](../evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-paired.log); [captured350 raw](../evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum350-captured.log). Latter retains historical benchmark name `Paired200` despite supplied actual350 payload:350 outcomes,182 trades,658,463 fixture-file bytes, checksum `edbf91cd6050f90be305889eca390de49144ac1292e6a6558156785cf6c4c885`. [Captured facts](../evidence/calcify-10k-timebox-2026-10-01/checksum/current-full-fact-350.json). Earlier before/AB logs remain retained; they differ in setup and are not substituted for paired controls.
+
+Actual Sync350 audit counted794,723,291 source bytes; maximum record726,291B. Batch450 maximum926,269B: close to default1MiB producer request limit before request framing. Observed maxima apply only to these IDs/facts; longer IDs, unknown fields or richer fills can exceed them. Increasing command batch size cannot substitute for byte-aware bounds and explicit oversized-record tests. No default producer limit raised during these observations.
+
+## Qualification results and remaining gates
+
+**q1 failed rate and scheduler-drop gates.** Strict ACK count1,875,240/300s=6,250.80commands/s; total accepted1,880,088, including4,848 late ACKs. Completed940,044 crossing pairs;634,956 offered pairs dropped. No request failures/retries. Receipt drain789ms, resolved conservative drain2,065ms and gap6,417 pass their bounds; these do not compensate for missing target rate. Seeded intake/source/matcher totals1,880,090commands and all940,045 commitments/verified links/receipts/resolved contexts reconcile. Source payload total3,795,663,870B; maximum814,598B. [Strict load](../evidence/calcify-10k-timebox-2026-10-01/q1-300s/load.json), [full-stage accounting](../evidence/calcify-10k-timebox-2026-10-01/q1-300s/phase1-accounting.json), [independent facts and gates](../evidence/calcify-10k-timebox-2026-10-01/q1-300s/results.json).
+
+q1 used Docker10CPU, intake cache1GB, stopped disabled legacy roles, retained aged intake and four instruments mapped to **three** actual partitions0/2/3. Frozen requested workload is not proof of four-lane utilization. Runner also emitted spurious JSON parse errors from Go's pretty-printed load output after valid report write; q2 parses JSON only for processes with a result callback. q1 exit1 remains truthful: Go rate/drop gates failed, independent of parser correction.
+
+q1 PostgreSQL wait snapshot:95 `LWLock/WALWrite`,6 `Timeout/SpinDelay`,1 `IO/WALSync` sessions. These are sampled wait states, **not95 simultaneous physical disk writes**; they support inspecting WAL/commit contention without isolating storage-device throughput. [Wait snapshot](../evidence/calcify-10k-timebox-2026-10-01/q1-pg-waits-middle.txt).
+
+**q2 complete: intake/drop FAIL; exact all-stage accounting PASS.** Balanced four-instrument mapping now targets all four actual partitions; Netty256/pool128 and PostgreSQL `commit_delay=1000µs` added, retaining `fsync=on`, `synchronous_commit=on`, `full_page_writes=on`. [Routing](../evidence/calcify-10k-timebox-2026-10-01/q2-workload.json), [database settings](../evidence/calcify-10k-timebox-2026-10-01/q2-pg-durability.txt). PostgreSQL documents commit delay as a group-commit tradeoff: waiting may combine more transactions into one WAL flush, while increasing latency; effectiveness depends on workload and active siblings. Synchronous commits still wait for durable WAL flush under these settings. [WAL settings](https://www.postgresql.org/docs/16/runtime-config-wal.html), [WAL/group-commit guidance](https://www.postgresql.org/docs/16/wal-configuration.html). Final q2 values and raw evidence recorded below; source maximum741,218B.
+
+Capacity campaign does not close retention-window/checkpoint validity, persisted verified/output identity and topic-recreation recovery, rebalance/standby promotion, process failure/lost local state or broker/node loss at target rate. Merged replay/source-offset safeguards remain prerequisites, not fresh fault evidence. Require unchanged final candidate fault/recovery repeats, hot/spread/skew/aged profiles, explicit retention/replay policy, supervised nonzero failure exits and production-role health checks. RF3 multi-node and hosted capacity remain separate gates. Broader business verifier, projection and settlement work remain outside stub-verifier capacity claim.
+
+Earlier RF3 resolver-only `sustained-8ea6c8ce` delivered3.15m exact contexts at10,160.50 active contexts/s but producer310.730s exceeded301s maximum: **failed**, with later profiles unrun. Neither that result nor short checksum gains establish joined HTTP10k. [Historical throughput ledger](../THROUGHPUT_BASELINES.md#cal-p2-i1-nightly-checkpoint--sustained-delivery-gate-remains-open).
+
+## Latest-master boundary
+
+At05:16 UTC, origin/master advanced to `16e15340` with run-scoped acceptance and hidden-limit fixes, plus newer Phase1 retention/durability guards. Timed cohorts remain frozen on `037971d6` plus recorded candidate hashes. No capacity claim transfers to newer master. Delivery integration preserves newer guards/generated contracts and adapts independent oracle before regression checks; integration smoke is correctness evidence only.
+
+Q2 accepted2,312,509 commands before deadline,2,317,350 total;4,841 late ACKs,416,325 dropped offered pairs, zero failures/retries,300,598ms workers. Receipt gap p95/peak2,732/3,197trades. All1,158,676 seeded-plus-load contexts and full-stage counts exact. WAL snapshot122waiters on LWLock/WALWrite; pool128 active with101waiting threads. Cumulative WAL counters are labeled cumulative, not isolated timings.
+
+Final q3 raises Netty application threads384/intake pool224/PostgreSQL max320, group-commit delay100µs; broker fsync and PostgreSQL durable settings unchanged. Post-q2 one-second `pg_test_fsync` screen measured single8KiB fdatasync205µs; half value motivates100µs starting-point trial per [PostgreSQL tuning guidance](https://www.postgresql.org/docs/16/wal-configuration.html). Screen ran after timed HTTP load/receipt drain during correctness audit, not concurrent capacity load. One/two-write samples vary; no optimum, storage guarantee, or causal gain inferred. [Raw screen](../evidence/calcify-10k-timebox-2026-10-01/boundary-fsync-diagnostic.log).
+
+## Final trial and campaign disposition
+
+[q3 result](../evidence/calcify-10k-timebox-2026-10-01/q3-300s/results.json): scheduled300s, stopped200,974ms after1,805 request failures. First503 says PostgreSQL could not extend relation: **No space left on device**.1,601,023 load ACKs,800,373 completed pairs plus seeded trade,248,938 dropped pairs. Dividing ACKs by scheduled300s gives5,336.74/s only as failed-gate denominator; active interval is incomplete and **not five-minute sustained evidence**. All800,374 resolved trade contexts match full source facts, but277 accepted first-leg orders exceed pair-based command expectation; final command/receipt gate fails. Resolved source maximum751,352B. No slowdown attributed solely to larger pool or commit delay: hardware/storage exhaustion confounds final attempt.
+
+Docker guest150GB filesystem had35MB free at failure, despite host free space. Exact ten test topics from completed/audited control and HTTP128 cohorts removed after ownership/oracle checks, restoring~1.7GB; best q2 topics and all database volumes preserved. [Cleanup proof](../evidence/calcify-10k-timebox-2026-10-01/owned-topic-cleanup.log). Future campaign requires guest-disk headroom sized for source/output/changelog/WAL/aged tables, not host `df` alone; do not launch another sustained load on current nearly-full guest.
+
+Best q2 is73.4% of10.5k offered /77.1% of10k required. Data prove exact Phase1/2 effects at delivered rate, not10k, real business verification, settlement, RF3, hosted capacity or new-master performance. Checksum microbenchmark remains component-only gain; no JSON library dependency changed.
+
+Next bounded work: restore equal logical/physical dataset and guest storage headroom; isolate Netty, PostgreSQL pool and measured group-commit settings with repeated controls. Investigate batched durable PostgreSQL reservations/transaction/index cost, requiring each202 to await its actual durable intake and broker ACK; preserve idempotency/same-lane order. Q3 intermediate waits include WALWrite100, relation-extension38 and buffer locks. Current evidence does not establish codec replacement as primary remaining fix. Re-run new-master hot/balanced/skew/aged300s profiles and unchanged-candidate fault/recovery gates before raising qualification.
+
+Final latest-master full-path smoke **PASS**: two PostgreSQL-backed commands, one exact receipt and complete resolved context. [Integration images/hashes](../evidence/calcify-10k-timebox-2026-10-01/latest-master-integration.json), [smoke](../evidence/calcify-10k-timebox-2026-10-01/smoke-master461.log), [platform check/coverage](../evidence/calcify-10k-timebox-2026-10-01/latest-master-platform-check.log), [matcher race](../evidence/calcify-10k-timebox-2026-10-01/latest-master-matcher-race.log). No post-merge sustained cohort run.
+
+
+## Configuration correction — October2, after campaign
+
+User challenged PostgreSQL ingress assumption. Verified code and frozen q2 environment: campaign reused `calcify-full-path-smoke.mjs`, which calls `applyStackProfile("stream-ack")` then unconditionally sets RUNTIME_PERSISTENCE, EXTERNAL_API_IDEMPOTENCY_STORE and STREAM_ACK_INTAKE_STORE to postgres. Frozen q2 also has STREAM_ACK_PUBLISH_PIPELINE_ENABLED=false. This functional smoke profile adds synchronous SQL reservation before broker publication; PostgreSQL is not required for durable command-log acknowledgment.
+
+Documented direct-ingress/materializer performance shape uses in-memory intake and enabled partitioned publish pipeline (scripts/dev/lib/dev-stack-profiles.mjs236–250; docs/LOCAL_RUN_PROFILES.md323–330). D-040 keeps durable Kafka/Redpanda append plus direct Go consumer; D-042 keeps matching books in Go memory. In-memory queue/store is not itself durable:202 must still await configured broker ACK. Phase1 receipt persistence may remain PostgreSQL independently of upstream intake.
+
+Correction:7,708.36/s and PostgreSQL wait diagnosis apply only to measured PostgreSQL-backed smoke configuration. They do not establish matching-engine or intended Calcify direct-ingress capacity ceiling. Intended fast-ingress+Calcify combination was not measured in this campaign. Selecting smoke as capacity profile was setup error; preserve all historical artifacts and scope rather than rewriting results. Before further throughput changes, build explicit direct-ingress+Calcify profile and freeze actual flags, durability/idempotency retention, routing and stage accounting. Existing phase1 audit hardcodes PostgreSQL intake counts and needs profile-aware checks; do not merely turn off SQL and call existing checks equivalent. No new benchmark or stack restart performed during this configuration review.
+
+### Follow-up: fresh direct-path campaign achieved scoped target
+
+October2 fresh05:54:53–07:54:53UTC campaign corrected ingress selection and measured C5-style broker-durable direct matching with Calcify. D7 passed300s at10,425.19verified matched trades/s and10,440.92resolved contexts/s;3,142,846exact full-fact outputs.64seeded makers excluded; one timed aggressor per trade. LocalRF1/stub verification/standing-liquidity scope. Earlier SQL results remain valid only for original smoke profile. [New qualification and exact differences](CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).

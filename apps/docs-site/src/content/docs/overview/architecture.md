@@ -81,4 +81,4 @@ Orders-and-execution, command status, market-data/own-order reads, durable venue
 - `docs/steering/external-api-boundary.md` — API boundary steering
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — schema blueprint (see [Schema](../../schema/overview/) on this site)
 - `docs/LOCAL_CONFIGURATION.md` — accepted local stack and lifecycle
-- `docs/archive/ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md` — July infrastructure diagram snapshot
+- [docs/archive/ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md) — July infrastructure diagram snapshot

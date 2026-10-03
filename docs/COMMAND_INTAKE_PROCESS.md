@@ -107,7 +107,7 @@ POST /api/v1/orders/cancel-by-client-order
   -> emit normal CancelOrder with routing, ownership, and order identity
 ```
 
-The slower resolver is not part of the throughput target.
+The slower resolver is not part of the throughput target. It accepts optional `runId`; a participant reusing `clientOrderId` across runs must provide scope. Ambiguous unscoped resolution returns not-found. See [runtime order identity](RUNTIME_ORDER_IDENTITY.md).
 
 ## Acceptance Response
 
@@ -446,7 +446,7 @@ provider-neutral status/diagnostics, client-order cancel resolution, durable
 handoff/crash checks and the hosted `10k` materializer baseline have landed.
 In particular, `ModifyOrder` is no longer deferred from the supported path.
 Current remaining work is scoped in [`WORK_PLAN.md`](./WORK_PLAN.md#work-board)
-and the [implementation audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+and the [implementation audit](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 
 ### Now
 

@@ -58,7 +58,21 @@ their path scopes changed.
 - Update `scripts/dev/ci-workflow-hardening.test.mjs` when adding workflows,
   jobs, or external actions.
 
+## Opt-in OpenCodeReview pilot
+
+[Workflow](../.github/workflows/open-code-review-pilot.yml) runs only for ready PRs carrying `ocr-pilot`; unrelated label additions do not trigger review. Later pushes, reopening and ready-for-review events run opted-in PRs. Trusted base workflow/rules control review; PR files must not execute here.
+
+Checkpoint ranges narrow later pushes after completed trusted review. Missing/untrusted checkpoints, base/config changes and non-ancestor pushes cause full review; reopening or becoming ready requests full review. Request full review when unchanged-file interactions matter. Inspect range summary and skipped/partial results; budget/timeout do not guarantee complete review. Humans validate findings.
+
+[Project rules](../.opencodereview/rule.json) include changed service tests, exclude docs/reports and leave language rules at defaults. Includes bypass default filters rather than restrict review to whitelist. Workflow owns model, effort, concurrency and budget. [Dated pilot measurements](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/records/reef/docs/work/open-code-review-pilot.md) establish historical scope only.
+
 ## Local Verification
+
+`calcify-tests` also runs boundary idempotency renewal integration tests against
+real PostgreSQL with `RUNTIME_DB_URL_TEST`, `RUNTIME_DB_USER_TEST` and
+`RUNTIME_DB_PASSWORD_TEST` configured. Missing local DB configuration reports
+skipped tests; configured URL with missing credentials fails. Renewal tests cover
+expiry, concurrent replacement and preservation of live results.
 
 ```bash
 node scripts/dev/ci-workflow-hardening.test.mjs
@@ -68,3 +82,11 @@ node scripts/dev/script-surface-check.mjs
 actionlint
 make test-dev-tooling
 ```
+
+## Historical-record retention
+
+`Records retention` workflow runs `bun run repo:check:records` and
+`bun run repo:test:records` without product dependencies or cross-repository access.
+It checks relocation metadata, active links, required fixtures, complete retained
+evidence bundles and original checksum companions. [Retention policy](RECORDS_RETENTION.md)
+defines latest-bundle selection and immutable archive lookup.

@@ -1,6 +1,8 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.validQuoteCurrency
 import com.reef.platform.api.JsonCodec
+import com.reef.platform.domain.RuntimeOrderIdentity
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
@@ -178,10 +180,12 @@ class PostgresRuntimePersistence(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.referenceInstruments} (
                       instrument_id TEXT PRIMARY KEY,
-                      symbol TEXT NOT NULL
+                      symbol TEXT NOT NULL,
+                      quote_currency TEXT NOT NULL DEFAULT 'USD'
                     )
                     """.trimIndent()
                 )
+                stmt.execute("ALTER TABLE ${names.referenceInstruments} ADD COLUMN IF NOT EXISTS quote_currency TEXT NOT NULL DEFAULT 'USD'")
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.referenceParticipants} (
@@ -644,7 +648,9 @@ class PostgresRuntimePersistence(
                     """
                     ALTER TABLE ${names.submitResults}
                     ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
-                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ,
+                    ADD COLUMN IF NOT EXISTS cancelled JSONB,
+                    ADD COLUMN IF NOT EXISTS matching_facts JSONB
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -1004,6 +1010,7 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
+                backfillLegacyMatchingResultFacts(stmt, names)
                 ProjectionBatchClaimBootstrap.install(stmt, names)
                 stmt.execute(
                     """
@@ -1351,7 +1358,7 @@ class PostgresRuntimePersistence(
                           p_accepted_order->>'timeInForce',
                           p_accepted_order->>'acceptedAt'
                         )
-                        ON CONFLICT (order_id) DO UPDATE SET
+                        ON CONFLICT (run_id, order_id) DO UPDATE SET
                           engine_order_id = EXCLUDED.engine_order_id,
                           instrument_id = EXCLUDED.instrument_id,
                           participant_id = EXCLUDED.participant_id,
@@ -1410,7 +1417,7 @@ class PostgresRuntimePersistence(
                       ) dirty_ids
                       WHERE COALESCE(order_id, '') <> ''
                       ORDER BY order_id
-                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at;
+                      ON CONFLICT (run_id, order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at;
 
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
@@ -1509,7 +1516,7 @@ class PostgresRuntimePersistence(
                         FROM jsonb_array_elements(p_outcomes) WITH ORDINALITY AS outcome_rows(outcome, ordinality)
                       ),
                       upsert_results AS (
-                        INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
+                        INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at, cancelled, matching_facts)
                         SELECT
                           outcome->>'commandId',
                           outcome->>'resultType',
@@ -1518,7 +1525,9 @@ class PostgresRuntimePersistence(
                           outcome->>'engineOrderId',
                           outcome->>'code',
                           outcome->>'reason',
-                          outcome->>'occurredAt'
+                          outcome->>'occurredAt',
+                          NULLIF(outcome->'cancelled', 'null'::jsonb),
+                          COALESCE(outcome->'matchingFacts', jsonb_build_object('executions', COALESCE(outcome->'executions', '[]'::jsonb), 'trades', COALESCE(outcome->'trades', '[]'::jsonb)))
                         FROM outcomes
                         ON CONFLICT (command_id) DO UPDATE SET
                           command_id = ${names.submitResults}.command_id
@@ -1529,6 +1538,8 @@ class PostgresRuntimePersistence(
                           AND ${names.submitResults}.code = EXCLUDED.code
                           AND ${names.submitResults}.reason = EXCLUDED.reason
                           AND ${names.submitResults}.occurred_at = EXCLUDED.occurred_at
+                          AND ${names.submitResults}.cancelled IS NOT DISTINCT FROM EXCLUDED.cancelled
+                          AND ${names.submitResults}.matching_facts IS NOT DISTINCT FROM EXCLUDED.matching_facts
                         RETURNING 1
                       ),
                       accepted_orders AS (
@@ -1556,7 +1567,7 @@ class PostgresRuntimePersistence(
                         FROM accepted_orders
                         WHERE accepted_order IS NOT NULL
                           AND jsonb_typeof(accepted_order) = 'object'
-                        ON CONFLICT (order_id) DO UPDATE SET
+                        ON CONFLICT (run_id, order_id) DO UPDATE SET
                           engine_order_id = EXCLUDED.engine_order_id,
                           instrument_id = EXCLUDED.instrument_id,
                           participant_id = EXCLUDED.participant_id,
@@ -2061,6 +2072,8 @@ class PostgresRuntimePersistence(
                             END,
                             'executions', CASE WHEN p_include_fills THEN COALESCE(result_payload->'executions', '[]'::jsonb) ELSE '[]'::jsonb END,
                             'trades', CASE WHEN p_include_fills THEN COALESCE(result_payload->'trades', '[]'::jsonb) ELSE '[]'::jsonb END,
+                            'cancelled', result_payload->'cancelled',
+                            'matchingFacts', jsonb_build_object('executions', COALESCE(result_payload->'executions', '[]'::jsonb), 'trades', COALESCE(result_payload->'trades', '[]'::jsonb)),
                             'events', jsonb_build_array(
                               jsonb_build_object(
                                 'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
@@ -2080,7 +2093,18 @@ class PostgresRuntimePersistence(
                                 'occurredAt', COALESCE(NULLIF(result_payload #>> '{accepted,occurredAt}', ''), NULLIF(result_payload #>> '{rejected,occurredAt}', ''), ''),
                                 'payloadJson', result_payload
                               )
-                            )
+                            ) || CASE WHEN jsonb_typeof(result_payload->'cancelled') = 'object' THEN jsonb_build_array(jsonb_build_object(
+                              'eventId', result_payload #>> '{cancelled,eventId}',
+                              'eventType', 'OrderCancelled', 'orderId', result_payload #>> '{cancelled,orderId}',
+                              'traceId', COALESCE(NULLIF(command_payload->>'traceId', ''), command_id),
+                              'causationId', result_payload #>> '{accepted,eventId}',
+                              'correlationId', COALESCE(NULLIF(command_payload->>'correlationId', ''), command_id),
+                              'actorId', '', 'producer', 'venue-event-batch-projector', 'schemaVersion', 'v1',
+                              'occurredAt', result_payload #>> '{cancelled,occurredAt}',
+                              'payloadJson', jsonb_build_object('commandId', command_id,
+                                'cancelledQuantityUnits', result_payload #>> '{cancelled,cancelledQuantityUnits}',
+                                'reason', result_payload #>> '{cancelled,reason}')
+                            )) ELSE '[]'::jsonb END
                           ) AS result_payload
                         FROM eligible
                       ),
@@ -2149,6 +2173,44 @@ class PostgresRuntimePersistence(
                 }
             }
         }
+        if (bootstrapMode == PostgresBootstrapMode.Compat) {
+            canonicalConnection().use { conn ->
+                val sql = listOf("0073_runtime_order_run_identity.sql", "0074_matching_ioc_cancellation.sql").joinToString("\n") { migration ->
+                    requireNotNull(javaClass.getResourceAsStream("/db/$migration")) {
+                        "missing runtime bootstrap migration: $migration"
+                    }.bufferedReader().use { it.readText() }
+                }
+                val previousAutoCommit = conn.autoCommit
+                conn.autoCommit = false
+                try {
+                    conn.createStatement().use { statement ->
+                        statement.execute(sql.replace("runtime.", "${names.runtimeSchemaName}.").replace("'runtime'", "'${names.runtimeSchemaName}'"))
+                    }
+                    conn.commit()
+                } catch (error: Exception) {
+                    conn.rollback()
+                    throw error
+                } finally {
+                    conn.autoCommit = previousAutoCommit
+                }
+            }
+            connection().use { conn -> conn.createStatement().use { sql ->
+                sql.executeQuery("""
+                    SELECT EXISTS(
+                      SELECT 1 FROM ${names.orders} o
+                      JOIN ${names.referenceInstruments} i USING (instrument_id)
+                      WHERE o.currency <> i.quote_currency AND EXISTS (
+                        SELECT 1 FROM ${names.submitResults} result
+                        WHERE result.run_id = o.run_id AND result.order_id = o.order_id AND result.engine_order_id = o.engine_order_id
+                          AND result.result_type = 'accepted'
+                      )
+                    )
+                """.trimIndent()).use { rows ->
+                    rows.next()
+                    check(!rows.getBoolean(1)) { "retained order currencies contradict instrument quote specifications" }
+                }
+            } }
+        }
         if (bootstrapMode == PostgresBootstrapMode.Validate && projectionStoreSeparated()) {
             projectionConnection().use { conn ->
                 PostgresSchemaValidator.validate(conn, PostgresSchemaRequirements.runtime(names))
@@ -2163,8 +2225,8 @@ class PostgresRuntimePersistence(
         projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at, cancelled, matching_facts, run_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?)
                 ON CONFLICT (command_id) DO UPDATE SET
                   result_type = EXCLUDED.result_type,
                   event_id = EXCLUDED.event_id,
@@ -2172,7 +2234,10 @@ class PostgresRuntimePersistence(
                   engine_order_id = EXCLUDED.engine_order_id,
                   code = EXCLUDED.code,
                   reason = EXCLUDED.reason,
-                  occurred_at = EXCLUDED.occurred_at
+                  occurred_at = EXCLUDED.occurred_at,
+                  cancelled = EXCLUDED.cancelled,
+                  matching_facts = EXCLUDED.matching_facts,
+                  run_id = EXCLUDED.run_id
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, commandId)
@@ -2183,6 +2248,9 @@ class PostgresRuntimePersistence(
                 ps.setString(6, rejected?.code.orEmpty())
                 ps.setString(7, rejected?.reason.orEmpty())
                 ps.setString(8, accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
+                ps.setString(9, result.cancelled?.toJsonObject())
+                ps.setString(10, result.matchingFactsJson())
+                ps.setString(11, result.executions.firstOrNull()?.runId ?: result.trades.firstOrNull()?.runId.orEmpty())
                 ps.executeUpdate()
             }
         }
@@ -2191,7 +2259,7 @@ class PostgresRuntimePersistence(
     override fun submitResult(commandId: String): SubmitOrderResult? {
         projectionConnection().use { conn ->
             conn.prepareStatement(
-                "SELECT result_type, event_id, order_id, engine_order_id, code, reason, occurred_at FROM ${names.submitResults} WHERE command_id = ?"
+                "SELECT run_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at, cancelled::TEXT AS cancellation_json, matching_facts::TEXT AS matching_facts_json FROM ${names.submitResults} WHERE command_id = ?"
             ).use { ps ->
                 ps.setString(1, commandId)
                 ps.executeQuery().use { rs ->
@@ -2200,14 +2268,15 @@ class PostgresRuntimePersistence(
                     val orderId = rs.getString("order_id")
                     return if (resultType == "accepted") {
                         SubmitOrderResult(
+                            cancelled = rs.getString("cancellation_json")?.let { cancellationFromResultPayload("{\"cancelled\":$it}") },
                             accepted = EngineOrderAccepted(
                                 eventId = rs.getString("event_id"),
                                 orderId = orderId,
                                 engineOrderId = rs.getString("engine_order_id"),
                                 occurredAt = rs.getString("occurred_at")
                             ),
-                            executions = executionsForOrder(orderId),
-                            trades = tradesForOrder(orderId)
+                            executions = rs.getString("matching_facts_json")?.let { executionsFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: executionsForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId)),
+                            trades = rs.getString("matching_facts_json")?.let { tradesFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: tradesForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId))
                         )
                     } else {
                         SubmitOrderResult(
@@ -2230,13 +2299,16 @@ class PostgresRuntimePersistence(
             conn.prepareStatement(
                 """
                 SELECT
+                  run_id,
                   result_payload->>'resultType' AS result_type,
                   result_payload->>'eventId' AS event_id,
                   result_payload->>'orderId' AS order_id,
                   result_payload->>'engineOrderId' AS engine_order_id,
                   result_payload->>'code' AS code,
                   result_payload->>'reason' AS reason,
-                  result_payload->>'occurredAt' AS occurred_at
+                  result_payload->>'occurredAt' AS occurred_at,
+                  (result_payload->'cancelled')::TEXT AS cancellation_json,
+                  result_payload::TEXT AS matching_facts_json
                 FROM ${names.canonicalCommandResults}
                 WHERE command_id = ?
                 """.trimIndent()
@@ -2248,14 +2320,15 @@ class PostgresRuntimePersistence(
                     val orderId = rs.getString("order_id")
                     return if (resultType == "accepted") {
                         SubmitOrderResult(
+                            cancelled = rs.getString("cancellation_json")?.let { cancellationFromResultPayload("{\"cancelled\":$it}") },
                             accepted = EngineOrderAccepted(
                                 eventId = rs.getString("event_id"),
                                 orderId = orderId,
                                 engineOrderId = rs.getString("engine_order_id"),
                                 occurredAt = rs.getString("occurred_at")
                             ),
-                            executions = executionsForOrder(orderId),
-                            trades = tradesForOrder(orderId)
+                            executions = rs.getString("matching_facts_json")?.let { executionsFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: executionsForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId)),
+                            trades = rs.getString("matching_facts_json")?.let { tradesFromResultPayload(it).map { fact -> fact.copy(runId = rs.getString("run_id")) } } ?: tradesForOrder(RuntimeOrderIdentity(rs.getString("run_id"), orderId))
                         )
                     } else {
                         SubmitOrderResult(
@@ -2274,7 +2347,19 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveInstrument(instrument: Instrument) {
-        upsert("${names.referenceInstruments}", "instrument_id", instrument.instrumentId, instrument.symbol)
+        require(validQuoteCurrency(instrument.quoteCurrency)) { "invalid instrument quote currency" }
+        connection().use { conn ->
+            conn.prepareStatement("""
+                INSERT INTO ${names.referenceInstruments}(instrument_id, symbol, quote_currency) VALUES (?, ?, ?)
+                ON CONFLICT (instrument_id) DO UPDATE SET symbol = EXCLUDED.symbol
+                WHERE ${names.referenceInstruments}.quote_currency = EXCLUDED.quote_currency
+            """.trimIndent()).use { ps ->
+                ps.setString(1, instrument.instrumentId)
+                ps.setString(2, instrument.symbol)
+                ps.setString(3, instrument.quoteCurrency)
+                require(ps.executeUpdate() == 1) { "instrument quote currency is immutable" }
+            }
+        }
     }
 
     override fun saveParticipant(participant: Participant) {
@@ -2547,8 +2632,8 @@ class PostgresRuntimePersistence(
         )
     }
 
-    override fun instruments(): List<Instrument> = queryList("SELECT instrument_id, symbol FROM ${names.referenceInstruments}") {
-        Instrument(getString("instrument_id"), getString("symbol"))
+    override fun instruments(): List<Instrument> = queryList("SELECT instrument_id, symbol, quote_currency FROM ${names.referenceInstruments}") {
+        Instrument(getString("instrument_id"), getString("symbol"), getString("quote_currency"))
     }
 
     override fun participants(): List<Participant> = queryList("SELECT participant_id, name FROM ${names.referenceParticipants}") {
@@ -2598,24 +2683,31 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT instrument_exists, participant_exists, account_exists, account_belongs_to_participant
+                SELECT instrument_exists, participant_exists, account_exists, account_belongs_to_participant, i.quote_currency
                 FROM ${names.validateReferenceDataFunction}(?, ?, ?)
+                LEFT JOIN ${names.referenceInstruments} i ON i.instrument_id = ?
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, instrumentId)
                 ps.setString(2, participantId)
                 ps.setString(3, accountId)
+                ps.setString(4, instrumentId)
                 ps.executeQuery().use { rs ->
                     rs.next()
                     return ReferenceDataValidation(
                         instrumentExists = rs.getBoolean("instrument_exists"),
                         participantExists = rs.getBoolean("participant_exists"),
                         accountExists = rs.getBoolean("account_exists"),
-                        accountBelongsToParticipant = rs.getBoolean("account_belongs_to_participant")
+                        accountBelongsToParticipant = rs.getBoolean("account_belongs_to_participant"),
+                        instrumentQuoteCurrency = rs.getString("quote_currency")
                     )
                 }
             }
         }
+    }
+
+    override fun persistSubmitOutcome(outcome: PersistableSubmitOutcome) {
+        persistSubmitOutcomes(listOf(outcome))
     }
 
     override fun persistSubmitOutcome(
@@ -3958,21 +4050,21 @@ class PostgresRuntimePersistence(
                     """
                     WITH execution_totals AS (
                       SELECT
-                        order_id,
+                        run_id, order_id,
                         SUM(quantity_units::NUMERIC) AS filled_quantity_units
                       FROM ${names.executions}
                       WHERE quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
-                      GROUP BY order_id
+                      GROUP BY run_id, order_id
                     ),
                     latest_modify AS (
-                      SELECT DISTINCT ON (order_id)
-                        order_id,
+                      SELECT DISTINCT ON (run_id, order_id)
+                        run_id, order_id,
                         COALESCE(NULLIF(modify_quantity_units, ''), '') AS modified_quantity_units,
                         COALESCE(NULLIF(modify_limit_price, ''), '') AS modified_limit_price,
                         occurred_at
                       FROM ${names.runtimeEvents}
                       WHERE event_type = 'OrderModified'
-                      ORDER BY order_id,
+                      ORDER BY run_id, order_id,
                         occurred_at_ts DESC NULLS LAST,
                         occurred_at DESC,
                         sequence_number DESC,
@@ -3981,16 +4073,16 @@ class PostgresRuntimePersistence(
                     ),
                     order_event_state AS (
                       SELECT
-                        order_id,
+                        run_id, order_id,
                         BOOL_OR(event_type = 'OrderCancelled') AS cancelled,
                         BOOL_OR(event_type = 'OrderRejected') AS rejected,
                         COALESCE(MAX(NULLIF(occurred_at, '')), '') AS last_event_at
                       FROM ${names.runtimeEvents}
-                      GROUP BY order_id
+                      GROUP BY run_id, order_id
                     ),
                     shaped AS (
                       SELECT
-                        orders.order_id,
+                        orders.run_id, orders.order_id,
                         orders.engine_order_id,
                         orders.instrument_id,
                         orders.participant_id,
@@ -4008,9 +4100,9 @@ class PostgresRuntimePersistence(
                         COALESCE(order_event_state.rejected, FALSE) AS rejected,
                         COALESCE(NULLIF(order_event_state.last_event_at, ''), orders.accepted_at) AS last_event_at
                       FROM ${names.orders} orders
-                      LEFT JOIN execution_totals ON execution_totals.order_id = orders.order_id
-                      LEFT JOIN latest_modify ON latest_modify.order_id = orders.order_id
-                      LEFT JOIN order_event_state ON order_event_state.order_id = orders.order_id
+                      LEFT JOIN execution_totals ON execution_totals.run_id = orders.run_id AND execution_totals.order_id = orders.order_id
+                      LEFT JOIN latest_modify ON latest_modify.run_id = orders.run_id AND latest_modify.order_id = orders.order_id
+                      LEFT JOIN order_event_state ON order_event_state.run_id = orders.run_id AND order_event_state.order_id = orders.order_id
                       WHERE COALESCE(NULLIF(latest_modify.modified_quantity_units, ''), orders.quantity_units) ~ '^[0-9]+(\.[0-9]+)?$'
                     ),
                     calculated AS (
@@ -4024,7 +4116,7 @@ class PostgresRuntimePersistence(
                       FROM shaped
                     )
                     INSERT INTO ${names.orderLifecycleState}(
-                      order_id,
+                      run_id, order_id,
                       engine_order_id,
                       instrument_id,
                       participant_id,
@@ -4047,7 +4139,7 @@ class PostgresRuntimePersistence(
                       limit_price_num
                     )
                     SELECT
-                      order_id,
+                      run_id, order_id,
                       engine_order_id,
                       instrument_id,
                       participant_id,
@@ -4108,6 +4200,54 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun orderLifecycleState(identity: RuntimeOrderIdentity): OrderLifecycleState? {
+        return projectionQueryList(
+            """
+            SELECT
+              order_id,
+              engine_order_id,
+              instrument_id,
+              participant_id,
+              account_id,
+              side,
+              order_type,
+              original_quantity_units,
+              remaining_quantity_units,
+              filled_quantity_units,
+              limit_price,
+              currency,
+              time_in_force,
+              status,
+              accepted_at,
+              last_event_at,
+              updated_at::TEXT AS updated_at
+            FROM ${names.orderLifecycleState}
+            WHERE run_id = ? AND order_id = ?
+            """.trimIndent(),
+            identity.runId, identity.orderId
+        ) {
+            OrderLifecycleState(
+                orderId = getString("order_id"),
+                engineOrderId = getString("engine_order_id"),
+                instrumentId = getString("instrument_id"),
+                participantId = getString("participant_id"),
+                accountId = getString("account_id"),
+                side = getString("side"),
+                orderType = getString("order_type"),
+                originalQuantityUnits = getString("original_quantity_units"),
+                remainingQuantityUnits = getString("remaining_quantity_units"),
+                filledQuantityUnits = getString("filled_quantity_units"),
+                limitPrice = getString("limit_price"),
+                currency = getString("currency"),
+                timeInForce = getString("time_in_force"),
+                status = getString("status"),
+                acceptedAt = getString("accepted_at"),
+                lastEventAt = getString("last_event_at"),
+                updatedAt = getString("updated_at")
+            )
+        }.firstOrNull()
+    }
+
     override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
         return projectionQueryList(
             """
@@ -4153,7 +4293,7 @@ class PostgresRuntimePersistence(
                 lastEventAt = getString("last_event_at"),
                 updatedAt = getString("updated_at")
             )
-        }.firstOrNull()
+        }.singleOrNull()
     }
 
     override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
@@ -4568,12 +4708,12 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
-        projectionConnection().use { conn ->
+        projectionTransaction { conn ->
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (order_id) DO UPDATE SET
+                ON CONFLICT (run_id, order_id) DO UPDATE SET
                   engine_order_id = EXCLUDED.engine_order_id,
                   instrument_id = EXCLUDED.instrument_id,
                   participant_id = EXCLUDED.participant_id,
@@ -4607,16 +4747,17 @@ class PostgresRuntimePersistence(
                 ps.setString(15, order.venueSessionId)
                 ps.executeUpdate()
             }
+            markOrderLifecycleDirty(conn, listOf(RuntimeOrderIdentity(order.runId, order.orderId)))
         }
     }
 
     override fun saveExecutions(executions: List<ExecutionCreated>) {
         if (executions.isEmpty()) return
-        projectionConnection().use { conn ->
+        projectionTransaction { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role, run_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO UPDATE SET
                   event_id = ${names.rejectExecutionReplayConflictFunction}(EXCLUDED.event_id)
                 WHERE ROW(
@@ -4626,6 +4767,7 @@ class PostgresRuntimePersistence(
                   ${names.executions}.quantity_units,
                   ${names.executions}.execution_price,
                   ${names.executions}.currency,
+                  ${names.executions}.run_id,
                   ${names.executions}.occurred_at,
                   ${names.executions}.liquidity_role
                 ) IS DISTINCT FROM ROW(
@@ -4635,6 +4777,7 @@ class PostgresRuntimePersistence(
                   EXCLUDED.quantity_units,
                   EXCLUDED.execution_price,
                   EXCLUDED.currency,
+                  EXCLUDED.run_id,
                   EXCLUDED.occurred_at,
                   EXCLUDED.liquidity_role
                 )
@@ -4650,20 +4793,22 @@ class PostgresRuntimePersistence(
                     ps.setString(7, execution.currency)
                     ps.setString(8, execution.occurredAt)
                     ps.setString(9, execution.liquidityRole)
+                    ps.setString(10, execution.runId)
                     ps.addBatch()
                 }
                 ps.executeBatch()
             }
+            markOrderLifecycleDirty(conn, executions.map { RuntimeOrderIdentity(it.runId, it.orderId) })
         }
     }
 
     override fun saveTrades(trades: List<TradeCreated>) {
         if (trades.isEmpty()) return
-        projectionConnection().use { conn ->
+        projectionTransaction { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at, run_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO UPDATE SET
                   event_id = ${names.rejectTradeReplayConflictFunction}(EXCLUDED.event_id)
                 WHERE ROW(
@@ -4675,6 +4820,7 @@ class PostgresRuntimePersistence(
                   ${names.trades}.quantity_units,
                   ${names.trades}.price,
                   ${names.trades}.currency,
+                  ${names.trades}.run_id,
                   ${names.trades}.occurred_at
                 ) IS DISTINCT FROM ROW(
                   EXCLUDED.trade_id,
@@ -4685,6 +4831,7 @@ class PostgresRuntimePersistence(
                   EXCLUDED.quantity_units,
                   EXCLUDED.price,
                   EXCLUDED.currency,
+                  EXCLUDED.run_id,
                   EXCLUDED.occurred_at
                 )
                 """.trimIndent()
@@ -4700,10 +4847,12 @@ class PostgresRuntimePersistence(
                     ps.setString(8, trade.price)
                     ps.setString(9, trade.currency)
                     ps.setString(10, trade.occurredAt)
+                    ps.setString(11, trade.runId)
                     ps.addBatch()
                 }
                 ps.executeBatch()
             }
+            markOrderLifecycleDirty(conn, trades.flatMap { listOf(RuntimeOrderIdentity(it.runId, it.buyOrderId), RuntimeOrderIdentity(it.runId, it.sellOrderId)) })
         }
     }
 
@@ -4714,171 +4863,41 @@ class PostgresRuntimePersistence(
     override fun saveEvents(events: List<RuntimeEvent>) {
         if (events.isEmpty()) return
         require(events.map { it.eventId }.toSet().size == events.size) { "duplicate runtime event ID in batch" }
-        projectionConnection().use { conn ->
-            val previousAutoCommit = conn.autoCommit
-            conn.autoCommit = false
-            try {
-                conn.prepareStatement("SELECT pg_advisory_xact_lock(198765432, hashtext(?))").use { ps ->
-                    events.map { it.traceId }.distinct().sorted().forEach { traceId ->
-                        ps.setString(1, traceId)
-                        ps.executeQuery().close()
-                    }
-                }
-                val existingIds = mutableSetOf<String>()
-                conn.prepareStatement(
-                    """
-                    SELECT ROW(
-                      stored.event_type, stored.order_id, stored.trace_id, stored.causation_id,
-                      stored.correlation_id, stored.actor_id, stored.producer, stored.schema_version,
-                      stored.occurred_at, stored.modify_quantity_units, stored.modify_limit_price,
-                      COALESCE(stored.payload_sha256, sha256(COALESCE(payloads.payload_json, stored.payload_json)::text::bytea))
-                    ) IS NOT DISTINCT FROM ROW(
-                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, sha256((?::jsonb)::text::bytea)
-                    ) AND COALESCE(payloads.payload_json, stored.payload_json) = ?::jsonb AS identical
-                    FROM ${names.runtimeEvents} stored
-                    LEFT JOIN ${names.runtimeEventPayloads} payloads ON payloads.event_id = stored.event_id
-                    WHERE stored.event_id = ?
-                    """.trimIndent()
-                ).use { ps ->
-                    events.forEach { event ->
-                        val modifyFacts = event.modifyFacts()
-                        val payload = event.payloadJson.ifBlank { "{}" }
-                        ps.setString(1, event.eventType)
-                        ps.setString(2, event.orderId)
-                        ps.setString(3, event.traceId)
-                        ps.setString(4, event.causationId)
-                        ps.setString(5, event.correlationId)
-                        ps.setString(6, event.actorId)
-                        ps.setString(7, event.producer)
-                        ps.setString(8, event.schemaVersion)
-                        ps.setString(9, event.occurredAt)
-                        ps.setString(10, modifyFacts.quantityUnits)
-                        ps.setString(11, modifyFacts.limitPrice)
-                        ps.setString(12, payload)
-                        ps.setString(13, payload)
-                        ps.setString(14, event.eventId)
-                        ps.executeQuery().use { rs ->
-                            if (rs.next()) {
-                                if (!rs.getBoolean("identical")) {
-                                    throw SQLException("runtime event replay conflict for existing event_id ${event.eventId}", "23505")
-                                }
-                                existingIds.add(event.eventId)
-                            }
-                        }
-                    }
-                }
-                val newEvents = events.filterNot { it.eventId in existingIds }
-                if (newEvents.isEmpty()) {
-                    conn.commit()
-                    return
-                }
-                val startByTrace = mutableMapOf<String, Long>()
-                newEvents.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
-                    conn.prepareStatement(
-                        """
-                        INSERT INTO ${names.runtimeTraceSequences} AS trace_sequence(trace_id, next_sequence)
-                        VALUES (?, ?)
-                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = trace_sequence.next_sequence + EXCLUDED.next_sequence
-                        RETURNING next_sequence
-                        """.trimIndent()
-                    ).use { ps ->
-                        ps.setString(1, traceId)
-                        ps.setLong(2, traceEvents.size.toLong())
-                        ps.executeQuery().use { rs ->
-                            rs.next()
-                            val sequenceHigh = rs.getLong("next_sequence")
-                            startByTrace[traceId] = sequenceHigh - traceEvents.size + 1
-                        }
-                    }
-                }
-
-                val nextByTrace = startByTrace.toMutableMap()
-                conn.prepareStatement(
-                    """
-                    INSERT INTO ${names.runtimeEvents} AS stored(
-                      event_id,
-                      event_type,
-                      order_id,
-                      trace_id,
-                      causation_id,
-                      correlation_id,
-                      actor_id,
-                      producer,
-                      schema_version,
-                      sequence_number,
-                      payload_json,
-                      occurred_at,
-                      modify_quantity_units,
-                      modify_limit_price,
-                      payload_sha256
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}'::jsonb, ?, ?, ?, sha256((?::jsonb)::text::bytea))
-                    ON CONFLICT (event_id) DO UPDATE
-                      SET event_id = runtime.runtime_reject_event_replay_conflict(EXCLUDED.event_id)
-                      WHERE ROW(
-                        stored.event_type, stored.order_id, stored.trace_id, stored.causation_id,
-                        stored.correlation_id, stored.actor_id, stored.producer, stored.schema_version,
-                        stored.sequence_number, stored.occurred_at, stored.modify_quantity_units,
-                        stored.modify_limit_price,
-                        COALESCE(stored.payload_sha256, sha256(COALESCE(
-                          (SELECT payload_json FROM ${names.runtimeEventPayloads} WHERE event_id = stored.event_id),
-                          stored.payload_json
-                        )::text::bytea))
-                      ) IS DISTINCT FROM ROW(
-                        EXCLUDED.event_type, EXCLUDED.order_id, EXCLUDED.trace_id, EXCLUDED.causation_id,
-                        EXCLUDED.correlation_id, EXCLUDED.actor_id, EXCLUDED.producer, EXCLUDED.schema_version,
-                        EXCLUDED.sequence_number, EXCLUDED.occurred_at, EXCLUDED.modify_quantity_units,
-                        EXCLUDED.modify_limit_price, EXCLUDED.payload_sha256
-                      )
-                    """.trimIndent()
-                ).use { ps ->
-                    newEvents.forEach { event ->
-                        val sequence = nextByTrace.getValue(event.traceId)
-                        nextByTrace[event.traceId] = sequence + 1
-                        val modifyFacts = event.modifyFacts()
-                        ps.setString(1, event.eventId)
-                        ps.setString(2, event.eventType)
-                        ps.setString(3, event.orderId)
-                        ps.setString(4, event.traceId)
-                        ps.setString(5, event.causationId)
-                        ps.setString(6, event.correlationId)
-                        ps.setString(7, event.actorId)
-                        ps.setString(8, event.producer)
-                        ps.setString(9, event.schemaVersion)
-                        ps.setLong(10, sequence)
-                        ps.setString(11, event.occurredAt)
-                        ps.setString(12, modifyFacts.quantityUnits)
-                        ps.setString(13, modifyFacts.limitPrice)
-                        ps.setString(14, event.payloadJson.ifBlank { "{}" })
-                        ps.addBatch()
-                    }
-                    ps.executeBatch()
-                }
-                conn.prepareStatement(
-                    """
-                    INSERT INTO ${names.runtimeEventPayloads} AS stored(event_id, payload_json)
-                    VALUES (?, ?::jsonb)
-                    ON CONFLICT (event_id) DO UPDATE
-                      SET event_id = runtime.runtime_reject_event_replay_conflict(EXCLUDED.event_id)
-                      WHERE stored.payload_json IS DISTINCT FROM EXCLUDED.payload_json
-                    """.trimIndent()
-                ).use { ps ->
-                    newEvents.forEach { event ->
-                        val payload = event.payloadJson.ifBlank { "{}" }
-                        if (payload == "{}") return@forEach
-                        ps.setString(1, event.eventId)
-                        ps.setString(2, payload)
-                        ps.addBatch()
-                    }
-                    ps.executeBatch()
-                }
-                conn.commit()
-            } catch (ex: Exception) {
-                conn.rollback()
-                throw ex
-            } finally {
-                conn.autoCommit = previousAutoCommit
+        val payload = "[{\"events\":${events.toJsonArray { it.toJsonObject() }}}]"
+        projectionTransaction { conn ->
+            conn.prepareStatement("SELECT ${names.persistSubmitOutcomeTimelineStageFunction}(?::jsonb)").use { ps ->
+                ps.setString(1, payload)
+                ps.executeQuery().close()
             }
+        }
+    }
+
+    private fun <T> projectionTransaction(action: (Connection) -> T): T = projectionConnection().use { conn ->
+        val previousAutoCommit = conn.autoCommit
+        conn.autoCommit = false
+        try {
+            val result = action(conn)
+            conn.commit()
+            result
+        } catch (error: Exception) {
+            conn.rollback()
+            throw error
+        } finally {
+            conn.autoCommit = previousAutoCommit
+        }
+    }
+
+    private fun markOrderLifecycleDirty(conn: Connection, identities: List<RuntimeOrderIdentity>) {
+        conn.prepareStatement(
+            "INSERT INTO ${names.orderLifecycleDirty} AS dirty(run_id, order_id) VALUES (?, ?) " +
+                "ON CONFLICT (run_id, order_id) DO UPDATE SET dirtied_at = dirty.dirtied_at WHERE FALSE"
+        ).use { ps ->
+            identities.distinct().sortedWith(compareBy<RuntimeOrderIdentity> { it.runId }.thenBy { it.orderId }).forEach {
+                ps.setString(1, it.runId)
+                ps.setString(2, it.orderId)
+                ps.addBatch()
+            }
+            ps.executeBatch()
         }
     }
 
@@ -4896,56 +4915,41 @@ class PostgresRuntimePersistence(
         val limitPrice: String = ""
     )
 
-    override fun acceptedOrder(orderId: String): PersistedOrder? {
-        projectionConnection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT $OrderSelectColumns
-                FROM ${names.orders} WHERE order_id = ?
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, orderId)
-                ps.executeQuery().use { rs ->
-                    if (!rs.next()) return null
-                    return rs.toPersistedOrder()
-                }
-            }
-        }
+    override fun acceptedOrder(identity: RuntimeOrderIdentity): PersistedOrder? = projectionQueryList(
+        "SELECT $OrderSelectColumns FROM ${names.orders} WHERE run_id = ? AND order_id = ?",
+        identity.runId, identity.orderId
+    ) { toPersistedOrder() }.singleOrNull()
+
+    override fun acceptedOrdersByIdentity(identities: Set<RuntimeOrderIdentity>): Map<RuntimeOrderIdentity, PersistedOrder> {
+        if (identities.isEmpty()) return emptyMap()
+        val predicates = identities.joinToString(" OR ") { "(run_id = ? AND order_id = ?)" }
+        val params = identities.flatMap { listOf(it.runId, it.orderId) }.toTypedArray()
+        return projectionQueryList("SELECT $OrderSelectColumns FROM ${names.orders} WHERE $predicates", *params) {
+            toPersistedOrder()
+        }.associateBy { RuntimeOrderIdentity(it.runId, it.orderId) }
     }
+
+    override fun acceptedOrder(orderId: String): PersistedOrder? = projectionQueryList(
+        "SELECT $OrderSelectColumns FROM ${names.orders} WHERE order_id = ? LIMIT 2", orderId
+    ) { toPersistedOrder() }.singleOrNull()
 
     override fun acceptedOrders(orderIds: Set<String>): Map<String, PersistedOrder> {
         if (orderIds.isEmpty()) return emptyMap()
         val placeholders = orderIds.joinToString(",") { "?" }
         return projectionQueryList(
-            """
-            SELECT $OrderSelectColumns
-            FROM ${names.orders}
-            WHERE order_id IN ($placeholders)
-            """.trimIndent(),
+            "SELECT $OrderSelectColumns FROM ${names.orders} WHERE order_id IN ($placeholders)",
             *orderIds.toTypedArray()
-        ) {
-            toPersistedOrder()
-        }.associateBy { it.orderId }
+        ) { toPersistedOrder() }.groupBy { it.orderId }.mapNotNull { (id, rows) -> rows.singleOrNull()?.let { id to it } }.toMap()
     }
 
-    override fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
-        projectionConnection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT $OrderSelectColumns
-                FROM ${names.orders} WHERE participant_id = ? AND client_order_id = ?
-                ORDER BY accepted_at_ts DESC NULLS LAST, accepted_at DESC, order_id DESC
-                LIMIT 1
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, participantId)
-                ps.setString(2, clientOrderId)
-                ps.executeQuery().use { rs ->
-                    if (!rs.next()) return null
-                    return rs.toPersistedOrder()
-                }
-            }
-        }
+    override fun findOrderByClientOrderId(participantId: String, clientOrderId: String, runId: String?): PersistedOrder? {
+        val runFilter = if (runId == null) "" else "AND run_id = ?"
+        val params = listOfNotNull(participantId, clientOrderId, runId).toTypedArray()
+        val candidates = projectionQueryList(
+            "SELECT $OrderSelectColumns FROM ${names.orders} WHERE participant_id = ? AND client_order_id = ? $runFilter " +
+                "ORDER BY accepted_at_ts DESC NULLS LAST, accepted_at DESC, order_id DESC", *params
+        ) { toPersistedOrder() }
+        return if (candidates.map { it.runId }.distinct().size > 1) null else candidates.firstOrNull()
     }
 
     override fun acceptedOrders(): List<PersistedOrder> = projectionQueryList(
@@ -5074,7 +5078,7 @@ class PostgresRuntimePersistence(
             """
             SELECT e.execution_id, e.order_id, e.instrument_id, o.side, e.quantity_units, e.execution_price, e.currency, e.occurred_at, e.liquidity_role
             FROM ${names.executions} e
-            JOIN ${names.orders} o ON o.order_id = e.order_id
+            JOIN ${names.orders} o ON o.run_id = e.run_id AND o.order_id = e.order_id
             WHERE o.participant_id = ?
             $instrumentFilter
             $runFilter
@@ -5098,7 +5102,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> = projectionQueryList(
-        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id",
+        "SELECT run_id, event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at, liquidity_role FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id",
         orderId
     ) {
         ExecutionCreated(
@@ -5110,18 +5114,19 @@ class PostgresRuntimePersistence(
             executionPrice = getString("execution_price"),
             currency = getString("currency"),
             occurredAt = getString("occurred_at"),
-            liquidityRole = getString("liquidity_role")
+            liquidityRole = getString("liquidity_role"),
+            runId = getString("run_id")
         )
     }
 
     override fun trades(): List<TradeCreated> = projectionQueryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id"
+        "SELECT run_id, event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id"
     ) {
         toTradeCreated()
     }
 
     override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
+        "SELECT run_id, event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
         limit.coerceIn(0, 500).toString()
     ) {
         toTradeCreated()
@@ -5129,7 +5134,7 @@ class PostgresRuntimePersistence(
 
     override fun tradesForOrder(orderId: String): List<TradeCreated> = projectionQueryList(
         """
-        SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at
+        SELECT run_id, event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at
         FROM ${names.trades} WHERE buy_order_id = ? OR sell_order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id
         """.trimIndent(),
         orderId,
@@ -5163,11 +5168,11 @@ class PostgresRuntimePersistence(
         }
         return projectionQueryList(
             """
-            SELECT trade.event_id, trade.trade_id, trade.execution_id, trade.buy_order_id, trade.sell_order_id,
+            SELECT trade.run_id, trade.event_id, trade.trade_id, trade.execution_id, trade.buy_order_id, trade.sell_order_id,
                    trade.instrument_id, trade.quantity_units, trade.price, trade.currency, trade.occurred_at
             FROM ${names.trades} trade
-            JOIN ${names.orders} buy_order ON buy_order.order_id = trade.buy_order_id
-            JOIN ${names.orders} sell_order ON sell_order.order_id = trade.sell_order_id
+            JOIN ${names.orders} buy_order ON buy_order.run_id = trade.run_id AND buy_order.order_id = trade.buy_order_id
+            JOIN ${names.orders} sell_order ON sell_order.run_id = trade.run_id AND sell_order.order_id = trade.sell_order_id
             WHERE COALESCE(NULLIF(buy_order.run_id, ''), NULLIF(sell_order.run_id, ''), ?) = ?
               AND (
                   buy_order.run_id = ''
@@ -5194,7 +5199,8 @@ class PostgresRuntimePersistence(
             quantityUnits = getString("quantity_units"),
             price = getString("price"),
             currency = getString("currency"),
-            occurredAt = getString("occurred_at")
+            occurredAt = getString("occurred_at"),
+            runId = getString("run_id")
         )
     }
 
@@ -5327,6 +5333,7 @@ class PostgresRuntimePersistence(
             SELECT
               events.event_id,
               events.event_type,
+              events.run_id,
               events.order_id,
               events.trace_id,
               events.causation_id,
@@ -5354,7 +5361,8 @@ class PostgresRuntimePersistence(
             sequenceNumber = getLong("sequence_number"),
             occurredAt = getString("occurred_at"),
             actorId = getString("actor_id"),
-            payloadJson = getString("payload_json")
+            payloadJson = getString("payload_json"),
+            runId = getString("run_id")
         )
     }
 
@@ -5407,138 +5415,12 @@ class PostgresRuntimePersistence(
     private fun <T> projectionQueryList(sql: String, vararg params: String, map: java.sql.ResultSet.() -> T): List<T> =
         queryList(sql, *params, connectionSupplier = ::projectionConnection, map = map)
 
-    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
-        commandPayloadJson: String = "{}",
-        includeFills: Boolean = true
-    ): PersistableSubmitOutcome {
-        val resultPayload = JsonCodec.parseLegacyObjectOrEmpty(resultPayloadJson)
-        val embeddedAcceptedOrder = resultPayload.obj("acceptedOrder")
-        val commandPayload = JsonCodec.parseLegacyObjectOrEmpty(commandPayloadJson)
-        val traceId = commandPayload.string("traceId").ifBlank { commandId }
-        val causationId = commandPayload.string("causationId").ifBlank { commandId }
-        val correlationId = commandPayload.string("correlationId").ifBlank { commandId }
-        val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
-        val occurredAt = jsonString(resultPayloadJson, "occurredAt")
-        val rejected = resultStatus == "rejected" || resultStatus == "failed"
-        val result = if (rejected) {
-            SubmitOrderResult(
-                rejected = EngineOrderRejected(
-                    eventId = eventId,
-                    orderId = orderId,
-                    code = rejectCode.ifBlank { jsonString(resultPayloadJson, "code") },
-                    reason = jsonString(resultPayloadJson, "reason"),
-                    occurredAt = occurredAt
-                ),
-                executions = if (includeFills) executionsFromResultPayload(resultPayloadJson) else emptyList(),
-                trades = if (includeFills) tradesFromResultPayload(resultPayloadJson) else emptyList()
-            )
-        } else {
-            SubmitOrderResult(
-                accepted = EngineOrderAccepted(
-                    eventId = eventId,
-                    orderId = orderId,
-                    engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
-                    occurredAt = occurredAt
-                ),
-                executions = if (includeFills) executionsFromResultPayload(resultPayloadJson) else emptyList(),
-                trades = if (includeFills) tradesFromResultPayload(resultPayloadJson) else emptyList()
-            )
-        }
-        val rejectCodeValue = rejectCode.ifBlank { jsonString(resultPayloadJson, "code") }
-        val acceptedOrder = if (
-            commandType == "SubmitOrder" &&
-            (!rejected || rejectCodeValue !in NonLifecycleRejectCodes)
-        ) {
-            fun orderField(key: String): String {
-                return embeddedAcceptedOrder.string(key).ifBlank { commandPayload.string(key) }
-            }
-            PersistedOrder(
-                orderId = orderField("orderId").ifBlank { orderId },
-                engineOrderId = if (rejected) "" else orderField("engineOrderId").ifBlank { jsonString(resultPayloadJson, "engineOrderId") },
-                instrumentId = orderField("instrumentId"),
-                participantId = orderField("participantId"),
-                accountId = orderField("accountId"),
-                side = orderField("side"),
-                orderType = orderField("orderType"),
-                quantityUnits = orderField("quantityUnits"),
-                limitPrice = orderField("limitPrice"),
-                currency = orderField("currency"),
-                timeInForce = orderField("timeInForce"),
-                acceptedAt = orderField("acceptedAt").ifBlank { occurredAt },
-                clientOrderId = orderField("clientOrderId"),
-                runId = orderField("runId"),
-                venueSessionId = orderField("venueSessionId")
-            ).takeIf {
-                it.orderId.isNotBlank() &&
-                it.instrumentId.isNotBlank() &&
-                    it.participantId.isNotBlank() &&
-                    it.accountId.isNotBlank()
-            }
-        } else {
-            null
-        }
-        return PersistableSubmitOutcome(
-            commandId = commandId,
-            result = result,
-            acceptedOrder = acceptedOrder,
-            lifecycleEvents = listOf(
-                RuntimeEvent(
-                    eventId = eventId,
-                    eventType = lifecycleEventType(commandType, rejected),
-                    orderId = orderId,
-                    traceId = traceId,
-                    causationId = causationId,
-                    correlationId = correlationId,
-                    actorId = "",
-                    producer = "venue-event-batch-projector",
-                    schemaVersion = "v1",
-                    occurredAt = occurredAt,
-                    payloadJson = resultPayloadJson.ifBlank { "{}" }
-                )
-            ),
-            streamSequence = streamSequence
-        )
-    }
-
     private fun lifecycleEventType(commandType: String, rejected: Boolean): String {
         if (rejected) return "OrderRejected"
         return when (commandType) {
             "CancelOrder" -> "OrderCancelled"
             "ModifyOrder" -> "OrderModified"
             else -> "OrderAccepted"
-        }
-    }
-
-    private fun executionsFromResultPayload(json: String): List<ExecutionCreated> {
-        return JsonCodec.parseLegacyObjectOrEmpty(json).objectDocuments("executions").map { execution ->
-            ExecutionCreated(
-                eventId = execution.string("eventId"),
-                executionId = execution.string("executionId"),
-                orderId = execution.string("orderId"),
-                instrumentId = execution.string("instrumentId"),
-                quantityUnits = execution.string("quantityUnits"),
-                executionPrice = execution.string("executionPrice"),
-                currency = execution.string("currency"),
-                occurredAt = execution.string("occurredAt"),
-                liquidityRole = execution.string("liquidityRole").ifBlank { "UNSPECIFIED" }
-            )
-        }
-    }
-
-    private fun tradesFromResultPayload(json: String): List<TradeCreated> {
-        return JsonCodec.parseLegacyObjectOrEmpty(json).objectDocuments("trades").map { trade ->
-            TradeCreated(
-                eventId = trade.string("eventId"),
-                tradeId = trade.string("tradeId"),
-                executionId = trade.string("executionId"),
-                buyOrderId = trade.string("buyOrderId"),
-                sellOrderId = trade.string("sellOrderId"),
-                instrumentId = trade.string("instrumentId"),
-                quantityUnits = trade.string("quantityUnits"),
-                price = trade.string("price"),
-                currency = trade.string("currency"),
-                occurredAt = trade.string("occurredAt")
-            )
         }
     }
 

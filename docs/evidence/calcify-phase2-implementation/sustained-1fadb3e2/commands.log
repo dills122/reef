@@ -1,4 +1,0 @@
-{"mode":"init","prefix":"p2-sus-1fadb3e2-hot","args":[],"code":0}
-{"mode":"paired-seed","prefix":"p2-sus-1fadb3e2-hot","args":[33000,"hot",0,110],"code":1}
-{"mode":"measure","prefix":"p2-sus-1fadb3e2-hot","args":[3300000,390000],"code":null}
-{"mode":"worker","prefix":"p2-sus-1fadb3e2-hot","args":["p2-sus-1fadb3e2-hot-app","/var/folders/lg/j56llg991d1gpjvtjh8l9gbh0000gn/T/reef-resolver-sustained-FnBBaB","",2],"code":null}

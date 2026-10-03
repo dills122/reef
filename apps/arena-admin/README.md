@@ -29,16 +29,21 @@ only and must not appear in production output.
 
 ```bash
 bun run arena-admin:check
+bun scripts/dev/arena-admin-run-detail.test.mjs
 bun run arena-admin:build:guarded
 bun run arena-admin:ui-audit
 ```
+
+Run detail clears prior data when selection changes and ignores outdated request
+results or errors, including after clearing selection or leaving page. Deferred
+request tests cover both completion orders, stale errors, and effect cleanup.
 
 The guarded build scans the static output for local fixture markers. CI also
 runs the Svelte typecheck and static build.
 
 For the real GitHub OAuth/Admin DB local smoke, environment requirements, and
 owner-config setup, see
-[`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](../../docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
+[docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md).
 For launch status and external-submission blockers, see
 [`docs/BOT_ARENA_RELEASE_READINESS.md`](../../docs/BOT_ARENA_RELEASE_READINESS.md).
 

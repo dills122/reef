@@ -1,0 +1,166 @@
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":44694,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":44694,"elapsedMs":5000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":100390,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":100390,"elapsedMs":10000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":153155,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":153155,"elapsedMs":15000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":205345,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":205345,"elapsedMs":20000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":257872,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":257872,"elapsedMs":25000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":310211,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":310211,"elapsedMs":30000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":362840,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":362840,"elapsedMs":35000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":415222,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":415222,"elapsedMs":40000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":468075,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":468075,"elapsedMs":45000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":520277,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":520277,"elapsedMs":50000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":573076,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":573076,"elapsedMs":55000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_PROGRESS {"acceptedOrders":625582,"acceptedToReceiptGapLower":null,"acceptedToReceiptGapUpper":null,"completedPairs":625582,"elapsedMs":60000,"failures":0,"receiptQueryMs":0,"receipts":null,"retries":0,"sampleError":""}
+CALCIFY_LOAD_RESULT {
+  "workloadMode": "aggressor",
+  "ordersPerTrade": 1,
+  "completedTrades": 625780,
+  "jobAccounting": "completedTrades and legacy completedPairs count fully acknowledged trade jobs; pairs fields are legacy job counters; actual completed trades require canonical source/verified/resolved reconciliation; aggressor maker seeding occurs before load window",
+  "instrumentIds": [
+    "I0-d6",
+    "I1-d6",
+    "I2-d6",
+    "I3-d6",
+    "I4-d6",
+    "I5-d6",
+    "I6-d6",
+    "I7-d6",
+    "I8-d6",
+    "I9-d6",
+    "I10-d6",
+    "I11-d6",
+    "I12-d6",
+    "I13-d6",
+    "I14-d6",
+    "I15-d6",
+    "I16-d6",
+    "I17-d6",
+    "I18-d6",
+    "I19-d6",
+    "I20-d6",
+    "I21-d6",
+    "I22-d6",
+    "I23-d6",
+    "I26-d6",
+    "I28-d6",
+    "I29-d6",
+    "I30-d6",
+    "I31-d6",
+    "I32-d6",
+    "I33-d6",
+    "I34-d6",
+    "I36-d6",
+    "I37-d6",
+    "I39-d6",
+    "I40-d6",
+    "I41-d6",
+    "I42-d6",
+    "I43-d6",
+    "I44-d6",
+    "I45-d6",
+    "I46-d6",
+    "I49-d6",
+    "I50-d6",
+    "I51-d6",
+    "I52-d6",
+    "I53-d6",
+    "I54-d6",
+    "I57-d6",
+    "I58-d6",
+    "I59-d6",
+    "I60-d6",
+    "I62-d6",
+    "I63-d6",
+    "I67-d6",
+    "I70-d6",
+    "I71-d6",
+    "I72-d6",
+    "I74-d6",
+    "I75-d6",
+    "I76-d6",
+    "I78-d6",
+    "I82-d6",
+    "I89-d6"
+  ],
+  "smokeId": "d6",
+  "targetPairs": 630000,
+  "startIndex": 0,
+  "targetPairsPerSecond": 10500,
+  "scheduledPairs": 630000,
+  "dispatchedPairs": 625780,
+  "droppedPairs": 4220,
+  "completedPairs": 625780,
+  "acceptedOrders": 625780,
+  "acceptedOrdersAtDeadline": 625562,
+  "deadlineAccounting": "validated durable HTTP acknowledgement observed strictly before fixed monotonic load-start plus requested duration; late/equal acknowledgements count only in acceptedOrders; epoch fields expose wall time from those same Go instants",
+  "loadStartedEpochMs": 1790923923528,
+  "scheduledDeadlineEpochMs": 1790923983528,
+  "acceptedAllEpochMs": 1790923983541,
+  "receiptDrainAccounting": "drainMs runs from HTTP worker completion before stopping the progress observer through successful receipt reconciliation; includes any outstanding observer query wait; acceptedAllEpochMs records worker completion even if requests failed",
+  "acceptedOrdersPerSecond": 10427.581353038722,
+  "elapsedMs": 60011,
+  "retries": 0,
+  "failures": 0,
+  "samples": [
+    {
+      "elapsedMs": 5000,
+      "completedPairsBefore": 44694,
+      "completedPairs": 44694
+    },
+    {
+      "elapsedMs": 10000,
+      "completedPairsBefore": 100390,
+      "completedPairs": 100390
+    },
+    {
+      "elapsedMs": 15000,
+      "completedPairsBefore": 153155,
+      "completedPairs": 153155
+    },
+    {
+      "elapsedMs": 20000,
+      "completedPairsBefore": 205345,
+      "completedPairs": 205345
+    },
+    {
+      "elapsedMs": 25000,
+      "completedPairsBefore": 257872,
+      "completedPairs": 257872
+    },
+    {
+      "elapsedMs": 30000,
+      "completedPairsBefore": 310211,
+      "completedPairs": 310211
+    },
+    {
+      "elapsedMs": 35000,
+      "completedPairsBefore": 362840,
+      "completedPairs": 362840
+    },
+    {
+      "elapsedMs": 40000,
+      "completedPairsBefore": 415222,
+      "completedPairs": 415222
+    },
+    {
+      "elapsedMs": 45000,
+      "completedPairsBefore": 468075,
+      "completedPairs": 468075
+    },
+    {
+      "elapsedMs": 50000,
+      "completedPairsBefore": 520277,
+      "completedPairs": 520277
+    },
+    {
+      "elapsedMs": 55000,
+      "completedPairsBefore": 573076,
+      "completedPairs": 573076
+    },
+    {
+      "elapsedMs": 60000,
+      "completedPairsBefore": 625582,
+      "completedPairs": 625582
+    }
+  ],
+  "gatePassed": true
+}

@@ -75,7 +75,7 @@ class PostgresRuntimePersistenceTest {
         )
 
         assertEquals(order, persistence.acceptedOrder(order.orderId))
-        assertEquals(listOf(execution), persistence.executionsForOrder(order.orderId))
+        assertEquals(listOf(execution.copy(runId = order.runId)), persistence.executionsForOrder(order.orderId))
     }
 
     @Test
@@ -181,7 +181,8 @@ class PostgresRuntimePersistenceTest {
             executionPrice = "150250000000",
             currency = "USD",
             occurredAt = "2026-07-07T00:00:00Z",
-            liquidityRole = "TAKER"
+            liquidityRole = "TAKER",
+            runId = runId
         )
         persistence.saveExecutions(listOf(execution))
         persistence.saveExecutions(listOf(execution))
@@ -231,7 +232,8 @@ class PostgresRuntimePersistenceTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-07-07T00:00:00Z"
+                    occurredAt = "2026-07-07T00:00:00Z",
+                    runId = runId
                 )
             )
         )
@@ -247,7 +249,8 @@ class PostgresRuntimePersistenceTest {
                 producer = "platform-runtime",
                 schemaVersion = "v1",
                 payloadJson = """{"source":"postgres-runtime-persistence-test"}""",
-                occurredAt = "2026-07-07T00:00:00Z"
+                occurredAt = "2026-07-07T00:00:00Z",
+                runId = runId
             )
         )
 

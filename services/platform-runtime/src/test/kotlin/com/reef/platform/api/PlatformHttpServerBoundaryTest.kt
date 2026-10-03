@@ -54,6 +54,32 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
 class PlatformHttpServerBoundaryTest {
+    @Test
+    fun defaultMemoryCanonicalProjectorUsesConfiguredCapturedSource() {
+        val sources = listOf(
+            InMemoryCommandCaptureStore(),
+            CommandLogCommandCaptureStore(InMemoryCommandCaptureStore(), InMemoryCommandLogStore())
+        )
+        sources.forEach { captured ->
+            val persistence = InMemoryRuntimePersistence()
+            val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+            val server = PlatformHttpServer(
+                port = 0, api = api, boundary = ExternalApiBoundary(),
+                idempotencyStore = InMemoryIdempotencyStore(),
+                idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+                commandCaptureStore = captured
+            ).start()
+            try {
+                com.reef.platform.infrastructure.persistence.assertCanonicalRunOrderLifecycleIsolation(persistence) { commandId, payload ->
+                    val route = if (JsonCodec.parseObject(payload).string("commandType") == "CancelOrder") "/orders/cancel" else "/orders/modify"
+                    captured.reserveReceived("client", route, commandId, commandId, payload)
+                }
+            } finally {
+                server.stop(0)
+            }
+        }
+    }
+
     private fun apiReadHeaders(
         clientId: String = "client-1",
         participantId: String = "participant-1"
@@ -3576,7 +3602,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-materialize"
                 )
             )
         )
@@ -3716,7 +3743,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-materialize-fail"
                 )
             )
         )
@@ -3902,7 +3930,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-materialize-security-fail"
                 )
             )
         )
@@ -4056,7 +4085,8 @@ class PlatformHttpServerBoundaryTest {
                     quantityUnits = "100",
                     price = "150250000000",
                     currency = "USD",
-                    occurredAt = "2026-01-01T00:00:00Z"
+                    occurredAt = "2026-01-01T00:00:00Z",
+                    runId = "run-force-settle"
                 )
             )
         )
@@ -5193,6 +5223,45 @@ class PlatformHttpServerBoundaryTest {
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun hotPathRejectsWrongInstrumentQuoteBeforeReserveOrPublish() {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        val publisher = RecordingStreamCommandPublisher()
+        val intake = InMemoryStreamCommandIntakeStore()
+        val server = PlatformHttpServer(port = 0,
+            boundary = ExternalApiBoundary(), idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            api = PlatformApi(OrderApplicationService(EchoOrderEngineGateway(), persistence)),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = intake, streamCommandPublisher = publisher)
+        val headers = Headers().apply { add("X-Client-Id", "client-1"); add("Idempotency-Key", "hot-wrong-quote") }
+        val response = server.handleHotPathRequest(PlatformHotPathRequest("POST", "/api/v1/orders/submit", null, headers,
+            "127.0.0.1", validSubmitBody("hot-wrong-quote", "hot-wrong-quote", "hot-wrong-quote", extra = streamRoutingExtra()).replace("\"USD\"", "\"CAD\"")))
+        assertEquals(400, response?.status)
+        assertContains(response?.body.orEmpty(), "CURRENCY_MISMATCH")
+        assertEquals(0, publisher.published.size)
+        assertEquals(null, intake.findByCommandId("hot-wrong-quote"))
+    }
+
+    @Test
+    fun streamAckRejectsWrongInstrumentQuoteBeforeReserveOrPublish() {
+        val publisher = RecordingStreamCommandPublisher()
+        val intakeStore = InMemoryStreamCommandIntakeStore()
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(gateway = gateway, commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = intakeStore, streamCommandPublisher = publisher)
+        try {
+            val response = post(server.address.port, "/api/v1/orders/submit",
+                mapOf("X-Client-Id" to "client-1", "Idempotency-Key" to "wrong-quote"),
+                validSubmitBody("wrong-quote", "wrong-quote", "wrong-quote", extra = streamRoutingExtra()).replace("\"USD\"", "\"CAD\""))
+            assertEquals(400, response.status)
+            assertContains(response.body, "CURRENCY_MISMATCH")
+            assertEquals(0, publisher.published.size)
+            assertEquals(null, intakeStore.findByCommandId("wrong-quote"))
+        } finally { server.stop(0) }
     }
 
     @Test

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "source_commit": "76872e9db249152e0329393d73c4a2f850ea2b93",
+  "archive_commit": "6b838e5287c5428c914f6577ff176c1cd03c44ec",
+  "scope": "PR #463 runtime order isolation final verification and CI follow-up; not qualification of subsequent #465 changes",
+  "files": [
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-check-review3.log",
+      "original_path": ".planning/R08-evidence/r08-check-review3.log",
+      "sha256": "07552fa6990d0a2ac255b6344fb1c740218ec1cbc3643338c3f12a9f0fe85d4f",
+      "bytes": 675
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-arena-container-final.log",
+      "original_path": ".planning/R08-evidence/r08-ci-arena-container-final.log",
+      "sha256": "1e6e7642623a3b57aeb01a23be57873a5bcd7ef25af4468276b3ab1c88f964fb",
+      "bytes": 4297
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-container-final.log",
+      "original_path": ".planning/R08-evidence/r08-ci-container-final.log",
+      "sha256": "94c5f445a59cb0d3158d377224a09b687ca422c236b50282a6daf7cc8d521e86",
+      "bytes": 39964
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-missing-resource-fixed.log",
+      "original_path": ".planning/R08-evidence/r08-ci-missing-resource-fixed.log",
+      "sha256": "fcec238e0f2d038cbb4cf7e1ff6f8b569ad2aceb6f14d83fa3104d476b10df1c",
+      "bytes": 969
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-node.log",
+      "original_path": ".planning/R08-evidence/r08-ci-node.log",
+      "sha256": "e239a9818fc5e48e563deb4343d7cf1a86021e6da97ee55d6bd8ba0ff9abb4b9",
+      "bytes": 6253
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-schema-green.log",
+      "original_path": ".planning/R08-evidence/r08-ci-schema-green.log",
+      "sha256": "543e851f065082469c98ad39c9c5ed867750f456bc9084e6fc2157a6b3cbdabb",
+      "bytes": 899
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-migration-tests.log",
+      "original_path": ".planning/R08-evidence/r08-migration-tests.log",
+      "sha256": "46e29be4de0261e751f7b7045bdffe55ed5db9bf35dd047c9bc76b0a79264ae7",
+      "bytes": 5174
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-review3-focused.log",
+      "original_path": ".planning/R08-evidence/r08-review3-focused.log",
+      "sha256": "db1ed3a096b98ff4513b8b8ac17efc89702e4c78d08fe3fbfce1021e4f92f1e6",
+      "bytes": 621
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-review3-independent.log",
+      "original_path": ".planning/R08-evidence/r08-review3-independent.log",
+      "sha256": "4629664592ddb4d4ba9ed9da28d774d94b9a3de01367deb3d86e26d46e90c314",
+      "bytes": 631
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-review3-sql-probe.log",
+      "original_path": ".planning/R08-evidence/r08-review3-sql-probe.log",
+      "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615",
+      "bytes": 560
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/R08-review-3.md",
+      "original_path": ".planning/R08-review-3.md",
+      "sha256": "6b3c31e55a347c77201bec61e67006e29693fe3503a0de197e6aa49c2b69f13c",
+      "bytes": 2102
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/R08-ci-followup.md",
+      "original_path": ".planning/R08-ci-followup.md",
+      "sha256": "31ba25c5356d56420124da048733f818c9f1b7f99643629394cfc9d13af4857d",
+      "bytes": 2880
+    }
+  ]
+}

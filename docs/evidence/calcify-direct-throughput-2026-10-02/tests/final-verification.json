@@ -1,0 +1,20 @@
+{
+  "timestampUTC": "2026-10-02T07:22:13Z",
+  "platformCommand": "JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home ./gradlew check",
+  "platformStatus": "BUILD SUCCESSFUL in29s; check and jacocoTestCoverageVerification passed",
+  "platformCounts": {
+    "tests": 727,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "runnerCommand": "node --test scripts/dev/calcify-direct-capacity.test.mjs",
+  "runnerTests": 11,
+  "runnerFailures": 0,
+  "sourceClassManifestDrift": [],
+  "finalReview": "Independent read-only review by existing replay_fix agent: no material blockers in bootstrap/runner/observer promotion, seed accounting, timing checks or reproduction scope; no review-time build/load mutations. Production extractor review previously clear.",
+  "qualifiedRun": "d7",
+  "durableMatchingAckCount": 3142910,
+  "matchingNacked": 0,
+  "matchingFailed": 0
+}

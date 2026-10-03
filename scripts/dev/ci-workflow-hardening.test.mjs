@@ -73,6 +73,13 @@ assert.match(
   "manual full-CI runs must exercise scenario replay",
 );
 assert.match(ci, /^permissions:\n  contents: read$/m);
+const idempotencyDbJob = jobBlocks(ci).get("calcify-tests");
+assert.match(idempotencyDbJob, /name: Run idempotency renewal tests against real Postgres/);
+for (const variable of ["RUNTIME_DB_URL_TEST", "RUNTIME_DB_USER_TEST", "RUNTIME_DB_PASSWORD_TEST"]) {
+  assert.match(idempotencyDbJob, new RegExp(`${variable}:`));
+}
+assert.match(idempotencyDbJob, /--tests "com\.reef\.platform\.api\.PostgresIdempotencyStoreIntegrationTest"/);
+assert.match(jobBlocks(ci).get("arena-admin"), /run: bun \.\.\/\.\.\/scripts\/dev\/arena-admin-run-detail\.test\.mjs/);
 assert.match(ci, /concurrency:\n  group: ci-/);
 assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 assert.doesNotMatch(ci, /arduino\/setup-protoc@/, "proto setup must not depend on a deprecated Node runtime");

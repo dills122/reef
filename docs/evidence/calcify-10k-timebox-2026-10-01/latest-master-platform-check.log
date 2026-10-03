@@ -1,0 +1,26 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :processTestResources UP-TO-DATE
+> Task :verifyNoTestSourceExclusions
+> Task :compileKotlin
+> Task :compileJava
+> Task :classes
+> Task :jar
+> Task :startScripts
+> Task :installDist
+
+> Task :compileTestKotlin
+w: file:///Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt:263:32 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :test
+> Task :jacocoTestReport
+> Task :jacocoTestCoverageVerification
+> Task :check
+
+[Incubating] Problems report is available at: file:///Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef/services/platform-runtime/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 37s
+11 actionable tasks: 10 executed, 1 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html

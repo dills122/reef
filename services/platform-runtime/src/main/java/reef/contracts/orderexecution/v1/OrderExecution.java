@@ -77,6 +77,11 @@ public final class OrderExecution extends com.google.protobuf.GeneratedFile {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_reef_contracts_orderexecution_v1_TradeCreated_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_orderexecution_v1_OrderCancelled_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_orderexecution_v1_OrderCancelled_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_reef_contracts_orderexecution_v1_SubmitOrderResult_descriptor;
   static final
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -155,43 +160,49 @@ public final class OrderExecution extends com.google.protobuf.GeneratedFile {
       "\007 \001(\0132/.reef.contracts.orderexecution.v1" +
       ".OrderQuantity\0226\n\005price\030\010 \001(\0132\'.reef.con" +
       "tracts.orderexecution.v1.Price\022\023\n\013occurr" +
-      "ed_at\030\t \001(\t\"\260\002\n\021SubmitOrderResult\022C\n\010acc" +
-      "epted\030\001 \001(\0132/.reef.contracts.orderexecut" +
-      "ion.v1.OrderAcceptedH\000\022C\n\010rejected\030\002 \001(\013" +
-      "2/.reef.contracts.orderexecution.v1.Orde" +
-      "rRejectedH\000\022F\n\nexecutions\030\003 \003(\01322.reef.c" +
-      "ontracts.orderexecution.v1.ExecutionCrea" +
-      "ted\022>\n\006trades\030\004 \003(\0132..reef.contracts.ord" +
-      "erexecution.v1.TradeCreatedB\t\n\007outcome\"\024" +
-      "\n\022HealthCheckRequest\"6\n\023HealthCheckRespo" +
-      "nse\022\017\n\007service\030\001 \001(\t\022\016\n\006status\030\002 \001(\t*c\n\r" +
-      "LiquidityRole\022\036\n\032LIQUIDITY_ROLE_UNSPECIF" +
-      "IED\020\000\022\030\n\024LIQUIDITY_ROLE_MAKER\020\001\022\030\n\024LIQUI" +
-      "DITY_ROLE_TAKER\020\002*P\n\tOrderSide\022\032\n\026ORDER_" +
-      "SIDE_UNSPECIFIED\020\000\022\022\n\016ORDER_SIDE_BUY\020\001\022\023" +
-      "\n\017ORDER_SIDE_SELL\020\002*=\n\tOrderType\022\032\n\026ORDE" +
-      "R_TYPE_UNSPECIFIED\020\000\022\024\n\020ORDER_TYPE_LIMIT" +
-      "\020\001*Z\n\013TimeInForce\022\035\n\031TIME_IN_FORCE_UNSPE" +
-      "CIFIED\020\000\022\025\n\021TIME_IN_FORCE_DAY\020\001\022\025\n\021TIME_" +
-      "IN_FORCE_IOC\020\0022\344\004\n\025OrderExecutionService" +
-      "\022q\n\013SubmitOrder\022-.reef.contracts.orderex" +
-      "ecution.v1.SubmitOrder\0323.reef.contracts." +
-      "orderexecution.v1.SubmitOrderResult\022v\n\014S" +
-      "ubmitOrders\022-.reef.contracts.orderexecut" +
-      "ion.v1.SubmitOrder\0323.reef.contracts.orde" +
-      "rexecution.v1.SubmitOrderResult(\0010\001\022q\n\013C" +
-      "ancelOrder\022-.reef.contracts.orderexecuti" +
-      "on.v1.CancelOrder\0323.reef.contracts.order" +
-      "execution.v1.SubmitOrderResult\022q\n\013Modify" +
-      "Order\022-.reef.contracts.orderexecution.v1" +
-      ".ModifyOrder\0323.reef.contracts.orderexecu" +
-      "tion.v1.SubmitOrderResult\022z\n\013HealthCheck" +
-      "\0224.reef.contracts.orderexecution.v1.Heal" +
-      "thCheckRequest\0325.reef.contracts.orderexe" +
-      "cution.v1.HealthCheckResponseBh\n reef.co" +
-      "ntracts.orderexecution.v1P\001ZBgithub.com/" +
-      "dills122/reef/contracts/proto/orderexecu" +
-      "tion/v1;orderv1b\006proto3"
+      "ed_at\030\t \001(\t\"\246\001\n\016OrderCancelled\022\020\n\010event_" +
+      "id\030\001 \001(\t\022\020\n\010order_id\030\002 \001(\t\022K\n\022cancelled_" +
+      "quantity\030\003 \001(\0132/.reef.contracts.orderexe" +
+      "cution.v1.OrderQuantity\022\016\n\006reason\030\004 \001(\t\022" +
+      "\023\n\013occurred_at\030\005 \001(\t\"\365\002\n\021SubmitOrderResu" +
+      "lt\022C\n\010accepted\030\001 \001(\0132/.reef.contracts.or" +
+      "derexecution.v1.OrderAcceptedH\000\022C\n\010rejec" +
+      "ted\030\002 \001(\0132/.reef.contracts.orderexecutio" +
+      "n.v1.OrderRejectedH\000\022F\n\nexecutions\030\003 \003(\013" +
+      "22.reef.contracts.orderexecution.v1.Exec" +
+      "utionCreated\022>\n\006trades\030\004 \003(\0132..reef.cont" +
+      "racts.orderexecution.v1.TradeCreated\022C\n\t" +
+      "cancelled\030\005 \001(\01320.reef.contracts.orderex" +
+      "ecution.v1.OrderCancelledB\t\n\007outcome\"\024\n\022" +
+      "HealthCheckRequest\"6\n\023HealthCheckRespons" +
+      "e\022\017\n\007service\030\001 \001(\t\022\016\n\006status\030\002 \001(\t*c\n\rLi" +
+      "quidityRole\022\036\n\032LIQUIDITY_ROLE_UNSPECIFIE" +
+      "D\020\000\022\030\n\024LIQUIDITY_ROLE_MAKER\020\001\022\030\n\024LIQUIDI" +
+      "TY_ROLE_TAKER\020\002*P\n\tOrderSide\022\032\n\026ORDER_SI" +
+      "DE_UNSPECIFIED\020\000\022\022\n\016ORDER_SIDE_BUY\020\001\022\023\n\017" +
+      "ORDER_SIDE_SELL\020\002*=\n\tOrderType\022\032\n\026ORDER_" +
+      "TYPE_UNSPECIFIED\020\000\022\024\n\020ORDER_TYPE_LIMIT\020\001" +
+      "*Z\n\013TimeInForce\022\035\n\031TIME_IN_FORCE_UNSPECI" +
+      "FIED\020\000\022\025\n\021TIME_IN_FORCE_DAY\020\001\022\025\n\021TIME_IN" +
+      "_FORCE_IOC\020\0022\344\004\n\025OrderExecutionService\022q" +
+      "\n\013SubmitOrder\022-.reef.contracts.orderexec" +
+      "ution.v1.SubmitOrder\0323.reef.contracts.or" +
+      "derexecution.v1.SubmitOrderResult\022v\n\014Sub" +
+      "mitOrders\022-.reef.contracts.orderexecutio" +
+      "n.v1.SubmitOrder\0323.reef.contracts.ordere" +
+      "xecution.v1.SubmitOrderResult(\0010\001\022q\n\013Can" +
+      "celOrder\022-.reef.contracts.orderexecution" +
+      ".v1.CancelOrder\0323.reef.contracts.orderex" +
+      "ecution.v1.SubmitOrderResult\022q\n\013ModifyOr" +
+      "der\022-.reef.contracts.orderexecution.v1.M" +
+      "odifyOrder\0323.reef.contracts.orderexecuti" +
+      "on.v1.SubmitOrderResult\022z\n\013HealthCheck\0224" +
+      ".reef.contracts.orderexecution.v1.Health" +
+      "CheckRequest\0325.reef.contracts.orderexecu" +
+      "tion.v1.HealthCheckResponseBh\n reef.cont" +
+      "racts.orderexecution.v1P\001ZBgithub.com/di" +
+      "lls122/reef/contracts/proto/orderexecuti" +
+      "on/v1;orderv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -257,20 +268,26 @@ public final class OrderExecution extends com.google.protobuf.GeneratedFile {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_orderexecution_v1_TradeCreated_descriptor,
         new java.lang.String[] { "EventId", "TradeId", "ExecutionId", "BuyOrderId", "SellOrderId", "InstrumentId", "Quantity", "Price", "OccurredAt", });
-    internal_static_reef_contracts_orderexecution_v1_SubmitOrderResult_descriptor =
+    internal_static_reef_contracts_orderexecution_v1_OrderCancelled_descriptor =
       getDescriptor().getMessageType(10);
+    internal_static_reef_contracts_orderexecution_v1_OrderCancelled_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_orderexecution_v1_OrderCancelled_descriptor,
+        new java.lang.String[] { "EventId", "OrderId", "CancelledQuantity", "Reason", "OccurredAt", });
+    internal_static_reef_contracts_orderexecution_v1_SubmitOrderResult_descriptor =
+      getDescriptor().getMessageType(11);
     internal_static_reef_contracts_orderexecution_v1_SubmitOrderResult_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_orderexecution_v1_SubmitOrderResult_descriptor,
-        new java.lang.String[] { "Accepted", "Rejected", "Executions", "Trades", "Outcome", });
+        new java.lang.String[] { "Accepted", "Rejected", "Executions", "Trades", "Cancelled", "Outcome", });
     internal_static_reef_contracts_orderexecution_v1_HealthCheckRequest_descriptor =
-      getDescriptor().getMessageType(11);
+      getDescriptor().getMessageType(12);
     internal_static_reef_contracts_orderexecution_v1_HealthCheckRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_orderexecution_v1_HealthCheckRequest_descriptor,
         new java.lang.String[] { });
     internal_static_reef_contracts_orderexecution_v1_HealthCheckResponse_descriptor =
-      getDescriptor().getMessageType(12);
+      getDescriptor().getMessageType(13);
     internal_static_reef_contracts_orderexecution_v1_HealthCheckResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_orderexecution_v1_HealthCheckResponse_descriptor,

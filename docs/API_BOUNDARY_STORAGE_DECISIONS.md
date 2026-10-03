@@ -17,6 +17,13 @@ Define swappable storage backends for boundary-layer concerns and set default/ta
 Decision:
 - default local/dev: `inmemory`
 - baseline durable mode: `postgres`
+- live results remain immutable until TTL expiry; saving an expired key atomically
+  renews its result, creation time, and expiry without waiting for cleanup.
+- concurrent renewals keep the first live result. Postgres uses a conditional
+  conflict update under the row lock; in-memory storage applies the same rule
+  per key and removes expired entries only if they have not been renewed.
+- this TTL governs result replay only; independent command-capture and
+  command-log reservations retain their own lifecycle and deduplication rules.
 
 Rationale:
 - idempotency replay correctness requires durable records across process restarts for realistic API behavior.

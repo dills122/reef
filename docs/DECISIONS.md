@@ -47,7 +47,7 @@ Summary:
 - Future admin HTTP APIs must reuse the same admin application modules.
 
 Primary references:
-- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
+- [docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-004: Post-Match Lifecycle Baseline
@@ -64,7 +64,7 @@ Summary:
 - innovation paths are allowed only after baseline parity is established and test-covered.
 
 Primary references:
-- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
+- [docs/archive/SPRINT_POST_MATCH_ENGINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_POST_MATCH_ENGINES.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-005: Participant Roles and Permission Model
@@ -99,7 +99,7 @@ Summary:
 - calendar configuration should be one of the first admin tools delivered.
 
 Primary references:
-- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
+- [docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-007: Cross-Language Engineering Standards
@@ -130,7 +130,7 @@ Summary:
 - replay runs must record which policy version was applied.
 
 Primary references:
-- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
+- [docs/archive/SPRINT_POST_MATCH_ENGINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_POST_MATCH_ENGINES.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-009: Settlement Ledger Baseline
@@ -143,7 +143,7 @@ Summary:
 
 Primary references:
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
-- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
+- [docs/archive/SPRINT_POST_MATCH_ENGINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-010: Simulation-Backed External Integrations
 
@@ -175,7 +175,7 @@ Summary:
 
 Primary references:
 - [`docs/steering/architecture.md`](./steering/architecture.md)
-- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
+- [docs/archive/SPRINT_POST_MATCH_ENGINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-012: Traffic Scenario Catalog Requirement
 
@@ -187,7 +187,7 @@ Summary:
 - scenarios should be deterministic, versioned, and replayable.
 
 Primary references:
-- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
+- [docs/archive/SIMULATION_TRAFFIC_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SIMULATION_TRAFFIC_PLAN.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-013: Operational UI Target Style
@@ -215,7 +215,7 @@ Summary:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
+- [docs/archive/SIMULATION_TRAFFIC_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SIMULATION_TRAFFIC_PLAN.md)
 
 ### D-015: Engine vs Service Extraction Criteria
 
@@ -269,7 +269,7 @@ Summary:
 
 Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
-- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
+- [docs/archive/SPRINT_POST_MATCH_ENGINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-019: Override Governance and Audit Controls
 
@@ -284,7 +284,7 @@ Summary:
 
 Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
-- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
+- [docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-020: Clock Source Determinism Policy
 
@@ -296,7 +296,7 @@ Summary:
 
 Primary references:
 - [`docs/steering/architecture.md`](./steering/architecture.md)
-- [`docs/archive/SIMULATION_TRAFFIC_PLAN.md`](./archive/SIMULATION_TRAFFIC_PLAN.md)
+- [docs/archive/SIMULATION_TRAFFIC_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SIMULATION_TRAFFIC_PLAN.md)
 
 ### D-021: Baseline Performance Envelope Targets
 
@@ -313,7 +313,7 @@ Summary:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
+- [docs/archive/SPRINT_POST_MATCH_ENGINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-022: Baseline SLO Target Document
 
@@ -324,8 +324,8 @@ Summary:
 - cross-stage objectives (order path, boundary, and post-match stages) should be tracked and refined as architecture matures.
 
 Primary references:
-- [`docs/archive/SLO_BASELINES.md`](./archive/SLO_BASELINES.md)
-- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
+- [docs/archive/SLO_BASELINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SLO_BASELINES.md)
+- [docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-023: Single-Instance Capacity Objective
 
@@ -338,7 +338,7 @@ Summary:
 - superseded for the bot-arena scaling track by D-035, which raises the active target to `7500-10000` completed commands/sec with no accepted-command accounting gaps.
 
 Primary references:
-- [`docs/archive/SLO_BASELINES.md`](./archive/SLO_BASELINES.md)
+- [docs/archive/SLO_BASELINES.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SLO_BASELINES.md)
 
 ### D-024: Event Durability and Distribution Pattern
 
@@ -351,7 +351,7 @@ Summary:
 - event delivery semantics are at-least-once; consumers must be idempotent by `eventId`.
 
 Primary references:
-- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
+- [`docs/ROADMAP.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ROADMAP.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-025: EOD Data Lifecycle Policy
@@ -367,7 +367,7 @@ Summary:
   - immutable archive artifacts (compressed file-based partitions with manifest/checksums)
 
 Primary references:
-- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
+- [`docs/ROADMAP.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ROADMAP.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-026: Minimal Scheduler/Orchestration Policy
@@ -382,7 +382,7 @@ Summary:
 
 Primary references:
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
-- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
+- [`docs/ROADMAP.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ROADMAP.md)
 
 ### D-027: Postgres Procedure-First Persistence Policy
 
@@ -412,8 +412,8 @@ Summary:
 - physical database splitting is deferred until schema-level diagnostics prove contention that cannot be solved with logical isolation, partitioning, and batching.
 
 Primary references:
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
 
 ### D-029: Simulator Control Room Before Next Throughput Architecture Sprint
@@ -431,9 +431,9 @@ Summary:
 - this sprint supports the throughput track by making stress runs, comparisons, diagnostics, and scenario execution easier to repeat.
 
 Primary references:
-- [`docs/PROJECT_PITCH.md`](./archive/PROJECT_PITCH.md)
-- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
-- [`docs/archive/SIMULATOR_UPGRADE_BACKLOG.md`](./archive/SIMULATOR_UPGRADE_BACKLOG.md)
+- [`docs/PROJECT_PITCH.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/PROJECT_PITCH.md)
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [docs/archive/SIMULATOR_UPGRADE_BACKLOG.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SIMULATOR_UPGRADE_BACKLOG.md)
 
 ### D-030: Runtime Event Schema Baseline And Outbox Timing
 
@@ -446,7 +446,7 @@ Summary:
 - `runtime.event_outbox` remains a follow-up migration/workflow. It should be introduced with explicit transaction timing and publisher semantics rather than being mixed into this drift-fix slice.
 
 Primary references:
-- [`docs/archive/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./archive/SPRINT_CRITICAL_QUALITY_HARDENING.md)
+- [docs/archive/SPRINT_CRITICAL_QUALITY_HARDENING.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SPRINT_CRITICAL_QUALITY_HARDENING.md)
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
 
 ### D-031: Captured-Ack Async Command Worker
@@ -463,8 +463,8 @@ Summary:
 - Synchronous `sync-result` remains available for compatibility and deterministic tests.
 
 Primary references:
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ### D-033: Command Log Lifecycle Controls
 
@@ -479,7 +479,7 @@ Summary:
 - physical partitioning remains a follow-up after prune/retest evidence shows how much table lifecycle alone recovers.
 
 Primary references:
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
 ### D-034: Command Log Partitioning Direction
@@ -496,7 +496,7 @@ Summary:
 
 Primary references:
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-035: Completed Throughput And No-Loss Scaling Target
 
@@ -516,9 +516,9 @@ Summary:
 - bot traffic must use the same public command/API path as other simulator traffic, with run/session/bot attribution and no direct state mutation.
 
 Primary references:
-- [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./archive/THROUGHPUT_SCALING_WORK_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-036: Stream-Ack Ingress And Partitioned Processing Direction
 
@@ -538,9 +538,9 @@ Summary:
 - failure tests must cover publish retry, redelivery before DB commit, redelivery after DB commit before ack, deterministic replay, and projection rebuild.
 
 Primary references:
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md`](./archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-037: Stream-Ack Canonical Append And Projection Split
 
@@ -564,8 +564,8 @@ Summary:
 - no `7500-10000` completed/sec claim is valid without accepted/completed/projected accounting, bounded lag, p95/p99 evidence, zero accepted-command gaps, and replay or checksum evidence.
 
 Primary references:
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/steering/architecture.md`](./steering/architecture.md)
 - [NATS JetStream Streams](https://docs.nats.io/nats-concepts/jetstream/streams)
 - [NATS JetStream Consumers](https://docs.nats.io/nats-concepts/jetstream/consumers)
@@ -592,8 +592,8 @@ Summary:
 - using JetStream as the canonical venue event log with Postgres as projection/query storage is a reserved hard-pivot option only if a compact canonical Postgres append path still caps completed throughput; adopting it would require a new decision that supersedes the D-036/D-037 completion boundary.
 
 Primary references:
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/archive/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./archive/DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/archive/DIGITALOCEAN_STRESS_TEST_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
 ### D-039: Redpanda Stream-Ack Provider Comparison
@@ -609,7 +609,7 @@ Summary:
 - This comparison is meant to test durable-log mechanics, not to move canonical venue facts out of Postgres.
 
 Primary references:
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
 ### D-040: JetStream Command Stream And Engine Ingestion Direction
@@ -690,7 +690,7 @@ Summary:
 
 Primary references:
 - [`docs/TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
-- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
 ### D-043: Venue Event Batch Materialization Boundary
@@ -737,9 +737,9 @@ projection visible:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
 
 ### D-032: Command Log Queue And Result Split
@@ -773,8 +773,8 @@ Summary:
 - superseded by D-036 for the bot-arena high-throughput path: the next major throughput slice should build stream-ack ingress and partitioned processing rather than continue small command-log write-amplification tuning.
 
 Primary references:
-- [`docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ### D-045: Bot Arena Intake Direction
 
@@ -790,7 +790,7 @@ Summary:
 - final equity is the first headline leaderboard metric; richer risk, conduct, and consistency metrics are retained from day one.
 - public bot submissions are delayed until built-in/local bots prove replay, scoring, sandboxing, and operator controls (Rollout Plan Phase 5 gated behind Phases 1-4).
 - arena metadata, leaderboards, bot registry, run history, and replay indexes stay outside the trading hot-path database; Redis is ephemeral coordination/cache only, never the sole durable store for competition records.
-- the run plane is designed for early horizontal scale by tournament run, shard, instrument group, and sandbox worker; it inherits the throughput target from `docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md` (`7500`+ completed commands/sec per runtime+engine instance) and uses `docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md` as the target venue-ingress design for high-throughput bot traffic.
+- the run plane is designed for early horizontal scale by tournament run, shard, instrument group, and sandbox worker; it inherits the throughput target from [docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md) (`7500`+ completed commands/sec per runtime+engine instance) and uses [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md) as the target venue-ingress design for high-throughput bot traffic.
 - implementation state when D-045 was accepted was early Rollout Plan Phase 1
   (control-plane registry only). This is historical context, not a current
   inventory: D-051 and D-052 plus the July 2026 implementation added hosted
@@ -801,8 +801,8 @@ Summary:
 
 Primary references:
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
-- [`docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md`](./archive/THROUGHPUT_SCALING_WORK_PLAN.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/THROUGHPUT_SCALING_WORK_PLAN.md)
 
 ### D-046: Backbone/Run-Plane Infra Split
 
@@ -819,7 +819,7 @@ Summary:
 
 Primary references:
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/archive/ARENA_INTAKE_GAP_ANALYSIS.md`](archive/ARENA_INTAKE_GAP_ANALYSIS.md)
+- [docs/archive/ARENA_INTAKE_GAP_ANALYSIS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/ARENA_INTAKE_GAP_ANALYSIS.md)
 - [`infra/hetzner-core/`](../infra/hetzner-core/)
 - [`infra/simulation-runner/README.md`](../infra/simulation-runner/README.md)
 
@@ -843,8 +843,8 @@ Summary:
 Primary references:
 - [`docs/COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
-- [`docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md`](./archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md)
+- [docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 Amendment (2026-08-17):
 - `ModifyOrder` is now implemented on the direct stream path and shares the
@@ -883,7 +883,7 @@ Status: accepted
 Implementation note (2026-09-04): the decision summary below preserves the
 accepted direction at the time. Current delivery status is in
 [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
-and the [implementation audit](./archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
+and the [implementation audit](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Order/command authorization, durable scoped partitioning, TLS/mesh client modes,
 standard engine gRPC health and role-aware configuration checks have landed;
 the remaining work is narrower than the original future-tense summary.
@@ -903,8 +903,8 @@ Primary references:
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
 - [`docs/INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
-- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md)
+- [docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 
 ### D-050: Settlement Instant-Post-Trade Profile
 
@@ -954,9 +954,9 @@ Summary:
 - PR feedback must classify failures as user-fixable or maintainer/platform-fixable. Platform failures should comment on the PR and tag the configured maintainer group.
 
 Primary references:
-- [`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 
 ### D-052: Bot Arena Admin UI And Public Leaderboard Surface
@@ -972,8 +972,8 @@ Summary:
 - The admin-only area reuses the existing GitHub OAuth session flow and `AdminIdentityService` role/trust-state model from D-051 for gating. It starts scoped to a single operator but uses the existing role model so access can expand without a new auth mechanism.
 
 Primary references:
-- [`docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
-- [`docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - [`docs/steering/astro.md`](./steering/astro.md)
 
@@ -1011,7 +1011,7 @@ Summary:
 - the matching-engine artifact and Reef canonical behavior are identical
   between Reef-only and Arena-enabled profiles for the same commit.
 - the separation sprint was implemented and promoted on 2026-07-19; see
-  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](./archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
+  [`REEF_BOT_ARENA_SEPARATION_PROMOTION.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_PROMOTION.md).
   Invite-only fork admission implementation may proceed subject to its own
   release gates.
 - D-053 supersedes the parts of D-046 and D-052 that assumed Arena registry or
@@ -1020,7 +1020,7 @@ Summary:
   remains accepted.
 
 Primary references:
-- [`docs/archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md`](./archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
+- [docs/archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/REEF_BOT_ARENA_SEPARATION_SPRINT.md)
 - [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md#product-boundary)
 - [`docs/BOT_ARENA_INVITE_PREVIEW_SPRINT.md`](./BOT_ARENA_INVITE_PREVIEW_SPRINT.md)
 - [`docs/steering/architecture.md`](./steering/architecture.md)

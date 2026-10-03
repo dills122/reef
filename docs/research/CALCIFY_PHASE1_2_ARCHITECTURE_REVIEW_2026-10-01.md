@@ -16,7 +16,7 @@ failure, that is quoted directly rather than summarized charitably.
 Calcify Phase 2 (PR #433, "feat(calcify): add Phase 2 full-fact resolver and
 run-scoped matching") is on `master` today in the exact state its own authors
 described as a **draft that must not merge**. The 2026-09-30 nightly handoff
-(`docs/work/handoffs/2026-09-30-calcify-phase2.md`) is explicit: *"Draft must
+([archived original](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/records/reef/docs/work/handoffs/2026-09-30-calcify-phase2.md)) is explicit: *"Draft must
 remain unmerged until blockers below close"* and lists two P1 (severity-1)
 correctness defects plus a sustained-capacity qualification that failed every
 attempt. The squash commit merged to master is the identical commit set
@@ -28,7 +28,7 @@ review into thinking it was fixed (see Finding 1).
 Independently of that process failure, this review found a defect in the Go
 matching engine that the project's own prior review missed: the resolver's
 entire indexing strategy is built on the premise that **order IDs are not
-globally unique, only unique per run** (`docs/research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md`
+globally unique, only unique per run** ([docs/research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md)
 Piece 2: *"Order IDs are not assumed globally unique unless the contract
 proves that"*). The order-ID index in `services/matching-engine` was never
 updated when run-scoping was added to the order book — it still enforces
@@ -173,7 +173,7 @@ assumed when it designed the resolver's local index around the key
   scenario the architecture review explicitly calls out as expected
   behavior — reused order IDs across runs — has zero test coverage in either
   direction.
-- This directly contradicts `docs/research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md`
+- This directly contradicts [docs/research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_ARCHITECTURE_REVIEW_2026-09-29.md)
   Piece 2: *"Order IDs are not assumed globally unique unless the contract
   proves that."* The contract proves the opposite of what was assumed: it
   enforces global uniqueness by rejection, not per-run uniqueness by

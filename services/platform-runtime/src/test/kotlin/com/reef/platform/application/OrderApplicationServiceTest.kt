@@ -1,5 +1,7 @@
 package com.reef.platform.application
 
+import com.reef.platform.api.JsonCodec
+import com.reef.platform.domain.EngineOrderCancelled
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
@@ -24,6 +26,53 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class OrderApplicationServiceTest {
+    @Test
+    fun directIntakeRejectsInvalidCurrencyWithoutCallingEngine() {
+        for (quote in listOf("", "ZZZ", "XXX", "usd", "CAD")) {
+            val gateway = RecordingEngineGateway()
+            val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
+            seedReferenceData(service)
+            seedOrderAuthorization(service, "trader")
+            val result = service.submitOrder(submitCommand("bad-currency", "bad", "trader").copy(currency = quote))
+            assertEquals("CURRENCY_MISMATCH", result.rejected?.code)
+            assertEquals(0, gateway.submitCalls)
+        }
+    }
+
+    @Test
+    fun iocCancellationClosesParticipantOrderAfterPartialFillAndRetry() {
+        val delegate = RecordingEngineGateway()
+        val gateway = object : EngineGateway by delegate {
+            override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult =
+                delegate.submitOrder(command).let { result ->
+                    result.copy(
+                        executions = result.executions.map { it.copy(quantityUnits = "40") },
+                        trades = result.trades.map { it.copy(quantityUnits = "40") },
+                        cancelled = EngineOrderCancelled("ioc-terminal", command.orderId, "60", "IOC_RESIDUAL", command.occurredAt)
+                    )
+                }
+        }
+        val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
+        seedReferenceData(service)
+        seedOrderAuthorization(service, "trader")
+        val command = submitCommand("ioc-command", "ioc", "trader").copy(timeInForce = "IOC")
+        val result = service.submitOrder(command)
+        assertEquals(result, service.submitOrder(command))
+        assertEquals(1, delegate.submitCalls)
+        assertEquals(listOf("OrderAccepted", "ExecutionCreated", "TradeCreated", "OrderCancelled"),
+            service.persistedEvents("ioc").map { it.eventType })
+        val cancellation = service.persistedEvents("ioc").last()
+        val payload = JsonCodec.parseObject(cancellation.payloadJson)
+        assertEquals("60", payload.string("cancelledQuantityUnits"))
+        assertEquals("IOC_RESIDUAL", payload.string("reason"))
+        assertEquals(command.commandId, payload.string("commandId"))
+        service.rebuildOrderLifecycleState()
+        val ownOrder = service.ordersForParticipant("participant-1", false).single()
+        assertEquals("CANCELLED", ownOrder.status)
+        assertEquals("0", ownOrder.remainingQuantityUnits)
+        assertTrue(service.ordersForParticipant("participant-1", true).isEmpty())
+    }
+
     @Test
     fun submitOrderDelegatesToEngineGatewayAndPersistsAcceptedArtifacts() {
         val gateway = RecordingEngineGateway()
@@ -172,13 +221,15 @@ class OrderApplicationServiceTest {
                 quantityUnits = "100",
                 limitPrice = "150250000000",
                 currency = "USD",
-                timeInForce = "DAY"
+                timeInForce = "DAY",
+                runId = "run-unauthorized"
             )
         )
 
         assertNotNull(result.rejected)
         assertEquals("AUTHORIZATION_ERROR", result.rejected?.code)
         assertEquals("actorId missing permission order.submit", result.rejected?.reason)
+        assertEquals("run-unauthorized", service.persistedTraceEvents("trace-unauthorized-submit-1").single().runId)
         assertEquals(0, gateway.submitCalls)
         assertEquals(listOf("OrderRejected"), service.persistedTraceEvents("trace-unauthorized-submit-1").map { it.eventType })
     }
@@ -265,7 +316,8 @@ class OrderApplicationServiceTest {
                 actorId = "trader-unauthorized",
                 occurredAt = "2026-03-14T18:00:00Z",
                 orderId = "ord-unauthorized-cancel-1",
-                reason = "user requested"
+                reason = "user requested",
+                runId = "run-cancel"
             )
         )
         val modify = service.modifyOrder(
@@ -278,7 +330,8 @@ class OrderApplicationServiceTest {
                 occurredAt = "2026-03-14T18:00:00Z",
                 orderId = "ord-unauthorized-modify-1",
                 quantityUnits = "120",
-                limitPrice = "150250000001"
+                limitPrice = "150250000001",
+                runId = "run-modify"
             )
         )
 
@@ -286,6 +339,8 @@ class OrderApplicationServiceTest {
         assertEquals("actorId missing permission order.cancel", cancel.rejected?.reason)
         assertEquals("AUTHORIZATION_ERROR", modify.rejected?.code)
         assertEquals("actorId missing permission order.modify", modify.rejected?.reason)
+        assertEquals("run-cancel", service.persistedTraceEvents("trace-unauthorized-cancel-1").single().runId)
+        assertEquals("run-modify", service.persistedTraceEvents("trace-unauthorized-modify-1").single().runId)
         assertEquals(0, gateway.submitCalls)
     }
 

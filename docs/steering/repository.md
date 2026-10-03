@@ -55,6 +55,8 @@ For product and architecture priorities that should guide every change, read [`r
 
 ## Documentation Expectations
 
+- every feature/fix/refactor completes [delivery and retention pass](../RECORDS_RETENTION.md#required-completion-pass): affected code/contracts/docs/latest evidence, guidance/overview review, then verified archive of superseded topic records
+- keep local context pertinent to active planning, onboarding, session understanding and current system/design; historical context stays in Records and is read/cited there when needed
 - significant architectural decisions should be reflected in `docs/`
 - steering documents should change when the intended direction changes materially
 - README content should describe the current project shape, not the original prototype only

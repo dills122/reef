@@ -1,6 +1,6 @@
 # Calcify Phase 2 implementation plan
 
-Implementation basis: [bounded experiment report](../research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md). User approved six-slice plan on 2026-09-30. Execution status belongs in WORK_PLAN.md.
+Implementation basis: [bounded experiment report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md). User approved six-slice plan on 2026-09-30. Execution status belongs in WORK_PLAN.md.
 
 1. D-042 matching: run/session/instrument books, submit/cancel/modify/rollback, scope-aware reads and snapshot compatibility. Gate: cross-run isolation and deterministic lane replay; existing Go regression/race suites.
 2. Protobuf V1 and pure full-fact resolver: immutable trade and accepted-order facts, identities and exact provenance; acceptance ordering, ID lifetime and duplicate policy. Gate: deterministic wire round-trip plus positive/negative source fixtures.
@@ -36,7 +36,7 @@ Recovery diagnostic objective:1m full accepted rows, cold local-state loss, same
 
 Current source-generation/source-UUID checks do not bind verified/output UUIDs. Review found expired verified checkpoints may reset to earliest, and verified/output recreation may reuse restored checkpoints/completed identities against different history. Both require fail-closed fixes before merge. Planned remedy: explicit verified checkpoint retention validation with reset disabled and pinned classic consumer protocol; persist generation plus names/UUIDs of source, verified and output topics; reject missing output before creation when application changelog exists; extend existing periodic identity check. Existing source-only checkpoints need explicit repair, since prior input/output UUIDs cannot be inferred. These changes are pending, not current guarantees. Simultaneous destruction of changelog and namespace, and atomic malicious cross-topic replacement, remain outside this guard's proof.
 
-Final local platform regression/coverage passes. Earlier actual HTTP smoke, nine-boundary RF3 fault matrix and1m-row recovery precede final candidate changes. Latest sustained hot cohort has exact3.15m outputs and10,160.50/s active covering rate but fails actual source-delivery duration310.730s versus301s maximum; remaining profiles unrun. Draft cannot merge until review defects and unchanged-candidate qualification close. [Continuation handoff](handoffs/2026-09-30-calcify-phase2.md).
+Final local platform regression/coverage passes. Earlier actual HTTP smoke, nine-boundary RF3 fault matrix and1m-row recovery precede final candidate changes. Latest sustained hot cohort has exact3.15m outputs and10,160.50/s active covering rate but fails actual source-delivery duration310.730s versus301s maximum; remaining profiles unrun. Draft cannot merge until review defects and unchanged-candidate qualification close. [Continuation handoff](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/records/reef/docs/work/handoffs/2026-09-30-calcify-phase2.md).
 
 ## Run namespace upgrade and coordinated replay (2026-10-02)
 

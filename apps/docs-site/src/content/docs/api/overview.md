@@ -82,4 +82,4 @@ profile it requires `modeId` and `scoringPolicyVersion` query parameters.
 ## Learn More
 
 - `docs/steering/external-api-boundary.md` — full boundary steering (source for this page)
-- `docs/CURRENT_STATUS.md` — which processing mode is active by default today
+- [docs/CURRENT_STATUS.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md) — which processing mode is active by default today

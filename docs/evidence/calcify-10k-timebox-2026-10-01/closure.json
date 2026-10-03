@@ -1,0 +1,27 @@
+{
+  "ownedServicesStopped": [
+    "/reef-calcify-10k-20261001-calcify-resolver-1",
+    "/reef-calcify-10k-20261001-calcify-verifier-1",
+    "/reef-calcify-10k-20261001-calcify-extractor-1",
+    "/reef-calcify-10k-20261001-calcify-receipt-1",
+    "/reef-platform-worker-3",
+    "/reef-platform-projector-0",
+    "/reef-platform-projector-3",
+    "/reef-platform-worker-2",
+    "/reef-platform-worker-1",
+    "/reef-platform-api",
+    "/reef-platform-projector-1",
+    "/reef-platform-worker-0",
+    "/reef-platform-projector-2",
+    "/reef-matching-engine",
+    "/reef-boundary-postgres",
+    "/reef-nats",
+    "/reef-redpanda",
+    "/reef-projection-postgres",
+    "/reef-postgres"
+  ],
+  "runningOwnedServices": [],
+  "volumesPreserved": true,
+  "bestQ2TopicsPreserved": true,
+  "noIndexersStarted": true
+}

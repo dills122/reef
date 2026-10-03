@@ -357,6 +357,7 @@ jobs:
             scripts/dev/run-arena-economic-policy-matrix.test.mjs \
             scripts/dev/run-arena-scoring-calibration-matrix.test.mjs \
             scripts/dev/projection-replay-proof.test.mjs \
+            scripts/dev/calcify-direct-capacity.test.mjs \
             scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt
       - name: Add coverage summary
         run: |
@@ -441,6 +442,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Typecheck
         run: bun run check
+      - name: Run run-detail navigation regressions
+        run: bun ../../scripts/dev/arena-admin-run-detail.test.mjs
       - name: Build static site
         run: bun --bun run build
 
@@ -517,7 +520,7 @@ jobs:
             context: services/matching-engine
             dockerfile: services/matching-engine/Dockerfile
           - name: platform-runtime
-            context: services/platform-runtime
+            context: .
             dockerfile: services/platform-runtime/Dockerfile
           - name: arena-platform-runtime
             context: .
@@ -659,6 +662,12 @@ jobs:
           RUNTIME_POSTGRES_USER_TEST: reef
           RUNTIME_POSTGRES_PASSWORD_TEST: reef
         run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.calcify.*"
+      - name: Run idempotency renewal tests against real Postgres
+        env:
+          RUNTIME_DB_URL_TEST: jdbc:postgresql://localhost:5432/reef
+          RUNTIME_DB_USER_TEST: reef
+          RUNTIME_DB_PASSWORD_TEST: reef
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.api.PostgresIdempotencyStoreIntegrationTest"
       - name: Dump Postgres logs on failure
         if: failure()
         run: docker compose -f compose.base.yml -f compose.local.yml logs postgres

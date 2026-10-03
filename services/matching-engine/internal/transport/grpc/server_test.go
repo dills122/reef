@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
+	"github.com/dills122/reef/services/matching-engine/internal/domain"
 	orderv1 "github.com/dills122/reef/services/matching-engine/internal/transport/grpc/pb/contracts/proto"
 	gogrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -348,5 +349,14 @@ func validSubmitRequest(commandID string, orderID string) *orderv1.SubmitOrder {
 		Quantity:      &orderv1.OrderQuantity{Units: "100"},
 		LimitPrice:    &orderv1.Price{Nanos: "150250000000", Currency: "USD"},
 		TimeInForce:   orderv1.TimeInForce_TIME_IN_FORCE_DAY,
+	}
+}
+
+func TestIOCResultPreservesCancellationFact(t *testing.T) {
+	service := app.NewService()
+	result := service.SubmitOrder(domain.SubmitOrder{OrderID: "ioc", InstrumentID: "AAPL", Side: domain.SideBuy, QuantityUnits: "10", LimitPrice: "100", Currency: "USD", TimeInForce: "IOC"})
+	proto := toProtoResult(result)
+	if proto.GetAccepted() == nil || proto.GetCancelled() == nil || proto.GetCancelled().GetCancelledQuantity().GetUnits() != "10" {
+		t.Fatalf("IOC terminal fact lost: %v", proto)
 	}
 }
