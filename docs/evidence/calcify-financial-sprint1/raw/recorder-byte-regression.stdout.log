@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: stdout and stderr retain split UTF-8 and invalid bytes exactly
+ok 1 - stdout and stderr retain split UTF-8 and invalid bytes exactly
+  ---
+  duration_ms: 1.490666
+  type: 'test'
+  ...
+# Subtest: recorder persists binary output, failures and separate spawn diagnostics
+ok 2 - recorder persists binary output, failures and separate spawn diagnostics
+  ---
+  duration_ms: 217.102958
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 262.016167

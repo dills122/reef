@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_date": "2026-10-03",
-  "selection_reason": "Carry forward prior latest bundles unchanged; add first Calcify financial E0 checkpoint with frozen inputs, exact execution provenance, failed attempts, corrections and tool/runtime blockers; no superseded financial sprint bundle exists.",
+  "selection_reason": "Carry forward prior latest bundles unchanged; add first Calcify financial E0 checkpoint with frozen inputs, exact execution provenance, failed attempts, corrections and tool/runtime blockers; no superseded financial sprint bundle exists. October3 correction: independent review1 and author disposition retained; recorder byte-capture fix/tests added, prior raw bytes preserved.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,13 +1665,13 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 15675,
-      "sha256": "2b03fac1881f5dd9df1c2db2317ee93cd65f6e0f0223a34d1a42573ede95c95a"
+      "bytes": 17153,
+      "sha256": "9dbc84eabe86babac28e792d4f83af8d2a12156574108a4dc287c1e0d96b1f64"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/SHA256SUMS",
-      "bytes": 11571,
-      "sha256": "74bc14b1a7cffc5a58751a13cc82d6e112a0144c547144d0ad5b8251405eee36"
+      "bytes": 13007,
+      "sha256": "2d7d1014c573ba2a370ab4c5818727e282ff119ffc89076aee26ad9439507e6a"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1680,8 +1680,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/environment.json",
-      "bytes": 11595,
-      "sha256": "2eeda54008db47e34bd859366f0a92c4421bbcc09660d7001dac7567c998305e"
+      "bytes": 13139,
+      "sha256": "f5c5f06f09ce6930735e1d0beb15d660b601b70cf0087355511b6457432e3b37"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/fixtures.json",
@@ -1690,8 +1690,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/raw/attempts.jsonl",
-      "bytes": 10933,
-      "sha256": "aa0b23fa2977c706d253133bb83ffb7bbd86e85fdd69b87c453f9a5c96f6d761"
+      "bytes": 12448,
+      "sha256": "aa103542d42fe0ae37b7e53aec344c226228b6528a8ceab0e04b9a6cd1a56479"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/raw/bootstrap.json",
@@ -1964,6 +1964,46 @@
       "sha256": "ed9b6c20399aa68c81d7e00a15cb8f1ff461d53f182c2831f0e42f558357f3e8"
     },
     {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-byte-regression.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-byte-regression.stdout.log",
+      "bytes": 531,
+      "sha256": "1f578d9c630726348a845528af746da37dda866a0b3a1f4c6dfd03349ade3685"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-final-regression.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-final-regression.stdout.log",
+      "bytes": 530,
+      "sha256": "2f6a38e060d40f7927c9b2140319613bfe896bd63864fa49ec0d0ecd591131fd"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-records-tests.stderr.log",
+      "bytes": 58,
+      "sha256": "947f1bfc4de4f7eebdcbd13b6405e7c63fd479ed640d8ea86bcf80c19169dfa5"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-records-tests.stdout.log",
+      "bytes": 1911,
+      "sha256": "87a2e5aecba83ded22696247a35fa9876970886cb78cc8aae7b7beab62ed149d"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-script-surface.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/raw/recorder-script-surface.stdout.log",
+      "bytes": 871,
+      "sha256": "729885b2737208c01915fe80b790f32f1ad149580e18a2ec95438aa24f925410"
+    },
+    {
       "path": "docs/evidence/calcify-financial-sprint1/raw/recording-overwrite-negative.stderr.log",
       "bytes": 427,
       "sha256": "f48feb55ee1719e235affe1950b3d6b46746d694810d289e7377e3109fec5444"
@@ -2082,6 +2122,16 @@
       "path": "docs/evidence/calcify-financial-sprint1/raw/source-edge-tests.stdout.log",
       "bytes": 781,
       "sha256": "b80ee553c922af616b0a1def29ab2e13e0d08e21b11ac2d27e8119a9889353e6"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/reviews/instance-1-author-response.md",
+      "bytes": 1161,
+      "sha256": "27ca391292077b9929d052a054112da6941a73a4252b0b04136ff353a01eb0ee"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/reviews/instance-1.md",
+      "bytes": 14159,
+      "sha256": "8254837d2c6131460c502d35f10326cdda23b1fea527f98be8418e068df70478"
     }
   ]
 }

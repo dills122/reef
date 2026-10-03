@@ -340,5 +340,36 @@
       "path": "scripts/dev/calcify-financial/record-attempt.mjs",
       "sha256": "4f3c41317ba14e780a60459dd1e9baf53a90d66f22f55422d08ae2ed4bf309ab"
     }
-  ]
+  ],
+  "toolHashesScope": "Initial E0 recorder before independent-review correction; original values preserved. Current recorder revision recorded separately.",
+  "recorderRevision": {
+    "date": "2026-10-03",
+    "reviewedParent": "59917fd4fb9cc6dcec6b5295c722eba5e4c5597b",
+    "reason": "Accept instance1 P2: retain output Buffers, isolate spawn diagnostics and regression-test split UTF-8/binary bytes; preserve all prior log bytes",
+    "files": [
+      {
+        "path": "scripts/dev/calcify-financial/freeze-fixtures.mjs",
+        "sha256": "6245f5fe49f948dd990d7a3293cc88aacec874863c427e298c52241982649994"
+      },
+      {
+        "path": "scripts/dev/calcify-financial/lib/output-capture.mjs",
+        "sha256": "cf7d90f2a493c38007a678d9c9a8595d37216005b9da3dee12cf7d3b39145660"
+      },
+      {
+        "path": "scripts/dev/calcify-financial/record-attempt.mjs",
+        "sha256": "e63c715a01643f85f055315e6e010c9b15365f8bf31c5abb01bfc72160e77a98"
+      },
+      {
+        "path": "scripts/dev/calcify-financial/record-attempt.test.mjs",
+        "sha256": "0ce3022417fb7725fbe75d8a2632cba49ef8acef5606939ced8e36925e2b5a9e"
+      }
+    ],
+    "tests": "record-attempt.test.mjs; wired in Make test-dev-tooling and CI dev-tooling test list",
+    "futureAttempts": "include recorderSha256/captureSha256; HEAD alone does not certify uncommitted helper revision"
+  },
+  "planningUpdate": {
+    "observedDate": "2026-10-03",
+    "remoteMaster": "64f51936",
+    "planningPR466": "merged; doc-only source delta from original execution head"
+  }
 }

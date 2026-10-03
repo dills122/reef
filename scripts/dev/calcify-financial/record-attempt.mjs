@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, appendFile, access } from 'node:fs/promises';
+import { mkdir, writeFile, appendFile, access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { captureOutput } from './lib/output-capture.mjs';
+import { createHash } from 'node:crypto';
 
 // Record every attempt, including nonzero exit and complete stdout/stderr.
 const [id, cwdArg, command, ...args] = process.argv.slice(2);
@@ -14,13 +16,15 @@ const collision = await access(resolve(dir, `${id}.stdout.log`)).then(() => true
 if (collision) throw Error(`attempt ${id} exists; choose new ID to preserve prior evidence`);
 const started = new Date().toISOString();
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const recorderSha256 = createHash('sha256').update(await readFile(import.meta.filename)).digest('hex');
+const captureSha256 = createHash('sha256').update(await readFile(new URL('./lib/output-capture.mjs', import.meta.url))).digest('hex');
 const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
-let stdout = '', stderr = '';
-child.stdout.on('data', x => { stdout += x; process.stdout.write(x); });
-child.stderr.on('data', x => { stderr += x; process.stderr.write(x); });
-child.on('error', x => { stderr += String(x); });
+const stdout = captureOutput(child.stdout, process.stdout);
+const stderr = captureOutput(child.stderr, process.stderr);
+let spawnError = null;
+child.on('error', error => { spawnError = String(error); });
 const result = await new Promise(r => child.on('close', (code, signal) => r({ code, signal })));
-await writeFile(resolve(dir, `${id}.stdout.log`), stdout);
-await writeFile(resolve(dir, `${id}.stderr.log`), stderr);
-await appendFile(resolve(dir, 'attempts.jsonl'), JSON.stringify({ id, cwd, command, args, started, finished: new Date().toISOString(), head, javaHome: process.env.JAVA_HOME ?? null, ...result }) + '\n');
-process.exitCode = result.code ?? 1;
+await writeFile(resolve(dir, `${id}.stdout.log`), stdout());
+await writeFile(resolve(dir, `${id}.stderr.log`), stderr());
+await appendFile(resolve(dir, 'attempts.jsonl'), JSON.stringify({ id, cwd, command, args, started, finished: new Date().toISOString(), head, recorderSha256, captureSha256, javaHome: process.env.JAVA_HOME ?? null, spawnError, ...result }) + '\n');
+process.exitCode = spawnError ? 1 : result.code ?? 1;

@@ -198,7 +198,7 @@ within signed64 opening-account range; explicit per-case opening journals; corre
 both cash and shares; explicit overflow/no-effect cases; separate input stability
 from unrun accounting proof; device IDs redacted; overwrite prevented. Retention
 checker/tests, fixture regeneration, script syntax, script-surface and diff checks
-record final outcomes in raw attempts. No independent merge review or PR submitted.
+record final outcomes in raw attempts. At initial E0 checkpoint, no independent merge review or PR submitted.
 
 Script-surface correction: Bun invocation stalled at `bun --check` child; exact
 processes terminated, failed attempt retained. Node rerun passes259 script surfaces
@@ -211,3 +211,25 @@ Gradle/Docker logs; commit command continued despite check failure. Raw log byte
 preserved with bundle-local `.gitattributes`, matching existing evidence convention.
 Full branch diff check repeated after correction; untracked-file checks alone did
 not cover raw additions. No production change or raw-output trimming performed.
+
+## Accepted independent-review correction (2026-10-03)
+
+[Fresh review instance1of3](reviews/instance-1.md) returns Ready with non-blocking
+follow-ups for scoped preparation checkpoint; E0 successful tool gate stays blocked.
+[Author response](reviews/instance-1-author-response.md) accepts P2 split-UTF-8 log
+capture defect. User subsequently authorized fix and PR publication once good.
+Recorder now retains Buffer bytes on stdout/stderr, stores spawn errors separately
+in attempt metadata, and records its own/helper hashes for future capture provenance.
+Historical log bytes unchanged. Initial toolHashes retained as historical capture
+inputs; environment.recorderRevision pins corrected files explicitly.
+
+Two focused tests pass: split multibyte/invalid byte capture on both streams, and
+isolated CLI persistence with nonzero child status, overwrite refusal, missing
+command diagnostics and recorder/helper hash metadata. Tests wired into existing
+Make and CI tooling suites. Memory buffering, serial ID use and post-exit attempt
+recording remain known local-tool limits; no crash-safe concurrent recorder claim.
+
+Latest fetched master64f51936 merges planning PR#466; initial open-PR snapshot remains
+historical. Planning merge changes docs only; original executed source head85f0ce8c
+and runtime/test provenance remain unchanged. Instance2 reviews corrected complete
+branch before publication; no authority cutover or successful E0 tooling claim.

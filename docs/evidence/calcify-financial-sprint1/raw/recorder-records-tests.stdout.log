@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: valid split passes; unrepaired active archive link fails
+ok 1 - valid split passes; unrepaired active archive link fails
+  ---
+  duration_ms: 152.938833
+  type: 'test'
+  ...
+# Subtest: restored historical bulk and missing executable fixture fail
+ok 2 - restored historical bulk and missing executable fixture fail
+  ---
+  duration_ms: 131.453167
+  type: 'test'
+  ...
+# Subtest: retained raw evidence tampering fails original checksum
+ok 3 - retained raw evidence tampering fails original checksum
+  ---
+  duration_ms: 99.048375
+  type: 'test'
+  ...
+# Subtest: unsafe relocation path fails before filesystem checks
+ok 4 - unsafe relocation path fails before filesystem checks
+  ---
+  duration_ms: 81.349333
+  type: 'test'
+  ...
+# Subtest: latest bundle inventory catches missing companion and silent correction
+ok 5 - latest bundle inventory catches missing companion and silent correction
+  ---
+  duration_ms: 149.565791
+  type: 'test'
+  ...
+# Subtest: all migrations are enforced; historical retained selection can be superseded
+ok 6 - all migrations are enforced; historical retained selection can be superseded
+  ---
+  duration_ms: 232.830416
+  type: 'test'
+  ...
+# Subtest: duplicate relocation and unsafe redirect in later migration fail
+ok 7 - duplicate relocation and unsafe redirect in later migration fail
+  ---
+  duration_ms: 115.509
+  type: 'test'
+  ...
+# Subtest: missing maintained selection fails even when historical manifest includes one
+ok 8 - missing maintained selection fails even when historical manifest includes one
+  ---
+  duration_ms: 98.727834
+  type: 'test'
+  ...
+# Subtest: destination verification uses each migration pinned commit
+ok 9 - destination verification uses each migration pinned commit
+  ---
+  duration_ms: 443.798542
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1549.602958
