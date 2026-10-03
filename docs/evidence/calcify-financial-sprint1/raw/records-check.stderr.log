@@ -1,1 +1,0 @@
-$ bun scripts/ci/check-records-retention.mjs

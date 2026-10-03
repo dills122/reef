@@ -1,241 +1,56 @@
-# Calcify financial sprint 1 — canonical execution evidence
+# Calcify financial sprint1 — E0 checkpoint
 
-Day 1 / E0 checkpoint: 2026-10-03, America/Toronto. **Synthetic E1 inputs ready;
-E0 tooling gate blocked.** No financial kernel, broker recovery, capacity or
-production cutover claim. This file owns sprint results; [pinned RFC §10.1](https://github.com/dills122/reef/blob/cda4185b8065bd38126c7547b30fef79a813f68a/docs/work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint)
-owns proposed architecture.
+October 3, 2026: preparation checkpoint. Full E0 readiness blocked; E1-E4 unrun.
+Execution source `85f0ce8c84cd7de6bc22322bac0b32da109073ab`; planning source
+`cda4185b8065bd38126c7547b30fef79a813f68a` (PR #466 subsequently merged, docs only).
+Production post-match behavior and local volumes unchanged.
 
-## Provenance and retained artifacts
+## Focused inputs and checks
 
-- Planning head `cda4185b8065bd38126c7547b30fef79a813f68a`; PR #466 still open,
-  no failed/pending checks in recorded snapshot. No merge performed.
-- Execution source head `85f0ce8c84cd7de6bc22322bac0b32da109073ab`, fetched
-  `origin/master`; feature branch `codex/calcify-financial-sprint1-e0`.
-- Execution checkout `/private/tmp/reef-calcify-financial-e0`. Primary checkout
-  remains `540c1df199b9ab73527a1c165a67de8cc69c07fc` with unrelated edits intact.
-- [Environment and resolved jar hashes](environment.json), [frozen inputs](fixtures.json),
-  [isolated RF3 Compose](broker.compose.yml), [shell attempts](raw/attempts.jsonl),
-  [bootstrap/corrections](raw/bootstrap.json), raw graph and Serena responses in `raw/`.
-- Final fixture SHA-256 `fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d`.
-  Early relocation failure lost complete raw compiler output; exact command/error
-  excerpts and limitation retained in bootstrap record. Clean rerun fully logged.
-  Earlier freeze hashes remain in attempt logs; final fixture adds complete history
-  shape, zero/negative input cases, explicit workflow state and per-case opening journals. No earlier result silently upgraded.
+- [Frozen inputs](fixtures.json):20 cases/52 inputs; SHA256
+  `fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d`.
+  Normalization/framing/golden stability only; financial kernel/oracle unimplemented.
+- [RF3 config](broker.compose.yml): isolated project `reef-calcify-financial-s1-85f0ce8c`,
+  ports39192/39292/39392; offline configuration validated, no resources created.
+- Java21 clean compile and70 Calcify tests/16 suites pass; matcher app/streamdirect
+  suites and focused identity/IOC/replay/restore/reuse checks pass.
+- Recorder byte-capture regression2/2, retention9/9, fixture and script-surface
+  checks pass. [Independent review2](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/reviews/instance-2.md): Ready
+  with non-blocking follow-ups for checkpoint publication; prior P2 fixed.
 
-## Readiness
+## Open gates and next slice
 
-| Concern | Observation / status | Scope and next gate |
-| --- | --- | --- |
-| Build/compiler | PASS: Java21 clean Kotlin/Java/test compilation and probe dependency materialization | Java `21+35-LTS-2513`, Gradle9.8.0, Kotlin2.4.20; warnings retained |
-| Existing Calcify tests | PASS: 16 suites,70 tests,0 failures/errors | Resolver/unit/topology only; no financial or broker EOS proof |
-| Matcher source edges | PASS: app and streamdirect suites; focused zero/partial/full IOC, framed identity, run scope, snapshot/rollback and terminal reuse | Existing integration tests may skip absent broker environment; no live source qualification |
-| Codebase Memory | Indexed exact final checkout;14,253 nodes,72,503 edges at recorded generation | Coverage clean for cited source; scripts excluded, app testdata excluded; direct source fallback used |
-| Graph limitations | Resolver class trace returns no edges despite direct source callers | No absence/exhaustive caller claim; methods resolved by focused source reads |
-| Serena | BLOCKED: six configured servers, six actual source queries attempted; Kotlin initialization terminates shared manager | All six queries fail manager initialization. Activation metadata is not successful language-server verification. Server/version/trust root cause unverified; no global config changes |
-| Fixtures | PASS:20 cases/52 inputs, request/framing checks and byte-stable regeneration | E0 input check only; accounting/oracle/evolve assertions run in E1 |
-| Host resources | Apple M1 Max,10 cores,64GiB RAM;391GiB free | sysctl denied; filtered hardware report succeeds; device identifiers explicitly redacted |
-| Broker resources | BLOCKED: selected desktop-linux socket absent; `open -a Docker` reports app absent | Guest disk, live RF3/durability/topic configs and image digest unverified; no resources created |
-| Isolation config | PASS: `docker compose ... config` | Project/volume names and39192/39292/39392 host ports checked offline; availability not checked against live daemon |
-| Live order source | BLOCKED for same-run reuse; framing collision concern corrected by source | Matcher permits reuse after terminal eviction; resolver rejects conflicting immutable run/order acceptance |
-| Reservations | DEFERRED: frozen short proposed policy cases | Owner review required before live holds; unreserved E1 unaffected |
-| SQL/API/capacity | DEFERRED | No useful-path rate, SQL cost, authoritative state or live integration claim |
+All six actual language-server queries fail shared manager initialization. Docker
+socket/application absent; guest disk, image digests and live topic durability
+unverified. Matcher same-run order reuse conflicts with resolver immutable
+acceptance; reservation-source lifecycle incomplete. No capacity or cutover claim.
 
-## Frozen E1 contract and fixtures
+E1a: test-only `FinancialKernel`, independent BigInteger `FinancialOracle` and
+`FinancialKernelTest` under platform-runtime Calcify financial tests. Start balanced
+journaled genesis and two-asset capture/settle; implement frozen20 cases and
+`decide→validate→encodeBounded→evolve`. Compare every business prefix, complete
+owner state/history and checkpoint suffix; fill abbreviated dedup/history schema,
+then seeded schedules/crash cuts/mutants. Reservation E1b remains separate proposal.
+Before E3: successful tool/runtime gates, explicit broker project/evidence paths,
+20GiB host/guest headroom,10GiB experiment/raw256MiB caps, pinned digests/settings.
 
-`fixtures.json` is executable input/golden data generated by
-`scripts/dev/calcify-financial/freeze-fixtures.mjs`. Its schema pins:
+## Complete evidence in Reef Records
 
-- Action key `[namespace,domain,actionId]`; normalized request digest stored beside
-  key. Ordered UTF-8 JSON array framing avoids delimiter ambiguity; identifier
-  bytes remain exact. Decimal integer strings normalize through BigInt, enums use
-  uppercase ASCII, omitted optional policy equals null. Required absence rejects.
-  Digest precedes default policy selection; excludes resolved defaults and transport.
-- Evaluation context selected once: kernel/schema/policy/reference/rounding/fee/
-  reservation versions, logical tick and domain. Retry retains original context.
-- Execution scoped by run/session/instrument/authoritative execution ID; obligation
-  once per execution/DvP kind, explicit attempt ordinal; decision/journal IDs depend
-  on business identity, never broker/history positions or CPU yield.
-- Exact cash nanos, whole security shares, price nanos/share; checked signed64
-  storage and wide intermediate multiplication. No credit, fees, netting, live
-  reservations or external finality. Explicit opening account balances funding
-  journals separately per asset.
-- Required kernel payload, source causation, owner-state fields, monotonic history/
-  business sequences, complete semantic deltas, genesis and certified checkpoint
-  coverage. Stage-only acceptance is not completion; physical offsets10/12 are
-  explicit membership, not inferred integer prefix.
-- Equal-business-cut comparison includes decisions/IDs/digests and all future-
-  decision-relevant fields. Same-history replay compares complete owner state,
-  including staged inputs/cursors. Semantic digest and exact-history checksum differ.
-
-Twenty cases cover two-asset success, insufficient cash/shares, identical retry,
-changed-request conflict, paid-obligation/new-action, repeated/conflicting execution,
-policy activation retry, funding/new attempt for both assets, failed-attempt retry,
-wide multiplication and balance credit overflow, missing payload/policy, zero/
-negative quantities, one-nano boundary, and clock→two due settlements→funding/repair.
-History shape covers genesis→stage→capture→stage→settle with checkpoint/crash cuts
-after each record. E1 must fill every required encoded transition and prove complete
-state reconstruction; fixture shape alone does not establish authority.
-
-Three delivery schedules freeze yield budgets1/2/64, transaction groups1/4/64,
-stage-ahead0/64/3. Clock continuation drains canonical due order before later funding
-can affect earlier economics. Freeze xorshift32 seeds1/42/20261003,100 traces per seed,
-maximum64 inputs each, every-history crash cut and minimal counterexample retention.
-Duplicate-discharge, one-leg-mutation and missing-staging-delta mutants must fail.
-
-Reservation model remains proposed: own owner consumes hold only within hold and
-obligation residual; cash100/hold80/settle50 gives cash50/hold30/unrelated available20.
-Separate security10/hold8/settle5 gives shares5/hold3/available2. Ordered acceptance
-then stable owner ID determines priority. Failed attempt retains hold; withdrawal
-uses unheld resources; cancellation releases unmatched remainder while captured
-obligation retains transferred ownership. E1b presents worked cases for owner review.
-
-## Source spot-check findings
-
-`services/matching-engine/internal/app/service.go:1313` length-frames run/session/
-instrument/buy/sell/incoming book sequence/match ordinal before SHA-256. Current
-execution IDs use `exec-v2`, trades use `trade-v2`; sequence survives snapshot and
-rollback. Existing tests distinguish `(a-b,c)` from `(a,b-c)`, run scope, provisional
-rollback and restored facts. This implementation already exists at pinned planning
-head too: scoped source diff between planning and execution is empty. RFC's claim
-that current IDs concatenate delimiters is stale; E0 corrects evidence without
-rewriting open planning branch.
-
-Matcher regression explicitly permits same-run order reuse after eviction and
-produces distinct trade IDs. `MatchContextResolver.mergeAcceptance` still rejects
-new immutable acceptance under same run/order key. First live financial slice must
-enforce no reuse upstream, including restore/eviction, or explicitly adopt source
-incarnation references. No speculative repair made during E0.
-
-Run metadata on ModifyOrder trade outcomes and hidden-limit alias normalization
-pass existing fixtures. Zero-trade IOC emits cancellation and leaves no resting
-residual; restore continues identically. Resolver `parseChecked` captures immutable
-SubmitOrder acceptances/trades only; cancellation/modification lifecycle deltas are
-not a complete reservation authority feed. Live holds stay blocked pending source
-extension/ownership transfer. Synthetic unreserved model does not need that feed.
-
-## Bounded runtime research
-
-**Maintainer facts:** Kafka4.3.1 producer commit timeout can mean unknown outcome;
-retry same operation or close, rather than switch to abort. Producer idempotence
-does not deduplicate application resends. [KafkaProducer API](https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html).
-TopologyTestDriver simulates application runtime; broker failures require real
-integration checks. [Kafka testing guide](https://kafka.apache.org/43/streams/developer-guide/testing/).
-Streams exception handler distinguishes replacement/client/application shutdown.
-[4.3.1 handler API](https://kafka.apache.org/43/javadoc/org/apache/kafka/streams/errors/StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.html).
-
-Redpanda26.2 documents commit-outcome uncertainty and transaction atomicity, but
-topic deletion may remove deleted partitions from transaction scope; remote recovery
-does not guarantee transaction atomicity. [Redpanda transactions](https://docs.redpanda.com/streaming/current/develop/transactions/).
-Therefore topic UUID/history membership and registered restore cut remain explicit
-E3 assertions, not a blanket EOS assumption. Disk cleanup/retention are workload-
-dependent; host free space does not prove guest free space.
-[Redpanda disk guidance](https://docs.redpanda.com/streaming/current/manage/cluster-maintenance/disk-utilization/).
-
-Postgres16 Read Committed uses statement snapshots, so successive reads may differ;
-Repeatable Read supports common transaction snapshot with retry handling.
-[Postgres16 isolation](https://www.postgresql.org/docs/16/transaction-iso.html).
-SQL seam must test watermark/journal/accounts/obligations at one snapshot.
-
-**Observed source:** existing resolver pins EOSv2/classic protocol/reset-none and
-SHUTDOWN_CLIENT; backend durability separates Kafka ISR from Redpanda write caching.
-**Inference:** reuse adapter/fault harness structure; don't import resolver economics
-or oracle as financial proof. **Unknown:** actual broker settings/digests, failure
-outcomes, restore completeness and SQL cost. No further framework research needed.
-
-## Rerun and next slice
-
-Run from execution checkout:
+[Full overview and reasoning](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md),
+[runtime/source manifest](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/environment.json),
+[all attempts, successes and failures](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/raw/attempts.jsonl),
+[original checksums](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/SHA256SUMS),
+[archive index](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/INDEX.md), [import manifest](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/manifests/2026-10-03-calcify-e0.json).
+97 originals copied byte-for-byte from Reef `41bb17dcb5e93b7bce9444dd7f597c90ea01a3e1`,
+published via [Records PR #5](https://github.com/dills122/reef-records/pull/5), verified
+at pinned archive commit before Reef removal. Original early relocation output
+incomplete; historical recorder byte limitation disclosed. Failures/corrections
+remain intact. [Local relocation inventory](../../records/2026-10-03-calcify-e0-migration.json)
+resolves original paths/hashes. Local raw captures stay ignored; publish complete
+attempt bundles to Records before replacing this checkpoint.
 
 ```sh
 bun scripts/dev/calcify-financial/freeze-fixtures.mjs --check
-JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home node scripts/dev/calcify-financial/record-attempt.mjs next-unique-id services/platform-runtime ./gradlew --no-daemon compileKotlin test --tests 'com.reef.platform.calcify.*' resolverProbeDependencies
-docker compose -p reef-calcify-financial-s1-85f0ce8c -f docs/evidence/calcify-financial-sprint1/broker.compose.yml config
+node --test scripts/dev/calcify-financial/record-attempt.test.mjs
+bun run repo:check:records
 ```
-
-Use lowercase unique attempt ID; record helper rejects overwrite. Commands already
-executed and exact results live in attempts; these examples add no unbuilt runner.
-
-**Next E1a slice:** implement test-only
-`services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialKernel.kt`,
-`FinancialOracle.kt`, `FinancialKernelTest.kt`. Names planned, files not yet built.
-Start journaled genesis plus two-asset capture/settle, then frozen20 cases and
-complete `decide→validate→encodeBounded→evolve`. Independent BigInteger oracle
-must not call kernel validation/evolve. Compare every business prefix, same-history
-complete reconstruction and checkpoint suffix; run seeded schedules and mutation
-controls before E3. Keep reservation policy in separate small E1b model.
-
-E3 reuses existing broker/capacity/recovery/sustained probe structure after making
-project, evidence root, ports and financial record assertions explicit; current
-broker runner hardcodes `reef-calcify-resolver-test` and must not run unchanged.
-Before startup require20GiB host and guest headroom; cap experiment10GiB/raw256MiB,
-pin actual image digests and RF3/write-cache/topic/changelog settings. Retain genesis
-through certified cut; exact registered names only for faults/cleanup. No volumes,
-topics, apps or state directories created in E0.
-
-E4 measurements frozen in environment manifest: distinct offered/admitted/decided/
-settled/pending, journal/state parity, lag/drain, CPU/heap/native/disk, output and
-changelog bytes, touched keys and transaction waits. Compatible clock samples only;
-window/backlog bounds are not latency. No E0 performance run, so no baseline ledger
-entry. Later10k/600s and7.5k/900s unchanged full-path qualifications remain separate.
-
-No owner policy decision blocks synthetic E1a. Tool service repair and Docker runtime
-availability are technical prerequisites, not requests for authority cutover. Same-
-run reuse prohibition/incarnation and reservation table remain focused owner sync
-items before live integration.
-
-## Delivery / retention review
-
-E0 adds test inputs, local recording helper and evidence only; public contracts,
-post-match paths, defaults and production dependencies unchanged. Work board updated;
-guidance, overviews, steering and accepted decisions checked for applicability, no
-architecture policy update needed. Latest sprint bundle newly created; no older
-sprint execution bundle superseded, no Records archive move required. Existing
-Calcify bundles retain original scope. Retained-evidence inventory includes complete
-new bundle including failures and corrections.
-
-Self-review used code-review-and-quality: corrected overflow genesis to remain
-within signed64 opening-account range; explicit per-case opening journals; corrected funding/repair fixture to fund
-both cash and shares; explicit overflow/no-effect cases; separate input stability
-from unrun accounting proof; device IDs redacted; overwrite prevented. Retention
-checker/tests, fixture regeneration, script syntax, script-surface and diff checks
-record final outcomes in raw attempts. At initial E0 checkpoint, no independent merge review or PR submitted.
-
-Script-surface correction: Bun invocation stalled at `bun --check` child; exact
-processes terminated, failed attempt retained. Node rerun passes259 script surfaces
-(247 JS syntax,11 shell syntax). No source changes made for this runner issue.
-Final fixture checker and9 retention tests pass; graph coverage and tool failures
-remain scoped above.
-
-Delivery correction: first staged diff check flagged whitespace emitted by raw
-Gradle/Docker logs; commit command continued despite check failure. Raw log bytes
-preserved with bundle-local `.gitattributes`, matching existing evidence convention.
-Full branch diff check repeated after correction; untracked-file checks alone did
-not cover raw additions. No production change or raw-output trimming performed.
-
-## Accepted independent-review correction (2026-10-03)
-
-[Fresh review instance1of3](reviews/instance-1.md) returns Ready with non-blocking
-follow-ups for scoped preparation checkpoint; E0 successful tool gate stays blocked.
-[Author response](reviews/instance-1-author-response.md) accepts P2 split-UTF-8 log
-capture defect. User subsequently authorized fix and PR publication once good.
-Recorder now retains Buffer bytes on stdout/stderr, stores spawn errors separately
-in attempt metadata, and records its own/helper hashes for future capture provenance.
-Historical log bytes unchanged. Initial toolHashes retained as historical capture
-inputs; environment.recorderRevision pins corrected files explicitly.
-
-Two focused tests pass: split multibyte/invalid byte capture on both streams, and
-isolated CLI persistence with nonzero child status, overwrite refusal, missing
-command diagnostics and recorder/helper hash metadata. Tests wired into existing
-Make and CI tooling suites. Memory buffering, serial ID use and post-exit attempt
-recording remain known local-tool limits; no crash-safe concurrent recorder claim.
-
-Latest fetched master64f51936 merges planning PR#466; initial open-PR snapshot remains
-historical. Planning merge changes docs only; original executed source head85f0ce8c
-and runtime/test provenance remain unchanged. Instance2 reviews corrected complete
-branch before publication; no authority cutover or successful E0 tooling claim.
-
-[Fresh review instance2of3](reviews/instance-2.md) returns Ready with non-blocking
-follow-ups for PR publication of preparation checkpoint. Prior P2 closed; no new
-actionable findings. [Author response](reviews/instance-2-author-response.md) accepts
-scoped verdict and carries disclosed E1/tool/runtime gaps forward. Final delivery
-adds review records/status only; no material change after reviewed headeccdef96.

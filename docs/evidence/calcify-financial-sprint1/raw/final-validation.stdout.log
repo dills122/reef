@@ -1,2 +1,0 @@
-{"cases":20,"inputs":52,"sha256":"fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d","checks":"input normalization/framing/golden stability only; kernel/oracle unimplemented"}
-Records retention passed: 423 archived files; active references, fixtures and original checksum companions verified.

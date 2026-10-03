@@ -1,6 +1,6 @@
 # Records retention
 
-Policy confirmed October 2, 2026: Reef keeps current code and docs plus latest complete evidence bundle per topic/profile. Historical documents, older attempts and dated reports live in [Reef Records](https://github.com/dills122/reef-records).
+Policy updated October 3, 2026: Reef keeps current code/docs, executable fixtures and concise focused verification summaries. Complete bulk evidence—including latest raw attempts, failures, provenance and reviews—lives in [Reef Records](https://github.com/dills122/reef-records), linked from Reef at immutable commits. Existing retained selections stay in place until individually verified migrations; no age-based sweep.
 
 ## Required completion pass
 
@@ -8,8 +8,8 @@ Apply to every feature, fix, refactor and code-working session before PR/handoff
 
 1. Update implementation, focused tests, affected contracts and owner docs together. Preserve latest relevant evidence with exact source/configuration, commands, date, scope, results and corrections. Generate new evidence when behavior or claims require it; do not rerun unrelated qualifications for prose-only changes.
 2. Check guidance and overviews against resulting system: `AGENTS.md`, `AI_CONTEXT.md`, documentation map, relevant steering, system/project overview, technical design and accepted decisions. Update affected owners only; explain non-applicability in PR rather than editing every overview mechanically. Put current execution/status in `WORK_PLAN.md`.
-3. Review touched topic and related plans, reports, handoffs, research and evidence for supersession. Keep only material needed for active planning, session understanding, onboarding, current system/design, operations or latest verification. File age or recent creation alone is not a reason to retain it. Before moving mixed current/history material, promote still-live facts and open tasks to current owner, leaving concise links to historical reasoning.
-4. Lift and shift superseded records into `reef-records` using [archive protocol](https://github.com/dills122/reef-records/blob/main/docs/ARCHIVE_POLICY.md): preserve bytes and paths, record source commit/hash/selection reason, publish and land archive, verify destination, then remove Reef copies and repair active links to immutable archive commits. Retain latest complete bundle per topic/profile, including failed latest attempts and necessary fixtures/corrections. Never keep only a favorable success or remove active dependencies to meet size targets.
+3. Review touched topic and related plans, reports, handoffs, research and evidence for supersession. Keep only material needed for active planning, session understanding, onboarding, current system/design, operations or focused latest verification with immutable links to complete proof. File age or recent creation alone is not a reason to retain it. Before moving mixed current/history material, promote still-live facts and open tasks to current owner, leaving concise links to historical reasoning.
+4. Lift and shift bulk evidence and superseded records into `reef-records` using [archive protocol](https://github.com/dills122/reef-records/blob/main/docs/ARCHIVE_POLICY.md): preserve bytes and paths, record source commit/hash/selection reason, publish and land archive, verify destination, then remove Reef copies and repair active links to immutable archive commits. Preserve latest complete bundle per topic/profile in Records, including failed latest attempts and corrections; keep executable fixtures and concise current summary in Reef. Never keep only a favorable success or remove active dependencies to meet size targets.
 5. Update archive index and Reef relocation/retained-evidence inventory for actual moves; update relevant local navigation and reading guidance. Run retention checks, affected validation and link checks. PR/handoff records retained latest bundle, archive commit/PR and verification, or explicit no-op reason when no superseded material exists. Pass is required; artificial archive churn is not.
 
 Checker loads every `docs/records/*-migration.json`, preserving historical relocation facts and each pinned archive commit. [`retained-evidence.json`](records/retained-evidence.json) owns current latest-bundle selection; retained lists embedded in older migration manifests remain historical snapshots. Update maintained inventory with dated replacement/archive reasons whenever bundles change. An unchecked inventory does not complete retention gate.
@@ -24,7 +24,7 @@ Search [Records index](https://github.com/dills122/reef-records/blob/main/INDEX.
 
 If current work needs a durable lesson, add concise verified fact to current owner with archive citation. Keep original report and bulk historical narrative in Records. When history is unavailable, state missing evidence and its impact; do not guess or recreate its claims as current facts.
 
-## What stays
+## Current retained selections
 
 - Current code, tests, scenario definitions, contracts, accepted decisions, steering and operational runbooks.
 - Active execution in `WORK_PLAN.md`, Calcify overview/discovery/current Phase 2 implementation plan and current handoff; latest October 1 architecture reviews.
@@ -35,7 +35,7 @@ If current work needs a durable lesson, add concise verified fact to current own
 - [Runtime order identity](evidence/runtime-order-identity/README.md): final R08 local/real-DB/reviewer verification and CI follow-up with correction companions.
 - Source fixtures consumed by current scripts, original checksum/provenance manifests and correction notes. These are required companions, not obsolete bulk.
 
-Review retention when adding new evidence. Preserve complete bundles and older success/failure history in Records before replacing a local bundle. A current contract or unresolved active plan does not become historical because its filename is old. Imported original Markdown remains unchanged; its relative links refer to source checkout at recorded source commit.
+Review retention when adding new evidence. Publish and verify complete bundles, including latest and older success/failure history, in Records before removing local bulk. A current contract or unresolved active plan does not become historical because its filename is old. Imported original Markdown remains unchanged; its relative links refer to source checkout at recorded source commit.
 
 ## October 2 migration
 
@@ -63,3 +63,12 @@ First command checks relocation metadata, removal/reference consistency, require
 To restore one file, read its `archive_path` at pinned archive commit with `git show`, verify SHA-256 against inventory, then write original `source_path` on a feature branch. Preserve immutable archive and inventory. Update retention/index links for intentional restoration; do not silently restore entire historical tree.
 
 Source deletion reduces current checkout size. Old Reef Git history still contains original blobs; this migration does not rewrite history. Ignored local runs, caches and build output are outside tracked migration inventory.
+
+## October 3 Calcify E0 split
+
+User-directed evidence split:97 original E0 files preserved at [Records08a4347](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md),
+[PR #5](https://github.com/dills122/reef-records/pull/5). Verified exact bytes before
+removal. [Relocation inventory](records/2026-10-03-calcify-e0-migration.json) pins
+source/archive hashes; focused [checkpoint](evidence/calcify-financial-sprint1/README.md),
+frozen inputs and broker fixture remain local. No readiness upgrade or other-topic
+archive sweep. Future completion follows this compact-summary/full-proof split.

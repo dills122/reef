@@ -20,23 +20,14 @@ audited checkout; missing local reports do not prove a run never happened.
 
 ## Calcify financial experiment E0 checkpoint (2026-10-03)
 
-Execution source `85f0ce8c`, separate from open planning PR #466 at `cda4185b`.
-Java21 build and70 existing Calcify tests pass; matcher source suites pass.
-Frozen20 synthetic cases/52 inputs, history/checkpoint shape, runtime jar hashes,
-isolated RF3 config and measurement rules ready for E1a. E0 tool gate blocked by
-Serena Kotlin initialization; Docker daemon/app unavailable, guest disk/image/topic
-settings unverified. Same-run order reuse remains live-source gap; reservations
-and authority cutover deferred. [Canonical sprint evidence and next E1 slice](evidence/calcify-financial-sprint1/README.md).
-
-Independent review1 accepts scoped preparation checkpoint with P2 recorder finding.
-Byte-capture correction and2 regression tests pass; review2 checks corrected branch
-before PR publication. Planning PR#466 now merged; doc-only master sync leaves
-original executed production-source85f0ce8c provenance intact.
-
-Fresh independent review2of3 accepts scoped preparation checkpoint with non-blocking
-follow-ups; prior recorder P2 fixed and verified, no new actionable findings.
-[Report](evidence/calcify-financial-sprint1/reviews/instance-2.md) retained; E0 tool
-gate and later financial/broker proofs remain pending. PR publication authorized.
+Execution source85f0ce8c; planningcda4185b/PR#466 subsequently merged, docs only.
+Java21 compile/70 Calcify tests, matcher suites, frozen20cases/52inputs and recorder
+regressions pass. Review2 accepts preparation checkpoint; E0 language-server and
+Docker gates blocked, E1-E4 unrun. Same-run reuse/reservation-source gaps remain.
+[Focused checkpoint and next E1 slice](evidence/calcify-financial-sprint1/README.md).
+97-file complete evidence bundle verified and landed via [Records PR #5](https://github.com/dills122/reef-records/pull/5);
+[full details](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md). Reef keeps scripts/tests, fixtures and concise
+status; raw proofs/reviews live in Records. No production integration/cutover.
 
 ## CI dependency throttling recovery (2026-10-02)
 

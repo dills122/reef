@@ -1,6 +1,0 @@
-script surface check passed
-  scripts=259
-  nodeSyntaxChecked=247
-  shellSyntaxChecked=11
-  syntaxSkipped=scripts/dev/arena-runner-bench-deno.ts
-  controlFiles=Makefile, package.json, .github/dependabot.yml, .github/workflows/admin-ui-deploy.yml, .github/workflows/bot-registry-sync.yml, .github/workflows/bot-submission-invite-approve.yml, .github/workflows/bot-submission-non-bot-status.yml, .github/workflows/bot-submission-provision.yml, .github/workflows/bot-submission.yml, .github/workflows/ci.yml, .github/workflows/container-images.yml, .github/workflows/dependabot-auto-merge.yml, .github/workflows/docs-site.yml, .github/workflows/materializer-10k-gate.yml, .github/workflows/open-code-review-pilot.yml, .github/workflows/publish-image.yml, .github/workflows/records-retention.yml, .github/workflows/service-deploy.yml, .github/workflows/throughput-stress.yml

@@ -889,9 +889,10 @@ No production migration/API adapter. If seam cannot fit timebox, SQL/API cost st
 explicit unknown and blocks total useful-path capacity claim, not E4 core diagnostic.
 10k/600s and7.5k/900s qualification remain later, on unchanged full required path.
 
-**Evidence and stop rules.** One canonical sprint result summary will live beside
-raw machine-readable attempts under `docs/evidence/calcify-financial-sprint1/`;
-link summary here after execution. Every attempt records code/build/config/image
+**Evidence and stop rules.** Concise current checkpoint and executable fixtures live
+under `docs/evidence/calcify-financial-sprint1/`; complete raw attempts, provenance
+and review details live in Reef Records, linked at immutable commits from checkpoint.
+Every attempt records code/build/config/image
 digest, hardware, seed/fixture hash, command, measurement boundaries, thresholds,
 counts, counterexample, result and cleanup scope. Preserve failures/setup errors;
 append measured throughput and scope to existing baseline ledger. No parallel

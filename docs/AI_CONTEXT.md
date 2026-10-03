@@ -37,6 +37,6 @@ Historical files live in [Reef Records](https://github.com/dills122/reef-records
 active document cites its result, a failed attempt matters, or a prior design
 choice must be reviewed.
 
-[Records retention](RECORDS_RETENTION.md) identifies current evidence kept locally.
+[Records retention](RECORDS_RETENTION.md) defines focused local evidence and immutable links to complete proof in Records.
 [Required completion pass](RECORDS_RETENTION.md#required-completion-pass) applies
 after every feature or code change, including guidance/overview review and archive pass.

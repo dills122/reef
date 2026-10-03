@@ -1,7 +1,0 @@
-java version "21" 2023-09-19 LTS
-Java(TM) SE Runtime Environment (build 21+35-LTS-2513)
-Java HotSpot(TM) 64-Bit Server VM (build 21+35-LTS-2513, mixed mode, sharing)
-sysctl: sysctl fmt -1 1024 1: Operation not permitted
-failed to connect to the docker API at unix:///Users/dsteele/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/dsteele/.docker/run/docker.sock: connect: no such file or directory
-failed to connect to the docker API at unix:///Users/dsteele/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/dsteele/.docker/run/docker.sock: connect: no such file or directory
-failed to connect to the docker API at unix:///Users/dsteele/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/dsteele/.docker/run/docker.sock: connect: no such file or directory

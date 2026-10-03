@@ -1,1 +1,0 @@
-$ node --test scripts/ci/check-records-retention.test.mjs
