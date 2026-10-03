@@ -28,6 +28,11 @@ Serena Kotlin initialization; Docker daemon/app unavailable, guest disk/image/to
 settings unverified. Same-run order reuse remains live-source gap; reservations
 and authority cutover deferred. [Canonical sprint evidence and next E1 slice](evidence/calcify-financial-sprint1/README.md).
 
+Independent review1 accepts scoped preparation checkpoint with P2 recorder finding.
+Byte-capture correction and2 regression tests pass; review2 checks corrected branch
+before PR publication. Planning PR#466 now merged; doc-only master sync leaves
+original executed production-source85f0ce8c provenance intact.
+
 ## CI dependency throttling recovery (2026-10-02)
 
 Master `2af704d7` CI recovered on [failed-job rerun](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2).
