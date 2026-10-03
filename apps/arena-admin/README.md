@@ -29,9 +29,14 @@ only and must not appear in production output.
 
 ```bash
 bun run arena-admin:check
+bun scripts/dev/arena-admin-run-detail.test.mjs
 bun run arena-admin:build:guarded
 bun run arena-admin:ui-audit
 ```
+
+Run detail clears prior data when selection changes and ignores outdated request
+results or errors, including after clearing selection or leaving page. Deferred
+request tests cover both completion orders, stale errors, and effect cleanup.
 
 The guarded build scans the static output for local fixture markers. CI also
 runs the Svelte typecheck and static build.

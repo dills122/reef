@@ -15,6 +15,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import StateMessage from '$lib/components/ui/StateMessage.svelte';
+	import { createRunDetailLoader } from '$lib/admin-run-detail';
 	import { cn } from '$lib/utils';
 
 	let run = $state<ArenaRun | null>(null);
@@ -22,7 +23,6 @@
 	let enforcementEvents = $state<ArenaRunEnforcementEvent[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let lastLoadedRunId = $state('');
 
 	let runId = $derived(page.url.searchParams.get('runId')?.trim() ?? '');
 	let winner = $derived(
@@ -30,39 +30,18 @@
 	);
 	let leaderboardHref = $derived(run && results[0]?.scoringPolicyVersion ? runLeaderboardHref(run, results[0]) : '');
 
-	$effect(() => {
-		if (runId === lastLoadedRunId) return;
-		lastLoadedRunId = runId;
-		loadRun(runId);
-	});
-
-	async function loadRun(nextRunId: string) {
-		run = null;
-		results = [];
-		enforcementEvents = [];
-		error = '';
-
-		if (!nextRunId) {
-			loading = false;
-			return;
+	const loadRun = createRunDetailLoader(
+		{ fetchAdminRuns, fetchAdminRunResults, fetchAdminRunEnforcementEvents },
+		(state) => {
+			run = state.run;
+			results = state.results;
+			enforcementEvents = state.enforcementEvents;
+			loading = state.loading;
+			error = state.error;
 		}
+	);
 
-		loading = true;
-		try {
-			const [runList, nextResults, nextEnforcementEvents] = await Promise.all([
-				fetchAdminRuns(100),
-				fetchAdminRunResults(nextRunId),
-				fetchAdminRunEnforcementEvents(nextRunId)
-			]);
-			run = runList.find((item) => item.runId === nextRunId) ?? null;
-			results = nextResults;
-			enforcementEvents = nextEnforcementEvents;
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'run detail load failed';
-		} finally {
-			loading = false;
-		}
-	}
+	$effect(() => loadRun(runId));
 
 	function runLeaderboardHref(selectedRun: ArenaRun, selectedResult: ArenaRunBotResult) {
 		const params = new URLSearchParams({

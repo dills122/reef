@@ -24,6 +24,34 @@ audited checkout; missing local reports do not prove a run never happened.
 
 Two-hour frozen-base campaign fails10k accepted-order target. Best300s **7,708.36durable order ACKs/s**,1,158,676 exact resolved contexts and Phase1 counts, bounded drain, zero failures. Final higher-concurrency attempt aborts on Docker guest-disk ENOSPC. Latest-master correctness fixes integrated and separately checked; no capacity transfer. [Campaign evidence/next gates](research/CALCIFY_10K_TIMEBOX_2026-10-02.md), [handoff](work/handoffs/2026-10-02-calcify-10k-timebox.md). Restore guest storage headroom and repeated-state controls before further sustained load; durable-intake batching remains measured hypothesis. Older checkpoints below retain dated scope.
 
+## Idempotency renewal and run-detail fixes (2026-10-02 branch)
+
+`codex/idempotency-renewal-run-detail`, based on `76872e9d`, addresses #442
+and #456. Expired boundary result rows renew atomically without cleanup;
+live results and TTLs remain immutable under concurrent writers. In-memory
+expiry/renewal follows the same rule, including stale-reader safety. Capture
+and command-log reservation lifecycles remain separate. Arena run detail now
+publishes only the current request and invalidates pending work on navigation,
+empty selection and unmount. Both focused regressions are wired into CI.
+
+Local verification: Java 21 focused `ExternalApiBoundaryTest`,
+`InMemoryIdempotencyStoreTest` and `PostgresIdempotencyStoreIntegrationTest`
+pass **38 tests, zero skipped/failures**, using isolated PostgreSQL 16 on
+localhost:55442 with `RUNTIME_DB_*_TEST` configured. Deferred UI race/lifecycle
+checks, Svelte check (zero errors/warnings), guarded static build, CI workflow
+guard, actionlint, Node script-surface check, diff whitespace and offline
+Records retention pass. Browser-render and full-stack qualification not run.
+
+Completion pass: boundary storage and Arena owner docs updated; D-016, API
+steering and overview invariants reviewed. No route/schema/event changes or
+new architecture decision; general guidance remains applicable. No standalone
+topic record/evidence replaced, so archive pass is a no-op; maintained doc
+versions remain in Git history.
+
+Independent review instance 1 of 3: **Ready**, no actionable findings. Reviewer
+verified frozen file hashes, reran UI/CI/build/retention checks and inspected
+prior zero-skipped 38-test Kotlin XML; no fresh DB or mounted-browser rerun.
+
 ## Records separation (2026-10-02)
 
 Reef Records bootstrap and archive import landed in [Records PR #2](https://github.com/dills122/reef-records/pull/2). 386 historical files (39.36 MiB) preserved byte-for-byte at pinned archive commit; Reef cleanup on `codex/extract-historical-records` retains 89 current evidence files plus active code/docs and required fixtures. [Retention policy](RECORDS_RETENTION.md) and relocation inventory own selection and lookup. Local archive hashes, retained checksums, active links and five retention failure-path tests pass; no new runtime or performance qualification claimed.
