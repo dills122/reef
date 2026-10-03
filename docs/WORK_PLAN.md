@@ -18,6 +18,17 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify financial experiment E0 checkpoint (2026-10-03)
+
+Execution source85f0ce8c; planningcda4185b/PR#466 subsequently merged, docs only.
+Java21 compile/70 Calcify tests, matcher suites, frozen20cases/52inputs and recorder
+regressions pass. Review2 accepts preparation checkpoint; E0 language-server and
+Docker gates blocked, E1-E4 unrun. Same-run reuse/reservation-source gaps remain.
+[Focused checkpoint and next E1 slice](evidence/calcify-financial-sprint1/README.md).
+97-file complete evidence bundle verified and landed via [Records PR #5](https://github.com/dills122/reef-records/pull/5);
+[full details](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md). Reef keeps scripts/tests, fixtures and concise
+status; raw proofs/reviews live in Records. No production integration/cutover.
+
 ## CI dependency throttling recovery (2026-10-02)
 
 Master `2af704d7` CI recovered on [failed-job rerun](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2).

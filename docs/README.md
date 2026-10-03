@@ -53,7 +53,7 @@ checklists as open work.
 [Documentation lifecycle](DOCUMENTATION_CLEANUP_PLAN.md) defines how new docs
 become active, reference, or historical.
 
-[Records retention](RECORDS_RETENTION.md) names latest complete evidence bundles
-kept in Reef and describes checksum-verified archive lookup and restore.
+[Records retention](RECORDS_RETENTION.md) defines focused local summaries/fixtures,
+complete bulk evidence in Records and checksum-verified lookup/restore.
 [Completion pass](RECORDS_RETENTION.md#required-completion-pass) is required for
 every feature/code change: update affected docs/evidence/guidance, then archive old material.

@@ -1,0 +1,30 @@
+import { spawn } from 'node:child_process';
+import { mkdir, writeFile, appendFile, access, readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { captureOutput } from './lib/output-capture.mjs';
+import { createHash } from 'node:crypto';
+
+// Record every attempt, including nonzero exit and complete stdout/stderr.
+const [id, cwdArg, command, ...args] = process.argv.slice(2);
+if (!id || !cwdArg || !command || !/^[a-z0-9-]+$/.test(id)) throw Error('usage: record-attempt.mjs ID CWD COMMAND [ARGS]');
+const root = resolve(import.meta.dirname, '../../..');
+const cwd = resolve(root, cwdArg);
+const dir = resolve(root, 'docs/evidence/calcify-financial-sprint1/raw');
+await mkdir(dir, { recursive: true });
+const collision = await access(resolve(dir, `${id}.stdout.log`)).then(() => true, () => false);
+if (collision) throw Error(`attempt ${id} exists; choose new ID to preserve prior evidence`);
+const started = new Date().toISOString();
+const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const recorderSha256 = createHash('sha256').update(await readFile(import.meta.filename)).digest('hex');
+const captureSha256 = createHash('sha256').update(await readFile(new URL('./lib/output-capture.mjs', import.meta.url))).digest('hex');
+const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+const stdout = captureOutput(child.stdout, process.stdout);
+const stderr = captureOutput(child.stderr, process.stderr);
+let spawnError = null;
+child.on('error', error => { spawnError = String(error); });
+const result = await new Promise(r => child.on('close', (code, signal) => r({ code, signal })));
+await writeFile(resolve(dir, `${id}.stdout.log`), stdout());
+await writeFile(resolve(dir, `${id}.stderr.log`), stderr());
+await appendFile(resolve(dir, 'attempts.jsonl'), JSON.stringify({ id, cwd, command, args, started, finished: new Date().toISOString(), head, recorderSha256, captureSha256, javaHome: process.env.JAVA_HOME ?? null, spawnError, ...result }) + '\n');
+process.exitCode = spawnError ? 1 : result.code ?? 1;

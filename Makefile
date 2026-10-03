@@ -46,6 +46,7 @@ test-dev-tooling:
 	node scripts/dev/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
+	node --test scripts/dev/calcify-financial/record-attempt.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...

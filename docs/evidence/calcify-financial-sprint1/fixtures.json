@@ -1,0 +1,3240 @@
+{
+  "schema": "calcify-e0-fixtures-v1",
+  "scope": "synthetic unreserved gross DvP; no production authority",
+  "policy": {
+    "kernel": "e1-gross-v1",
+    "schema": "e1-v1",
+    "policy": "gross-p1",
+    "reference": "assets-r1",
+    "rounding": "EXACT",
+    "fees": "NONE",
+    "reservation": "UNRESERVED"
+  },
+  "units": {
+    "cash": "USD nanos",
+    "security": "whole ACME shares",
+    "price": "USD nanos per whole share",
+    "signedStorageBits": 64,
+    "intermediate": "arbitrary precision; checked before int64 storage",
+    "rounding": "exact; no fractional shares"
+  },
+  "identity": {
+    "actionKey": [
+      "namespace",
+      "domain",
+      "actionId"
+    ],
+    "executionKey": [
+      "runId",
+      "venueSessionId",
+      "instrumentId",
+      "executionId"
+    ],
+    "obligation": "executionKey plus DVP obligation kind",
+    "attempt": "obligationKey plus explicit ordinal",
+    "decision": "domain plus action/attempt/continuation key",
+    "journal": "decisionKey plus local leg ordinal",
+    "framing": "ordered JSON string arrays, UTF-8, no whitespace; identifiers exact, no trimming/Unicode normalization"
+  },
+  "normalization": {
+    "version": "request-v1",
+    "fields": [
+      "kind",
+      "requestedPolicy-or-null",
+      "payload-sorted-by-field"
+    ],
+    "integers": "decimal strings normalized through BigInt; reject fractions, exponent, plus sign, whitespace",
+    "enums": "uppercase ASCII",
+    "optional": "absent optional requestedPolicy equals null; required absence rejects; empty identifiers reject",
+    "repeatedSets": "none in v1; future sets require sorted unique canonical members",
+    "excluded": [
+      "source locator",
+      "wall-clock delivery timestamp",
+      "resolved policy defaults",
+      "worker identity"
+    ]
+  },
+  "evaluationContext": {
+    "selectedOnce": [
+      "kernel",
+      "schema",
+      "policy",
+      "reference",
+      "rounding",
+      "fees",
+      "reservation",
+      "logicalTick",
+      "domain"
+    ],
+    "retry": "retain original selected context; normalized digest computed before default selection"
+  },
+  "kernelReady": [
+    "executionId",
+    "runId",
+    "venueSessionId",
+    "instrumentId",
+    "buyOrderId",
+    "sellOrderId",
+    "buyerAccount",
+    "sellerAccount",
+    "cashAsset",
+    "securityAsset",
+    "quantity",
+    "priceNanos",
+    "dueTick"
+  ],
+  "sourceCausation": [
+    "generation",
+    "topicUUID",
+    "partition",
+    "offset",
+    "outcomeOrdinal",
+    "tradeOrdinal",
+    "originalChecksum"
+  ],
+  "genesis": {
+    "logicalTick": "0",
+    "historySeq": "0",
+    "businessSeq": "0",
+    "openingResourceAccount": "opening",
+    "funding": "two legs per account/asset against explicit opening; opening may be negative as balancing account only",
+    "ownerStateFields": [
+      "balances",
+      "reservations",
+      "executions",
+      "workflows",
+      "obligations",
+      "instructions",
+      "attempts",
+      "exceptions",
+      "policyActivation",
+      "logicalTick",
+      "dueQueue",
+      "continuations",
+      "dedup",
+      "effects",
+      "entityVersions",
+      "stagedInputs",
+      "deliveryCursor",
+      "historySeq",
+      "businessSeq"
+    ],
+    "emptyFields": [
+      "reservations",
+      "executions",
+      "workflows",
+      "obligations",
+      "instructions",
+      "attempts",
+      "exceptions",
+      "dueQueue",
+      "continuations",
+      "dedup",
+      "effects",
+      "stagedInputs"
+    ]
+  },
+  "history": {
+    "recordKinds": [
+      "GENESIS",
+      "STAGE",
+      "BUSINESS"
+    ],
+    "priorSequenceRequired": true,
+    "monotonicPerDomain": true,
+    "checkpoint": "full owner state + certified history sequence/checksum + versions + input membership; replay only strict suffix",
+    "deltasRequired": [
+      "journalGroups/legs",
+      "workflow/obligation/instruction/attempt/exception",
+      "reservation",
+      "dueQueue",
+      "continuation",
+      "account/entityVersion",
+      "dedup/context/disposition",
+      "externalIntent/status",
+      "policyActivation",
+      "logicalTick",
+      "stagedInput/cursor/completedCoverage"
+    ],
+    "missingHistory": "fail closed; never highest-seen-as-prefix"
+  },
+  "comparison": {
+    "business": [
+      "balances",
+      "executions",
+      "obligationResiduals",
+      "workflow",
+      "attempts",
+      "reservations",
+      "logicalTick",
+      "dueQueue",
+      "continuations",
+      "dedup/context/disposition",
+      "effects",
+      "entityVersions",
+      "policies",
+      "businessSeq",
+      "decisionId",
+      "semanticDigest"
+    ],
+    "excludes": [
+      "historySeq",
+      "deliveryCursor",
+      "stagedInputs",
+      "transportTimestamp",
+      "sourceOffset"
+    ],
+    "exactHistory": "compare every owner state field including staged inputs and delivery cursor; exact-history checksum distinct from semantic digest",
+    "cut": "after every business prefix, including failed dispositions; duplicate retry adds no business decision",
+    "barrier": "clock continuation drains canonical due order before later funding can affect economics; staging later input never exposes it to earlier decisions"
+  },
+  "generation": {
+    "prng": "xorshift32; unsigned shifts 13,17,5; reject zero seed",
+    "seeds": [
+      1,
+      42,
+      20261003
+    ],
+    "tracesPerSeed": 100,
+    "maxInputsPerTrace": 64,
+    "crashAfterEveryHistoryRecord": true,
+    "retainMinimalCounterexample": true,
+    "mutationControls": [
+      "duplicate-discharge",
+      "one-leg-mutation",
+      "missing-staging-delta"
+    ]
+  },
+  "deliverySchedules": [
+    {
+      "id": "one-at-a-time",
+      "yieldBudget": 1,
+      "transactionGroup": 1,
+      "stageAhead": 0
+    },
+    {
+      "id": "stage-all",
+      "yieldBudget": 2,
+      "transactionGroup": 4,
+      "stageAhead": 64
+    },
+    {
+      "id": "large-yield",
+      "yieldBudget": 64,
+      "transactionGroup": 64,
+      "stageAhead": 3
+    }
+  ],
+  "cases": [
+    {
+      "id": "two-asset-success",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "1",
+            "journalLegs": 4
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "insufficient-cash",
+      "genesisBalances": {
+        "buyerCash": "40000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "40000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "INSUFFICIENT_CASH",
+            "balances": {
+              "buyerCash": "40000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "failedAttempt": "1",
+            "journalLegs": 0
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-40000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-40000000000"
+            ],
+            [
+              "buyer",
+              "40000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "insufficient-shares",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "4"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "4"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "INSUFFICIENT_SHARES",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "4"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "failedAttempt": "1",
+            "journalLegs": 0
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-4"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-4"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "4"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "identical-retry",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "1",
+            "journalLegs": 4
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "PRIOR_RESULT",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "originalDisposition": "settle-1",
+            "noNewAttempt": true,
+            "journalLegs": 0
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "changed-request-same-key",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "1",
+            "journalLegs": 4
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "2"
+            }
+          },
+          "expected": {
+            "disposition": "ACTION_CONFLICT",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "journalLegs": 0
+          },
+          "normalizedDigest": "2f54a8d0a48c006d4db421dd07b66b68328b7a414f35f218293b38f1cc8ca9cf",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "paid-obligation-new-action",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "1",
+            "journalLegs": 4
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "new-action",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "2"
+            }
+          },
+          "expected": {
+            "disposition": "ALREADY_SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "journalLegs": 0
+          },
+          "normalizedDigest": "2f54a8d0a48c006d4db421dd07b66b68328b7a414f35f218293b38f1cc8ca9cf",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"new-action\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repeated-execution-capture",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-again",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "EXECUTION_ALREADY_CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "obligationCount": 1
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-again\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "conflicting-execution-capture",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-changed",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "6",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "EXECUTION_CONFLICT",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "obligationCount": 1
+          },
+          "normalizedDigest": "dbc8ce58dd1cab3abb234a4be73d08bcbe86864ed416ce4cba9ed9ded8e5af2c",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-changed\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "retry-after-policy-activation",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "1",
+            "journalLegs": 4
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "activate-p2",
+            "kind": "ACTIVATE_POLICY",
+            "payload": {
+              "policy": "gross-p2"
+            }
+          },
+          "expected": {
+            "disposition": "POLICY_ACTIVATED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "activePolicy": "gross-p2"
+          },
+          "normalizedDigest": "d058e014ac21a46b4676cf9a92dc62203a7dfcbdcf03eb005a01c9fb1943b3b8",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"activate-p2\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "PRIOR_RESULT",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "selectedPolicy": "gross-p1",
+            "originalDisposition": "settle-1",
+            "journalLegs": 0
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cash-funding-new-attempt",
+      "genesisBalances": {
+        "buyerCash": "40000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "40000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "INSUFFICIENT_CASH",
+            "balances": {
+              "buyerCash": "40000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "failedAttempt": "1"
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "fund-cash",
+            "kind": "FUND",
+            "payload": {
+              "account": "buyer",
+              "asset": "USD_NANO",
+              "amount": "20000000000",
+              "authority": "opening-resource-owner"
+            }
+          },
+          "expected": {
+            "disposition": "FUNDED",
+            "balances": {
+              "buyerCash": "60000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "journalLegs": 2
+          },
+          "normalizedDigest": "b3107034c34b2fd73f81ae205059562d1b184e60be985632940ce423946f14c6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"fund-cash\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "repair-2",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "2"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "10000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "2",
+            "journalLegs": 4
+          },
+          "normalizedDigest": "2f54a8d0a48c006d4db421dd07b66b68328b7a414f35f218293b38f1cc8ca9cf",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"repair-2\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-40000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-40000000000"
+            ],
+            [
+              "buyer",
+              "40000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-funding-new-attempt",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "4"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "4"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "INSUFFICIENT_SHARES",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "4"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "failedAttempt": "1"
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "fund-shares",
+            "kind": "FUND",
+            "payload": {
+              "account": "seller",
+              "asset": "ACME_SHARE",
+              "amount": "2",
+              "authority": "opening-resource-owner"
+            }
+          },
+          "expected": {
+            "disposition": "FUNDED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "6"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "journalLegs": 2
+          },
+          "normalizedDigest": "02b72377b89c86e5dba5554111f3fd10931387b273fdaa6249cb3649d28ee056",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"fund-shares\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "repair-2",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "2"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "1"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0",
+            "attempt": "2"
+          },
+          "normalizedDigest": "2f54a8d0a48c006d4db421dd07b66b68328b7a414f35f218293b38f1cc8ca9cf",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"repair-2\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-4"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-4"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "4"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "failed-attempt-retry",
+      "genesisBalances": {
+        "buyerCash": "40000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "40000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "INSUFFICIENT_CASH",
+            "balances": {
+              "buyerCash": "40000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "failedAttempt": "1"
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "fund-cash",
+            "kind": "FUND",
+            "payload": {
+              "account": "buyer",
+              "asset": "USD_NANO",
+              "amount": "20000000000",
+              "authority": "opening-resource-owner"
+            }
+          },
+          "expected": {
+            "disposition": "FUNDED",
+            "balances": {
+              "buyerCash": "60000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "b3107034c34b2fd73f81ae205059562d1b184e60be985632940ce423946f14c6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"fund-cash\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "PRIOR_RESULT",
+            "balances": {
+              "buyerCash": "60000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "originalDisposition": "settle-1",
+            "noNewAttempt": true
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-40000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-40000000000"
+            ],
+            [
+              "buyer",
+              "40000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wide-multiply-overflow",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "overflow",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "9223372036854775807",
+              "priceNanos": "2",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "AMOUNT_OVERFLOW",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 0,
+            "journalLegs": 0
+          },
+          "normalizedDigest": "78f7e33ad9290f5eced47b1c882e7f26c6b69b6ecd5199791f4061eaf3e9754e",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"overflow\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "credit-overflow-atomic",
+      "genesisBalances": {
+        "buyerCash": "50000000000",
+        "sellerCash": "9223371986854775808",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "9223371986854775808",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "normalizedDigest": "cf24c721e98289d5e296d383bb74b6bf4226365411d118fae15567e58cf887e4",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "BALANCE_OVERFLOW",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "9223371986854775808",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5",
+            "journalLegs": 0
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-9223372036854775808",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-9223372036854775808"
+            ],
+            [
+              "buyer",
+              "50000000000"
+            ],
+            [
+              "seller",
+              "9223371986854775808"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "missing-required-payload",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "missing",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "INVALID_INPUT",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 0,
+            "journalLegs": 0
+          },
+          "normalizedDigest": "39b60d3d2e4b64a82a7873477cd46aab28abfe74ebe95b83e1b3684d0b03f1ac",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"missing\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "missing-policy",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "capture-1",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            },
+            "requestedPolicy": "absent-p9"
+          },
+          "expected": {
+            "disposition": "MISSING_POLICY",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 0,
+            "journalLegs": 0
+          },
+          "normalizedDigest": "a7984a6a6efeb9732ab410f06686ea41c1ee20fab0f9ee00fb0d8233cdba45fb",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"capture-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zero-quantity",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "zero",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "0",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "INVALID_INPUT",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 0,
+            "journalLegs": 0
+          },
+          "normalizedDigest": "7d29eb7a40fffb079bfce15dfc624ec887672970a59fe749ef4ec62100dff186",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"zero\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "negative-quantity",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "negative",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "-1",
+              "priceNanos": "10000000000",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "INVALID_INPUT",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 0,
+            "journalLegs": 0
+          },
+          "normalizedDigest": "b85907b2df2c6768b14b70fdaf8bf3d3ab4974f550c4cd58962f21dc648eb977",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"negative\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exact-unit-boundary",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "one-nano",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "1",
+              "priceNanos": "1",
+              "dueTick": "0"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "cashResidual": "1",
+            "shareResidual": "1"
+          },
+          "normalizedDigest": "382fb18c2a322ccf3a3fbe63cb67f1ed302b232de723f6220b6eb6d4f84c2fa2",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"one-nano\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "settle-1",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "exec-synthetic-1",
+              "attempt": "1"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "99999999999",
+              "sellerCash": "1",
+              "buyerShares": "1",
+              "sellerShares": "9"
+            },
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0"
+          },
+          "normalizedDigest": "975733695610610b7ca94ebe518de02d8a179ab580bad041217723671db87ee6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"settle-1\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "due-order-and-staging",
+      "genesisBalances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "steps": [
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "due-a",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "due-a",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "5",
+              "priceNanos": "10000000000",
+              "dueTick": "10"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 1
+          },
+          "normalizedDigest": "d4583ed209628e72fffd7163a461adc12c6080b6da33728c8972c0326634bb98",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"due-a\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "due-b",
+            "kind": "CAPTURE",
+            "payload": {
+              "executionId": "due-b",
+              "runId": "run-é",
+              "venueSessionId": "session-1",
+              "instrumentId": "ACME",
+              "buyOrderId": "a-b",
+              "sellOrderId": "c",
+              "buyerAccount": "buyer",
+              "sellerAccount": "seller",
+              "cashAsset": "USD_NANO",
+              "securityAsset": "ACME_SHARE",
+              "quantity": "6",
+              "priceNanos": "10000000000",
+              "dueTick": "10"
+            }
+          },
+          "expected": {
+            "disposition": "CAPTURED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "obligationCount": 2
+          },
+          "normalizedDigest": "2ad09d0010747675a5913dc8703efbbb3c21f6f38eeced859b3ade7136f0e51f",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"due-b\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "clock-10",
+            "kind": "CLOCK",
+            "payload": {
+              "tick": "10"
+            }
+          },
+          "expected": {
+            "disposition": "CLOCK_ADVANCED",
+            "balances": {
+              "buyerCash": "100000000000",
+              "sellerCash": "0",
+              "buyerShares": "0",
+              "sellerShares": "10"
+            },
+            "dueWork": [
+              "due-a",
+              "due-b"
+            ],
+            "continuationPhase": "DRAIN_DUE"
+          },
+          "normalizedDigest": "cdc69d9491e191c161ceefa8138023347f7ed9c08f17ae261e07d31b7a2dd6f8",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"clock-10\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "continue-a",
+            "kind": "CONTINUE",
+            "payload": {
+              "clockAction": "clock-10",
+              "workId": "due-a"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "dueWork": [
+              "due-b"
+            ],
+            "settledExecutions": [
+              "due-a"
+            ]
+          },
+          "normalizedDigest": "7d9e8c78c111cc0bb6a5292dad233aa763ec06cb65fc28aebf008a136d84ab6c",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"continue-a\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "continue-b",
+            "kind": "CONTINUE",
+            "payload": {
+              "clockAction": "clock-10",
+              "workId": "due-b"
+            }
+          },
+          "expected": {
+            "disposition": "INSUFFICIENT_CASH",
+            "balances": {
+              "buyerCash": "50000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "dueWork": [],
+            "pendingExecutions": [
+              "due-b"
+            ],
+            "failedAttempt": "1"
+          },
+          "normalizedDigest": "cd05a696538bdd0441e644f1874b73858c97635cd998fd5817e961f94291eafd",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"continue-b\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "later-funding",
+            "kind": "FUND",
+            "payload": {
+              "account": "buyer",
+              "asset": "USD_NANO",
+              "amount": "20000000000",
+              "authority": "opening-resource-owner"
+            }
+          },
+          "expected": {
+            "disposition": "FUNDED",
+            "balances": {
+              "buyerCash": "70000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "5"
+            },
+            "pendingExecutions": [
+              "due-b"
+            ]
+          },
+          "normalizedDigest": "b3107034c34b2fd73f81ae205059562d1b184e60be985632940ce423946f14c6",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"later-funding\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "later-shares",
+            "kind": "FUND",
+            "payload": {
+              "account": "seller",
+              "asset": "ACME_SHARE",
+              "amount": "2",
+              "authority": "opening-resource-owner"
+            }
+          },
+          "expected": {
+            "disposition": "FUNDED",
+            "balances": {
+              "buyerCash": "70000000000",
+              "sellerCash": "50000000000",
+              "buyerShares": "5",
+              "sellerShares": "7"
+            },
+            "pendingExecutions": [
+              "due-b"
+            ]
+          },
+          "normalizedDigest": "02b72377b89c86e5dba5554111f3fd10931387b273fdaa6249cb3649d28ee056",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"later-shares\"]"
+        },
+        {
+          "input": {
+            "namespace": "sprint1",
+            "domain": "domain-1",
+            "actionId": "repair-due-b",
+            "kind": "SETTLE",
+            "payload": {
+              "executionId": "due-b",
+              "attempt": "2"
+            }
+          },
+          "expected": {
+            "disposition": "SETTLED",
+            "balances": {
+              "buyerCash": "10000000000",
+              "sellerCash": "110000000000",
+              "buyerShares": "11",
+              "sellerShares": "1"
+            },
+            "settledExecutions": [
+              "due-a",
+              "due-b"
+            ],
+            "dueWork": []
+          },
+          "normalizedDigest": "26be79e135de271cd195cb2564f8b2a751d8d3ef8f9321ccdc202cc82f0549c9",
+          "actionKey": "[\"sprint1\",\"domain-1\",\"repair-due-b\"]"
+        }
+      ],
+      "genesisOpeningAccounts": {
+        "cash": "-100000000000",
+        "shares": "-10"
+      },
+      "genesisJournalGroups": [
+        {
+          "asset": "USD_NANO",
+          "legs": [
+            [
+              "opening",
+              "-100000000000"
+            ],
+            [
+              "buyer",
+              "100000000000"
+            ],
+            [
+              "seller",
+              "0"
+            ]
+          ]
+        },
+        {
+          "asset": "ACME_SHARE",
+          "legs": [
+            [
+              "opening",
+              "-10"
+            ],
+            [
+              "buyer",
+              "0"
+            ],
+            [
+              "seller",
+              "10"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "reconstructionFixture": {
+    "id": "genesis-stage-capture-settle",
+    "genesis": {
+      "balances": {
+        "buyerCash": "100000000000",
+        "sellerCash": "0",
+        "buyerShares": "0",
+        "sellerShares": "10"
+      },
+      "openingCash": "-100000000000",
+      "openingShares": "-10",
+      "policies": {
+        "kernel": "e1-gross-v1",
+        "schema": "e1-v1",
+        "policy": "gross-p1",
+        "reference": "assets-r1",
+        "rounding": "EXACT",
+        "fees": "NONE",
+        "reservation": "UNRESERVED"
+      },
+      "logicalTick": "0",
+      "historySeq": "0",
+      "businessSeq": "0",
+      "reservations": {},
+      "executions": {},
+      "workflows": {},
+      "obligations": {},
+      "instructions": {},
+      "attempts": {},
+      "exceptions": {},
+      "dueQueue": [],
+      "continuations": {},
+      "dedup": {},
+      "effects": {},
+      "entityVersions": {
+        "buyer": "1",
+        "seller": "1",
+        "opening": "1"
+      },
+      "stagedInputs": [],
+      "deliveryCursor": null
+    },
+    "records": [
+      {
+        "historySeq": "1",
+        "priorHistorySeq": "0",
+        "kind": "STAGE",
+        "input": {
+          "namespace": "sprint1",
+          "domain": "domain-1",
+          "actionId": "capture-1",
+          "kind": "CAPTURE",
+          "payload": {
+            "executionId": "exec-synthetic-1",
+            "runId": "run-é",
+            "venueSessionId": "session-1",
+            "instrumentId": "ACME",
+            "buyOrderId": "a-b",
+            "sellOrderId": "c",
+            "buyerAccount": "buyer",
+            "sellerAccount": "seller",
+            "cashAsset": "USD_NANO",
+            "securityAsset": "ACME_SHARE",
+            "quantity": "5",
+            "priceNanos": "10000000000",
+            "dueTick": "0"
+          }
+        },
+        "delta": {
+          "stagedInputsAdd": [
+            "capture-1"
+          ],
+          "deliveryCursor": [
+            "synthetic-topic",
+            "0",
+            "10"
+          ]
+        },
+        "expected": {
+          "stagedInputs": [
+            "capture-1"
+          ],
+          "businessSeq": "0",
+          "balances": {
+            "buyerCash": "100000000000",
+            "sellerCash": "0",
+            "buyerShares": "0",
+            "sellerShares": "10"
+          }
+        }
+      },
+      {
+        "historySeq": "2",
+        "priorHistorySeq": "1",
+        "kind": "BUSINESS",
+        "businessSeq": "1",
+        "priorBusinessSeq": "0",
+        "decisionId": [
+          "domain-1",
+          "capture-1"
+        ],
+        "delta": {
+          "executionAdd": {
+            "executionId": "exec-synthetic-1",
+            "runId": "run-é",
+            "venueSessionId": "session-1",
+            "instrumentId": "ACME",
+            "buyOrderId": "a-b",
+            "sellOrderId": "c",
+            "buyerAccount": "buyer",
+            "sellerAccount": "seller",
+            "cashAsset": "USD_NANO",
+            "securityAsset": "ACME_SHARE",
+            "quantity": "5",
+            "priceNanos": "10000000000",
+            "dueTick": "0"
+          },
+          "obligationAdd": {
+            "id": [
+              "exec-synthetic-1",
+              "DVP"
+            ],
+            "obligationStatus": "PENDING",
+            "cashResidual": "50000000000",
+            "shareResidual": "5"
+          },
+          "instructionAdd": {
+            "id": [
+              "exec-synthetic-1",
+              "DVP"
+            ],
+            "status": "READY"
+          },
+          "workflow": "PENDING",
+          "dedupAdd": {
+            "actionId": "capture-1",
+            "disposition": "CAPTURED",
+            "selectedContext": {
+              "kernel": "e1-gross-v1",
+              "schema": "e1-v1",
+              "policy": "gross-p1",
+              "reference": "assets-r1",
+              "rounding": "EXACT",
+              "fees": "NONE",
+              "reservation": "UNRESERVED",
+              "logicalTick": "0",
+              "domain": "domain-1"
+            }
+          },
+          "stagedInputsRemove": [
+            "capture-1"
+          ]
+        },
+        "expected": {
+          "stagedInputs": [],
+          "businessSeq": "1",
+          "balances": {
+            "buyerCash": "100000000000",
+            "sellerCash": "0",
+            "buyerShares": "0",
+            "sellerShares": "10"
+          },
+          "obligationCount": 1
+        }
+      },
+      {
+        "historySeq": "3",
+        "priorHistorySeq": "2",
+        "kind": "STAGE",
+        "input": {
+          "namespace": "sprint1",
+          "domain": "domain-1",
+          "actionId": "settle-1",
+          "kind": "SETTLE",
+          "payload": {
+            "executionId": "exec-synthetic-1",
+            "attempt": "1"
+          }
+        },
+        "delta": {
+          "stagedInputsAdd": [
+            "settle-1"
+          ],
+          "deliveryCursor": [
+            "synthetic-topic",
+            "0",
+            "12"
+          ]
+        },
+        "expected": {
+          "stagedInputs": [
+            "settle-1"
+          ],
+          "businessSeq": "1",
+          "balances": {
+            "buyerCash": "100000000000",
+            "sellerCash": "0",
+            "buyerShares": "0",
+            "sellerShares": "10"
+          }
+        }
+      },
+      {
+        "historySeq": "4",
+        "priorHistorySeq": "3",
+        "kind": "BUSINESS",
+        "businessSeq": "2",
+        "priorBusinessSeq": "1",
+        "decisionId": [
+          "domain-1",
+          "settle-1"
+        ],
+        "delta": {
+          "journalGroups": [
+            {
+              "asset": "USD_NANO",
+              "legs": [
+                [
+                  "buyer",
+                  "-50000000000"
+                ],
+                [
+                  "seller",
+                  "50000000000"
+                ]
+              ]
+            },
+            {
+              "asset": "ACME_SHARE",
+              "legs": [
+                [
+                  "seller",
+                  "-5"
+                ],
+                [
+                  "buyer",
+                  "5"
+                ]
+              ]
+            }
+          ],
+          "obligationUpdate": {
+            "obligationStatus": "SETTLED",
+            "cashResidual": "0",
+            "shareResidual": "0"
+          },
+          "instructionStatus": "SETTLED",
+          "workflow": "SETTLED",
+          "attemptAdd": {
+            "ordinal": "1",
+            "disposition": "SETTLED"
+          },
+          "entityVersions": {
+            "buyer": "2",
+            "seller": "2"
+          },
+          "dedupAdd": {
+            "actionId": "settle-1",
+            "disposition": "SETTLED",
+            "selectedContext": {
+              "kernel": "e1-gross-v1",
+              "schema": "e1-v1",
+              "policy": "gross-p1",
+              "reference": "assets-r1",
+              "rounding": "EXACT",
+              "fees": "NONE",
+              "reservation": "UNRESERVED",
+              "logicalTick": "0",
+              "domain": "domain-1"
+            }
+          },
+          "stagedInputsRemove": [
+            "settle-1"
+          ]
+        },
+        "expected": {
+          "stagedInputs": [],
+          "businessSeq": "2",
+          "balances": {
+            "buyerCash": "50000000000",
+            "sellerCash": "50000000000",
+            "buyerShares": "5",
+            "sellerShares": "5"
+          },
+          "obligationStatus": "SETTLED",
+          "cashResidual": "0",
+          "shareResidual": "0"
+        }
+      }
+    ],
+    "checkpointCuts": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "crashCuts": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "requiredAssertions": [
+      "rebuild all owner fields from genesis",
+      "checkpoint at each cut plus strict suffix matches full replay",
+      "STAGE is durable but not financially complete",
+      "nonconsecutive physical offsets 10/12 are explicit membership",
+      "remove staging delta mutant must fail owner-state parity"
+    ],
+    "semanticDigest": "normalize semantic deltas under schema; exclude delivery/history fields; complete every required workflow/dedup context transition in E1 encoding",
+    "expectedFullState": "genesis plus specified ordered deltas; unspecified fields retain prior value; fixture is shape contract, no E0 reconstruction implementation claim"
+  },
+  "reservationPolicyModel": {
+    "status": "PROPOSED; E1b owner review; never activated live",
+    "owner": "order remainder transfers to captured obligation; no implicit release",
+    "priority": "ordered business acceptance then stable owner ID",
+    "ownHoldConsumer": "only named owner up to hold and obligation residual",
+    "cashExample": {
+      "cashBefore": "100",
+      "holdBefore": "80",
+      "settles": "50",
+      "cashAfter": "50",
+      "holdAfter": "30",
+      "unrelatedAvailable": "20"
+    },
+    "securityExample": {
+      "sharesBefore": "10",
+      "holdBefore": "8",
+      "settles": "5",
+      "sharesAfter": "5",
+      "holdAfter": "3",
+      "unrelatedAvailable": "2"
+    },
+    "failure": "retain hold until explicit repair/cancel rule",
+    "withdrawal": "only unheld available; cannot consume another owner hold",
+    "cancellation": "release unmatched remainder only; captured obligation hold stays",
+    "casesRequired": [
+      "own-hold",
+      "competing-owner",
+      "partial-fill",
+      "closure-release",
+      "failed-attempt",
+      "withdrawal",
+      "ownership-transfer"
+    ]
+  }
+}

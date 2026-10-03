@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated_date": "2026-10-02",
-  "selection_reason": "Carry forward latest Calcify/terminal bundles; repair archived handoff navigation with original checksum companion preserved; rehome final R08 verification and corrections.",
+  "updated_date": "2026-10-03",
+  "selection_reason": "Carry forward existing topic selections unchanged. October3 user-directed bulk relocation: complete Calcify E0 97-file bundle verified in Reef Records08a4347; Reef retains focused summary, frozen executable inputs and broker config. All failures, corrections and reviews linked through immutable archive and relocation inventory.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1657,6 +1657,26 @@
       "path": "docs/evidence/runtime-order-identity/r08-review3-sql-probe.log",
       "bytes": 560,
       "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/.gitignore",
+      "bytes": 6,
+      "sha256": "fa7cadf041a79b6b93bb9853e479d62cf3e83f2e12a71939ba1dd2db9916aadc"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/README.md",
+      "bytes": 4073,
+      "sha256": "493142a95e649eaf292a3f1e62872ee6b59c11938c31822eac3b4dd5ac87a75c"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
+      "bytes": 1977,
+      "sha256": "0c84f3aaa9115bc55cd9c130a1c2c8f4d5674a18effe81b94e597f7dab9ada40"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/fixtures.json",
+      "bytes": 90325,
+      "sha256": "fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d"
     }
   ]
 }

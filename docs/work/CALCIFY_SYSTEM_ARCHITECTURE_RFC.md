@@ -127,11 +127,12 @@ before engine acceptance, and test restore/terminal eviction. If owner needs sam
 run reuse, introduce explicit acceptance incarnation in authoritative outcomes and
 trade references, with temporal/sequential resolution. No guessing from latest row.
 
-Audit current matcher execution ID construction before promising batch-invariant
-seed reconstruction. Include delimiter collisions: current concatenation of buy
-and sell IDs permits `("a-b","c")` and `("a","b-c")` to collide at equal ordinal.
-Test repeated fills/modify outcomes and restore too. Require unambiguous framing
-and authoritative logical execution identity, independent of publication grouping.
+Audit matcher execution ID construction before promising batch-invariant seed
+reconstruction. E0 verified current `matching-fact-v2` construction length-frames
+run/session/instrument/order IDs, incoming book sequence and match ordinal before
+hashing; delimiter and snapshot/rollback regressions pass. Earlier concatenation
+concern is superseded by existing matcher implementation, not a sprint source fix.
+Keep repeated-fill/modify, acceptance-lifetime and publication-grouping checks explicit.
 Existing locator stays provenance;
 financial action dedup must not be derived only from a Kafka offset or random UUID.
 
@@ -702,7 +703,9 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** planned, unrun. Decision owner: Reef project owner. Planning checkpoint:
+**Status:** [E0 preparation checkpoint recorded](../evidence/calcify-financial-sprint1/README.md);
+successful language-server gate and broker prerequisites remain blocked. E1–E4 unrun.
+Decision owner: Reef project owner. Planning checkpoint:
 `0edbfa31055235fe196cc1949e3443fd75ffb41b`; execution must pin actual code/config.
 Goal: earn a decision on smallest financial kernel, gate protocol, reservation
 fixture policy, recovery contract and useful-work cost before system implementation.
@@ -886,9 +889,10 @@ No production migration/API adapter. If seam cannot fit timebox, SQL/API cost st
 explicit unknown and blocks total useful-path capacity claim, not E4 core diagnostic.
 10k/600s and7.5k/900s qualification remain later, on unchanged full required path.
 
-**Evidence and stop rules.** One canonical sprint result summary will live beside
-raw machine-readable attempts under `docs/evidence/calcify-financial-sprint1/`;
-link summary here after execution. Every attempt records code/build/config/image
+**Evidence and stop rules.** Concise current checkpoint and executable fixtures live
+under `docs/evidence/calcify-financial-sprint1/`; complete raw attempts, provenance
+and review details live in Reef Records, linked at immutable commits from checkpoint.
+Every attempt records code/build/config/image
 digest, hardware, seed/fixture hash, command, measurement boundaries, thresholds,
 counts, counterexample, result and cleanup scope. Preserve failures/setup errors;
 append measured throughput and scope to existing baseline ledger. No parallel
