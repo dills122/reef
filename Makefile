@@ -45,6 +45,7 @@ test-dev-tooling:
 	node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
 	node scripts/dev/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
+	node --test scripts/ci/build-container.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...

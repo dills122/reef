@@ -37,7 +37,7 @@
     "repo:test:dependabot-automation": "bun scripts/dev/dependabot-automation-workflow.test.mjs",
     "repo:check:records": "bun scripts/ci/check-records-retention.mjs",
     "repo:test:records": "node --test scripts/ci/check-records-retention.test.mjs",
-    "repo:test:ci-hardening": "node scripts/dev/ci-workflow-hardening.test.mjs && node --test scripts/ci/check-required-results.test.mjs",
+    "repo:test:ci-hardening": "node scripts/dev/ci-workflow-hardening.test.mjs && node --test scripts/ci/check-required-results.test.mjs scripts/ci/build-container.test.mjs",
     "repo:test:ci-change-scope": "node scripts/dev/ci-pr-change-scope.test.mjs",
     "bot-sdk:test:openbao-provision": "bun scripts/dev/bot-submission-provision-openbao.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",

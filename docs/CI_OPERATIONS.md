@@ -47,6 +47,28 @@ their path scopes changed.
 
 ## Workflow Maintenance Rules
 
+`container-builds` uses `node scripts/ci/build-container.mjs` for all matrix
+images. It streams Docker output and retries only Gradle dependency requests
+to Maven Central or Gradle Plugin Portal that return HTTP 429. Maximum three
+attempts, with 15s then 30s backoff; successful Docker layers remain cached
+within that job. Compiler errors, other build failures and interrupted builds
+fail immediately. Persistent throttling still fails `ci-required`; this does
+not waive or lower merge checks.
+
+October 2, 2026 incident: [PR #470](https://github.com/dills122/reef/pull/470)
+passed [pre-merge CI](https://github.com/dills122/reef/actions/runs/37089823096),
+including stock-data image build, before merging as `2af704d7`.
+[Master CI attempt 1](https://github.com/dills122/reef/actions/runs/37090920609/attempts/1)
+failed fetching `kotlin-gradle-plugins-bom:2.4.20` from Maven Central with
+HTTP 429; stock-data container build was the sole originating failure, and
+`ci-required` correctly rejected it. [Attempt 2](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2)
+reran failed jobs on unchanged code and passed. Live default-branch ruleset
+`18541941` required `ci-required`, was active and had no bypass actors when
+checked; PR head included then-current master `f3d42d31`. Stale-base merges
+were permitted by configuration, but did not cause this incident. External
+dependency availability can differ between pre-merge and post-merge runs;
+merge protection cannot guarantee downstream service uptime.
+
 - Pin external actions to full commit SHAs. Keep release tags in comments so
   Dependabot can propose reviewed SHA updates.
 - Give every job a finite timeout.
