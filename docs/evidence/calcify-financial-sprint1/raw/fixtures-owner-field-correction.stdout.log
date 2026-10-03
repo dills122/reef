@@ -1,0 +1,1 @@
+{"cases":20,"inputs":52,"sha256":"59b5d30782c19c08356430e896c646c2bff1b334d7be8b35a48e5f6d15b9e73f","checks":"input normalization/framing/golden stability only; kernel/oracle unimplemented"}

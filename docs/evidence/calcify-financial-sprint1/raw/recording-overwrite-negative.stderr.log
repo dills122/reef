@@ -1,0 +1,8 @@
+file:///private/tmp/reef-calcify-financial-e0/scripts/dev/calcify-financial/record-attempt.mjs:14
+if (collision) throw Error(`attempt ${id} exists; choose new ID to preserve prior evidence`);
+                     ^
+
+Error: attempt fixtures-final-check exists; choose new ID to preserve prior evidence
+    at file:///private/tmp/reef-calcify-financial-e0/scripts/dev/calcify-financial/record-attempt.mjs:14:22
+
+Node.js v22.22.1

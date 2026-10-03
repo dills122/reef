@@ -18,6 +18,16 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify financial experiment E0 checkpoint (2026-10-03)
+
+Execution source `85f0ce8c`, separate from open planning PR #466 at `cda4185b`.
+Java21 build and70 existing Calcify tests pass; matcher source suites pass.
+Frozen20 synthetic cases/52 inputs, history/checkpoint shape, runtime jar hashes,
+isolated RF3 config and measurement rules ready for E1a. E0 tool gate blocked by
+Serena Kotlin initialization; Docker daemon/app unavailable, guest disk/image/topic
+settings unverified. Same-run order reuse remains live-source gap; reservations
+and authority cutover deferred. [Canonical sprint evidence and next E1 slice](evidence/calcify-financial-sprint1/README.md).
+
 ## CI dependency throttling recovery (2026-10-02)
 
 Master `2af704d7` CI recovered on [failed-job rerun](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2).

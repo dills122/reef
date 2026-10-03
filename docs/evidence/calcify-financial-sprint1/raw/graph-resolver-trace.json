@@ -1,0 +1,1 @@
+{"content":[{"type":"text","text":"function: MatchContextResolver\ndirection: both\ncallees_total: 0\ncallees_total_relation: eq\ncallees: 0  (cols: qn hop)\ncallers_total: 0\ncallers_total_relation: eq\ncallers: 0  (cols: qn hop)\n"}],"isError":false}

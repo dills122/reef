@@ -1,0 +1,16 @@
+=== RUN   TestIOCResidualNeverRests
+=== RUN   TestIOCResidualNeverRests/zero
+=== RUN   TestIOCResidualNeverRests/partial
+=== RUN   TestIOCResidualNeverRests/full
+--- PASS: TestIOCResidualNeverRests (0.00s)
+    --- PASS: TestIOCResidualNeverRests/zero (0.00s)
+    --- PASS: TestIOCResidualNeverRests/partial (0.00s)
+    --- PASS: TestIOCResidualNeverRests/full (0.00s)
+=== RUN   TestMatchFactsReplaySnapshotAndRollbackExactly
+--- PASS: TestMatchFactsReplaySnapshotAndRollbackExactly (0.00s)
+PASS
+ok  	github.com/dills122/reef/services/matching-engine/internal/app	0.401s
+=== RUN   TestCalcifyOutcomeRunScopeAndHiddenLimitSource
+--- PASS: TestCalcifyOutcomeRunScopeAndHiddenLimitSource (0.00s)
+PASS
+ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	0.516s
