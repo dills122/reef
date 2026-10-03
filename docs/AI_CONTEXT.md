@@ -33,7 +33,7 @@ higher authority than source, tests, accepted decisions, and recorded evidence.
    originals, parse corrections, cite commit/scope and check current implications.
    Promote concise current facts with citations; leave historical bulk in Records.
 
-Historical files live in [Reef Records](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/INDEX.md). Open one when an
+Historical files live in [Reef Records](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/INDEX.md). Open one when an
 active document cites its result, a failed attempt matters, or a prior design
 choice must be reviewed.
 

@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "migration_date": "2026-10-02",
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "76872e9db249152e0329393d73c4a2f850ea2b93",
+  "selection_policy": "Second supersession pass after syncing master. Archive completed task records and superseded handoff/pilot evidence; retain current plans and complete latest topic verification. Original evidence README archived before navigation repair.",
+  "files": [
+    {
+      "source_path": ".planning/R08-author-explanation.md",
+      "archive_path": "records/reef/.planning/R08-author-explanation.md",
+      "bytes": 8262,
+      "sha256": "67c7e45ed2316eac3cf7c6a62699340fa6e3a6c84de11f0772c47cb8daf90de1",
+      "source_blob_oid": "da1d020ae3dab989e527d33f6b9e8bde770f108a",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-ci-followup.md",
+      "archive_path": "records/reef/.planning/R08-ci-followup.md",
+      "bytes": 2880,
+      "sha256": "31ba25c5356d56420124da048733f818c9f1b7f99643629394cfc9d13af4857d",
+      "source_blob_oid": "d3543b7085e75841d15918a25adc1e2dd8bd9314",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-auth-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-auth-red.log",
+      "bytes": 2701,
+      "sha256": "75cc67f518388eb48aac5ad5b77bd20e2c981d7c9d4a957a4986ea6999a7be66",
+      "source_blob_oid": "9ee146d85a486f4e6c5cf6f41ebab5c3f3bfd598",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-bulk-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-bulk-red.log",
+      "bytes": 1037,
+      "sha256": "0bc16694664511492f7001ab56e9fa7ab96bab477235582cb03ce710927ed906",
+      "source_blob_oid": "a9ca0183fa9874214d7a5281c898e5340a0868d4",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-check-review3.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-check-review3.log",
+      "bytes": 675,
+      "sha256": "07552fa6990d0a2ac255b6344fb1c740218ec1cbc3643338c3f12a9f0fe85d4f",
+      "source_blob_oid": "9f506a4e5794a79cf2eec5704bdfebba2b3edc6f",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-ci-arena-container-final.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-ci-arena-container-final.log",
+      "bytes": 4297,
+      "sha256": "1e6e7642623a3b57aeb01a23be57873a5bcd7ef25af4468276b3ab1c88f964fb",
+      "source_blob_oid": "5751615b4a6ff965e7569efd54fac62bc2991413",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-ci-container-final.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-ci-container-final.log",
+      "bytes": 39964,
+      "sha256": "94c5f445a59cb0d3158d377224a09b687ca422c236b50282a6daf7cc8d521e86",
+      "source_blob_oid": "11b64f1c8977ef5495b0c820b659769fa0ce2df4",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-ci-missing-resource-fixed.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-ci-missing-resource-fixed.log",
+      "bytes": 969,
+      "sha256": "fcec238e0f2d038cbb4cf7e1ff6f8b569ad2aceb6f14d83fa3104d476b10df1c",
+      "source_blob_oid": "4347baca0dbe877a1c5e5787e72349cd541296a5",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-ci-node.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-ci-node.log",
+      "bytes": 6253,
+      "sha256": "e239a9818fc5e48e563deb4343d7cf1a86021e6da97ee55d6bd8ba0ff9abb4b9",
+      "source_blob_oid": "69de75be60f0958be0fa7f77aa4e257ed8423319",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-ci-schema-green.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-ci-schema-green.log",
+      "bytes": 899,
+      "sha256": "543e851f065082469c98ad39c9c5ed867750f456bc9084e6fc2157a6b3cbdabb",
+      "source_blob_oid": "ebcbeddbfadc6d19384900d595351bc831ba49e5",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-ci-schema-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-ci-schema-red.log",
+      "bytes": 1281,
+      "sha256": "1b1fd8dbe46607d52c2450d68d2008475cc7f29b0e4c2cefaa7f0b47d5379755",
+      "source_blob_oid": "a486dc39165e0759e88c91fcf6b415539cebea72",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-db-recreate.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-db-recreate.log",
+      "bytes": 20891,
+      "sha256": "c866c14eabd78af902697a018e094a71a79a3d60f66da4d431d01bf967407df1",
+      "source_blob_oid": "247842e842830be4a820b3e651ed26d467fca8b0",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-memory-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-memory-red.log",
+      "bytes": 5846,
+      "sha256": "d1f6d00320ddd41705223c4cd399e5db76ad9dae657581aa30481617e82092e3",
+      "source_blob_oid": "61dc451c0e561774a7d64e900f1e23df83365bde",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-migration-tests.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-migration-tests.log",
+      "bytes": 5174,
+      "sha256": "46e29be4de0261e751f7b7045bdffe55ed5db9bf35dd047c9bc76b0a79264ae7",
+      "source_blob_oid": "18bab16f57a1c2b87453f26c2a2e7747aa4f5385",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-postgres-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-postgres-red.log",
+      "bytes": 1040,
+      "sha256": "14ad425ada26b775bddcbff9bffd215fe57e7b1422d54e7e6695c22328a9d682",
+      "source_blob_oid": "11c64b49dc5100e607977a236a40f52184a5588d",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-replay-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-replay-red.log",
+      "bytes": 1013,
+      "sha256": "7f2c0648dcef5a5351341ab0e844617272719839a2c1046eaf0d7e15df14a36b",
+      "source_blob_oid": "4932e06a3691f38f30816939486e3ca2ab822e31",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-result-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-result-red.log",
+      "bytes": 1051,
+      "sha256": "70ec3f01c617a427b1a83b6b7d350d9eb79c88fd686794e6b4079b6f1f5cc4ad",
+      "source_blob_oid": "79b2c5eadb4fb5c324634abce8fe77c08fe407c2",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review1-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review1-red.log",
+      "bytes": 3105,
+      "sha256": "f0fa24f48a1358be49d3251437ac0bd229befb2df48126d95e0de733e1ec90a3",
+      "source_blob_oid": "f589e248d16db526a1cbcdeeb97525b71aa7e9c3",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review2-composition-red.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review2-composition-red.log",
+      "bytes": 1043,
+      "sha256": "e73cc072f1fb9c6d52da102e87cca9b32b21b12f8d1962818c24e2d8bb41dd0b",
+      "source_blob_oid": "03135151946a4f0e5a9ec4b79b11ccba9709b32b",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review2-recovery-green-2.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review2-recovery-green-2.log",
+      "bytes": 620,
+      "sha256": "69c8cd0d3d15780996617784f99c4c9547082d1a3c6f06fade6f11ba1700cb9e",
+      "source_blob_oid": "42de0f2cb9149f3e65bc086b0dc162f4e41c2e51",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review2-replay.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review2-replay.log",
+      "bytes": 14632,
+      "sha256": "603c5577923e2b1d6a92ac93aacf7069174ab19af18dbec598a82d29a08f00ce",
+      "source_blob_oid": "318eaf32075e31d1f2ee56efa03c6ee6cfe21462",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review3-focused.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review3-focused.log",
+      "bytes": 621,
+      "sha256": "db1ed3a096b98ff4513b8b8ac17efc89702e4c78d08fe3fbfce1021e4f92f1e6",
+      "source_blob_oid": "be44704d1362fcd52f6696b0e1e18e34413956bb",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review3-independent.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review3-independent.log",
+      "bytes": 631,
+      "sha256": "4629664592ddb4d4ba9ed9da28d774d94b9a3de01367deb3d86e26d46e90c314",
+      "source_blob_oid": "a4ee277fb549d5eefc7fc62014c8ca0e588c82b2",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-evidence/r08-review3-sql-probe.log",
+      "archive_path": "records/reef/.planning/R08-evidence/r08-review3-sql-probe.log",
+      "bytes": 560,
+      "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615",
+      "source_blob_oid": "07b54bf4b22c3866b1a456addd0e6b20e0f4b205",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-ledger.md",
+      "archive_path": "records/reef/.planning/R08-ledger.md",
+      "bytes": 7396,
+      "sha256": "c11b345523ae3cccf1479e63a3b95757ff7346f4fdb9fb6b2eee26c8908557d2",
+      "source_blob_oid": "e6c6b21edeff648d24e03fca9e7afd92ea89f0bb",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-plan.md",
+      "archive_path": "records/reef/.planning/R08-plan.md",
+      "bytes": 956,
+      "sha256": "ae60a179835d527b7b2dc0b605962f138dae158ca05909ffea5f096f879a8557",
+      "source_blob_oid": "c3c2b52d39b1a80f7d6216be5b435fb1f8954534",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-pr.md",
+      "archive_path": "records/reef/.planning/R08-pr.md",
+      "bytes": 1639,
+      "sha256": "5f972afd3c517ce2bbf1560da0c8300dbc1b9baea8d04e33fc39f0f24d8aff5e",
+      "source_blob_oid": "fcca96da2884506a70c2d664c4c7c0a6f503b683",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-review-1.md",
+      "archive_path": "records/reef/.planning/R08-review-1.md",
+      "bytes": 1612,
+      "sha256": "84660857a88b84936072e55a7e8525a91edb9a512dbf5f9b53f6592fcfd0956c",
+      "source_blob_oid": "098ab5a56e5d4998726c2fc6f56e38b41476fede",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-review-2.md",
+      "archive_path": "records/reef/.planning/R08-review-2.md",
+      "bytes": 1661,
+      "sha256": "1792e2f88f5c1f53d0abd6a579511804955edc1e9846dad27e2a1f6995b39eed",
+      "source_blob_oid": "1d6d12bca8659743d5721352630663d9838585c2",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-review-3.md",
+      "archive_path": "records/reef/.planning/R08-review-3.md",
+      "bytes": 2102,
+      "sha256": "6b3c31e55a347c77201bec61e67006e29693fe3503a0de197e6aa49c2b69f13c",
+      "source_blob_oid": "27c6bd009ac1b165a571ab9da4033dcfc31aeb7c",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/R08-review-bootstrap.md",
+      "archive_path": "records/reef/.planning/R08-review-bootstrap.md",
+      "bytes": 6577,
+      "sha256": "8e45365b43d295e9d42cafaba78ac6d077ecdfe71752602ba42ab0eaaecda4e4",
+      "source_blob_oid": "e0016379b5b76af5b8f32585d5d9df60b2b426b3",
+      "reason": "Completed R08 implementation/review history; latest complete verification rehomed in Reef"
+    },
+    {
+      "source_path": ".planning/calcify-10k-timebox/findings.md",
+      "archive_path": "records/reef/.planning/calcify-10k-timebox/findings.md",
+      "bytes": 502,
+      "sha256": "fd9cd27367aeb8ecdf8683f6438ab518bf1cdc10114830e7ad3c7daf55a53b0f",
+      "source_blob_oid": "5dbe273896e3d77b55cd97099df52e731f312c84",
+      "reason": "Completed timed campaign scratch planning; current findings and open tasks retained in owner docs"
+    },
+    {
+      "source_path": ".planning/calcify-10k-timebox/progress.md",
+      "archive_path": "records/reef/.planning/calcify-10k-timebox/progress.md",
+      "bytes": 1707,
+      "sha256": "8d45e98618385260715d422ffd1f58b7065639b6e6c7d08e6ce63b0d3ad7c3b6",
+      "source_blob_oid": "88c4d4ea630f4d78598c0cfed3a77affe476da24",
+      "reason": "Completed timed campaign scratch planning; current findings and open tasks retained in owner docs"
+    },
+    {
+      "source_path": ".planning/calcify-10k-timebox/task_plan.md",
+      "archive_path": "records/reef/.planning/calcify-10k-timebox/task_plan.md",
+      "bytes": 951,
+      "sha256": "edbf9509b77057fbf55e017b092bd0a770750929c03c38f2064d49f88170e430",
+      "source_blob_oid": "1bc195bdbca7f0781b49d1e6a430345725ebbba7",
+      "reason": "Completed timed campaign scratch planning; current findings and open tasks retained in owner docs"
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/README.md",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/README.md",
+      "bytes": 7268,
+      "sha256": "40d64c6cb4c82da6257fb75e6c689c34b6d93087b39551126ea641dced7d5030",
+      "source_blob_oid": "9ac8ed0517674364780b5621a2bde3d997c98460",
+      "reason": "Superseded handoff/navigation; current Phase 2 owners and exact original checksum companion preserved"
+    },
+    {
+      "source_path": "docs/work/handoffs/2026-09-30-calcify-phase2.md",
+      "archive_path": "records/reef/docs/work/handoffs/2026-09-30-calcify-phase2.md",
+      "bytes": 15910,
+      "sha256": "22cc436356b2995eb4742d4718f195a1a72664548e90f89d1309e09787b179aa",
+      "source_blob_oid": "1eb38560814febc5235b9fe0ffd767f7c793985d",
+      "reason": "Superseded handoff/navigation; current Phase 2 owners and exact original checksum companion preserved"
+    },
+    {
+      "source_path": "docs/work/open-code-review-pilot.md",
+      "archive_path": "records/reef/docs/work/open-code-review-pilot.md",
+      "bytes": 5795,
+      "sha256": "d06caee1df1a5596415d072e80fa4638c9b7015dc53455394b36d6efb58d0c7d",
+      "source_blob_oid": "a3218c359ed75184672d7a9c4de3bdc056b3eec3",
+      "reason": "Dated pilot evidence; operating guidance promoted to CI Operations"
+    }
+  ],
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "6b838e5287c5428c914f6577ff176c1cd03c44ec",
+  "archive_manifest": "manifests/2026-10-02-reef-second-pass.json",
+  "redirect_paths": [
+    "docs/evidence/calcify-phase2-implementation/README.md"
+  ]
+}
