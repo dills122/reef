@@ -4,6 +4,451 @@
   "selection_reason": "Carry forward prior latest bundles unchanged; add first Calcify financial E0 checkpoint with frozen inputs, exact execution provenance, failed attempts, corrections and tool/runtime blockers; no superseded financial sprint bundle exists. October3 correction: independent review1 and author disposition retained; recorder byte-capture fix/tests added, prior raw bytes preserved. Review2 scoped ready verdict and author disposition retained; no material post-review changes.",
   "files": [
     {
+      "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
+      "bytes": 139,
+      "sha256": "047bd7f39869e6532c7f0376e5247a48d20348ef61eaa8660788b96be8eedade"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/.gitignore",
+      "bytes": 6,
+      "sha256": "f87a55f7f84a960a099c32dd8535cea6ace3557ca4c1335062ac5f2ba35e78bc"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/README.md",
+      "bytes": 7367,
+      "sha256": "728c3fbd875a57a9488687c9296235957e618986acab2500197abf973d94bb80"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/SHA256SUMS",
+      "bytes": 19454,
+      "sha256": "1a8bc5177836f30c62e4ad549815652e4e09d07f71c25612f4d991aecb615469"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/broker-loss.log",
+      "bytes": 1807,
+      "sha256": "b9ddb5a83412569bfba94c7d37a7c40fc535d0c2c4c9e35608e9b838bb26f47f"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commands.log",
+      "bytes": 27132,
+      "sha256": "53722a57e287a9fe1805b33d04e594d69ee7007a2b829c1b1de1bb9e6e3c095b"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-first.log",
+      "bytes": 488,
+      "sha256": "85b21a492f467fecf115d70402737bb61d4207b9e8b576e552a1eb25e14b1bda"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-restored.log",
+      "bytes": 370,
+      "sha256": "914e525f8d15e930acfbf13bcab2b3b89075d25df68d1e3aa0a711d48a1c2b7c"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-first.log",
+      "bytes": 244,
+      "sha256": "c7a0ec57f3544448292e075b3f1c352b37cbc9b66821005010211f656d633b4b"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-restored.log",
+      "bytes": 850,
+      "sha256": "5cbe3d15a29a2e6ce6b5a741e1c3d5749ceeda8f2dfed8e8ebe8925311874036"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-first.log",
+      "bytes": 215,
+      "sha256": "2ac5c16f50253fad4d0d457df84d34aaa29e6b97ca81490236ec52812f9dbd29"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-restored.log",
+      "bytes": 850,
+      "sha256": "9c7e8d2a98304ae6756da770d096293dc639e5663fb85108e86307bb0ef096aa"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-owner.log",
+      "bytes": 1851,
+      "sha256": "a2c329c71270ae6eb06b953dc4eeb4348b5520a69e0bcaf01ca2630b256536e4"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-second.log",
+      "bytes": 2352,
+      "sha256": "cc90fea33ea2b36475b1d69bd90e4fecdac30a31835d52f5d4df66c90154fd76"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/live-recreation.log",
+      "bytes": 3420,
+      "sha256": "000b34c0a23d787bb1f9b6680dd4ebf1d6abbd931ca3db45b9982de9ba35272d"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/recreation-restored.log",
+      "bytes": 2047,
+      "sha256": "ecee34a7afe0ba7db61176b955c36b6236fbb2950868c2ab147b224d2a996f9a"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/results.json",
+      "bytes": 5024,
+      "sha256": "7344af759a354ed4fe2df7eebafa6e5606ec2cd1660eb58776b483eab347a2d2"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/retention-fault.log",
+      "bytes": 1605,
+      "sha256": "6be1367e51cb0a5c122919e1d23071bb2f8763b50166d653b23f7f4dc2a927fb"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-first.log",
+      "bytes": 244,
+      "sha256": "c7a0ec57f3544448292e075b3f1c352b37cbc9b66821005010211f656d633b4b"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-restored.log",
+      "bytes": 850,
+      "sha256": "086daf8356e531ce6c5bab753a6132c5ee5f0bf5805ffa32ff06bae6b107f62b"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-owner.log",
+      "bytes": 1941,
+      "sha256": "61d57f508afc1f18df10c15333f5a9b12d4885c0b9b759041f56bd0f4fcf27eb"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-successor.log",
+      "bytes": 1457,
+      "sha256": "04243459809f131ca4c17020c7b496f3f28e82de9a8a0b058cad282b128d91ee"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/commands.log",
+      "bytes": 4702,
+      "sha256": "8d065ffada469c226fadb59671b99955fb39762b0fc6b33f9ec5d6a1c9fa699a"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/hot-worker.log",
+      "bytes": 861,
+      "sha256": "e9238d54d3bfd2dca849decc1d8578d2804205d4ee468c839e809fbd82d9bf07"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/results.json",
+      "bytes": 2623,
+      "sha256": "6aca30eae2fc2ab6087b278c0c094482880843c1924ef75572f2acba8fc8bfb5"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/skew-worker.log",
+      "bytes": 1382,
+      "sha256": "fc7a9e78297cd96c13798fbcb4c7fbc40f6ae40e9ea27fcdb9bac4dd43f50a8d"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/spread-worker.log",
+      "bytes": 878,
+      "sha256": "b8c1c60ee02bcc7fe00e6cb75721761e2a9bd87cb80dcaf8aad7ab5895429462"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/commands.log",
+      "bytes": 145723,
+      "sha256": "df76c00a9021ad720e07277ff6cd9a1afcdf40d0808e45c77ee650e3dedbdc79"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/hot-worker.log",
+      "bytes": 2312,
+      "sha256": "1febf3fbdcf0c79e9a69ff371fc514f935443e98daa7e0b9caea8ff465daa004"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-sha256.txt",
+      "bytes": 74,
+      "sha256": "2183f3834a3747eb65c548cd3a6383e746a0accc99c5e2988deaba7e42919614"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-summary.txt",
+      "bytes": 11486,
+      "sha256": "def3d95da9fa022985c3eb041276904c5ca3f692184c78a94cc328d384ef5655"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/results.json",
+      "bytes": 1468,
+      "sha256": "750a1842a9d2e2002b88effbaf9978fd900d81b14f1abb24e0b2361f2e9badb4"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/commands.log",
+      "bytes": 145723,
+      "sha256": "62573c3b35a0bc9eae5aab8d839bc1f77c6f29338dc22aa13c071ce238f334b1"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/hot-worker.log",
+      "bytes": 2313,
+      "sha256": "f8e2cf8d4456377a646d0a02c307ece07299364902d581d1cc35e297d64ef7dc"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-sha256.txt",
+      "bytes": 74,
+      "sha256": "e3b06545e2c4791d3338111807a37a436d1857d7ce0c326153eff2d0f956ee51"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-summary.txt",
+      "bytes": 11486,
+      "sha256": "86d32ca97d1b3a54d68929d2a79ceb8a6046e641e1916d52e20e17742880eb5a"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/results.json",
+      "bytes": 1468,
+      "sha256": "f08cda03804a17d5adac3c2b97bf8dc79efdee0d68f4e8a490f5a40b1932b93c"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/fault-tests.log",
+      "bytes": 642,
+      "sha256": "9be68c08fc8f2d545b2c4408dc76ce9023f2b19616946b3fc299d027684336ab"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/full-path/cached-image-stage-failed.json",
+      "bytes": 277,
+      "sha256": "6b540b31db293780ddaf5fa83f3e52c1205a3d71d46705c2ac85f0ff8c6da067"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/full-path/cached-startup-validation-failed.log",
+      "bytes": 29753,
+      "sha256": "ac651d94190086a950fcaf4d108248490913e50c67a748bd2f7c0fc0415bbc09"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/full-path/image-manifest.json",
+      "bytes": 968,
+      "sha256": "54a56e3c60cdb879d66ab03ee061518ea8cce3f130c6dcc3139ed8465e4d4cec"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/full-path/null-key-validation-failed.log",
+      "bytes": 29626,
+      "sha256": "6a0810858a3bd982d4cc80706003ca9004c709efe8ec66391c900376af12d7ab"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/full-path/passed.log",
+      "bytes": 29874,
+      "sha256": "358c9107a5970b6b380fafb3904cc9dbfd081a60394bd3a00f782071ea701b4c"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/full-path/registry-build-failed.log",
+      "bytes": 23895,
+      "sha256": "21369c59a01982bf2a690d26ff05977c2a5d93af2440ab8cdfa280f290ae722c"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/broker-shutdown.log",
+      "bytes": 1070,
+      "sha256": "3ed5d79dbe3f334e6f8efbe1a1712a567e1bdc47bb708555e58e5e6436b51f59"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/brokers-before-shutdown.jsonl",
+      "bytes": 4602,
+      "sha256": "4337c6cafa80ffce97e4eeb2e02bd5044cffe18b0cca42f1cf0b301d289efac8"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/containers-after.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/go-race.log",
+      "bytes": 1059,
+      "sha256": "1f1b2340c6b84fdfa23328433f90394915cfd4bc61cb288effaf42d4d00f348a"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-after.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-before.txt",
+      "bytes": 108,
+      "sha256": "1ad9a607c8ebd028cdf57b966d8430813f90abf4a81f6b5c81cc1209287df216"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/proto-governance.log",
+      "bytes": 94,
+      "sha256": "5ecf82871f187c92f0251abcdc0bd6e78a825cc75a86a37c086dcfccf94304c6"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/tooling-checks.json",
+      "bytes": 642,
+      "sha256": "7f00896f38be1f9d42b6e403a09ed75dc9f2aecf2a78b78f730ed74409a04967"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/verification.json",
+      "bytes": 1009,
+      "sha256": "6f25e4bf36df2c88d9ab40fa0e91528fa3f6fc780ee42353c48b677371f931f8"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/paired-source-fixture.jsonl",
+      "bytes": 347968,
+      "sha256": "0fe928629da50546192b60d334a1c7301bb8c0205215cad144289e9f495d982e"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/platform-check-handoff.log",
+      "bytes": 684,
+      "sha256": "3b763c33c4814d978e14540e027192f0b1e3adc9c3a8b8370afce318a060ff23"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/cold-restored.log",
+      "bytes": 3943,
+      "sha256": "8274ce54c782ab5c48f64046d94a71893a33d094375b391b6b90c471166b4c8a"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/commands.log",
+      "bytes": 5795,
+      "sha256": "50ea7f7deb739f1a0de8b8a40eadf87fc300135a001d4f68d3b647a0628eb6e1"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/initial.log",
+      "bytes": 14154,
+      "sha256": "4bd281985a5817e8e5b87ad18188f60a6b22e628d80fc4152a1f8c0b5941b1f7"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/result.json",
+      "bytes": 4131,
+      "sha256": "e3ae9bc86340b1a5b9c6a54c57da841f84bd616ab00188630ea08ec14a88f93e"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/review-findings.md",
+      "bytes": 4013,
+      "sha256": "e8cff2e0acc5220ef54fc35420c3ed9f54af95a93f65c266368cb467e17978b4"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/commands.log",
+      "bytes": 584,
+      "sha256": "de9e91ef7e1cfa8500bd63ebabf27a55fdd3667a98abf549c37b6311c1d325b2"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/frozen-policy.json",
+      "bytes": 33746,
+      "sha256": "1bdc96a6b760c216ddb607a13c3a26108bdffb0f9eec23f52ea1da9d4d118c5f"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/harness-source.mjs",
+      "bytes": 8090,
+      "sha256": "d4b0d840e17c0c1af4f96798613e034ff7f9280c7cf5ea528197e90a80123535"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-observer.log",
+      "bytes": 41191,
+      "sha256": "9ab9e1ffaaa5500fd155c8e816126cd7af62d46e05ed71f60084b30760129040"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-worker.log",
+      "bytes": 49340,
+      "sha256": "ecb145736a05bf0ded55e8532bdf31eb0b609171fb1d63525136212366f96f95"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-cleanup.log",
+      "bytes": 342,
+      "sha256": "b686f94c786b23bdd63d175b8b56afe372d1baa087b6eb3b3753ffea78c90c21"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-init.log",
+      "bytes": 186,
+      "sha256": "2c58b87a0350a39bb1c3b5f4891defeeb9a785e84aa11a466dc9ddb21253bf58"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-oracle.log",
+      "bytes": 423,
+      "sha256": "66dacd49a6d045a59cd8493fc41290bf1bd33a8db5fedd2c1e6ae5c77bb3e985"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-seed.log",
+      "bytes": 4640094,
+      "sha256": "c05d37b8c83700c5da7cef06446947fe040692f656900e52684ce9aa85c6f41c"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/results.json",
+      "bytes": 85982,
+      "sha256": "a87016fbddc4189a52759f71fa1c58c22395dec0bda4e9bf3f0da87c2534ce54"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2/hidden-run-source-fixture.jsonl",
+      "bytes": 3134,
+      "sha256": "a28878840fedf884d5841ae0f60b97bb15a8246c67fad39e0577836389aafe1d"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2/manifest.json",
+      "bytes": 1995,
+      "sha256": "976dda57dcfc12ed2d85795fd010559038c0a93afd42325a2117cfca1ce62fd7"
+    },
+    {
+      "path": "docs/evidence/calcify-phase2/source-fixture.jsonl",
+      "bytes": 213801,
+      "sha256": "4c322acd4de345bbff73d6e0c0f3e0ff50e3d94e75a3cf3823cbff3742ab9e37"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/README.md",
+      "bytes": 6013,
+      "sha256": "5e2b7c0143667621354478590dbca99230955c7b356eabc792cf7fe12d99c714"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/first-race-policy-assertion.log",
+      "bytes": 1618,
+      "sha256": "637a75b51d4b9232c131268681e34ab9cc93eec80c07d7347cb0ea200f565ff3"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/first-reservation-api-build.log",
+      "bytes": 1444,
+      "sha256": "10a604ac8321c542098d7e2f708d61075e52fc56d35029d2bb8dda4f626b68ae"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/green-focused.log",
+      "bytes": 159,
+      "sha256": "b236a3c05ae659c346117da68c68e694c133e21c6674a4b9fbd3f9e4ee873380"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/green-race-all.log",
+      "bytes": 1043,
+      "sha256": "0d78e24c5100371a312acb5f2c9b2323494a97beab741998a4cdda2b72f5f91d"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/green-race-pre-reservation.log",
+      "bytes": 1043,
+      "sha256": "3d576c33bc7fbf89ebd681feaaa80a072dfce69ba820c4bba8572387db8b949a"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/manifest.json",
+      "bytes": 3317,
+      "sha256": "2415e130dd21c1f68d18671e3188fdcbedee2548f191c15d9f7f7d1eaadb3d51"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/README.md",
+      "bytes": 2275,
+      "sha256": "1635fec3aceffdbff67547771e194c7ed64d11025abb38eb003b95131eef1031"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/green-race-all.log",
+      "bytes": 1043,
+      "sha256": "fa624522381877841ac29825aab3c58b690c1d82142999912fa9b201fa9d17cb"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/manifest.json",
+      "bytes": 1346,
+      "sha256": "337733919cb4ec2236061828b347dae1fd5f976c3bb48d72e5262f5de65dda8b"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/run.json",
+      "bytes": 172,
+      "sha256": "3e4b6953d74bdc7b59039fd4c8b227a4736f83c4c24c2f8f2fc6094d0b936089"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/red-batch-cut.log",
+      "bytes": 480,
+      "sha256": "fbeead0f77261a731ee29c5bac6e467de51a58bd7ba6f61a0c7e1665540f230a"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/red-multibook-preimage.log",
+      "bytes": 986,
+      "sha256": "93167abbd0ec92dc3669fc37350887e6ea1715d0fda42a3296c211f567f12f7d"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/red-provisional-reservation.log",
+      "bytes": 357,
+      "sha256": "bb5fbfca4c634022ca9f755c35e0b0316990276b8674fe1c91a0795ba145adee"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/red.log",
+      "bytes": 846,
+      "sha256": "091e24f0955c354016e20077eb7586385807f77528f531aa3fc053f42b71ec79"
+    },
+    {
+      "path": "docs/evidence/terminal-retention-replay-fix/review.md",
+      "bytes": 968,
+      "sha256": "6b4ea1ddf82ff051896bf2d5c3cc18cea03f5c167797c0c095e4e7e389bb4218"
+    },
+    {
       "path": "docs/evidence/README.md",
       "bytes": 1267,
       "sha256": "0f0b42fe30a333c5427ab05a5fa03eae27fbaa03a7f242348a1662695d9d889d"
@@ -1144,6 +1589,76 @@
       "sha256": "c3735c34e70c69fa9cc1d72863c0aeb3eabd33bf0697ada530ef56cba44efe0e"
     },
     {
+      "path": "docs/evidence/runtime-order-identity/R08-ci-followup.md",
+      "bytes": 2880,
+      "sha256": "31ba25c5356d56420124da048733f818c9f1b7f99643629394cfc9d13af4857d"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/R08-review-3.md",
+      "bytes": 2102,
+      "sha256": "6b3c31e55a347c77201bec61e67006e29693fe3503a0de197e6aa49c2b69f13c"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/README.md",
+      "bytes": 1378,
+      "sha256": "4b250514823b3e8ad707e87211f0ef20653cf6de2b604ba7449852a8433ca484"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/provenance.json",
+      "bytes": 3493,
+      "sha256": "24286bb05cee346dd7ad7525c9d539a476968ea8fc587e51f5307db056386ce6"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-check-review3.log",
+      "bytes": 675,
+      "sha256": "07552fa6990d0a2ac255b6344fb1c740218ec1cbc3643338c3f12a9f0fe85d4f"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-arena-container-final.log",
+      "bytes": 4297,
+      "sha256": "1e6e7642623a3b57aeb01a23be57873a5bcd7ef25af4468276b3ab1c88f964fb"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-container-final.log",
+      "bytes": 39964,
+      "sha256": "94c5f445a59cb0d3158d377224a09b687ca422c236b50282a6daf7cc8d521e86"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-missing-resource-fixed.log",
+      "bytes": 969,
+      "sha256": "fcec238e0f2d038cbb4cf7e1ff6f8b569ad2aceb6f14d83fa3104d476b10df1c"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-node.log",
+      "bytes": 6253,
+      "sha256": "e239a9818fc5e48e563deb4343d7cf1a86021e6da97ee55d6bd8ba0ff9abb4b9"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-ci-schema-green.log",
+      "bytes": 899,
+      "sha256": "543e851f065082469c98ad39c9c5ed867750f456bc9084e6fc2157a6b3cbdabb"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-migration-tests.log",
+      "bytes": 5174,
+      "sha256": "46e29be4de0261e751f7b7045bdffe55ed5db9bf35dd047c9bc76b0a79264ae7"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-review3-focused.log",
+      "bytes": 621,
+      "sha256": "db1ed3a096b98ff4513b8b8ac17efc89702e4c78d08fe3fbfce1021e4f92f1e6"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-review3-independent.log",
+      "bytes": 631,
+      "sha256": "4629664592ddb4d4ba9ed9da28d774d94b9a3de01367deb3d86e26d46e90c314"
+    },
+    {
+      "path": "docs/evidence/runtime-order-identity/r08-review3-sql-probe.log",
+      "bytes": 560,
+      "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615"
+    },
+    {
       "path": "docs/evidence/calcify-financial-sprint1/.gitattributes",
       "bytes": 94,
       "sha256": "ea167b2e4063804fb969e78f433c3d6ecc0ef5d392c426e153811453a3bd1ee8"
@@ -1627,521 +2142,6 @@
       "path": "docs/evidence/calcify-financial-sprint1/reviews/instance-2.md",
       "bytes": 11409,
       "sha256": "1eee9009ce88f4e9201ac5125cc0a25ca6e4f04bbf5f4ea3a7be12ac9a9abb17"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
-      "bytes": 139,
-      "sha256": "047bd7f39869e6532c7f0376e5247a48d20348ef61eaa8660788b96be8eedade"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/.gitignore",
-      "bytes": 6,
-      "sha256": "f87a55f7f84a960a099c32dd8535cea6ace3557ca4c1335062ac5f2ba35e78bc"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/README.md",
-      "bytes": 7367,
-      "sha256": "728c3fbd875a57a9488687c9296235957e618986acab2500197abf973d94bb80"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/SHA256SUMS",
-      "bytes": 19454,
-      "sha256": "1a8bc5177836f30c62e4ad549815652e4e09d07f71c25612f4d991aecb615469"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/broker-loss.log",
-      "bytes": 1807,
-      "sha256": "b9ddb5a83412569bfba94c7d37a7c40fc535d0c2c4c9e35608e9b838bb26f47f"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commands.log",
-      "bytes": 27132,
-      "sha256": "53722a57e287a9fe1805b33d04e594d69ee7007a2b829c1b1de1bb9e6e3c095b"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-first.log",
-      "bytes": 488,
-      "sha256": "85b21a492f467fecf115d70402737bb61d4207b9e8b576e552a1eb25e14b1bda"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-restored.log",
-      "bytes": 370,
-      "sha256": "914e525f8d15e930acfbf13bcab2b3b89075d25df68d1e3aa0a711d48a1c2b7c"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-first.log",
-      "bytes": 244,
-      "sha256": "c7a0ec57f3544448292e075b3f1c352b37cbc9b66821005010211f656d633b4b"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-restored.log",
-      "bytes": 850,
-      "sha256": "5cbe3d15a29a2e6ce6b5a741e1c3d5749ceeda8f2dfed8e8ebe8925311874036"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-first.log",
-      "bytes": 215,
-      "sha256": "2ac5c16f50253fad4d0d457df84d34aaa29e6b97ca81490236ec52812f9dbd29"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-restored.log",
-      "bytes": 850,
-      "sha256": "9c7e8d2a98304ae6756da770d096293dc639e5663fb85108e86307bb0ef096aa"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-owner.log",
-      "bytes": 1851,
-      "sha256": "a2c329c71270ae6eb06b953dc4eeb4348b5520a69e0bcaf01ca2630b256536e4"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-second.log",
-      "bytes": 2352,
-      "sha256": "cc90fea33ea2b36475b1d69bd90e4fecdac30a31835d52f5d4df66c90154fd76"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/live-recreation.log",
-      "bytes": 3420,
-      "sha256": "000b34c0a23d787bb1f9b6680dd4ebf1d6abbd931ca3db45b9982de9ba35272d"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/recreation-restored.log",
-      "bytes": 2047,
-      "sha256": "ecee34a7afe0ba7db61176b955c36b6236fbb2950868c2ab147b224d2a996f9a"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/results.json",
-      "bytes": 5024,
-      "sha256": "7344af759a354ed4fe2df7eebafa6e5606ec2cd1660eb58776b483eab347a2d2"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/retention-fault.log",
-      "bytes": 1605,
-      "sha256": "6be1367e51cb0a5c122919e1d23071bb2f8763b50166d653b23f7f4dc2a927fb"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-first.log",
-      "bytes": 244,
-      "sha256": "c7a0ec57f3544448292e075b3f1c352b37cbc9b66821005010211f656d633b4b"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-restored.log",
-      "bytes": 850,
-      "sha256": "086daf8356e531ce6c5bab753a6132c5ee5f0bf5805ffa32ff06bae6b107f62b"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-owner.log",
-      "bytes": 1941,
-      "sha256": "61d57f508afc1f18df10c15333f5a9b12d4885c0b9b759041f56bd0f4fcf27eb"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-successor.log",
-      "bytes": 1457,
-      "sha256": "04243459809f131ca4c17020c7b496f3f28e82de9a8a0b058cad282b128d91ee"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/commands.log",
-      "bytes": 4702,
-      "sha256": "8d065ffada469c226fadb59671b99955fb39762b0fc6b33f9ec5d6a1c9fa699a"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/hot-worker.log",
-      "bytes": 861,
-      "sha256": "e9238d54d3bfd2dca849decc1d8578d2804205d4ee468c839e809fbd82d9bf07"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/results.json",
-      "bytes": 2623,
-      "sha256": "6aca30eae2fc2ab6087b278c0c094482880843c1924ef75572f2acba8fc8bfb5"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/skew-worker.log",
-      "bytes": 1382,
-      "sha256": "fc7a9e78297cd96c13798fbcb4c7fbc40f6ae40e9ea27fcdb9bac4dd43f50a8d"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/spread-worker.log",
-      "bytes": 878,
-      "sha256": "b8c1c60ee02bcc7fe00e6cb75721761e2a9bd87cb80dcaf8aad7ab5895429462"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/commands.log",
-      "bytes": 145723,
-      "sha256": "df76c00a9021ad720e07277ff6cd9a1afcdf40d0808e45c77ee650e3dedbdc79"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/hot-worker.log",
-      "bytes": 2312,
-      "sha256": "1febf3fbdcf0c79e9a69ff371fc514f935443e98daa7e0b9caea8ff465daa004"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-sha256.txt",
-      "bytes": 74,
-      "sha256": "2183f3834a3747eb65c548cd3a6383e746a0accc99c5e2988deaba7e42919614"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-summary.txt",
-      "bytes": 11486,
-      "sha256": "def3d95da9fa022985c3eb041276904c5ca3f692184c78a94cc328d384ef5655"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/results.json",
-      "bytes": 1468,
-      "sha256": "750a1842a9d2e2002b88effbaf9978fd900d81b14f1abb24e0b2361f2e9badb4"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/commands.log",
-      "bytes": 145723,
-      "sha256": "62573c3b35a0bc9eae5aab8d839bc1f77c6f29338dc22aa13c071ce238f334b1"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/hot-worker.log",
-      "bytes": 2313,
-      "sha256": "f8e2cf8d4456377a646d0a02c307ece07299364902d581d1cc35e297d64ef7dc"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-sha256.txt",
-      "bytes": 74,
-      "sha256": "e3b06545e2c4791d3338111807a37a436d1857d7ce0c326153eff2d0f956ee51"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-summary.txt",
-      "bytes": 11486,
-      "sha256": "86d32ca97d1b3a54d68929d2a79ceb8a6046e641e1916d52e20e17742880eb5a"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/results.json",
-      "bytes": 1468,
-      "sha256": "f08cda03804a17d5adac3c2b97bf8dc79efdee0d68f4e8a490f5a40b1932b93c"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/fault-tests.log",
-      "bytes": 642,
-      "sha256": "9be68c08fc8f2d545b2c4408dc76ce9023f2b19616946b3fc299d027684336ab"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/full-path/cached-image-stage-failed.json",
-      "bytes": 277,
-      "sha256": "6b540b31db293780ddaf5fa83f3e52c1205a3d71d46705c2ac85f0ff8c6da067"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/full-path/cached-startup-validation-failed.log",
-      "bytes": 29753,
-      "sha256": "ac651d94190086a950fcaf4d108248490913e50c67a748bd2f7c0fc0415bbc09"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/full-path/image-manifest.json",
-      "bytes": 968,
-      "sha256": "54a56e3c60cdb879d66ab03ee061518ea8cce3f130c6dcc3139ed8465e4d4cec"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/full-path/null-key-validation-failed.log",
-      "bytes": 29626,
-      "sha256": "6a0810858a3bd982d4cc80706003ca9004c709efe8ec66391c900376af12d7ab"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/full-path/passed.log",
-      "bytes": 29874,
-      "sha256": "358c9107a5970b6b380fafb3904cc9dbfd081a60394bd3a00f782071ea701b4c"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/full-path/registry-build-failed.log",
-      "bytes": 23895,
-      "sha256": "21369c59a01982bf2a690d26ff05977c2a5d93af2440ab8cdfa280f290ae722c"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/broker-shutdown.log",
-      "bytes": 1070,
-      "sha256": "3ed5d79dbe3f334e6f8efbe1a1712a567e1bdc47bb708555e58e5e6436b51f59"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/brokers-before-shutdown.jsonl",
-      "bytes": 4602,
-      "sha256": "4337c6cafa80ffce97e4eeb2e02bd5044cffe18b0cca42f1cf0b301d289efac8"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/containers-after.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/go-race.log",
-      "bytes": 1059,
-      "sha256": "1f1b2340c6b84fdfa23328433f90394915cfd4bc61cb288effaf42d4d00f348a"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-after.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-before.txt",
-      "bytes": 108,
-      "sha256": "1ad9a607c8ebd028cdf57b966d8430813f90abf4a81f6b5c81cc1209287df216"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/proto-governance.log",
-      "bytes": 94,
-      "sha256": "5ecf82871f187c92f0251abcdc0bd6e78a825cc75a86a37c086dcfccf94304c6"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/tooling-checks.json",
-      "bytes": 642,
-      "sha256": "7f00896f38be1f9d42b6e403a09ed75dc9f2aecf2a78b78f730ed74409a04967"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/verification.json",
-      "bytes": 1009,
-      "sha256": "6f25e4bf36df2c88d9ab40fa0e91528fa3f6fc780ee42353c48b677371f931f8"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/paired-source-fixture.jsonl",
-      "bytes": 347968,
-      "sha256": "0fe928629da50546192b60d334a1c7301bb8c0205215cad144289e9f495d982e"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/platform-check-handoff.log",
-      "bytes": 684,
-      "sha256": "3b763c33c4814d978e14540e027192f0b1e3adc9c3a8b8370afce318a060ff23"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/cold-restored.log",
-      "bytes": 3943,
-      "sha256": "8274ce54c782ab5c48f64046d94a71893a33d094375b391b6b90c471166b4c8a"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/commands.log",
-      "bytes": 5795,
-      "sha256": "50ea7f7deb739f1a0de8b8a40eadf87fc300135a001d4f68d3b647a0628eb6e1"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/initial.log",
-      "bytes": 14154,
-      "sha256": "4bd281985a5817e8e5b87ad18188f60a6b22e628d80fc4152a1f8c0b5941b1f7"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/result.json",
-      "bytes": 4131,
-      "sha256": "e3ae9bc86340b1a5b9c6a54c57da841f84bd616ab00188630ea08ec14a88f93e"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/review-findings.md",
-      "bytes": 4013,
-      "sha256": "e8cff2e0acc5220ef54fc35420c3ed9f54af95a93f65c266368cb467e17978b4"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/commands.log",
-      "bytes": 584,
-      "sha256": "de9e91ef7e1cfa8500bd63ebabf27a55fdd3667a98abf549c37b6311c1d325b2"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/frozen-policy.json",
-      "bytes": 33746,
-      "sha256": "1bdc96a6b760c216ddb607a13c3a26108bdffb0f9eec23f52ea1da9d4d118c5f"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/harness-source.mjs",
-      "bytes": 8090,
-      "sha256": "d4b0d840e17c0c1af4f96798613e034ff7f9280c7cf5ea528197e90a80123535"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-observer.log",
-      "bytes": 41191,
-      "sha256": "9ab9e1ffaaa5500fd155c8e816126cd7af62d46e05ed71f60084b30760129040"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-worker.log",
-      "bytes": 49340,
-      "sha256": "ecb145736a05bf0ded55e8532bdf31eb0b609171fb1d63525136212366f96f95"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-cleanup.log",
-      "bytes": 342,
-      "sha256": "b686f94c786b23bdd63d175b8b56afe372d1baa087b6eb3b3753ffea78c90c21"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-init.log",
-      "bytes": 186,
-      "sha256": "2c58b87a0350a39bb1c3b5f4891defeeb9a785e84aa11a466dc9ddb21253bf58"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-oracle.log",
-      "bytes": 423,
-      "sha256": "66dacd49a6d045a59cd8493fc41290bf1bd33a8db5fedd2c1e6ae5c77bb3e985"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-seed.log",
-      "bytes": 4640094,
-      "sha256": "c05d37b8c83700c5da7cef06446947fe040692f656900e52684ce9aa85c6f41c"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/results.json",
-      "bytes": 85982,
-      "sha256": "a87016fbddc4189a52759f71fa1c58c22395dec0bda4e9bf3f0da87c2534ce54"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2/hidden-run-source-fixture.jsonl",
-      "bytes": 3134,
-      "sha256": "a28878840fedf884d5841ae0f60b97bb15a8246c67fad39e0577836389aafe1d"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2/manifest.json",
-      "bytes": 1995,
-      "sha256": "976dda57dcfc12ed2d85795fd010559038c0a93afd42325a2117cfca1ce62fd7"
-    },
-    {
-      "path": "docs/evidence/calcify-phase2/source-fixture.jsonl",
-      "bytes": 213801,
-      "sha256": "4c322acd4de345bbff73d6e0c0f3e0ff50e3d94e75a3cf3823cbff3742ab9e37"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/R08-ci-followup.md",
-      "bytes": 2880,
-      "sha256": "31ba25c5356d56420124da048733f818c9f1b7f99643629394cfc9d13af4857d"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/R08-review-3.md",
-      "bytes": 2102,
-      "sha256": "6b3c31e55a347c77201bec61e67006e29693fe3503a0de197e6aa49c2b69f13c"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/README.md",
-      "bytes": 1378,
-      "sha256": "4b250514823b3e8ad707e87211f0ef20653cf6de2b604ba7449852a8433ca484"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/provenance.json",
-      "bytes": 3493,
-      "sha256": "24286bb05cee346dd7ad7525c9d539a476968ea8fc587e51f5307db056386ce6"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-check-review3.log",
-      "bytes": 675,
-      "sha256": "07552fa6990d0a2ac255b6344fb1c740218ec1cbc3643338c3f12a9f0fe85d4f"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-ci-arena-container-final.log",
-      "bytes": 4297,
-      "sha256": "1e6e7642623a3b57aeb01a23be57873a5bcd7ef25af4468276b3ab1c88f964fb"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-ci-container-final.log",
-      "bytes": 39964,
-      "sha256": "94c5f445a59cb0d3158d377224a09b687ca422c236b50282a6daf7cc8d521e86"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-ci-missing-resource-fixed.log",
-      "bytes": 969,
-      "sha256": "fcec238e0f2d038cbb4cf7e1ff6f8b569ad2aceb6f14d83fa3104d476b10df1c"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-ci-node.log",
-      "bytes": 6253,
-      "sha256": "e239a9818fc5e48e563deb4343d7cf1a86021e6da97ee55d6bd8ba0ff9abb4b9"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-ci-schema-green.log",
-      "bytes": 899,
-      "sha256": "543e851f065082469c98ad39c9c5ed867750f456bc9084e6fc2157a6b3cbdabb"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-migration-tests.log",
-      "bytes": 5174,
-      "sha256": "46e29be4de0261e751f7b7045bdffe55ed5db9bf35dd047c9bc76b0a79264ae7"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-review3-focused.log",
-      "bytes": 621,
-      "sha256": "db1ed3a096b98ff4513b8b8ac17efc89702e4c78d08fe3fbfce1021e4f92f1e6"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-review3-independent.log",
-      "bytes": 631,
-      "sha256": "4629664592ddb4d4ba9ed9da28d774d94b9a3de01367deb3d86e26d46e90c314"
-    },
-    {
-      "path": "docs/evidence/runtime-order-identity/r08-review3-sql-probe.log",
-      "bytes": 560,
-      "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/README.md",
-      "bytes": 6013,
-      "sha256": "5e2b7c0143667621354478590dbca99230955c7b356eabc792cf7fe12d99c714"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/first-race-policy-assertion.log",
-      "bytes": 1618,
-      "sha256": "637a75b51d4b9232c131268681e34ab9cc93eec80c07d7347cb0ea200f565ff3"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/first-reservation-api-build.log",
-      "bytes": 1444,
-      "sha256": "10a604ac8321c542098d7e2f708d61075e52fc56d35029d2bb8dda4f626b68ae"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/green-focused.log",
-      "bytes": 159,
-      "sha256": "b236a3c05ae659c346117da68c68e694c133e21c6674a4b9fbd3f9e4ee873380"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/green-race-all.log",
-      "bytes": 1043,
-      "sha256": "0d78e24c5100371a312acb5f2c9b2323494a97beab741998a4cdda2b72f5f91d"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/green-race-pre-reservation.log",
-      "bytes": 1043,
-      "sha256": "3d576c33bc7fbf89ebd681feaaa80a072dfce69ba820c4bba8572387db8b949a"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/manifest.json",
-      "bytes": 3317,
-      "sha256": "2415e130dd21c1f68d18671e3188fdcbedee2548f191c15d9f7f7d1eaadb3d51"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/README.md",
-      "bytes": 2275,
-      "sha256": "1635fec3aceffdbff67547771e194c7ed64d11025abb38eb003b95131eef1031"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/green-race-all.log",
-      "bytes": 1043,
-      "sha256": "fa624522381877841ac29825aab3c58b690c1d82142999912fa9b201fa9d17cb"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/manifest.json",
-      "bytes": 1346,
-      "sha256": "337733919cb4ec2236061828b347dae1fd5f976c3bb48d72e5262f5de65dda8b"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/run.json",
-      "bytes": 172,
-      "sha256": "3e4b6953d74bdc7b59039fd4c8b227a4736f83c4c24c2f8f2fc6094d0b936089"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/red-batch-cut.log",
-      "bytes": 480,
-      "sha256": "fbeead0f77261a731ee29c5bac6e467de51a58bd7ba6f61a0c7e1665540f230a"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/red-multibook-preimage.log",
-      "bytes": 986,
-      "sha256": "93167abbd0ec92dc3669fc37350887e6ea1715d0fda42a3296c211f567f12f7d"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/red-provisional-reservation.log",
-      "bytes": 357,
-      "sha256": "bb5fbfca4c634022ca9f755c35e0b0316990276b8674fe1c91a0795ba145adee"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/red.log",
-      "bytes": 846,
-      "sha256": "091e24f0955c354016e20077eb7586385807f77528f531aa3fc053f42b71ec79"
-    },
-    {
-      "path": "docs/evidence/terminal-retention-replay-fix/review.md",
-      "bytes": 968,
-      "sha256": "6b4ea1ddf82ff051896bf2d5c3cc18cea03f5c167797c0c095e4e7e389bb4218"
     }
   ]
 }
