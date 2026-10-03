@@ -137,3 +137,7 @@ retained canonical snapshots through normal projector. Replay/rebuild retain bot
 runs while old blank-run facts remain unchanged. Test uses two schemas in one
 dedicated DB; production database provisioning/cutover is an unexecuted operator
 step, not a qualified deployment.
+
+## Latest verification
+
+[Runtime order identity evidence](evidence/runtime-order-identity/README.md) retains final R08 verification and CI correction companions. Completed plans, earlier red attempts and reviews resolve through [Records retention](RECORDS_RETENTION.md#october-2-second-pass); current design and rollout guidance remain here.
