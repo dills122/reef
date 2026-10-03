@@ -12,7 +12,7 @@ Apply to every feature, fix, refactor and code-working session before PR/handoff
 4. Lift and shift superseded records into `reef-records` using [archive protocol](https://github.com/dills122/reef-records/blob/main/docs/ARCHIVE_POLICY.md): preserve bytes and paths, record source commit/hash/selection reason, publish and land archive, verify destination, then remove Reef copies and repair active links to immutable archive commits. Retain latest complete bundle per topic/profile, including failed latest attempts and necessary fixtures/corrections. Never keep only a favorable success or remove active dependencies to meet size targets.
 5. Update archive index and Reef relocation/retained-evidence inventory for actual moves; update relevant local navigation and reading guidance. Run retention checks, affected validation and link checks. PR/handoff records retained latest bundle, archive commit/PR and verification, or explicit no-op reason when no superseded material exists. Pass is required; artificial archive churn is not.
 
-Existing checker verifies October 2 inventory. Future migrations must extend checker to cover every new inventory and maintained latest-bundle selection; adding an unchecked JSON file does not complete retention gate. Preserve historical relocation facts while updating current retained-evidence selection with dated replacement/archive links.
+Checker loads every `docs/records/*-migration.json`, preserving historical relocation facts and each pinned archive commit. [`retained-evidence.json`](records/retained-evidence.json) owns current latest-bundle selection; retained lists embedded in older migration manifests remain historical snapshots. Update maintained inventory with dated replacement/archive reasons whenever bundles change. An unchecked inventory does not complete retention gate.
 
 Ordinary prior versions of continuously maintained code/docs stay in Git history. Archive standalone superseded records and evidence; do not snapshot whole repository for every edit. No automatic age-based purge or deletion of ignored local data.
 
@@ -32,6 +32,7 @@ If current work needs a durable lesson, add concise verified fact to current own
 - Phase 2 implementation: latest corrected broker fault cohort `broker-a9bc0494`; latest multi-shape short cohort `capacity-0ccfefa6`; last candidate `capacity-156d616c` and last producer-batch comparison `capacity-4c565d6d`; latest sustained attempt `sustained-8ea6c8ce`; latest large recovery `recovery-5545850c`; full-path and nightly-checkpoint bundles. Latest failed attempts remain failures; retention does not upgrade their qualification.
 - Latest master Calcify direct-throughput and joined-10k campaign bundles, including failed attempts, corrections, source manifests and current handoff. These are separate profiles from earlier phase diagnostics; campaign outcomes retain their recorded scope.
 - Complete terminal-retention red/green proof and latest PR review pass2.
+- [Runtime order identity](evidence/runtime-order-identity/README.md): final R08 local/real-DB/reviewer verification and CI follow-up with correction companions.
 - Source fixtures consumed by current scripts, original checksum/provenance manifests and correction notes. These are required companions, not obsolete bulk.
 
 Review retention when adding new evidence. Preserve complete bundles and older success/failure history in Records before replacing a local bundle. A current contract or unresolved active plan does not become historical because its filename is old. Imported original Markdown remains unchanged; its relative links refer to source checkout at recorded source commit.
@@ -43,6 +44,12 @@ Review retention when adding new evidence. Preserve complete bundles and older s
 `docs/archive/README.md` remains a small navigation pointer. September 4 `CURRENT_STATUS.md`, completed discovery/implementation reports, prior research, July run reports, projection-era plans and older probe cohorts are historical Records entries. Current execution remains in `WORK_PLAN.md`.
 
 Original `SHA256SUMS` and JSON manifests may name paths now archived. Resolve those paths through relocation inventory rather than rewriting recorded measurements or hashes. Offline checker validates local checksum entries; archived entries resolve through inventory. Use optional archive checkout check to validate pinned destination blobs.
+
+## October 2 second pass
+
+After syncing `master` to `76872e9db249152e0329393d73c4a2f850ea2b93`, 37 originals (15 Markdown files; 179,521 bytes) published in [Records PR #4](https://github.com/dills122/reef-records/pull/4), archive commit `6b838e5287c5428c914f6577ff176c1cd03c44ec`. [Second inventory](records/2026-10-02-second-pass-migration.json) covers completed R08 task history, closed Calcify campaign scratch plans, superseded September 30 handoff and dated OCR pilot evidence.
+
+Latest complete R08 verification rehomed under `docs/evidence/runtime-order-identity/` with exact-byte provenance. Active Calcify reports, plans and bundles remain local. Original Phase 2 evidence README archived before repairing local navigation; original `SHA256SUMS` resolves historical bytes through relocation inventory. Current pilot facts promoted into [CI Operations](CI_OPERATIONS.md#opt-in-opencodereview-pilot).
 
 ## Verify and restore
 

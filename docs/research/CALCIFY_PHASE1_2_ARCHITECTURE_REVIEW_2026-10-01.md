@@ -16,7 +16,7 @@ failure, that is quoted directly rather than summarized charitably.
 Calcify Phase 2 (PR #433, "feat(calcify): add Phase 2 full-fact resolver and
 run-scoped matching") is on `master` today in the exact state its own authors
 described as a **draft that must not merge**. The 2026-09-30 nightly handoff
-(`docs/work/handoffs/2026-09-30-calcify-phase2.md`) is explicit: *"Draft must
+([archived original](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/records/reef/docs/work/handoffs/2026-09-30-calcify-phase2.md)) is explicit: *"Draft must
 remain unmerged until blockers below close"* and lists two P1 (severity-1)
 correctness defects plus a sustained-capacity qualification that failed every
 attempt. The squash commit merged to master is the identical commit set
