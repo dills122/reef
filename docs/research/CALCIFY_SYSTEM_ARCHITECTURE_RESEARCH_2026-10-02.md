@@ -103,10 +103,11 @@ partition/thread/process boundaries. Pending continuations must be managed state
 ### Broker failure model
 
 **Fact:** Redpanda excludes transactions and consumer offsets from ordinary write
-caching. Official Cloud transaction docs describe removing deleted partitions from
-in-flight transactions; legacy Streaming23.3 docs additionally warn that remote
-recovery does not guarantee transaction atomicity.
+caching. Current Streaming transaction page labelled v26.2 describes removing
+deleted partitions from in-flight transactions and warns remote recovery does not
+guarantee transaction atomicity; Cloud/legacy sources also retain those caveats.
 [Write caching](https://docs.redpanda.com/streaming/current/develop/manage-topics/config-topics/#configure-write-caching),
+[Current Streaming transactions](https://docs.redpanda.com/streaming/current/develop/transactions/),
 [Cloud transactions](https://docs.redpanda.com/cloud-data-platform/develop/transactions/),
 [Streaming23.3 transactions](https://docs.redpanda.com/streaming/23.3/develop/transactions/).
 
@@ -116,6 +117,9 @@ included deletion/remote-recovery caveats at lines105/112; reviewer retrieval om
 them. Explicit26.2 URL failed retrieval. Neither Cloud/legacy wording nor this
 variable current-page view establishes tested26.2.3 behavior; qualify version and
 retain pinned-version proof rather than claiming blanket current-version guarantee.
+Follow-up v1 review and author recheck on October2 retrieved both caveats from current
+page at lines105/112. This strengthens current-document attribution, not tested
+deployment guarantees; prior differing retrievals remain evidence limits.
 
 **Inference:** topic UUID monitoring alone cannot prevent administrative deletion
 during a commit. Protect active histories with permissions/change control; certify
