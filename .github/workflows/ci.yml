@@ -339,6 +339,7 @@ jobs:
             scripts/dev/ci-workflow-hardening.test.mjs \
             scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/ci/check-required-results.test.mjs \
+            scripts/ci/build-container.test.mjs \
             scripts/dev/db/migrate.test.mjs \
             scripts/dev/container-images-workflow.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
@@ -536,8 +537,11 @@ jobs:
             dockerfile: infra/hetzner-core/server/deploy-receiver/Dockerfile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
       - name: Build ${{ matrix.name }} image
-        run: docker build -f "${{ matrix.dockerfile }}" -t "reef/${{ matrix.name }}:ci" "${{ matrix.context }}"
+        run: node scripts/ci/build-container.mjs -f "${{ matrix.dockerfile }}" -t "reef/${{ matrix.name }}:ci" "${{ matrix.context }}"
 
   infrastructure-config:
     needs: change-scope

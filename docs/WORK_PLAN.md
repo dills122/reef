@@ -18,6 +18,26 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## CI dependency throttling recovery (2026-10-02)
+
+Master `2af704d7` CI recovered on [failed-job rerun](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2).
+Initial stock-data Docker build failed on Maven Central HTTP 429 after green
+PR CI; required gate correctly failed. `codex/ci-maven-rate-limit` adds
+three-attempt bounded Docker retries for this exact dependency failure, with
+regressions wired into CI and local tooling. [CI Operations](CI_OPERATIONS.md#workflow-maintenance-rules)
+owns cause, source runs, protection check and retry limits.
+
+Local verification: exact Node CI suite passes 104 tests, zero failures/skips;
+local dev-tooling target, observed-failure classifier check, actionlint,
+script-surface check, offline Records retention and diff whitespace pass.
+Sandbox blocked localhost test listener on first full-suite attempt; same
+suite passed with localhost access. Hosted Docker builds remain PR CI checks.
+
+Completion pass: CI owner docs and board updated; aggregate gate and delivery
+invariants preserved. No runtime/API/event/storage/scenario changes, so contracts,
+architecture overviews and boundary steering remain applicable. No standalone
+record or retained evidence bundle superseded; archive pass is a no-op.
+
 ## Calcify joined10k checkpoint (2026-10-02)
 
 **Configuration correction:** campaign tested PostgreSQL-backed smoke ingress, not documented in-memory-intake/publish-pipeline performance shape. Intended fast-ingress+Calcify capacity remains unmeasured. Verify explicit profile/accounting before further tuning;7,708.36/s is scoped SQL-smoke result.

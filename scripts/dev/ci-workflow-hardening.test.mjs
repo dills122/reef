@@ -73,6 +73,8 @@ assert.match(
   "manual full-CI runs must exercise scenario replay",
 );
 assert.match(ci, /^permissions:\n  contents: read$/m);
+assert.match(jobBlocks(ci).get("container-builds"), /run: node scripts\/ci\/build-container\.mjs -f/);
+assert.match(jobBlocks(ci).get("node-dev-tooling"), /scripts\/ci\/build-container\.test\.mjs/);
 const idempotencyDbJob = jobBlocks(ci).get("calcify-tests");
 assert.match(idempotencyDbJob, /name: Run idempotency renewal tests against real Postgres/);
 for (const variable of ["RUNTIME_DB_URL_TEST", "RUNTIME_DB_USER_TEST", "RUNTIME_DB_PASSWORD_TEST"]) {
