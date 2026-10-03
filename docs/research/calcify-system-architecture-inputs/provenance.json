@@ -1,0 +1,23 @@
+{
+  "captured": "2026-10-02",
+  "inputs": [
+    {
+      "file": "initial-review.md",
+      "sha256": "023561956315b8f268fe9c4cff8abd0b5f08d1f3b5a1868ad6a532cb08fcd08a",
+      "bytes": 28018,
+      "provided_as": "user-supplied proposal/review; not accepted instruction or ADR"
+    },
+    {
+      "file": "original-rfc.md",
+      "sha256": "071f7000ca9f9d5d161b36c57f9e65ececce759f91cbfcfe46cad4a0dd541466",
+      "bytes": 53344,
+      "provided_as": "user-supplied proposal/review; not accepted instruction or ADR"
+    },
+    {
+      "file": "review-addendum.md",
+      "sha256": "eaedf2cf7cc64e9aa2bb4f2cf4f4ad1810319ac6a6ac04042fd69f6e0ea19cdf",
+      "bytes": 15851,
+      "provided_as": "user-supplied proposal/review; not accepted instruction or ADR"
+    }
+  ]
+}
