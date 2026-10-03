@@ -68,6 +68,12 @@ Checkpoint ranges narrow later pushes after completed trusted review. Missing/un
 
 ## Local Verification
 
+`calcify-tests` also runs boundary idempotency renewal integration tests against
+real PostgreSQL with `RUNTIME_DB_URL_TEST`, `RUNTIME_DB_USER_TEST` and
+`RUNTIME_DB_PASSWORD_TEST` configured. Missing local DB configuration reports
+skipped tests; configured URL with missing credentials fails. Renewal tests cover
+expiry, concurrent replacement and preservation of live results.
+
 ```bash
 node scripts/dev/ci-workflow-hardening.test.mjs
 node --test scripts/ci/check-required-results.test.mjs
