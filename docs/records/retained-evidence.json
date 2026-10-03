@@ -1659,14 +1659,19 @@
       "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615"
     },
     {
+      "path": "docs/evidence/calcify-financial-sprint1/.gitattributes",
+      "bytes": 94,
+      "sha256": "ea167b2e4063804fb969e78f433c3d6ecc0ef5d392c426e153811453a3bd1ee8"
+    },
+    {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 15266,
-      "sha256": "1a870658ecb7388d723b61b03f63d9792f8575e1e8568d55bbe3f9741754e5de"
+      "bytes": 15675,
+      "sha256": "2b03fac1881f5dd9df1c2db2317ee93cd65f6e0f0223a34d1a42573ede95c95a"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/SHA256SUMS",
-      "bytes": 11450,
-      "sha256": "852ef3b096d55facb928b2d7023d13311b13d4d03a25f6d83c3a2ac42ed7a773"
+      "bytes": 11571,
+      "sha256": "74bc14b1a7cffc5a58751a13cc82d6e112a0144c547144d0ad5b8251405eee36"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1690,8 +1695,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/raw/bootstrap.json",
-      "bytes": 6472,
-      "sha256": "5f86b93f67e2991fb0ef5ca7a2e08a0804d8ec9bbe7a7a35d1a4434fa6fb1e7f"
+      "bytes": 6681,
+      "sha256": "2fa422df00b782107c5767216b973f1c7c9b72f29852bbe03fc62e27f6d7603d"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/raw/compose-config.stderr.log",

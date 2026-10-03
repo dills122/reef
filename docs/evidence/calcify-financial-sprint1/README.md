@@ -205,3 +205,9 @@ processes terminated, failed attempt retained. Node rerun passes259 script surfa
 (247 JS syntax,11 shell syntax). No source changes made for this runner issue.
 Final fixture checker and9 retention tests pass; graph coverage and tool failures
 remain scoped above.
+
+Delivery correction: first staged diff check flagged whitespace emitted by raw
+Gradle/Docker logs; commit command continued despite check failure. Raw log bytes
+preserved with bundle-local `.gitattributes`, matching existing evidence convention.
+Full branch diff check repeated after correction; untracked-file checks alone did
+not cover raw additions. No production change or raw-output trimming performed.

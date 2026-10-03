@@ -118,6 +118,7 @@
     "recording-overwrite-negative exit1 is expected refusal; prior fixture check log preserved",
     "credit-overflow genesis initially exceeded int64 opening account; final genesis now opening cash INT64_MIN and settlement credit alone overflows",
     "explicit per-case opening journal groups added; E0 validates shape/range only",
-    "Bun script-surface invocation stalled; exact children7709/7575 terminated with SIGTERM; Node rerun passes259 surfaces; ps sandbox denied, escalated process metadata used only to select exact cancellation targets"
+    "Bun script-surface invocation stalled; exact children7709/7575 terminated with SIGTERM; Node rerun passes259 surfaces; ps sandbox denied, escalated process metadata used only to select exact cancellation targets",
+    "first staged git diff --check flagged emitted raw-log whitespace; chained commit continued despite failure; add bundle-local raw log whitespace attribute, preserve exact bytes, repeat branch diff check"
   ]
 }
