@@ -699,6 +699,223 @@ outbox/checkpoint. Retain WAL, contention and API cost. TigerBeetle is condition
 next comparison if ledger assurance/performance warrants bridge proof. Aeron/Flink/
 Temporal require a measured fit gap; none is automatic next dependency.
 
+### 10.1 First experiment sprint
+
+**Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
+**Status:** planned, unrun. Decision owner: Reef project owner. Planning checkpoint:
+`0edbfa31055235fe196cc1949e3443fd75ffb41b`; execution must pin actual code/config.
+Goal: earn a decision on smallest financial kernel, gate protocol, reservation
+fixture policy, recovery contract and useful-work cost before system implementation.
+
+Scope: isolated fixtures/models and thin test adapters using existing Kotlin/JVM,
+Kafka Streams, RocksDB, Redpanda and PostgreSQL dependencies. Experiments leave
+current post-match behavior and financial authority unchanged. P1a is required;
+P1b remains a small policy model until owner accepts its fixture contract. Full
+source gateway, API rollout, archive service, netting/CCP, external provider delivery
+and seed-only bot reproducibility follow their own gates after this sprint.
+
+```mermaid
+flowchart LR
+    E0["E0: freeze contracts and environment"] --> E1["E1: kernel and accounting oracle"]
+    E0 --> E2["E2: gate protocol model"]
+    E1 --> E3["E3: real broker and recovery"]
+    E3 --> E4["E4: rate and storage cost"]
+    E2 --> SY["Day 10: evidence and owner sync"]
+    E4 --> SY
+```
+
+E2 can proceed independently once E0 fixtures are frozen. Unsettled gate selection
+does not block E1/E3 synthetic ordered inputs. Every task produces a rerunnable
+command, manifest, exact assertions and bounded conclusion; no new platform choice
+or broad workflow is a prerequisite.
+
+| Slot | Experiment / question | Output / decision |
+| --- | --- | --- |
+| Day1 | E0: are tools, input contracts, runtime and measurement ready? | Frozen fixtures/config and explicit missing prerequisites |
+| Days1–3 | E1: can complete decisions preserve economics and reconstruct owner state? | P1a kernel/oracle results; proposed P1b reservation rules |
+| Days4–5 | E2: which gate can close bounded windows under adverse delivery? | Counterexample traces, access/progress/resource comparison |
+| Days6–8 | E3: does managed adapter preserve that contract through real failures? | Transaction/fencing/restore matrix and certified-cut evidence |
+| Day9 | E4: where is useful work expensive, and is core rate credible? | Hot-domain rate/cost diagnostic; thin SQL bundle cost if ready |
+| Day10 | Consolidate and sync | Keep/change/defer decision per concern and one next implementation slice |
+
+**E0 — entry and bounded research (half-day target).** Activate execution checkout
+in Serena, verify all six configured language servers with relevant source queries,
+and index/check Codebase Memory against that exact checkout. Compiler/build and
+focused existing Calcify tests must work. Planning lookup used older graph whose
+checkout had disappeared; harness/config references below were verified by direct
+source reads, not a claim of current graph coverage.
+
+Freeze action key/request normalization/evaluation context, execution/obligation
+identities, exact units, kernel-ready fields, business-vs-delivery comparison and
+genesis/history coverage. Spot-check actual source fixtures for run lifetime,
+delimiter collisions, repeated fills and zero-trade lifecycle; unresolved P0 issue
+blocks live source claims, not complete synthetic P1 fixtures. Avoid speculative
+source repairs during planning.
+
+Research only decision-critical boundaries: pinned client exception/EOS/restore
+behavior, broker transaction failure scope, reservation ownership, gate access and
+SQL read snapshots. Prefer repository source and official maintainer documentation;
+stop when documented behavior plus remaining experiment question is explicit.
+Record facts, observations, inference and unknowns separately. No framework survey.
+
+Reuse existing probe orchestration/fixtures, adapting assertion and record model:
+[broker probe](../../services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt),
+[broker runner](../../scripts/dev/calcify-resolver/broker-check.mjs),
+[capacity runner](../../scripts/dev/calcify-resolver/capacity-check.mjs),
+[recovery runner](../../scripts/dev/calcify-resolver/recovery-check.mjs),
+[paced runner](../../scripts/dev/calcify-resolver/sustained-check.mjs) and
+[RF3 Compose](../../scripts/dev/calcify-resolver/broker.compose.yml).
+Existing probe/oracle is resolver-specific and shares resolver calculation; new
+financial oracle must independently implement accounting expectations. Use test-only
+Kotlin package for kernel/adapter fixtures and small Bun runner/model scripts; freeze
+exact filenames/commands before each task rather than presenting unbuilt commands.
+
+Baseline currently pins Kafka clients/Streams4.3.1 and Redpanda26.2.3; recheck actual
+runtime/image digest before execution. Gradle targets JVM21 while some prior probes
+ran Java25; record actual runtime rather than silently mixing them. Isolated named
+topics/apps/volumes and disk/retention budgets are mandatory after prior ENOSPC.
+Verify actual RF3/backend durability/changelog settings; preserve unrelated volumes.
+Each destructive fault targets only explicitly registered experiment resources.
+
+**E1a — pure financial proof (2 days target, after E0).** Build smallest gross-DvP
+`decide → validate → encodeBounded → evolve` model with journaled opening resources,
+indexed state and bounded deltas. Independent simple oracle uses separate accounting
+logic and wide arithmetic, not kernel validation or `evolve`. Compare business state
+after every business prefix: balances/asset conservation, obligations/residuals,
+attempts, due phase/work, dedup and selected policies. Within each exact history,
+also compare full reconstructed owner state, including pending delivery state.
+
+Fixtures: successful two-asset exchange; insufficient cash/shares; checked overflow;
+identical retry, same key/changed request, new action against paid obligation,
+repeated execution capture and retry after policy activation; funding/new attempt;
+missing required payload/policy; clock→two due settlements→funding with different
+yield budgets, staging schedules and transaction grouping. Rebuild from genesis
+and checkpoint-plus-history. Exact same history restores full owner state; different
+delivery schedules preserve business decisions/IDs/digests at equal business cuts.
+Generated seeded traces retain seed and smallest failing trace; freeze trace count,
+length and crash points before run. Tests must detect deliberately injected duplicate
+discharge, one-leg mutation and missing staging delta.
+
+Acceptance: independent oracle agreement; complete reconstruction; no partial or
+duplicate economic effect in frozen fixtures. Failure produces minimal counterexample
+and targeted contract correction before E3. Unit/topology test success does not prove
+broker EOS; [Kafka test driver](https://kafka.apache.org/43/streams/developer-guide/testing/)
+simulates runtime rather than exercising real failure/transaction boundaries.
+
+**E1b — reservation policy model (half-day target).** Model §6.2 own-hold example,
+competing operation, cash/security units, partial-fill residual and release separately.
+Show proposed creation/consumption priority, funding insufficiency and withdrawal
+rules. Cancellation releases unmatched order remainder without silently releasing
+resources still owned by captured obligation; test required ownership transfer.
+Acceptance: owner can accept or amend one short policy table with worked cases.
+Unsettled product rule remains labelled unknown and prevents live hold activation;
+E1a/E3 proceed with explicitly unreserved model. No full lifecycle implementation.
+
+**E2 — gate comparison (2 days target, after E0).** Implement small executable state
+models for source-prefix slices and durable credits with same manifests, capacities
+and adverse traces. Track source read position, bypass spool, admitted membership,
+completion/seal capacity, stable grant ID/owner epoch and every retained byte/item.
+Make explicit fairness assumption: available channel/owner eventually gets serviced;
+missing genuine source fact may remain waiting and is not an algorithmic deadlock.
+
+Cases: ungranted FIFO A-prefix before granted B; admitted seal behind future-window
+burst; unresolved prior-fill dependency; zero-trade amendment/cancel; high water and
+already-fetched suffix; duplicate/out-of-order completion; reassignment mid-grant;
+closure then late old completion; timeout without fencing; declared fanout overflow.
+Explore small finite state space and larger seeded traces; retain explored bounds.
+Finite testing supports model only, not an unqualified universal liveness proof.
+
+Acceptance: allowed admitted work has bounded reachable closure without new-work
+capacity; no lost/duplicated membership or minted/reclaimed capacity; resources stay
+within declared envelope. Compare head-of-line blocking, independent-domain progress,
+persistent records and recovery state. Prefer source-prefix baseline if it meets
+required isolation/progress; choose credits only with proven access and concrete need.
+If neither works, stop gateway build and bring precise access/closure gap to owner.
+
+**E3 — real managed adapter (3 days target, after E1a passes).** Put same kernel and
+encoded decisions behind real Streams persistent state/EOS on isolated RF3 broker.
+Use explicit failure handlers/startup configuration and independent read-committed
+observer; retain input/result topics across worker restart. Test multiple decisions
+per transaction and two domains sharing one partition. Minimal admission-ahead plus
+one bounded staging case is sufficient; gate production implementation stays deferred.
+
+Fault matrix: crash after each semantic store mutation, after forward/before commit,
+after committed output/before acknowledgement; serialization/production failure;
+one broker unavailable with majority intact; stale owner resumed after takeover;
+local state loss/changelog restore; committed
+phase plus staged funding; isolated reconstruction when local/changelog unavailable;
+mixed-age A10/B27 snapshots for A+10,B+20,A+5,B+7 partition; missing required history.
+No administrative cluster/power-loss guarantee follows from worker crash tests.
+
+Acceptance: exact committed history/state/oracle agreement, once-only financial IDs,
+and certified partition cut including pending/phase state. Abort preserves no partial
+financial result; unavailable coverage refuses activation. Restore does not republish
+old decisions into original result log. Inject faults deterministically; repeat only
+timing-sensitive takeover/ambiguous boundaries under same frozen build/config.
+Measure process start, framework RUNNING, certified catch-up and first fresh result
+separately. Start rough core-rate/record-size measurement as soon as happy path works.
+
+**E4 — useful-rate and cost diagnostic (1 day target, after E3 correctness).** First
+calibrate producer/observer at proposed rate with real record sizes. Use pre-funded
+cohorts whose exact opening resources cover declared trades; no unlimited funds or
+per-trade full-domain copy. Initial stress is one closed hot domain with contending
+accounts; it is a conservative diagnostic, not an accepted requirement that every
+domain sustain whole-system10k. Add two colocated domains only to explain ownership
+coupling, not to conceal hot-domain result.
+
+Proposed bounded ladder: 2.5k,5k,10k trades/s for60s; repeat highest stable arm for300s
+on fresh and aged state. Proposed aged fixture:1m retained execution/action identities
+plus10k pending obligations/due items; freeze exact age/resource size after disk
+preflight. Keep generated business workload identical between fresh/aged comparisons.
+Do not run concurrent capacity loads. A single minimal-staging versus bounded-staging
+comparison uses same ordered business inputs; tune one measured variable only if
+diagnostic identifies it. Record driver duration misses as failed/limited attempts.
+
+Measure offered/durably admitted/decided/settled/pending trades; complete journal and
+state parity; lag trend/end/drain; CPU/heap/native RSS/disk; encoded and physical
+broker/changelog bytes, technical records/touched keys per trade, transaction waits
+and sampled stage latency. Sample clocks must be compatible; backlog bounds/window
+rates are not per-trade latency. Report measured knees and restore work, not only peak.
+[Kafka memory guidance](https://kafka.apache.org/43/streams/developer-guide/memory-mgmt/)
+requires accounting for off-heap state and client/decoded buffering alongside heap.
+
+Time-permitting SQL seam: same committed fixtures into one disposable PostgreSQL
+financial bundle with journal/account/obligation/checkpoint and bounded batches.
+Check post-commit replay and common-snapshot reads; measure rows/WAL/lock/commit cost.
+No production migration/API adapter. If seam cannot fit timebox, SQL/API cost stays
+explicit unknown and blocks total useful-path capacity claim, not E4 core diagnostic.
+10k/600s and7.5k/900s qualification remain later, on unchanged full required path.
+
+**Evidence and stop rules.** One canonical sprint result summary will live beside
+raw machine-readable attempts under `docs/evidence/calcify-financial-sprint1/`;
+link summary here after execution. Every attempt records code/build/config/image
+digest, hardware, seed/fixture hash, command, measurement boundaries, thresholds,
+counts, counterexample, result and cleanup scope. Preserve failures/setup errors;
+append measured throughput and scope to existing baseline ledger. No parallel
+collection of competing architecture/status reports.
+
+Original evidence reviewed: CAL-P1-L9 full Phase1~5k commands/s; CAL-P2-E4 local
+WAL-off joins excludes broker/SQL; `capacity-64c101a6` short resolver10,638.42/s;
+`sustained-53a64664` end gap127,510 failed; `sustained-8ea6c8ce` exact3.15m but
+producer310.730s exceeded301s gate; `recovery-5545850c`1m accepted rows/RUNNING19.971s
+is resolver restore, not financial RTO. This sprint adds shared-account mutations,
+complete financial output, staging/recovery and optional SQL, so prior rates do not
+qualify it. [Original attempts](../evidence/calcify-phase2-implementation/README.md).
+
+Stop dependent experiments on accounting/reconstruction failure. Limit exploratory
+tuning to one measured variable/comparison per experiment; record routine harness
+fixes separately and rerun affected checks. Remaining failed hypothesis returns to
+owner instead of spawning framework comparisons. A material authority or
+ownership pivot requires owner decision. Stop at day10 with achieved evidence and
+explicit unknowns; timebox expiration is not a pass.
+
+Exit sync delivers five decisions: kernel contract ready/change; gate baseline/credits/
+unresolved; reservation policy accepted/deferred; adapter recovery ready/change;
+measured rate/cost gap and next hypothesis. Select one next implementation slice and
+its finite acceptance gates. Seed observation protocol, external effects, extended
+archive and full qualification remain explicitly scoped follow-ups. Sprint does not
+grant financial-authority cutover or certify entire architecture.
+
 ## 11. Rollout, observability and decisions
 
 Keep Calcify opt-in, isolated namespaces/run membership and accounts. Legacy remains
