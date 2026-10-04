@@ -18,6 +18,15 @@ Production post-match behavior and local volumes unchanged.
   checks pass. [Independent review2](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/reviews/instance-2.md): Ready
   with non-blocking follow-ups for checkpoint publication; prior P2 fixed.
 
+## Current synthetic input boundary
+
+Recovered test-only gross-DvP kernel accepts positive quantities and nonnegative
+prices, including zero-price transfers; negative prices are invalid. Both funding
+legs must fit signed64 storage, including opening-resource debit. Identical retries
+of rejected inputs retain original decision and policy context without new effects.
+These experiment rules do not establish live venue policy. E0 checks below remain
+dated evidence; current execution status lives in [work plan](../../WORK_PLAN.md).
+
 ## Open gates and next slice
 
 All six actual language-server queries fail shared manager initialization. Docker

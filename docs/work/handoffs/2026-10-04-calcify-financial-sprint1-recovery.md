@@ -1,12 +1,12 @@
 # Handoff: Calcify sprint1 source recovery
 
-October4,2026. Recovery checkpoint; experiments remain paused pending user check-in.
+October4,2026. Recovery checkpoint resumed for independent review and fresh proof.
 
 ## Objective And Boundary
 
-Recover all October3 code before further work. User requested check-in after recovery.
-No E3 faults, E4 calibration/load, new heap implementation or production work authorized
-at this checkpoint. Existing sprint scope remains test-only RFC experiments.
+October3 source recovered and pushed; user resumed independent review, then fresh
+verification/proof after sign-off. Existing sprint scope remains test-only RFC
+experiments. Full E3 acceptance precedes E4 loads; no production cutover.
 
 ## Canonical Sources
 
@@ -40,7 +40,8 @@ started. Full original draft/recovery trace/old handoff remain in persistent loc
 October3 temporary worktree and proof were deleted. Prior15 financial/38 model
 passes survive as conversation reports only; full original raw attempts/XML gone.
 Fresh recovery verification:17 hashes match,38 Node tests pass, Java21 test-source
-compile passes42s. Financial JUnit suite not rerun.
+compile passes42s. Review instance1 subsequently reran15 financial JUnit tests successfully and
+reproduced three oracle boundary counterexamples; source sign-off withheld pending fixes.
 Fresh logs use persistent `.planning/sprint1-recovery/verification/`.
 Do not recreate historical proof or present reruns as original artifacts.
 
@@ -69,13 +70,13 @@ pause. Never global prune/reset or remove unrelated volumes.
 
 ## Immediate Next Actions
 
-1. Check in with user after recovery checkpoint and verification; do not resume
-   experiments until user resumes them.
-2. On resume, verify source hashes and branch. Read newest handoff only.
+1. Apply four accepted review findings; preserve original recovery hashes as history.
+   Fresh independent instance2 required before authoritative post-fix proof.
+2. Verify latest source commit and branch. Read newest handoff only.
 3. Freeze compiled runtime before E3; recheck actual isolated Docker resources,
    versions, health, disk and topics. First real arm run-happy with explicit
-   persistent proof directory. Runner default still points at private/tmp: override
-   before any run, then fix durable defaults as separately recorded change.
+   persistent proof directory. Runner default corrected to persistent `.planning/calcify-financial-proof/broker/<run>`.
+   Docker daemon unavailable during review; retain failed preflight before any live arm.
 4. Finish E3/E4 gates, broader module checks, compact checkpoint/full Records proof,
    fresh-context independent review, then focused PR. No new PR created yet.
 

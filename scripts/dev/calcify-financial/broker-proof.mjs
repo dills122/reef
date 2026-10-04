@@ -13,7 +13,7 @@ const broker=process.env.CALCIFY_FINANCIAL_BROKER ?? '127.0.0.1:39192,127.0.0.1:
 const run=process.env.CALCIFY_FINANCIAL_RUN_ID ?? randomUUID().slice(0,8);
 if(!/^[a-z0-9-]{1,40}$/.test(run))throw Error('invalid isolated run ID');
 const prefix=`financial-s1-97924e15-${run}`;
-const proof=resolve(process.env.CALCIFY_FINANCIAL_PROOF_DIR ?? `/private/tmp/reef-sprint1-proof/broker/${run}`);
+const proof=resolve(process.env.CALCIFY_FINANCIAL_PROOF_DIR ?? join(root,'.planning/calcify-financial-proof/broker',run));
 await mkdir(proof,{recursive:true});
 const fixtures=JSON.parse(await readFile(join(root,'docs/evidence/calcify-financial-sprint1/fixtures.json'),'utf8'));
 const java=process.env.JAVA_HOME?join(process.env.JAVA_HOME,'bin/java'):'java';

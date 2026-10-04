@@ -11,6 +11,7 @@ import java.util.HexFormat
 internal class FinancialOracle(genesisBalances: JsonNode, private val policy: JsonNode) {
     private val json = ObjectMapper()
     private val max = BigInteger.valueOf(Long.MAX_VALUE)
+    private val min = BigInteger.valueOf(Long.MIN_VALUE)
     private val money = linkedMapOf<String, BigInteger>()
     private val executions = linkedMapOf<String, JsonNode>()
     private val obligations = linkedMapOf<String, MutableMap<String, String>>()
@@ -53,7 +54,7 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
         if (continuation != null && input["kind"].asText().uppercase() != "CONTINUE") return projection("STAGED", input, 0, activePolicy)
         if (invalidNormalization) digest = sha(canonical(input))
         val prior = dedup[key]
-        if (prior != null && prior["digest"] == digest && !invalidNormalization) {
+        if (prior != null && prior["digest"] == digest) {
             return projection("PRIOR_RESULT", input, 0, (prior["context"] as Map<*, *>)["policy"].toString()).also {
                 it.put("originalDisposition", input["actionId"].asText()); it.put("noNewAttempt", true)
             }
@@ -83,7 +84,8 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                         val price = BigInteger(normalized["priceNanos"].asText())
                         val dueTick = BigInteger(normalized["dueTick"].asText())
                         val value = quantity * price
-                        if (quantity.signum() > 0 && price.signum() > 0 && dueTick.signum() >= 0 && dueTick <= max) {
+                        // Synthetic gross-DvP contract accepts positive quantity and nonnegative price, including zero cash value.
+                        if (quantity.signum() > 0 && price.signum() >= 0 && dueTick.signum() >= 0 && dueTick <= max) {
                             val executionKey = execKey(normalized)
                             val previous = executions[executionKey]
                             disposition = when {
@@ -146,7 +148,7 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                     if (continuation == null && account in setOf("buyer", "seller") && asset in setOf("USD_NANO", "ACME_SHARE") && amount != null && amount.signum() > 0 && normalized["authority"]?.asText() == "opening-resource-owner") {
                         val field = account + if (asset == "USD_NANO") "Cash" else "Shares"
                         val opening = if (asset == "USD_NANO") "openingCash" else "openingShares"
-                        if (money.getValue(field) + amount > max) disposition = "BALANCE_OVERFLOW"
+                        if (money.getValue(field) + amount > max || money.getValue(opening) - amount < min) disposition = "BALANCE_OVERFLOW"
                         else {
                             money[field] = money.getValue(field) + amount; money[opening] = money.getValue(opening) - amount
                             versions[field] = versions.getValue(field) + 1; versions[opening] = versions.getValue(opening) + 1

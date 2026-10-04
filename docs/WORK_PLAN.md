@@ -27,8 +27,9 @@ Historical15 financial/38 model passes require fresh proof; original raw attempt
 not retained. No live E3 fault or E4 load had run.
 
 [Recovery handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md)
-owns resume paths and remaining gates. User requests recovery/check-in before
-resuming experiments. Primary dirty checkout preserved.
+owns resume paths and remaining gates. User resumed independent source review,
+then fresh proof after sign-off. Instance1 found four accepted P2 defects; focused
+oracle/default-storage fixes and fresh instance2 pending. Primary dirty checkout preserved.
 
 Broker harness `scripts/dev/calcify-financial/broker-proof.mjs`; rate policy
 `scripts/dev/calcify-financial/rate-proof.mjs`. Heap-guard tests recovered as

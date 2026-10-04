@@ -56,6 +56,94 @@ class FinancialOracleTest {
         assertEquals(19200, prefixes)
     }
 
+    @Test
+    fun `malformed identical retry preserves first context and all business state`() {
+        val opening = fixtures["cases"][0]["genesisBalances"]
+        val oracle = FinancialOracle(opening, fixtures["policy"])
+        val kernel = FinancialKernel(opening, fixtures["policy"])
+        val malformed = fixtures["cases"][0]["steps"][0]["input"].deepCopy<ObjectNode>()
+        (malformed["payload"] as ObjectNode).put("quantity", "NaN")
+        assertEquals("INVALID_INPUT", oracle.execute(malformed)["disposition"].asText())
+        assertEquals("INVALID_INPUT", kernel.execute(malformed)["disposition"].asText())
+        oracle.assertMatches(kernel.businessView(), "malformed first decision")
+        val activate = mapper.valueToTree<JsonNode>(mapOf("namespace" to "sprint1", "domain" to malformed["domain"].asText(), "actionId" to "change-policy", "kind" to "ACTIVATE_POLICY", "payload" to mapOf("policy" to "gross-p2")))
+        assertEquals("POLICY_ACTIVATED", oracle.execute(activate)["disposition"].asText())
+        assertEquals("POLICY_ACTIVATED", kernel.execute(activate)["disposition"].asText())
+        oracle.assertMatches(kernel.businessView(), "policy activation before retry")
+        val referenceBefore = oracle.businessView()
+        val kernelBefore = kernel.businessView()
+        val historyBefore = kernel.historySequence()
+        val reference = oracle.execute(malformed)
+        val actual = kernel.execute(malformed)
+        for (result in listOf(reference, actual)) {
+            assertEquals("PRIOR_RESULT", result["disposition"].asText())
+            assertEquals("gross-p1", result["selectedPolicy"].asText())
+            assertEquals(true, result["noNewAttempt"].asBoolean())
+        }
+        assertEquals(referenceBefore, oracle.businessView(), "reference retry must preserve full state and context")
+        assertEquals(kernelBefore, kernel.businessView(), "kernel retry must preserve full state and context")
+        assertEquals(historyBefore, kernel.historySequence())
+        oracle.assertMatches(kernel.businessView(), "malformed retry")
+    }
+
+    @Test
+    fun `funding checks exact credit and opening debit boundaries for both assets`() {
+        for ((asset, suffix) in listOf("USD_NANO" to "Cash", "ACME_SHARE" to "Shares")) {
+            for (openingBoundary in listOf(true, false)) {
+                for (amount in listOf("1", "2")) {
+                    val genesis = mapper.valueToTree<JsonNode>(mapOf("buyerCash" to "0", "sellerCash" to "0", "buyerShares" to "0", "sellerShares" to "0")) as ObjectNode
+                    genesis.put("buyer$suffix", if (openingBoundary) Long.MAX_VALUE.toString() else (Long.MAX_VALUE - 1).toString())
+                    val oracle = FinancialOracle(genesis, fixtures["policy"])
+                    val kernel = FinancialKernel(genesis, fixtures["policy"])
+                    val input = mapper.valueToTree<JsonNode>(mapOf("namespace" to "sprint1", "domain" to "domain-1", "actionId" to "fund-$asset-$openingBoundary-$amount", "kind" to "FUND", "payload" to mapOf("account" to if (openingBoundary) "seller" else "buyer", "asset" to asset, "amount" to amount, "authority" to "opening-resource-owner")))
+                    val label = "$asset openingBoundary=$openingBoundary amount=$amount"
+                    val before = oracle.businessView()
+                    val expected = if (amount == "1") "FUNDED" else "BALANCE_OVERFLOW"
+                    assertEquals(expected, oracle.execute(input)["disposition"].asText(), "$label reference")
+                    assertEquals(expected, kernel.execute(input)["disposition"].asText(), "$label kernel")
+                    oracle.assertMatches(kernel.businessView(), label)
+                    val after = oracle.businessView()
+                    if (amount == "1") {
+                        assertEquals(if (openingBoundary) Long.MIN_VALUE.toString() else (-Long.MAX_VALUE).toString(), after["balances"]["opening$suffix"].asText(), label)
+                        assertEquals(if (openingBoundary) "1" else Long.MAX_VALUE.toString(), after["balances"][if (openingBoundary) "seller$suffix" else "buyer$suffix"].asText(), label)
+                    } else {
+                        for (field in listOf("balances", "versions", "effects", "obligations")) assertEquals(before[field], after[field], "$label atomic rejection $field")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `synthetic capture accepts zero and positive price and refuses negative price`() {
+        val opening = fixtures["cases"][0]["genesisBalances"]
+        for (price in listOf("0", "-1", "1")) {
+            val oracle = FinancialOracle(opening, fixtures["policy"])
+            val kernel = FinancialKernel(opening, fixtures["policy"])
+            val capture = fixtures["cases"][0]["steps"][0]["input"].deepCopy<ObjectNode>()
+            (capture["payload"] as ObjectNode).put("quantity", "5").put("priceNanos", price)
+            val expected = if (price == "-1") "INVALID_INPUT" else "CAPTURED"
+            assertEquals(expected, oracle.execute(capture)["disposition"].asText(), "price=$price reference")
+            assertEquals(expected, kernel.execute(capture)["disposition"].asText(), "price=$price kernel")
+            oracle.assertMatches(kernel.businessView(), "price=$price capture")
+            if (price == "-1") {
+                assertEquals(0, oracle.businessView()["obligations"].size())
+            } else {
+                val obligation = oracle.businessView()["obligations"].elements().next()
+                assertEquals(if (price == "0") "0" else "5", obligation["cashResidual"].asText())
+                val settle = fixtures["cases"][0]["steps"][1]["input"]
+                assertEquals("SETTLED", oracle.execute(settle)["disposition"].asText())
+                assertEquals("SETTLED", kernel.execute(settle)["disposition"].asText())
+                oracle.assertMatches(kernel.businessView(), "price=$price settlement")
+                assertEquals("5", oracle.businessView()["balances"]["buyerShares"].asText())
+                if (price == "0") {
+                    assertEquals(opening["buyerCash"], oracle.businessView()["balances"]["buyerCash"])
+                    assertEquals(opening["sellerCash"], oracle.businessView()["balances"]["sellerCash"])
+                }
+            }
+        }
+    }
+
     /** Shared only as immutable input data for independent kernel replay/crash proof. */
     internal fun generatedTraces(): Sequence<Pair<String, List<JsonNode>>> = sequence {
         for (seed in listOf(1, 42, 20261003)) {
