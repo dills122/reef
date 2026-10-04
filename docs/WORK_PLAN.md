@@ -18,24 +18,31 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
-## Calcify sprint1 recovery — October4,2026
+## Calcify sprint1 verification — October4,2026
 
-Branch `codex/calcify-sprint1-experiments`, base97924e15. October3 temporary
-checkout, uncommitted handoff and raw proof disappeared.17 code/config files
-recovered from retained source-write logs; [hash manifest](evidence/calcify-financial-sprint1/recovery.json).
-Historical15 financial/38 model passes require fresh proof; original raw attempts
-not retained. No live E3 fault or E4 load had run.
+Branch `codex/calcify-sprint1-experiments`, base97924e15, reviewed source908c3e54.
+October3 lost temporary source recovered and pushed; [recovery hashes](evidence/calcify-financial-sprint1/recovery.json).
+[Focused checkpoint](evidence/calcify-financial-sprint1/README.md) and
+[active handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md)
+own current results and resume paths. Primary dirty checkout preserved.
 
-[Recovery handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md)
-owns resume paths and remaining gates. User resumed independent source review,
-then fresh proof after sign-off. Instance1 found four accepted P2 defects; focused
-oracle/default-storage fixes verified by instance2. Three additional input-boundary/
-staging findings accepted and fixed; focused eight regressions pass after correcting
-one test compilation error. Final independent instance3 pending. Primary dirty checkout preserved.
+Review3of3: Ready with non-blocking follow-ups for E1/E2 and bounded E3 proof.
+Seven accepted prior P2 findings fixed; final reviewed source unchanged during retest.
+Node144/144; financial26/26; offline runtime774 reported passes/20 skips/0 failures;
+E2 finite156+seeded128 pass. No external DB integration proof.
 
-Broker harness `scripts/dev/calcify-financial/broker-proof.mjs`; rate policy
-`scripts/dev/calcify-financial/rate-proof.mjs`. Heap-guard tests recovered as
-unapplied draft; implementation pending. No readiness/capacity upgrade.
+**E3/E4 blocked:** actual RF3 happy/restart arm fails before worker readiness,
+transaction timeout10s below commit interval60s; no completed decision results.
+E4 assessor count-consistency P2 remains, reproduced with fabricated control.
+Review cap3 reached; human limit decision required before another instance.
+Next: broker timeout fix and E4 assessor regression, new sign-off, then fresh E3 proof.
+Complete E3 fault/activation matrix and E4 heap/calibration gates before loads.
+Reservation stays proposal; no capacity, cutover or overall sprint PASS.
+
+Full new review/proof bundle published only to Records, with local provenance commit;
+product PR keeps focused results and executable fixtures. Active guidance/overview
+check: no production API/events/schema/architecture changes, so no contract or accepted
+ADR update needed. E0 original archive remains immutable; current handoff refreshed.
 
 ## Calcify financial experiment E0 checkpoint (2026-10-03)
 

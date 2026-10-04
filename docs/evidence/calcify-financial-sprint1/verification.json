@@ -1,0 +1,104 @@
+{
+  "schema": "calcify-sprint1-verification-v1",
+  "date": "2026-10-04",
+  "sourceHead": "908c3e54583cb812b074fe66160c42f0bcbd4921",
+  "overall": "BLOCKED_E3_E4",
+  "review": {
+    "instances": 3,
+    "maximum": 3,
+    "lastVerdict": "Ready with non-blocking follow-ups",
+    "scope": "E1/E2 and bounded E3 proof regeneration; no E4 qualification",
+    "openP2": "E4 assessor accepts impossible deadline counts greater than final counts",
+    "newPostReviewBlocker": "RF3 worker fails initialization: producer transaction timeout10000ms lower than commit interval60000ms",
+    "furtherReview": "Stopped at skill maximum; human review-limit decision required before new independent instance"
+  },
+  "checks": {
+    "nodeCi": {
+      "tests": 144,
+      "passed": 144,
+      "failed": 0,
+      "attempts": [
+        "node-ci sandbox FAIL EPERM listener",
+        "node-ci-unsandboxed PASS"
+      ]
+    },
+    "platformRuntime": {
+      "reportedTests": 794,
+      "reportedPassed": 774,
+      "skipped": 20,
+      "failures": 0,
+      "errors": 0,
+      "suites": 103,
+      "profile": "Offline; DB environment unset; guarded DB tests can return without assertions; no DB integration claim",
+      "elapsedSeconds": 191.762
+    },
+    "financial": {
+      "tests": 26,
+      "passed": 26,
+      "kernelTests": 14,
+      "oracleTests": 12,
+      "fixtureCases": 20,
+      "fixtureInputs": 52,
+      "seededTraces": 300,
+      "businessPrefixes": 19200
+    },
+    "gateModel": {
+      "finiteCases": 156,
+      "creditCases": 144,
+      "prefixCases": 12,
+      "seededCases": 128,
+      "failures": 0,
+      "scope": "Bounded symbolic model; no physical heap or full liveness proof"
+    },
+    "rateSelfcheck": {
+      "prefixes": 40,
+      "oneLegMutantRejected": true,
+      "scope": "Local correctness selfcheck only; no measured rate"
+    },
+    "fixtureCheck": "PASS unchanged fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d",
+    "scriptSurface": "PASS",
+    "brokerHappy": {
+      "result": "FAIL before worker readiness",
+      "elapsedSeconds": 7.458,
+      "completedDecisionResults": 0,
+      "evidence": "broker-happy/0004-worker.stderr.log",
+      "project": "reef-calcify-financial-s1-908c3e54",
+      "cleanup": "Only new project stopped; volumes/topics preserved; no prune",
+      "acknowledgedPrefixInputs": 4,
+      "prefixInputBytes": 1317,
+      "physicalInputOffsets": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "scope": "Input append succeeded; financial worker never initialized; acknowledgements alone do not prove financial processing."
+    },
+    "e4KnownCounterexample": {
+      "result": "DEFECT REPRODUCED",
+      "scope": "Fabricated assessor input, not measured benchmark",
+      "evidence": "e4-known-counterexample.stdout.log"
+    }
+  },
+  "limitations": [
+    "E3 golden/recovery/fault arms not run after startup failure",
+    "Full E3 qualification matrix incomplete",
+    "E4 heap guard only unapplied draft; actual ACK/bytes/calibration gaps",
+    "No capacity, production cutover, live reservation policy or full sprint PASS",
+    "October3 original raw proof lost; October4 proof fresh, not reconstructed history"
+  ],
+  "archive": {
+    "repository": "https://github.com/dills122/reef-records",
+    "commit": "cfa4217708ff0694a966e3d87acce9585010a65a",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54",
+    "pullRequest": "https://github.com/dills122/reef-records/pull/6",
+    "status": "OPEN",
+    "files": 256,
+    "bytes": 1342028,
+    "remoteBytesVerified": true,
+    "integrity": "PASS 776 records",
+    "unitTestsPassed": 4,
+    "sourceBundleLocalCommit": "fa442bbc5ef9fa7ab33e8ae4e6f128e364a30a95",
+    "sourceBundleRemote": "Not published to Reef; only Records remote contains bulk"
+  }
+}

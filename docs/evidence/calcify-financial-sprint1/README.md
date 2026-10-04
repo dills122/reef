@@ -1,72 +1,55 @@
-# Calcify financial sprint1 — E0 checkpoint
+# Calcify financial sprint1 — October4 verification checkpoint
 
-October 3, 2026: preparation checkpoint. Full E0 readiness blocked; E1-E4 unrun.
-Execution source `85f0ce8c84cd7de6bc22322bac0b32da109073ab`; planning source
-`cda4185b8065bd38126c7547b30fef79a813f68a` (PR #466 subsequently merged, docs only).
-Production post-match behavior and local volumes unchanged.
+Reviewed source `908c3e54583cb812b074fe66160c42f0bcbd4921`, base97924e15;
+branch `codex/calcify-sprint1-experiments`. Test-only experiments; production
+post-match behavior unchanged. [Focused results](verification.json).
 
-## Focused inputs and checks
+## Review and retest
 
-- [Frozen inputs](fixtures.json):20 cases/52 inputs; SHA256
-  `fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d`.
-  Normalization/framing/golden stability only; financial kernel/oracle unimplemented.
-- [RF3 config](broker.compose.yml): isolated project `reef-calcify-financial-s1-85f0ce8c`,
-  ports39192/39292/39392; offline configuration validated, no resources created.
-- Java21 clean compile and70 Calcify tests/16 suites pass; matcher app/streamdirect
-  suites and focused identity/IOC/replay/restore/reuse checks pass.
-- Recorder byte-capture regression2/2, retention9/9, fixture and script-surface
-  checks pass. [Independent review2](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/reviews/instance-2.md): Ready
-  with non-blocking follow-ups for checkpoint publication; prior P2 fixed.
+Independent review3of3: **Ready with non-blocking follow-ups** for E1/E2 and
+bounded E3 proof regeneration. First two reviews found seven accepted P2 defects;
+input normalization, dedup, signed64 bounds, typed identities, malformed staging
+and locator parity corrected. Final source unchanged during retest.
 
-## Current synthetic input boundary
+- Node CI:144/144 pass. Sandbox listener failure retained; outside-sandbox rerun passes.
+- Platform runtime:794 reported tests,774 reported passes,20 skips,0 failures/errors,
+  103 suites;191.762s. Offline profile; guarded DB tests can return without assertions.
+  No DB integration claim. Financial subset26/26,14 kernel+12 independent oracle.
+- Frozen20cases/52inputs;300 seeded traces/19,200 business prefixes, replay cuts,
+  staging and omission/mutation controls. [Frozen inputs](fixtures.json) unchanged:
+  SHA256`fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d`.
+- E2:156 finite cases+128 seeded cases,0 failures; symbolic bounds only.
+- Rate selfcheck40 prefixes+one-leg mutant rejection; fixture/script-surface checks pass.
 
-Recovered test-only gross-DvP kernel accepts positive quantities and nonnegative
-prices, including zero-price transfers; negative prices are invalid. Both funding
-legs must fit signed64 storage, including opening-resource debit. Identical retries
-of rejected inputs retain original decision and policy context without new effects.
-Consumed attempt/time/funding values checked before economic effects, with explicit
-sign/range error dispositions.
-Namespace/domain/action IDs require nonempty text; typed invalid identities cannot
-alias valid text. Settlement locators and continuation clock IDs require text;
-complete scope tuple resolves exactly, otherwise execution ID must be unique.
-Malformed bounded requests stage durably during active phase,
-restore pending membership, then reject after phase drains.
-These experiment rules do not establish live venue policy. E0 checks below remain
-dated evidence; current execution status lives in [work plan](../../WORK_PLAN.md).
+## Failed and open gates
 
-## Open gates and next slice
+**Overall E3/E4 blocked.** RF3 happy/restart arm fails before worker readiness:
+transaction timeout10000ms below commit interval60000ms. Zero completed decision
+results; golden/recovery/fault arms unrun. E4 assessor accepts impossible deadline
+counts greater than final counts; fabricated control reproduces defect, no rate result.
+Review maximum3 reached; human review-limit decision required before new instance.
 
-All six actual language-server queries fail shared manager initialization. Docker
-socket/application absent; guest disk, image digests and live topic durability
-unverified. Matcher same-run order reuse conflicts with resolver immutable
-acceptance; reservation-source lifecycle incomplete. No capacity or cutover claim.
+Full E3 fault/activation matrix, E4 heap guard/calibration/ACK membership/physical-byte
+proof, live reservation policy acceptance and matcher identity integration remain.
+No full sprint, capacity or cutover PASS. Reservation model stays proposal.
 
-E1a: test-only `FinancialKernel`, independent BigInteger `FinancialOracle` and
-`FinancialKernelTest` under platform-runtime Calcify financial tests. Start balanced
-journaled genesis and two-asset capture/settle; implement frozen20 cases and
-`decide→validate→encodeBounded→evolve`. Compare every business prefix, complete
-owner state/history and checkpoint suffix; fill abbreviated dedup/history schema,
-then seeded schedules/crash cuts/mutants. Reservation E1b remains separate proposal.
-Before E3: successful tool/runtime gates, explicit broker project/evidence paths,
-20GiB host/guest headroom,10GiB experiment/raw256MiB caps, pinned digests/settings.
+Docker29.7.2 accessible outside sandbox; initial socket denial did not prove daemon
+stopped. Redpanda26.2.3 RF3 project `reef-calcify-financial-s1-908c3e54` started healthy,
+then only this project stopped; topics/volumes preserved. Image pinned to
+`sha256:9e83cfa99278f30d0133271c26bf670cd69c94ffa6ba0b42830dd0c3bd9dcfd9`.
+No volume prune. [Broker config](broker.compose.yml).
 
-## Complete evidence in Reef Records
+## Durable evidence and continuation
 
-[Full overview and reasoning](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md),
-[runtime/source manifest](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/environment.json),
-[all attempts, successes and failures](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/raw/attempts.jsonl),
-[original checksums](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/SHA256SUMS),
-[archive index](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/INDEX.md), [import manifest](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/manifests/2026-10-03-calcify-e0.json).
-97 originals copied byte-for-byte from Reef `41bb17dcb5e93b7bce9444dd7f597c90ea01a3e1`,
-published via [Records PR #5](https://github.com/dills122/reef-records/pull/5), verified
-at pinned archive commit before Reef removal. Original early relocation output
-incomplete; historical recorder byte limitation disclosed. Failures/corrections
-remain intact. [Local relocation inventory](../../records/2026-10-03-calcify-e0-migration.json)
-resolves original paths/hashes. Local raw captures stay ignored; publish complete
-attempt bundles to Records before replacing this checkpoint.
+[Complete reviews, raw attempts, failed controls and JUnit XML](https://github.com/dills122/reef-records/tree/cfa4217708ff0694a966e3d87acce9585010a65a/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54),
+[retest closure](https://github.com/dills122/reef-records/blob/cfa4217708ff0694a966e3d87acce9585010a65a/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54/proof/closure.json).
+Local-only provenance commit serves archive import; bulk published only to Records.
+[Records PR6](https://github.com/dills122/reef-records/pull/6):256files/1,342,028bytes,
+remote hashes verified; archive integrity and4unit tests pass. Import remains open;
+no local source removal.
+[Recovery hashes](recovery.json), [current work plan](../../WORK_PLAN.md),
+[active handoff](../../work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
+October3 original raw proof lost; October4 reruns are fresh evidence.
 
-```sh
-bun scripts/dev/calcify-financial/freeze-fixtures.mjs --check
-node --test scripts/dev/calcify-financial/record-attempt.test.mjs
-bun run repo:check:records
-```
+[E0 historical overview](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md)
+retains dated preparation scope and failures; never rewritten as current status.
