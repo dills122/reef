@@ -47,6 +47,7 @@ test-dev-tooling:
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
 	node --test scripts/dev/calcify-financial/record-attempt.test.mjs
+	node --test scripts/dev/calcify-financial/reservation-model.test.mjs scripts/dev/calcify-financial/gate-model.test.mjs scripts/dev/calcify-financial/rate-proof.test.mjs
 
 lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...

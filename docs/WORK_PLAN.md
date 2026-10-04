@@ -18,6 +18,22 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify sprint1 recovery — October4,2026
+
+Branch `codex/calcify-sprint1-experiments`, base97924e15. October3 temporary
+checkout, uncommitted handoff and raw proof disappeared.17 code/config files
+recovered from retained source-write logs; [hash manifest](evidence/calcify-financial-sprint1/recovery.json).
+Historical15 financial/38 model passes require fresh proof; original raw attempts
+not retained. No live E3 fault or E4 load had run.
+
+[Recovery handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md)
+owns resume paths and remaining gates. User requests recovery/check-in before
+resuming experiments. Primary dirty checkout preserved.
+
+Broker harness `scripts/dev/calcify-financial/broker-proof.mjs`; rate policy
+`scripts/dev/calcify-financial/rate-proof.mjs`. Heap-guard tests recovered as
+unapplied draft; implementation pending. No readiness/capacity upgrade.
+
 ## Calcify financial experiment E0 checkpoint (2026-10-03)
 
 Execution source85f0ce8c; planningcda4185b/PR#466 subsequently merged, docs only.

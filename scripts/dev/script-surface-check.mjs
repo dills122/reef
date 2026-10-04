@@ -31,7 +31,7 @@ const syntaxSkipped = [];
 
 for (const path of scriptFiles) {
   if (nodeCheckExts.has(extension(path))) {
-    runCheck(process.execPath, ["--check", path], `${path} JS syntax`);
+    runCheck("node", ["--check", path], `${path} JS syntax`);
     syntaxChecked.push(path);
     continue;
   }
