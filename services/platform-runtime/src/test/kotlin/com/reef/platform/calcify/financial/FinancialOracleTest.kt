@@ -279,6 +279,55 @@ class FinancialOracleTest {
         assertFailsWith<IllegalArgumentException> { FinancialBrokerProbe.OutputVerifier(changedConfig).also { verifier -> outputs.forEach(verifier::accept) } }
     }
 
+    @Test
+    fun `execution resolution requires textual locators and complete scope or unique unscoped identity`() {
+        val template = fixtures["cases"][0]["steps"][0]["input"]
+        for (kind in listOf("SETTLE", "CONTINUE")) {
+            for (variant in listOf("numeric-locator", "partial-one", "partial-two", "complete-wrong", "complete-correct", "partial-ambiguous", "numeric-clock")) {
+                if (kind == "SETTLE" && variant == "numeric-clock") continue
+                val oracle = FinancialOracle(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+                val kernel = FinancialKernel(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+                fun apply(input: JsonNode, expected: String) {
+                    assertEquals(expected, oracle.execute(input)["disposition"].asText(), "$kind $variant reference")
+                    assertEquals(expected, kernel.execute(input)["disposition"].asText(), "$kind $variant kernel")
+                    oracle.assertMatches(kernel.businessView(), "$kind $variant input=$input")
+                }
+                val capture = template.deepCopy<ObjectNode>().apply { (get("payload") as ObjectNode).put("executionId", "17") }
+                apply(capture, "CAPTURED")
+                if (variant == "partial-ambiguous") {
+                    val other = capture.deepCopy().put("actionId", "capture-other").apply { (get("payload") as ObjectNode).put("runId", "other-run") }
+                    apply(other, "CAPTURED")
+                }
+                if (kind == "CONTINUE") apply(mapper.valueToTree(mapOf("namespace" to "sprint1", "domain" to "domain-1", "actionId" to "17", "kind" to "CLOCK", "payload" to mapOf("tick" to "1"))), "CLOCK_ADVANCED")
+                val payload = mapper.createObjectNode().put(if (kind == "CONTINUE") "workId" else "executionId", "17")
+                if (kind == "CONTINUE") payload.put("clockAction", "17") else payload.put("attempt", "1")
+                when (variant) {
+                    "numeric-locator" -> payload.put(if (kind == "CONTINUE") "workId" else "executionId", 17)
+                    "numeric-clock" -> payload.put("clockAction", 17)
+                    "partial-one" -> payload.put("runId", "wrong-run")
+                    "partial-two" -> payload.put("runId", "wrong-run").put("venueSessionId", "wrong-session")
+                    "partial-ambiguous" -> payload.put("runId", capture["payload"]["runId"].asText())
+                    "complete-wrong", "complete-correct" -> {
+                        for (field in listOf("runId", "venueSessionId", "instrumentId")) payload.put(field, capture["payload"][field].asText())
+                        if (variant == "complete-wrong") payload.put("runId", "wrong-run")
+                    }
+                }
+                val input = mapper.valueToTree<JsonNode>(mapOf("namespace" to "sprint1", "domain" to "domain-1", "actionId" to "resolve", "kind" to kind, "payload" to payload))
+                val expected = if (variant in setOf("numeric-locator", "numeric-clock", "complete-wrong", "partial-ambiguous")) "INVALID_INPUT" else "SETTLED"
+                val before = oracle.businessView()
+                apply(input, expected)
+                if (expected == "INVALID_INPUT") {
+                    for (field in listOf("balances", "effects", "versions", "obligations", "attempts", "dueQueue", "continuation")) assertEquals(before[field], oracle.businessView()[field], "$kind $variant no effect $field")
+                    val rejected = oracle.businessView()
+                    val history = kernel.historySequence()
+                    apply(input, "PRIOR_RESULT")
+                    assertEquals(rejected, oracle.businessView())
+                    assertEquals(history, kernel.historySequence())
+                }
+            }
+        }
+    }
+
     /** Shared only as immutable input data for independent kernel replay/crash proof. */
     internal fun generatedTraces(): Sequence<Pair<String, List<JsonNode>>> = sequence {
         for (seed in listOf(1, 42, 20261003)) {

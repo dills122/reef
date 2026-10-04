@@ -115,13 +115,21 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                 }
                 "SETTLE", "CONTINUE" -> {
                     val isContinue = input.path("kind").asText().uppercase() == "CONTINUE"
-                    val id = normalized[if (isContinue) "workId" else "executionId"]?.asText()
-                    val matches = executions.entries.filter { (_, e) -> e["executionId"].asText() == id && listOf("runId", "venueSessionId", "instrumentId").all { !normalized.has(it) || normalized[it] == e[it] } }
+                    val locator = normalized.get(if (isContinue) "workId" else "executionId")
+                    val scopeFields = listOf("runId", "venueSessionId", "instrumentId")
+                    val scoped = scopeFields.all { normalized.has(it) }
+                    val validLocator = locator != null && locator.isTextual && locator.asText().isNotEmpty()
+                    val validScope = !scoped || scopeFields.all { normalized[it].isTextual && normalized[it].asText().isNotEmpty() }
+                    // Partial scope does not narrow identity; only complete tuples select scoped execution.
+                    val matches = if (!validLocator || !validScope) emptyList() else executions.entries.filter { (_, execution) ->
+                        execution["executionId"] == locator && (!scoped || scopeFields.all { normalized[it] == execution[it] })
+                    }
                     if (matches.size == 1) {
                         val ekey = matches.single().key
                         val ordinal = if (isContinue) "1" else normalized["attempt"]?.asText()
                         val queue = eligible()
-                        val allowed = if (isContinue) continuation?.get("clockAction") == normalized["clockAction"]?.asText() && queue.firstOrNull() == ekey else continuation == null
+                        val clockAction = normalized.get("clockAction")
+                        val allowed = if (isContinue) clockAction != null && clockAction.isTextual && clockAction.asText().isNotEmpty() && continuation?.get("clockAction") == clockAction.asText() && queue.firstOrNull() == ekey else continuation == null
                         if (ordinal != null && BigInteger(ordinal).signum() > 0 && BigInteger(ordinal) > max) disposition = "AMOUNT_OVERFLOW"
                         else if (ordinal != null && BigInteger(ordinal).signum() > 0 && allowed) {
                             val akey = json.writeValueAsString(json.readTree(ekey).map { it.asText() } + ordinal)

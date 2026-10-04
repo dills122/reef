@@ -30,7 +30,7 @@ not retained. No live E3 fault or E4 load had run.
 owns resume paths and remaining gates. User resumed independent source review,
 then fresh proof after sign-off. Instance1 found four accepted P2 defects; focused
 oracle/default-storage fixes verified by instance2. Three additional input-boundary/
-staging findings accepted and fixed; focused seven regressions pass after correcting
+staging findings accepted and fixed; focused eight regressions pass after correcting
 one test compilation error. Final independent instance3 pending. Primary dirty checkout preserved.
 
 Broker harness `scripts/dev/calcify-financial/broker-proof.mjs`; rate policy

@@ -71,7 +71,7 @@ pause. Never global prune/reset or remove unrelated volumes.
 ## Immediate Next Actions
 
 1. Instance1 four findings fixed; instance2 three additional boundary/staging findings
-   fixed. Seven focused regressions pass after one test compilation correction.
+   fixed. Eight focused regressions pass after one test compilation correction.
    Final fresh independent instance3 required before authoritative post-fix proof.
    Preserve original recovery hashes and failed attempts as history.
 2. Verify latest source commit and branch. Read newest handoff only.

@@ -27,7 +27,9 @@ of rejected inputs retain original decision and policy context without new effec
 Consumed attempt/time/funding values checked before economic effects, with explicit
 sign/range error dispositions.
 Namespace/domain/action IDs require nonempty text; typed invalid identities cannot
-alias valid text. Malformed bounded requests stage durably during active phase,
+alias valid text. Settlement locators and continuation clock IDs require text;
+complete scope tuple resolves exactly, otherwise execution ID must be unique.
+Malformed bounded requests stage durably during active phase,
 restore pending membership, then reject after phase drains.
 These experiment rules do not establish live venue policy. E0 checks below remain
 dated evidence; current execution status lives in [work plan](../../WORK_PLAN.md).
