@@ -1,46 +1,46 @@
 {
   "schema": "calcify-sprint1-verification-v1",
   "date": "2026-10-04",
-  "sourceHead": "908c3e54583cb812b074fe66160c42f0bcbd4921",
+  "sourceHead": "f56b30b19d00a1033abae44a75435a4e771990e9",
   "overall": "BLOCKED_E3_E4",
   "review": {
-    "instances": 3,
-    "maximum": 3,
-    "lastVerdict": "Ready with non-blocking follow-ups",
-    "scope": "E1/E2 and bounded E3 proof regeneration; no E4 qualification",
-    "openP2": "E4 assessor accepts impossible deadline counts greater than final counts",
-    "newPostReviewBlocker": "RF3 worker fails initialization: producer transaction timeout10000ms lower than commit interval60000ms",
-    "furtherReview": "Stopped at skill maximum; human review-limit decision required before new independent instance"
+    "instances": 6,
+    "maximum": 6,
+    "lastVerdict": "Not ready",
+    "scope": "All recovered source/config/tests plus bounded operational watchdog",
+    "openP1": "Resource watchdog fails open on sample/cleanup failures",
+    "productSource": "No new actionable defect in round6;18 software hashes match f75",
+    "remediation": "Author-fixed watcher and new supervisor;11 mock controls pass; no fresh independent sign-off",
+    "furtherReview": "Human review-limit extension required; no seventh instance started"
   },
   "checks": {
     "nodeCi": {
-      "tests": 144,
-      "passed": 144,
+      "tests": 154,
+      "passed": 154,
       "failed": 0,
-      "attempts": [
-        "node-ci sandbox FAIL EPERM listener",
-        "node-ci-unsandboxed PASS"
-      ]
+      "skipped": 0,
+      "files": 31
     },
     "platformRuntime": {
-      "reportedTests": 794,
-      "reportedPassed": 774,
+      "reportedTests": 795,
+      "reportedPassed": 775,
       "skipped": 20,
       "failures": 0,
       "errors": 0,
-      "suites": 103,
+      "suites": 104,
       "profile": "Offline; DB environment unset; guarded DB tests can return without assertions; no DB integration claim",
-      "elapsedSeconds": 191.762
+      "elapsedSeconds": 208.945
     },
     "financial": {
-      "tests": 26,
-      "passed": 26,
+      "tests": 27,
+      "passed": 27,
       "kernelTests": 14,
       "oracleTests": 12,
       "fixtureCases": 20,
       "fixtureInputs": 52,
       "seededTraces": 300,
-      "businessPrefixes": 19200
+      "businessPrefixes": 19200,
+      "brokerConfigTests": 1
     },
     "gateModel": {
       "finiteCases": 156,
@@ -58,36 +58,73 @@
     "fixtureCheck": "PASS unchanged fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d",
     "scriptSurface": "PASS",
     "brokerHappy": {
-      "result": "FAIL before worker readiness",
-      "elapsedSeconds": 7.458,
-      "completedDecisionResults": 0,
-      "evidence": "broker-happy/0004-worker.stderr.log",
-      "project": "reef-calcify-financial-s1-908c3e54",
-      "cleanup": "Only new project stopped; volumes/topics preserved; no prune",
-      "acknowledgedPrefixInputs": 4,
-      "prefixInputBytes": 1317,
-      "physicalInputOffsets": [
-        4,
-        5,
-        6,
-        7
-      ],
-      "scope": "Input append succeeded; financial worker never initialized; acknowledgements alone do not prove financial processing."
+      "result": "PASS",
+      "elapsedSeconds": 26.417,
+      "project": "reef-calcify-financial-s1-3435d7b0",
+      "beforeRestart": {
+        "coveredInputs": 4,
+        "decisions": 4,
+        "settlements": 2
+      },
+      "afterRestart": {
+        "coveredInputs": 8,
+        "decisions": 8,
+        "settlements": 4,
+        "domains": 2
+      },
+      "scope": "Synthetic RF3/EOS happy/restart; separate result-history reconstruction controls, no full managed activation qualification"
     },
     "e4KnownCounterexample": {
-      "result": "DEFECT REPRODUCED",
-      "scope": "Fabricated assessor input, not measured benchmark",
-      "evidence": "e4-known-counterexample.stdout.log"
+      "result": "FIXED_AND_REJECTED",
+      "countFailuresDetected": 5,
+      "byteOverrides": "Invalid/undersized/unsafe overrides BLOCKED",
+      "scope": "Fabricated validation controls, not measured benchmarks"
+    },
+    "brokerCoreGolden": {
+      "result": "BUDGET_ABORT",
+      "coreCompleted": 10,
+      "corePlanned": 24,
+      "goldenCompleted": 9,
+      "goldenPlanned": 20,
+      "completedArmsPassed": true,
+      "lastActiveAllocatedBytes": 9114636288,
+      "stoppedAllocatedBytes": 13537280,
+      "peakCaptured": false,
+      "scope": "Partial passes; no full matrix pass; shutdown reclaimed preallocation; stopped footprint12.91MiB"
+    },
+    "boundedProfile": {
+      "result": "NOT_RUN",
+      "clusterProperties": "8MiB log/compacted/transaction coordinator segments; not applied",
+      "project": "reef-calcify-financial-s1-bounded",
+      "cleanup": "Preflight up succeeded then project stopped; volumes preserved",
+      "guardAuthorTests": 11,
+      "guardIndependentSignoff": false
     }
   },
   "limitations": [
-    "E3 golden/recovery/fault arms not run after startup failure",
+    "Full core/golden run budget-aborted; new profile rerun paused on review6 P1",
     "Full E3 qualification matrix incomplete",
     "E4 heap guard only unapplied draft; actual ACK/bytes/calibration gaps",
     "No capacity, production cutover, live reservation policy or full sprint PASS",
     "October3 original raw proof lost; October4 proof fresh, not reconstructed history"
   ],
   "archive": {
+    "repository": "https://github.com/dills122/reef-records",
+    "commit": "ad7b60e9512907865785b3ab3723642c9d56dd86",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-f56b30b1",
+    "pullRequest": "https://github.com/dills122/reef-records/pull/6",
+    "status": "OPEN",
+    "sourceBundleRemote": "Not published to Reef; only Records remote contains bulk",
+    "files": 617,
+    "bytes": 2682693,
+    "remoteBytesVerified": true,
+    "integrity": "PASS1393records, append-only/hygiene",
+    "unitTestsPassed": 4,
+    "sourceBundleLocalCommit": "b0ff1f24e252d922ba8df1ddf2854dc832010b6b",
+    "ci": "Both PR6 checks PASS"
+  },
+  "codeSourceHead": "f75b5d6187b631d5d608a24b883df6c57478b151",
+  "historicArchive": {
     "repository": "https://github.com/dills122/reef-records",
     "commit": "cfa4217708ff0694a966e3d87acce9585010a65a",
     "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54",

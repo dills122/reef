@@ -20,29 +20,28 @@ audited checkout; missing local reports do not prove a run never happened.
 
 ## Calcify sprint1 verification — October4,2026
 
-Branch `codex/calcify-sprint1-experiments`, base97924e15, reviewed source908c3e54.
-October3 lost temporary source recovered and pushed; [recovery hashes](evidence/calcify-financial-sprint1/recovery.json).
-[Focused checkpoint](evidence/calcify-financial-sprint1/README.md) and
-[active handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md)
-own current results and resume paths. Primary dirty checkout preserved.
+Branch `codex/calcify-sprint1-experiments`, base97924e15, sourcef56b30b1 pushed.
+Recovered source preserved; primary dirty checkout untouched.
+[Focused checkpoint](evidence/calcify-financial-sprint1/README.md),
+[active handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
 
-Review3of3: Ready with non-blocking follow-ups for E1/E2 and bounded E3 proof.
-Seven accepted prior P2 findings fixed; final reviewed source unchanged during retest.
-Node144/144; financial26/26; offline runtime774 reported passes/20 skips/0 failures;
-E2 finite156+seeded128 pass. No external DB integration proof.
+Human authorized rounds4–6. Timeout/count/byte-override defects fixed.
+Node154/154; financial27/27; offline runtime775 reported passes/20 skips/0failures;
+E2 finite156+seeded128 pass. RF3 happy/restart passes. Core10of24/golden9of20
+passed before disk-budget abort; no complete matrix pass or measured capacity.
 
-**E3/E4 blocked:** actual RF3 happy/restart arm fails before worker readiness,
-transaction timeout10s below commit interval60s; no completed decision results.
-E4 assessor count-consistency P2 remains, reproduced with fabricated control.
-Review cap3 reached; human limit decision required before another instance.
-Next: broker timeout fix and E4 assessor regression, new sign-off, then fresh E3 proof.
-Complete E3 fault/activation matrix and E4 heap/calibration gates before loads.
-Reservation stays proposal; no capacity, cutover or overall sprint PASS.
+**Review6of6 Not ready:** P1 proof watchdog fails open on sampling/cleanup error.
+Author fixed guard and supervising controller;11 mock-only controls pass, independent
+sign-off pending. New bounded project stopped with volumes preserved;8MiB profile
+not applied and bounded probes unrun. Cap6 exhausted; human extension required.
+Next: fresh review of corrected execution guard, exact profile preflight/readback,
+then remaining core/golden proof. Full E3 fault/activation and E4 heap/calibration/
+ACK gates remain; no capacity, cutover or overall sprint PASS. Product PR withheld.
 
-Full new review/proof bundle published only to Records, with local provenance commit;
-product PR keeps focused results and executable fixtures. Active guidance/overview
-check: no production API/events/schema/architecture changes, so no contract or accepted
-ADR update needed. E0 original archive remains immutable; current handoff refreshed.
+Bulk extended proof/reviews preserved only in Records; focused results and executable
+fixtures remain in Reef. Guidance/overview checked: no production API/events/schema
+or authority changes, so no contract/accepted ADR update needed. RFC status link
+refreshed; historical E0/908c checkpoints immutable. Active handoff refreshed.
 
 ## Calcify financial experiment E0 checkpoint (2026-10-03)
 

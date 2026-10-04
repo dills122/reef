@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_date": "2026-10-04",
-  "selection_reason": "Existing unrelated selections unchanged. October4 review/retest: bulk complete reviews and fresh proof published only to Reef Records; focused summary, machine-readable verification, recovery provenance, frozen executable fixtures and broker config retained in Reef. E3 startup failure/E4 assessor P2 retained; no overall PASS. E0 original archive immutable.",
+  "selection_reason": "Unrelated selections unchanged. October4 extended review/retest: complete rounds4\u20136/raw proof/failed budget/guard remediation archived only in Reef Records. Focused checkpoint, verification, fixture, recovery, broker config/profile retained; review6Not ready, no bounded rerun or overall PASS. Historical archives immutable.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 3698,
-      "sha256": "8ef1c36d0a2ac20f9615465dd456095c54eec77e9d77eb2010c332facfb7f449"
+      "bytes": 3795,
+      "sha256": "aaf7e05ccba657cafb5fe741faf044735ad34e7aedddfbedb1f993b086459a7b"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1680,13 +1680,18 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/verification.json",
-      "bytes": 3821,
-      "sha256": "71701a9e21ef5626fa828c02871b23bb93659626af65c53a45b67ff7aa7eb6df"
+      "bytes": 5306,
+      "sha256": "05f43118b2babdee971431075ea2aafb424f44c1bf974d72e63b4c04e28aea95"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/recovery.json",
       "bytes": 5113,
       "sha256": "b885932f63cdda2952cd6421b4ba65916069a6806413d1cb614a3f9813e2b8a1"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/broker-profile.json",
+      "bytes": 1796,
+      "sha256": "9b5a452576ea96fd9d5ab6fcb118e8a5a04039037903d2a4fc4c214a6e2f8e25"
     }
   ]
 }

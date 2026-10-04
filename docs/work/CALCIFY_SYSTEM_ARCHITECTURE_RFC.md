@@ -703,8 +703,9 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** [E0 preparation checkpoint recorded](../evidence/calcify-financial-sprint1/README.md);
-successful language-server gate and broker prerequisites remain blocked. E1–E4 unrun.
+**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-sprint1-verification--october42026)
+and [focused verification](../evidence/calcify-financial-sprint1/README.md) own execution status;
+E0 preparation history remains linked from evidence. Acceptance gates below unchanged.
 Decision owner: Reef project owner. Planning checkpoint:
 `0edbfa31055235fe196cc1949e3443fd75ffb41b`; execution must pin actual code/config.
 Goal: earn a decision on smallest financial kernel, gate protocol, reservation
