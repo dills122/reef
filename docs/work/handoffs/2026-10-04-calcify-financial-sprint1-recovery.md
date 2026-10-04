@@ -19,7 +19,7 @@ at this checkpoint. Existing sprint scope remains test-only RFC experiments.
 
 Persistent worktree `/Users/dsteele/repos/reef/.worktrees/calcify-sprint1-experiments`.
 Branch `codex/calcify-sprint1-experiments`, base97924e15642826a687db935a219d7927ae649ac8.
-Recovery commit will pin source and this handoff. Verify `git log -1` before resume.
+Source checkpoint06911bcf committed and pushed to origin. Verify latest `git log -1` before resume.
 Primary `/Users/dsteele/repos/reef` remains dirty on codex/calcify-phase2-planning;
 preserve AGENTS.md/CLAUDE.md and preexisting untracked planning/research files.
 
@@ -39,7 +39,9 @@ started. Full original draft/recovery trace/old handoff remain in persistent loc
 
 October3 temporary worktree and proof were deleted. Prior15 financial/38 model
 passes survive as conversation reports only; full original raw attempts/XML gone.
-Fresh verification logs use persistent `.planning/sprint1-recovery/verification/`.
+Fresh recovery verification:17 hashes match,38 Node tests pass, Java21 test-source
+compile passes42s. Financial JUnit suite not rerun.
+Fresh logs use persistent `.planning/sprint1-recovery/verification/`.
 Do not recreate historical proof or present reruns as original artifacts.
 
 ## Decisions And Rationale

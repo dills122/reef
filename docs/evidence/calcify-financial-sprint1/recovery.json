@@ -97,5 +97,27 @@
     "01a102ee-2b5a-77d0-8607-7ac5064666d1",
     "01a102ee-67c4-7b31-af3a-046e257faec7",
     "01a102ee-9b65-7ce1-b7c7-c686db80fdf8"
-  ]
+  ],
+  "recoveryVerification": {
+    "date": "2026-10-04",
+    "sourceCheckpoint": "06911bcf",
+    "sourceHashCheck": {
+      "files": 17,
+      "mismatches": 0
+    },
+    "nodeModels": {
+      "result": "PASS",
+      "tests": 38,
+      "rawSha256": "cbedd052df172460edd3a8040777993fbd51af89271a8646fe44b8c435349d93"
+    },
+    "kotlinCompile": {
+      "result": "PASS",
+      "elapsedSeconds": 42,
+      "command": "JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home ./gradlew --no-daemon compileTestKotlin resolverProbeDependencies",
+      "stdoutSha256": "68ea863ec60201bb04c81f4b3e4115d9829ca1290631f3aaaf78fd4901e5a6e4",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "rawLocation": "persistent .planning/sprint1-recovery/verification; Records publication pending",
+    "scope": "Source recovery only. Financial JUnit suite not rerun; no live broker arms or rate calibration/load."
+  }
 }
