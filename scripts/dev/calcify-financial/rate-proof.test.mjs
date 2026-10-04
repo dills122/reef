@@ -91,6 +91,44 @@ test('late drain cannot be counted as deadline output or settled financial throu
   assert.equal(r.rates.decidedPerSecond, 100000 / 60);
 });
 
+for (const stage of ['offered', 'admitted', 'decided', 'settled']) {
+  test(`cumulative ${stage} cannot roll back between deadline and final cuts`, () => {
+    const m = measurement();
+    const cumulative = ['offered', 'admitted', 'decided', 'settled'];
+    for (const preceding of cumulative.slice(0, cumulative.indexOf(stage) + 1)) m.deadline[preceding]++;
+    m.deadline.pending = m.deadline.decided - m.deadline.settled;
+    const r = assessMeasurement(policy(), m);
+    assert.ok(!r.failures.includes('DEADLINE_COUNT_PARITY'), `${stage}: valid within-cut accounting`);
+    assert.ok(r.failures.includes(`DEADLINE_${stage.toUpperCase()}_EXCEEDS_FINAL`), stage);
+    assert.equal(r.result, 'FAIL_DIAGNOSTIC', stage);
+  });
+}
+
+test('deadline offers cannot exceed frozen expected workload even if final agrees', () => {
+  const m = measurement();
+  for (const cut of ['deadline', 'final']) {
+    for (const stage of ['offered', 'admitted', 'decided', 'settled']) m[cut][stage]++;
+  }
+  const r = assessMeasurement(policy(), m);
+  assert.ok(r.failures.includes('DEADLINE_OFFERED_EXCEEDS_EXPECTED'));
+});
+
+test('each cut rejects admission ordering and settlement accounting violations', () => {
+  for (const cut of ['deadline', 'final']) {
+    for (const stage of ['admitted', 'decided', 'settled', 'pending']) {
+      const m = measurement(); m[cut][stage]++;
+      assert.ok(assessMeasurement(policy(), m).failures.includes(`${cut.toUpperCase()}_COUNT_PARITY`), `${cut}/${stage}`);
+    }
+  }
+});
+
+test('pending may decrease during drain; only missed deadline settlement fails', () => {
+  const m = measurement(); m.deadline.settled--; m.deadline.pending++;
+  const r = assessMeasurement(policy(), m);
+  assert.deepEqual(r.failures, ['DEADLINE_USEFUL_RATE_MISS']);
+  assert.deepEqual(r.gaps, []);
+});
+
 test('missing accounting or resource metrics are explicit limited attempt; count inconsistency fails', () => {
   const m = measurement(); delete m.resources.physicalChangelogBytes;
   assert.equal(assessMeasurement(policy(), m).result, 'LIMITED');

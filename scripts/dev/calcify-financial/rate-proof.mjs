@@ -90,6 +90,13 @@ export function assessMeasurement(policy, m) {
     if (!c || stages.some(k => !nonnegative(c[k]))) { gaps.push(`${cut.toUpperCase()}_STAGE_COUNTS_REQUIRED`); continue; }
     if (c.offered < c.admitted || c.admitted < c.decided || c.decided !== c.settled + c.pending) failures.push(`${cut.toUpperCase()}_COUNT_PARITY`);
   }
+  // Cumulative execution counts cannot shrink across cuts; pending is a gauge.
+  for (const stage of ['offered', 'admitted', 'decided', 'settled']) {
+    if (nonnegative(m.deadline?.[stage]) && nonnegative(m.final?.[stage]) && m.deadline[stage] > m.final[stage])
+      failures.push(`DEADLINE_${stage.toUpperCase()}_EXCEEDS_FINAL`);
+  }
+  if (nonnegative(m.deadline?.offered) && m.deadline.offered > policy.expectedTimedTrades)
+    failures.push('DEADLINE_OFFERED_EXCEEDS_EXPECTED');
   if (!positive(m.producerElapsedMs)) gaps.push('PRODUCER_ELAPSED_REQUIRED');
   else if (m.producerElapsedMs > durationMs + PLAN.maxProducerOverrunMs || m.producerElapsedMs < durationMs) failures.push('PRODUCER_DURATION_MISS');
   if (!nonnegative(m.drainMs)) gaps.push('DRAIN_REQUIRED');

@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -128,17 +129,7 @@ object FinancialBrokerProbe {
             require(ordinal < config["acceptedManifest"]["membership"].size()) { "source acknowledgement not registered before bounded deadline" }
             config["acceptedManifest"]["membership"][ordinal.toInt()]
         })
-        val props = properties(broker).apply {
-            put(StreamsConfig.APPLICATION_ID_CONFIG, app); put(StreamsConfig.STATE_DIR_CONFIG, stateDir)
-            put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
-            put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3); put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1)
-            put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, config["commitIntervalMs"]?.asInt() ?: 60000); put("topic.min.insync.replicas", 2); put("topic.write.caching", false)
-            put("default.deserialization.exception.handler", "org.apache.kafka.streams.errors.LogAndFailExceptionHandler")
-            put("default.production.exception.handler", "org.apache.kafka.streams.errors.DefaultProductionExceptionHandler")
-            put("processing.exception.handler", "org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler")
-            put("consumer.max.poll.records", config["maxPollRecords"]?.asInt() ?: 128); put("consumer.max.poll.interval.ms", 10000); put("consumer.session.timeout.ms", 6000); put("consumer.heartbeat.interval.ms", 1000)
-            if (fault == "production") put("producer.max.request.size", 512)
-        }
+        val props = workerProperties(broker, app, stateDir, config, fault)
         val failed = CountDownLatch(1)
         val streams = KafkaStreams(topology, props)
         streams.setUncaughtExceptionHandler { failure ->
@@ -474,6 +465,20 @@ object FinancialBrokerProbe {
         val unsigned = record.deepCopy<ObjectNode>(); unsigned.remove("checksum")
         require(record["checksum"].asText() == sha(canonical(unsigned))) { "history checksum mismatch" }
     }
+    internal fun workerProperties(broker: String, app: String, stateDir: String, config: JsonNode, fault: String = ""): Properties = properties(broker).apply {
+        put(StreamsConfig.APPLICATION_ID_CONFIG, app); put(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+        put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
+        // Preserve sixty-second grouping; EOS default ten-second timeout cannot cover this interval.
+        put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), 120000)
+        put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3); put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1)
+        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, config["commitIntervalMs"]?.asInt() ?: 60000); put("topic.min.insync.replicas", 2); put("topic.write.caching", false)
+        put("default.deserialization.exception.handler", "org.apache.kafka.streams.errors.LogAndFailExceptionHandler")
+        put("default.production.exception.handler", "org.apache.kafka.streams.errors.DefaultProductionExceptionHandler")
+        put("processing.exception.handler", "org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler")
+        put("consumer.max.poll.records", config["maxPollRecords"]?.asInt() ?: 128); put("consumer.max.poll.interval.ms", 10000); put("consumer.session.timeout.ms", 6000); put("consumer.heartbeat.interval.ms", 1000)
+        if (fault == "production") put("producer.max.request.size", 512)
+    }
+
     private fun properties(broker: String) = Properties().apply { put("bootstrap.servers", broker) }
     private fun canonical(node: JsonNode): String = when {
         node.isObject -> node.fieldNames().asSequence().sorted().joinToString(",", "{", "}") { json.writeValueAsString(it) + ":" + canonical(node[it]) }
