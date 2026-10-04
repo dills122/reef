@@ -390,7 +390,7 @@ object FinancialBrokerProbe {
                 "DRAIN" -> {
                     val view = oracle.businessView()
                     val item = if (view["continuation"].isNull) queue.entries.minByOrNull { it.value.position } else queue.entries.filter {
-                        it.value.input["kind"].asText().uppercase() == "CONTINUE" && it.value.input["payload"]["workId"].asText() == view["dueWork"][0].asText()
+                        it.value.input.path("kind").asText().uppercase() == "CONTINUE" && it.value.input.path("payload").path("workId").asText() == view["dueWork"][0].asText()
                     }.minByOrNull { it.value.position }
                     if (item != null) {
                         queue.remove(item.key); cursor[domain] = (cursor[domain] ?: 0L) + 1
@@ -420,14 +420,25 @@ object FinancialBrokerProbe {
             require(ordinal + 1 == count.toLong()) { "incomplete input prefix" }
             if (count == config["inputs"].size()) require(pending.values.all { it.isEmpty() } && owners.values.all { it["continuation"].isNull }) { "financial phase remains unfinished" }
         }
-        private fun actionKey(input: JsonNode) = json.writeValueAsString(listOf(input["namespace"].asText(), input["domain"].asText(), input["actionId"].asText()))
+        private fun actionKey(input: JsonNode) = json.writeValueAsString(listOf("namespace", "domain", "actionId").map { input.path(it) })
         private fun requestDigest(input: JsonNode): String {
-            val numeric = setOf("quantity", "priceNanos", "dueTick", "attempt", "amount", "tick")
-            val pairs = input["payload"].fieldNames().asSequence().sorted().map { name ->
-                val value = input["payload"][name].asText()
-                listOf(name, if (name in numeric) value.toBigInteger().toString() else value)
-            }.toList()
-            return sha(json.writeValueAsString(listOf(input["kind"].asText().uppercase(), input.get("requestedPolicy")?.takeUnless { it.isNull }?.asText(), pairs)))
+            // Independent source normalization: expected malformed input retains canonical identity while staged.
+            val normalized = runCatching {
+                val payload = input.path("payload")
+                require(payload.isObject)
+                val numeric = setOf("quantity", "priceNanos", "dueTick", "attempt", "amount", "tick")
+                val pairs = json.createArrayNode()
+                payload.fieldNames().asSequence().sorted().forEach { name ->
+                    val value = payload[name]
+                    val normalizedValue = if (name in numeric) {
+                        require(value.isTextual && value.asText().matches(Regex("-?[0-9]+")))
+                        json.nodeFactory.textNode(value.asText().toBigInteger().toString())
+                    } else value
+                    pairs.add(json.createArrayNode().add(name).add(normalizedValue))
+                }
+                json.writeValueAsString(listOf(input.path("kind").asText().uppercase(), input.get("requestedPolicy"), pairs))
+            }
+            return sha(normalized.getOrElse { canonical(input) })
         }
     }
 

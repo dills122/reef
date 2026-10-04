@@ -70,8 +70,10 @@ pause. Never global prune/reset or remove unrelated volumes.
 
 ## Immediate Next Actions
 
-1. Apply four accepted review findings; preserve original recovery hashes as history.
-   Fresh independent instance2 required before authoritative post-fix proof.
+1. Instance1 four findings fixed; instance2 three additional boundary/staging findings
+   fixed. Seven focused regressions pass after one test compilation correction.
+   Final fresh independent instance3 required before authoritative post-fix proof.
+   Preserve original recovery hashes and failed attempts as history.
 2. Verify latest source commit and branch. Read newest handoff only.
 3. Freeze compiled runtime before E3; recheck actual isolated Docker resources,
    versions, health, disk and topics. First real arm run-happy with explicit

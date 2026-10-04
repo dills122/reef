@@ -39,45 +39,54 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
 
     fun execute(input: JsonNode): JsonNode {
         val previousBusiness = businessView()
-        val key = frame(input["namespace"].asText(), input["domain"].asText(), input["actionId"].asText())
-        val payload = input["payload"]
+        val key = json.writeValueAsString(listOf("namespace", "domain", "actionId").map { input.path(it) })
+        val payload = input.path("payload")
         var digest = ""
         var normalized: JsonNode = payload
         val invalidNormalization = runCatching {
-            val pairs = payload.fieldNames().asSequence().sorted().map { name ->
-                val value = payload[name].asText()
-                listOf(name, if (name in numeric) integer(value).toString() else value)
-            }.toList()
-            digest = sha(json.writeValueAsString(listOf(input["kind"].asText().uppercase(), input.get("requestedPolicy")?.takeUnless { it.isNull }?.asText(), pairs)))
-            normalized = json.valueToTree(pairs.associate { it[0] to it[1] })
+            require(payload.isObject)
+            val pairs = json.createArrayNode()
+            val converted = json.createObjectNode()
+            payload.fieldNames().asSequence().sorted().forEach { name ->
+                val value = payload[name]
+                val normalizedValue = if (name in numeric) {
+                    require(value.isTextual)
+                    json.nodeFactory.textNode(integer(value.asText()).toString())
+                } else value
+                converted.set<JsonNode>(name, normalizedValue)
+                pairs.add(json.createArrayNode().add(name).add(normalizedValue))
+            }
+            digest = sha(json.writeValueAsString(listOf(input.path("kind").asText().uppercase(), input.get("requestedPolicy"), pairs)))
+            normalized = converted
         }.isFailure
-        if (continuation != null && input["kind"].asText().uppercase() != "CONTINUE") return projection("STAGED", input, 0, activePolicy)
+        if (continuation != null && input.path("kind").asText().uppercase() != "CONTINUE") return projection("STAGED", input, 0, activePolicy)
         if (invalidNormalization) digest = sha(canonical(input))
         val prior = dedup[key]
         if (prior != null && prior["digest"] == digest) {
             return projection("PRIOR_RESULT", input, 0, (prior["context"] as Map<*, *>)["policy"].toString()).also {
-                it.put("originalDisposition", input["actionId"].asText()); it.put("noNewAttempt", true)
+                it.put("originalDisposition", input.path("actionId").asText()); it.put("noNewAttempt", true)
             }
         }
         val conflictKey = frame(key, "conflict", digest)
         val priorConflict = if (prior != null) dedup[conflictKey] else null
         if (priorConflict != null) {
             return projection("PRIOR_RESULT", input, 0, (priorConflict["context"] as Map<*, *>)["policy"].toString()).also {
-                it.put("originalDisposition", input["actionId"].asText()); it.put("noNewAttempt", true)
+                it.put("originalDisposition", input.path("actionId").asText()); it.put("noNewAttempt", true)
             }
         }
         val selected = input.get("requestedPolicy")?.takeUnless { it.isNull }?.asText() ?: activePolicy
         val context = policy.fields().asSequence().associate { it.key to it.value.asText() }.toMutableMap()
-        context["policy"] = selected; context["logicalTick"] = tick.toString(); context["domain"] = input["domain"].asText()
+        context["policy"] = selected; context["logicalTick"] = tick.toString(); context["domain"] = input.path("domain").asText()
         var disposition = "INVALID_INPUT"
         var legs: List<Map<String, String>> = emptyList()
         if (prior != null) disposition = "ACTION_CONFLICT"
+        else if (invalidNormalization || listOf("namespace", "domain", "actionId").any { !input.path(it).isTextual || input.path(it).asText().isEmpty() }) disposition = "INVALID_INPUT"
         else if (selected !in setOf("gross-p1", "gross-p2")) disposition = "MISSING_POLICY"
         else if (!invalidNormalization) {
-            when (input["kind"].asText().uppercase()) {
+            when (input.path("kind").asText().uppercase()) {
                 "CAPTURE" -> {
                     val required = listOf("executionId", "runId", "venueSessionId", "instrumentId", "buyOrderId", "sellOrderId", "buyerAccount", "sellerAccount", "cashAsset", "securityAsset", "quantity", "priceNanos", "dueTick")
-                    if (required.all { normalized.hasNonNull(it) && normalized[it].asText().isNotEmpty() } &&
+                    if (required.all { normalized.hasNonNull(it) && normalized[it].isTextual && normalized[it].asText().isNotEmpty() } &&
                         normalized["buyerAccount"].asText() == "buyer" && normalized["sellerAccount"].asText() == "seller" &&
                         normalized["cashAsset"].asText() == "USD_NANO" && normalized["securityAsset"].asText() == "ACME_SHARE") {
                         val quantity = BigInteger(normalized["quantity"].asText())
@@ -85,11 +94,11 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                         val dueTick = BigInteger(normalized["dueTick"].asText())
                         val value = quantity * price
                         // Synthetic gross-DvP contract accepts positive quantity and nonnegative price, including zero cash value.
-                        if (quantity.signum() > 0 && price.signum() >= 0 && dueTick.signum() >= 0 && dueTick <= max) {
+                        if (quantity.signum() > 0 && price.signum() >= 0 && dueTick.signum() >= 0) {
                             val executionKey = execKey(normalized)
                             val previous = executions[executionKey]
                             disposition = when {
-                                quantity > max || price > max || value > max -> "AMOUNT_OVERFLOW"
+                                quantity > max || value > max || dueTick > max -> "AMOUNT_OVERFLOW"
                                 previous != null && previous != normalized -> "EXECUTION_CONFLICT"
                                 previous != null -> "EXECUTION_ALREADY_CAPTURED"
                                 else -> {
@@ -105,7 +114,7 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                     }
                 }
                 "SETTLE", "CONTINUE" -> {
-                    val isContinue = input["kind"].asText().uppercase() == "CONTINUE"
+                    val isContinue = input.path("kind").asText().uppercase() == "CONTINUE"
                     val id = normalized[if (isContinue) "workId" else "executionId"]?.asText()
                     val matches = executions.entries.filter { (_, e) -> e["executionId"].asText() == id && listOf("runId", "venueSessionId", "instrumentId").all { !normalized.has(it) || normalized[it] == e[it] } }
                     if (matches.size == 1) {
@@ -113,7 +122,8 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                         val ordinal = if (isContinue) "1" else normalized["attempt"]?.asText()
                         val queue = eligible()
                         val allowed = if (isContinue) continuation?.get("clockAction") == normalized["clockAction"]?.asText() && queue.firstOrNull() == ekey else continuation == null
-                        if (ordinal != null && BigInteger(ordinal).signum() > 0 && allowed) {
+                        if (ordinal != null && BigInteger(ordinal).signum() > 0 && BigInteger(ordinal) > max) disposition = "AMOUNT_OVERFLOW"
+                        else if (ordinal != null && BigInteger(ordinal).signum() > 0 && allowed) {
                             val akey = json.writeValueAsString(json.readTree(ekey).map { it.asText() } + ordinal)
                             val o = obligations.getValue(ekey)
                             disposition = when {
@@ -148,7 +158,8 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                     if (continuation == null && account in setOf("buyer", "seller") && asset in setOf("USD_NANO", "ACME_SHARE") && amount != null && amount.signum() > 0 && normalized["authority"]?.asText() == "opening-resource-owner") {
                         val field = account + if (asset == "USD_NANO") "Cash" else "Shares"
                         val opening = if (asset == "USD_NANO") "openingCash" else "openingShares"
-                        if (money.getValue(field) + amount > max || money.getValue(opening) - amount < min) disposition = "BALANCE_OVERFLOW"
+                        if (amount > max) disposition = "AMOUNT_OVERFLOW"
+                        else if (money.getValue(field) + amount > max || money.getValue(opening) - amount < min) disposition = "BALANCE_OVERFLOW"
                         else {
                             money[field] = money.getValue(field) + amount; money[opening] = money.getValue(opening) - amount
                             versions[field] = versions.getValue(field) + 1; versions[opening] = versions.getValue(opening) + 1
@@ -159,9 +170,10 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
                 "ACTIVATE_POLICY" -> if (normalized["policy"]?.asText() in setOf("gross-p1", "gross-p2") && continuation == null) { activePolicy = normalized["policy"].asText(); disposition = "POLICY_ACTIVATED" }
                 "CLOCK" -> {
                     val next = normalized["tick"]?.asText()?.let(::BigInteger)
-                    if (next != null && next >= tick && next <= max && continuation == null) {
+                    if (next != null && (next < min || next > max)) disposition = "AMOUNT_OVERFLOW"
+                    else if (next != null && next >= tick && continuation == null) {
                         tick = next
-                        continuation = mapOf("clockAction" to input["actionId"].asText(), "phase" to "DRAIN_DUE")
+                        continuation = mapOf("clockAction" to input.path("actionId").asText(), "phase" to "DRAIN_DUE")
                         if (eligible().isEmpty()) continuation = null
                         disposition = "CLOCK_ADVANCED"
                     }
@@ -183,10 +195,10 @@ internal class FinancialOracle(genesisBalances: JsonNode, private val policy: Js
         result.set<JsonNode>("settledExecutions", json.valueToTree(obligations.filterValues { it["status"] == "SETTLED" }.keys.map { executions.getValue(it)["executionId"].asText() }.sorted()))
         result.set<JsonNode>("pendingExecutions", json.valueToTree(obligations.filterValues { it["status"] == "PENDING" }.keys.map { executions.getValue(it)["executionId"].asText() }.sorted()))
         if (continuation != null) result.put("continuationPhase", "DRAIN_DUE")
-        val id = input["payload"]["executionId"]?.asText() ?: input["payload"]["workId"]?.asText()
+        val id = input.path("payload").get("executionId")?.asText() ?: input.path("payload").get("workId")?.asText()
         val o = obligations.entries.singleOrNull { executions.getValue(it.key)["executionId"].asText() == id }?.value ?: obligations.values.singleOrNull()
         o?.let { result.put("obligationStatus", it["status"]); result.put("cashResidual", it["cashResidual"]); result.put("shareResidual", it["shareResidual"]) }
-        val ordinal = input["payload"]["attempt"]?.asText() ?: if (input["kind"].asText().uppercase() == "CONTINUE") "1" else null
+        val ordinal = input.path("payload").get("attempt")?.asText() ?: if (input.path("kind").asText().uppercase() == "CONTINUE") "1" else null
         if (ordinal != null && disposition == "SETTLED") result.put("attempt", BigInteger(ordinal).toString())
         if (ordinal != null && disposition in setOf("INSUFFICIENT_CASH", "INSUFFICIENT_SHARES", "BALANCE_OVERFLOW")) result.put("failedAttempt", BigInteger(ordinal).toString())
         return result

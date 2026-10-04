@@ -24,6 +24,11 @@ Recovered test-only gross-DvP kernel accepts positive quantities and nonnegative
 prices, including zero-price transfers; negative prices are invalid. Both funding
 legs must fit signed64 storage, including opening-resource debit. Identical retries
 of rejected inputs retain original decision and policy context without new effects.
+Consumed attempt/time/funding values checked before economic effects, with explicit
+sign/range error dispositions.
+Namespace/domain/action IDs require nonempty text; typed invalid identities cannot
+alias valid text. Malformed bounded requests stage durably during active phase,
+restore pending membership, then reject after phase drains.
 These experiment rules do not establish live venue policy. E0 checks below remain
 dated evidence; current execution status lives in [work plan](../../WORK_PLAN.md).
 

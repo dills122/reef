@@ -6,6 +6,7 @@ import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class FinancialKernelTest {
     private val fixtures = ObjectMapper().readTree(Path.of("../../docs/evidence/calcify-financial-sprint1/fixtures.json").readText())
@@ -120,6 +121,155 @@ class FinancialKernelTest {
         restored.drainStaged()
         assertEquals("70000000000", restored.businessView()["balances"]["buyerCash"].asText())
         assertEquals("PENDING", restored.businessView()["obligations"].first { it["status"].asText() == "PENDING" }["status"].asText())
+    }
+
+    @Test fun clockBarrierDurablyStagesMalformedInputsUntilTerminalRejection() {
+        val mapper = ObjectMapper()
+        val fixture = fixtures["cases"].last()
+        val steps = fixture["steps"].map { it["input"] }
+        for (malformation in listOf("numeric", "missing-payload", "missing-kind", "continue-missing-payload", "continue-missing-workId")) {
+            val continuationInput = malformation.startsWith("continue-")
+            val input = steps[if (continuationInput) 3 else 0].deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>().apply {
+                put("actionId", "staged-invalid-$malformation")
+                when (malformation) {
+                    "numeric" -> (get("payload") as com.fasterxml.jackson.databind.node.ObjectNode).put("quantity", "NaN")
+                    "missing-kind" -> remove("kind")
+                    "continue-missing-workId" -> (get("payload") as com.fasterxml.jackson.databind.node.ObjectNode).remove("workId")
+                    else -> remove("payload")
+                }
+            }
+            val kernel = FinancialKernel(fixture["genesisBalances"], fixtures["policy"])
+            steps.take(3).forEach { kernel.execute(it) }
+            val beforeStage = kernel.businessView()
+            fun deliverPending() = if (continuationInput) kernel.stage(input) else kernel.execute(input)
+            assertEquals("STAGED", deliverPending()["disposition"].asText(), malformation)
+            val pending = kernel.ownerView()
+            val stageRecord = kernel.lastRecord()!!
+            assertEquals("STAGE", stageRecord["kind"].asText())
+            assertTrue(mapper.writeValueAsBytes(stageRecord).size <= 65_536)
+            assertTrue(stageRecord["changes"].size() <= 64)
+            assertEquals(1, pending["stagedInputs"].size())
+            assertEquals(input, pending["stagedInputs"].first()["input"])
+            assertEquals(beforeStage, kernel.businessView())
+            assertEquals("STAGED", deliverPending()["disposition"].asText())
+            assertEquals(pending, kernel.ownerView(), "duplicate pending membership: $malformation")
+            assertEquals(stageRecord, kernel.lastRecord(), "duplicate must not append history")
+            assertEquals(emptyList(), kernel.drainStaged())
+
+            val pendingCheckpoint = mapper.readTree(mapper.writeValueAsBytes(kernel.checkpoint()))
+            val pendingHistory = kernel.history().map { mapper.readTree(mapper.writeValueAsBytes(it)) }
+            val recovered = listOf(
+                kernel,
+                FinancialKernel.restore(pendingCheckpoint, emptyList()),
+                FinancialKernel.replay(pendingHistory)
+            )
+            recovered.forEach { assertEquals(pending, it.ownerView(), "pending recovery: $malformation") }
+            for (continuation in steps.slice(3..4)) {
+                kernel.stage(continuation)
+                val expected = kernel.drainStaged(1).single()
+                recovered.drop(1).forEach {
+                    it.stage(continuation)
+                    assertEquals(expected, it.drainStaged(1).single())
+                    assertEquals(kernel.ownerView(), it.ownerView())
+                    assertEquals(kernel.lastRecord(), it.lastRecord())
+                }
+            }
+            val beforeReject = kernel.ownerView()
+            for (owner in recovered) {
+                val result = owner.drainStaged().single()
+                assertEquals("INVALID_INPUT", result["disposition"].asText(), malformation)
+                assertEquals(0, result["journalLegs"].asInt())
+                val terminal = owner.ownerView()
+                assertEquals(0, terminal["stagedInputs"].size())
+                assertEquals(beforeReject["businessSeq"].asLong() + 1, terminal["businessSeq"].asLong())
+                assertEquals(beforeReject["deliveryCursor"].asLong() + 1, terminal["deliveryCursor"].asLong())
+                for (field in listOf("balances", "executions", "obligations", "workflows", "instructions", "attempts", "exceptions", "reservations", "effects", "versions", "dueQueue")) {
+                    assertEquals(beforeReject[field], terminal[field], "rejection changed $field: $malformation")
+                }
+                val rejection = terminal["dedup"].first { it["disposition"].asText() == "INVALID_INPUT" }
+                assertEquals(pending["stagedInputs"].first()["digest"], rejection["digest"])
+                assertEquals("gross-p1", rejection["context"]["policy"].asText())
+                assertEquals("10", rejection["context"]["logicalTick"].asText())
+                assertEquals(input["domain"], rejection["context"]["domain"])
+                assertEquals(kernel.ownerView(), terminal, "deterministic rejection: $malformation")
+                assertEquals(kernel.lastRecord(), owner.lastRecord())
+                val terminalRecord = owner.lastRecord()
+                assertEquals("BUSINESS", terminalRecord!!["kind"].asText())
+                assertTrue(terminalRecord["journalGroups"].isEmpty)
+                assertEquals("PRIOR_RESULT", owner.execute(input)["disposition"].asText())
+                assertEquals(terminal, owner.ownerView(), "rejected retry must be inert")
+                assertEquals(terminalRecord, owner.lastRecord())
+            }
+            assertEquals(kernel.ownerView(), FinancialKernel.replay(kernel.history()).ownerView())
+            assertEquals(kernel.ownerView(), FinancialKernel.restore(pendingCheckpoint, kernel.history().drop(pendingHistory.size)).ownerView())
+        }
+    }
+
+    @Test fun invalidEnvelopeIdentityRejectsAndIdenticalRetryReturnsPriorResult() {
+        val mapper = ObjectMapper()
+        val fixture = fixtures["cases"].last()
+        for (field in listOf("namespace", "domain", "actionId")) for (malformation in listOf("missing", "empty", "null", "nontext")) {
+            val input = fixture["steps"][0]["input"].deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>().apply {
+                when (malformation) {
+                    "missing" -> remove(field)
+                    "empty" -> put(field, "")
+                    "null" -> putNull(field)
+                    "nontext" -> set<com.fasterxml.jackson.databind.JsonNode>(field, mapper.nodeFactory.numberNode(17))
+                }
+            }
+            val label = "$field $malformation"
+            val kernel = FinancialKernel(fixture["genesisBalances"], fixtures["policy"])
+            val before = kernel.ownerView()
+            val result = kernel.execute(input)
+            assertEquals("INVALID_INPUT", result["disposition"].asText(), label)
+            assertEquals(0, result["journalLegs"].asInt())
+            val rejected = kernel.ownerView()
+            val record = kernel.lastRecord()
+            for (economicField in listOf("balances", "executions", "obligations", "effects", "versions", "dueQueue")) {
+                assertEquals(before[economicField], rejected[economicField], "$label changed $economicField")
+            }
+            for (owner in listOf(kernel, FinancialKernel.restore(kernel.checkpoint(), emptyList()), FinancialKernel.replay(kernel.history()))) {
+                assertEquals("PRIOR_RESULT", owner.execute(input)["disposition"].asText(), label)
+                assertEquals(rejected, owner.ownerView())
+            }
+            assertEquals(record, kernel.lastRecord())
+        }
+    }
+
+    @Test fun envelopeIdentityTypesCannotConflateValidAndRejectedActions() {
+        val mapper = ObjectMapper()
+        val fixture = fixtures["cases"].last()
+        for (field in listOf("namespace", "domain", "actionId")) for (invalidType in listOf("numeric", "null")) for (invalidFirst in listOf(false, true)) {
+            val textValue = if (invalidType == "numeric") "17" else "null"
+            val valid = fixture["steps"][0]["input"].deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>().apply { put(field, textValue) }
+            val invalid = valid.deepCopy().apply {
+                if (invalidType == "numeric") set<com.fasterxml.jackson.databind.JsonNode>(field, mapper.nodeFactory.numberNode(17)) else putNull(field)
+            }
+            val kernel = FinancialKernel(fixture["genesisBalances"], fixtures["policy"])
+            val label = "$field $invalidType invalidFirst=$invalidFirst"
+            val ordered = if (invalidFirst) listOf(invalid, valid) else listOf(valid, invalid)
+            for (input in ordered) {
+                val before = kernel.ownerView()
+                val result = kernel.execute(input)
+                assertEquals(if (input === invalid) "INVALID_INPUT" else "CAPTURED", result["disposition"].asText(), label)
+                if (input === invalid) {
+                    assertEquals(0, result["journalLegs"].asInt())
+                    for (economicField in listOf("balances", "executions", "obligations", "effects", "versions", "dueQueue")) {
+                        assertEquals(before[economicField], kernel.ownerView()[economicField], "$label changed $economicField")
+                    }
+                }
+            }
+            val terminal = kernel.ownerView()
+            assertEquals(2, terminal["dedup"].size(), label)
+            assertEquals(setOf("CAPTURED", "INVALID_INPUT"), terminal["dedup"].map { it["disposition"].asText() }.toSet())
+            assertEquals(1, terminal["executions"].size())
+            for (owner in listOf(kernel, FinancialKernel.restore(kernel.checkpoint(), emptyList()), FinancialKernel.replay(kernel.history()))) {
+                for (input in listOf(valid, invalid)) {
+                    assertEquals("PRIOR_RESULT", owner.execute(input)["disposition"].asText(), label)
+                    assertEquals(terminal, owner.ownerView(), "$label retry changed state")
+                }
+            }
+        }
     }
 
     @Test fun missingStagingDeltaMutantCannotReconstructPendingOwnerState() {

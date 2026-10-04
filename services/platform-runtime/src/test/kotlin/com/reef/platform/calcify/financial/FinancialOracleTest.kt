@@ -144,6 +144,141 @@ class FinancialOracleTest {
         }
     }
 
+    @Test
+    fun `consumed signed64 bounds reject before effects and preserve rejection retries`() {
+        val maximum = Long.MAX_VALUE.toString()
+        val beyond = "9223372036854775808"
+        val below = "-9223372036854775809"
+        val captureTemplate = fixtures["cases"][0]["steps"][0]["input"]
+        data class Boundary(val kind: String, val field: String, val value: String, val expected: String)
+        val boundaries = listOf(
+            Boundary("CAPTURE", "dueTick", maximum, "CAPTURED"), Boundary("CAPTURE", "dueTick", beyond, "AMOUNT_OVERFLOW"), Boundary("CAPTURE", "dueTick", "-1", "INVALID_INPUT"),
+            Boundary("SETTLE", "attempt", maximum, "SETTLED"), Boundary("SETTLE", "attempt", beyond, "AMOUNT_OVERFLOW"), Boundary("SETTLE", "attempt", "0", "INVALID_INPUT"), Boundary("SETTLE", "attempt", "-1", "INVALID_INPUT"),
+            Boundary("FUND", "amount", maximum, "FUNDED"), Boundary("FUND", "amount", beyond, "AMOUNT_OVERFLOW"), Boundary("FUND", "amount", "0", "INVALID_INPUT"), Boundary("FUND", "amount", "-1", "INVALID_INPUT"),
+            Boundary("CLOCK", "tick", maximum, "CLOCK_ADVANCED"), Boundary("CLOCK", "tick", beyond, "AMOUNT_OVERFLOW"), Boundary("CLOCK", "tick", Long.MIN_VALUE.toString(), "INVALID_INPUT"), Boundary("CLOCK", "tick", below, "AMOUNT_OVERFLOW"), Boundary("CLOCK", "tick", "-1", "INVALID_INPUT")
+        )
+        for (boundary in boundaries) {
+            val genesis = if (boundary.kind == "FUND") mapper.valueToTree<JsonNode>(mapOf("buyerCash" to "0", "sellerCash" to "0", "buyerShares" to "0", "sellerShares" to "0")) else fixtures["cases"][0]["genesisBalances"]
+            val oracle = FinancialOracle(genesis, fixtures["policy"])
+            val kernel = FinancialKernel(genesis, fixtures["policy"])
+            if (boundary.kind == "SETTLE") {
+                oracle.execute(captureTemplate); kernel.execute(captureTemplate)
+                oracle.assertMatches(kernel.businessView(), "settle boundary setup")
+            }
+            val payload = when (boundary.kind) {
+                "CAPTURE" -> captureTemplate["payload"].deepCopy<ObjectNode>()
+                "SETTLE" -> fixtures["cases"][0]["steps"][1]["input"]["payload"].deepCopy<ObjectNode>()
+                "FUND" -> mapper.valueToTree<ObjectNode>(mapOf("account" to "buyer", "asset" to "USD_NANO", "authority" to "opening-resource-owner"))
+                else -> mapper.createObjectNode()
+            }.put(boundary.field, boundary.value)
+            val input = mapper.valueToTree<JsonNode>(mapOf("namespace" to "sprint1", "domain" to "domain-1", "actionId" to "boundary", "kind" to boundary.kind, "payload" to payload))
+            val before = oracle.businessView()
+            assertEquals(boundary.expected, oracle.execute(input)["disposition"].asText(), "$boundary reference")
+            assertEquals(boundary.expected, kernel.execute(input)["disposition"].asText(), "$boundary kernel")
+            oracle.assertMatches(kernel.businessView(), boundary.toString())
+            if (boundary.expected in setOf("AMOUNT_OVERFLOW", "INVALID_INPUT")) {
+                for (field in listOf("balances", "effects", "versions", "obligations", "attempts", "dueQueue", "logicalTick", "continuation")) assertEquals(before[field], oracle.businessView()[field], "$boundary no effect $field")
+                val rejected = oracle.businessView()
+                val history = kernel.historySequence()
+                assertEquals("PRIOR_RESULT", oracle.execute(input)["disposition"].asText())
+                assertEquals("PRIOR_RESULT", kernel.execute(input)["disposition"].asText())
+                assertEquals(rejected, oracle.businessView(), "$boundary retry full state")
+                assertEquals(history, kernel.historySequence())
+                oracle.assertMatches(kernel.businessView(), "$boundary retry")
+            }
+        }
+    }
+
+    @Test
+    fun `missing empty null and numeric envelope identities reject before missing policy`() {
+        val template = fixtures["cases"][0]["steps"][0]["input"]
+        val invalid = mutableListOf<ObjectNode>()
+        for (field in listOf("namespace", "domain", "actionId")) {
+            invalid.add(template.deepCopy<ObjectNode>().apply { remove(field) })
+            invalid.add(template.deepCopy<ObjectNode>().put(field, ""))
+            invalid.add(template.deepCopy<ObjectNode>().putNull(field))
+            invalid.add(template.deepCopy<ObjectNode>().put(field, 7))
+        }
+        invalid.add(template.deepCopy<ObjectNode>().put("requestedPolicy", "missing-policy").apply { (get("payload") as ObjectNode).put("quantity", "NaN") })
+        invalid.add(template.deepCopy<ObjectNode>().put("requestedPolicy", "missing-policy").apply { remove("payload") })
+        for ((index, input) in invalid.withIndex()) {
+            val oracle = FinancialOracle(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+            val kernel = FinancialKernel(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+            val before = oracle.businessView()
+            assertEquals("INVALID_INPUT", oracle.execute(input)["disposition"].asText(), "identity=$index reference")
+            assertEquals("INVALID_INPUT", kernel.execute(input)["disposition"].asText(), "identity=$index kernel")
+            oracle.assertMatches(kernel.businessView(), "identity=$index")
+            for (field in listOf("balances", "effects", "versions", "executions", "obligations", "dueQueue")) assertEquals(before[field], oracle.businessView()[field], "identity=$index no effect $field")
+            val rejected = oracle.businessView()
+            val history = kernel.historySequence()
+            assertEquals("PRIOR_RESULT", oracle.execute(input)["disposition"].asText())
+            assertEquals("PRIOR_RESULT", kernel.execute(input)["disposition"].asText())
+            assertEquals(rejected, oracle.businessView())
+            assertEquals(history, kernel.historySequence())
+            oracle.assertMatches(kernel.businessView(), "identity=$index retry context")
+        }
+        val oracle = FinancialOracle(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+        val kernel = FinancialKernel(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+        oracle.execute(template); kernel.execute(template)
+        val conflict = template.deepCopy<ObjectNode>().put("requestedPolicy", "missing-policy").apply { (get("payload") as ObjectNode).put("quantity", "NaN") }
+        assertEquals("ACTION_CONFLICT", oracle.execute(conflict)["disposition"].asText())
+        assertEquals("ACTION_CONFLICT", kernel.execute(conflict)["disposition"].asText())
+        oracle.assertMatches(kernel.businessView(), "conflict precedes malformed input and missing policy")
+    }
+
+    @Test
+    fun `typed envelope identities never alias valid text identities in either order`() {
+        val template = fixtures["cases"][0]["steps"][0]["input"]
+        for (field in listOf("namespace", "domain", "actionId")) {
+            for (numeric in listOf(true, false)) {
+                for (invalidFirst in listOf(true, false)) {
+                    val invalid = template.deepCopy<ObjectNode>().apply { if (numeric) put(field, 7) else putNull(field) }
+                    val valid = template.deepCopy<ObjectNode>().put(field, if (numeric) "7" else "null")
+                    val oracle = FinancialOracle(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+                    val kernel = FinancialKernel(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+                    for ((input, expected) in if (invalidFirst) listOf(invalid to "INVALID_INPUT", valid to "CAPTURED") else listOf(valid to "CAPTURED", invalid to "INVALID_INPUT")) {
+                        assertEquals(expected, oracle.execute(input)["disposition"].asText(), "$field numeric=$numeric invalidFirst=$invalidFirst reference")
+                        assertEquals(expected, kernel.execute(input)["disposition"].asText(), "$field numeric=$numeric invalidFirst=$invalidFirst kernel")
+                        oracle.assertMatches(kernel.businessView(), "$field numeric=$numeric invalidFirst=$invalidFirst")
+                    }
+                    assertEquals(2, oracle.businessView()["dedup"].size(), "distinct typed identities")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `broker reference stages malformed numeric missing payload and missing identity without losing authority`() {
+        val capture = fixtures["cases"][0]["steps"][0]["input"].deepCopy<ObjectNode>().put("domain", "A")
+        val clock = mapper.valueToTree<JsonNode>(mapOf("namespace" to "sprint1", "domain" to "A", "actionId" to "clock", "kind" to "CLOCK", "payload" to mapOf("tick" to "1")))
+        val malformed = capture.deepCopy().put("actionId", "bad-numeric").apply { (get("payload") as ObjectNode).put("quantity", "NaN") }
+        val missingPayload = capture.deepCopy().put("actionId", "missing-payload").apply { remove("payload") }
+        val missingIdentity = capture.deepCopy().apply { remove("actionId") }
+        val missingKind = capture.deepCopy().put("actionId", "missing-kind").apply { remove("kind") }
+        val malformedContinue = capture.deepCopy().put("actionId", "bad-continue").put("kind", "CONTINUE").apply { remove("payload") }
+        val missingWork = capture.deepCopy().put("actionId", "missing-work").put("kind", "CONTINUE").apply { set<JsonNode>("payload", mapper.valueToTree(mapOf("clockAction" to "clock"))) }
+        val continuation = mapper.valueToTree<JsonNode>(mapOf("namespace" to "sprint1", "domain" to "A", "actionId" to "continue", "kind" to "CONTINUE", "payload" to mapOf("clockAction" to "clock", "workId" to capture["payload"]["executionId"].asText())))
+        val dispatch = listOf("EXECUTE" to capture, "EXECUTE" to clock, "EXECUTE" to malformed, "EXECUTE" to malformed, "EXECUTE" to missingPayload, "EXECUTE" to missingIdentity, "EXECUTE" to missingKind, "STAGE" to malformedContinue, "STAGE" to missingWork, "EXECUTE" to continuation, "DRAIN" to mapper.nullNode(), "DRAIN" to mapper.nullNode(), "DRAIN" to mapper.nullNode(), "DRAIN" to mapper.nullNode(), "DRAIN" to mapper.nullNode(), "DRAIN" to mapper.nullNode())
+        val envelopes = dispatch.mapIndexed { index, (mode, input) -> mapper.valueToTree<JsonNode>(mapOf("domain" to "A", "inputOrdinal" to index, "mode" to mode, "input" to input)) }
+        val config = mapper.valueToTree<JsonNode>(mapOf("inputs" to envelopes, "genesis" to mapOf("A" to mapOf("balances" to fixtures["cases"][0]["genesisBalances"])), "policy" to fixtures["policy"]))
+        val kernel = FinancialKernel(fixtures["cases"][0]["genesisBalances"], fixtures["policy"])
+        var emitted = 0
+        val outputs = dispatch.mapIndexed { index, (mode, input) ->
+            val result = when (mode) { "DRAIN" -> kernel.drainStaged(1).single(); "STAGE" -> kernel.stage(input); else -> kernel.execute(input) }
+            val records = kernel.history().drop(emitted)
+            emitted += records.size
+            mapper.valueToTree<JsonNode>(mapOf("domain" to "A", "inputOrdinal" to index, "records" to records, "disposition" to result["disposition"].asText()))
+        }
+        assertEquals(listOf("CAPTURED", "CLOCK_ADVANCED", "STAGED", "STAGED", "STAGED", "STAGED", "STAGED", "STAGED", "STAGED", "SETTLED", "INVALID_INPUT", "INVALID_INPUT", "INVALID_INPUT", "INVALID_INPUT", "INVALID_INPUT", "INVALID_INPUT"), outputs.map { it["disposition"].asText() })
+        FinancialBrokerProbe.OutputVerifier(config).also { verifier -> outputs.forEach(verifier::accept); verifier.requirePrefix(outputs.size) }
+        val omitted = outputs.map { it.deepCopy<ObjectNode>() }
+        omitted[2].set<JsonNode>("records", mapper.createArrayNode())
+        assertFailsWith<IllegalArgumentException> { FinancialBrokerProbe.OutputVerifier(config).also { verifier -> omitted.forEach(verifier::accept) } }
+        val changedConfig = config.deepCopy<ObjectNode>()
+        (changedConfig["inputs"][2]["input"]["payload"] as ObjectNode).put("quantity", "Infinity")
+        assertFailsWith<IllegalArgumentException> { FinancialBrokerProbe.OutputVerifier(changedConfig).also { verifier -> outputs.forEach(verifier::accept) } }
+    }
+
     /** Shared only as immutable input data for independent kernel replay/crash proof. */
     internal fun generatedTraces(): Sequence<Pair<String, List<JsonNode>>> = sequence {
         for (seed in listOf(1, 42, 20261003)) {

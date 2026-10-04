@@ -90,7 +90,7 @@ internal class FinancialKernel private constructor(private val state: ObjectNode
                 val d = Changes(); d.put(listOf("stagedInputs", stagedKey), null); d.increment(listOf("deliveryCursor")); append("STAGE", d, input)
             }
             return projection(input, "PRIOR_RESULT", 0, prior["context"]["policy"].asText(), detailed).apply {
-                put("originalDisposition", input["actionId"].asText()); put("noNewAttempt", true)
+                put("originalDisposition", input.path("actionId").asText()); put("noNewAttempt", true)
             }
         }
         val d = Changes()
@@ -102,7 +102,7 @@ internal class FinancialKernel private constructor(private val state: ObjectNode
         val legs = mapper.createArrayNode()
         var status = when {
             prior != null -> "ACTION_CONFLICT"
-            normalized.isFailure || listOf("namespace", "domain", "actionId").any { input.path(it).asText().isEmpty() } -> "INVALID_INPUT"
+            normalized.isFailure || listOf("namespace", "domain", "actionId").any { !input.path(it).isTextual || input.path(it).asText().isEmpty() } -> "INVALID_INPUT"
             context["policy"].asText() !in setOf("gross-p1", "gross-p2") -> "MISSING_POLICY"
             else -> runCatching {
                 when (kind) {
@@ -240,7 +240,7 @@ internal class FinancialKernel private constructor(private val state: ObjectNode
     }
 
     fun stage(input: JsonNode, detailed: Boolean = true): JsonNode {
-        val digest = hash(normalize(input)); val key = frame(listOf(actionKey(input), digest))
+        val digest = hash(runCatching { normalize(input) }.getOrElse { canonical(input) }); val key = frame(listOf(actionKey(input), digest))
         val old = state["stagedInputs"][key]
         if (old != null) { require(old["digest"].asText() == digest) { "conflicting staged identity" }; return projection(input, "STAGED", 0, state["activePolicy"].asText(), detailed) }
         require(state["stagedInputs"].size() < 64) { "staging capacity exceeded" }
@@ -257,7 +257,7 @@ internal class FinancialKernel private constructor(private val state: ObjectNode
             val staged = state["stagedInputs"].properties().sortedBy { it.value["position"].asLong() }
             val selected = if (state["continuation"].isNull) staged.first() else staged.firstOrNull {
                 val input = it.value["input"]
-                input["kind"].asText().uppercase() == "CONTINUE" && input["payload"]["workId"].asText() == dueIndex.firstEntry()?.key?.work
+                input.path("kind").asText().uppercase() == "CONTINUE" && input.path("payload").path("workId").asText() == dueIndex.firstEntry()?.key?.work
             } ?: break
             results.add(process(selected.value["input"], selected.key, detailed))
         }
@@ -350,7 +350,7 @@ internal class FinancialKernel private constructor(private val state: ObjectNode
         private fun required(n: JsonNode?, field: String): String { val v = n?.get(field); require(v != null && v.isTextual && v.asText().isNotEmpty()); return v.asText() }
         private fun frame(fields: List<String>) = mapper.writeValueAsString(fields)
         private fun executionKey(p: JsonNode) = frame(listOf("runId", "venueSessionId", "instrumentId", "executionId").map { required(p, it) })
-        private fun actionKey(input: JsonNode) = frame(listOf("namespace", "domain", "actionId").map { input.path(it).asText() })
+        private fun actionKey(input: JsonNode) = mapper.writeValueAsString(listOf("namespace", "domain", "actionId").map { input.path(it) })
         private fun normalizePayload(p: JsonNode): ObjectNode = obj().apply { p.properties().sortedBy { it.key }.forEach { (k,v) -> set<JsonNode>(k, if (k in numeric) text(integer(v).toString()) else v) } }
         private fun normalize(input: JsonNode): String {
             val pairs = mapper.createArrayNode(); val p = input["payload"]; require(p != null && p.isObject)
