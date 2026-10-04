@@ -28,8 +28,17 @@ const nonnegative = value => Number.isSafeInteger(value) && value >= 0;
 const finiteNonnegative = value => Number.isFinite(value) && value >= 0;
 const positive = value => Number.isSafeInteger(value) && value > 0;
 
+function physicalTradeBudget(calibration) {
+  if (!positive(calibration?.physicalBytes) || !positive(calibration?.sampleTrades)) throw Error('PHYSICAL_TRADE_BUDGET_INVALID');
+  const measured = Math.ceil(calibration.physicalBytes / calibration.sampleTrades) * 2;
+  const override = calibration.maxPhysicalBytesPerTrade;
+  if (!positive(measured) || (override !== undefined && (!positive(override) || override < measured)))
+    throw Error('PHYSICAL_TRADE_BUDGET_INVALID');
+  return override ?? measured;
+}
+
 export function estimateAged(calibration, preflight, arm = { rate: 10000, seconds: 300 }) {
-  const perTrade = calibration.maxPhysicalBytesPerTrade ?? Math.ceil(calibration.physicalBytes / calibration.sampleTrades) * 2;
+  const perTrade = physicalTradeBudget(calibration);
   const fixed = preflight.basePhysicalBytes + 10000 * calibration.pendingPhysicalBytes + arm.rate * arm.seconds * perTrade;
   const proposed = fixed + PLAN.proposedIdentities * calibration.identityPhysicalBytes;
   const identities = Math.min(PLAN.proposedIdentities, Math.max(0, Math.floor((PLAN.diskBudgetBytes - fixed) / calibration.identityPhysicalBytes)));
@@ -57,6 +66,9 @@ export function preparePolicy(request = {}) {
     const s = c?.[role];
     if (!s || !positive(s.elapsedMs) || !positive(s.completedTrades) || !arm || s.completedTrades * 1000 / s.elapsedMs < arm.rate || (role === 'observer' && s.exactParity !== true))
       gaps.push(`${role.toUpperCase()}_REAL_RECORD_RATE_CALIBRATION_REQUIRED`);
+  }
+  if (c) {
+    try { physicalTradeBudget(c); } catch { gaps.push('PHYSICAL_TRADE_BUDGET_INVALID'); }
   }
   if (gaps.length) return { schema: 'financial-e4-policy-v1', status: 'BLOCKED', plan: PLAN, gaps };
   const aged = estimateAged(c, p, arm);

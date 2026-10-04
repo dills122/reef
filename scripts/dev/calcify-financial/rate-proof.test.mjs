@@ -167,3 +167,30 @@ test('load and calibration entrypoints refuse before filesystem or adapter work 
   await assert.rejects(runAdapter('/missing-policy', '/missing-adapter', '/missing-out'), /authorize-load/);
   await assert.rejects(calibrateAdapter('/missing-request', '/missing-adapter', '/missing-out'), /authorize-calibration/);
 });
+
+
+test('calibration overrides cannot undercut measured physical byte budget or use invalid numbers', () => {
+  const huge = { ...calibration, physicalBytes: 200000000 };
+  assert.equal(preparePolicy({ calibration: huge, correctness, preflight, arm }).status, 'BLOCKED');
+  for (const value of [0, -1, 0.5, 1, 399999, '400000', 'bogus', null, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    const c = { ...huge, maxPhysicalBytesPerTrade: value };
+    assert.equal(preparePolicy({ calibration: c, correctness, preflight, arm }).status, 'BLOCKED', String(value));
+    assert.throws(() => estimateAged(c, preflight, arm), /PHYSICAL_TRADE_BUDGET/, String(value));
+  }
+});
+
+test('valid byte override preserves conservative floor and may increase budget only', () => {
+  for (const value of [400, 800]) {
+    const c = { ...calibration, maxPhysicalBytesPerTrade: value };
+    const p = preparePolicy({ calibration: c, correctness, preflight, arm });
+    assert.equal(p.status, 'FROZEN');
+    assert.equal(p.aged.physicalBytesPerTradeBudget, value);
+    assert.equal(p.aged.fixedBytes, preflight.basePhysicalBytes + PLAN.pendingItems * c.pendingPhysicalBytes + arm.rate * arm.seconds * value);
+  }
+});
+
+test('derived per-trade budget must remain safe integer before policy freezes', () => {
+  const c = { ...calibration, sampleTrades: 1, physicalBytes: Number.MAX_SAFE_INTEGER };
+  assert.equal(preparePolicy({ calibration: c, correctness, preflight, arm }).status, 'BLOCKED');
+  assert.throws(() => estimateAged(c, preflight, arm), /PHYSICAL_TRADE_BUDGET/);
+});
