@@ -1,0 +1,28 @@
+{
+  "schema": "calcify-rf3-correctness-profile-v1",
+  "scope": "Synthetic bounded RF3/EOS correctness probes only; no throughput/capacity transfer",
+  "clusterProperties": {
+    "log_segment_size": 8388608,
+    "compacted_log_segment_size": 8388608,
+    "transaction_coordinator_log_segment_size": 8388608
+  },
+  "applyBefore": "Any FinancialBrokerProbe init/seed/worker command on fresh isolated project; read back exact values and attach frozen preflight",
+  "invariants": [
+    "RF3 and topic min.insync.replicas2 unchanged",
+    "Input/result/changelog write caching false unchanged",
+    "Worker60s commit and120s producer timeout unchanged",
+    "Retention/history and replica/durability settings unchanged",
+    "No E4 capacity loads or production deployment"
+  ],
+  "budgets": {
+    "projectAllocatedBytes": 10737418240,
+    "guestFreeBytesFloor": 21474836480,
+    "rawProofBytes": 268435456
+  },
+  "monitoring": "Parent-owned watcher samples allocated broker directories/guest free/raw proof bytes every5seconds; stops only registered project and exact owned probe tree at9GiB allocation (hardbudget10GiB), guest<20GiB or raw>=256MiB. Recorded samples are not continuous peak measurement. Preallocation may reclaim on shutdown; stopped footprint never reported as active peak.",
+  "rationale": "Previous default topic/internal transaction segment preallocation reached sampled9,114,636,288bytes after nine completed arms; core/golden stopped before full pass. Topics/volumes and failed proof preserved.8MiB segments reduce reserved geometry; no business or ordering rule changes.",
+  "references": [
+    "https://docs.redpanda.com/streaming/current/reference/properties/topic-properties/",
+    "https://docs.redpanda.com/streaming/current/reference/properties/cluster-properties/"
+  ]
+}

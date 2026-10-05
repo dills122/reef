@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated_date": "2026-10-03",
-  "selection_reason": "Carry forward existing topic selections unchanged. October3 user-directed bulk relocation: complete Calcify E0 97-file bundle verified in Reef Records08a4347; Reef retains focused summary, frozen executable inputs and broker config. All failures, corrections and reviews linked through immutable archive and relocation inventory.",
+  "updated_date": "2026-10-05",
+  "selection_reason": "Unrelated selections unchanged. Round7 signed guard and supervised pilot/full implemented matrix proof archived only in Reef Records. Focused current verification, fixtures, recovery, profile and active handoff retained; full E3/E4/capacity open. Historical imports immutable; no source removal.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 4073,
-      "sha256": "493142a95e649eaf292a3f1e62872ee6b59c11938c31822eac3b4dd5ac87a75c"
+      "bytes": 4856,
+      "sha256": "2f27bd65ab533ab512af886d6f6f45b6c906b2d14a33dd18697f36ec04325ee8"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1677,6 +1677,21 @@
       "path": "docs/evidence/calcify-financial-sprint1/fixtures.json",
       "bytes": 90325,
       "sha256": "fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/verification.json",
+      "bytes": 9193,
+      "sha256": "9b3505b2b257835dade182f5ada83b463dc4dbe385a2909ac3a206bc71dbb537"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/recovery.json",
+      "bytes": 5113,
+      "sha256": "b885932f63cdda2952cd6421b4ba65916069a6806413d1cb614a3f9813e2b8a1"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/broker-profile.json",
+      "bytes": 1796,
+      "sha256": "9b5a452576ea96fd9d5ab6fcb118e8a5a04039037903d2a4fc4c214a6e2f8e25"
     }
   ]
 }

@@ -1,0 +1,219 @@
+{
+  "schema": "calcify-sprint1-verification-v1",
+  "date": "2026-10-05",
+  "sourceHead": "f22b2f852a3aa1b14bd52a36f828f3e5cceb351f",
+  "overall": "OCR_FIXES_TESTED_INDEPENDENT_SIGNOFF_PENDING",
+  "review": {
+    "instances": 7,
+    "maximum": 7,
+    "lastVerdict": "Ready with non-blocking follow-ups",
+    "scope": "Historical round7 scope; subsequent OCR checkpoint and metric fixes await new independent sign-off",
+    "openP1": null,
+    "remediation": "Independent 19 mocked and 2 real process-tree controls pass; prior fail-open P1 closed",
+    "furtherReview": "Cap 7 exhausted; new material changes require human extension"
+  },
+  "checks": {
+    "nodeCi": {
+      "tests": 158,
+      "passed": 158,
+      "failed": 0,
+      "skipped": 0,
+      "files": 31,
+      "scope": "Fresh exact31-file rerun after OCR fixes, outside sandbox for loopback server; initial sandbox EPERM preserved"
+    },
+    "platformRuntime": {
+      "reportedTests": 795,
+      "reportedPassed": 775,
+      "skipped": 20,
+      "failures": 0,
+      "errors": 0,
+      "suites": 104,
+      "profile": "Offline; DB environment unset; guarded DB tests can return without assertions; no DB integration claim",
+      "elapsedSeconds": 208.945,
+      "scope": "Retained full-module rerun after review5; same 18 software and 89 build hashes checked after review7; not a new module rerun"
+    },
+    "financial": {
+      "tests": 27,
+      "passed": 27,
+      "kernelTests": 14,
+      "oracleTests": 12,
+      "fixtureCases": 20,
+      "fixtureInputs": 52,
+      "seededTraces": 300,
+      "businessPrefixes": 19200,
+      "brokerConfigTests": 1
+    },
+    "gateModel": {
+      "finiteCases": 156,
+      "creditCases": 144,
+      "prefixCases": 12,
+      "seededCases": 128,
+      "failures": 0,
+      "scope": "Bounded symbolic model; no physical heap or full liveness proof"
+    },
+    "rateSelfcheck": {
+      "prefixes": 40,
+      "oneLegMutantRejected": true,
+      "scope": "Local correctness selfcheck only; no measured rate"
+    },
+    "fixtureCheck": "PASS unchanged fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d",
+    "scriptSurface": "PASS",
+    "brokerHappy": {
+      "result": "PASS",
+      "elapsedSeconds": 26.417,
+      "project": "reef-calcify-financial-s1-3435d7b0",
+      "beforeRestart": {
+        "coveredInputs": 4,
+        "decisions": 4,
+        "settlements": 2
+      },
+      "afterRestart": {
+        "coveredInputs": 8,
+        "decisions": 8,
+        "settlements": 4,
+        "domains": 2
+      },
+      "scope": "Synthetic RF3/EOS happy/restart; separate result-history reconstruction controls, no full managed activation qualification"
+    },
+    "e4KnownCounterexample": {
+      "result": "FIXED_AND_REJECTED",
+      "countFailuresDetected": 5,
+      "byteOverrides": "Invalid/undersized/unsafe overrides BLOCKED",
+      "scope": "Fabricated validation controls, not measured benchmarks"
+    },
+    "brokerCoreGolden": {
+      "result": "BUDGET_ABORT",
+      "coreCompleted": 10,
+      "corePlanned": 24,
+      "goldenCompleted": 9,
+      "goldenPlanned": 20,
+      "completedArmsPassed": true,
+      "lastActiveAllocatedBytes": 9114636288,
+      "stoppedAllocatedBytes": 13537280,
+      "peakCaptured": false,
+      "scope": "Partial passes; no full matrix pass; shutdown reclaimed preallocation; stopped footprint12.91MiB"
+    },
+    "boundedProfile": {
+      "result": "PASS",
+      "profileSourceHead": "f56b30b19d00a1033abae44a75435a4e771990e9",
+      "clusterProperties": "Actual readback: log, compacted and transaction coordinator segments 8388608 bytes",
+      "pilotArms": 2,
+      "coreArms": 24,
+      "goldenArms": 20,
+      "elapsedSeconds": {
+        "broker-golden": 432.849,
+        "broker-core": 469.711,
+        "supervised-matrix": 474.917
+      },
+      "isolatedHistoryChecks": 44,
+      "topicSettingsVerified": 132,
+      "requestedKafkaMinISR": 2,
+      "reportedKafkaMinISR": null,
+      "actualDurabilitySettings": "RF3, write.caching=false; Kafka ISR hint absent in Redpanda readback. Documented Raft quorum inference separate from outage proof.",
+      "forecastAllocatedBytes": 8280440832,
+      "maxSampledAllocatedBytes": 4778024960,
+      "minGuestFreeBytes": 92796874752,
+      "finalLiveAllocatedBytes": 4752396288,
+      "resourceSamples": 92,
+      "guardMockControls": 19,
+      "guardRealProcessControls": 2,
+      "guardIndependentSignoff": true,
+      "cleanup": "Both owned projects stopped; six broker volumes retained; no owned probes remain",
+      "scope": "Implemented correctness matrix only; 5-second samples do not establish continuous peak or capacity"
+    }
+  },
+  "limitations": [
+    "Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27 activation matrix incomplete",
+    "E4 heap/ACK membership/physical-byte/calibration gaps; no rate load",
+    "No capacity, production cutover, accepted live reservation policy or full sprint PASS",
+    "October3 original raw proof lost; subsequent proof fresh, not reconstructed history",
+    "Historical default-segment budget abort and assessment/parser failures retained with explicit corrections"
+  ],
+  "archive": {
+    "repository": "https://github.com/dills122/reef-records",
+    "commit": "b5d868b69132e85cdf74e4fc9c948f01eafc74c9",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-05-f22b2f85",
+    "pullRequest": "https://github.com/dills122/reef-records/pull/6",
+    "status": "OPEN",
+    "sourceBundleRemote": "Bulk only in Records; Reef provenance local-only",
+    "sourceBundleLocalCommit": "b665c75f4732cfc0d0e86c930449cb071b1e8e80",
+    "files": 948,
+    "bytes": 4214935,
+    "remoteBytesVerified": true,
+    "integrity": "PASS append-only, hashes and hygiene",
+    "unitTestsPassed": 4,
+    "ci": "Both PR6 checks PASS at b5d868b69132e85cdf74e4fc9c948f01eafc74c9"
+  },
+  "codeSourceHead": "f75b5d6187b631d5d608a24b883df6c57478b151",
+  "historicArchive": {
+    "repository": "https://github.com/dills122/reef-records",
+    "commit": "cfa4217708ff0694a966e3d87acce9585010a65a",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54",
+    "pullRequest": "https://github.com/dills122/reef-records/pull/6",
+    "status": "OPEN",
+    "files": 256,
+    "bytes": 1342028,
+    "remoteBytesVerified": true,
+    "integrity": "PASS 776 records",
+    "unitTestsPassed": 4,
+    "sourceBundleLocalCommit": "fa442bbc5ef9fa7ab33e8ae4e6f128e364a30a95",
+    "sourceBundleRemote": "Not published to Reef; only Records remote contains bulk"
+  },
+  "guardRevision": {
+    "commit": "0fd0e45c1efb5464e5308021d4b6834e68b54f76",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/guard-revision-2026-10-05-f56b30b1",
+    "independentSignoff": false,
+    "files": 25,
+    "bytes": 54968,
+    "remoteBytesVerified": true,
+    "integrity": "PASS1418records",
+    "unitTestsPassed": 4,
+    "ci": "Both PR6 checks PASS",
+    "sourceBundleLocalCommit": "fedb554b811559596d32a084451d9af60e021ca8"
+  },
+  "extendedArchive": {
+    "repository": "https://github.com/dills122/reef-records",
+    "commit": "ad7b60e9512907865785b3ab3723642c9d56dd86",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-f56b30b1",
+    "pullRequest": "https://github.com/dills122/reef-records/pull/6",
+    "status": "OPEN",
+    "sourceBundleRemote": "Not published to Reef; only Records remote contains bulk",
+    "files": 617,
+    "bytes": 2682693,
+    "remoteBytesVerified": true,
+    "integrity": "PASS1393records, append-only/hygiene",
+    "unitTestsPassed": 4,
+    "sourceBundleLocalCommit": "b0ff1f24e252d922ba8df1ddf2854dc832010b6b",
+    "ci": "Both PR6 checks PASS"
+  },
+  "ocrFollowup": {
+    "comments": [
+      4180270457,
+      4180270466,
+      4180270468
+    ],
+    "checkpoint": "Versioned checkpoint with required-field, numeric, position, manifest/history and window validation before state assignment",
+    "metrics": "Invalid numerators or denominators return null; scheduled stage rates also guarded",
+    "lock": "Finding disputed: exclusive open occurs before finally; only lock owner unlinks, global serialization and unique output directories intentional",
+    "regressionTests": {
+      "focused": 47,
+      "passed": 47,
+      "newCases": 4,
+      "nodeCi": 158,
+      "failures": 0
+    },
+    "historicalBrokerScope": "Same broker/Kotlin/profile/guard as signed 44-arm run; JS gate/rate changes postdate historical full-source hash verification",
+    "independentReview": "Not started; cap7 exhausted, human extension required",
+    "proofArchive": {
+      "commit": "ef6e48ee0469816f83500a46b96f1986ea7b174b",
+      "url": "https://github.com/dills122/reef-records/tree/ef6e48ee0469816f83500a46b96f1986ea7b174b/records/reef/docs/evidence/calcify-financial-sprint1/ocr-followup-2026-10-05-0a64c482",
+      "files": 13,
+      "bytes": 135639,
+      "remoteBytesVerified": true,
+      "sourceLocalCommit": "245a91ba49db43788eb3fe948a522a92f70f287c",
+      "productSourceCommit": "0a64c4823a00ec5133e331bcfbbc94e542c4d8d3",
+      "archiveIntegrity": "2379 records PASS",
+      "archiveUnitTests": 4
+    }
+  }
+}

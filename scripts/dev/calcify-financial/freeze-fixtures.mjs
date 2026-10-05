@@ -121,4 +121,4 @@ for (const c of cases) for (const s of c.steps) {
 const text = JSON.stringify(contract, null, 2) + '\n';
 if (process.argv.includes('--check')) assert.equal(await readFile(output, 'utf8'), text, 'frozen fixture drift');
 else await writeFile(output, text);
-console.log(JSON.stringify({ cases: cases.length, inputs: cases.reduce((n, c) => n + c.steps.length, 0), sha256: createHash('sha256').update(text).digest('hex'), checks: 'input normalization/framing/golden stability only; kernel/oracle unimplemented' }));
+console.log(JSON.stringify({ cases: cases.length, inputs: cases.reduce((n, c) => n + c.steps.length, 0), sha256: createHash('sha256').update(text).digest('hex'), checks: 'input normalization/framing/golden stability only; financial correctness requires separate kernel/oracle suite' }));

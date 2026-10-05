@@ -18,6 +18,36 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify sprint1 verification — October5 UTC / October4 local, 2026
+
+Branch `codex/calcify-sprint1-experiments`; recovered test-only source preserved,
+primary dirty checkout untouched. [Focused checkpoint](evidence/calcify-financial-sprint1/README.md),
+[active handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
+
+OCR follow-up: checkpoint schema/state validation and null invalid metrics fixed;
+four new regressions, focused47/47 and exact Node158/158 pass. Lock finding
+disputed with exclusive-open ownership evidence. New JS changes await independent
+sign-off; cap7 exhausted. [Reef PR473](https://github.com/dills122/reef/pull/473).
+
+**Review7/7 Ready with non-blocking follow-ups.** Guard P1 closed; independent
+19 mocked + 2 real process-tree controls pass. Small pilot 2/2; full implemented
+matrix 24/24 core + 20/20 golden, all 44 isolated-history checks pass. Actual RF3/
+write-caching/8 MiB settings verified on 132 topics. Sampled maximum 4.45 GiB;
+474.917 seconds correctness timing. Both clusters stopped, six volumes retained.
+Fresh Node154/154; retained identical-code financial27/27 and offline module
+775 reported passes/20 skips/zero failures. No DB integration or capacity claim.
+
+Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27
+activation and E4 heap/ACK/physical-byte/calibration gates remain open. Next: close
+missing fault/activation acceptance cases before E4 rate qualification. Reservation
+acceptance and matcher identity integration remain. No full sprint/cutover sign-off.
+Cap 7 used; material changes need human review extension.
+
+[Bulk reviews/proof](https://github.com/dills122/reef-records/tree/b5d868b69132e85cdf74e4fc9c948f01eafc74c9/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-05-f22b2f85) only in Records; focused verification and executable
+fixtures remain in Reef. Prior failures immutable. Completion/retention pass updates
+current owners; no source removal. Test-only change affects no production API,
+events, storage, authority or accepted ADR; guidance/overview checked.
+
 ## Calcify financial experiment E0 checkpoint (2026-10-03)
 
 Execution source85f0ce8c; planningcda4185b/PR#466 subsequently merged, docs only.

@@ -1,0 +1,32 @@
+--- a/scripts/dev/calcify-financial/rate-proof.test.mjs
++++ b/scripts/dev/calcify-financial/rate-proof.test.mjs
+@@ -8,12 +8,12 @@
+   schema: 'financial-rate-calibration-v1', sourceHead: hash, fixtureSha256: hash,
+   realRecordEvidenceSha256: hash, sampleTrades: 1000, encodedBytes: 100000,
+   physicalBytes: 200000, physicalReplicationIncluded: true,
+-  identityPhysicalBytes: 100, pendingPhysicalBytes: 200,
++  identityPhysicalBytes: 100, pendingPhysicalBytes: 200, identityHeapBytes: 100, pendingHeapBytes: 100,
+   producer: { completedTrades: 10000, elapsedMs: 1000 },
+   observer: { completedTrades: 10000, elapsedMs: 1000, exactParity: true },
+ };
+ const correctness = { schema: 'financial-e3-correctness-v1', result: 'PASS', sourceHead: hash, fixtureSha256: hash, evidenceSha256: hash };
+-const preflight = { guestFreeBytes: 40 * 1024 ** 3, basePhysicalBytes: 1024,
++const preflight = { guestFreeBytes: 40 * 1024 ** 3, basePhysicalBytes: 1024, jvmMaxHeapBytes: 768 * 1024 ** 2, heapBaselineBytes: 128 * 1024 ** 2,
+   indexedReadView: true, boundedWrites: true, retainsFullDomainHistory: false,
+   accessPatternEvidenceSha256: hash };
+ const arm = PLAN.ladder[0];
+@@ -129,3 +129,14 @@
+   await assert.rejects(runAdapter('/missing-policy', '/missing-adapter', '/missing-out'), /authorize-load/);
+   await assert.rejects(calibrateAdapter('/missing-request', '/missing-adapter', '/missing-out'), /authorize-calibration/);
+ });
++
++test('heap estimate blocks fresh arm beyond768MiB and preserves proposed aged failure', () => {
++  const large = { ...calibration, identityHeapBytes: 10000, pendingHeapBytes: 10000 };
++  const frozen = preparePolicy({ calibration: large, correctness, preflight, arm });
++  assert.equal(frozen.status, 'BLOCKED');
++  assert.ok(frozen.gaps.includes('FRESH_RETAINED_STATE_HEAP_BUDGET_EXCEEDED'));
++  const aged = estimateAged({ ...calibration, identityHeapBytes: 1000, pendingHeapBytes: 1000 }, preflight, arm);
++  assert.ok(aged.identities < 1000000);
++  assert.equal(aged.scope, 'REDUCED_AGED_DIAGNOSTIC');
++  assert.ok(aged.proposedEstimatedHeapBytes > preflight.jvmMaxHeapBytes);
++});
