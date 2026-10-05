@@ -24,7 +24,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 | Order | Owner | Read for |
 | --- | --- | --- |
-| 1 | [Current work](WORK_PLAN.md#calcify-heap-protection-component--october-5-2026) | Merged work, verified heap component and remaining E4 gates |
+| 1 | [Current work](WORK_PLAN.md#calcify-e4-continuation--october-5-2026) | Merged work, E4 diagnostic readiness, measured gates and next bounded work |
 | 2 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
 | 3 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
 | 4 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |

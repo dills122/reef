@@ -185,6 +185,9 @@ jobs:
         working-directory: services/platform-runtime
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -365,6 +368,10 @@ jobs:
             scripts/dev/calcify-financial/reservation-model.test.mjs \
             scripts/dev/calcify-financial/gate-model.test.mjs \
             scripts/dev/calcify-financial/rate-proof.test.mjs \
+            scripts/dev/calcify-financial/rate-supervision.test.mjs \
+            scripts/dev/calcify-financial/bootstrap-calibration.test.mjs \
+            scripts/dev/calcify-financial/physical-evidence.test.mjs \
+            scripts/dev/calcify-financial/physical-adapter.test.mjs \
             scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt
       - name: Add coverage summary
         run: |

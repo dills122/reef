@@ -18,6 +18,96 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify E4 continuation — October 5, 2026
+
+Branch `codex/calcify-e4-readiness`, base `29a8926d`. Test-only bounded diagnostic
+Attempt1 code passed independent cycle3 review, financial97/97 and exact
+NodeCI274/274 on its frozen source. Recoverable bounded ACK membership,
+raw physical inventories, local-resource supervision, current-candidate E3
+binding and separately launched JVM recovery are implemented. Review establishes
+code readiness for that candidate. Its49-arm correctness passed on same source/build:
+external4/core24/golden20/activation1,1073.813s,233 resource observations
+(238 journal rows;4 fault-phase grants and1 closure distinct),228 with all3
+actual allocations. Sampled maximum
+project charge6,658,150,400 bytes includes fixed3GiB fault-target reservation;
+maximum fully measured broker sum5,135,011,840 bytes has separate scope.
+All three owned brokers stopped, volumes retained. First1000-settled/100-pending
+diagnostic invocation refused before payload: equal heap maxima compared as
+different JSON integer node types. Research reproduced boundary; strict integral
+comparison fix passes focused8-test regression, including invalid forms. New
+Attempt2 cycle1 whole-code review Ready; fullfinancial98/98 passes on frozen
+source, actual capability round trip passes. Fresh same-candidate49 passed:
+external4/core24/golden20/activation1,1054.051s correctness timing,228 resource
+observations (233 journal rows),225 with all3 actual allocations. Second diagnostic
+completed2100 actions/2101 histories and five physical checkpoints, then managed
+child refused activation parity. Child count compared LongNode with parsed
+IntNode2101; prior numeric audit missed this callback. Actual owner/hash parity
+remains unproven because no child summary was emitted. Strict integral count
+fix requires exact2101 and preserves hashes, ordinal2099 and journal offset;
+semantic regression reproduced9 tests/1 failure before correction; corrected
+whole financial suite99/99 and exact NodeCI274/274 pass on unchanged frozen
+source. Independent whole-code Attempt2 cycle2 Ready. Fresh corrected49 passed:
+external4/core24/golden20/activation1,1074.258s;232 resource observations
+(237 journal rows),230 with all3 actual allocations. Sampled maximum project
+charge6,657,753,088 bytes includes fixed3GiB fault-target reservation; maximum
+fully measured broker sum5,073,129,472 bytes remains separate. Ordinary-shape
+bounded diagnostic then passed1000 settled/100 pending,2100 actions/2101 histories,
+all seven physical checkpoints, distinct parent/child JVMs and complete result-only
+replay. Independent actual qualification instance2 Ready; owner SHA and history
+checksum verified from complete raw facts. Parent sampled heap peak198,005,296
+bytes; child179,424,816 bytes. These diagnostic observations establish no ordinary
+rate, capacity, native-memory or conservative upper-cost qualification.
+
+Compact canonical-leaf reference now preserves complete owner facts and history
+without retained JsonNode trees. Whole-code Attempt3 cycle1 Ready on frozen27
+paths; financial109/109 and independent focused Node125/125 pass. Exact existing
+NodeCI274/274 retains unchanged Node source scope. Attempt2 cycle3 failed one
+negative test because JsonNode Iterable overload appended record fields; explicit
+singleton-list correction and rejection-message assertion pass. Original failure
+and bytecode research retained before new attempt. Fresh compact capability binds
+36 source snapshot files and97 Financial classes. Distinct compact49 passed in
+1059.676s;234 journal rows/229 resource observations/226 fully measured all3.
+Compact1000-settled/100-pending diagnostic passed all seven physical stages,
+distinct child JVM recovery and complete result replay. Independent actual
+qualification instance3of3 Ready; every2100 source envelope/2101 history record,
+genesis/policy and reconstructed owner equal baseline without normalization.
+All process groups and exact broker resources closed; volumes retained. Setup
+watcher20-minute timeout preserved; fresh bounded metadata restart then succeeded.
+
+Compact sampled parent peak214,017,080 bytes versus baseline198,005,296;
+child219,456,064 versus179,424,816. Single paired run shows higher peaks, not
+causal benefit or retained upper. Current prospective JVM layout/helper bytecode
+binds retained lower664,800,000 bytes for150000 trades, above strict644,245,094 gate
+by20,554,906. Exact active-PID layout not attested; complete finite upper absent.
+Ordinary/aged ladder not authorized. Next bounded proposal: share two exact
+constant leaf values without dropping facts, inspect canonical transient allocations,
+then derive complete finite upper. Hypothetical608,400,376-byte weak lower would
+still not prove fit. Reviewed code `17409ac2`, [PR477](https://github.com/dills122/reef/pull/477)
+draft above PR475; all26 code-commit hosted checks passed/skipped. Proof published at immutable [Records `87242fe0`](https://github.com/dills122/reef-records/tree/87242fe0415a80a9934846686cd41fc8c08cad6c/records/reef/docs/evidence/calcify-financial-sprint1/e4-session-2026-10-05-29a8926d33f9); [Records PR9](https://github.com/dills122/reef-records/pull/9) draft above PR8. Fresh remote clone verified all24,719 blobs/843,777,692 bytes, including failed runs and reviews. No tracked bulk removed. Final documentation-head hosted CI tracked on PR477.
+
+Pure Reference allocation research independently Ready: identical2101 pre-parsed
+histories, two warmups/five measured repetitions per arm. Median accept allocated
+2,244,541,400 ordinary versus2,370,007,696 compact bytes (+5.59%); final owner digest
+66,991,464 versus7,431,576 bytes (-88.91%); combined median +2.85%. Reflection
+included; parsing/construction/kernel/Kafka/other-thread/native costs excluded.
+Fixed ordinary-first order and mapper lifecycle differ. Gross allocations are not
+retained heap, driver-peak cause or conservative upper. Transient acceptance cost
+now explicit next research target. [Profile and independent review](https://github.com/dills122/reef-records/tree/b9b0e17cbec9cb18e7d6ade3ea05eaff26129702/records/reef/docs/evidence/calcify-financial-sprint1/e4-reference-allocation-2026-10-05-bf04ead83d8b)
+published; all31 supplemental blobs/5,956,080 bytes remotely verified.
+
+Earlier ordinary-shape model refuses smallest proposed ordinary arm,2500
+trades/s for60s, under pinned Java21/768MiB two-owner retention. Map entries alone require at least
+732,000,000 bytes, above strict644,245,094-byte heap gate; fuller structural lower
+is804,000,000 bytes. This is conditional resource admission refusal, not measured
+latency, rate capacity or conservative upper cost. Diagnostic cohort cannot
+authorize ordinary ladder. Integrated compact candidate now has independently qualified bounded actual
+owner/history/recovery comparison; ordinary ladder still needs separately supported
+finite cost admission.
+
+E3 and heap predecessor drafts remain separately scoped below. Reservation owner
+acceptance, matcher identity, SQL/API cost and production financial authority
+remain separate. [Focused current verification](evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json) owns diagnostic status.
+
 ## Calcify heap protection component — October 5, 2026
 
 Component verification passes on `codex/calcify-heap-protection`, starting from

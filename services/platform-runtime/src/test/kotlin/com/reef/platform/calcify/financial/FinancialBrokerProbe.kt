@@ -180,9 +180,10 @@ object FinancialBrokerProbe {
         prefix: String,
         membership: (Long) -> JsonNode = { ordinal -> config["acceptedManifest"]["membership"][ordinal.toInt()] },
         sourceUuid: String = config["acceptedManifest"]["inputTopicId"].asText(),
+        onActivation: (FinancialPartitionCut.ReconstructedCut) -> Unit = {},
     ): Topology {
         return Topology().addSource("financial-input", StringDeserializer(), StringDeserializer(), "$prefix-input")
-            .addProcessor("financial", { FinancialProcessor(config, fault, membership, sourceUuid) }, "financial-input")
+            .addProcessor("financial", { FinancialProcessor(config, fault, membership, sourceUuid, onActivation) }, "financial-input")
             .addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("financial-state"), Serdes.String(), Serdes.String()).withCachingDisabled(), "financial")
             .addSink("financial-results", "$prefix-results", StringSerializer(), object : Serializer<String> {
                 override fun serialize(topic: String?, data: String?): ByteArray? {
@@ -191,7 +192,22 @@ object FinancialBrokerProbe {
             }, "financial")
     }
 
-    private class FinancialProcessor(private val config: JsonNode, private val fault: String, private val membership: (Long) -> JsonNode, private val sourceUuid: String) : Processor<String, String, String, String> {
+    /** Cold verifier consumes one member at a time; retain no second JSON prefix. */
+    internal fun activationMembership(config: JsonNode, coverageSize: Int, membership: (Long) -> JsonNode): List<JsonNode> {
+        require(coverageSize >= 0)
+        val declared = config["acceptedManifest"]?.get("membership")
+        require(declared == null || declared.isArray) { "invalid accepted membership" }
+        return object : AbstractList<JsonNode>() {
+            override val size: Int = declared?.size() ?: coverageSize
+            override fun get(index: Int): JsonNode {
+                if (index !in 0 until size) throw IndexOutOfBoundsException("membership index=$index size=$size")
+                return declared?.get(index) ?: membership(index.toLong())
+            }
+        }
+    }
+
+    private class FinancialProcessor(private val config: JsonNode, private val fault: String, private val membership: (Long) -> JsonNode,
+        private val sourceUuid: String, private val onActivation: (FinancialPartitionCut.ReconstructedCut) -> Unit) : Processor<String, String, String, String> {
         private lateinit var context: ProcessorContext<String, String>
         private lateinit var store: KeyValueStore<String, String>
         private val kernels = mutableMapOf<String, FinancialKernel>()
@@ -215,11 +231,11 @@ object FinancialBrokerProbe {
                 }
             } }
             val certificate = store.get("cert/0")?.let { json.readTree(it) }
-            val acceptedMembers = config["acceptedManifest"]?.get("membership")?.toList()
-                ?: coverage.indices.map { membership(it.toLong()) }
+            val acceptedMembers = activationMembership(config, coverage.size, membership)
             val restored = FinancialPartitionCut.validateActivation(config, sourceUuid,
                 acceptedMembers, certificate, coverage, historyWrappers, semanticState)
             kernels.putAll(restored.owners)
+            onActivation(restored)
             emit(mapOf("certifiedCatchupDomains" to kernels.size, "partitionCut" to store.get("cert/0")))
         }
         override fun process(record: Record<String, String>) {

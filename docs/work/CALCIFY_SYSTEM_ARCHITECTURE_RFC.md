@@ -703,7 +703,7 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
+**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
 and [focused verification](../evidence/calcify-financial-sprint1/README.md) own execution status;
 E0 preparation history remains linked from evidence. Acceptance gates below unchanged.
 Decision owner: Reef project owner. Planning checkpoint:
@@ -867,7 +867,38 @@ accounts; it is a conservative diagnostic, not an accepted requirement that ever
 domain sustain whole-system10k. Add two colocated domains only to explain ownership
 coupling, not to conceal hot-domain result.
 
-Proposed bounded ladder: 2.5k,5k,10k trades/s for60s; repeat highest stable arm for300s
+October5 test-only continuation adds recoverable bounded ACK membership, raw
+physical resource inventories and owned supervision through a separate JVM restart
+and complete committed-result replay. Initial finite bootstrap is1000 settled
+trades plus100 pending,0 aged identities. Its strict heap/record/client/journal
+limits authorize empirical diagnostic only; sampled averages are not conservative
+upper bounds. Current-candidate49-arm E3 proof and frozen reviewed source/build/
+classpath/config/cluster identities remain prerequisites. [Current checkpoint](../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
+owns execution status, distinct from implementation review.
+
+Ordinary-shape bounded bootstrap passed complete raw owner/history parity,
+separate-process restore and result-only replay; independent actual qualification
+Ready. Compact test reference now retains canonical strings for every complete
+owner leaf and streams equivalent owner digest. Selected independent economic
+checks, complete kernel-prefix parity and replay controls remain; compact code
+and actual paired qualification Ready for1000/100 bounded diagnostic. Exact
+raw inputs/history/owner equality preserved; sampled parent/child peaks higher.
+Prospective retained floor664800000B exceeds644245094B gate; finite upper absent.
+Pure Reference research finds median accept allocation +5.59%, final digest
+-88.91%, combined +2.85% for identical2101 pre-parsed histories; fixed arm order
+and implementation mapper lifecycle limit comparison. Gross allocation does not
+prove driver peak cause, retained upper or capacity.
+Public financial authority and production matching remain unchanged.
+
+Prior Java21/768MiB two-owner model refuses smallest150000-trade ordinary arm:
+map entries alone require732000000 bytes, above strict644245094-byte heap gate.
+New compact model needs separately bound layout/lifecycle costs; its structural
+lower and sampled diagnostic peaks cannot provide conservative upper admission.
+Current-candidate correctness, complete owner/history/recovery and reviewed finite
+upper costs remain gates before ordinary ladder. Earlier two-owner lower applies
+to earlier retained representation, not automatically to compact candidate.
+
+Proposed bounded ladder, conditional on those gates: 2.5k,5k,10k trades/s for60s; repeat highest stable arm for300s
 on fresh and aged state. Proposed aged fixture:1m retained execution/action identities
 plus10k pending obligations/due items; freeze exact age/resource size after disk
 preflight. Keep generated business workload identical between fresh/aged comparisons.

@@ -1,0 +1,449 @@
+{
+  "schema": "calcify-e4-session-verification-v1",
+  "status": "PASSED_BOUNDED_BASELINE_COMPACT_PAIR_ORDINARY_BLOCKED",
+  "dateUtc": "2026-10-05",
+  "branch": "codex/calcify-e4-readiness",
+  "baselineCommit": "29a8926d33f9e2dc7278a1676a6fa3272628de3c",
+  "reviewedCodeCommit": "17409ac2e6f8e2c4408dcd6b36c98398c3da32ad",
+  "productPr": "https://github.com/dills122/reef/pull/477",
+  "scope": "Test-only bounded financial diagnostic; baseline and compact actual qualification Ready; ordinary and capacity blocked",
+  "productionAuthorityAccepted": false,
+  "fullE4Readiness": false,
+  "capacityQualification": false,
+  "heapConservativeBound": false,
+  "sourceHeadMetadataLimit": "Actual capability sourceHead retains measured variant baseline; frozen source hashes and compiled/ordered classpath digests bind execution. Reviewed commit blobs equal current27 frozen source paths; no commit-only execution claim.",
+  "sourceSha256": {
+    ".github/workflows/ci.yml": "de1a802e302ccb54274b89ca504db0c74e9bcda573d14f2f22ce78c38c810755",
+    "scripts/dev/calcify-financial/bootstrap-calibration.mjs": "b2aaf95fc6a72dafee15c98b2c50f18adb13e74096f0ac06d6e046c3bac12ece",
+    "scripts/dev/calcify-financial/bootstrap-calibration.test.mjs": "a0958bb84316233adff57ecc1d8bbf0490eb8009d57ad7dd03a73731b0e480e7",
+    "scripts/dev/calcify-financial/broker-proof.mjs": "5e508882336f939cb6ed2c15dfbe38c4a4fa7228266a405d7bb8a2b17ac61680",
+    "scripts/dev/calcify-financial/physical-adapter.mjs": "302747923f526e73c10207c6e173871029b118a6592feb688d2653b5306ced8d",
+    "scripts/dev/calcify-financial/physical-adapter.test.mjs": "d39a7fa466a8cd766165afd3f7880e61247bcd611c3acbaede43541dfc542bf1",
+    "scripts/dev/calcify-financial/physical-evidence.mjs": "3591634ab38f7a6d6e65663ba14d1a2a99641549e04777010ecf7e3c42672a54",
+    "scripts/dev/calcify-financial/physical-evidence.test.mjs": "52c69bc8d10e305abb64e9c575c7de3e8806d6cd6ea1edb735b9b130366ad865",
+    "scripts/dev/calcify-financial/proof-supervisor.mjs": "a5ec54bb9a1eca13e4d321872523565d0770b435836f18ec873eb95882832425",
+    "scripts/dev/calcify-financial/proof-supervisor.test.mjs": "2751f488f2c30d1f670234cb943f4b352d9bcbd0eff2afa6ce179f1292b97b3a",
+    "scripts/dev/calcify-financial/rate-proof.mjs": "c067b36d4551f279a98e15029081374c4b84a88643857a666699bfce19d9e24e",
+    "scripts/dev/calcify-financial/rate-proof.test.mjs": "8188a8203a264022e6486380151153e8cc53a4a8c4ad62ce0d6945812aca3ec4",
+    "scripts/dev/calcify-financial/rate-supervision.mjs": "f7fdcddabe4f00cacb37d386785c8dedf53529c76a50bd11081a67022510110c",
+    "scripts/dev/calcify-financial/rate-supervision.test.mjs": "89841f9c35e3f78bd3525ad17845a1a4cb6e14b274d3691e630182965ac4686e",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialAckJournal.kt": "a1600cadef1962822ea5d7bcbe32436ce5133d685f22624faa61f83a590fc933",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialAckJournalTest.kt": "85127a857336a2f42193083354e7fb2533e22f1595392b38aa117a1a9e1d6a08",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialBootstrapProbeTest.kt": "c2f83dd64aff583ce4d2dbb4284101e96670b808875fc23827e812506695f10b",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialBrokerProbe.kt": "6f7d89934d01a79e54b68ced230adc2d341076573cdd7fa0ca36408b767ae778",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialBrokerProbeTest.kt": "33f641de586b7aef69d9bf1028a4978d070301cabaa2060508fe7ab71b490d2a",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCanonicalLeafOwner.kt": "3406ede4cc3f8d605e4fcf5d8e047b941d35bc1502b21fd483b13fc415e7bcb7",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCanonicalLeafOwnerTest.kt": "34ac8e67dc33421e055c3b2622eb093e6b3d603ec3ea23b0b99dce9c7d558378",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialHeapGuard.kt": "06e673ff1b8428a755485313e5514f43ed9635594f62fc23259248fe7a9f484d",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialHeapGuardTest.kt": "b398ecd7e41473abe0c4e3930add848d1c37107ada6d0f0ffecf9c3d64d7ddff",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialPhysicalInventory.kt": "984d21564e57472525c28ddd72668645be76dd5f1e10e7e70c968dec68256c2c",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialPhysicalInventoryTest.kt": "8a7045d480d55538ed162dc316e593205932eeaa987a529e3bc20bf43e34fb3c",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt": "92fb6924c67085f7ab8e492209f692cabff2e20f2c99cb6a97c31869aeaa67d1",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt": "413c6e820dced468eae3de8367d0c5312b107bac529e144a60fa21ec42e2f6f3"
+  },
+  "compactCapability": {
+    "schema": "financial-heap-capability-v1",
+    "maxHeapBytes": 805306368,
+    "usedHeapBytes": 38309168,
+    "vmArguments": [
+      "-Xms128m",
+      "-Xmx768m"
+    ],
+    "javaVersion": "21",
+    "javaVendor": "Oracle Corporation",
+    "sourceHead": "29a8926d33f9e2dc7278a1676a6fa3272628de3c",
+    "fixtureSha256": "fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d",
+    "configSha256": "7e16459f4bbacabc7e5832bb90b038d92cf97dfd041d66a970f09bab89a009f1",
+    "buildSha256": "bf04ead83d8be2864231b95720190b109c9d31e09ed585f01791947520337b53",
+    "classpathSha256": "b05ea2145b1a90bd78f61cfc605df6ea3534030535e809f58b4895ceb7fa2c14",
+    "classpathEntries": [
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/classes/kotlin/test",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/classes/kotlin/main",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/classes/java/main",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/HikariCP-7.1.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/animal-sniffer-annotations-1.27.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/annotations-23.0.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/annotations-4.1.1.4.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/bcprov-lts8on-2.73.12.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/checker-qual-3.55.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/error_prone_annotations-2.50.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/failureaccess-1.0.3.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-api-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-context-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-core-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-netty-shaded-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-protobuf-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-protobuf-lite-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-stub-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/grpc-util-1.84.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/gson-2.14.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/guava-33.6.0-jre.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/j2objc-annotations-3.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/jackson-annotations-2.22.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/jackson-core-2.22.3.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/jackson-databind-2.22.3.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/jnats-2.26.3.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/jspecify-1.0.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/jsr305-3.0.2.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/junit-jupiter-api-5.10.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/junit-jupiter-engine-5.10.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/junit-platform-commons-1.10.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/junit-platform-engine-1.10.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/junit-platform-launcher-1.10.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kafka-clients-4.3.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kafka-streams-4.3.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kafka-streams-test-utils-4.3.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kotlin-stdlib-2.4.20.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kotlin-test-2.4.20.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kotlin-test-junit5-2.4.20.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/kotlinx-coroutines-core-jvm-1.11.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/lz4-java-1.10.2.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/opentest4j-1.3.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/perfmark-api-0.27.0.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/postgresql-42.7.13.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/proto-google-common-protos-2.64.1.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/protobuf-java-4.36.2.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/rocksdbjni-10.1.3.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/slf4j-api-2.0.17.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/snappy-java-1.1.10.7.jar",
+      "/Users/dsteele/.codex/worktrees/8c6f/reef/services/platform-runtime/build/resolver-probe-deps/zstd-jni-1.5.6-10.jar"
+    ],
+    "classIdentityScope": "All compiled Financial*.class including nested classes; ordered classpath entries with streamed jar/file bytes and sorted directory resources"
+  },
+  "validation": {
+    "financial": {
+      "tests": 109,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "independentFocusedNode": {
+      "tests": 125,
+      "passed": 125
+    },
+    "exactNodeCI": {
+      "tests": 274,
+      "passed": 274,
+      "scope": "Unchanged Node source scope; full exact workflow argv retained"
+    },
+    "changedSourcePaths": 27,
+    "candidateSourcePaths": 29,
+    "sourceSnapshotPaths": 36,
+    "compiledFinancialClasses": 97,
+    "hostedReviewedCode": {
+      "commit": "17409ac2e6f8e2c4408dcd6b36c98398c3da32ad",
+      "checks": 26,
+      "allPassedOrSkipped": true,
+      "proofSha256": "daf434a42a14e17cf2a307f979977de9831c70897e2a01a4715534e64992dea5",
+      "scope": "Reviewed source commit; final ownerdoc-head hosted status follows linked PR477"
+    }
+  },
+  "independentReview": {
+    "wholeCode": {
+      "attempt": 3,
+      "cycle": 1,
+      "verdict": "Ready",
+      "reportSha256": "d96dcfe01a3f59f5c98a6231056ef63a8040cfef0d9bbfff1d146d10458810a9"
+    },
+    "actualBaseline": {
+      "instance": 2,
+      "verdict": "Ready",
+      "reportSha256": "890f832565f8910bec9aa49f4660684029fce14c87e7716efcffcd677913cbd9"
+    },
+    "actualCompact": {
+      "instance": 3,
+      "verdict": "Ready",
+      "reportSha256": "d6aa6f6213c8ac82f85f79ad64b93274511639c14f6a10b249264bcb8f4a15ec",
+      "writerClosed": true
+    }
+  },
+  "baseline": {
+    "sampleTrades": 1000,
+    "pendingSample": 100,
+    "agedIdentities": 0,
+    "sourceActions": 2100,
+    "historyRecords": 2101,
+    "managedRestartVerified": true,
+    "resultOnlyReplayVerified": true,
+    "parentProcessId": 29683,
+    "managedRecoveryProcess": {
+      "processId": 29934,
+      "parentProcessId": 29683,
+      "exitCode": 0,
+      "newJvm": true,
+      "commandEvidencePath": "managed-recovery/command.json",
+      "commandEvidenceSha256": "542827f942aa08b6189a9904216bcb0188c79a3aedb2311c13b381df3a631dd5"
+    },
+    "parity": {
+      "ownerSha256": "96da35188859915ebb3061691644e114021e8eb033e2f8865065fae4b7901db1",
+      "historyChecksum": "27d2d99c876edc961958133c9a9317a2baa7b12c78efd8a589af92c2b20ab5ae",
+      "historyRecords": 2101,
+      "sourceUuid": "YjGXHkb4RXm-JR0SAQcqwA",
+      "readCommitted": true,
+      "independentCompleteDeltas": true
+    },
+    "physicalCheckpointCount": 7,
+    "heapObservation": {
+      "schema": "financial-bootstrap-heap-observation-v1",
+      "guardOutcome": "PASS_SAMPLED",
+      "actualMaxHeapBytes": 805306368,
+      "admissionLimitBytes": 644245094,
+      "estimatedHeapBytes": null,
+      "heapPeakBytes": 198005296,
+      "baselineObservations": [
+        {
+          "stage": "before-setup",
+          "sampledAtNano": 70319173094083,
+          "usedHeapBytes": 53017504,
+          "maxHeapBytes": 805306368
+        },
+        {
+          "stage": "warmed-before-aging",
+          "sampledAtNano": 70322859665875,
+          "usedHeapBytes": 51335208,
+          "maxHeapBytes": 805306368
+        },
+        {
+          "stage": "producer-warmed-before-aging",
+          "sampledAtNano": 70323341567750,
+          "usedHeapBytes": 60772392,
+          "maxHeapBytes": 805306368
+        }
+      ],
+      "pollMillis": 250,
+      "maxSampleAgeNanos": 5000000000,
+      "sampled": true,
+      "limitation": "Sudden allocation may outrun sampled protection; native/RSS memory unbounded; no OOM guarantee",
+      "purpose": "EMPIRICAL_BOUNDED_DIAGNOSTIC",
+      "heapConservativeBound": false,
+      "preloadOperationalCeilingBytes": null,
+      "reportedPeakScope": "Sampled through result assembly snapshot; final serialization and staged writes excluded"
+    },
+    "encodedBytes": 6784151,
+    "encodedInputBytes": 776390,
+    "encodedResultBytes": 6007761,
+    "producerElapsedMs": 140,
+    "observerElapsedMs": 3949,
+    "drainMs": 3808,
+    "correctness49": {
+      "schema": "calcify-e3-closed-measurement-v1",
+      "journalRows": 237,
+      "resourceObservations": 232,
+      "fullyActualAll3Observations": 230,
+      "maxProjectChargedBytes": 6657753088,
+      "maxFullyMeasuredAll3BrokerBytes": 5073129472,
+      "minGuestFreeBytes": 92242239488,
+      "correctnessWrapperElapsedMs": 1074258,
+      "sourceJournalSha256": "df7b574645b1724c3ce7466e31861b097a3a17e3bb1f8ad0d1c7e6f6f8bf71d5",
+      "scope": "Correctness only; charged project includes fixed3GiB target reservation, fully measured all3 distinct; lifecycle rows not resource observations; native,RSS,CPU,causal rates unknown"
+    },
+    "scope": "Single1000settled100pending diagnostic; elapsed stages descriptive, not capacity or per-trade causal latency"
+  },
+  "retainedFailuresAndCorrections": [
+    "Initial heap maximum JSON numeric-width refusal before payload",
+    "Second child activation history-count width mismatch after2100/2101 and five checkpoints; fixed strict integral comparison",
+    "Compact negative fixture JsonNode Iterable plus overload; bytecode research and exact duplicate-action rejection correction",
+    "Compact setup20-minute deadline while metadata gate held; stoppedexact3 then freshbounded metadata prep completed",
+    "Sandbox Node mock-server EPERM; exactargv outside sandbox274green",
+    "Withdrawn resource sample-count proposal retained alongside actual original238rows/233observations/228fully measured"
+  ],
+  "archive": {
+    "status": "PUBLISHED_VERIFIED_DRAFT",
+    "namespace": "docs/evidence/calcify-financial-sprint1/e4-session-2026-10-05-29a8926d33f9",
+    "recordsCommit": "87242fe0415a80a9934846686cd41fc8c08cad6c",
+    "recordsPr": "https://github.com/dills122/reef-records/pull/9",
+    "remoteBlobsVerified": true,
+    "trackedBulkRemoved": false,
+    "remoteBlobCount": 24719,
+    "remoteBytes": 843777692,
+    "sourceProvenanceCommit": "c8cef277e7063b54b5dddab373e33c14903b0107",
+    "freshCloneWithoutAlternates": true,
+    "landingPending": true
+  },
+  "nextGates": [
+    "Reduce retained/transient costs and derive independently reviewed finite conservative upper before ordinary150000-trade arm",
+    "New explicitly authorized qualification session must preserve completedinstance3of3 history; no fourthsame-milestone reset",
+    "Producer/observer proposedrate/agedstate/nativeRSS/SQLAPI fullpath qualification separate"
+  ],
+  "compact": {
+    "sampleTrades": 1000,
+    "pendingSample": 100,
+    "agedIdentities": 0,
+    "sourceActions": 2100,
+    "historyRecords": 2101,
+    "managedRestartVerified": true,
+    "resultOnlyReplayVerified": true,
+    "parentProcessId": 82795,
+    "managedRecoveryProcess": {
+      "processId": 83139,
+      "parentProcessId": 82795,
+      "exitCode": 0,
+      "newJvm": true,
+      "commandEvidencePath": "managed-recovery/command.json",
+      "commandEvidenceSha256": "b11e8ea34e05d6be35402e423a57bf8038695a2d541443e2574db3254a3a8f23"
+    },
+    "parity": {
+      "ownerSha256": "96da35188859915ebb3061691644e114021e8eb033e2f8865065fae4b7901db1",
+      "historyChecksum": "27d2d99c876edc961958133c9a9317a2baa7b12c78efd8a589af92c2b20ab5ae",
+      "historyRecords": 2101,
+      "sourceUuid": "vQgpzpyWQHyUVj7vYqiVMg",
+      "readCommitted": true,
+      "independentCompleteDeltas": true
+    },
+    "physicalCheckpointCount": 7,
+    "heapObservation": {
+      "schema": "financial-bootstrap-heap-observation-v1",
+      "guardOutcome": "PASS_SAMPLED",
+      "actualMaxHeapBytes": 805306368,
+      "admissionLimitBytes": 644245094,
+      "estimatedHeapBytes": null,
+      "heapPeakBytes": 214017080,
+      "baselineObservations": [
+        {
+          "stage": "before-setup",
+          "sampledAtNano": 73616955200291,
+          "usedHeapBytes": 53775808,
+          "maxHeapBytes": 805306368
+        },
+        {
+          "stage": "warmed-before-aging",
+          "sampledAtNano": 73621156763875,
+          "usedHeapBytes": 52602336,
+          "maxHeapBytes": 805306368
+        },
+        {
+          "stage": "producer-warmed-before-aging",
+          "sampledAtNano": 73621572306416,
+          "usedHeapBytes": 62039520,
+          "maxHeapBytes": 805306368
+        }
+      ],
+      "pollMillis": 250,
+      "maxSampleAgeNanos": 5000000000,
+      "sampled": true,
+      "limitation": "Sudden allocation may outrun sampled protection; native/RSS memory unbounded; no OOM guarantee",
+      "purpose": "EMPIRICAL_BOUNDED_DIAGNOSTIC",
+      "heapConservativeBound": false,
+      "preloadOperationalCeilingBytes": null,
+      "reportedPeakScope": "Sampled through result assembly snapshot; final serialization and staged writes excluded"
+    },
+    "managedRecoveryHeapObservation": {
+      "schema": "financial-bootstrap-heap-observation-v1",
+      "guardOutcome": "PASS_SAMPLED",
+      "actualMaxHeapBytes": 805306368,
+      "admissionLimitBytes": 644245094,
+      "estimatedHeapBytes": null,
+      "heapPeakBytes": 219456064,
+      "baselineObservations": [
+        {
+          "stage": "before-setup",
+          "sampledAtNano": 73631212303583,
+          "usedHeapBytes": 53891792,
+          "maxHeapBytes": 805306368
+        }
+      ],
+      "pollMillis": 250,
+      "maxSampleAgeNanos": 5000000000,
+      "sampled": true,
+      "limitation": "Sudden allocation may outrun sampled protection; native/RSS memory unbounded; no OOM guarantee",
+      "purpose": "EMPIRICAL_BOUNDED_DIAGNOSTIC",
+      "heapConservativeBound": false,
+      "preloadOperationalCeilingBytes": null,
+      "reportedPeakScope": "Sampled through result assembly snapshot; final serialization and staged writes excluded"
+    },
+    "encodedBytes": 6784151,
+    "encodedInputBytes": 776390,
+    "encodedResultBytes": 6007761,
+    "producerElapsedMs": 148,
+    "observerElapsedMs": 4073,
+    "drainMs": 3925,
+    "correctness49": {
+      "schema": "calcify-e3-closed-measurement-v1",
+      "journalRows": 234,
+      "resourceObservations": 229,
+      "fullyActualAll3Observations": 226,
+      "maxProjectChargedBytes": 6660775936,
+      "maxFullyMeasuredAll3BrokerBytes": 5097439232,
+      "minGuestFreeBytes": 92117663744,
+      "correctnessWrapperElapsedMs": 1059676,
+      "sourceJournalSha256": "5afefb42aebfeda3eb5873cff1c3a7e48d4598f4b1cb04d152e314d57ffdb382",
+      "scope": "Correctness only; charged project includes fixed3GiB target reservation, fully measured all3 distinct; lifecycle rows not resource observations; native,RSS,CPU,causal rates unknown"
+    },
+    "scope": "Fixed empirical1000settled100pending; no ordinaryrate or conservative upper",
+    "resourceSamples": {
+      "schema": "calcify-bootstrap-closed-resource-summary-v1",
+      "journalRows": 13,
+      "actualSamples": 12,
+      "maxSampleStartGapMs": 4803,
+      "maxProjectAllocatedBytes": 5299146752,
+      "minGuestFreeBytes": 91934068736,
+      "rawJournalSha256": "a5dcfddaccd1aa3443d78cbce76866ffceb5ab6a9d850a7551cdf125e6e214be",
+      "scope": "Actual5-second sampled broker/local3category allocation during fixeddiagnostic; continuouspeak/native/RSS/CPU not measured"
+    }
+  },
+  "exactPairedComparison": {
+    "ownerSha256": "96da35188859915ebb3061691644e114021e8eb033e2f8865065fae4b7901db1",
+    "historyChecksum": "27d2d99c876edc961958133c9a9317a2baa7b12c78efd8a589af92c2b20ab5ae",
+    "everySourceEnvelopeAndHistory": true,
+    "genesisAndPolicy": true,
+    "independentRawPairSha256": "93dca7f29bbf3d8f75b45824c33d27177962576b52918bcc57cf4140b21026a5",
+    "sampledPeaks": {
+      "baselineParent": 198005296,
+      "compactParent": 214017080,
+      "parentDifference": 16011784,
+      "baselineChild": 179424816,
+      "compactChild": 219456064,
+      "childDifference": 40031248,
+      "scope": "Single paired observations; compact sampled peaks higher; no causal/retained/upper inference; final serialization/staged writes excluded"
+    },
+    "scope": "Complete business input/history/owner equality without normalization; source topic UUIDs and broker rigs distinct; independently qualified actualinstance3"
+  },
+  "ordinaryAdmission": {
+    "status": "BLOCKED",
+    "smallestProposedTrades": 150000,
+    "prospectiveLayoutRetainedLowerBytes": 664800000,
+    "strictHeapGateBytes": 644245094,
+    "excessBytes": 20554906,
+    "layoutScope": "Same pinned binary/options prospective JVM layout and actual helper bytecode; not exact active PID layout",
+    "conservativeUpperAvailable": false,
+    "scope": "Structural lower cannot authorize capacity or upper-cost qualification; actual ordinary workload not launched",
+    "nextProposal": "Bounded sharing of two exact constant canonical leaves, transient-allocation audit and complete finite upper derivation; hypothetical608400376 weakfloor does not provefit"
+  },
+  "referenceAllocationResearch": {
+    "status": "PASSED_BOUNDED_RESEARCH_INDEPENDENT_READY",
+    "historyRecords": 2101,
+    "warmupsPerArm": 2,
+    "measuredRepetitionsPerArm": 5,
+    "medianAcceptAllocatedBytes": {
+      "ordinary": 2244541400,
+      "compact": 2370007696
+    },
+    "medianFinalOwnerDigestAllocatedBytes": {
+      "ordinary": 66991464,
+      "compact": 7431576
+    },
+    "medianCombinedAllocatedBytes": {
+      "ordinary": 2311532864,
+      "compact": 2377439272
+    },
+    "armOrder": "ordinary then compact; no crossover or randomization",
+    "scope": "Single-thread allocation includes reflection; shared pre-parsed history, construction, parsing, kernel, Kafka, other threads and native memory excluded",
+    "heapPeakCauseEstablished": false,
+    "retainedOrConservativeUpperEstablished": false,
+    "capacityQualification": false,
+    "reviewSha256": "0d7b2f030702c24615cc4cb27ec2ab0fd864253c0ddfc7d3de06fb0ae9a77aff",
+    "profileSha256": "1accc2d192bf346f0cc968f7d619c506cacbffc1fa2821ec1364814a9fbafeb4",
+    "limits": "Gross allocated bytes, not retained heap or peak. Fixed order/shared dependency JIT; ordinary shared warmed mapper vs compact fresh per-owner mapper. No causal driver comparison.",
+    "archive": {
+      "recordsCommit": "b9b0e17cbec9cb18e7d6ade3ea05eaff26129702",
+      "recordsPr": "https://github.com/dills122/reef-records/pull/9",
+      "namespace": "records/reef/docs/evidence/calcify-financial-sprint1/e4-reference-allocation-2026-10-05-bf04ead83d8b",
+      "remoteBlobsVerified": true,
+      "files": 31,
+      "bytes": 5956080,
+      "allocationSourceCommit": "2b78445d614f0ff6b8917a65a78fdf8cc737d2d2",
+      "reviewSourceCommit": "3b6556d4a2bcb350fa41adcd7272fd494a0a0689"
+    }
+  }
+}

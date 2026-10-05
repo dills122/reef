@@ -213,6 +213,95 @@ class FinancialHeapGuardTest {
         exported.forEach { artifact -> assertEquals(expected, artifact["heapObservation"].path("reportedPeakScope").asText()) }
         assertEquals(expected, exported.last()["resources"].path("heapPeakScope").asText())
     }
+    private fun diagnostic(used: () -> Long = { 150 }, max: () -> Long = { 1000 }, clock: () -> Long = { 0 },
+        sampleAt: () -> Long = clock, ceiling: Long? = null): FinancialHeapGuard =
+        FinancialHeapGuard.diagnosticBootstrap(1000, 100, 0, 1000, ceiling,
+            { FinancialHeapSnapshot(max(), used(), sampleAt()) }, clock)
+
+    @Test fun diagnosticRequiresFrozenCohortAndAuthorizedCapability() {
+        for ((cohort, aged) in listOf(999L to 100L to 0L, 1001L to 100L to 0L,
+            1000L to 99L to 0L, 1000L to 101L to 0L, 1000L to 100L to 1L)) {
+            assertFailsWith<IllegalArgumentException> {
+                FinancialHeapGuard.diagnosticBootstrap(cohort.first, cohort.second, aged, 1000)
+            }
+        }
+        for (cap in listOf(0L, FinancialHeapBounds.AUTHORIZED_MAX + 1))
+            assertFailsWith<IllegalArgumentException> { FinancialHeapGuard.diagnosticBootstrap(1000, 100, 0, cap) }
+    }
+    @Test fun diagnosticTelemetryHasSeparateSchemaNullEstimateAndNoConservativeBound() {
+        diagnostic().use { g ->
+            g.start(); g.baseline("warmed")
+            val observation = json.valueToTree<com.fasterxml.jackson.databind.JsonNode>(g.telemetry())
+            assertEquals("financial-bootstrap-heap-observation-v1", observation["schema"].asText())
+            assertEquals("EMPIRICAL_BOUNDED_DIAGNOSTIC", observation["purpose"].asText())
+            assertFalse(observation["heapConservativeBound"].asBoolean())
+            assertTrue(observation.has("estimatedHeapBytes")); assertTrue(observation["estimatedHeapBytes"].isNull)
+            assertEquals(2, observation["baselineObservations"].size())
+        }
+        guard().use { g -> g.start(); assertEquals("financial-heap-observation-v1", g.telemetry()["schema"])
+            assertEquals(172L, g.telemetry()["estimatedHeapBytes"]); assertFalse(g.telemetry().containsKey("purpose")) }
+    }
+    @Test fun diagnosticActualCapEqualityAndOperationalPreloadStopRefuse() {
+        diagnostic(used = { 560 }, max = { 700 }).use { assertFailsWith<IllegalStateException> { it.start() } }
+        diagnostic(used = { 559 }, max = { 700 }).use { it.start(); assertEquals(560L, it.admissionLimitBytes) }
+        diagnostic(max = { FinancialHeapBounds.AUTHORIZED_MAX + 1 }).use { assertFailsWith<IllegalStateException> { it.start() } }
+        for (ceiling in listOf(0L, 800L)) assertFailsWith<IllegalArgumentException> { diagnostic(ceiling = ceiling) }
+        diagnostic(ceiling = 200).use { g -> g.start(); assertEquals(null, g.failure) }
+        diagnostic(used = { 200 }, ceiling = 200).use { assertFailsWith<IllegalStateException> { it.start() } }
+        diagnostic(max = { 200 }, ceiling = 200).use { assertFailsWith<IllegalStateException> { it.start() } }
+        guard(used = { 100 }).use { it.start() } // Conservative baseline equality remains accepted.
+    }
+    @Test fun diagnosticBreachSensorErrorStaleAndMaximumChangeRemainSticky() {
+        val used = AtomicLong(150); val max = AtomicLong(1000); val time = AtomicLong(0)
+        for (failureMode in listOf("breach", "stale", "max")) {
+            used.set(150); max.set(1000); time.set(0)
+            diagnostic(used::get, max::get, time::get, { 0 }).use { g ->
+                g.start()
+                when (failureMode) { "breach" -> used.set(800); "stale" -> time.set(5_000_000_000); "max" -> max.set(999) }
+                assertFailsWith<IllegalStateException> { g.refresh(failureMode) }; val first = assertNotNull(g.failure)
+                used.set(1); max.set(1000); time.set(0)
+                assertFailsWith<IllegalStateException> { g.refresh("recovered") }; assertSame(first, g.failure)
+            }
+        }
+        var throws = false
+        FinancialHeapGuard.diagnosticBootstrap(1000, 100, 0, 1000, sensor = {
+            if (throws) error("diagnostic-sensor-error") else FinancialHeapSnapshot(1000, 150, 0)
+        }, clock = { 0 }).use { g ->
+            g.start(); throws = true; assertFailsWith<IllegalStateException> { g.refresh("sensor") }
+            val first = assertNotNull(g.failure); throws = false
+            assertFailsWith<IllegalStateException> { g.refresh("sensor-recovered") }; assertSame(first, g.failure)
+        }
+    }
+    @Test fun diagnosticDedicatedSensorSurvivesWorkerCloseAndBlocksPublication() {
+        val used = AtomicLong(150); val observed = CountDownLatch(1)
+        val g = FinancialHeapGuard.diagnosticBootstrap(1000, 100, 0, 1000, sensor = {
+            val value = used.get(); if (value == 800L) observed.countDown()
+            FinancialHeapSnapshot(1000, value, System.nanoTime())
+        }, pollMillis = 5)
+        val dir = Files.createTempDirectory("bootstrap-heap-sensor"); val output = dir.resolve("result.json")
+        try {
+            assertFailsWith<IllegalStateException> { FinancialRateProbe.withHeapProtection(g) {
+                it.refresh("workers-closed"); used.set(800)
+                assertTrue(observed.await(1, TimeUnit.SECONDS)); awaitFailure(g); it.publish(output, "success")
+            } }
+            assertFalse(Files.exists(output)); assertTrue(g.isClosed)
+        } finally { g.close(); Files.deleteIfExists(output); Files.deleteIfExists(dir) }
+    }
+    @Test fun diagnosticStagedFailureLeavesBothArtifactsAbsentAndHealthyPublicationCloses() {
+        val dir = Files.createTempDirectory("bootstrap-heap-publication"); val output = dir.resolve("result.json"); val parity = dir.resolve("parity.json")
+        var samples = 0
+        val failed = FinancialHeapGuard.diagnosticBootstrap(1000, 100, 0, 1000, sensor = {
+            samples++; FinancialHeapSnapshot(1000, if (samples >= 3) 800 else 150, 0)
+        }, clock = { 0 })
+        try {
+            assertFailsWith<IllegalStateException> { FinancialRateProbe.withHeapProtection(failed) { it.publish(output, "success", parity to "parity") } }
+            assertFalse(Files.exists(output)); assertFalse(Files.exists(parity)); assertTrue(failed.isClosed)
+            assertEquals(0, Files.list(dir).use { it.count() })
+            val healthy = diagnostic()
+            FinancialRateProbe.withHeapProtection(healthy) { it.refresh("managed-restart"); it.refresh("result-only-replay"); it.publish(output, "empirical-only", parity to "parity") }
+            assertEquals("empirical-only", Files.readString(output)); assertTrue(healthy.isClosed)
+        } finally { Files.deleteIfExists(output); Files.deleteIfExists(parity); Files.deleteIfExists(dir) }
+    }
     private fun awaitFailure(g: FinancialHeapGuard) {
         val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(1)
         while (g.failure == null && System.nanoTime() < end) Thread.yield()

@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, open, unlink, realpath } from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { tmpdir } from 'node:os';
+import { superviseRateAdapter } from './rate-supervision.mjs';
+import { freezeBootstrap, verifyBootstrapEvidence, validateBootstrapResult } from './bootstrap-calibration.mjs';
+import { readBoundedJSON } from './physical-adapter.mjs';
 
 // All capacity entry points share one host lock; preserve macOS session lock location.
 export function capacityLockPath(platform = process.platform, temporaryDirectory = tmpdir()) {
@@ -228,7 +229,9 @@ export function assessMeasurement(policy, m) {
   for (const cut of ['deadline', 'final']) {
     const c = m[cut];
     if (!c || stages.some(k => !nonnegative(c[k]))) { gaps.push(`${cut.toUpperCase()}_STAGE_COUNTS_REQUIRED`); continue; }
-    if (c.offered < c.admitted || c.admitted < c.decided || c.decided !== c.settled + c.pending) failures.push(`${cut.toUpperCase()}_COUNT_PARITY`);
+    // CAPTURE can decide before its paired SETTLE is durably admitted.
+    if (c.offered < c.admitted || c.offered < c.decided || c.admitted < c.settled
+      || c.decided < c.settled || c.decided !== c.settled + c.pending) failures.push(`${cut.toUpperCase()}_COUNT_PARITY`);
   }
   // Cumulative execution counts cannot shrink across cuts; pending is a gauge.
   for (const stage of ['offered', 'admitted', 'decided', 'settled']) {
@@ -300,12 +303,8 @@ async function runAdapterUnlocked(policyPath, adapterPath, out, authorize) {
   await verifyAdapterCapability(policy, policyPath, adapter, pinned, out);
   const args = [...adapter.args, '--financial-rate-policy', path.resolve(policyPath), '--financial-rate-measurement', measurementPath];
   await writeFile(path.join(out, 'command.json'), `${JSON.stringify({ command: adapter.command, args }, null, 2)}\n`);
-  const child = spawn(adapter.command, args, { env: heapEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
-  const exit = new Promise(resolve => { child.once('error', error => resolve({ error: error.message })); child.once('close', (code, signal) => resolve({ code, signal })); });
-  const streams = await Promise.allSettled([pipeline(child.stdout, createWriteStream(path.join(out, 'stdout.log'))), pipeline(child.stderr, createWriteStream(path.join(out, 'stderr.log')))]);
-  const ended = await exit;
-  await writeFile(path.join(out, 'process.json'), `${JSON.stringify({ ...ended, streamErrors: streams.filter(r => r.status === 'rejected').map(r => r.reason.message) }, null, 2)}\n`);
-  if (ended.code !== 0) throw new Error('ADAPTER_PROCESS_FAILED; raw attempt preserved.');
+  const ended = await superviseRateAdapter(adapter, adapterPath, args, out, heapEnvironment());
+  await writeFile(path.join(out, 'process.json'), `${JSON.stringify(ended, null, 2)}\n`);
   const result = assessMeasurement(policy, JSON.parse(await readFile(measurementPath, 'utf8')));
   await writeFile(path.join(out, 'assessment.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
@@ -343,12 +342,8 @@ export async function calibrateAdapter(requestPath, adapterPath, out, authorize)
     const resultPath = path.resolve(out, 'calibration.json');
     const args = [...adapter.args, '--financial-rate-calibration-request', path.resolve(requestPath), '--financial-rate-calibration', resultPath];
     await writeFile(path.join(out, 'command.json'), `${JSON.stringify({ command: adapter.command, args }, null, 2)}\n`);
-    const child = spawn(adapter.command, args, { env: heapEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
-    const exit = new Promise(resolve => { child.once('error', error => resolve({ error: error.message })); child.once('close', (code, signal) => resolve({ code, signal })); });
-    await Promise.allSettled([pipeline(child.stdout, createWriteStream(path.join(out, 'stdout.log'))), pipeline(child.stderr, createWriteStream(path.join(out, 'stderr.log')))]);
-    const ended = await exit;
+    const ended = await superviseRateAdapter(adapter, adapterPath, args, out, heapEnvironment());
     await writeFile(path.join(out, 'process.json'), `${JSON.stringify(ended, null, 2)}\n`);
-    if (ended.code !== 0) throw new Error('CALIBRATION_PROCESS_FAILED; raw attempt preserved.');
     const measured = JSON.parse(await readFile(resultPath, 'utf8'));
     if (measured.schema !== 'financial-rate-calibration-v1') throw new Error('CALIBRATION_ARTIFACT_REQUIRED');
     if (typeof measured.realRecordEvidencePath !== 'string') throw new Error('RAW_ENCODED_RECORD_EVIDENCE_REQUIRED');
@@ -361,14 +356,44 @@ export async function calibrateAdapter(requestPath, adapterPath, out, authorize)
   } finally { await lock.close(); await unlink(lockPath); }
 }
 
+/** Explicit fixed bootstrap; observations cannot become conservative heap bounds. */
+export async function bootstrapAdapter(requestPath, adapterPath, out, authorize) {
+  if (authorize !== '--authorize-calibration-bootstrap') throw Error('Explicit --authorize-calibration-bootstrap required.');
+  const request = await readBoundedJSON(requestPath, 1024 * 1024);
+  const adapter = await readBoundedJSON(adapterPath, 65536), pinned = pinnedHeapAdapter(adapter, 'bootstrap-calibrate');
+  await verifyBootstrapEvidence(request, requestPath, pinned[8]);
+  const lockPath = capacityLockPath(), lock = await open(lockPath, 'wx');
+  try {
+    await lock.writeFile(`${JSON.stringify({ pid: process.pid, requestPath, out, mode: 'bootstrap-calibrate' })}\n`);
+    await mkdir(out);
+    const fixture = path.resolve(path.dirname(requestPath), request.fixtureEvidencePath);
+    const capabilityArgs = [...pinned.slice(0, 5), 'heap-capability', request.sourceHead, fixture, pinned[8]];
+    const attempt = await captureHeapCapability(adapter.command, capabilityArgs);
+    await writeFile(path.join(out, 'heap-capability-attempt.json'), `${JSON.stringify(attempt, null, 2)}\n`);
+    if (attempt.code !== 0 || attempt.timedOut || attempt.outputOverflow) throw Error('BOOTSTRAP_CAPABILITY_PROCESS_FAILED');
+    await verifyBootstrapEvidence(request, requestPath, pinned[8], JSON.parse(attempt.stdout));
+    const artifact = path.resolve(out, 'bootstrap.json');
+    const args = [...adapter.args, '--financial-calibration-bootstrap-request', path.resolve(requestPath), '--financial-calibration-bootstrap', artifact];
+    await writeFile(path.join(out, 'command.json'), `${JSON.stringify({ command: adapter.command, args }, null, 2)}\n`);
+    const ended = await superviseRateAdapter(adapter, adapterPath, args, out, heapEnvironment());
+    await writeFile(path.join(out, 'process.json'), `${JSON.stringify(ended, null, 2)}\n`);
+    const measured = await readBoundedJSON(artifact, 8 * 1024 * 1024);
+    const assessment = await validateBootstrapResult(request, measured, out);
+    await writeFile(path.join(out, 'assessment.json'), `${JSON.stringify(assessment, null, 2)}\n`, { flag: 'wx' });
+    return measured;
+  } finally { await lock.close(); await unlink(lockPath); }
+}
+
 async function main(args) {
   const [mode, ...rest] = args;
   if (mode === 'plan') return PLAN;
   if (mode === 'freeze') return preparePolicy(JSON.parse(await readFile(rest[0], 'utf8')));
   if (mode === 'assess') return assessMeasurement(JSON.parse(await readFile(rest[0], 'utf8')), JSON.parse(await readFile(rest[1], 'utf8')));
   if (mode === 'calibrate') return calibrateAdapter(...rest);
+  if (mode === 'freeze-bootstrap') return freezeBootstrap(JSON.parse(await readFile(rest[0], 'utf8')));
+  if (mode === 'bootstrap-calibrate') return bootstrapAdapter(...rest);
   if (mode === 'run') return runAdapter(...rest);
-  throw new Error('Usage: rate-proof.mjs plan | freeze REQUEST.json | assess POLICY.json MEASUREMENT.json | calibrate REQUEST.json ADAPTER.json UNIQUE_OUT --authorize-calibration | run POLICY.json ADAPTER.json UNIQUE_OUT --authorize-load');
+  throw new Error('Usage: rate-proof.mjs plan | freeze REQUEST.json | freeze-bootstrap REQUEST.json | assess POLICY.json MEASUREMENT.json | calibrate REQUEST.json ADAPTER.json UNIQUE_OUT --authorize-calibration | bootstrap-calibrate REQUEST.json ADAPTER.json UNIQUE_OUT --authorize-calibration-bootstrap | run POLICY.json ADAPTER.json UNIQUE_OUT --authorize-load');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).then(result => {

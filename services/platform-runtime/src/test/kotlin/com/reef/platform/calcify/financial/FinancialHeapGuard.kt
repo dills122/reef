@@ -55,17 +55,52 @@ data class FinancialHeapBounds(
 data class FinancialHeapSnapshot(val maxHeapBytes: Long, val usedHeapBytes: Long, val sampledAtNano: Long)
 
 /** Dedicated heap-only sensor. First breach/error/stale observation is sticky, including after GC. */
-class FinancialHeapGuard(
-    private val bounds: FinancialHeapBounds,
-    private val estimatedHeapBytes: Long,
+class FinancialHeapGuard private constructor(
+    private val profile: Profile,
     private val capabilityMax: Long,
-    private val sensor: () -> FinancialHeapSnapshot = {
-        FinancialHeapSnapshot(Runtime.getRuntime().maxMemory(), ManagementFactory.getMemoryMXBean().heapMemoryUsage.used, System.nanoTime())
-    },
-    private val clock: () -> Long = System::nanoTime,
-    private val pollMillis: Long = 250,
-    private val maxSampleAgeNanos: Long = 5_000_000_000L,
+    private val sensor: () -> FinancialHeapSnapshot,
+    private val clock: () -> Long,
+    private val pollMillis: Long,
+    private val maxSampleAgeNanos: Long,
 ) : AutoCloseable {
+    private sealed interface Profile {
+        data class Conservative(val bounds: FinancialHeapBounds, val estimate: Long) : Profile
+        data class DiagnosticBootstrap(val preloadOperationalCeilingBytes: Long?) : Profile
+    }
+
+    constructor(
+        bounds: FinancialHeapBounds,
+        estimatedHeapBytes: Long,
+        capabilityMax: Long,
+        sensor: () -> FinancialHeapSnapshot = ::runtimeSnapshot,
+        clock: () -> Long = System::nanoTime,
+        pollMillis: Long = 250,
+        maxSampleAgeNanos: Long = 5_000_000_000L,
+    ) : this(Profile.Conservative(bounds, estimatedHeapBytes), capabilityMax, sensor, clock, pollMillis, maxSampleAgeNanos)
+
+    companion object {
+        private fun runtimeSnapshot() = FinancialHeapSnapshot(Runtime.getRuntime().maxMemory(),
+            ManagementFactory.getMemoryMXBean().heapMemoryUsage.used, System.nanoTime())
+
+        /** Empirical fixed-cohort diagnostic only; caller separately validates frozen request identity/config. */
+        internal fun diagnosticBootstrap(
+            timedTrades: Long,
+            pendingItems: Long,
+            agedIdentities: Long,
+            capabilityMax: Long,
+            preloadOperationalCeilingBytes: Long? = null,
+            sensor: () -> FinancialHeapSnapshot = ::runtimeSnapshot,
+            clock: () -> Long = System::nanoTime,
+            pollMillis: Long = 250,
+            maxSampleAgeNanos: Long = 5_000_000_000L,
+        ): FinancialHeapGuard {
+            require(timedTrades == 1000L && pendingItems == 100L && agedIdentities == 0L) { "HEAP_BOOTSTRAP_FIXED_COHORT_REQUIRED" }
+            val limit = FinancialHeapBounds.limit(capabilityMax)
+            require(preloadOperationalCeilingBytes == null || preloadOperationalCeilingBytes in 1 until limit) { "HEAP_PRELOAD_OPERATIONAL_CEILING_INVALID" }
+            return FinancialHeapGuard(Profile.DiagnosticBootstrap(preloadOperationalCeilingBytes), capabilityMax,
+                sensor, clock, pollMillis, maxSampleAgeNanos)
+        }
+    }
     private val firstFailure = AtomicReference<Throwable>()
     private val latest = AtomicReference<FinancialHeapSnapshot>()
     private val running = AtomicBoolean(false)
@@ -82,7 +117,8 @@ class FinancialHeapGuard(
     init {
         require(pollMillis in 1..250 && maxSampleAgeNanos in 1..5_000_000_000L) { "HEAP_SENSOR_CADENCE" }
         FinancialHeapBounds.limit(capabilityMax)
-        require(estimatedHeapBytes > 0 && estimatedHeapBytes <= FinancialHeapBounds.MAX_SAFE_INTEGER) { "HEAP_ESTIMATE_INVALID" }
+        if (profile is Profile.Conservative)
+            require(profile.estimate > 0 && profile.estimate <= FinancialHeapBounds.MAX_SAFE_INTEGER) { "HEAP_ESTIMATE_INVALID" }
     }
     private fun fail(error: Throwable) { firstFailure.compareAndSet(null, error) }
     fun refresh(stage: String) {
@@ -98,7 +134,10 @@ class FinancialHeapGuard(
                 actualMaxHeapBytes = s.maxHeapBytes; admissionLimitBytes = limit
             }
             require(s.maxHeapBytes == actualMaxHeapBytes) { "HEAP_MAX_CHANGED" }
-            require(estimatedHeapBytes < limit) { "HEAP_ADMISSION_LIMIT" }
+            when (val p = profile) {
+                is Profile.Conservative -> require(p.estimate < limit) { "HEAP_ADMISSION_LIMIT" }
+                is Profile.DiagnosticBootstrap -> require(p.preloadOperationalCeilingBytes == null || p.preloadOperationalCeilingBytes < limit) { "HEAP_PRELOAD_OPERATIONAL_CEILING_INVALID" }
+            }
             require(s.usedHeapBytes < limit) { "HEAP_OBSERVED_LIMIT" }
             latest.set(s); peak.accumulateAndGet(s.usedHeapBytes, ::maxOf)
         } catch (error: Throwable) { fail(IllegalStateException("heap failure stage=$stage", error)) }
@@ -118,8 +157,13 @@ class FinancialHeapGuard(
     fun baseline(stage: String) {
         refresh(stage)
         val s = latest.get()
-        if (s.usedHeapBytes > bounds.baselineHeapBytesUpper) {
-            fail(IllegalStateException("HEAP_BASELINE_BOUND_EXCEEDED stage=$stage")); checkpoint(stage)
+        when (val p = profile) {
+            is Profile.Conservative -> if (s.usedHeapBytes > p.bounds.baselineHeapBytesUpper) {
+                fail(IllegalStateException("HEAP_BASELINE_BOUND_EXCEEDED stage=$stage")); checkpoint(stage)
+            }
+            is Profile.DiagnosticBootstrap -> if (p.preloadOperationalCeilingBytes != null && s.usedHeapBytes >= p.preloadOperationalCeilingBytes) {
+                fail(IllegalStateException("HEAP_PRELOAD_OPERATIONAL_CEILING_EXCEEDED stage=$stage")); checkpoint(stage)
+            }
         }
         synchronized(baselineObservations) {
             require(baselineObservations.size < 16)
@@ -136,11 +180,13 @@ class FinancialHeapGuard(
             catch (error: Throwable) { fail(error) }
         }, "financial-heap-guard").apply { isDaemon = true; start() }
     }
-    fun telemetry(): Map<String, Any> = mapOf("schema" to "financial-heap-observation-v1", "guardOutcome" to if (failure != null) "FAILED" else if (latest.get() == null) "UNSTARTED" else "PASS_SAMPLED", "actualMaxHeapBytes" to actualMaxHeapBytes,
-        "admissionLimitBytes" to admissionLimitBytes, "estimatedHeapBytes" to estimatedHeapBytes, "heapPeakBytes" to peak.get(),
+    fun telemetry(): Map<String, Any?> = mapOf("schema" to if (profile is Profile.Conservative) "financial-heap-observation-v1" else "financial-bootstrap-heap-observation-v1", "guardOutcome" to if (failure != null) "FAILED" else if (latest.get() == null) "UNSTARTED" else "PASS_SAMPLED", "actualMaxHeapBytes" to actualMaxHeapBytes,
+        "admissionLimitBytes" to admissionLimitBytes, "estimatedHeapBytes" to (profile as? Profile.Conservative)?.estimate, "heapPeakBytes" to peak.get(),
         "baselineObservations" to synchronized(baselineObservations) { baselineObservations.toList() },
         "pollMillis" to pollMillis, "maxSampleAgeNanos" to maxSampleAgeNanos, "sampled" to true,
-        "limitation" to "Sudden allocation may outrun sampled protection; native/RSS memory unbounded; no OOM guarantee")
+        "limitation" to "Sudden allocation may outrun sampled protection; native/RSS memory unbounded; no OOM guarantee") +
+        if (profile is Profile.DiagnosticBootstrap) mapOf("purpose" to "EMPIRICAL_BOUNDED_DIAGNOSTIC", "heapConservativeBound" to false,
+            "preloadOperationalCeilingBytes" to profile.preloadOperationalCeilingBytes) else emptyMap()
 
     /** Stage bytes first; sensor stops and final check succeeds before atomic publication. */
     fun publish(path: Path, contents: String, auxiliary: Pair<Path, String>? = null) {
