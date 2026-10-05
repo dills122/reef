@@ -17,7 +17,7 @@ refusal controls pass without broker/client setup. Sticky sampled protection
 continues through replay/publication; emitted peak scope ends at result assembly.
 Real conservative cost evidence absent: existing real policies stay BLOCKED.
 Full E4/ACK/physical/calibration/supervision and capacity remain open.
-Proof publication pending; original E3 proof below retains separate hashes.
+Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified. [Final independent review](https://github.com/dills122/reef-records/blob/132dae9d9a02b1c6bd11946f9dbd12670a65d70b/records/reef/docs/evidence/calcify-financial-sprint1/heap-protection-2026-10-05-3ce2bdf2729c/review/cycle2/report.md). Original E3 proof below retains separate hashes.
 
 ## Current E3 continuation
 

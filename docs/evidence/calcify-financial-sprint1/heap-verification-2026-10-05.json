@@ -1,6 +1,6 @@
 {
   "schema": "calcify-heap-component-verification-v1",
-  "status": "PASSED_COMPONENT_PUBLICATION_PENDING",
+  "status": "PASSED_HEAP_PROTECTION",
   "dateUtc": "2026-10-05",
   "branch": "codex/calcify-heap-protection",
   "baselineCommit": "3ce2bdf2729c884b0efd77d0a56808a0a6eb7d96",
@@ -104,14 +104,17 @@
   ],
   "archive": {
     "namespace": "docs/evidence/calcify-financial-sprint1/heap-protection-2026-10-05-3ce2bdf2729c",
-    "status": "PUBLICATION_PENDING",
-    "recordsCommit": null,
-    "recordsPullRequest": null,
-    "reviewedProductCommit": null,
-    "localOnlyEvidenceCommit": null,
+    "status": "PUBLISHED_REMOTE_VERIFIED_LANDING_PENDING",
+    "recordsCommit": "132dae9d9a02b1c6bd11946f9dbd12670a65d70b",
+    "recordsPullRequest": "https://github.com/dills122/reef-records/pull/8",
+    "reviewedProductCommit": "799760dc69f9fce5c65eb7de2a04f768dc9ac54a",
+    "localOnlyEvidenceCommit": "faa6c0f5cefed1750b80e59d6db49026e55ec63b",
     "reefBulkPushed": false,
     "trackedSourceRemoved": false,
-    "e3ArchiveUnchanged": "ed6faadf261dab78a1c4f49991b8f297aecadea4"
+    "e3ArchiveUnchanged": "ed6faadf261dab78a1c4f49991b8f297aecadea4",
+    "files": 216,
+    "bytes": 3632431,
+    "independentRemoteBlobVerification": "PASS"
   },
   "nextGates": [
     "Recoverable durable ACK membership bound to actual retained source",

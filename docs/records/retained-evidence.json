@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_date": "2026-10-05",
-  "selection_reason": "Unrelated selections/order unchanged. Historical round7 imports immutable. Bounded E3 code/live independent Ready; complete new proof published at Records ed6faadf with1358 remote blobs/53,415,268 bytes verified. Focused current summary/fixtures/profile/owners retained. Archive PR7 landing pending; no tracked source removal.",
+  "selection_reason": "Unrelated selections/order unchanged. Historical round7 imports immutable. Bounded E3 code/live independent Ready; complete new proof published at Records ed6faadf with1358 remote blobs/53,415,268 bytes verified. Focused current summary/fixtures/profile/owners retained. Archive PR7 landing pending; no tracked source removal. Heap component independently Ready; separate216-file proof published at Records132dae9d, remote bytes verified; PR8 landing pending. Current heap summary retained.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 7403,
-      "sha256": "a06a8df67100a1ed8e6bbeda231c6df1e0cc89542e17b6aa7f079bbba47301ee"
+      "bytes": 7781,
+      "sha256": "a1a156c54d6dfe97e395f62463558016335250f74f3a583926c51acec1949af3"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1700,8 +1700,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json",
-      "bytes": 6469,
-      "sha256": "3355569b43b67b204073d567cda61c3dcfeec51d36ca9a195cc1ecde96323fa3"
+      "bytes": 6725,
+      "sha256": "bdffb4869c7de330eeca077c87d60a95fb280a482c684cd05e465f6560bd9fda"
     }
   ]
 }

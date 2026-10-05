@@ -27,7 +27,7 @@ and publication. Financial64/64 and exact NodeCI229/229 pass. Independent review
 Attempt1 cycle2 **Ready**; cycle1 P2 peak-scope finding fixed with actual RED/GREEN
 control. Emitted peaks explicitly exclude final serialization/staged writes.
 [Focused verification](evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json)
-owns exact source/build/test scope. Proof publication/retention completion pending.
+owns exact source/build/test scope. Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified; local-only provenance `faa6c0f5`, product checkpoint `799760dc`. No tracked bulk removed.
 No broker load or real conservative cost qualification.
 
 Missing conservative cost provenance blocks existing real-load policies. Full E4

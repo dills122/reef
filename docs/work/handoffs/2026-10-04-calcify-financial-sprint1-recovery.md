@@ -14,7 +14,7 @@ Applied test-harness heap component: financial64/64, exact NodeCI229/229;
 independent Attempt1 cycle2 Ready. Peak-scope P2 fixed with actual RED/GREEN;
 final-build capability/baseline/identity refusals verified broker-free.
 [Focused verification](../../evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json)
-owns current source/build/metric limits; proof publication pending.
+owns current source/build/metric limits. Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified; original E3 archive unchanged.
 Existing real policies lack reviewed finite costs and stay BLOCKED. Full E4
 requires ACK recovery, distinct physical metrics, safe calibration bootstrap and
 producer/observer/resource supervision through restore. No capacity/production claim.
