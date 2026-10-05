@@ -20,6 +20,19 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 ## Change behavior or architecture
 
+### Calcify reading order
+
+| Order | Owner | Read for |
+| --- | --- | --- |
+| 1 | [Current work](WORK_PLAN.md#calcify-e3-continuation--october-5-2026) | Merged work, remaining gates and next bounded slice |
+| 2 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
+| 3 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
+| 4 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |
+| 5 | [Throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026) | Scoped D7 pass; financial capacity remains unmeasured |
+
+Detailed reviews and raw financial proof remain linked from checkpoint to immutable
+Records commits. Execution status stays in `WORK_PLAN.md`; RFC remains proposed.
+
 - [Calcify Phases 1 and 2](CALCIFY_PHASES_OVERVIEW.md) explains implemented flow, worker wiring, source facts, managed state, and capacity boundaries.
 - [Calcify discovery](work/CALCIFY_DISCOVERY.md) records open post-match redesign questions, proposed logical flow, and phased proof gates; it is not an approved architecture.
 - [Calcify system RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) proposes full post-trade architecture and bounded financial proofs; [research and review reconciliation](research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md) compares authorities and corrects historical findings against October 2 master. Neither accepts a new architecture or claims capacity qualification.

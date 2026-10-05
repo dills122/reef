@@ -1,8 +1,23 @@
 # Handoff: Calcify sprint1 bounded proof and remaining qualification
 
 October5 UTC / October4 local, 2026. Review7 closes guard P1; implemented
-correctness scope passes. Full E3/E4 remains open. [Product PR473](https://github.com/dills122/reef/pull/473) open from
+correctness scope passes. Full E3/E4 remains open. [Product PR473](https://github.com/dills122/reef/pull/473) merged at
+`a6ddafbbae750693e227985f054be2d26716ae84`; originating branch
 `codex/calcify-sprint1-experiments`, base `97924e15642826a687db935a219d7927ae649ac8`.
+Required CI passed. Records PR6 remains open; pinned proof commits remain published.
+
+## October5 continuation
+
+Active clean-baseline worktree `/Users/dsteele/.codex/worktrees/8c6f/reef`, branch
+`codex/calcify-planning-readiness`, base `a6ddafbb`; primary checkout preserved.
+New session expressly authorizes bounded milestone review sessions. Historical
+cap7 and original proof scope remain unchanged. Candidate fault/certification
+code passes financial45/45 and exact Node CI216/216. Guard recovery smoke passes
+actual parent `starting` with measured disk, healthy final sample and exit0;
+volumes retained. Candidate external4/4, quartet, core24/24 and golden20/20 pass.
+Final integrated review Ready; M0 Attempt2 cycle3, M1 Attempt1 cycle3,
+M2 Attempt1 cycle2; no findings. Archive publication still delivery gate. See
+[current execution status](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026).
 
 ## OCR follow-up
 

@@ -1,0 +1,172 @@
+{
+  "schema": "calcify-e3-verification-v1",
+  "dateUtc": "2026-10-05",
+  "branch": "codex/calcify-planning-readiness",
+  "measurementBaseline": "a6ddafbbae750693e227985f054be2d26716ae84",
+  "status": "READY_CODE_AND_LIVE_DELIVERY_PENDING",
+  "scope": "Bounded test-only RF3 external faults and certified activation; no production financial authority or capacity qualification",
+  "sourceHashes": {
+    ".github/workflows/ci.yml": "b637e1bca4afbe9d6beb693d5da5ea0a4787b23adcc889c3b49c801b5d6a798f",
+    "scripts/dev/calcify-financial/broker-proof.mjs": "fb3599f79cee45d9ce1987ad4aca3a15c924db6baf5028976127e144a699bb78",
+    "scripts/dev/calcify-financial/broker-proof.test.mjs": "af02c807123a2998093b04864d32d50da543a8b4ee8de021dbd22478451c62cf",
+    "scripts/dev/calcify-financial/lib/external-faults.mjs": "c62bb2ce1e71fa2cfe345e9419fa678404eb273f32a3e1a0a8a24954e2df429f",
+    "scripts/dev/calcify-financial/proof-supervisor.mjs": "04631a6ce54cf5a591715570d4d8823b0d559ea8a3cb90003bdd9e0e0df88844",
+    "scripts/dev/calcify-financial/proof-supervisor.test.mjs": "20242a1692edd7099fc98594d4783b3ef32abb63078e610b71836fe96df3034e",
+    "scripts/dev/calcify-financial/record-attempt.mjs": "82673197ab191e17ca70c51f71cbcb11d523a2197914ee91ddaa3ea7daa41a11",
+    "scripts/dev/calcify-financial/record-attempt.test.mjs": "36ac794101707e7c88ee3a812ff39f35800f51b43491be1a68bcd13334022f1e",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialBrokerProbe.kt": "f3e824685301fa7aa446f1017620dbc096c7bb9ecb81197dcc5f1f645e9d5fb7",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialBrokerProbeTest.kt": "e4b8a01e0d693e92e46374b0b4cc186f1ec732921f254f22af76e296afbf661d",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialPartitionCut.kt": "b24893cbf315171652c2d18cb9cb343f1c1f906d9263d5d6ea2262e90a3161bc",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialPartitionCutTest.kt": "609e09025939987d83fa0a6a7b3b78fe6de54bc6dc11266a6c2296f4c130cd2c",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCommittedCut.kt": "543a31445992e4e33b0c8518df6d21f66689dba2dc850effe6e73080ddd236a6",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCommittedCutTest.kt": "a2f6485d28625502fbaf1edfc029d01f093b9918c6b9265baa69996ecde0f716"
+  },
+  "liveIdentity": {
+    "runnerHashCount": 3,
+    "financialSourceHashCount": 11,
+    "compiledHashCount": 97,
+    "runnerHashesIdentical": true,
+    "financialSourceHashesIdentical": true,
+    "compiledHashesIdentical": true,
+    "currentSourceHashesMatch": true
+  },
+  "fixtureSha256": "fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d",
+  "tests": {
+    "financialKotlin": {
+      "tests": 45,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "exactNodeCi": {
+      "tests": 216,
+      "failures": 0,
+      "skipped": 0,
+      "actualExitCode": 0,
+      "directBeforeAfterHashesMatch": true
+    },
+    "independentGuardFocused": 58,
+    "actualSmokeDriverControls": 2,
+    "scriptSurfaceScripts": 272,
+    "recordsExistingArchivedFiles": 520
+  },
+  "live": {
+    "recoverySmoke": {
+      "ok": true,
+      "parentStartingSamples": 4,
+      "actualTargetDuBound": true,
+      "fixedTargetReservationBytes": 3221225472,
+      "elapsedFromStartGrantMs": 3596,
+      "wrapperExitCode": 0,
+      "finalHealthy": true,
+      "cleanupErrors": [],
+      "volumesPreserved": true,
+      "scope": "No financial workload"
+    },
+    "externalFaults": {
+      "arms": 4,
+      "pass": true,
+      "names": [
+        "producer-failure",
+        "committed-output-before-controller-ack",
+        "stale-owner-resume-after-takeover",
+        "majority-one-broker-unavailable"
+      ],
+      "actualProducerFailureClass": "RecordTooLargeException",
+      "actualStaleOwnerFailureClass": "ProducerFencedException",
+      "wrapperExitCode": 0,
+      "scope": "bounded RF3/EOS external faults; no cluster-loss guarantee"
+    },
+    "activationQuartet": {
+      "pass": true,
+      "isolatedMixedA10B27Refused": true,
+      "isolatedMissingA5HistoryRefused": true,
+      "completeBalances": {
+        "A": "15",
+        "B": "27"
+      },
+      "newDirectoryRestoreBalances": {
+        "A": "15",
+        "B": "27"
+      },
+      "freshSuffixBalances": {
+        "A": "16",
+        "B": "28"
+      },
+      "oldPrefixEndAndFrameworkCheckpointPreserved": true,
+      "scope": "Isolated mixed snapshot refusal and actual new-directory changelog restore; no injected mixed managed store"
+    },
+    "core": {
+      "count": 24,
+      "sampleCount": 99,
+      "sampledMaximumAllocatedBytes": 4340293632,
+      "elapsedSeconds": 468.764
+    },
+    "golden": {
+      "count": 20,
+      "sampleCount": 92,
+      "sampledMaximumAllocatedBytes": 5863723008,
+      "elapsedSeconds": 435.002
+    }
+  },
+  "resourceScope": {
+    "brokerImageDigest": "sha256:9e83cfa99278f30d0133271c26bf670cd69c94ffa6ba0b42830dd0c3bd9dcfd9",
+    "replication": 3,
+    "segmentBytes": 8388608,
+    "writeCaching": "disabled",
+    "abortBytes": 9663676416,
+    "hardBudgetBytes": 10737418240,
+    "guestFreeFloorBytes": 21474836480,
+    "rawProofCapBytes": 268435456,
+    "maximumSampleFreshnessMs": 5000,
+    "recoveringNominalCadenceMs": 1000,
+    "faultAccountedMaximumBytes": 4844015616,
+    "faultMeasuredRunningSumMaximumBytes": 2430259200,
+    "faultAccountingLimit": "Maximum accounted bytes includes fixed 3 GiB target reservation throughout external fault mode; measured running broker sum excludes stopped-target unknown rows; sampled only, no continuous peak",
+    "allCandidateBrokersStoppedAfterEachRun": true,
+    "namedVolumesRetained": 3,
+    "peakLimit": "Samples only; not continuous peak. Inspect and du separate observations; outside-writer absence operational premise."
+  },
+  "timing": {
+    "serialCorePlusGoldenSeconds": 903.766,
+    "historicalOriginal44Seconds": 474.917,
+    "comparison": "Original historical software/orchestration scope retained. Current two serial wrappers reuse volumes with prior attempts; no matched A/B or causal timing claim."
+  },
+  "review": {
+    "verdict": "Ready for frozen bounded E3 source/plan/live acceptance",
+    "findings": 0,
+    "M0": "Attempt1 cycles1-3 preserved; research spike; Attempt2 cycle3 Ready",
+    "M1": "Attempt1 cycle3 Ready",
+    "M2": "Attempt1 cycle2 Ready",
+    "independentFreshNodeTests": 60,
+    "candidateArmsVerified": 49,
+    "rawSamplesVerified": 246,
+    "maximumObservedSampleStartGapMs": 4815,
+    "reportSha256": "5fcecf73fed5e40763bd4755dc8233c953459a3ae3c765daa5baf17f26a1f24d",
+    "reportPublication": "Pending exact-byte Records publication",
+    "historicalCap7": "Preserved; current user explicitly authorized new bounded sessions"
+  },
+  "failedCampaigns": [
+    "external1 wrong canonical label before majority mutation",
+    "external2 guard rejected normal target starting; earlier three arms and stopped-target full oracle preserved"
+  ],
+  "corrections": [
+    "CI1 unsupported while-running hash attribution preserved and corrected; CI2 captures direct before/after",
+    "Recorder35 original receipts retained exact bytes in active session namespace",
+    "Derived smoke du and fault accounting summary scope corrections retained separately"
+  ],
+  "openGates": [
+    "E4 applied heap/ACK membership/physical-byte/calibration",
+    "Reservation owner acceptance",
+    "Matcher identity integration",
+    "Production financial authority/cutover",
+    "Records PR6 landing"
+  ],
+  "bulkEvidence": {
+    "status": "PENDING_EXACT_BYTE_PUBLICATION",
+    "localActiveSession": ".planning/calcify-session-2026-10-04",
+    "plannedNamespace": "docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75",
+    "rawBulkDestination": "reef-records only",
+    "trackedBulkRemoved": false
+  }
+}

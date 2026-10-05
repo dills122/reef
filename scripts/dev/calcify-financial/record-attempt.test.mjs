@@ -33,9 +33,10 @@ test('recorder persists binary output, failures and separate spawn diagnostics',
     execFileSync('git', ['init', '--quiet'], { cwd: root });
     execFileSync('git', ['-c', 'user.name=Recorder Test', '-c', 'user.email=recorder@example.invalid', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty', '-m', 'test fixture'], { cwd: root });
     const script = join(scriptDir, 'record-attempt.mjs');
-    const raw = join(root, 'docs/evidence/calcify-financial-sprint1/raw');
+    const raw = join(root, 'selected-attempts');
+    const env = { ...process.env, CALCIFY_FINANCIAL_ATTEMPT_DIR: raw };
     const code = 'process.stdout.write(Buffer.from([0xc3,0xa9,0xff,0])); process.stderr.write(Buffer.from([0xf0,0x9f,0x8c,0x8a,0xfe])); process.exitCode=7;';
-    const recorded = spawnSync(process.execPath, [script, 'binary', '.', process.execPath, '-e', code]);
+    const recorded = spawnSync(process.execPath, [script, 'binary', '.', process.execPath, '-e', code], { env });
     assert.equal(recorded.status, 7);
     const stdout = await readFile(join(raw, 'binary.stdout.log'));
     const stderr = await readFile(join(raw, 'binary.stderr.log'));
@@ -43,10 +44,10 @@ test('recorder persists binary output, failures and separate spawn diagnostics',
     assert.deepEqual(stderr, Buffer.from([0xf0, 0x9f, 0x8c, 0x8a, 0xfe]));
     assert.deepEqual(recorded.stdout, stdout);
     assert.deepEqual(recorded.stderr, stderr);
-    const duplicate = spawnSync(process.execPath, [script, 'binary', '.', process.execPath, '--version']);
+    const duplicate = spawnSync(process.execPath, [script, 'binary', '.', process.execPath, '--version'], { env });
     assert.equal(duplicate.status, 1);
     assert.deepEqual(await readFile(join(raw, 'binary.stdout.log')), stdout);
-    const missing = spawnSync(process.execPath, [script, 'missing', '.', join(root, 'absent-command')]);
+    const missing = spawnSync(process.execPath, [script, 'missing', '.', join(root, 'absent-command')], { env });
     assert.equal(missing.status, 1);
     assert.equal((await readFile(join(raw, 'missing.stderr.log'))).length, 0);
     const attempts = (await readFile(join(raw, 'attempts.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
@@ -57,6 +58,11 @@ test('recorder persists binary output, failures and separate spawn diagnostics',
     assert.equal(attempts[0].captureSha256, createHash('sha256').update(await readFile(join(scriptDir, 'lib/output-capture.mjs'))).digest('hex'));
     assert.match(attempts[1].spawnError, /ENOENT/);
     assert.notEqual(attempts[1].code, 0);
+    const defaultAttempt = spawnSync(process.execPath, [script, 'default', '.', process.execPath, '-e', 'process.stdout.write("default")'],
+      { env: { ...process.env, CALCIFY_FINANCIAL_ATTEMPT_DIR: '' } });
+    assert.equal(defaultAttempt.status, 0);
+    assert.equal(await readFile(join(root, '.planning/calcify-financial-proof/attempts/default.stdout.log'), 'utf8'), 'default');
+    await assert.rejects(readFile(join(root, 'docs/evidence/calcify-financial-sprint1/raw/attempts.jsonl')), { code: 'ENOENT' });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

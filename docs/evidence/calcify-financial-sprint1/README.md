@@ -6,6 +6,21 @@ checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
+## Current E3 continuation
+
+October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
+[Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
+owns candidate status. New test-only external faults and partition-cut verifier
+remain under acceptance review. Kotlin45/45 and exact Node CI216/216 pass.
+Reviewed recovery guard passes real parent-observed `starting`/measured-disk/
+healthy recovery smoke; no financial workload in that smoke. Candidate external4/4, quartet, core24/24 and golden20/20 pass;
+[focused current verification](e3-verification-2026-10-05.json) records same-build
+scope, failures, timing and resources. Independent integrated review Ready: M0 Attempt2 cycle3, M1 Attempt1 cycle3,
+M2 Attempt1 cycle2; no findings, fresh Node60/60. Exact-byte archive publication
+pending; historical proof below retains
+its original hashes. Current explicit review authorization preserves historical
+cap7 and adds bounded milestone sessions, without resetting prior counts.
+
 ## OCR follow-up
 
 Checkpoint now versioned and validated before state assignment. Invalid resource

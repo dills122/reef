@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_date": "2026-10-05",
-  "selection_reason": "Unrelated selections unchanged. Round7 signed guard and supervised pilot/full implemented matrix proof archived only in Reef Records. Focused current verification, fixtures, recovery, profile and active handoff retained; full E3/E4/capacity open. Historical imports immutable; no source removal.",
+  "selection_reason": "Unrelated selections unchanged. Historical round7 proof remains immutable. Current test-only E3 source/live acceptance independently Ready; focused verification, fixtures, profile and owners retained. New bulk receipts await exact-byte Records publication; no tracked source removal.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 4856,
-      "sha256": "2f27bd65ab533ab512af886d6f6f45b6c906b2d14a33dd18697f36ec04325ee8"
+      "bytes": 5870,
+      "sha256": "31bd554f4cfae732a531ec1b20ee352dbcafaecfe49bb3a9628fad35dbf11ea3"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1692,6 +1692,11 @@
       "path": "docs/evidence/calcify-financial-sprint1/broker-profile.json",
       "bytes": 1796,
       "sha256": "9b5a452576ea96fd9d5ab6fcb118e8a5a04039037903d2a4fc4c214a6e2f8e25"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/e3-verification-2026-10-05.json",
+      "bytes": 7976,
+      "sha256": "49b469f6cfb30b879f98ace98befb5c0c04ef0d99cbfce9f2f37b4625ac9edff"
     }
   ]
 }

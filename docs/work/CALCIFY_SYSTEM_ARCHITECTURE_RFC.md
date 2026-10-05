@@ -703,7 +703,7 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-sprint1-verification--october42026)
+**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
 and [focused verification](../evidence/calcify-financial-sprint1/README.md) own execution status;
 E0 preparation history remains linked from evidence. Acceptance gates below unchanged.
 Decision owner: Reef project owner. Planning checkpoint:
