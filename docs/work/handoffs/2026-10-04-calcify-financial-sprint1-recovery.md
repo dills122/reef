@@ -19,7 +19,9 @@ Fix source `0a64c4823a00ec5133e331bcfbbc94e542c4d8d3`.
 
 Persistent checkout `/Users/dsteele/repos/reef/.worktrees/calcify-sprint1-experiments`.
 Software `f75b5d6187b631d5d608a24b883df6c57478b151`, profile
-`f56b30b19d00a1033abae44a75435a4e771990e9`; 18 software and 89 build hashes unchanged.
+`f56b30b19d00a1033abae44a75435a4e771990e9`; Historical bounded proof checked 18 software and 89 build hashes; subsequent
+OCR fixes change two JavaScript source files. Broker/Kotlin/build/profile/guard
+remain unchanged.
 Focused docs advance product HEAD; bulk never pushed to Reef.
 [Complete round7/pilot/matrix proof](https://github.com/dills122/reef-records/tree/b5d868b69132e85cdf74e4fc9c948f01eafc74c9/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-05-f22b2f85),
 [Records PR6](https://github.com/dills122/reef-records/pull/6),
