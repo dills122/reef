@@ -18,9 +18,31 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify heap protection component — October 5, 2026
+
+Component verification passes on `codex/calcify-heap-protection`, starting from
+E3 delivery checkpoint `3ce2bdf2`. Actual JVM capability binding, checked finite
+retained-state admission and sticky sampled protection cover result-only replay
+and publication. Financial64/64 and exact NodeCI230/230 pass. Independent review
+Attempt1 cycle3 **Ready**; cycle1 P2 peak-scope finding fixed with actual RED/GREEN
+control. Emitted peaks explicitly exclude final serialization/staged writes.
+[Focused verification](evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json)
+owns exact source/build/test scope. Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified; local-only provenance `faa6c0f5`, product checkpoint `799760dc`. No tracked bulk removed.
+No broker load or real conservative cost qualification.
+
+Missing conservative cost provenance blocks existing real-load policies. Full E4
+readiness still needs recoverable ACK membership, distinct physical-byte metrics,
+producer/observer cost calibration and resource supervision through restore.
+Heap protection alone establishes no capacity, native-memory or OOM guarantee.
+Real launcher remains pinned to local macOS Java21/128m/768m; portability needs
+explicit new launcher binding. Cost calibration needs separately reviewed finite
+derivation and safe bootstrap envelope before existing real policies can run.
+
+Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof published at Records `2a2abf9e`:63 remote blobs/700,463 bytes verified; combined279/4,332,894. [Final independent review](https://github.com/dills122/reef-records/blob/2a2abf9ea130636daecc2d35dc6c961b08c182f9/records/reef/docs/evidence/calcify-financial-sprint1/heap-ci-correction-2026-10-05-3bf45160ebfa/review/cycle3/report.md); Records PR8 draft, landing pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
+
 ## Calcify E3 continuation — October 5, 2026
 
-Active branch `codex/calcify-planning-readiness`, baseline `a6ddafbb`.
+E3 delivery branch `codex/calcify-planning-readiness`, baseline `a6ddafbb`.
 Current session explicitly authorizes new bounded milestone reviews: three cycles
 per attempt, research between attempts, maximum three attempts. Historical cap7
 and original proof remain dated evidence; neither count is reset.
@@ -46,9 +68,10 @@ resource samples and fresh Node60/60. Bounded E3 acceptance/retention complete.
 landing pending; no tracked bulk removed. Product checkpoint `c4d332a0` holds
 reviewed code; actual runs bind prior dirty/new source/build hashes.
 
-Next E4 slice: actual applied maximum-heap admission guard, recoverable ACK
-membership, distinct physical-byte metrics, producer/observer calibration through
-restore. Existing financial rate assessment remains LIMITED. Reservation owner
+Applied heap component above closes implementation slice; remaining E4 gates:
+recoverable ACK membership, distinct physical-byte metrics, reviewed finite heap
+costs and producer/observer calibration/resource supervision through restore.
+Existing financial rate assessment remains LIMITED. Reservation owner
 acceptance, matcher identity and production financial authority remain separate.
 
 ## Calcify sprint1 verification — October5 UTC / October4 local, 2026

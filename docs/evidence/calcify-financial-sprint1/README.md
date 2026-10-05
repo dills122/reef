@@ -6,12 +6,27 @@ checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
+## Current heap protection component
+
+October5, 2026 UTC; branch `codex/calcify-heap-protection`, base `3ce2bdf2`.
+[Focused verification](heap-verification-2026-10-05.json) and
+[current work plan](../../WORK_PLAN.md#calcify-heap-protection-component--october-5-2026)
+own new test-harness component scope. Financial64/64, exact NodeCI230/230;
+independent Attempt1 cycle3 Ready. Actual Java21 capability and final-build child
+refusal controls pass without broker/client setup. Sticky sampled protection
+continues through replay/publication; emitted peak scope ends at result assembly.
+Real conservative cost evidence absent: existing real policies stay BLOCKED.
+Full E4/ACK/physical/calibration/supervision and capacity remain open.
+Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified. [Earlier component review](https://github.com/dills122/reef-records/blob/132dae9d9a02b1c6bd11946f9dbd12670a65d70b/records/reef/docs/evidence/calcify-financial-sprint1/heap-protection-2026-10-05-3ce2bdf2729c/review/cycle2/report.md). Original E3 proof below retains separate hashes.
+
+Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof published at Records `2a2abf9e`:63 remote blobs/700,463 bytes verified; combined279/4,332,894. [Final independent review](https://github.com/dills122/reef-records/blob/2a2abf9ea130636daecc2d35dc6c961b08c182f9/records/reef/docs/evidence/calcify-financial-sprint1/heap-ci-correction-2026-10-05-3bf45160ebfa/review/cycle3/report.md); Records PR8 draft, landing pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
+
 ## Current E3 continuation
 
 October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
 [Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
 owns candidate status. New test-only external faults and partition-cut verifier
-remain under acceptance review. Kotlin45/45 and exact Node CI216/216 pass.
+have bounded acceptance complete; product merge pending. Kotlin45/45 and exact Node CI216/216 pass.
 Reviewed recovery guard passes real parent-observed `starting`/measured-disk/
 healthy recovery smoke; no financial workload in that smoke. Candidate external4/4, quartet, core24/24 and golden20/20 pass;
 [focused current verification](e3-verification-2026-10-05.json) records same-build
@@ -71,8 +86,9 @@ preallocation reclamation. Historical failure remains immutable. Original 16 MiB
 proposal never applied. Initial metadata and assessment errors preserved with corrections.
 
 At original checkpoint, full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK and
-A10B27 certified activation remained open; current continuation above closes bounded E3. E4 heap/ACK membership/physical-byte/
-calibration gates, reservation acceptance and matcher identity integration remain.
+A10B27 certified activation remained open; current continuation above closes bounded E3.
+Applied heap component passes separately; E4 reviewed costs/ACK membership/physical-byte/
+calibration/supervision gates, reservation acceptance and matcher identity integration remain.
 No full sprint, capacity, production or cutover sign-off.
 
 ## Records and continuation

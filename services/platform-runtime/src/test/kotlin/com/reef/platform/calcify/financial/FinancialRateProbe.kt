@@ -3,6 +3,7 @@ package com.reef.platform.calcify.financial
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
+import java.io.File
 import java.lang.management.ManagementFactory
 import java.math.BigInteger
 import java.nio.file.Files
@@ -15,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.LockSupport
@@ -167,22 +170,148 @@ object FinancialRateProbe {
         println(json.writeValueAsString(mapOf("selfCheck" to true, "prefixes" to 40, "independentFullOracle" to true, "oneLegMutationRejected" to true)))
     }
 
+    // Build identity covers every compiled Financial*.class, including nested classes,
+    // in this test-only code-source directory. Classpath identity covers ordered actual
+    // entries: streamed jar/file bytes and every regular directory file sorted by relative
+    // path, including resources. Config/fixture identity covers raw file bytes.
+    internal fun heapCapability(sourceHead: String, fixturePath: Path, configPath: Path): JsonNode {
+        val root = Path.of(FinancialRateProbe::class.java.protectionDomain.codeSource.location.toURI())
+        require(Files.isDirectory(root)) { "HEAP_DIRECTORY_BUILD_REQUIRED" }
+        val dir = root.resolve("com/reef/platform/calcify/financial")
+        val md = MessageDigest.getInstance("SHA-256")
+        Files.list(dir).use { paths -> paths.filter { it.fileName.toString().startsWith("Financial") && it.fileName.toString().endsWith(".class") }
+            .sorted().forEach { file -> md.update(file.fileName.toString().toByteArray()); md.update(0.toByte()); md.update(Files.readAllBytes(file)) } }
+        val classpathDigest = MessageDigest.getInstance("SHA-256")
+        fun classpathPart(value: String) { classpathDigest.update(value.toByteArray()); classpathDigest.update(0.toByte()) }
+        val classpathEntries = System.getProperty("java.class.path").split(File.pathSeparator).map { Path.of(it).toAbsolutePath().normalize().toString() }
+        classpathEntries.forEach { entry ->
+            val path = Path.of(entry).toAbsolutePath().normalize(); require(Files.exists(path)) { "HEAP_CLASSPATH_ENTRY_MISSING" }
+            classpathPart(path.toString())
+            if (Files.isDirectory(path)) Files.walk(path).use { paths -> paths.filter { Files.isRegularFile(it) }.sorted().forEach { file ->
+                classpathPart(path.relativize(file).toString()); classpathPart(shaFile(file))
+            } } else classpathPart(shaFile(path))
+        }
+        return node(mapOf("schema" to "financial-heap-capability-v1", "maxHeapBytes" to Runtime.getRuntime().maxMemory(),
+            "usedHeapBytes" to ManagementFactory.getMemoryMXBean().heapMemoryUsage.used,
+            "vmArguments" to ManagementFactory.getRuntimeMXBean().inputArguments,
+            "javaVersion" to System.getProperty("java.version"), "javaVendor" to System.getProperty("java.vendor"),
+            "sourceHead" to sourceHead, "fixtureSha256" to shaFile(fixturePath), "configSha256" to shaFile(configPath),
+            "buildSha256" to HexFormat.of().formatHex(md.digest()), "classpathSha256" to HexFormat.of().formatHex(classpathDigest.digest()), "classpathEntries" to classpathEntries,
+            "classIdentityScope" to "All compiled Financial*.class including nested classes; ordered classpath entries with streamed jar/file bytes and sorted directory resources"))
+    }
+
+    internal fun heapGuard(spec: JsonNode, specPath: Path, configPath: Path, timed: Long, aged: Long, pending: Long): FinancialHeapGuard {
+        val h = requireNotNull(spec["heap"]) { "HEAP_CONSERVATIVE_EVIDENCE_REQUIRED" }
+        val b = requireNotNull(h["bounds"]); val c = requireNotNull(h["capability"])
+        require(h["schema"]?.asText() == "financial-heap-admission-v1" && b["schema"]?.asText() == "financial-heap-bounds-v1"
+            && c["schema"]?.asText() == "financial-heap-capability-v1") { "HEAP_CONSERVATIVE_EVIDENCE_REQUIRED" }
+        require(FinancialHeapBounds.integer(h["authorizedMaxHeapBytes"], "authorizedMaxHeapBytes") == FinancialHeapBounds.AUTHORIZED_MAX)
+        require(b["validationOnly"]?.isBoolean == true && !b["validationOnly"].booleanValue()) { "HEAP_VALIDATION_ONLY_EVIDENCE" }
+        for (field in listOf("derivation", "scope")) require(b[field]?.isTextual == true && b[field].asText().isNotBlank())
+        val review = requireNotNull(h["review"]) { "HEAP_REVIEW_EVIDENCE_REQUIRED" }
+        require(review["schema"]?.asText() == "financial-heap-bounds-review-v1"
+            && review["verdict"]?.asText() == "READY_CONSERVATIVE_BOUND"
+            && review["validationOnly"]?.isBoolean == true && !review["validationOnly"].booleanValue()) { "HEAP_REVIEW_EVIDENCE_REQUIRED" }
+        require(review["boundsEvidenceSha256"] == h["boundsEvidenceSha256"]) { "HEAP_REVIEW_SCOPE_MISMATCH" }
+        for (field in listOf("sourceHead", "fixtureSha256", "configSha256", "buildSha256", "classpathSha256", "supportedIdentities", "supportedPendingItems", "derivation", "scope"))
+            require(review[field] != null && review[field] == b[field]) { "HEAP_REVIEW_SCOPE_MISMATCH field=$field" }
+        val root = specPath.toAbsolutePath().normalize().parent.toRealPath()
+        for ((kind, expected) in listOf("bounds" to b, "capability" to c, "review" to review)) {
+            require(h["${kind}EvidencePath"]?.isTextual == true)
+            val file = root.resolve(h["${kind}EvidencePath"].asText()).normalize().toRealPath()
+            require(file.startsWith(root) && file != root) { "HEAP_EVIDENCE_MUST_BE_OWNED_BY_POLICY" }
+            require(shaFile(file) == h["${kind}EvidenceSha256"]?.asText()) { "HEAP_RAW_EVIDENCE_HASH_MISMATCH" }
+            require(json.readTree(Files.readString(file)) == expected) { "HEAP_RAW_EVIDENCE_IDENTITY_MISMATCH" }
+        }
+        require(h["fixtureEvidencePath"]?.isTextual == true)
+        val fixturePath = root.resolve(h["fixtureEvidencePath"].asText()).normalize().toRealPath()
+        require(fixturePath.startsWith(root) && fixturePath != root && shaFile(fixturePath) == b["fixtureSha256"].asText()) { "HEAP_FIXTURE_IDENTITY_MISMATCH" }
+        val actual = heapCapability(spec["sourceHead"].asText(), fixturePath, configPath)
+        require(spec["fixtureSha256"] == actual["fixtureSha256"]) { "HEAP_FIXTURE_IDENTITY_MISMATCH" }
+        for (field in listOf("sourceHead", "fixtureSha256", "configSha256", "buildSha256", "classpathSha256")) {
+            val pattern = if (field == "sourceHead") "(?:[a-f0-9]{40}|[a-f0-9]{64})" else "[a-f0-9]{64}"
+            require(b[field]?.isTextual == true && b[field].asText().matches(Regex(pattern))
+                && b[field] == c[field] && b[field] == actual[field]) { "HEAP_IDENTITY_MISMATCH field=$field" }
+        }
+        val vmArgs = node(listOf("-Xms128m", "-Xmx768m"))
+        require(c["vmArguments"] == vmArgs && actual["vmArguments"] == vmArgs) { "HEAP_PINNED_VM_ARGUMENTS_REQUIRED" }
+        for (field in listOf("javaVersion", "javaVendor")) require(c[field]?.isTextual == true && c[field].asText().isNotBlank() && c[field] == actual[field])
+        val bounds = FinancialHeapBounds.from(b)
+        val capabilityMax = FinancialHeapBounds.integer(c["maxHeapBytes"], "maxHeapBytes")
+        val capabilityUsed = FinancialHeapBounds.integer(c["usedHeapBytes"], "usedHeapBytes", false)
+        val estimated = bounds.estimate(timed, aged, pending)
+        require(estimated <= FinancialHeapBounds.MAX_SAFE_INTEGER && estimated < FinancialHeapBounds.limit(capabilityMax)
+            && capabilityUsed <= bounds.baselineHeapBytesUpper && capabilityUsed < FinancialHeapBounds.limit(capabilityMax)) { "HEAP_ADMISSION_LIMIT" }
+        return FinancialHeapGuard(bounds, estimated, capabilityMax)
+    }
+
+    /** Actual caller seam: guard starts before setup and closes on every exceptional path.
+     * Body retains guard through worker close, result-only replay and atomic result publication. */
+    internal fun <T> withHeapProtection(guard: FinancialHeapGuard, body: (FinancialHeapGuard) -> T): T {
+        try { guard.start(); return body(guard).also { if (guard.isClosed) guard.checkpoint("lifecycle-return") else guard.refresh("lifecycle-return") } }
+        finally { guard.close() }
+    }
+
+    /** Shared actual result-only replay batch boundary, independently injectable without a broker. */
+    internal fun <T> heapReplayBatch(guard: FinancialHeapGuard, records: Iterable<T>, applyRecord: (T) -> Unit) {
+        guard.checkpoint("result-only-replay-batch")
+        records.forEach { record -> guard.checkpoint("result-only-replay-record"); applyRecord(record); guard.checkpoint("result-only-replay-record-applied") }
+    }
+
+    /** Main thread polls heap failure during interruptible blocking producer operations. */
+    internal fun <T> heapAwait(guard: FinancialHeapGuard, stage: String, timeoutMillis: Long, action: () -> T): T {
+        guard.checkpoint("$stage-before-operation")
+        val task = FutureTask<T> { action() }
+        val thread = Thread(task, "financial-$stage").apply { isDaemon = true; start() }
+        val end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        try {
+            while (true) {
+                guard.checkpoint(stage)
+                require(System.nanoTime() < end) { "rate operation timeout stage=$stage" }
+                try { return task.get(25, TimeUnit.MILLISECONDS).also { guard.refresh("$stage-complete") } }
+                catch (_: TimeoutException) { /* Keep heap checkpoint separate from blocked operation. */ }
+            }
+        } finally { if (!task.isDone) task.cancel(true); thread.join(500) }
+    }
+
+    internal data class HeapArtifactSnapshot(val observation: Map<String, Any>, val resourcePeakBytes: Long, val peakScope: String)
+
+    /** Reporting cutoff only: guard continues sampling through serialization and staged writes. */
+    internal fun heapArtifactSnapshot(guard: FinancialHeapGuard, physicalSamplerPeakBytes: Long): HeapArtifactSnapshot {
+        val observation = guard.telemetry()
+        val scope = "Sampled through result assembly snapshot; final serialization and staged writes excluded"
+        return HeapArtifactSnapshot(observation + ("reportedPeakScope" to scope),
+            maxOf(physicalSamplerPeakBytes, observation["heapPeakBytes"] as Long), scope)
+    }
+
     @JvmStatic fun main(args: Array<String>) {
+        if (args.firstOrNull() == "heap-capability") {
+            require(args.size == 4) { "heap-capability source-head fixture-path config-path" }
+            println(json.writeValueAsString(heapCapability(args[1], Path.of(args[2]), Path.of(args[3])))); return
+        }
         if (args.firstOrNull() == "self-check") { selfCheck(json.readTree(Files.readString(Path.of(args[1])))["policy"]); return }
         require(args.size >= 4) { "calibrate|run bootstrap financial-s1-prefix config-file --financial-rate-* PATH" }
         val mode = args[0]; val broker = args[1]; val prefix = args[2]
         require(mode in setOf("calibrate", "run") && prefix.startsWith("financial-s1-"))
-        val config = json.readTree(Files.readString(Path.of(args[3])))
+        val configPath = Path.of(args[3])
         fun flag(name: String): Path = Path.of(args[args.indexOf(name).also { require(it >= 0) } + 1])
-        val spec = json.readTree(Files.readString(flag(if (mode == "calibrate") "--financial-rate-calibration-request" else "--financial-rate-policy")))
+        val specPath = flag(if (mode == "calibrate") "--financial-rate-calibration-request" else "--financial-rate-policy")
+        val spec = json.readTree(Files.readString(specPath))
         val outPath = flag(if (mode == "calibrate") "--financial-rate-calibration" else "--financial-rate-measurement")
         require(if (mode == "calibrate") spec["correctness"]["result"].asText() == "PASS" else spec["status"].asText() == "FROZEN") { "E3/frozen load gate" }
-        val count = if (mode == "calibrate") spec.path("sampleTrades").asLong(1000) else spec["expectedTimedTrades"].asLong()
+        if (mode == "run") {
+            val frozen = spec.deepCopy<ObjectNode>().apply { remove("policySha256") }
+            require(sha(json.writeValueAsBytes(frozen)) == spec["policySha256"]?.asText()) { "FROZEN_POLICY_HASH_MISMATCH" }
+        }
+        val count = FinancialHeapBounds.integer(spec[if (mode == "calibrate") "sampleTrades" else "expectedTimedTrades"], "timedTrades")
         require(count in 1L..3_000_000L)
         val rate = if (mode == "calibrate") 0L else spec["arm"]["rate"].asLong()
         val seconds = if (mode == "calibrate") 0L else spec["arm"]["seconds"].asLong()
-        val aged = if (mode == "run" && spec["arm"]["state"].asText() == "aged") spec["aged"]["identities"].asLong() else 0L
-        val pending = if (mode == "calibrate") spec.path("pendingSample").asLong(100) else if (spec["arm"]["state"].asText() == "aged") spec["aged"]["pendingItems"].asLong() else 0L
+        val aged = if (mode == "run" && spec["arm"]["state"].asText() == "aged") FinancialHeapBounds.integer(spec["aged"]["identities"], "agedIdentities", false) else 0L
+        val pending = if (mode == "calibrate") FinancialHeapBounds.integer(spec["pendingSample"], "pendingSample", false) else if (spec["arm"]["state"].asText() == "aged") FinancialHeapBounds.integer(spec["aged"]["pendingItems"], "pendingItems", false) else 0L
+        val heap = heapGuard(spec, specPath, configPath, count, aged, pending)
+        withHeapProtection(heap) { guard ->
+        val config = json.readTree(Files.readString(configPath))
         val opening = Math.addExact(Math.addExact(aged, pending), count)
         val balances = node(mapOf("buyerCash" to Math.multiplyExact(opening, PRICE).toString(), "sellerCash" to "0", "buyerShares" to "0", "sellerShares" to opening.toString()))
         if (mode == "run") require(spec["openingResources"]["cashNanos"].asText() == balances["buyerCash"].asText() && spec["openingResources"]["shares"].asText() == balances["sellerShares"].asText()) { "frozen genesis resource mismatch" }
@@ -201,6 +330,8 @@ object FinancialRateProbe {
         var rawBytes = 0L
         fun retain(bytes: ByteArray) { if (raw != null) synchronized(raw) { require(rawBytes + bytes.size <= RAW_CAP); raw.write(bytes); rawBytes += bytes.size } }
         val reference = Reference(balances, config["policy"])
+        try {
+        guard.refresh("before-client-topic-setup")
         AdminClient.create(props).use { admin ->
             admin.createTopics(listOf("input", "results").map { NewTopic("$prefix-$it", 1, 3.toShort()).configs(mapOf("cleanup.policy" to "delete", "write.caching" to "false", "min.insync.replicas" to "2")) }).all().get(30, TimeUnit.SECONDS)
             val uuid = admin.describeTopics(listOf("$prefix-input")).allTopicNames().get().getValue("$prefix-input").topicId().toString()
@@ -208,7 +339,7 @@ object FinancialRateProbe {
             val topology = FinancialBrokerProbe.topology(workerConfig, "", prefix, { index ->
                 val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
                 var member = members[index] ?: lastMember.get()?.takeIf { it.first == index }?.second
-                while (member == null && System.nanoTime() < end && fatal.get() == null) { LockSupport.parkNanos(100_000); member = members[index] }
+                while (member == null && System.nanoTime() < end && fatal.get() == null) { guard.checkpoint("ACK-membership"); LockSupport.parkNanos(100_000); member = members[index] }
                 requireNotNull(member) { "ACK membership wait expired index=$index" }
             }, uuid)
             val streams = KafkaStreams(topology, Properties().apply {
@@ -236,7 +367,7 @@ object FinancialRateProbe {
                 try { KafkaConsumer(Properties().apply { putAll(props); put("enable.auto.commit", false); put("auto.offset.reset", "earliest"); put("isolation.level", "read_committed") }, StringDeserializer(), StringDeserializer()).use { consumer ->
                     val tp = TopicPartition("$prefix-results", 0); consumer.assign(listOf(tp)); consumer.seekToBeginning(listOf(tp))
                     while (!done.get()) for (record in consumer.poll(Duration.ofMillis(50))) {
-                        val value = json.readTree(record.value()); val index = value["inputOrdinal"].asLong(); require(index == covered.get())
+                        guard.checkpoint("observer-record"); val value = json.readTree(record.value()); val index = value["inputOrdinal"].asLong(); require(index == covered.get())
                         val member = members[index] ?: error("missing acknowledged member"); require(value["inputOffset"].asLong() == member["offset"].asLong())
                         val bytes = record.value().toByteArray(); retain(bytes); outputBytes.addAndGet(bytes.size.toLong())
                         val histories = value["records"]
@@ -252,7 +383,7 @@ object FinancialRateProbe {
                     }
                 } } catch (error: Throwable) { fatal.compareAndSet(null, error) }
             }
-            fun waitCovered(timeoutMs: Long = 120000) { val end = System.nanoTime() + timeoutMs * 1_000_000; while (covered.get() < ordinal.get() && System.nanoTime() < end && fatal.get() == null) Thread.sleep(10); fatal.get()?.let { throw IllegalStateException("rate probe failure", it) }; require(covered.get() == ordinal.get()) { "coverage/drain timeout" } }
+            fun waitCovered(timeoutMs: Long = 120000) { val end = System.nanoTime() + timeoutMs * 1_000_000; while (covered.get() < ordinal.get() && System.nanoTime() < end && fatal.get() == null) { guard.checkpoint("drain"); Thread.sleep(10) }; guard.refresh("drain-complete"); fatal.get()?.let { throw IllegalStateException("rate probe failure", it) }; require(covered.get() == ordinal.get()) { "coverage/drain timeout" } }
             var heapPeak = 0L; var rssPeak: Long? = null; var diskPeak = 0L
             val start = timedStart; val deadline = AtomicReference<Map<String, Long>>()
             val sampler = Thread {
@@ -269,10 +400,18 @@ object FinancialRateProbe {
             var physicalEnd: Pair<Long, Long>? = null; var txnMs: Double? = null
             val workload = MessageDigest.getInstance("SHA-256")
             try {
-                observer.start(); streams.start(); require(running.await(60, TimeUnit.SECONDS)); sampler.start()
-                KafkaProducer(Properties().apply { putAll(props); put("acks", "all"); put("enable.idempotence", true); put("linger.ms", 2); put("batch.size", 65536); put("buffer.memory", 16 * 1024 * 1024) }, StringSerializer(), StringSerializer()).use { producer ->
+                guard.refresh("startup"); observer.start(); streams.start()
+                val startupEnd = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
+                while (running.count > 0 && System.nanoTime() < startupEnd) { guard.checkpoint("startup-wait"); running.await(25, TimeUnit.MILLISECONDS) }
+                require(running.count == 0L); guard.baseline("warmed-before-aging"); sampler.start()
+                val producer = KafkaProducer(Properties().apply { putAll(props); put("acks", "all"); put("enable.idempotence", true); put("linger.ms", 2); put("batch.size", 65536); put("buffer.memory", 16 * 1024 * 1024) }, StringSerializer(), StringSerializer())
+                try {
+                    guard.baseline("producer-warmed-before-aging")
                     fun send(id: Long, phase: String, kind: String) {
-                        fatal.get()?.let { throw IllegalStateException("worker/observer failure", it) }; require(capacity.tryAcquire(10, TimeUnit.SECONDS)) { "bounded source suffix exhausted" }
+                        guard.checkpoint("send"); fatal.get()?.let { throw IllegalStateException("worker/observer failure", it) }; val acquireEnd = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                        var acquired = capacity.tryAcquire()
+                        while (!acquired && System.nanoTime() < acquireEnd) { guard.checkpoint("send-capacity"); acquired = capacity.tryAcquire(25, TimeUnit.MILLISECONDS) }
+                        require(acquired) { "bounded source suffix exhausted" }
                         val index = ordinal.getAndIncrement(); val input = action(id, phase, kind); val bytes = json.writeValueAsBytes(node(mapOf("domain" to "hot", "mode" to "EXECUTE", "inputOrdinal" to index, "input" to input)))
                         require(bytes.size <= 1024) { "source record exceeds pinned1KiB bound" }; retain(bytes); inputBytes.addAndGet(bytes.size.toLong()); if (phase == "timed") workload.update(json.writeValueAsBytes(input)); val offeredNano = System.nanoTime()
                         producer.send(ProducerRecord("$prefix-input", 0, "hot", String(bytes, Charsets.UTF_8))) { metadata, error -> if (error != null) fatal.compareAndSet(null, error) else {
@@ -280,22 +419,22 @@ object FinancialRateProbe {
                         } }
                     }
                     for (id in 0 until aged) { send(id, "aged", "CAPTURE"); send(id, "aged", "SETTLE") }; if (mode == "run") for (id in 0 until pending) send(id, "pending", "CAPTURE")
-                    producer.flush(); waitCovered(); System.gc(); Thread.sleep(100)
-                    val heapBefore = ManagementFactory.getMemoryMXBean().heapMemoryUsage.used; val before = physical(); val localBefore = localBytes(); val cpuBefore = os.processCpuTime
+                    guard.checkpoint("flush-before"); heapAwait(guard, "producer-flush", 120000) { producer.flush() }; guard.refresh("flush-after"); waitCovered(); System.gc(); Thread.sleep(100)
+                    guard.refresh("before-timed-load"); val heapBefore = ManagementFactory.getMemoryMXBean().heapMemoryUsage.used; val before = physical(); val localBefore = localBytes(); val cpuBefore = os.processCpuTime
                     start.set(System.nanoTime()); synchronized(lag) { lag.add(mapOf("elapsedMs" to 0L, "lag" to 0L)) }
-                    for (id in 0 until count) { if (rate > 0) { val due = start.get() + id * 1_000_000_000L / rate; while (System.nanoTime() < due) LockSupport.parkNanos(100_000) }; offered.incrementAndGet(); if (beforeDeadline()) deadlineOffered.incrementAndGet(); send(id, "timed", "CAPTURE"); send(id, "timed", "SETTLE") }
-                    if (seconds > 0) while (System.nanoTime() < start.get() + seconds * 1_000_000_000) LockSupport.parkNanos(100_000)
-                    producer.flush(); val producerEnd = System.nanoTime(); producerMs = maxOf(1L, (producerEnd - start.get()) / 1_000_000); waitCovered(); val observerEnd = System.nanoTime()
+                    for (id in 0 until count) { if (rate > 0) { val due = start.get() + id * 1_000_000_000L / rate; while (System.nanoTime() < due) { guard.checkpoint("pacing"); LockSupport.parkNanos(100_000) } }; offered.incrementAndGet(); if (beforeDeadline()) deadlineOffered.incrementAndGet(); send(id, "timed", "CAPTURE"); send(id, "timed", "SETTLE") }
+                    if (seconds > 0) while (System.nanoTime() < start.get() + seconds * 1_000_000_000) { guard.checkpoint("deadline-wait"); LockSupport.parkNanos(100_000) }
+                    guard.checkpoint("timed-flush"); heapAwait(guard, "producer-flush", 120000) { producer.flush() }; guard.refresh("timed-flush-complete"); val producerEnd = System.nanoTime(); producerMs = maxOf(1L, (producerEnd - start.get()) / 1_000_000); waitCovered(); val observerEnd = System.nanoTime()
                     observerMs = maxOf(1L, (observerEnd - start.get()) / 1_000_000); drainMs = maxOf(0L, (observerEnd - producerEnd) / 1_000_000); cpuMs = (os.processCpuTime - cpuBefore) / 1_000_000
                     deadline.set(mapOf("offered" to deadlineOffered.get(), "admitted" to deadlineAdmitted.get(), "decided" to deadlineCaptured.get(), "settled" to deadlineSettled.get(), "pending" to deadlineCaptured.get() - deadlineSettled.get())); synchronized(lag) { if (seconds > 0) lag.add(mapOf("elapsedMs" to seconds * 1000, "lag" to maxOf(0L, deadlineAdmitted.get() - deadlineSettled.get()))) }; physicalEnd = physical(); bytesPhysical = if (before != null && physicalEnd != null) maxOf(0L, physicalEnd!!.first + physicalEnd!!.second - before.first - before.second + localBytes() - localBefore) else 0
                     System.gc(); Thread.sleep(100); identityHeap = maxOf(0L, (ManagementFactory.getMemoryMXBean().heapMemoryUsage.used - heapBefore) / count)
-                    if (mode == "calibrate" && pending > 0) { val pBefore = physical(); val lBefore = localBytes(); for (id in 0 until pending) send(id, "pending", "CAPTURE"); producer.flush(); waitCovered(); val pAfter = physical(); pendingPhysical = if (pBefore != null && pAfter != null) maxOf(0L, (pAfter.first + pAfter.second - pBefore.first - pBefore.second + localBytes() - lBefore) / pending) else 0 }
+                    if (mode == "calibrate" && pending > 0) { val pBefore = physical(); val lBefore = localBytes(); for (id in 0 until pending) send(id, "pending", "CAPTURE"); heapAwait(guard, "producer-flush", 120000) { producer.flush() }; waitCovered(); val pAfter = physical(); pendingPhysical = if (pBefore != null && pAfter != null) maxOf(0L, (pAfter.first + pAfter.second - pBefore.first - pBefore.second + localBytes() - lBefore) / pending) else 0 }
                     txnMs = streams.metrics().filterKeys { it.name() == "txn-commit-time-ns-total" }.values.mapNotNull { (it.metricValue() as? Number)?.toDouble() }.takeIf { it.isNotEmpty() }?.sum()?.div(1_000_000)
-                }
+                } finally { producer.close(if (guard.failure != null) Duration.ZERO else Duration.ofSeconds(15)) }
             } finally { done.set(true); observer.join(5000); sampler.interrupt(); sampler.join(15000); raw?.close(); streams.close(Duration.ofSeconds(15)) }
-            fatal.get()?.let { throw IllegalStateException("rate aborted", it) }
-            val expectedOwner = digest(reference.owner); val expectedChain = reference.chain; val expectedHistory = reference.historyRecords
-            reference.owner.removeAll(); System.gc()
+            guard.refresh("workers-closed"); fatal.get()?.let { throw IllegalStateException("rate aborted", it) }
+            guard.refresh("before-owner-digest"); val expectedOwner = digest(reference.owner); val expectedChain = reference.chain; val expectedHistory = reference.historyRecords
+            guard.refresh("after-owner-digest"); reference.owner.removeAll(); System.gc(); guard.refresh("before-result-only-replay")
             val restored = Reference(balances, config["policy"]); val restoreStart = System.nanoTime(); var restoreBytes = 0L; var restoreInputs = 0L
             fun expectedInput(index: Long): JsonNode {
                 if (mode == "calibrate") return if (index < count * 2) action(index / 2, "timed", if (index % 2 == 0L) "CAPTURE" else "SETTLE") else action(index - count * 2, "pending", "CAPTURE")
@@ -308,26 +447,30 @@ object FinancialRateProbe {
             KafkaConsumer(Properties().apply { putAll(props); put("enable.auto.commit", false); put("isolation.level", "read_committed") }, StringDeserializer(), StringDeserializer()).use { consumer ->
                 val tp = TopicPartition("$prefix-results", 0); consumer.assign(listOf(tp)); consumer.seekToBeginning(listOf(tp))
                 val end = restoreStart + TimeUnit.MINUTES.toNanos(5)
-                while (restoreInputs < ordinal.get() && System.nanoTime() < end) for (record in consumer.poll(Duration.ofMillis(100))) {
+                while (restoreInputs < ordinal.get() && System.nanoTime() < end) { guard.checkpoint("result-only-replay-poll"); heapReplayBatch(guard, consumer.poll(Duration.ofMillis(100))) { record ->
                     val value = json.readTree(record.value()); require(value["inputOrdinal"].asLong() == restoreInputs)
                     val rows = value["records"]; require(rows.size() == if (restoreInputs == 0L) 2 else 1)
                     require(rows.last()["kind"].asText() == "BUSINESS" && canonical(rows.last()["input"]) == canonical(expectedInput(restoreInputs)))
                     rows.forEach { restored.accept(it) }; restoreBytes += record.value().toByteArray().size; restoreInputs++
-                }
+                } }
             }
-            require(restoreInputs == ordinal.get() && expectedHistory == restored.historyRecords && expectedChain == restored.chain && expectedOwner == digest(restored.owner)) { "complete result-only restore mismatch" }
+            guard.refresh("result-only-replay-complete"); require(restoreInputs == ordinal.get() && expectedHistory == restored.historyRecords && expectedChain == restored.chain && expectedOwner == digest(restored.owner)) { "complete result-only restore mismatch" }
             val restoreMs = (System.nanoTime() - restoreStart) / 1_000_000
-            val parityPath = outPath.parent.resolve("parity.json"); Files.writeString(parityPath, json.writeValueAsString(mapOf("ownerSha256" to expectedOwner, "historyChecksum" to expectedChain, "historyRecords" to expectedHistory, "sourceUuid" to uuid, "readCommitted" to true, "independentCompleteDeltas" to true)) + "\n")
+            val parityPath = outPath.parent.resolve("parity.json")
+            val parityContent = json.writeValueAsString(mapOf("ownerSha256" to expectedOwner, "historyChecksum" to expectedChain, "historyRecords" to expectedHistory, "sourceUuid" to uuid, "readCommitted" to true, "independentCompleteDeltas" to true)) + "\n"
+            val heapArtifact = heapArtifactSnapshot(guard, heapPeak)
             val result = if (mode == "calibrate") mapOf(
                 "schema" to "financial-rate-calibration-v1", "sourceHead" to spec["sourceHead"].asText(), "fixtureSha256" to spec["fixtureSha256"].asText(), "realRecordEvidencePath" to "encoded-records.bin", "realRecordEvidenceSha256" to shaFile(rawPath), "sampleTrades" to count, "encodedBytes" to rawBytes,
-                "physicalBytes" to bytesPhysical, "physicalReplicationIncluded" to true, "identityPhysicalBytes" to if (bytesPhysical > 0) maxOf(1L, bytesPhysical / count) else 0, "pendingPhysicalBytes" to pendingPhysical, "identityHeapBytes" to identityHeap,
+                "physicalBytes" to bytesPhysical, "physicalReplicationIncluded" to true, "identityPhysicalBytes" to if (bytesPhysical > 0) maxOf(1L, bytesPhysical / count) else 0, "pendingPhysicalBytes" to pendingPhysical, "identityHeapBytes" to identityHeap, "heapObservation" to heapArtifact.observation,
                 "producer" to mapOf("completedTrades" to admitted.get(), "elapsedMs" to producerMs), "observer" to mapOf("completedTrades" to settled.get(), "elapsedMs" to observerMs, "exactParity" to true), "sourceTopicUuid" to uuid)
             else mapOf("schema" to "financial-rate-measurement-v1", "policySha256" to spec["policySha256"].asText(), "sourceHead" to spec["sourceHead"].asText(), "fixtureSha256" to spec["fixtureSha256"].asText(), "workloadSha256" to HexFormat.of().formatHex(workload.digest()), "units" to "unique timed executions; preflight/aged rows excluded", "producerElapsedMs" to producerMs, "drainMs" to drainMs, "deadline" to deadline.get(), "final" to counts(),
-                "parity" to mapOf("completeJournal" to true, "completeOwnerState" to true, "independentOracle" to true, "evidenceSha256" to sha(Files.readAllBytes(parityPath))), "lagSamples" to lag,
-                "resources" to mapOf("processCpuMs" to cpuMs, "heapPeakBytes" to heapPeak, "rssPeakBytes" to rssPeak, "diskPeakBytes" to diskPeak, "encodedInputBytes" to inputBytes.get(), "encodedResultBytes" to outputBytes.get(), "encodedTechnicalBytes" to null, "physicalBrokerBytes" to physicalEnd?.first, "physicalChangelogBytes" to physicalEnd?.second, "touchedKeys" to keys.get(), "technicalRecords" to covered.get(), "transactionWaitMs" to txnMs),
-                "stageLatency" to synchronized(latency) { val sorted = latency.sorted(); mapOf("kind" to "sampled-individual", "stage" to "offer-to-read-committed-settlement", "clockDomain" to "same-monotonic", "samples" to sorted.size, "p95Ms" to sorted.getOrNull((sorted.size * .95).toInt()), "p99Ms" to sorted.getOrNull((sorted.size * .99).toInt())) },
+                "parity" to mapOf("completeJournal" to true, "completeOwnerState" to true, "independentOracle" to true, "evidenceSha256" to sha(parityContent.toByteArray())), "lagSamples" to lag,
+                "resources" to mapOf("processCpuMs" to cpuMs, "heapPeakBytes" to heapArtifact.resourcePeakBytes, "heapPeakScope" to heapArtifact.peakScope, "rssPeakBytes" to rssPeak, "diskPeakBytes" to diskPeak, "encodedInputBytes" to inputBytes.get(), "encodedResultBytes" to outputBytes.get(), "encodedTechnicalBytes" to null, "physicalBrokerBytes" to physicalEnd?.first, "physicalChangelogBytes" to physicalEnd?.second, "touchedKeys" to keys.get(), "technicalRecords" to covered.get(), "transactionWaitMs" to txnMs),
+                "heapObservation" to heapArtifact.observation, "stageLatency" to synchronized(latency) { val sorted = latency.sorted(); mapOf("kind" to "sampled-individual", "stage" to "offer-to-read-committed-settlement", "clockDomain" to "same-monotonic", "samples" to sorted.size, "p95Ms" to sorted.getOrNull((sorted.size * .95).toInt()), "p99Ms" to sorted.getOrNull((sorted.size * .99).toInt())) },
                 "restore" to mapOf("records" to expectedHistory, "bytes" to restoreBytes, "elapsedMs" to restoreMs, "verifiedCut" to true), "gaps" to listOf("Managed restart requires recovered durable ACK membership; rate callback RAM registry not certified", "Encoded technical store bytes uninstrumented", "CPU scope same-JVM worker+producer+observer; broker CPU unmeasured", "Touched keys = emitted state/history/coverage/cert writes; framework reads excluded"), "capacityQualification" to false)
-            Files.writeString(outPath, json.writerWithDefaultPrettyPrinter().writeValueAsString(result) + "\n"); println(json.writeValueAsString(mapOf("artifact" to outPath.toString(), "offered" to offered.get(), "admitted" to admitted.get(), "settled" to settled.get())))
+            guard.publish(outPath, json.writerWithDefaultPrettyPrinter().writeValueAsString(result) + "\n", parityPath to parityContent); println(json.writeValueAsString(mapOf("artifact" to outPath.toString(), "offered" to offered.get(), "admitted" to admitted.get(), "settled" to settled.get())))
+        }
+        } finally { raw?.close() }
         }
     }
 }

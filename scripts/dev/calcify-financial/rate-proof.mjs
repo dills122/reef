@@ -1,10 +1,17 @@
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir, open, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, open, unlink, realpath } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import { tmpdir } from 'node:os';
+
+// All capacity entry points share one host lock; preserve macOS session lock location.
+export function capacityLockPath(platform = process.platform, temporaryDirectory = tmpdir()) {
+  return path.join(platform === 'darwin' ? '/private/tmp' : temporaryDirectory, 'reef-financial-rate-capacity.lock');
+}
 
 export const PLAN = Object.freeze({
   schema: 'financial-e4-plan-v1', stage: 'synthetic ordered financial adapter; single closed hot domain',
@@ -27,6 +34,114 @@ const revision = value => typeof value === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9
 const nonnegative = value => Number.isSafeInteger(value) && value >= 0;
 const finiteNonnegative = value => Number.isFinite(value) && value >= 0;
 const positive = value => Number.isSafeInteger(value) && value > 0;
+
+// Frozen diagnostic launcher; request metadata cannot increase this cap.
+export const HEAP_LAUNCHER = Object.freeze({
+  java: '/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java',
+  flags: ['-Xms128m', '-Xmx768m'], maxHeapBytes: 768 * 1024 ** 2,
+  mainClass: 'com.reef.platform.calcify.financial.FinancialRateProbe',
+});
+const heapFields = ['identityHeapBytesUpper', 'pendingHeapBytesUpper', 'baselineHeapBytesUpper',
+  'transientHeapReserveBytes', 'replayHeapReserveBytes', 'supportedIdentities', 'supportedPendingItems'];
+const heapIdentities = ['sourceHead', 'fixtureSha256', 'configSha256', 'buildSha256', 'classpathSha256'];
+
+/** Validation-only fixtures may exercise arithmetic; executable boundary rejects them. */
+export function estimateHeap(heap, timedTrades, agedIdentities = 0, pendingItems = 0, actual = heap?.capability) {
+  const b = heap?.bounds, c = heap?.capability, r = heap?.review;
+  if (heap?.schema !== 'financial-heap-admission-v1' || heap.authorizedMaxHeapBytes !== HEAP_LAUNCHER.maxHeapBytes
+    || b?.schema !== 'financial-heap-bounds-v1' || c?.schema !== 'financial-heap-capability-v1'
+    || !heapFields.every(k => positive(b?.[k])) || !positive(c?.maxHeapBytes) || !nonnegative(c?.usedHeapBytes)
+    || !positive(actual?.maxHeapBytes) || !nonnegative(actual?.usedHeapBytes)
+    || ![timedTrades, agedIdentities, pendingItems].every(nonnegative)
+    || !heapIdentities.every(k => (k === 'sourceHead' ? revision(b?.[k]) : hash(b?.[k])) && b[k] === c[k] && b[k] === actual[k])
+    || !Array.isArray(c.vmArguments) || JSON.stringify(c.vmArguments) !== JSON.stringify(HEAP_LAUNCHER.flags)
+    || JSON.stringify(actual.vmArguments) !== JSON.stringify(c.vmArguments)
+    || typeof c.javaVersion !== 'string' || !c.javaVersion || typeof c.javaVendor !== 'string' || !c.javaVendor
+    || actual.javaVersion !== c.javaVersion || actual.javaVendor !== c.javaVendor
+    || typeof b.derivation !== 'string' || !b.derivation.trim() || typeof b.scope !== 'string' || !b.scope.trim()
+    || typeof b.validationOnly !== 'boolean'
+    || r?.schema !== 'financial-heap-bounds-review-v1' || r.validationOnly !== b.validationOnly
+    || r.verdict !== (b.validationOnly ? 'VALIDATION_ONLY' : 'READY_CONSERVATIVE_BOUND')
+    || r.boundsEvidenceSha256 !== heap.boundsEvidenceSha256
+    || !heapIdentities.every(k => r[k] === b[k])
+    || r.supportedIdentities !== b.supportedIdentities || r.supportedPendingItems !== b.supportedPendingItems
+    || r.derivation !== b.derivation || r.scope !== b.scope
+    || !hash(heap.reviewEvidenceSha256) || typeof heap.reviewEvidencePath !== 'string' || !heap.reviewEvidencePath
+    || !hash(heap.boundsEvidenceSha256) || !hash(heap.capabilityEvidenceSha256)
+    || typeof heap.boundsEvidencePath !== 'string' || !heap.boundsEvidencePath
+    || typeof heap.capabilityEvidencePath !== 'string' || !heap.capabilityEvidencePath
+    || typeof heap.fixtureEvidencePath !== 'string' || !heap.fixtureEvidencePath)
+    throw Error('HEAP_CONSERVATIVE_EVIDENCE_REQUIRED');
+  if (c.maxHeapBytes > heap.authorizedMaxHeapBytes || actual.maxHeapBytes > heap.authorizedMaxHeapBytes)
+    throw Error('HEAP_UNAUTHORIZED_MAX');
+  const identities = BigInt(timedTrades) + BigInt(agedIdentities), pending = BigInt(pendingItems);
+  const limit = BigInt(Math.min(heap.authorizedMaxHeapBytes, c.maxHeapBytes, actual.maxHeapBytes)) * 4n / 5n;
+  const estimated = BigInt(b.baselineHeapBytesUpper) + identities * BigInt(b.identityHeapBytesUpper)
+    + pending * BigInt(b.pendingHeapBytesUpper) + BigInt(b.transientHeapReserveBytes) + BigInt(b.replayHeapReserveBytes);
+  if (identities > BigInt(b.supportedIdentities) || pending > BigInt(b.supportedPendingItems)) throw Error('HEAP_UNSUPPORTED_COUNTS');
+  if (estimated > BigInt(Number.MAX_SAFE_INTEGER)) throw Error('HEAP_ESTIMATE_OVERFLOW');
+  if (c.usedHeapBytes > b.baselineHeapBytesUpper || actual.usedHeapBytes > b.baselineHeapBytesUpper) throw Error('HEAP_BASELINE_BOUND_EXCEEDED');
+  if (estimated >= limit || BigInt(actual.usedHeapBytes) >= limit || BigInt(c.usedHeapBytes) >= limit) throw Error('HEAP_ADMISSION_LIMIT');
+  return { estimatedHeapBytes: Number(estimated), admissionLimitBytes: Number(limit), identities: Number(identities), pendingItems,
+    threshold: 'used >= floor(effective max * 4 / 5)', sampled: true, capacityQualification: false };
+}
+
+export async function verifyHeapEvidence(policy, policyPath, actual = policy.heap?.capability) {
+  const heap = policy.heap;
+  if (policy.sourceHead !== heap?.bounds?.sourceHead || policy.fixtureSha256 !== heap?.bounds?.fixtureSha256) throw Error('HEAP_CANDIDATE_FIXTURE_MISMATCH');
+  estimateHeap(heap, policy.expectedTimedTrades, policy.arm?.state === 'aged' ? policy.aged.identities : 0,
+    policy.arm?.state === 'aged' ? policy.aged.pendingItems : 0, actual);
+  if (heap.bounds.validationOnly) throw Error('HEAP_VALIDATION_ONLY_EVIDENCE');
+  const root = await realpath(path.dirname(path.resolve(policyPath)));
+  const owned = async name => {
+    const file = path.resolve(root, name);
+    if (!file.startsWith(`${root}${path.sep}`)) throw Error('HEAP_EVIDENCE_MUST_BE_OWNED_BY_POLICY');
+    const resolved = await realpath(file);
+    if (!resolved.startsWith(`${root}${path.sep}`)) throw Error('HEAP_EVIDENCE_MUST_BE_OWNED_BY_POLICY');
+    return resolved;
+  };
+  for (const [kind, object] of [['bounds', heap.bounds], ['capability', heap.capability], ['review', heap.review]]) {
+    const file = await owned(heap[`${kind}EvidencePath`]);
+    const bytes = await readFile(file);
+    if (createHash('sha256').update(bytes).digest('hex') !== heap[`${kind}EvidenceSha256`]) throw Error('HEAP_RAW_EVIDENCE_HASH_MISMATCH');
+    // Compare semantic JSON, separately from raw byte provenance.
+    if (!isDeepStrictEqual(JSON.parse(bytes), object)) throw Error('HEAP_RAW_EVIDENCE_IDENTITY_MISMATCH');
+  }
+  const fixture = await owned(heap.fixtureEvidencePath);
+  if (createHash('sha256').update(await readFile(fixture)).digest('hex') !== heap.bounds.fixtureSha256) throw Error('HEAP_FIXTURE_IDENTITY_MISMATCH');
+  return heap;
+}
+
+function pinnedHeapAdapter(adapter, mode = 'run') {
+  if (adapter.command !== HEAP_LAUNCHER.java || !Array.isArray(adapter.args)) throw Error('HEAP_PINNED_LAUNCHER_REQUIRED');
+  const a = adapter.args;
+  if (a.length !== 9 || a[0] !== HEAP_LAUNCHER.flags[0] || a[1] !== HEAP_LAUNCHER.flags[1]
+    || a[2] !== '-cp' || typeof a[3] !== 'string' || !a[3] || a[4] !== HEAP_LAUNCHER.mainClass
+    || a[5] !== mode || typeof a[8] !== 'string') throw Error('HEAP_PINNED_LAUNCHER_REQUIRED');
+  return a;
+}
+const heapEnvironment = () => {
+  const env = { ...process.env };
+  for (const key of ['JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'CLASSPATH']) delete env[key];
+  return env;
+};
+
+/** Broker-free capability subprocess only; main load supervision remains separate E4 work. */
+export async function captureHeapCapability(command, args, { timeoutMs = 15000, killAfterMs = 2000, spawnProcess = spawn } = {}) {
+  const child = spawnProcess(command, args, { env: heapEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '', stderr = '', timedOut = false, outputOverflow = false, forceTimer;
+  const stop = () => {
+    child.kill('SIGTERM');
+    forceTimer ??= setTimeout(() => child.kill('SIGKILL'), killAfterMs);
+  };
+  child.stdout.on('data', chunk => { stdout += chunk.toString().slice(0, 65536 - stdout.length); if (stdout.length >= 65536) { outputOverflow = true; stop(); } });
+  child.stderr.on('data', chunk => { stderr += chunk.toString().slice(0, 65536 - stderr.length); if (stderr.length >= 65536) { outputOverflow = true; stop(); } });
+  const timer = setTimeout(() => { timedOut = true; stop(); }, timeoutMs);
+  try {
+    const ended = await new Promise(resolve => { child.once('error', error => resolve({ error: error.message })); child.once('close', (code, signal) => resolve({ code, signal })); });
+    return { command, args, ...ended, stdout, stderr, timedOut, outputOverflow };
+  } finally { clearTimeout(timer); clearTimeout(forceTimer); }
+}
 
 function physicalTradeBudget(calibration) {
   if (!positive(calibration?.physicalBytes) || !positive(calibration?.sampleTrades)) throw Error('PHYSICAL_TRADE_BUDGET_INVALID');
@@ -76,13 +191,20 @@ export function preparePolicy(request = {}) {
   if (p.guestFreeBytes < aged.estimatedBytes + PLAN.diskHeadroomBytes) gaps.push('GUEST_SPACE_INSUFFICIENT');
   if (arm.seconds === 300 && (!hash(arm.workloadSha256) || request.ladderResult !== 'PASS_DIAGNOSTIC')) gaps.push('STABLE_LADDER_AND_REPEAT_WORKLOAD_REQUIRED');
   if (gaps.length) return { schema: 'financial-e4-policy-v1', status: 'BLOCKED', plan: PLAN, aged, gaps };
+  let heapEstimate;
+  try {
+    if (request.heap?.bounds?.sourceHead !== c.sourceHead || request.heap?.bounds?.fixtureSha256 !== c.fixtureSha256) throw Error('HEAP_CANDIDATE_FIXTURE_MISMATCH');
+    heapEstimate = estimateHeap(request.heap, arm.rate * arm.seconds, arm.state === 'aged' ? aged.identities : 0,
+      arm.state === 'aged' ? aged.pendingItems : 0);
+  } catch (error) { gaps.push(error.message); }
+  if (gaps.length) return { schema: 'financial-e4-policy-v1', status: 'BLOCKED', plan: PLAN, aged, gaps };
   const trades = BigInt(arm.rate * arm.seconds + (arm.state === 'aged' ? PLAN.pendingItems + aged.identities : 0));
   const cash = trades * BigInt(PLAN.trade.priceNanos);
   if (cash > (1n << 63n) - 1n) throw new Error('PREFUND_INT64_OVERFLOW');
   const policy = { schema: 'financial-e4-policy-v1', status: 'FROZEN', plan: PLAN,
     arm, sourceHead: c.sourceHead, fixtureSha256: c.fixtureSha256, calibrationSha256: sha(c),
     e3EvidenceSha256: e3.evidenceSha256, accessPatternEvidenceSha256: p.accessPatternEvidenceSha256,
-    aged, openingResources: { cashNanos: cash.toString(), shares: trades.toString() },
+    aged, heap: request.heap, heapEstimate, openingResources: { cashNanos: cash.toString(), shares: trades.toString() },
     expectedTimedTrades: arm.rate * arm.seconds, gaps: [], capacityQualification: false };
   return { ...policy, policySha256: sha(policy) };
 }
@@ -94,6 +216,12 @@ export function assessMeasurement(policy, m) {
   if (!m || m.schema !== 'financial-rate-measurement-v1') return { result: 'LIMITED', failures, gaps: ['MEASUREMENT_ARTIFACT_REQUIRED'], capacityQualification: false };
   if (m.policySha256 !== policy.policySha256 || m.sourceHead !== policy.sourceHead || m.fixtureSha256 !== policy.fixtureSha256
     || !hash(m.workloadSha256) || (policy.arm?.workloadSha256 && policy.arm.workloadSha256 !== m.workloadSha256)) failures.push('MEASUREMENT_PROVENANCE_MISMATCH');
+  if (!m.heapObservation || m.heapObservation.schema !== 'financial-heap-observation-v1') gaps.push('HEAP_LIFECYCLE_OBSERVATION_REQUIRED');
+  else if (m.heapObservation.guardOutcome !== 'PASS_SAMPLED' || !positive(m.heapObservation.actualMaxHeapBytes)
+    || m.heapObservation.actualMaxHeapBytes > HEAP_LAUNCHER.maxHeapBytes || !nonnegative(m.heapObservation.heapPeakBytes)
+    || m.heapObservation.heapPeakBytes >= m.heapObservation.admissionLimitBytes
+    || m.heapObservation.admissionLimitBytes !== Math.floor(Math.min(HEAP_LAUNCHER.maxHeapBytes, policy.heap?.capability?.maxHeapBytes, m.heapObservation.actualMaxHeapBytes) * 4 / 5)
+    || m.heapObservation.estimatedHeapBytes !== policy.heapEstimate?.estimatedHeapBytes) failures.push('HEAP_LIFECYCLE_PROTECTION_FAILED');
   if (m.units !== 'unique timed executions; preflight/aged rows excluded') failures.push('TRADE_UNIT_MISMATCH');
   const durationMs = policy.arm?.seconds * 1000;
   const stages = ['offered', 'admitted', 'decided', 'settled', 'pending'];
@@ -144,6 +272,17 @@ export function selectRepeat(ladder, workloadSha256) {
   return pass ? ['fresh', 'aged'].map(state => ({ rate: pass.rate, seconds: 300, state, workloadSha256 })) : [];
 }
 
+async function verifyAdapterCapability(policy, policyPath, adapter, pinned, out) {
+  const capabilityArgs = [...pinned.slice(0, 5), 'heap-capability', policy.sourceHead, path.resolve(path.dirname(policyPath), policy.heap.fixtureEvidencePath), pinned[8]];
+  const capabilityAttempt = await captureHeapCapability(adapter.command, capabilityArgs);
+  await writeFile(path.join(out, 'heap-capability-attempt.json'), `${JSON.stringify(capabilityAttempt, null, 2)}\n`);
+  if (capabilityAttempt.code !== 0 || capabilityAttempt.timedOut || capabilityAttempt.outputOverflow) throw Error('HEAP_CAPABILITY_PROCESS_FAILED');
+  const observedCapability = JSON.parse(capabilityAttempt.stdout);
+  await verifyHeapEvidence(policy, policyPath, observedCapability);
+  if (createHash('sha256').update(await readFile(pinned[8])).digest('hex') !== policy.heap.bounds.configSha256) throw Error('HEAP_CONFIG_IDENTITY_MISMATCH');
+  return observedCapability;
+}
+
 // Adapter contract: real executable receives --financial-rate-policy PATH and
 // --financial-rate-measurement PATH; owns producer/observer, emits measured schema.
 // E3 init/seed/worker/observe/reconstruct does not yet implement this rate contract.
@@ -151,14 +290,17 @@ async function runAdapterUnlocked(policyPath, adapterPath, out, authorize) {
   if (authorize !== '--authorize-load') throw new Error('Explicit --authorize-load required after E3 correctness.');
   const policy = JSON.parse(await readFile(policyPath, 'utf8'));
   if (policy.status !== 'FROZEN' || policy.policySha256 !== sha(Object.fromEntries(Object.entries(policy).filter(([k]) => k !== 'policySha256')))) throw new Error('FROZEN_POLICY_REQUIRED');
+  await verifyHeapEvidence(policy, policyPath);
   const adapter = JSON.parse(await readFile(adapterPath, 'utf8'));
+  const pinned = pinnedHeapAdapter(adapter);
   if (typeof adapter.command !== 'string' || !Array.isArray(adapter.args) || adapter.args.some(x => typeof x !== 'string')) throw new Error('ADAPTER_COMMAND_REQUIRED');
   await mkdir(out); // Unique run directory: refuse overwriting previous attempts.
   const measurementPath = path.resolve(out, 'measurement.json');
   await writeFile(path.join(out, 'policy.json'), `${JSON.stringify(policy, null, 2)}\n`);
+  await verifyAdapterCapability(policy, policyPath, adapter, pinned, out);
   const args = [...adapter.args, '--financial-rate-policy', path.resolve(policyPath), '--financial-rate-measurement', measurementPath];
   await writeFile(path.join(out, 'command.json'), `${JSON.stringify({ command: adapter.command, args }, null, 2)}\n`);
-  const child = spawn(adapter.command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(adapter.command, args, { env: heapEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
   const exit = new Promise(resolve => { child.once('error', error => resolve({ error: error.message })); child.once('close', (code, signal) => resolve({ code, signal })); });
   const streams = await Promise.allSettled([pipeline(child.stdout, createWriteStream(path.join(out, 'stdout.log'))), pipeline(child.stderr, createWriteStream(path.join(out, 'stderr.log')))]);
   const ended = await exit;
@@ -171,7 +313,7 @@ async function runAdapterUnlocked(policyPath, adapterPath, out, authorize) {
 
 export async function runAdapter(policyPath, adapterPath, out, authorize) {
   if (authorize !== '--authorize-load') throw new Error('Explicit --authorize-load required after E3 correctness.');
-  const lockPath = '/private/tmp/reef-financial-rate-capacity.lock';
+  const lockPath = capacityLockPath();
   const lock = await open(lockPath, 'wx'); // Refuse concurrent capacity loads; no stale-lock auto deletion.
   try {
     await lock.writeFile(`${JSON.stringify({ pid: process.pid, policyPath, out })}\n`);
@@ -187,16 +329,21 @@ export async function calibrateAdapter(requestPath, adapterPath, out, authorize)
   const request = JSON.parse(await readFile(requestPath, 'utf8'));
   if (request.correctness?.result !== 'PASS' || !hash(request.correctness?.evidenceSha256)) throw new Error('E3_CORRECTNESS_REQUIRED');
   if (request.adapterCalibrationContract !== 'financial-rate-calibration-v1') throw new Error('REAL_CALIBRATION_ADAPTER_NOT_READY');
+  if (!request.heap) throw Error('HEAP_CONSERVATIVE_EVIDENCE_REQUIRED');
+  const calibrationPolicy = { heap: request.heap, sourceHead: request.sourceHead, fixtureSha256: request.fixtureSha256, expectedTimedTrades: request.sampleTrades, arm: { state: 'aged' }, aged: { identities: 0, pendingItems: request.pendingSample } };
+  await verifyHeapEvidence(calibrationPolicy, requestPath);
   const adapter = JSON.parse(await readFile(adapterPath, 'utf8'));
+  const pinned = pinnedHeapAdapter(adapter, 'calibrate');
   if (typeof adapter.command !== 'string' || !Array.isArray(adapter.args) || adapter.args.some(x => typeof x !== 'string')) throw new Error('ADAPTER_COMMAND_REQUIRED');
-  const lockPath = '/private/tmp/reef-financial-rate-capacity.lock';
+  const lockPath = capacityLockPath();
   const lock = await open(lockPath, 'wx');
   try {
     await mkdir(out);
+    await verifyAdapterCapability(calibrationPolicy, requestPath, adapter, pinned, out);
     const resultPath = path.resolve(out, 'calibration.json');
     const args = [...adapter.args, '--financial-rate-calibration-request', path.resolve(requestPath), '--financial-rate-calibration', resultPath];
     await writeFile(path.join(out, 'command.json'), `${JSON.stringify({ command: adapter.command, args }, null, 2)}\n`);
-    const child = spawn(adapter.command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(adapter.command, args, { env: heapEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
     const exit = new Promise(resolve => { child.once('error', error => resolve({ error: error.message })); child.once('close', (code, signal) => resolve({ code, signal })); });
     await Promise.allSettled([pipeline(child.stdout, createWriteStream(path.join(out, 'stdout.log'))), pipeline(child.stderr, createWriteStream(path.join(out, 'stderr.log')))]);
     const ended = await exit;
