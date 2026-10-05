@@ -40,8 +40,11 @@ core24/24 and golden20/20 oracle/complete-history checks pass on identical sourc
 build/fixture hashes. [Focused candidate verification](evidence/calcify-financial-sprint1/e3-verification-2026-10-05.json)
 records exact scope and prior failures. Final independent review **Ready**, no actionable findings: M0 Attempt2 cycle3,
 M1 Attempt1 cycle3, M2 Attempt1 cycle2. Reviewer verifies49 candidate arms,246
-resource samples and fresh Node60/60. Code/live E3 acceptance passes; exact-byte
-archive publication and owner links remain delivery gate.
+resource samples and fresh Node60/60. Bounded E3 acceptance/retention complete.
+[Full proof](https://github.com/dills122/reef-records/tree/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75) and [independent report](https://github.com/dills122/reef-records/blob/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75/integration-review/final2-review/report.md) pinned to `ed6faadf`;
+1358 remote blobs/53,415,268 bytes verified exact. [Records PR7](https://github.com/dills122/reef-records/pull/7) draft,
+landing pending; no tracked bulk removed. Product checkpoint `c4d332a0` holds
+reviewed code; actual runs bind prior dirty/new source/build hashes.
 
 Next E4 slice: actual applied maximum-heap admission guard, recoverable ACK
 membership, distinct physical-byte metrics, producer/observer calibration through
@@ -82,8 +85,8 @@ write-caching/8 MiB settings verified on 132 topics. Sampled maximum 4.45 GiB;
 Fresh Node154/154; retained identical-code financial27/27 and offline module
 775 reported passes/20 skips/zero failures. No DB integration or capacity claim.
 
-Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27
-activation and E4 heap/ACK/physical-byte/calibration gates remain open. Next: close
+At original checkpoint, full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27
+activation and E4 heap/ACK/physical-byte/calibration gates remained open. Next: close
 missing fault/activation acceptance cases before E4 rate qualification. Reservation
 acceptance and matcher identity integration remain. No full sprint/cutover sign-off.
 Cap 7 used; material changes need human review extension.

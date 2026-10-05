@@ -3,7 +3,7 @@
   "dateUtc": "2026-10-05",
   "branch": "codex/calcify-planning-readiness",
   "measurementBaseline": "a6ddafbbae750693e227985f054be2d26716ae84",
-  "status": "READY_CODE_AND_LIVE_DELIVERY_PENDING",
+  "status": "PASSED_BOUNDED_E3",
   "scope": "Bounded test-only RF3 external faults and certified activation; no production financial authority or capacity qualification",
   "sourceHashes": {
     ".github/workflows/ci.yml": "b637e1bca4afbe9d6beb693d5da5ea0a4787b23adcc889c3b49c801b5d6a798f",
@@ -143,7 +143,7 @@
     "rawSamplesVerified": 246,
     "maximumObservedSampleStartGapMs": 4815,
     "reportSha256": "5fcecf73fed5e40763bd4755dc8233c953459a3ae3c765daa5baf17f26a1f24d",
-    "reportPublication": "Pending exact-byte Records publication",
+    "reportPublication": "https://github.com/dills122/reef-records/blob/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75/integration-review/final2-review/report.md",
     "historicalCap7": "Preserved; current user explicitly authorized new bounded sessions"
   },
   "failedCampaigns": [
@@ -163,9 +163,18 @@
     "Records PR6 landing"
   ],
   "bulkEvidence": {
-    "status": "PENDING_EXACT_BYTE_PUBLICATION",
-    "localActiveSession": ".planning/calcify-session-2026-10-04",
-    "plannedNamespace": "docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75",
+    "status": "PUBLISHED_AND_ALL_REMOTE_BYTES_VERIFIED",
+    "archiveCommit": "ed6faadf261dab78a1c4f49991b8f297aecadea4",
+    "recordsPullRequest": "https://github.com/dills122/reef-records/pull/7",
+    "archiveLanding": "PENDING",
+    "archiveTree": "https://github.com/dills122/reef-records/tree/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75",
+    "localOnlyReefProvenanceCommit": "2c12a04f768e5ae26e8a35f7aeeae78b617bf5e1",
+    "reviewedProductCheckpoint": "c4d332a0d1b559a2a412093504826b0ac0adee6e",
+    "importedFiles": 1358,
+    "importedBytes": 53415268,
+    "remoteVerification": "Independent depth1 remote Git object store; every imported blob byte count/SHA256 and manifest bytes match",
+    "remoteVerifiedUtc": "2026-10-05T06:01:16.424415+00:00",
+    "snapshotScope": "Archived ledger is pre-publication snapshot; later delivery outcome owned by this current summary. Actual measurements predate product checkpoint and bind dirty/new source/build/profile hashes.",
     "rawBulkDestination": "reef-records only",
     "trackedBulkRemoved": false
   }
