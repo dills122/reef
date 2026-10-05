@@ -204,6 +204,16 @@
     },
     "historicalBrokerScope": "Same broker/Kotlin/profile/guard as signed 44-arm run; JS gate/rate changes postdate historical full-source hash verification",
     "independentReview": "Not started; cap7 exhausted, human extension required",
-    "proofArchive": "Pending publication"
+    "proofArchive": {
+      "commit": "ef6e48ee0469816f83500a46b96f1986ea7b174b",
+      "url": "https://github.com/dills122/reef-records/tree/ef6e48ee0469816f83500a46b96f1986ea7b174b/records/reef/docs/evidence/calcify-financial-sprint1/ocr-followup-2026-10-05-0a64c482",
+      "files": 13,
+      "bytes": 135639,
+      "remoteBytesVerified": true,
+      "sourceLocalCommit": "245a91ba49db43788eb3fe948a522a92f70f287c",
+      "productSourceCommit": "0a64c4823a00ec5133e331bcfbbc94e542c4d8d3",
+      "archiveIntegrity": "2379 records PASS",
+      "archiveUnitTests": 4
+    }
   }
 }

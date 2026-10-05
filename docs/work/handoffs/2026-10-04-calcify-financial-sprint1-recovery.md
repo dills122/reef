@@ -12,6 +12,8 @@ global lock and unique output-directory behavior retained. New fixes postdate
 round7 sign-off and its 18-source hash comparison. Broker/Kotlin/profile/guard
 unchanged; original44-arm proof remains historical. Independent review cap7 used;
 human extension required for fresh sign-off, no round8 started.
+[OCR proof](https://github.com/dills122/reef-records/tree/ef6e48ee0469816f83500a46b96f1986ea7b174b/records/reef/docs/evidence/calcify-financial-sprint1/ocr-followup-2026-10-05-0a64c482):13 files /135,639 bytes, remote hashes verified.
+Fix source `0a64c4823a00ec5133e331bcfbbc94e542c4d8d3`.
 
 ## Durable state
 

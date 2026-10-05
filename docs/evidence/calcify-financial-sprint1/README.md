@@ -16,6 +16,8 @@ exclusive open precedes finally, global serialization and unique output director
 intentional. Fixes await independent sign-off; cap7 exhausted. Historical broker
 proof below remains scoped to its original software hashes.
 
+[OCR regression proof and preserved failures](https://github.com/dills122/reef-records/tree/ef6e48ee0469816f83500a46b96f1986ea7b174b/records/reef/docs/evidence/calcify-financial-sprint1/ocr-followup-2026-10-05-0a64c482).
+
 ## Review and validation
 
 Review **7/7 Ready with non-blocking follow-ups** for supervised pilot and
