@@ -1,9 +1,20 @@
 # Calcify financial sprint1 — bounded correctness pass
 
 October5 UTC / October4 local. Branch `codex/calcify-sprint1-experiments`;
-18 software files match tested `f75b5d61`, profile `f56b30b1`.
+Broker/Kotlin/profile proof remains from `f75b5d61` / `f56b30b1`; JavaScript
+checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
+
+## OCR follow-up
+
+Checkpoint now versioned and validated before state assignment. Invalid resource
+metrics and scheduled-duration ratios return null. Four new regressions reproduce
+prior gaps; focused47/47 and fresh Node158/158 pass. Initial sandbox loopback EPERM
+retained; same command passes outside sandbox. Global lock finding disputed:
+exclusive open precedes finally, global serialization and unique output directories
+intentional. Fixes await independent sign-off; cap7 exhausted. Historical broker
+proof below remains scoped to its original software hashes.
 
 ## Review and validation
 
@@ -19,7 +30,7 @@ Cap 7 exhausted; no automatic reset or further review round.
   8 MiB segments. Source requests Kafka minimum ISR 2; Redpanda does not expose
   that property in readback. Documented Raft majority semantics remain distinct
   from empirical majority-outage proof. Raw inventory also includes internal offsets topic.
-- Fresh Node CI 154/154. Retained identical-code module: 795 reported tests,
+- Historical Node CI 154/154; current OCR-fix rerun158/158. Retained identical-code module: 795 reported tests,
   775 reported passes, 20 skips, zero failures/errors; financial 27/27.
   Offline DB guards can return without assertions; no DB integration claim.
 - Frozen 20 cases/52 inputs; 300 seeded traces/19,200 business prefixes.

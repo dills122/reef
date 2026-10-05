@@ -131,10 +131,10 @@ export function assessMeasurement(policy, m) {
   if (!latency || latency.kind !== 'sampled-individual' || latency.clockDomain !== 'same-monotonic' || !positive(latency.samples)
     || !finiteNonnegative(latency.p95Ms) || !finiteNonnegative(latency.p99Ms) || latency.p99Ms < latency.p95Ms) gaps.push('LATENCY_CLOCK_UNQUALIFIED');
   return { result: failures.length ? 'FAIL_DIAGNOSTIC' : gaps.length ? 'LIMITED' : 'PASS_DIAGNOSTIC', failures, gaps,
-    rates: Object.fromEntries(stages.map(stage => [`${stage}PerSecond`, nonnegative(m.deadline?.[stage]) ? m.deadline[stage] * 1000 / durationMs : null])),
+    rates: Object.fromEntries(stages.map(stage => [`${stage}PerSecond`, nonnegative(m.deadline?.[stage]) && positive(durationMs) ? m.deadline[stage] * 1000 / durationMs : null])),
     rateBoundary: 'Counts visible at fixed deadline / scheduled duration; conservative covering rates, not individual latency.',
-    cpuEquivalentCores: m.resources ? m.resources.processCpuMs / durationMs : null,
-    touchedKeysPerTrade: m.resources && positive(m.final?.decided) ? m.resources.touchedKeys / m.final.decided : null,
+    cpuEquivalentCores: finiteNonnegative(m.resources?.processCpuMs) && positive(durationMs) ? m.resources.processCpuMs / durationMs : null,
+    touchedKeysPerTrade: nonnegative(m.resources?.touchedKeys) && positive(m.final?.decided) ? m.resources.touchedKeys / m.final.decided : null,
     capacityQualification: false, sourceHead: policy.sourceHead, policySha256: policy.policySha256 };
 }
 

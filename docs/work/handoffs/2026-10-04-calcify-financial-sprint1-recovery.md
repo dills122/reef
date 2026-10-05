@@ -1,8 +1,17 @@
 # Handoff: Calcify sprint1 bounded proof and remaining qualification
 
 October5 UTC / October4 local, 2026. Review7 closes guard P1; implemented
-correctness scope passes. Full E3/E4 remains open. Product PR prepared from
+correctness scope passes. Full E3/E4 remains open. [Product PR473](https://github.com/dills122/reef/pull/473) open from
 `codex/calcify-sprint1-experiments`, base `97924e15642826a687db935a219d7927ae649ac8`.
+
+## OCR follow-up
+
+Two JavaScript gaps fixed: versioned/validated checkpoints and null invalid metrics.
+Four new regressions; focused47/47, exact Node158/158 pass. Lock finding unsupported;
+global lock and unique output-directory behavior retained. New fixes postdate
+round7 sign-off and its 18-source hash comparison. Broker/Kotlin/profile/guard
+unchanged; original44-arm proof remains historical. Independent review cap7 used;
+human extension required for fresh sign-off, no round8 started.
 
 ## Durable state
 

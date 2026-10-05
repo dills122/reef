@@ -194,3 +194,27 @@ test('derived per-trade budget must remain safe integer before policy freezes', 
   assert.equal(preparePolicy({ calibration: c, correctness, preflight, arm }).status, 'BLOCKED');
   assert.throws(() => estimateAged(c, preflight, arm), /PHYSICAL_TRADE_BUDGET/);
 });
+
+test('invalid telemetry produces null derived metrics instead of non-finite values', () => {
+  for (const value of [undefined, null, 'bad', -1, NaN, Infinity]) {
+    const m = measurement(); m.resources.processCpuMs = value; m.resources.touchedKeys = value;
+    const r = assessMeasurement(policy(), m);
+    assert.notEqual(r.result, 'PASS_DIAGNOSTIC');
+    assert.equal(r.cpuEquivalentCores, null);
+    assert.equal(r.touchedKeysPerTrade, null);
+  }
+  const m = measurement(); m.resources.processCpuMs = 0; m.resources.touchedKeys = 0;
+  const r = assessMeasurement(policy(), m);
+  assert.equal(r.cpuEquivalentCores, 0); assert.equal(r.touchedKeysPerTrade, 0);
+});
+
+test('invalid duration and zero trades cannot publish non-finite derived metrics', () => {
+  for (const seconds of [0, undefined, NaN, Infinity, -1]) {
+    const p = policy(); p.arm = { ...p.arm, seconds };
+    const m = measurement(); m.final.decided = 0;
+    const r = assessMeasurement(p, m);
+    assert.equal(r.result, 'FAIL_DIAGNOSTIC');
+    assert.equal(r.cpuEquivalentCores, null); assert.equal(r.touchedKeysPerTrade, null);
+    assert.ok(Object.values(r.rates).every(x => x === null));
+  }
+});

@@ -24,6 +24,11 @@ Branch `codex/calcify-sprint1-experiments`; recovered test-only source preserved
 primary dirty checkout untouched. [Focused checkpoint](evidence/calcify-financial-sprint1/README.md),
 [active handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
 
+OCR follow-up: checkpoint schema/state validation and null invalid metrics fixed;
+four new regressions, focused47/47 and exact Node158/158 pass. Lock finding
+disputed with exclusive-open ownership evidence. New JS changes await independent
+sign-off; cap7 exhausted. [Reef PR473](https://github.com/dills122/reef/pull/473).
+
 **Review7/7 Ready with non-blocking follow-ups.** Guard P1 closed; independent
 19 mocked + 2 real process-tree controls pass. Small pilot 2/2; full implemented
 matrix 24/24 core + 20/20 golden, all 44 isolated-history checks pass. Actual RF3/

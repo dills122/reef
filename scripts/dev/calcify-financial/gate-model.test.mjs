@@ -141,3 +141,26 @@ test('cyclic or forward prefix dependency manifests fail preflight instead of cr
   assert.throws(() => new GateModel('credit', [manifest('A', ['a'], ['B']), manifest('B', ['b'], ['A'])], []), /DEPENDENCY_CYCLE/);
   assert.throws(() => new GateModel('prefix', [manifest('A', ['a'], ['B']), manifest('B', ['b'])], []), /NON_PREFIX_DEPENDENCY/);
 });
+
+for (const mode of ['prefix', 'credit']) {
+  test(`${mode}: checkpoint schema and required state reject truncated or mixed cuts`, () => {
+    const g = new GateModel(mode, [A], log.slice(0, 3)); g.open('A'); g.step();
+    const cut = g.checkpoint();
+    assert.equal(cut.schema, 'calcify-e2-gate-checkpoint-v1');
+    for (const key of Object.keys(cut)) {
+      const broken = structuredClone(cut); delete broken[key];
+      assert.throws(() => GateModel.restore(broken), /CHECKPOINT/, key);
+    }
+    for (const patch of [{ schema: 'v2' }, { epoch: 0 }, { epoch: '1' },
+      { readPosition: -1 }, { fetchPosition: 999 }, { fault: false },
+      { transitions: NaN }, { metadataBytes: 0 }, { extraVersionField: true }]) {
+      assert.throws(() => GateModel.restore({ ...cut, ...patch }), /CHECKPOINT/);
+    }
+    const badWindow = structuredClone(cut); badWindow.windows.A.reserve = 0;
+    assert.throws(() => GateModel.restore(badWindow), /CHECKPOINT/);
+    const restored = GateModel.restore(cut); restored.drain();
+    assert.deepEqual(restored.snapshot().closed, ['A']);
+    assert.equal(Object.getPrototypeOf(restored.windows), null);
+    assert.deepEqual(cut, g.checkpoint()); // Restore and drain cannot mutate source cut.
+  });
+}

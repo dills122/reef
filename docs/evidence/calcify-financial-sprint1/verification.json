@@ -2,24 +2,24 @@
   "schema": "calcify-sprint1-verification-v1",
   "date": "2026-10-05",
   "sourceHead": "f22b2f852a3aa1b14bd52a36f828f3e5cceb351f",
-  "overall": "BOUNDED_CORRECTNESS_PASS_FULL_E3_E4_OPEN",
+  "overall": "OCR_FIXES_TESTED_INDEPENDENT_SIGNOFF_PENDING",
   "review": {
     "instances": 7,
     "maximum": 7,
     "lastVerdict": "Ready with non-blocking follow-ups",
-    "scope": "Recovered source/config/tests and five operational guard helpers; supervised pilot then implemented matrix conditional on conservative resource gate",
+    "scope": "Historical round7 scope; subsequent OCR checkpoint and metric fixes await new independent sign-off",
     "openP1": null,
     "remediation": "Independent 19 mocked and 2 real process-tree controls pass; prior fail-open P1 closed",
     "furtherReview": "Cap 7 exhausted; new material changes require human extension"
   },
   "checks": {
     "nodeCi": {
-      "tests": 154,
-      "passed": 154,
+      "tests": 158,
+      "passed": 158,
       "failed": 0,
       "skipped": 0,
       "files": 31,
-      "scope": "Fresh exact 31-file rerun after review7"
+      "scope": "Fresh exact31-file rerun after OCR fixes, outside sandbox for loopback server; initial sandbox EPERM preserved"
     },
     "platformRuntime": {
       "reportedTests": 795,
@@ -185,5 +185,25 @@
     "unitTestsPassed": 4,
     "sourceBundleLocalCommit": "b0ff1f24e252d922ba8df1ddf2854dc832010b6b",
     "ci": "Both PR6 checks PASS"
+  },
+  "ocrFollowup": {
+    "comments": [
+      4180270457,
+      4180270466,
+      4180270468
+    ],
+    "checkpoint": "Versioned checkpoint with required-field, numeric, position, manifest/history and window validation before state assignment",
+    "metrics": "Invalid numerators or denominators return null; scheduled stage rates also guarded",
+    "lock": "Finding disputed: exclusive open occurs before finally; only lock owner unlinks, global serialization and unique output directories intentional",
+    "regressionTests": {
+      "focused": 47,
+      "passed": 47,
+      "newCases": 4,
+      "nodeCi": 158,
+      "failures": 0
+    },
+    "historicalBrokerScope": "Same broker/Kotlin/profile/guard as signed 44-arm run; JS gate/rate changes postdate historical full-source hash verification",
+    "independentReview": "Not started; cap7 exhausted, human extension required",
+    "proofArchive": "Pending publication"
   }
 }

@@ -166,8 +166,41 @@ export class GateModel {
   drain() { while (this.step()) {} return this.snapshot(); }
   reassign() { this.epoch++; this.assertInvariant(); }
   expire(id) { return this.windows[id] && !this.windows[id].closed ? { status: 'WAIT', reason: 'FENCING_REQUIRED' } : { status: 'NOOP' }; }
-  checkpoint() { return structuredClone({ ...this }); }
-  static restore(cut) { const g = Object.assign(Object.create(GateModel.prototype), structuredClone(cut)); g.windows = Object.assign(Object.create(null), g.windows); g.assertInvariant(); return g; }
+  checkpoint() { return structuredClone({ schema: 'calcify-e2-gate-checkpoint-v1', ...this }); }
+  static restore(cut) {
+    if (!cut || cut.schema !== 'calcify-e2-gate-checkpoint-v1') throw new Error('CHECKPOINT_SCHEMA');
+    try {
+      const { schema, ...state } = structuredClone(cut);
+      const integer = value => Number.isSafeInteger(value) && value >= 0;
+      const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+      if (!object(state.bounds) || typeof state.bounds.namespace !== 'string' || !state.bounds.namespace
+        || Object.keys(DEFAULT_BOUNDS).filter(k => k !== 'namespace').some(k => !integer(state.bounds[k]))
+        || !Array.isArray(state.manifests) || !Array.isArray(state.history)) throw new Error('SHAPE');
+      // Re-run manifest/history preflight before accepting persisted mutable state.
+      const g = new GateModel(state.mode, state.manifests, state.history, state.bounds);
+      const required = Object.keys(g);
+      if (Object.keys(state).length !== required.length || required.some(k => !Object.hasOwn(state, k))) throw new Error('FIELDS');
+      if (['epoch', 'fetchPosition', 'readPosition', 'duplicateRecords', 'peakRetainedBytes', 'transitions', 'metadataBytes']
+        .some(k => !integer(state[k])) || state.epoch < 1 || state.fetchPosition > state.history.length
+        || state.readPosition > state.fetchPosition || state.metadataBytes !== g.metadataBytes
+        || ![null, 'UNKNOWN_ROUTING', 'UNDECLARED_OR_UNAUTHORIZED_COMPLETION'].includes(state.fault)) throw new Error('STATE');
+      for (const key of ['fetched', 'bypass']) {
+        if (!Array.isArray(state[key]) || state[key].some(r => !object(r) || !integer(r.bytes)
+          || r.bytes === 0 || r.bytes > state.bounds.memberBytes)) throw new Error('RECORDS');
+      }
+      if (JSON.stringify(state.fetched) !== JSON.stringify(state.history.slice(state.readPosition, state.fetchPosition))
+        || !object(state.windows)) throw new Error('POSITION');
+      for (const [id, w] of Object.entries(state.windows)) {
+        const m = state.manifests.find(m => m.id === id);
+        if (!m || !object(w) || !Array.isArray(w.seen) || typeof w.sealed !== 'boolean'
+          || typeof w.closed !== 'boolean' || w.reserve !== m.completionBytes + m.sealBytes) throw new Error('WINDOW');
+      }
+      Object.assign(g, state);
+      g.windows = Object.assign(Object.create(null), state.windows);
+      g.assertInvariant();
+      return g;
+    } catch (error) { throw new Error('CHECKPOINT_INVALID', { cause: error }); }
+  }
 
   assertInvariant() {
     if (this.reservedBytes() > this.bounds.completionBytes || this.fetched.length > this.bounds.fetchItems
