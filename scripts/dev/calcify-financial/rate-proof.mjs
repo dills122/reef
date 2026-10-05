@@ -6,6 +6,12 @@ import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { tmpdir } from 'node:os';
+
+// All capacity entry points share one host lock; preserve macOS session lock location.
+export function capacityLockPath(platform = process.platform, temporaryDirectory = tmpdir()) {
+  return path.join(platform === 'darwin' ? '/private/tmp' : temporaryDirectory, 'reef-financial-rate-capacity.lock');
+}
 
 export const PLAN = Object.freeze({
   schema: 'financial-e4-plan-v1', stage: 'synthetic ordered financial adapter; single closed hot domain',
@@ -307,7 +313,7 @@ async function runAdapterUnlocked(policyPath, adapterPath, out, authorize) {
 
 export async function runAdapter(policyPath, adapterPath, out, authorize) {
   if (authorize !== '--authorize-load') throw new Error('Explicit --authorize-load required after E3 correctness.');
-  const lockPath = '/private/tmp/reef-financial-rate-capacity.lock';
+  const lockPath = capacityLockPath();
   const lock = await open(lockPath, 'wx'); // Refuse concurrent capacity loads; no stale-lock auto deletion.
   try {
     await lock.writeFile(`${JSON.stringify({ pid: process.pid, policyPath, out })}\n`);
@@ -329,7 +335,7 @@ export async function calibrateAdapter(requestPath, adapterPath, out, authorize)
   const adapter = JSON.parse(await readFile(adapterPath, 'utf8'));
   const pinned = pinnedHeapAdapter(adapter, 'calibrate');
   if (typeof adapter.command !== 'string' || !Array.isArray(adapter.args) || adapter.args.some(x => typeof x !== 'string')) throw new Error('ADAPTER_COMMAND_REQUIRED');
-  const lockPath = '/private/tmp/reef-financial-rate-capacity.lock';
+  const lockPath = capacityLockPath();
   const lock = await open(lockPath, 'wx');
   try {
     await mkdir(out);

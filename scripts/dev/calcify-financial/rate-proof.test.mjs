@@ -8,6 +8,15 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { PLAN, preparePolicy, assessMeasurement, selectRepeat, estimateAged, runAdapter, calibrateAdapter, estimateHeap, verifyHeapEvidence, HEAP_LAUNCHER, captureHeapCapability } from './rate-proof.mjs';
 
+test('capacity lock has fixed shared name in platform temporary directory', async () => {
+  const { capacityLockPath } = await import('./rate-proof.mjs');
+  assert.equal(typeof capacityLockPath, 'function');
+  assert.equal(capacityLockPath('darwin', '/irrelevant'), '/private/tmp/reef-financial-rate-capacity.lock');
+  assert.equal(capacityLockPath('linux', '/tmp'), '/tmp/reef-financial-rate-capacity.lock');
+  assert.equal(capacityLockPath('linux', '/tmp/custom'), '/tmp/custom/reef-financial-rate-capacity.lock');
+  assert.equal(capacityLockPath(), path.join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'reef-financial-rate-capacity.lock'));
+});
+
 // Fabricated unit-test measurements exercise validation only; never benchmark evidence.
 const hash = 'a'.repeat(64);
 const calibration = {

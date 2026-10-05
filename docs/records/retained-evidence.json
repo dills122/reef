@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 7781,
-      "sha256": "a1a156c54d6dfe97e395f62463558016335250f74f3a583926c51acec1949af3"
+      "bytes": 8202,
+      "sha256": "67c2b4f3662f1da6e8792b492e39e431d1cceb209a3b12816d1e6a9c9032ad42"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1700,8 +1700,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json",
-      "bytes": 6725,
-      "sha256": "bdffb4869c7de330eeca077c87d60a95fb280a482c684cd05e465f6560bd9fda"
+      "bytes": 8051,
+      "sha256": "a7792fdefbb89bd5b35bc38280292a0bd58ef9069dfd977e0fe9269ec8dad369"
     }
   ]
 }

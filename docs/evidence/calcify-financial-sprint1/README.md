@@ -11,13 +11,15 @@ Test-only experiments. [Focused results](verification.json),
 October5, 2026 UTC; branch `codex/calcify-heap-protection`, base `3ce2bdf2`.
 [Focused verification](heap-verification-2026-10-05.json) and
 [current work plan](../../WORK_PLAN.md#calcify-heap-protection-component--october-5-2026)
-own new test-harness component scope. Financial64/64, exact NodeCI229/229;
-independent Attempt1 cycle2 Ready. Actual Java21 capability and final-build child
+own new test-harness component scope. Financial64/64, exact NodeCI230/230;
+independent Attempt1 cycle3 Ready. Actual Java21 capability and final-build child
 refusal controls pass without broker/client setup. Sticky sampled protection
 continues through replay/publication; emitted peak scope ends at result assembly.
 Real conservative cost evidence absent: existing real policies stay BLOCKED.
 Full E4/ACK/physical/calibration/supervision and capacity remain open.
 Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified. [Final independent review](https://github.com/dills122/reef-records/blob/132dae9d9a02b1c6bd11946f9dbd12670a65d70b/records/reef/docs/evidence/calcify-financial-sprint1/heap-protection-2026-10-05-3ce2bdf2729c/review/cycle2/report.md). Original E3 proof below retains separate hashes.
+
+Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof publication pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
 
 ## Current E3 continuation
 

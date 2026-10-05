@@ -10,8 +10,8 @@
   "capacityQualification": false,
   "sourceHeadMetadataLimit": "Capability sourceHead echoes accepted baseline; dirty/new source hashes and actual compiled/classpath digests bind executed candidate separately. Product checkpoint alone does not establish execution identity.",
   "sourceSha256": {
-    "scripts/dev/calcify-financial/rate-proof.mjs": "fc2aecc678e1dc7b1b6479b2793f68f4e447e7d3963555c7ffa8da986340f090",
-    "scripts/dev/calcify-financial/rate-proof.test.mjs": "237818ed0bf7fef0ca86e5ac6eac0274afcf596e0f0676b7fbc75cc62b01938e",
+    "scripts/dev/calcify-financial/rate-proof.mjs": "eb04e2841db753cee03d04b0a171e6b043d9823a32e1a9d6760bd8af486d41b8",
+    "scripts/dev/calcify-financial/rate-proof.test.mjs": "ede45b558776bb944d1ce65fb66ff8a9f3d80b8cb638047051e78aa81e9ad821",
     "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt": "6916c2ed4f61a8f5f874f93f11ddc900519b503770e86bc3f0aaea343292965a",
     "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialHeapGuard.kt": "f5dd838d77fb3e0796861ac0dc4936caccaf6d7c2cfc1b5e337678464fb90943",
     "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialHeapGuardTest.kt": "bed9edbd42798136c127ed9d172a6110e6288bdc933cc6b1f5fb2160d6a957fa"
@@ -64,8 +64,8 @@
     },
     "financialXmlFiles": 6,
     "exactNodeCI": {
-      "tests": 229,
-      "pass": 229,
+      "tests": 230,
+      "pass": 230,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -73,7 +73,7 @@
     "sourceBeforeAfterEqual": true,
     "sourceInputs": 437,
     "gradleTasksExecuted": 10,
-    "focusedNodeTests": 37,
+    "focusedNodeTests": 38,
     "focusedKotlinTests": 19,
     "actualFinalChildControls": "Independent final-build impossible-baseline and compiled-build mismatch exit1 before state/output/client setup",
     "scriptSurface": {
@@ -83,15 +83,17 @@
       "status": "PASS"
     },
     "productWhitespace": "PASS",
-    "noLocalDatabaseIntegrationClaim": true
+    "noLocalDatabaseIntegrationClaim": true,
+    "financialReceiptScope": "Previous forced64-test Kotlin candidate; three Kotlin source/compiled class/classpath/config/fixture identities independently rechecked unchanged after JS-only lock correction. No new Kotlin run claimed."
   },
   "independentReview": {
     "attempt": 1,
-    "cyclesConsumed": 2,
+    "cyclesConsumed": 3,
     "maximumCyclesPerAttempt": 3,
     "cycle1": "Ready with non-blocking P2 exported peak scope; accepted and fixed with corrected actual RED then GREEN",
     "cycle2": "Ready; no actionable P0-P3 findings; whole bounded component and amendment reviewed",
-    "frozenSourceHashesVerified": true
+    "frozenSourceHashesVerified": true,
+    "cycle3": "Ready; no actionable findings; whole bounded component, lock portability, shared exclusivity/cleanup and unchanged compiled Kotlin identity verified"
   },
   "retainedFailuresAndCorrections": [
     "Missing/oversized heap admission RED",
@@ -100,7 +102,10 @@
     "Early post-run-only source hashes and stale unrelated XML copied during Node run",
     "Exact Node CI localhost EPERM sandbox failure, authorized identical command passes",
     "Peak-scope initial boxed numeric test mistake; corrected missing-field RED",
-    "Reviewer initial escaped-JSON peak control; corrected valid-JSON control retained"
+    "Reviewer initial escaped-JSON peak control; corrected valid-JSON control retained",
+    "Hosted Linux initial227/229: macOS-only lock parent ENOENT before intended refusal; shared fixed platform temporary lock correction",
+    "Reviewer cycle3 first wrong config-file assertion corrected; raw retained",
+    "Root owner-update Python syntax error on reserved keyword pass; no files written, corrected"
   ],
   "archive": {
     "namespace": "docs/evidence/calcify-financial-sprint1/heap-protection-2026-10-05-3ce2bdf2729c",
@@ -114,7 +119,13 @@
     "e3ArchiveUnchanged": "ed6faadf261dab78a1c4f49991b8f297aecadea4",
     "files": 216,
     "bytes": 3632431,
-    "independentRemoteBlobVerification": "PASS"
+    "independentRemoteBlobVerification": "PASS",
+    "supplementalCorrection": {
+      "namespace": "docs/evidence/calcify-financial-sprint1/heap-ci-correction-2026-10-05-3bf45160ebfa",
+      "status": "PUBLICATION_PENDING",
+      "recordsCommit": null,
+      "recordsPullRequest": "https://github.com/dills122/reef-records/pull/8"
+    }
   },
   "nextGates": [
     "Recoverable durable ACK membership bound to actual retained source",
@@ -123,5 +134,10 @@
     "Producer/observer calibration and resource/process supervision through restore",
     "Reservation owner acceptance and live matcher identity integration",
     "Accepted financial authority/cutover decisions remain proposed"
-  ]
+  ],
+  "lockPortability": {
+    "darwin": "Original /private/tmp fixed lock unchanged",
+    "otherPlatforms": "Fixed filename under os.tmpdir; both load and calibration share exclusive wx lock, stale refusal unchanged",
+    "instrumentedLinuxScope": "macOS-host branch control only; actual hosted checks see PR475"
+  }
 }

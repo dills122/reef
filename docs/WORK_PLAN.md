@@ -23,8 +23,8 @@ audited checkout; missing local reports do not prove a run never happened.
 Component verification passes on `codex/calcify-heap-protection`, starting from
 E3 delivery checkpoint `3ce2bdf2`. Actual JVM capability binding, checked finite
 retained-state admission and sticky sampled protection cover result-only replay
-and publication. Financial64/64 and exact NodeCI229/229 pass. Independent review
-Attempt1 cycle2 **Ready**; cycle1 P2 peak-scope finding fixed with actual RED/GREEN
+and publication. Financial64/64 and exact NodeCI230/230 pass. Independent review
+Attempt1 cycle3 **Ready**; cycle1 P2 peak-scope finding fixed with actual RED/GREEN
 control. Emitted peaks explicitly exclude final serialization/staged writes.
 [Focused verification](evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json)
 owns exact source/build/test scope. Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122/reef-records/pull/8) draft, landing pending. All216 remote blobs/3,632,431 bytes verified; local-only provenance `faa6c0f5`, product checkpoint `799760dc`. No tracked bulk removed.
@@ -37,6 +37,8 @@ Heap protection alone establishes no capacity, native-memory or OOM guarantee.
 Real launcher remains pinned to local macOS Java21/128m/768m; portability needs
 explicit new launcher binding. Cost calibration needs separately reviewed finite
 derivation and safe bootstrap envelope before existing real policies can run.
+
+Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof publication pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
 
 ## Calcify E3 continuation — October 5, 2026
 
