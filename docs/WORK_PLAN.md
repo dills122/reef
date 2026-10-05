@@ -18,9 +18,29 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify heap protection component — October 5, 2026
+
+Component verification passes on `codex/calcify-heap-protection`, starting from
+E3 delivery checkpoint `3ce2bdf2`. Actual JVM capability binding, checked finite
+retained-state admission and sticky sampled protection cover result-only replay
+and publication. Financial64/64 and exact NodeCI229/229 pass. Independent review
+Attempt1 cycle2 **Ready**; cycle1 P2 peak-scope finding fixed with actual RED/GREEN
+control. Emitted peaks explicitly exclude final serialization/staged writes.
+[Focused verification](evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json)
+owns exact source/build/test scope. Proof publication/retention completion pending.
+No broker load or real conservative cost qualification.
+
+Missing conservative cost provenance blocks existing real-load policies. Full E4
+readiness still needs recoverable ACK membership, distinct physical-byte metrics,
+producer/observer cost calibration and resource supervision through restore.
+Heap protection alone establishes no capacity, native-memory or OOM guarantee.
+Real launcher remains pinned to local macOS Java21/128m/768m; portability needs
+explicit new launcher binding. Cost calibration needs separately reviewed finite
+derivation and safe bootstrap envelope before existing real policies can run.
+
 ## Calcify E3 continuation — October 5, 2026
 
-Active branch `codex/calcify-planning-readiness`, baseline `a6ddafbb`.
+E3 delivery branch `codex/calcify-planning-readiness`, baseline `a6ddafbb`.
 Current session explicitly authorizes new bounded milestone reviews: three cycles
 per attempt, research between attempts, maximum three attempts. Historical cap7
 and original proof remain dated evidence; neither count is reset.
@@ -46,9 +66,10 @@ resource samples and fresh Node60/60. Bounded E3 acceptance/retention complete.
 landing pending; no tracked bulk removed. Product checkpoint `c4d332a0` holds
 reviewed code; actual runs bind prior dirty/new source/build hashes.
 
-Next E4 slice: actual applied maximum-heap admission guard, recoverable ACK
-membership, distinct physical-byte metrics, producer/observer calibration through
-restore. Existing financial rate assessment remains LIMITED. Reservation owner
+Applied heap component above closes implementation slice; remaining E4 gates:
+recoverable ACK membership, distinct physical-byte metrics, reviewed finite heap
+costs and producer/observer calibration/resource supervision through restore.
+Existing financial rate assessment remains LIMITED. Reservation owner
 acceptance, matcher identity and production financial authority remain separate.
 
 ## Calcify sprint1 verification — October5 UTC / October4 local, 2026

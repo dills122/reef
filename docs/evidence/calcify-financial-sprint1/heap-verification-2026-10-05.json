@@ -1,0 +1,124 @@
+{
+  "schema": "calcify-heap-component-verification-v1",
+  "status": "PASSED_COMPONENT_PUBLICATION_PENDING",
+  "dateUtc": "2026-10-05",
+  "branch": "codex/calcify-heap-protection",
+  "baselineCommit": "3ce2bdf2729c884b0efd77d0a56808a0a6eb7d96",
+  "scope": "Applied test-only admission/runtime protection component; no broker load or scientific conservative-cost qualification",
+  "productionAuthorityAccepted": false,
+  "fullE4Readiness": false,
+  "capacityQualification": false,
+  "sourceHeadMetadataLimit": "Capability sourceHead echoes accepted baseline; dirty/new source hashes and actual compiled/classpath digests bind executed candidate separately. Product checkpoint alone does not establish execution identity.",
+  "sourceSha256": {
+    "scripts/dev/calcify-financial/rate-proof.mjs": "fc2aecc678e1dc7b1b6479b2793f68f4e447e7d3963555c7ffa8da986340f090",
+    "scripts/dev/calcify-financial/rate-proof.test.mjs": "237818ed0bf7fef0ca86e5ac6eac0274afcf596e0f0676b7fbc75cc62b01938e",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt": "6916c2ed4f61a8f5f874f93f11ddc900519b503770e86bc3f0aaea343292965a",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialHeapGuard.kt": "f5dd838d77fb3e0796861ac0dc4936caccaf6d7c2cfc1b5e337678464fb90943",
+    "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialHeapGuardTest.kt": "bed9edbd42798136c127ed9d172a6110e6288bdc933cc6b1f5fb2160d6a957fa"
+  },
+  "actualCapability": {
+    "maxHeapBytes": 805306368,
+    "usedHeapBytes": 31746600,
+    "vmArguments": [
+      "-Xms128m",
+      "-Xmx768m"
+    ],
+    "javaVersion": "21",
+    "javaVendor": "Oracle Corporation",
+    "sourceHead": "3ce2bdf2729c884b0efd77d0a56808a0a6eb7d96",
+    "fixtureSha256": "fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d",
+    "configSha256": "f153d7e7ccdf2587573f0e4522f7ff0896d5007c015865b21db87fa295b58ad0",
+    "buildSha256": "0ab2ba5b4584cf44bdf3aca2bb2fd32c929c78503bc3f361c438a114ab1055aa",
+    "classpathSha256": "c5436375e29d6c954f79c082512f27c094569fc1c56082e89115427167e11a84",
+    "classIdentityScope": "All compiled Financial*.class including nested classes; ordered classpath entries with streamed jar/file bytes and sorted directory resources"
+  },
+  "capabilityScope": "Broker-free actual Java21 snapshot; independent digest recompute and post-forced-compile identity comparison pass. Used bytes are neither peak nor conservative bound.",
+  "admission": {
+    "authorizedMaxHeapBytes": 805306368,
+    "fixedLauncher": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java",
+    "strictAdmissionLimitBytes": 644245094,
+    "threshold": "Refuse estimated/observed >= floor(effective actual maximum * 4 / 5)",
+    "estimate": "baseline + (timed + aged identities) * identity upper + pending captures * pending upper + transient reserve + replay reserve",
+    "unknownEvidence": "BLOCKED",
+    "reviewTrustBoundary": "Raw review bytes/hash/exact finite scope verified mechanically; independent owner still must establish scientific derivation. No real bound/review created."
+  },
+  "runtime": {
+    "pollMillis": 250,
+    "maximumSnapshotAgeMs": 5000,
+    "firstFailureSticky": true,
+    "lifecycle": "Before setup, warm workload, aging/sends/drain/close, result-only replay and final staged publication",
+    "peakScope": "Sampled through result assembly snapshot; final serialization and staged writes excluded",
+    "limits": [
+      "Sampled guard may miss sudden allocation; no OOM guarantee",
+      "Native/RSS unbounded",
+      "Blocking Kafka calls may return before caller propagates failure; no immediate process-tree abort claim",
+      "Real launcher and ordered absolute classpath binding remain session-local macOS scope"
+    ]
+  },
+  "validation": {
+    "financial": {
+      "tests": 64,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "financialXmlFiles": 6,
+    "exactNodeCI": {
+      "tests": 229,
+      "pass": 229,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "sourceBeforeAfterEqual": true,
+    "sourceInputs": 437,
+    "gradleTasksExecuted": 10,
+    "focusedNodeTests": 37,
+    "focusedKotlinTests": 19,
+    "actualFinalChildControls": "Independent final-build impossible-baseline and compiled-build mismatch exit1 before state/output/client setup",
+    "scriptSurface": {
+      "scripts": 272,
+      "nodeSyntax": 260,
+      "shellSyntax": 11,
+      "status": "PASS"
+    },
+    "productWhitespace": "PASS",
+    "noLocalDatabaseIntegrationClaim": true
+  },
+  "independentReview": {
+    "attempt": 1,
+    "cyclesConsumed": 2,
+    "maximumCyclesPerAttempt": 3,
+    "cycle1": "Ready with non-blocking P2 exported peak scope; accepted and fixed with corrected actual RED then GREEN",
+    "cycle2": "Ready; no actionable P0-P3 findings; whole bounded component and amendment reviewed",
+    "frozenSourceHashesVerified": true
+  },
+  "retainedFailuresAndCorrections": [
+    "Missing/oversized heap admission RED",
+    "Missing lifecycle RED and Gradle sandbox cache denial",
+    "Initial reflection name-mangling test failure",
+    "Early post-run-only source hashes and stale unrelated XML copied during Node run",
+    "Exact Node CI localhost EPERM sandbox failure, authorized identical command passes",
+    "Peak-scope initial boxed numeric test mistake; corrected missing-field RED",
+    "Reviewer initial escaped-JSON peak control; corrected valid-JSON control retained"
+  ],
+  "archive": {
+    "namespace": "docs/evidence/calcify-financial-sprint1/heap-protection-2026-10-05-3ce2bdf2729c",
+    "status": "PUBLICATION_PENDING",
+    "recordsCommit": null,
+    "recordsPullRequest": null,
+    "reviewedProductCommit": null,
+    "localOnlyEvidenceCommit": null,
+    "reefBulkPushed": false,
+    "trackedSourceRemoved": false,
+    "e3ArchiveUnchanged": "ed6faadf261dab78a1c4f49991b8f297aecadea4"
+  },
+  "nextGates": [
+    "Recoverable durable ACK membership bound to actual retained source",
+    "Distinct replicated allocated broker/changelog/store bytes and native/RSS metrics",
+    "Independent finite cost derivation/covered-count review and safe calibration bootstrap envelope",
+    "Producer/observer calibration and resource/process supervision through restore",
+    "Reservation owner acceptance and live matcher identity integration",
+    "Accepted financial authority/cutover decisions remain proposed"
+  ]
+}

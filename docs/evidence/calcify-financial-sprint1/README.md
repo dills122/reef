@@ -6,12 +6,25 @@ checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
+## Current heap protection component
+
+October5, 2026 UTC; branch `codex/calcify-heap-protection`, base `3ce2bdf2`.
+[Focused verification](heap-verification-2026-10-05.json) and
+[current work plan](../../WORK_PLAN.md#calcify-heap-protection-component--october-5-2026)
+own new test-harness component scope. Financial64/64, exact NodeCI229/229;
+independent Attempt1 cycle2 Ready. Actual Java21 capability and final-build child
+refusal controls pass without broker/client setup. Sticky sampled protection
+continues through replay/publication; emitted peak scope ends at result assembly.
+Real conservative cost evidence absent: existing real policies stay BLOCKED.
+Full E4/ACK/physical/calibration/supervision and capacity remain open.
+Proof publication pending; original E3 proof below retains separate hashes.
+
 ## Current E3 continuation
 
 October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
 [Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
 owns candidate status. New test-only external faults and partition-cut verifier
-remain under acceptance review. Kotlin45/45 and exact Node CI216/216 pass.
+have bounded acceptance complete; product merge pending. Kotlin45/45 and exact Node CI216/216 pass.
 Reviewed recovery guard passes real parent-observed `starting`/measured-disk/
 healthy recovery smoke; no financial workload in that smoke. Candidate external4/4, quartet, core24/24 and golden20/20 pass;
 [focused current verification](e3-verification-2026-10-05.json) records same-build
@@ -71,8 +84,9 @@ preallocation reclamation. Historical failure remains immutable. Original 16 MiB
 proposal never applied. Initial metadata and assessment errors preserved with corrections.
 
 At original checkpoint, full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK and
-A10B27 certified activation remained open; current continuation above closes bounded E3. E4 heap/ACK membership/physical-byte/
-calibration gates, reservation acceptance and matcher identity integration remain.
+A10B27 certified activation remained open; current continuation above closes bounded E3.
+Applied heap component passes separately; E4 reviewed costs/ACK membership/physical-byte/
+calibration/supervision gates, reservation acceptance and matcher identity integration remain.
 No full sprint, capacity, production or cutover sign-off.
 
 ## Records and continuation

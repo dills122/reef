@@ -7,7 +7,19 @@ owns new bounded E3 acceptance. E4 remains open. [Product PR473](https://github.
 `codex/calcify-sprint1-experiments`, base `97924e15642826a687db935a219d7927ae649ac8`.
 Required CI passed. Records PR6 remains open; pinned proof commits remain published.
 
-## October5 continuation
+## October5 heap protection continuation
+
+Branch `codex/calcify-heap-protection`, base E3 checkpoint `3ce2bdf2`.
+Applied test-harness heap component: financial64/64, exact NodeCI229/229;
+independent Attempt1 cycle2 Ready. Peak-scope P2 fixed with actual RED/GREEN;
+final-build capability/baseline/identity refusals verified broker-free.
+[Focused verification](../../evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json)
+owns current source/build/metric limits; proof publication pending.
+Existing real policies lack reviewed finite costs and stay BLOCKED. Full E4
+requires ACK recovery, distinct physical metrics, safe calibration bootstrap and
+producer/observer/resource supervision through restore. No capacity/production claim.
+
+## October5 E3 continuation
 
 Active clean-baseline worktree `/Users/dsteele/.codex/worktrees/8c6f/reef`, branch
 `codex/calcify-planning-readiness`, base `a6ddafbb`; primary checkout preserved.
@@ -79,14 +91,16 @@ staging fixes retained; original budget-abort never relabeled passing.
 
 ## Next qualification work
 
-1. Close E3 broker-majority, stale-owner, producer-failure, committed-before-controller-ACK
-   and exact A10B27 certified activation cases against RFC acceptance rules.
-2. Close E4 applied heap guard, durable ACK membership, physical-byte instrumentation
-   and calibration before rate loads. [Unapplied draft](calcify-sprint1-unfinished-heap-guard.patch).
+1. Land reviewed E3 delivery and bounded heap component; proof/source scopes above
+   stay separate. E3 broker-majority/fencing/producer/crash/cut acceptance passes.
+2. Close remaining E4 durable ACK membership, physical-byte instrumentation,
+   reviewed finite cost/calibration and restore supervision before rate loads.
+   [Earlier unapplied draft](calcify-sprint1-unfinished-heap-guard.patch) remains historical evidence.
 3. Resolve reservation-policy acceptance and matcher identity integration. No production
    behavior, authority, accepted ADR or API/schema change currently shipped.
 
 Use [work plan](../../WORK_PLAN.md), RFC sections6/8/10.1, focused source/tests.
 Supervised proof helpers and all commands archived; `.planning/sprint1-proof-bounded`
 retained locally. Java21 `/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home`.
-Any new material source/guard change needs human-approved review extension.
+Historical cap7 stays exhausted; current session separately authorizes bounded
+milestone review attempts above. Do not reset prior counts.
