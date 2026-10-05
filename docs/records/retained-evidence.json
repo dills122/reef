@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_date": "2026-10-05",
-  "selection_reason": "Unrelated selections/order unchanged. Historical round7 imports immutable. Bounded E3 code/live independent Ready; complete new proof published at Records ed6faadf with1358 remote blobs/53,415,268 bytes verified. Focused current summary/fixtures/profile/owners retained. Archive PR7 landing pending; no tracked source removal. Heap component independently Ready; separate216-file proof published at Records132dae9d, remote bytes verified; PR8 landing pending. Current heap summary retained.",
+  "selection_reason": "Unrelated selections/order unchanged. Historical round7 imports immutable. Bounded E3 code/live independent Ready; complete new proof published at Records ed6faadf with1358 remote blobs/53,415,268 bytes verified. Focused current summary/fixtures/profile/owners retained. Archive PR7 landing pending; no tracked source removal. Heap component independently Ready; separate216-file proof published at Records132dae9d, remote bytes verified; PR8 landing pending. Current heap summary retained. Supplemental Linux failure/correction and review cycle3 published at Records2a2abf9e; combined279 remote blobs verified, original manifest unchanged.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 8202,
-      "sha256": "67c2b4f3662f1da6e8792b492e39e431d1cceb209a3b12816d1e6a9c9032ad42"
+      "bytes": 8548,
+      "sha256": "8fcd037a0eee934fce7aaa4df695d45e235e59c9bc93f2b65dce8c5ed4a307bc"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1700,8 +1700,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json",
-      "bytes": 8051,
-      "sha256": "a7792fdefbb89bd5b35bc38280292a0bd58ef9069dfd977e0fe9269ec8dad369"
+      "bytes": 8485,
+      "sha256": "5621754511a6ad70e4b4fcea0692676d5e1fb53be17eb889563fb4aef0b19cbd"
     }
   ]
 }

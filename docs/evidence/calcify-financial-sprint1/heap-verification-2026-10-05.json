@@ -122,9 +122,19 @@
     "independentRemoteBlobVerification": "PASS",
     "supplementalCorrection": {
       "namespace": "docs/evidence/calcify-financial-sprint1/heap-ci-correction-2026-10-05-3bf45160ebfa",
-      "status": "PUBLICATION_PENDING",
-      "recordsCommit": null,
-      "recordsPullRequest": "https://github.com/dills122/reef-records/pull/8"
+      "status": "PUBLISHED_REMOTE_VERIFIED_LANDING_PENDING",
+      "recordsCommit": "2a2abf9ea130636daecc2d35dc6c961b08c182f9",
+      "recordsPullRequest": "https://github.com/dills122/reef-records/pull/8",
+      "reviewedProductCommit": "c4c11b3a8be680bbb443bcfbf6b67b2563542721",
+      "localOnlyEvidenceCommit": "8ecaa27d543b191f43122a765fda934424066e51",
+      "files": 63,
+      "bytes": 700463,
+      "independentRemoteBlobVerification": "PASS"
+    },
+    "combinedAtSupplementalCommit": {
+      "files": 279,
+      "bytes": 4332894,
+      "originalManifestUnchanged": true
     }
   },
   "nextGates": [

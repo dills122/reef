@@ -19,7 +19,7 @@ Existing real policies lack reviewed finite costs and stay BLOCKED. Full E4
 requires ACK recovery, distinct physical metrics, safe calibration bootstrap and
 producer/observer/resource supervision through restore. No capacity/production claim.
 
-Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof publication pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
+Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof published at Records `2a2abf9e`:63 remote blobs/700,463 bytes verified; combined279/4,332,894. [Final independent review](https://github.com/dills122/reef-records/blob/2a2abf9ea130636daecc2d35dc6c961b08c182f9/records/reef/docs/evidence/calcify-financial-sprint1/heap-ci-correction-2026-10-05-3bf45160ebfa/review/cycle3/report.md); Records PR8 draft, landing pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
 
 ## October5 E3 continuation
 
