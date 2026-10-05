@@ -250,6 +250,8 @@ try{
   if(entry.endsWith('*')){
    const dir=resolve(runtime,entry.slice(0,-1));
    for(const name of (await readdir(dir)).filter(name=>name.endsWith('.jar')).sort())compiledHashes[join(dir,name)]=createHash('sha256').update(await readFile(join(dir,name))).digest('hex');
+  }else if(entry.endsWith('.jar')){
+   const file=resolve(runtime,entry);compiledHashes[file]=createHash('sha256').update(await readFile(file)).digest('hex');
   }else{
    const dir=join(resolve(runtime,entry),'com/reef/platform/calcify/financial');
    try{for(const name of (await readdir(dir)).filter(name=>name.startsWith('Financial')&&name.endsWith('.class')).sort())compiledHashes[join(dir,name)]=createHash('sha256').update(await readFile(join(dir,name))).digest('hex');}

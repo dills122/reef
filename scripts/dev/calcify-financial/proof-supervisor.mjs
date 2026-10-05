@@ -2,9 +2,9 @@
 // CLI: node proof-supervisor.mjs --preflight /absolute/frozen-supervisor.json
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, open, readFile, readdir, lstat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, readdir, lstat, writeFile, realpath } from 'node:fs/promises';
 import { openSync, closeSync, renameSync } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import {FAULT_ACTIONS,validatePhaseProtocol,assertPhaseClock,hostMonotonicMs,readPhaseRequests,publishPhaseArtifact} from './lib/external-faults.mjs';
@@ -30,6 +30,40 @@ function sameLabels(expected, actual) {
   return actual && Object.entries(expected).every(([key, value]) => actual[key] === value);
 }
 
+// Legacy E3 profiles may omit endpoint pins. Declared pins use this session's
+// strict single-binding loopback profile and cannot be inferred from broker IDs.
+export function validateBrokerEndpoints(registry, required = false) {
+  const declared = registry?.bootstrapServers !== undefined
+    || registry?.containers?.some(c => c.hostKafkaEndpoint !== undefined);
+  if (!declared && !required) return null;
+  requireValue(Array.isArray(registry?.containers) && registry.containers.length === 3, 'Kafka endpoint registry requires three brokers');
+  const brokerIds = new Set(), ports = new Set();
+  const brokers = registry.containers.map(c => {
+    const endpoint = c.hostKafkaEndpoint;
+    requireValue(Number.isSafeInteger(c.brokerId) && c.brokerId >= 0 && !brokerIds.has(c.brokerId)
+      && endpoint && endpoint.host === '127.0.0.1' && Number.isSafeInteger(endpoint.port)
+      && endpoint.port > 0 && endpoint.port <= 65535 && !ports.has(endpoint.port)
+      && endpoint.containerPort === `${endpoint.port}/tcp`, 'Kafka endpoint identity/loopback/port mismatch');
+    brokerIds.add(c.brokerId); ports.add(endpoint.port);
+    return { id: c.brokerId, host: endpoint.host, port: endpoint.port };
+  }).sort((a, b) => a.id - b.id);
+  requireValue(registry.bootstrapServers === brokers.map(b => `${b.host}:${b.port}`).join(','), 'Kafka endpoint bootstrap literal mismatch');
+  return brokers;
+}
+
+function validateInspectedBrokerEndpoints(registry, rawInspection) {
+  if (!validateBrokerEndpoints(registry)) return;
+  requireValue(Array.isArray(rawInspection) && rawInspection.length === 3
+    && new Set(rawInspection.map(row => row.Id)).size === 3, 'Kafka endpoint raw inspection missing/different');
+  for (const c of registry.containers) {
+    const ports = rawInspection.find(row => row.Id === c.id)?.NetworkSettings?.Ports;
+    const endpoint = c.hostKafkaEndpoint, bindings = ports?.[endpoint.containerPort];
+    requireValue(ports && Object.keys(ports).length === 1 && Array.isArray(bindings) && bindings.length === 1
+      && bindings[0]?.HostIp === endpoint.host && bindings[0]?.HostPort === String(endpoint.port)
+      && Object.keys(bindings[0]).sort().join(',') === 'HostIp,HostPort', 'Kafka endpoint actual Docker binding mismatch');
+  }
+}
+
 // This manifest is separate from the broker profile/preflight. Container IDs are
 // full Docker IDs; labels pin Compose project/service. Optional imageId/volumes
 // pin image identity and named data mounts. Only these IDs can ever be stopped.
@@ -51,11 +85,30 @@ export function validatePreflight(input) {
       typeof v.name === 'string' && v.name.length > 0 && typeof v.destination === 'string' && isAbsolute(v.destination)), 'invalid registered volumes');
     ids.add(c.id); services.add(c.labels['com.docker.compose.service']);
   }
+  validateBrokerEndpoints(r);
   requireValue(w && Array.isArray(w.argv) && w.argv.length > 0 && w.argv.every(a => typeof a === 'string' && !a.includes('\0')) &&
     isAbsolute(w.argv[0]), 'wrapper requires exact absolute executable argv');
   requireValue(typeof w.cwd === 'string' && isAbsolute(w.cwd) && typeof w.outputDir === 'string' &&
     isAbsolute(w.outputDir) && resolve(w.outputDir) !== resolve(w.cwd), 'wrapper requires absolute cwd and unique output directory');
   requireValue(Number.isSafeInteger(w.timeoutMs) && w.timeoutMs > 0, 'invalid wrapper timeout');
+  if (p.hostLocalResources) {
+    const local = p.hostLocalResources, categories = new Set(), localIds = new Set();
+    requireValue(typeof local.ownedRoot === 'string' && isAbsolute(local.ownedRoot)
+      && resolve(local.ownedRoot) === local.ownedRoot, 'host resources require canonical owned root');
+    requireValue(Array.isArray(local.paths) && local.paths.length === 3, 'three host resource categories required');
+    for (const resource of local.paths) {
+      requireValue(typeof resource.id === 'string' && resource.id.length > 0 && !localIds.has(resource.id), 'invalid host resource ID');
+      requireValue(['localStore', 'controllerJournal', 'proof'].includes(resource.category)
+        && !categories.has(resource.category), 'invalid host resource category');
+      requireValue(typeof resource.path === 'string' && isAbsolute(resource.path) && resolve(resource.path) === resource.path
+        && resource.path.startsWith(local.ownedRoot + sep), 'host resource outside owned root');
+      requireValue(!local.paths.some(other => other !== resource && (other.path === resource.path
+        || other.path?.startsWith(resource.path + sep) || resource.path.startsWith(other.path + sep))), 'overlapping host resources');
+      categories.add(resource.category); localIds.add(resource.id);
+    }
+    const proofPath = local.paths.find(r => r.category === 'proof').path;
+    requireValue(w.outputDir === proofPath || w.outputDir.startsWith(proofPath + sep), 'proof allocation path differs from wrapper output');
+  }
   if (p.externalBrokerFault) {
     const f = p.externalBrokerFault;
     requireValue(ids.has(f.targetContainer), 'external fault target outside registry');
@@ -90,6 +143,7 @@ export function validateSample(p, sample, nowMs) {
   'observer heartbeat stale/invalid');
   requireValue(Array.isArray(sample.containers) && sample.containers.length === 3 &&
     new Set(sample.containers.map(c => c.id)).size === 3, 'observer resource set differs from registry');
+  validateInspectedBrokerEndpoints(p.registeredResources, sample.rawInspection);
   let total = 0, healthy = 0;
   for (const expected of p.registeredResources.containers) {
     const c = sample.containers.find(c => c.id === expected.id);
@@ -112,12 +166,37 @@ export function validateSample(p, sample, nowMs) {
     total += allocated;
   }
   requireValue(healthy >= 2, 'at least two healthy running brokers required');
+  const brokerAllocatedBytes = total;
+  if (p.hostLocalResources) {
+    const rows = sample.hostLocalAllocations;
+    requireValue(Array.isArray(rows) && rows.length === 3 && new Set(rows.map(r => r.id)).size === 3, 'host allocation set missing/different');
+    for (const expected of p.hostLocalResources.paths) {
+      const row = rows.find(r => r.id === expected.id);
+      requireValue(row && row.path === expected.path && row.category === expected.category
+        && row.allocationMode === 'du-allocated', 'host allocation identity/mode mismatch');
+      total += bytes(row.allocatedBytes, 'host allocation');
+    }
+  }
   bytes(total, 'total allocation'); bytes(sample.guestFreeBytes, 'guest free bytes'); bytes(sample.rawProofBytes, 'raw proof bytes');
   requireValue(total < BUDGETS.hardAllocatedBytes, 'hard 10GiB allocation budget');
   requireValue(total < BUDGETS.abortAllocatedBytes, '9GiB allocation abort threshold');
   requireValue(sample.guestFreeBytes >= BUDGETS.guestFreeBytesFloor, 'guest free below 20GiB');
   requireValue(sample.rawProofBytes < BUDGETS.rawProofBytes, 'raw proof reached 256MiB');
-  return { ...sample, projectAllocatedBytes: total, scope: SCOPE };
+  return { ...sample, brokerAllocatedBytes, hostAllocatedBytes: total - brokerAllocatedBytes,
+    projectAllocatedBytes: total, scope: SCOPE + (p.hostLocalResources ? '; registered host store/journal/proof allocation included' : '') };
+}
+
+export async function measureHostAllocations(registry, execute = exec) {
+  requireValue(await realpath(registry.ownedRoot) === registry.ownedRoot, 'host owned root symlink/noncanonical');
+  return Promise.all(registry.paths.map(async resource => {
+    requireValue(await realpath(resource.path) === resource.path && (await lstat(resource.path)).isDirectory(), 'host resource missing/symlink/non-directory');
+    const argv = ['-sk', resource.path];
+    const { stdout } = await execute('/usr/bin/du', argv, { timeout: 1500, maxBuffer: 1024 * 1024, killSignal: 'SIGKILL' });
+    const match = /^(\d+)\s+(.+?)\s*$/.exec(stdout);
+    requireValue(match && match[2] === resource.path, 'invalid host allocated du output');
+    return { ...resource, allocatedBytes: bytes(Number(match[1]) * 1024, 'host du allocation'),
+      allocationMode: 'du-allocated', receipt: { command: '/usr/bin/du', argv, stdout, units: 'KiB allocated blocks' } };
+  }));
 }
 
 // Transitions consume only fresh daemon rows; cached sample validation is pure.
@@ -282,14 +361,14 @@ export async function superviseProof(input, deps) {
   return result;
 }
 
-export async function launchOwnedWrapper(wrapper) {
+export async function launchOwnedWrapper(wrapper, { env = process.env } = {}) {
   const stdout = openSync(join(wrapper.outputDir, 'wrapper.stdout.log'), 'wx');
   let stderr;
   try { stderr = openSync(join(wrapper.outputDir, 'wrapper.stderr.log'), 'wx'); }
   catch (error) { closeSync(stdout); throw error; }
   let child;
   try { child = spawn(wrapper.argv[0], wrapper.argv.slice(1), { cwd: wrapper.cwd, detached: true,
-    stdio: ['ignore', stdout, stderr] }); }
+    env, stdio: ['ignore', stdout, stderr] }); }
   finally { closeSync(stdout); closeSync(stderr); }
   let status = null;
   child.on('error', error => { status = { code: null, signal: null, error: String(error) }; });
@@ -334,6 +413,7 @@ export function dockerDependencies(p, { signal, docker = '/usr/local/bin/docker'
       if (c.volumes) for (const volume of c.volumes) requireValue(row.Mounts?.some(m =>
         m.Type === 'volume' && m.Name === volume.name && m.Destination === volume.destination), 'Docker volume differs from frozen registry');
     }
+    validateInspectedBrokerEndpoints(p.registeredResources, rows);
     return rows;
     } catch(error) {error.rawInspection=rows;throw error;}
   }
@@ -380,7 +460,8 @@ export function dockerDependencies(p, { signal, docker = '/usr/local/bin/docker'
       requireValue(columns.length === 6 && /^\d+$/.test(columns[3]), 'invalid guest df output');
       commands.push({ argv, stdout });
       return { sampledAtMs, containers, guestFreeBytes: Number(columns[3]) * 1024,
-        rawProofBytes: await rawBytes(p.wrapper.outputDir), commands,rawInspection:inspected,fault };
+        rawProofBytes: await rawBytes(p.hostLocalResources?.paths.find(r => r.category === 'proof').path ?? p.wrapper.outputDir), commands,rawInspection:inspected,fault,
+        ...(p.hostLocalResources ? { hostLocalAllocations: await measureHostAllocations(p.hostLocalResources, execute) } : {}) };
       } catch(error) {error.observation={sampledAtMs,rawInspection:inspected??error.rawInspection??null,commands,fault};throw error;}
     },
     readPhaseRequests:()=>readPhaseRequests(p.externalBrokerFault.phaseProtocol),

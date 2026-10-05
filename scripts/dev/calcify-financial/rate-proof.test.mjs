@@ -71,6 +71,28 @@ function measurement() {
   };
 }
 
+test('deadline CAPTURE decision may precede paired SETTLE durable admission', () => {
+  const m = measurement();
+  // Injected publication cut: CAPTURE visible, SETTLE publication held.
+  m.deadline = { offered: 1, admitted: 0, decided: 1, settled: 0, pending: 1 };
+  const result = assessMeasurement(policy(), m);
+  assert.equal(result.failures.includes('DEADLINE_COUNT_PARITY'), false);
+  assert.equal(result.failures.includes('DEADLINE_USEFUL_RATE_MISS'), true);
+  // Publication release and eventual drain cannot back-credit deadline rate.
+  assert.equal(result.rates.admittedPerSecond, 0);
+  assert.equal(result.result, 'FAIL_DIAGNOSTIC');
+});
+
+test('stage counts reject decided beyond offered and settled beyond admission', () => {
+  for (const deadline of [
+    { offered: 0, admitted: 0, decided: 1, settled: 0, pending: 1 },
+    { offered: 1, admitted: 0, decided: 1, settled: 1, pending: 0 },
+  ]) {
+    const m = measurement(); m.deadline = deadline;
+    assert.ok(assessMeasurement(policy(), m).failures.includes('DEADLINE_COUNT_PARITY'));
+  }
+});
+
 test('preparation stops until E3 correctness and real calibration plus indexed/bounded adapter exist', () => {
   assert.equal(preparePolicy({}).status, 'BLOCKED');
   assert.match(preparePolicy({ heap, calibration, preflight, arm, symlink }).gaps.join(' '), /E3/);

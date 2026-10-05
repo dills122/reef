@@ -12,15 +12,30 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
 class FinancialBrokerProbeTest {
+    @Test fun `cold activation membership retains no eager JSON prefix`() {
+        var reads = 0
+        val config = ObjectMapper().createObjectNode()
+        val members = FinancialBrokerProbe.activationMembership(config, 1_000_000) { ordinal ->
+            reads++; ObjectMapper().createObjectNode().put("ordinal", ordinal)
+        }
+        assertEquals(1_000_000, members.size); assertEquals(0, reads)
+        assertEquals(999_999L, members[999_999]["ordinal"].asLong()); assertEquals(1, reads)
+        assertFailsWith<IndexOutOfBoundsException> { members[-1] }
+        assertFailsWith<IndexOutOfBoundsException> { members[1_000_000] }
+        assertEquals(1, reads)
+    }
     @Test fun `empty cold startup permits rate probe dynamic acknowledged membership`() {
         val json = ObjectMapper()
         val fixtures = json.readTree(Path.of("../../docs/evidence/calcify-financial-sprint1/fixtures.json").readText())
         val config = json.valueToTree<com.fasterxml.jackson.databind.JsonNode>(mapOf("policy" to fixtures["policy"],
             "genesis" to mapOf("hot" to mapOf("balances" to fixtures["cases"][0]["genesisBalances"])),
             "acceptedManifest" to mapOf("inputTopicId" to "dynamic-source-uuid")))
-        val topology = FinancialBrokerProbe.topology(config, "", "financial-s1-dynamic", { error("empty startup must not request historical membership") })
+        var activated = false
+        val topology = FinancialBrokerProbe.topology(config, "", "financial-s1-dynamic", { error("empty startup must not request historical membership") },
+            onActivation = { cut -> assertTrue(cut.owners.isEmpty()); assertEquals(null, cut.ordinal); activated = true })
         TopologyTestDriver(topology, Properties().apply { put("application.id", "financial-s1-dynamic-test"); put("bootstrap.servers", "unused:9092") }).use { driver ->
             assertEquals(0L, driver.getKeyValueStore<String, String>("financial-state").approximateNumEntries())
+            assertTrue(activated)
         }
     }
     @Test fun `actual EOS worker config permits sixty second transaction grouping`() {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -11,7 +11,7 @@ import fsAsync from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {createPhaseClient, hostMonotonicMs, publishPhaseArtifact,readPhaseRequests,readPhaseArtifact} from './lib/external-faults.mjs';
-import { BUDGETS, validatePreflight, validateSample, superviseProof, launchOwnedWrapper, dockerDependencies,createFaultCycle } from './proof-supervisor.mjs';
+import { BUDGETS, validatePreflight, validateSample, superviseProof, launchOwnedWrapper, dockerDependencies,createFaultCycle, measureHostAllocations } from './proof-supervisor.mjs';
 
 const GiB = 1024 ** 3;
 function preflight() {
@@ -27,6 +27,72 @@ function sample(p = preflight(), now = 10000) {
     ...c, running: true, healthy: true, allocatedBytes: GiB, allocationMode: 'measured',
   })), guestFreeBytes: 30 * GiB, rawProofBytes: 10 };
 }
+function withKafkaEndpoints() {
+  const p = preflight();
+  p.registeredResources.containers.forEach((c, i) => {
+    c.brokerId = i; const port = 39492 + i * 100;
+    c.hostKafkaEndpoint = { host: '127.0.0.1', port, containerPort: `${port}/tcp` };
+  });
+  p.registeredResources.bootstrapServers = '127.0.0.1:39492,127.0.0.1:39592,127.0.0.1:39692';
+  return p;
+}
+function endpointSample(p) {
+  return { ...sample(p), rawInspection: p.registeredResources.containers.map(c => ({ Id: c.id,
+    NetworkSettings: { Ports: { [c.hostKafkaEndpoint.containerPort]: [{ HostIp: c.hostKafkaEndpoint.host, HostPort: String(c.hostKafkaEndpoint.port) }] } } })) };
+}
+test('declared Kafka endpoints freeze exact unique loopback ports and broker-ordered bootstrap literal', () => {
+  assert.equal(validatePreflight(withKafkaEndpoints()).registeredResources.bootstrapServers, withKafkaEndpoints().registeredResources.bootstrapServers);
+  for (const mutate of [p => delete p.registeredResources.bootstrapServers,
+    p => delete p.registeredResources.containers[0].hostKafkaEndpoint,
+    p => p.registeredResources.containers[1].brokerId = 0,
+    p => p.registeredResources.containers[0].hostKafkaEndpoint.host = '0.0.0.0',
+    p => p.registeredResources.containers[0].hostKafkaEndpoint.port = 65536,
+    p => p.registeredResources.containers[0].hostKafkaEndpoint.containerPort = '9092/tcp',
+    p => p.registeredResources.bootstrapServers = '127.0.0.1:29492,127.0.0.1:29592,127.0.0.1:29692',
+    p => p.registeredResources.containers[1].hostKafkaEndpoint = p.registeredResources.containers[0].hostKafkaEndpoint]) {
+    const p = withKafkaEndpoints(); mutate(p); assert.throws(() => validatePreflight(p), /Kafka endpoint/);
+  }
+});
+test('every pinned Kafka sample uses actual raw Docker port bindings, never declared summary metadata', () => {
+  const p = validatePreflight(withKafkaEndpoints()), s = endpointSample(p);
+  assert.equal(validateSample(p, s, 10000).projectAllocatedBytes, 3 * GiB);
+  for (const mutate of [s => delete s.rawInspection, s => s.rawInspection.pop(),
+    s => s.rawInspection[1].Id = s.rawInspection[0].Id,
+    s => s.rawInspection[0].NetworkSettings.Ports['39492/tcp'][0].HostPort = '29492',
+    s => s.rawInspection[0].NetworkSettings.Ports['39492/tcp'][0].HostIp = '0.0.0.0',
+    s => s.rawInspection[0].NetworkSettings.Ports['39492/tcp'][0].HostIp = '::',
+    s => s.rawInspection[0].NetworkSettings.Ports['39492/tcp'].push({ HostIp: '127.0.0.1', HostPort: '29492' }),
+    s => s.rawInspection[0].NetworkSettings.Ports = { '9092/tcp': [{ HostIp: '127.0.0.1', HostPort: '39492' }] },
+    s => s.rawInspection[0].NetworkSettings.Ports['9092/tcp'] = [{ HostIp: '127.0.0.1', HostPort: '29492' }]]) {
+    const changed = structuredClone(s); mutate(changed); assert.throws(() => validateSample(p, changed, 10000), /Kafka endpoint/);
+  }
+});
+test('actual Docker dependency factory rejects foreign published port before allocation and prelaunch', async () => {
+  const input = withKafkaEndpoints(); input.wrapper.outputDir = await mkdtemp(join(tmpdir(), 'endpoint-factory-'));
+  try {
+  const p = validatePreflight(input), rows = endpointSample(p).rawInspection;
+  for (const row of rows) {
+    row.Config = { Labels: p.registeredResources.containers.find(c => c.id === row.Id).labels };
+    row.State = { Running: true, Paused: false, Restarting: false, Dead: false, Status: 'running', Health: { Status: 'healthy' } };
+  }
+  let allocationCalls = 0;
+  const deps = dockerDependencies(p, { now: () => 10000, execute: async (_, argv) => {
+    if (argv[0] === 'inspect') return { stdout: JSON.stringify(rows) };
+    allocationCalls++;
+    return { stdout: argv.includes('du') ? '1048576 /var/lib/redpanda/data\n' : 'Filesystem 1024-blocks Used Available Capacity Mounted on\nguest 99999999 1 31457280 1% /var/lib/redpanda/data\n' };
+  } });
+  const actual = await deps.monitor();
+  assert.equal(validateSample(p, actual, 10000).projectAllocatedBytes, 3 * GiB);
+  assert.deepEqual(actual.rawInspection, rows); allocationCalls = 0;
+  rows[0].NetworkSettings.Ports['39492/tcp'][0].HostPort = '29492';
+  await assert.rejects(deps.monitor(), error => {
+    assert.match(error.message, /Kafka endpoint/);
+    assert.equal(error.observation.rawInspection[0].NetworkSettings.Ports['39492/tcp'][0].HostPort, '29492');
+    return true;
+  });
+  assert.equal(allocationCalls, 0);
+  } finally { await rm(input.wrapper.outputDir, { recursive: true, force: true }); }
+});
 test('fixed budgets retain bounded correctness profile', () => {
   assert.deepEqual(BUDGETS, { abortAllocatedBytes: 9 * GiB, hardAllocatedBytes: 10 * GiB,
     guestFreeBytesFloor: 20 * GiB, rawProofBytes: 256 * 1024 ** 2, sampleIntervalMs: 5000 });
@@ -69,6 +135,61 @@ test('each resource budget aborts at exact threshold', () => {
     const s = sample(); change(s); assert.throws(() => validateSample(preflight(), s, 10000));
   }
   const s = sample(); s.guestFreeBytes = 20 * GiB; assert.equal(validateSample(preflight(), s, 10000).projectAllocatedBytes, 3 * GiB);
+});
+
+function withHostResources() {
+  const p = preflight();
+  p.hostLocalResources = { ownedRoot: '/tmp/owned-rate', paths: [
+    { id: 'store', category: 'localStore', path: '/tmp/owned-rate/store' },
+    { id: 'journal', category: 'controllerJournal', path: '/tmp/owned-rate/journal' },
+    { id: 'proof', category: 'proof', path: '/tmp/owned-rate/proof' },
+  ] };
+  p.wrapper.outputDir = '/tmp/owned-rate/proof';
+  return p;
+}
+test('host allocation joins broker allocation and cannot be absent, duplicated or logical', () => {
+  const p = withHostResources(), s = sample(p);
+  s.hostLocalAllocations = p.hostLocalResources.paths.map(r => ({ ...r, allocatedBytes: GiB, allocationMode: 'du-allocated' }));
+  assert.equal(validateSample(p, s, 10000).projectAllocatedBytes, 6 * GiB);
+  for (const change of [
+    row => delete row.hostLocalAllocations,
+    row => row.hostLocalAllocations.pop(),
+    row => row.hostLocalAllocations[1] = row.hostLocalAllocations[0],
+    row => row.hostLocalAllocations[0].allocationMode = 'files-size',
+    row => row.hostLocalAllocations[0].allocatedBytes = 4 * GiB,
+  ]) {
+    const row = structuredClone(s); change(row); assert.throws(() => validateSample(p, row, 10000));
+  }
+});
+test('host allocation registration requires distinct owned categories and proof directory', () => {
+  for (const change of [
+    p => p.hostLocalResources.paths.pop(),
+    p => p.hostLocalResources.paths[0].path = '/tmp/unrelated',
+    p => p.hostLocalResources.paths[0].path = '/tmp/owned-rate/proof/store',
+    p => p.hostLocalResources.paths[0].category = 'proof',
+    p => p.hostLocalResources.paths[0].id = 'proof',
+    p => p.hostLocalResources.paths[2].path = '/tmp/owned-rate/other',
+  ]) { const p = withHostResources(); change(p); assert.throws(() => validatePreflight(p)); }
+});
+test('host sampler measures actual allocated blocks and rejects symlink or missing paths', async () => {
+  const temporary = await fsAsync.realpath(await mkdtemp(join(tmpdir(), 'reef-host-allocated-')));
+  try {
+    const registry = { ownedRoot: temporary, paths: [{ id: 'store', category: 'localStore', path: join(temporary, 'store') }] };
+    await fsAsync.mkdir(registry.paths[0].path);
+    await fsAsync.writeFile(join(registry.paths[0].path, 'data'), Buffer.alloc(1024 * 1024));
+    const [measured] = await measureHostAllocations(registry);
+    assert.ok(measured.allocatedBytes >= 1024 * 1024);
+    assert.equal(measured.receipt.units, 'KiB allocated blocks');
+    registry.paths[0].path = join(temporary, 'missing');
+    await assert.rejects(measureHostAllocations(registry));
+    await fsAsync.symlink(join(temporary, 'store'), join(temporary, 'alias'));
+    registry.paths[0].path = join(temporary, 'alias');
+    await assert.rejects(measureHostAllocations(registry), /symlink/);
+    registry.paths[0].path = join(temporary, 'store');
+    for (const stdout of ['-1 /unrelated', 'Infinity /unrelated', `2 ${temporary}\n`, `9007199254740991 ${registry.paths[0].path}\n`]) {
+      await assert.rejects(measureHostAllocations(registry, async () => ({ stdout })));
+    }
+  } finally { await fsAsync.rm(temporary, { recursive: true, force: true }); }
 });
 test('intentional STOP charges evidenced conservative bound and requires healthy peers', () => {
   const p = preflight(); p.externalBrokerFault = { targetContainer: p.registeredResources.containers[0].id,
