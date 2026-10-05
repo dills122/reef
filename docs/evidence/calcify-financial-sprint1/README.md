@@ -1,59 +1,57 @@
-# Calcify financial sprint1 — October4 verification checkpoint
+# Calcify financial sprint1 — bounded correctness pass
 
-Source `f56b30b19d00a1033abae44a75435a4e771990e9`, base97924e15;
-branch `codex/calcify-sprint1-experiments`.18 software files match testedf75b5d61;
-new [8MiB broker profile](broker-profile.json) unrun. Test-only experiments.
-[Focused results](verification.json), [current work plan](../../WORK_PLAN.md).
+October5 UTC / October4 local. Branch `codex/calcify-sprint1-experiments`;
+18 software files match tested `f75b5d61`, profile `f56b30b1`.
+Test-only experiments. [Focused results](verification.json),
+[current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
-## Review and retest
+## Review and validation
 
-Review6of6: **Not ready** for bounded broker rerun. No new actionable product-source
-defect; P1 operational watchdog fails open on sample/cleanup errors. Author fixed
-bounded deadlines, abort recording and cleanup, added supervising controller;
-13 mock-only controls pass. Material execution change needs fresh independent
-sign-off; human review-limit extension required. No seventh reviewer started.
-Follow-up self-check found/fixed completion race with explicit wrapper-exit handshake.
-Real disposable-process control confirms observer failure terminates two owned process
-groups with zero cleanup errors after reap-before-escalation fix. Earlier EPERM
-attempts retained; resource sampling simulated, no Docker/ps/broker calls. [Guard revision](https://github.com/dills122/reef-records/tree/0fd0e45c1efb5464e5308021d4b6834e68b54f76/records/reef/docs/evidence/calcify-financial-sprint1/guard-revision-2026-10-05-f56b30b1).
+Review **7/7 Ready with non-blocking follow-ups** for supervised pilot and
+implemented matrix after resource gate. Prior watchdog P1 closed. Independent
+19 mocked guard controls, 2 real process-tree controls and 48 model tests pass.
+Cap 7 exhausted; no automatic reset or further review round.
 
-Prior review findings fixed: timeout120s supports60s commit; E4 deadline counts
-cannot exceed final counts; physical-byte overrides cannot undercut conservative
-measured floor. Earlier normalization/identity/bounds/staging/locator fixes retained.
+- Pilot 2/2; full matrix **24/24 core + 20/20 golden**. All 44 read-committed
+  oracle and isolated complete-history reconstruction checks pass. Core covers
+  happy path, 19 mutation boundaries, forwarding, serialization and two local-loss cases.
+- All 132 experiment topics verified: one partition, RF3, write caching disabled,
+  8 MiB segments. Source requests Kafka minimum ISR 2; Redpanda does not expose
+  that property in readback. Documented Raft majority semantics remain distinct
+  from empirical majority-outage proof. Raw inventory also includes internal offsets topic.
+- Fresh Node CI 154/154. Retained identical-code module: 795 reported tests,
+  775 reported passes, 20 skips, zero failures/errors; financial 27/27.
+  Offline DB guards can return without assertions; no DB integration claim.
+- Frozen 20 cases/52 inputs; 300 seeded traces/19,200 business prefixes.
+  [Fixture](fixtures.json) SHA256 `fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d`.
+  E2 finite 156 + seeded 128 pass; symbolic bounds only. Rate selfcheck 40 prefixes
+  and one-leg mutant rejection; E4 count/byte counterexamples rejected.
 
-- Node CI154/154; reviewer6 independently48/48 model tests.
-- Platform795 reported tests,775 reported passes,20 skips,0 failures/errors,
-  104suites;208.945s. Offline profile; guarded DB tests may return without assertions.
-  No DB integration claim. Financial27/27:14kernel+12oracle+1broker-config test.
-- Frozen20cases/52inputs;300 seeded traces/19,200 business prefixes.
-  [Fixtures](fixtures.json) SHA256`fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d` unchanged.
-- E2 finite156+seeded128 pass; symbolic bounds only. Selfcheck40prefixes and
-  one-leg mutant rejection. E4 count/byte counterexamples rejected; no benchmark.
-- RF3 happy/restart passes26.417s:4→8covered inputs/decisions,2→4settlements,
-  two domains. Separate history reconstruction controls; no full authority activation.
+## Resource scope and open gates
 
-## Failed and open gates
+Full matrix elapsed 474.917 seconds; correctness timing, no throughput claim.
+Conservative pilot forecast 8,280,440,832 bytes (7.71 GiB); sampled active maximum
+4,778,024,960 bytes (4.45 GiB), final live allocation 4,752,396,288 bytes.
+92 samples at 5-second intervals; minimum guest free 92,796,874,752 bytes.
+9 GiB abort / 10 GiB configured budget; samples do not prove continuous peak.
+Both owned clusters stopped, six volumes retained, no owned probe processes remain.
 
-**Overall E3/E4 blocked.** Default-segment core/golden run budget-aborted after
-10of24core and9of20golden arms passed. Last active allocation sample9,114,636,288bytes
-(8.49GiB); peak unmeasured. Shutdown reclaimed preallocation to13,537,280bytes
-(12.91MiB); stopped footprint cannot replace active peak. Original16MiB proposal
-never applied; final8MiB profile awaits apply/readback and review of corrected guard.
-Bounded project started for preflight then stopped; no bounded probe launched.
+Earlier default-segment run budget-aborted after 10/24 core and 9/20 golden.
+Last active sample 9,114,636,288 bytes; stopped allocation 13,537,280 bytes after
+preallocation reclamation. Historical failure remains immutable. Original 16 MiB
+proposal never applied. Initial metadata and assessment errors preserved with corrections.
 
-Full E3 fault/activation matrix, E4 heap/calibration/ACK membership/physical-byte
-proof, live reservation policy acceptance and matcher identity integration remain.
-No full sprint, capacity or cutover PASS. Reservation model stays proposal.
-Only registered broker projects stopped; volumes/topics and unrelated projects preserved.
+Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK and
+A10B27 certified activation matrix remains open. E4 heap/ACK membership/physical-byte/
+calibration gates, reservation acceptance and matcher identity integration remain.
+No full sprint, capacity, production or cutover sign-off.
 
-## Durable evidence and continuation
+## Records and continuation
 
-[Complete extended reviews, failures, raw attempts, JUnit XML and guard controls](https://github.com/dills122/reef-records/tree/ad7b60e9512907865785b3ab3723642c9d56dd86/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-f56b30b1),
+[Round7 review, pilot, full matrix and raw proof](https://github.com/dills122/reef-records/tree/b5d868b69132e85cdf74e4fc9c948f01eafc74c9/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-05-f22b2f85),
 [Records PR6](https://github.com/dills122/reef-records/pull/6).
-Local-only provenance commit serves import; bulk published only to Records.
+Bulk only in Records, local-only Reef provenance; no local source removal.
+[Earlier rounds4–6 and failed default-segment run](https://github.com/dills122/reef-records/tree/ad7b60e9512907865785b3ab3723642c9d56dd86/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-f56b30b1),
+[original recovery/startup proof](https://github.com/dills122/reef-records/tree/cfa4217708ff0694a966e3d87acce9585010a65a/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54).
 [Recovery hashes](recovery.json), [active handoff](../../work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
-October3 original raw proof lost; October4 reruns are fresh evidence.
-
-[Earlier908c3e54 checkpoint and failed startup](https://github.com/dills122/reef-records/tree/cfa4217708ff0694a966e3d87acce9585010a65a/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54)
-and [E0 historical overview](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md)
-remain immutable. Import open; no local source removal.
+October3 original raw proof lost; subsequent reruns are fresh evidence.

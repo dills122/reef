@@ -18,30 +18,30 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
-## Calcify sprint1 verification — October4,2026
+## Calcify sprint1 verification — October5 UTC / October4 local, 2026
 
-Branch `codex/calcify-sprint1-experiments`, base97924e15, sourcef56b30b1 pushed.
-Recovered source preserved; primary dirty checkout untouched.
-[Focused checkpoint](evidence/calcify-financial-sprint1/README.md),
+Branch `codex/calcify-sprint1-experiments`; recovered test-only source preserved,
+primary dirty checkout untouched. [Focused checkpoint](evidence/calcify-financial-sprint1/README.md),
 [active handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
 
-Human authorized rounds4–6. Timeout/count/byte-override defects fixed.
-Node154/154; financial27/27; offline runtime775 reported passes/20 skips/0failures;
-E2 finite156+seeded128 pass. RF3 happy/restart passes. Core10of24/golden9of20
-passed before disk-budget abort; no complete matrix pass or measured capacity.
+**Review7/7 Ready with non-blocking follow-ups.** Guard P1 closed; independent
+19 mocked + 2 real process-tree controls pass. Small pilot 2/2; full implemented
+matrix 24/24 core + 20/20 golden, all 44 isolated-history checks pass. Actual RF3/
+write-caching/8 MiB settings verified on 132 topics. Sampled maximum 4.45 GiB;
+474.917 seconds correctness timing. Both clusters stopped, six volumes retained.
+Fresh Node154/154; retained identical-code financial27/27 and offline module
+775 reported passes/20 skips/zero failures. No DB integration or capacity claim.
 
-**Review6of6 Not ready:** P1 proof watchdog fails open on sampling/cleanup error.
-Author fixed guard and supervising controller;13 mock-only controls pass, independent
-sign-off pending. New bounded project stopped with volumes preserved;8MiB profile
-not applied and bounded probes unrun. Cap6 exhausted; human extension required.
-Next: fresh review of corrected execution guard, exact profile preflight/readback,
-then remaining core/golden proof. Full E3 fault/activation and E4 heap/calibration/
-ACK gates remain; no capacity, cutover or overall sprint PASS. Product PR withheld.
+Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27
+activation and E4 heap/ACK/physical-byte/calibration gates remain open. Next: close
+missing fault/activation acceptance cases before E4 rate qualification. Reservation
+acceptance and matcher identity integration remain. No full sprint/cutover sign-off.
+Cap 7 used; material changes need human review extension.
 
-Bulk extended proof/reviews preserved only in Records; focused results and executable
-fixtures remain in Reef. Guidance/overview checked: no production API/events/schema
-or authority changes, so no contract/accepted ADR update needed. RFC status link
-refreshed; historical E0/908c checkpoints immutable. Active handoff refreshed.
+[Bulk reviews/proof](https://github.com/dills122/reef-records/tree/b5d868b69132e85cdf74e4fc9c948f01eafc74c9/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-05-f22b2f85) only in Records; focused verification and executable
+fixtures remain in Reef. Prior failures immutable. Completion/retention pass updates
+current owners; no source removal. Test-only change affects no production API,
+events, storage, authority or accepted ADR; guidance/overview checked.
 
 ## Calcify financial experiment E0 checkpoint (2026-10-03)
 
