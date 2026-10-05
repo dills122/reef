@@ -7,6 +7,48 @@ owns new bounded E3 acceptance. E4 remains open. [Product PR473](https://github.
 `codex/calcify-sprint1-experiments`, base `97924e15642826a687db935a219d7927ae649ac8`.
 Required CI passed. Records PR6 remains open; pinned proof commits remain published.
 
+## October5 E4 continuation
+
+Branch `codex/calcify-e4-readiness`, base `29a8926d`. [Current work](../../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
+owns latest status. Attempt1 bounded diagnostic code: financial97/97, NodeCI274/274,
+independent Attempt1 cycle3 Ready. Same-candidate49 E3 arms pass; actual proof
+and unchanged original are retained separately from lossless bounded export.
+Export review Attempt1 cycle2 Ready. First runtime1000-settled/100-pending
+invocation refused before payload: equal heap bytes had distinct JSON integer
+node types. Research-backed strict integral fix passes8 focused tests; fresh
+Attempt2 cycle1 review Ready and financial98/98 pass; fresh current49 passed.
+Second bootstrap completed2100 actions/2101 histories/five physical checkpoints,
+then managed child failed count parity: LongNode vs parsed IntNode2101. Strict
+integral correction passed99 financial tests and whole-code Attempt2 cycle2 Ready.
+Fresh49 then passed and actual1000-settled/100-pending diagnostic qualified all
+seven physical checkpoints, separate-JVM recovery and complete result-only replay;
+independent actual qualification instance2 Ready. Owner/history parity verified
+from complete raw facts. Failed runs and actual stopped-broker readbacks retained.
+
+Integrated compact reference preserves complete facts using canonical leaf strings.
+Whole-code Attempt3 cycle1 Ready, financial109/109, independent Node125/125;
+unchanged Node source retains exact CI274/274 scope. Current compact snapshot binds
+36 source files/97 classes; fresh compact49 and1000/100 diagnostic passed.
+Independent actual instance3of3 Ready: every source/history/genesis/policy/owner
+equal baseline; separate child/replay/seven physical checkpoints/cleanup verified.
+Compact sampled peaks higher by16,011,784 parent and40,031,248 child bytes; no
+causal or capacity inference. Prospective retained floor664,800,000 bytes exceeds
+644,245,094 gate; complete finite upper absent. Ordinary/aged ladder remains blocked.
+[Focused E4 verification](../../evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json).
+Reviewed code commit `17409ac2`; [Reef PR477](https://github.com/dills122/reef/pull/477)
+draft above PR475. Proof published at immutable [Records `87242fe0`](https://github.com/dills122/reef-records/tree/87242fe0415a80a9934846686cd41fc8c08cad6c/records/reef/docs/evidence/calcify-financial-sprint1/e4-session-2026-10-05-29a8926d33f9); [Records PR9](https://github.com/dills122/reef-records/pull/9) draft above PR8. Fresh remote clone verified all24,719 blobs/843,777,692 bytes, including failed runs and reviews. No tracked bulk removed. Final documentation-head hosted CI tracked on PR477.
+[Pure allocation profile and review](https://github.com/dills122/reef-records/tree/b9b0e17cbec9cb18e7d6ade3ea05eaff26129702/records/reef/docs/evidence/calcify-financial-sprint1/e4-reference-allocation-2026-10-05-bf04ead83d8b) independently Ready;
+accept allocation +5.59%, final digest -88.91%, combined +2.85% for identical2101
+pre-parsed histories. Fixed arm order/mapper lifecycle limits; no driver-peak cause
+or heap-upper claim. All31 supplemental blobs/5,956,080 bytes remotely verified.
+Code readiness grants no ordinary rate qualification.
+
+Earlier ordinary-shape2500×60s arm refused by scoped source/build lower-bound model:
+map entries alone732000000B exceed strict644245094B heap gate. Keep refusal until
+retained shape and complete verification/recovery have new supported admission
+model. Compact observer prototype passed independent bounded review and12212 checks;
+now integrated with whole-code acceptance; current compact actual bounded qualification Ready. No production financial authority or reservation decision.
+
 ## October5 heap protection continuation
 
 Branch `codex/calcify-heap-protection`, base E3 checkpoint `3ce2bdf2`.
