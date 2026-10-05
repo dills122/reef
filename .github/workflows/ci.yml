@@ -360,6 +360,8 @@ jobs:
             scripts/dev/projection-replay-proof.test.mjs \
             scripts/dev/calcify-direct-capacity.test.mjs \
             scripts/dev/calcify-financial/record-attempt.test.mjs \
+            scripts/dev/calcify-financial/broker-proof.test.mjs \
+            scripts/dev/calcify-financial/proof-supervisor.test.mjs \
             scripts/dev/calcify-financial/reservation-model.test.mjs \
             scripts/dev/calcify-financial/gate-model.test.mjs \
             scripts/dev/calcify-financial/rate-proof.test.mjs \

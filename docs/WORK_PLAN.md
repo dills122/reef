@@ -18,7 +18,55 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify E3 continuation — October 5, 2026
+
+Active branch `codex/calcify-planning-readiness`, baseline `a6ddafbb`.
+Current session explicitly authorizes new bounded milestone reviews: three cycles
+per attempt, research between attempts, maximum three attempts. Historical cap7
+and original proof remain dated evidence; neither count is reset.
+
+Test-only candidate adds four external fault controls and shared partition-cut
+certification at worker activation. Actual committed source offsets, topic UUIDs,
+coverage/history/full semantic state and framework group checkpoint stay separate.
+Exact quartet uses isolated mixed-cut refusal plus real new-directory restore;
+no injected mixed RocksDB/changelog restore claim.
+
+Candidate checks: financial Kotlin **45/45**, exact Node CI **216/216**, zero
+failures/skips. Recovery guard Attempt2 cycle2 Ready for bounded live proof.
+Real owned recovery smoke passes: four parent `starting` observations with actual
+`du`, fixed 3 GiB target charge, healthy final sample, CLI exit0 and clean stop;
+three named volumes retained. Candidate full external4/4, quartet restore,
+core24/24 and golden20/20 oracle/complete-history checks pass on identical source/
+build/fixture hashes. [Focused candidate verification](evidence/calcify-financial-sprint1/e3-verification-2026-10-05.json)
+records exact scope and prior failures. Final independent review **Ready**, no actionable findings: M0 Attempt2 cycle3,
+M1 Attempt1 cycle3, M2 Attempt1 cycle2. Reviewer verifies49 candidate arms,246
+resource samples and fresh Node60/60. Bounded E3 acceptance/retention complete.
+[Full proof](https://github.com/dills122/reef-records/tree/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75) and [independent report](https://github.com/dills122/reef-records/blob/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75/integration-review/final2-review/report.md) pinned to `ed6faadf`;
+1358 remote blobs/53,415,268 bytes verified exact. [Records PR7](https://github.com/dills122/reef-records/pull/7) draft,
+landing pending; no tracked bulk removed. Product checkpoint `c4d332a0` holds
+reviewed code; actual runs bind prior dirty/new source/build hashes.
+
+Next E4 slice: actual applied maximum-heap admission guard, recoverable ACK
+membership, distinct physical-byte metrics, producer/observer calibration through
+restore. Existing financial rate assessment remains LIMITED. Reservation owner
+acceptance, matcher identity and production financial authority remain separate.
+
 ## Calcify sprint1 verification — October5 UTC / October4 local, 2026
+
+Merged-source reconciliation October 4 local: `origin/master` at `a6ddafbb`,
+[PR #473](https://github.com/dills122/reef/pull/473) merged; required CI passed.
+This chat's clean worktree updated from `97924e15` on
+`codex/calcify-planning-readiness`. Primary checkout remains on its existing dirty
+planning branch; unrelated edits preserved. No Calcify PR remained open at that reconciliation.
+
+| Merged slice | PRs | Resulting scope |
+| --- | --- | --- |
+| Phase 1 | #429, #430 | Opt-in commitment/extractor/verifier/receipt path |
+| Phase 2 | #431, #433 | Full-fact managed resolver and run-scoped matching |
+| Correctness and CI | #435, #436, #438, #439, #440, #461, #463, #465 | Receipt integration tests, run identity, retention/topic binding, hidden-order facts and matching fixes |
+| Throughput and overview | #458, #462 | Flow reference; local RF1 standing-liquidity D7 pass at 10,425.19 verified trades/s for 300s |
+| Financial planning/preparation | #466, #472 | Proposed architecture/proof plan and frozen E0 inputs |
+| Financial experiments | #473 | Test-only kernel/oracle, reservation/gate models and bounded RF3 correctness proof |
 
 Branch `codex/calcify-sprint1-experiments`; recovered test-only source preserved,
 primary dirty checkout untouched. [Focused checkpoint](evidence/calcify-financial-sprint1/README.md),
@@ -37,11 +85,31 @@ write-caching/8 MiB settings verified on 132 topics. Sampled maximum 4.45 GiB;
 Fresh Node154/154; retained identical-code financial27/27 and offline module
 775 reported passes/20 skips/zero failures. No DB integration or capacity claim.
 
-Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27
-activation and E4 heap/ACK/physical-byte/calibration gates remain open. Next: close
+At original checkpoint, full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK/A10B27
+activation and E4 heap/ACK/physical-byte/calibration gates remained open. Next: close
 missing fault/activation acceptance cases before E4 rate qualification. Reservation
 acceptance and matcher identity integration remain. No full sprint/cutover sign-off.
 Cap 7 used; material changes need human review extension.
+
+Next bounded slice: extend test-only E3 adapter/probes with one-broker outage and majority intact,
+stale-owner takeover, producer failure, committed-before-controller-ACK and exact
+A10/B27 certified activation. Freeze each failure trigger and oracle/cut assertion
+before execution; preserve original 44-arm proof as its own software scope.
+Recheck isolated RF3 profile, image/build hashes, ownership and resource guards.
+Pass requires exact committed history/state/oracle agreement, once-only financial
+IDs, refusal on missing history and no old-output republication during restore.
+
+After E3 acceptance: apply/test E4 heap guard, prove durable ACK membership,
+measure physical replicated bytes and calibrate producer/observer before rate loads.
+Reservation policy and live matcher identity need separate owner/source decisions;
+synthetic financial proof does not close those gates. Records PR #6 remains open
+at `ef6e48ee`; immutable proof bytes are published, archive merge still pending.
+Fresh local preparation check: focused financial Node suite 54/54 passes.
+
+Documentation completion: current board/navigation, discovery scope, phase overview,
+RFC status link and active handoff reconciled. No runtime/contracts/accepted authority change.
+Retention no-op: no standalone record or evidence bundle superseded; historical
+proof and existing immutable Records links preserved.
 
 [Bulk reviews/proof](https://github.com/dills122/reef-records/tree/b5d868b69132e85cdf74e4fc9c948f01eafc74c9/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-05-f22b2f85) only in Records; focused verification and executable
 fixtures remain in Reef. Prior failures immutable. Completion/retention pass updates

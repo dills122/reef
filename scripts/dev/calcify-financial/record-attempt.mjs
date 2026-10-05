@@ -10,7 +10,7 @@ const [id, cwdArg, command, ...args] = process.argv.slice(2);
 if (!id || !cwdArg || !command || !/^[a-z0-9-]+$/.test(id)) throw Error('usage: record-attempt.mjs ID CWD COMMAND [ARGS]');
 const root = resolve(import.meta.dirname, '../../..');
 const cwd = resolve(root, cwdArg);
-const dir = resolve(root, 'docs/evidence/calcify-financial-sprint1/raw');
+const dir = resolve(root, process.env.CALCIFY_FINANCIAL_ATTEMPT_DIR || '.planning/calcify-financial-proof/attempts');
 await mkdir(dir, { recursive: true });
 const collision = await access(resolve(dir, `${id}.stdout.log`)).then(() => true, () => false);
 if (collision) throw Error(`attempt ${id} exists; choose new ID to preserve prior evidence`);

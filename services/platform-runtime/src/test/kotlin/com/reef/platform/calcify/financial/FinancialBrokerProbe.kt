@@ -9,6 +9,13 @@ import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.Future
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.producer.Callback
+import org.apache.kafka.clients.producer.Producer
+import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -40,7 +47,7 @@ object FinancialBrokerProbe {
         val mode = args[0]; val broker = args[1]; val prefix = args[2]
         val config = json.readTree(Files.readString(Path.of(args[3]))) as ObjectNode
         val cohortHash = sha(canonical(config))
-        if (mode in setOf("worker", "observe", "observe-prefix", "reconstruct")) {
+        if (mode in setOf("worker", "observe", "observe-prefix", "reconstruct", "reconstruct-prefix")) {
             val manifest = json.readTree(Files.readString(Path.of(args[3] + ".accepted.json")))
             val unsigned = manifest.deepCopy<ObjectNode>(); unsigned.remove("checksum")
             require(manifest["checksum"].asText() == sha(canonical(unsigned)) && manifest["cohortSha256"].asText() == cohortHash) { "accepted source manifest checksum" }
@@ -108,6 +115,7 @@ object FinancialBrokerProbe {
             "observe-prefix" -> observe(broker, prefix, config, args.getOrNull(4)?.toLong() ?: 30000, limit = args[5].toInt())
             "observe" -> observe(broker, prefix, config, args.getOrNull(4)?.toLong() ?: 30000)
             "reconstruct" -> observe(broker, prefix, config, args.getOrNull(4)?.toLong() ?: 30000, reconstruct = true)
+            "reconstruct-prefix" -> observe(broker, prefix, config, args[4].toLong(), reconstruct = true, limit = args[5].toInt())
             else -> error("unknown mode $mode")
         }
     }
@@ -131,14 +139,37 @@ object FinancialBrokerProbe {
         })
         val props = workerProperties(broker, app, stateDir, config, fault)
         val failed = CountDownLatch(1)
-        val streams = KafkaStreams(topology, props)
+        val clients = object : DefaultKafkaClientSupplier() {
+            override fun getProducer(config: MutableMap<String, Any>): Producer<ByteArray, ByteArray> {
+                val delegate = super.getProducer(config)
+                return object : Producer<ByteArray, ByteArray> by delegate {
+                    override fun send(record: ProducerRecord<ByteArray, ByteArray>, callback: Callback?): Future<RecordMetadata> {
+                        try {
+                            return delegate.send(record, Callback { metadata, failure ->
+                                if (failure != null) producerFailure("send", failure, record.topic())
+                                callback?.onCompletion(metadata, failure)
+                            })
+                        } catch (failure: Exception) { producerFailure("send", failure, record.topic()); throw failure }
+                    }
+                    override fun sendOffsetsToTransaction(offsets: MutableMap<TopicPartition, OffsetAndMetadata>, group: ConsumerGroupMetadata) {
+                        try { delegate.sendOffsetsToTransaction(offsets, group) }
+                        catch (failure: Exception) { producerFailure("sendOffsetsToTransaction", failure, group.groupId()); throw failure }
+                    }
+                    override fun commitTransaction() {
+                        try { delegate.commitTransaction() }
+                        catch (failure: Exception) { producerFailure("commitTransaction", failure, app); throw failure }
+                    }
+                }
+            }
+        }
+        val streams = KafkaStreams(topology, props, clients)
         streams.setUncaughtExceptionHandler { failure ->
             emit(mapOf("halted" to failure.toString(), "cacheInvalidated" to true))
             failed.countDown(); StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT
         }
         streams.setStateListener { next, _ -> if (next == KafkaStreams.State.RUNNING) emit(mapOf("frameworkRunningMs" to (System.nanoTime() - started) / 1_000_000)) }
         Runtime.getRuntime().addShutdownHook(Thread { streams.close(Duration.ofSeconds(10)) })
-        emit(mapOf("processStarted" to true, "guarantee" to "exactly_once_v2", "commitIntervalMs" to (config["commitIntervalMs"]?.asInt() ?: 60000), "stateDir" to stateDir))
+        emit(mapOf("processStarted" to true, "guarantee" to "exactly_once_v2", "commitIntervalMs" to props[StreamsConfig.COMMIT_INTERVAL_MS_CONFIG], "transactionTimeoutMs" to props[StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG)], "stateDir" to stateDir))
         streams.start()
         if (failed.await(30, TimeUnit.MINUTES)) { streams.close(Duration.ofSeconds(10)); error("financial worker failed; caches discarded") }
     }
@@ -155,8 +186,7 @@ object FinancialBrokerProbe {
             .addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("financial-state"), Serdes.String(), Serdes.String()).withCachingDisabled(), "financial")
             .addSink("financial-results", "$prefix-results", StringSerializer(), object : Serializer<String> {
                 override fun serialize(topic: String?, data: String?): ByteArray? {
-                    if (fault == "serialization" && data?.contains("\"SETTLED\"") == true) throw IllegalStateException("injected financial serializer failure")
-                    return data?.toByteArray(Charsets.UTF_8)
+                    return outputBytes(fault, data)
                 }
             }, "financial")
     }
@@ -171,63 +201,25 @@ object FinancialBrokerProbe {
         @Volatile private var pausePending = false
         override fun init(context: ProcessorContext<String, String>) {
             this.context = context; store = context.getStateStore("financial-state")
-            if (fault == "pause") Thread { System.`in`.bufferedReader().forEachLine { if (it == "resume") resume.release() } }.apply { isDaemon = true; start() }
+            if (fault in setOf("pause", "stale-owner")) Thread { System.`in`.bufferedReader().forEachLine { if (it == "resume") resume.release() } }.apply { isDaemon = true; start() }
             // Cold recovery only. Hot processing performs known-key reads/writes from bounded semantic deltas.
-            val histories = mutableMapOf<String, MutableList<JsonNode>>()
-            store.all().use { rows -> while (rows.hasNext()) {
-                val row = rows.next()
-                if (row.key.startsWith("h/")) {
-                    val wrapper = json.readTree(row.value)
-                    histories.getOrPut(wrapper["domain"].asText()) { mutableListOf() }.add(wrapper["record"])
-                }
-            } }
-            histories.forEach { (domain, records) ->
-                val ordered = records.sortedBy { it["sequence"].asLong() }
-                verifyHistory(ordered)
-                kernels[domain] = FinancialKernel.replay(ordered, retainHistory = false)
-            }
-            val certificate = store.get("cert/0")?.let { json.readTree(it) }
-            if (certificate != null) {
-                require(certificate["sourceUuid"].asText() == sourceUuid) { "certificate source generation mismatch" }
-                val member = membership(certificate["ordinal"].asLong())
-                require(member["offset"].asLong() == certificate["offset"].asLong()) { "certificate lost explicit input membership" }
-                certificate["owners"].fields().forEachRemaining { (domain, cut) ->
-                    val restored = kernels[domain] ?: error("certificate domain history missing")
-                    require(restored.historySequence() == cut["sequence"].asLong() && restored.lastRecord()!!["checksum"].asText() == cut["checksum"].asText()) { "mixed-age owner certificate" }
-                }
-                require(certificate["owners"].size() == kernels.size) { "undeclared restored owner" }
-            } else require(kernels.isEmpty()) { "history without partition certificate" }
             val coverage = mutableListOf<JsonNode>()
             val historyWrappers = mutableMapOf<String, JsonNode>()
+            val semanticState = mutableMapOf<String, JsonNode>()
             store.all().use { rows -> while (rows.hasNext()) {
                 val row = rows.next()
-                if (row.key.startsWith("c/")) coverage.add(json.readTree(row.value))
-                if (row.key.startsWith("h/")) historyWrappers[row.key] = json.readTree(row.value)
-            } }
-            val heads = mutableMapOf<String, JsonNode>()
-            var priorPhysical = -1L; val referencedHistory = mutableSetOf<String>()
-            coverage.sortedBy { it["ordinal"].asLong() }.forEachIndexed { index, row ->
-                val domain = row["domain"].asText(); val member = membership(index.toLong())
-                require(row["ordinal"].asLong() == index.toLong() && row["offset"].asLong() > priorPhysical && row["offset"] == member["offset"] && row["payloadSha256"] == member["payloadSha256"] && row["uuid"].asText() == sourceUuid && row["authoritySha256"].asText() == authorityHash && member["domain"].asText() == domain) { "coverage source membership mismatch" }
-                val before = heads[domain] ?: json.valueToTree(mapOf("sequence" to 0L, "checksum" to "GENESIS"))
-                require(canonical(before) == canonical(row["headBefore"])) { "coverage owner prefix gap" }
-                row["history"].forEach { reference ->
-                    val key = "h/$domain/${reference["sequence"].asLong().toString().padStart(20, '0')}"
-                    val wrapper = historyWrappers[key] ?: error("coverage history missing")
-                    require(wrapper["record"]["checksum"] == reference["checksum"] && wrapper["source"]["ordinal"].asLong() == index.toLong() && wrapper["source"]["offset"] == row["offset"] && wrapper["source"]["uuid"] == row["uuid"] && wrapper["source"]["payloadSha256"] == row["payloadSha256"] && referencedHistory.add(key)) { "history source causation mismatch" }
+                when {
+                    row.key.startsWith("c/") -> coverage.add(json.readTree(row.value))
+                    row.key.startsWith("h/") -> historyWrappers[row.key] = json.readTree(row.value)
+                    row.key.startsWith("s/") -> semanticState[row.key] = json.readTree(row.value)
                 }
-                heads[domain] = row["headAfter"]; priorPhysical = row["offset"].asLong()
-            }
-            if (certificate != null) require(coverage.size.toLong() == certificate["ordinal"].asLong() + 1 && priorPhysical == certificate["offset"].asLong() && canonical(json.valueToTree(heads)) == canonical(certificate["owners"]) && certificate["authoritySha256"].asText() == authorityHash && referencedHistory.size == historyWrappers.size) { "uncertified partition/owner coverage" }
-            else require(coverage.isEmpty() && historyWrappers.isEmpty()) { "coverage without certified cut" }
-            val expectedKeys = mutableMapOf<String, String>()
-            histories.forEach { (domain, records) -> records.sortedBy { it["sequence"].asLong() }.forEach { history -> history["changes"].forEach { change ->
-                val key = "s/" + json.writeValueAsString(listOf(domain) + change["path"].map { it.asText() })
-                if (change["after"].isNull && change["path"].size() > 1) expectedKeys.remove(key) else expectedKeys[key] = canonical(change["after"])
-            } } }
-            val actualKeys = mutableMapOf<String, String>()
-            store.all().use { rows -> while (rows.hasNext()) { val row = rows.next(); if (row.key.startsWith("s/")) actualKeys[row.key] = canonical(json.readTree(row.value)) } }
-            require(actualKeys == expectedKeys) { "persistent semantic state/history mismatch" }
+            } }
+            val certificate = store.get("cert/0")?.let { json.readTree(it) }
+            val acceptedMembers = config["acceptedManifest"]?.get("membership")?.toList()
+                ?: coverage.indices.map { membership(it.toLong()) }
+            val restored = FinancialPartitionCut.validateActivation(config, sourceUuid,
+                acceptedMembers, certificate, coverage, historyWrappers, semanticState)
+            kernels.putAll(restored.owners)
             emit(mapOf("certifiedCatchupDomains" to kernels.size, "partitionCut" to store.get("cert/0")))
         }
         override fun process(record: Record<String, String>) {
@@ -281,6 +273,11 @@ object FinancialBrokerProbe {
             store.put("c/${ordinal.toString().padStart(20, '0')}", json.writeValueAsString(mapOf("ordinal" to ordinal, "offset" to offset, "uuid" to sourceUuid, "authoritySha256" to authorityHash, "domain" to domain, "payloadSha256" to sourceMember["payloadSha256"].asText(), "headBefore" to priorHead, "headAfter" to afterHead, "history" to records.map { mapOf("sequence" to it["sequence"].asLong(), "checksum" to it["checksum"].asText()) })))
             store.put("cert/0", json.writeValueAsString(mapOf("offset" to offset, "ordinal" to ordinal, "sourceUuid" to sourceUuid, "authoritySha256" to authorityHash, "owners" to kernels.mapValues { (_, owner) -> mapOf("sequence" to owner.historySequence(), "checksum" to owner.lastRecord()!!["checksum"].asText()) })))
             val output = json.writeValueAsString(mapOf("domain" to domain, "inputOffset" to offset, "inputOrdinal" to ordinal, "records" to records, "disposition" to result?.get("disposition")?.asText()))
+            if (fault == "stale-owner" && ordinal == config["pauseBeforeOrdinal"].asLong()) {
+                emit(mapOf("faultBoundary" to "before-forward", "inputOrdinal" to ordinal, "inputOffset" to offset, "storeCertificateCandidate" to store.get("cert/0"), "outputBytes" to output.toByteArray(Charsets.UTF_8).size, "commitRequested" to false))
+                resume.acquire()
+                emit(mapOf("faultBoundary" to "stale-owner-resumed", "inputOrdinal" to ordinal, "inputOffset" to offset))
+            }
             context.forward(Record(domain, output, record.timestamp()))
             if (fault == "forward" && domain == "B" && records.any { it["input"]?.get("kind")?.asText() == "SETTLE" }) Runtime.getRuntime().halt(91)
             if (envelope["commit"]?.asBoolean() == true) context.commit()
@@ -298,6 +295,7 @@ object FinancialBrokerProbe {
         val histories = verifier.histories
         var covered = -1L; var physical = -1L; var business = 0; var settled = 0
         var initialEnd = 0L; var finalEnd = 0L; val outputOffsets = mutableListOf<Long>()
+        val committedOutputs = mutableListOf<JsonNode>()
         KafkaConsumer(properties(broker).apply { put("enable.auto.commit", false); put("auto.offset.reset", "earliest"); put("isolation.level", "read_committed") }, StringDeserializer(), StringDeserializer()).use { consumer ->
             val partition = TopicPartition("$prefix-results", 0)
             consumer.assign(listOf(partition)); consumer.seekToBeginning(listOf(partition))
@@ -313,7 +311,7 @@ object FinancialBrokerProbe {
                     val member = config["acceptedManifest"]["membership"][covered.toInt()]
                     require(member["offset"].asLong() == output["inputOffset"].asLong() && member["domain"].asText() == domain) { "output source membership mismatch" }
                     physical = output["inputOffset"].asLong()
-                    verifier.accept(output)
+                    verifier.accept(output); committedOutputs.add(output)
                     business = verifier.business; settled = verifier.settled
                     if (covered + 1 == limit.toLong()) quietUntil = System.nanoTime() + 1_500_000_000L
                 }
@@ -322,25 +320,49 @@ object FinancialBrokerProbe {
             finalEnd = consumer.endOffsets(listOf(partition)).getValue(partition)
         }
         val complete = covered + 1 == limit.toLong()
-        if (complete) verifier.requirePrefix(limit)
+        val inputPartition = TopicPartition("$prefix-input", 0)
+        val groupCheckpoint = AdminClient.create(properties(broker)).use { admin ->
+            admin.listConsumerGroupOffsets("$prefix-app").partitionsToOffsetAndMetadata().get(10, TimeUnit.SECONDS)[inputPartition]?.offset() ?: -1L
+        }
+        val inputEnd = KafkaConsumer(properties(broker).apply { put("isolation.level", "read_committed") }, StringDeserializer(), StringDeserializer()).use { consumer ->
+            consumer.endOffsets(listOf(inputPartition), Duration.ofSeconds(10)).getValue(inputPartition)
+        }
+        if (complete) {
+            verifier.requirePrefix(limit)
+            require(groupCheckpoint in (physical + 1)..inputEnd) { "committed results/input checkpoint disagreement" }
+        }
         if (reconstruct) {
             require(complete) { "cannot certify incomplete partition coverage" }
-            val cuts = histories.mapValues { (_, rows) -> rows.last()["sequence"].asLong() }
-            fun certify(snapshots: Map<String, Long>) {
-                require(snapshots.keys == cuts.keys) { "missing domain snapshot" }
-                snapshots.forEach { (domain, seq) -> require(seq == cuts.getValue(domain)) { "mixed-age snapshot at declared partition cut domain=$domain snapshot=$seq required=${cuts[domain]}" } }
+            val manifest = config["acceptedManifest"]
+            val cut = FinancialCommittedCut.build(config, manifest, committedOutputs)
+            val sourceUuid = manifest["inputTopicId"].asText()
+            val members = manifest["membership"].toList()
+            val rebuilt = FinancialPartitionCut.reconstruct(config, sourceUuid, members, cut.certificate, cut.coverage, cut.histories)
+            val quartet = config.path("caseId").asText() == "activation-quartet"
+            if (quartet) {
+                require(limit == 4 && owners["A"]!!["balances"]["buyerCash"].asText() == "15" && owners["B"]!!["balances"]["buyerCash"].asText() == "27") { "exact quartet not observed" }
+                val mixed = cut.snapshots.first().filterKeys { json.readTree(it.removePrefix("s/"))[0].asText() == "A" } +
+                    cut.snapshots.last().filterKeys { json.readTree(it.removePrefix("s/"))[0].asText() == "B" }
+                require(mixed["s/" + json.writeValueAsString(listOf("A", "balances", "buyerCash"))]!!.asText() == "10") { "mixed A snapshot differs from recorded A+10" }
+                require(runCatching { FinancialPartitionCut.validateActivation(config, sourceUuid, members, cut.certificate, cut.coverage, cut.histories, mixed) }.isFailure) { "mixed A10/B27 activation allowed" }
+            } else {
+                val mixedCertificate = cut.certificate.deepCopy<ObjectNode>()
+                val oldest = cut.histories.values.first()
+                (mixedCertificate["owners"] as ObjectNode).set<JsonNode>(oldest["domain"].asText(),
+                    json.valueToTree(mapOf("sequence" to oldest["record"]["sequence"].asLong(), "checksum" to oldest["record"]["checksum"].asText())))
+                require(runCatching { FinancialPartitionCut.reconstruct(config, sourceUuid, members, mixedCertificate, cut.coverage, cut.histories) }.isFailure) { "mixed owner certificate allowed" }
             }
-            certify(cuts)
-            val mixed = cuts.toMutableMap()
-            val oldest = histories.entries.firstOrNull { it.value.size > 1 } ?: error("reconstruction cohort needs history")
-            mixed[oldest.key] = oldest.value[if (oldest.value.size > 2) 1 else 0]["sequence"].asLong()
-            require(runCatching { certify(mixed) }.isFailure) { "mixed-age activation was allowed" }
-            val domainRecords = oldest.value
-            val missing = domainRecords.filterIndexed { index, _ -> index != 1 }
-            require(runCatching { verifyHistory(missing) }.isFailure || missing.last()["sequence"].asLong() != cuts.getValue(oldest.key)) { "missing history activation was allowed" }
-            emit(mapOf("isolatedReconstruction" to mapOf("inputPartitionOrdinal" to covered, "inputPartitionOffset" to physical, "ownerHistoryCuts" to cuts, "mixedAgeRefused" to true, "missingHistoryRefused" to true, "repairFromCompleteHistory" to true, "committedEndBeforeReconstruction" to finalEnd, "scope" to "read_committed result-only reconstruction; no local or changelog reads")))
+            val missingKey = if (quartet) "h/A/00000000000000000003" else cut.histories.keys.first()
+            require(cut.histories.containsKey(missingKey)) { "missing-history control not applicable" }
+            require(runCatching { FinancialPartitionCut.reconstruct(config, sourceUuid, members, cut.certificate, cut.coverage, cut.histories.filterKeys { it != missingKey }) }.isFailure) { "incomplete history activation allowed" }
+            require(rebuilt.semanticState == cut.snapshots.last()) { "complete history changed semantic state" }
+            emit(mapOf("isolatedReconstruction" to mapOf("inputPartitionOrdinal" to covered, "inputPartitionOffset" to physical,
+                "capturedInputGroupCheckpoint" to groupCheckpoint, "inputReadCommittedEndOffset" to inputEnd,
+                "sourceDerivedCertificate" to cut.certificate, "mixedAgeRefused" to true, "missingHistoryRefused" to true,
+                "repairFromCompleteHistory" to true, "exactQuartetA15B27" to quartet, "committedEndBeforeReconstruction" to finalEnd,
+                "scope" to "isolated activation request from actual read_committed outputs; same mandatory startup verifier; no injected mixed RocksDB/changelog restore")))
         }
-        emit(mapOf("result" to mapOf("initialCommittedEndOffset" to initialEnd, "finalCommittedEndOffset" to finalEnd, "resultOffsets" to outputOffsets, "ownerSnapshots" to owners, "scope" to (if (limit == config["inputs"].size()) "full input/phase completion" else "certified prefix including pending phases"), "consecutiveResultOffsets" to outputOffsets.zipWithNext().all { (left, right) -> right == left + 1 }, "coveredInputs" to covered + 1, "expectedInputs" to limit, "businessDecisions" to business, "settlements" to settled, "domains" to owners.size, "readCommittedOracle" to true, "pass" to complete)))
+        emit(mapOf("result" to mapOf("initialCommittedEndOffset" to initialEnd, "finalCommittedEndOffset" to finalEnd, "resultOffsets" to outputOffsets, "ownerSnapshots" to owners, "scope" to (if (limit == config["inputs"].size()) "full input/phase completion" else "certified prefix including pending phases"), "consecutiveResultOffsets" to outputOffsets.zipWithNext().all { (left, right) -> right == left + 1 }, "coveredInputs" to covered + 1, "lastInputOffset" to physical, "inputGroupCheckpoint" to groupCheckpoint, "inputReadCommittedEndOffset" to inputEnd, "ownerCuts" to histories.mapValues { (_, rows) -> mapOf("sequence" to rows.last()["sequence"].asLong(), "checksum" to rows.last()["checksum"].asText()) }, "expectedInputs" to limit, "businessDecisions" to business, "settlements" to settled, "domains" to owners.size, "readCommittedOracle" to true, "pass" to complete)))
     }
 
     /** Reference dispatch derives expected decisions from accepted inputs, including zero-record deliveries. */
@@ -476,7 +498,24 @@ object FinancialBrokerProbe {
         put("default.production.exception.handler", "org.apache.kafka.streams.errors.DefaultProductionExceptionHandler")
         put("processing.exception.handler", "org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler")
         put("consumer.max.poll.records", config["maxPollRecords"]?.asInt() ?: 128); put("consumer.max.poll.interval.ms", 10000); put("consumer.session.timeout.ms", 6000); put("consumer.heartbeat.interval.ms", 1000)
-        if (fault == "production") put("producer.max.request.size", 512)
+        if (fault == "production") put("producer.max.request.size", 131072)
+        if (fault == "stale-owner") {
+            // Bound paused producer transaction lifetime so replacement changelog restoration cannot wait two minutes.
+            put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000)
+            put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), 30000)
+        }
+    }
+
+    internal fun outputBytes(fault: String, data: String?): ByteArray? {
+        if (data == null) return null
+        if (fault == "serialization" && data.contains("\"SETTLED\"")) throw IllegalStateException("injected financial serializer failure")
+        val target = fault == "production" && json.readTree(data).let { it["domain"]?.asText() == "B" && it["disposition"]?.asText() == "SETTLED" }
+        return (if (target) data + " ".repeat(131072) else data).toByteArray(Charsets.UTF_8)
+    }
+
+    private fun producerFailure(boundary: String, failure: Exception, resource: String) {
+        val causes = generateSequence<Throwable>(failure) { it.cause }.take(12).map { it.javaClass.name }.toList()
+        emit(mapOf("producerBoundary" to boundary, "failureClass" to failure.javaClass.name, "causeClasses" to causes, "resource" to resource, "failure" to failure.toString()))
     }
 
     private fun properties(broker: String) = Properties().apply { put("bootstrap.servers", broker) }

@@ -6,6 +6,22 @@ checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
+## Current E3 continuation
+
+October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
+[Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
+owns candidate status. New test-only external faults and partition-cut verifier
+remain under acceptance review. Kotlin45/45 and exact Node CI216/216 pass.
+Reviewed recovery guard passes real parent-observed `starting`/measured-disk/
+healthy recovery smoke; no financial workload in that smoke. Candidate external4/4, quartet, core24/24 and golden20/20 pass;
+[focused current verification](e3-verification-2026-10-05.json) records same-build
+scope, failures, timing and resources. Independent integrated review Ready: M0 Attempt2 cycle3, M1 Attempt1 cycle3,
+M2 Attempt1 cycle2; no findings, fresh Node60/60. [Complete proof](https://github.com/dills122/reef-records/tree/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75) and [review](https://github.com/dills122/reef-records/blob/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75/integration-review/final2-review/report.md) published;
+1358 remote blobs/53,415,268 bytes exact. [Records PR7](https://github.com/dills122/reef-records/pull/7) draft, landing pending.
+No tracked source removed. Historical proof below retains
+its original hashes. Current explicit review authorization preserves historical
+cap7 and adds bounded milestone sessions, without resetting prior counts.
+
 ## OCR follow-up
 
 Checkpoint now versioned and validated before state assignment. Invalid resource
@@ -54,8 +70,8 @@ Last active sample 9,114,636,288 bytes; stopped allocation 13,537,280 bytes afte
 preallocation reclamation. Historical failure remains immutable. Original 16 MiB
 proposal never applied. Initial metadata and assessment errors preserved with corrections.
 
-Full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK and
-A10B27 certified activation matrix remains open. E4 heap/ACK membership/physical-byte/
+At original checkpoint, full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK and
+A10B27 certified activation remained open; current continuation above closes bounded E3. E4 heap/ACK membership/physical-byte/
 calibration gates, reservation acceptance and matcher identity integration remain.
 No full sprint, capacity, production or cutover sign-off.
 

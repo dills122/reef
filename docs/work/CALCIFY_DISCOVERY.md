@@ -1,13 +1,20 @@
 # Calcify — post-match redesign discovery
 
-Status: discovery in progress; Phase 1 outline and match-commitment meaning agreed, implementation details open.
+Recorded status: discovery in progress; Phase 1 outline and match-commitment meaning agreed, implementation details open.
 Recorded: 2026-09-28 America/Toronto (2026-09-29 UTC).
 Base: `origin/master` at `368a9247b31c8997c5dd9f51aeb88a911adebfe7` (rollback PR #428 merged).
 Branch: `codex/calcify-discovery`.
 
 Phase 1 implementation checkpoint (2026-09-29): additive opt-in slice and
 local diagnostic evidence live in [CALCIFY_PHASE1_IMPLEMENTATION.md](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md);
-this discovery record still owns open full-design questions.
+this discovery record preserves original questions and rationale.
+
+October 4 reconciliation at `a6ddafbb`: Phases 1/2, commitment wire format and
+run-scoped matching have merged. Below reflects original discovery scope; do not
+schedule its settled items as new work. [System RFC](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md)
+now owns proposed full design and financial proofs; [work plan](../WORK_PLAN.md)
+owns current execution, and [phase overview](../CALCIFY_PHASES_OVERVIEW.md) owns
+implemented flow. Financial authority remains proposed.
 
 ## Purpose and working assumptions
 

@@ -1,11 +1,12 @@
 # Calcify Phases 1 and 2 — flow and wiring
 
-Reference overview checked against merged source on 2026-10-02, base `1c8d9639`.
+Reference flow checked against merged source on 2026-10-02, base `1c8d9639`;
+capacity wording reconciled October 4 against merged `a6ddafbb` and D7 artifacts.
 Execution status belongs in [WORK_PLAN.md](WORK_PLAN.md); measurement and qualification belong in [throughput ledger](THROUGHPUT_BASELINES.md).
 
 **Phase 1 makes each match durably addressable. Phase 2 assembles its complete source context for later post-match processing.**
 
-Both phases have implementation in the repository. Calcify remains opt-in and additive; legacy post-match remains present. Sustained 10,000 resolved commitments/s qualification remains open. This overview explains current component boundaries, not a production cutover or capacity approval.
+Both phases have implementation in the repository. Calcify remains opt-in and additive; legacy post-match remains present. [D7](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md) qualifies local RF1 standing-liquidity flow for 300s at 10,425.19 verified trades/s and 10,440.92 resolved contexts/s. Paired/mixed workloads, RF3 resilience and financial settlement capacity remain open. This overview explains current component boundaries; scoped D7 evidence grants no production cutover.
 
 ## Combined flow
 
@@ -147,7 +148,7 @@ Active facts and completed identities have no automatic TTL. Run-close/frontier 
 
 Goal is 10,000 resolved commitments/trades per second sustained. With one trade per pair of fresh orders, upstream needs roughly 20,000 successful order commands/s. Command throughput and resolved-trade throughput are separate measurements.
 
-Implementation and functional checks do not establish full capacity, fault recovery under sustained load, or production readiness. Consult throughput ledger and original evidence for workload, deployment, rate, lag, reconciliation, and recovery limits.
+Standing liquidity needs one timed aggressor command per trade after untimed maker seeds; D7 qualifies that distinct workload. Implementation and functional checks do not establish general capacity, fault recovery under sustained load, or production readiness. Consult throughput ledger and original evidence for workload, deployment, rate, lag, reconciliation, and recovery limits.
 
 ## Source map
 
