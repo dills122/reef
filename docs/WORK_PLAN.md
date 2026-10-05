@@ -31,7 +31,7 @@ E2 finite156+seeded128 pass. RF3 happy/restart passes. Core10of24/golden9of20
 passed before disk-budget abort; no complete matrix pass or measured capacity.
 
 **Review6of6 Not ready:** P1 proof watchdog fails open on sampling/cleanup error.
-Author fixed guard and supervising controller;11 mock-only controls pass, independent
+Author fixed guard and supervising controller;13 mock-only controls pass, independent
 sign-off pending. New bounded project stopped with volumes preserved;8MiB profile
 not applied and bounded probes unrun. Cap6 exhausted; human extension required.
 Next: fresh review of corrected execution guard, exact profile preflight/readback,

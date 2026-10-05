@@ -63,8 +63,17 @@ Corrected resource_watchdog.py:5s sample/ps timeout,15s compose stop, abort flus
 before cleanup, exact owned Node/Java signals independent of Docker stop, errors retained.
 New supervise_checks.py owns created process groups, requires initial heartbeat,
 detects watcher death/stale heartbeat, terminates own groups then attempts project stop.
-11 mock-only controls pass; no actual Docker/ps/signals in controls. Material behavior
-change needs independent sign-off. remediation-manifest.json freezes helper hashes.
+13 mock-only controls pass; no actual Docker/ps/signals in controls. Material behavior
+change needs independent sign-off. Follow-up self-check reproduced false abort when
+observer exited after attempt append but before wrapper exit. Fixed explicit
+supervisor-finished.json handshake, created only after both wrappers exit0; observer
+keeps sampling until handshake. Real disposable OS process control verifies observer
+exit1 causes both owned probe groups SIGTERM/exit-15 with zero cleanup errors.
+Initial controls recorded EPERM escalating before reaping leader; failures retained.
+Final helper reaps exited leader before escalation; surviving group members still
+receive SIGKILL. No Docker/ps/brokers executed.
+handshake-remediation-manifest.json freezes corrected hashes; original archived helpers
+immutable. [Guard revision](https://github.com/dills122/reef-records/tree/0fd0e45c1efb5464e5308021d4b6834e68b54f76/records/reef/docs/evidence/calcify-financial-sprint1/guard-revision-2026-10-05-f56b30b1).
 
 ## Runtime And Remaining Gates
 

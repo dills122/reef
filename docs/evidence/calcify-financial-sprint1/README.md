@@ -10,8 +10,12 @@ new [8MiB broker profile](broker-profile.json) unrun. Test-only experiments.
 Review6of6: **Not ready** for bounded broker rerun. No new actionable product-source
 defect; P1 operational watchdog fails open on sample/cleanup errors. Author fixed
 bounded deadlines, abort recording and cleanup, added supervising controller;
-11 mock-only controls pass. Material execution change needs fresh independent
+13 mock-only controls pass. Material execution change needs fresh independent
 sign-off; human review-limit extension required. No seventh reviewer started.
+Follow-up self-check found/fixed completion race with explicit wrapper-exit handshake.
+Real disposable-process control confirms observer failure terminates two owned process
+groups with zero cleanup errors after reap-before-escalation fix. Earlier EPERM
+attempts retained; resource sampling simulated, no Docker/ps/broker calls. [Guard revision](https://github.com/dills122/reef-records/tree/0fd0e45c1efb5464e5308021d4b6834e68b54f76/records/reef/docs/evidence/calcify-financial-sprint1/guard-revision-2026-10-05-f56b30b1).
 
 Prior review findings fixed: timeout120s supports60s commit; E4 deadline counts
 cannot exceed final counts; physical-byte overrides cannot undercut conservative

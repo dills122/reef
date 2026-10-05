@@ -10,7 +10,7 @@
     "scope": "All recovered source/config/tests plus bounded operational watchdog",
     "openP1": "Resource watchdog fails open on sample/cleanup failures",
     "productSource": "No new actionable defect in round6;18 software hashes match f75",
-    "remediation": "Author-fixed watcher and new supervisor;11 mock controls pass; no fresh independent sign-off",
+    "remediation": "Author-fixed watcher/supervisor plus explicit completion handshake;13 mocked controls and1real owned-OS-process cleanup control pass; no fresh independent sign-off",
     "furtherReview": "Human review-limit extension required; no seventh instance started"
   },
   "checks": {
@@ -97,8 +97,9 @@
       "clusterProperties": "8MiB log/compacted/transaction coordinator segments; not applied",
       "project": "reef-calcify-financial-s1-bounded",
       "cleanup": "Preflight up succeeded then project stopped; volumes preserved",
-      "guardAuthorTests": 11,
-      "guardIndependentSignoff": false
+      "guardAuthorTests": 13,
+      "guardIndependentSignoff": false,
+      "realProcessCleanupControl": "FinalPASS observerexit1,two owned groups exit-15,zero cleanup errors; initial EPERM attempts retained; sampling simulated,no Docker/ps/brokers"
     }
   },
   "limitations": [
@@ -137,5 +138,17 @@
     "unitTestsPassed": 4,
     "sourceBundleLocalCommit": "fa442bbc5ef9fa7ab33e8ae4e6f128e364a30a95",
     "sourceBundleRemote": "Not published to Reef; only Records remote contains bulk"
+  },
+  "guardRevision": {
+    "commit": "0fd0e45c1efb5464e5308021d4b6834e68b54f76",
+    "bundle": "records/reef/docs/evidence/calcify-financial-sprint1/guard-revision-2026-10-05-f56b30b1",
+    "independentSignoff": false,
+    "files": 25,
+    "bytes": 54968,
+    "remoteBytesVerified": true,
+    "integrity": "PASS1418records",
+    "unitTestsPassed": 4,
+    "ci": "Both PR6 checks PASS",
+    "sourceBundleLocalCommit": "fedb554b811559596d32a084451d9af60e021ca8"
   }
 }
