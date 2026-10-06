@@ -244,6 +244,64 @@ object FinancialRateProbe {
         return FinancialHeapGuard(bounds, estimated, capabilityMax)
     }
 
+    /** Finite empirical resource permission; never an ordinary conservative policy. */
+    internal fun diagnosticDiskBudget(spec: JsonNode): Long {
+        if (!spec.has("resourceProfile")) return DISK_CAP
+        require(spec["resourceProfile"]?.asText() in setOf("financial-empirical-disk16-v1", "financial-empirical-heap8-disk16-v1")) { "EMPIRICAL_RESOURCE_PROFILE_REQUIRED" }
+        return 16L * 1024 * 1024 * 1024
+    }
+    internal fun diagnosticHeapMax(spec: JsonNode): Long =
+        if (spec["resourceProfile"]?.asText() == "financial-empirical-heap8-disk16-v1") FinancialHeapGuard.EMPIRICAL_8G_MAX else FinancialHeapGuard.EMPIRICAL_MAX
+    internal fun validateDiagnosticPolicy(spec: JsonNode) {
+        require(spec["schema"]?.asText() == "financial-empirical-timed-policy-v1"
+            && spec["status"]?.asText() == "FROZEN_EMPIRICAL_DIAGNOSTIC"
+            && spec["purpose"]?.asText() == "EMPIRICAL_TIMED_DIAGNOSTIC"
+            && spec["capacityQualification"]?.isBoolean == true && !spec["capacityQualification"].booleanValue()
+            && spec["heapConservativeBound"]?.isBoolean == true && !spec["heapConservativeBound"].booleanValue()
+            && spec["estimatedHeapBytes"]?.isNull == true && !spec.has("heap")) { "EMPIRICAL_DIAGNOSTIC_SCOPE_REQUIRED" }
+        require(spec["arm"] == node(mapOf("rate" to 2500, "seconds" to 60, "state" to "fresh"))
+            && FinancialHeapBounds.integer(spec["expectedTimedTrades"], "expectedTimedTrades") == 150000L
+            && FinancialHeapBounds.integer(spec["ackJournalMaxBytes"], "ackJournalMaxBytes") == 2L * 1024 * 1024 * 1024
+            && spec["aged"] == node(mapOf("identities" to 0, "pendingItems" to 0))
+            && FinancialHeapBounds.integer(spec["diskBudgetBytes"], "diskBudgetBytes") == diagnosticDiskBudget(spec)
+            && FinancialHeapBounds.integer(spec["diskHeadroomBytes"], "diskHeadroomBytes") == 20L * 1024 * 1024 * 1024) { "EMPIRICAL_FIXED_COUNTS_BUDGET_REQUIRED" }
+        val unsigned = spec.deepCopy<ObjectNode>().apply { remove("policySha256") }
+        require(sha(json.writeValueAsBytes(unsigned)) == spec["policySha256"]?.asText()) { "EMPIRICAL_FROZEN_HASH_REQUIRED" }
+    }
+    private fun diagnosticGuard(spec: JsonNode, specPath: Path, configPath: Path): FinancialHeapGuard {
+        validateDiagnosticPolicy(spec)
+        val root = specPath.toAbsolutePath().parent.toRealPath()
+        fun owned(field: String): Path {
+            require(spec[field]?.isTextual == true)
+            val file = root.resolve(spec[field].asText()).normalize().toRealPath()
+            require(file.startsWith(root) && file != root && Files.isRegularFile(file) && Files.size(file) <= 1024L * 1024)
+            return file
+        }
+        val cap = requireNotNull(spec["capability"]); val correctness = requireNotNull(spec["correctness"])
+        val capabilityFile = owned("capabilityEvidencePath"); val correctnessFile = owned("correctnessEvidencePath")
+        require(shaFile(capabilityFile) == spec["capabilityEvidenceSha256"].asText()
+            && json.readTree(Files.readString(capabilityFile)) == cap) { "EMPIRICAL_RAW_CAPABILITY_REQUIRED" }
+        val correctnessRaw = correctness.deepCopy<ObjectNode>().apply { remove("evidenceSha256") }
+        require(shaFile(correctnessFile) == correctness["evidenceSha256"].asText()
+            && json.readTree(Files.readString(correctnessFile)) == correctnessRaw && correctness["result"].asText() == "PASS") { "EMPIRICAL_RAW_CORRECTNESS_REQUIRED" }
+        val fixture = owned("fixtureEvidencePath")
+        require(shaFile(fixture) == spec["fixtureSha256"].asText() && shaFile(configPath) == cap["configSha256"].asText()) { "EMPIRICAL_FIXTURE_CONFIG_REQUIRED" }
+        val actual = heapCapability(spec["sourceHead"].asText(), fixture, configPath)
+        for (field in listOf("schema", "sourceHead", "fixtureSha256", "configSha256", "buildSha256", "classpathSha256", "javaVersion", "javaVendor", "classpathEntries", "maxHeapBytes", "vmArguments"))
+            require(cap[field] != null && cap[field] == actual[field]) { "EMPIRICAL_CAPABILITY_DRIFT field=$field" }
+        val authorizedHeap = diagnosticHeapMax(spec)
+        require(actual["vmArguments"] == node(listOf("-Xms128m", if (authorizedHeap == FinancialHeapGuard.EMPIRICAL_8G_MAX) "-Xmx8g" else "-Xmx4g"))
+            && actual["maxHeapBytes"].asLong() == authorizedHeap) { "EMPIRICAL_PINNED_VM_REQUIRED" }
+        val sourceRoot = Path.of(spec["sourceRoot"].asText()).toRealPath()
+        require(actual["classpathEntries"].any { it.asText() == sourceRoot.resolve("services/platform-runtime/build/classes/kotlin/test").toString() }) { "EMPIRICAL_SOURCE_BUILD_ROOT" }
+        for ((name, key) in listOf("FinancialKernel.kt" to "kernelSha256", "FinancialBrokerProbe.kt" to "managedAdapterSha256")) {
+            val digest = shaFile(sourceRoot.resolve("services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/$name"))
+            require(digest == spec["runtimeProofHashes"][key].asText() && digest == correctness[key].asText()) { "EMPIRICAL_CORRECTNESS_SOURCE_DRIFT" }
+        }
+        require(json.readTree(Files.readString(configPath))["policy"] == json.readTree(Files.readString(fixture))["policy"]) { "EMPIRICAL_POLICY_FIXTURE" }
+        return FinancialHeapGuard.empiricalTimed(actual["maxHeapBytes"].asLong(), authorizedMax = authorizedHeap)
+    }
+
     internal fun validateBootstrapCounts(spec: JsonNode) {
         require(spec["schema"]?.asText() == "financial-calibration-bootstrap-v1"
             && spec["purpose"]?.asText() == "EMPIRICAL_BOUNDED_DIAGNOSTIC"
@@ -633,14 +691,14 @@ object FinancialRateProbe {
         if (args.firstOrNull() == "self-check") { selfCheck(json.readTree(Files.readString(Path.of(args[1])))["policy"]); return }
         require(args.size >= 4) { "calibrate|run bootstrap financial-s1-prefix config-file --financial-rate-* PATH" }
         val mode = args[0]; val broker = args[1]; val prefix = args[2]
-        require(mode in setOf("calibrate", "run", "bootstrap-calibrate") && prefix.startsWith("financial-s1-"))
-        val bootstrap = mode == "bootstrap-calibrate"; val calibrationMode = mode != "run"
+        require(mode in setOf("calibrate", "run", "bootstrap-calibrate", "diagnostic-run") && prefix.startsWith("financial-s1-"))
+        val bootstrap = mode == "bootstrap-calibrate"; val diagnostic = mode == "diagnostic-run"; val calibrationMode = mode != "run" && !diagnostic
         val configPath = Path.of(args[3])
         fun flag(name: String): Path = Path.of(args[args.indexOf(name).also { require(it >= 0) } + 1])
         val specPath = flag(if (bootstrap) "--financial-calibration-bootstrap-request" else if (calibrationMode) "--financial-rate-calibration-request" else "--financial-rate-policy")
         val spec = json.readTree(Files.readString(specPath))
         val outPath = flag(if (bootstrap) "--financial-calibration-bootstrap" else if (calibrationMode) "--financial-rate-calibration" else "--financial-rate-measurement")
-        require(if (calibrationMode) spec["correctness"]["result"].asText() == "PASS" else spec["status"].asText() == "FROZEN") { "E3/frozen load gate" }
+        require(if (calibrationMode) spec["correctness"]["result"].asText() == "PASS" else spec["status"].asText() == if (diagnostic) "FROZEN_EMPIRICAL_DIAGNOSTIC" else "FROZEN") { "E3/frozen load gate" }
         if (mode == "run") {
             val frozen = spec.deepCopy<ObjectNode>().apply { remove("policySha256") }
             require(sha(json.writeValueAsBytes(frozen)) == spec["policySha256"]?.asText()) { "FROZEN_POLICY_HASH_MISMATCH" }
@@ -651,13 +709,14 @@ object FinancialRateProbe {
         val seconds = if (calibrationMode) 0L else spec["arm"]["seconds"].asLong()
         val aged = if (mode == "run" && spec["arm"]["state"].asText() == "aged") FinancialHeapBounds.integer(spec["aged"]["identities"], "agedIdentities", false) else 0L
         val pending = if (calibrationMode) FinancialHeapBounds.integer(spec["pendingSample"], "pendingSample", false) else if (spec["arm"]["state"].asText() == "aged") FinancialHeapBounds.integer(spec["aged"]["pendingItems"], "pendingItems", false) else 0L
-        val heap = if (bootstrap) bootstrapGuard(spec, specPath, configPath) else heapGuard(spec, specPath, configPath, count, aged, pending)
+        val heap = if (diagnostic) diagnosticGuard(spec, specPath, configPath) else if (bootstrap) bootstrapGuard(spec, specPath, configPath) else heapGuard(spec, specPath, configPath, count, aged, pending)
         withHeapProtection(heap) { guard ->
+        val diskCap = if (diagnostic) diagnosticDiskBudget(spec) else DISK_CAP
         val config = json.readTree(Files.readString(configPath))
         require(config["registeredResources"]?.get("bootstrapServers")?.asText() == broker) { "RATE_BROKER_ARGUMENT_NOT_REGISTERED" }
         val opening = Math.addExact(Math.addExact(aged, pending), count)
         val balances = node(mapOf("buyerCash" to Math.multiplyExact(opening, PRICE).toString(), "sellerCash" to "0", "buyerShares" to "0", "sellerShares" to opening.toString()))
-        if (mode == "run") require(spec["openingResources"]["cashNanos"].asText() == balances["buyerCash"].asText() && spec["openingResources"]["shares"].asText() == balances["sellerShares"].asText()) { "frozen genesis resource mismatch" }
+        if (mode == "run" || diagnostic) require(spec["openingResources"]["cashNanos"].asText() == balances["buyerCash"].asText() && spec["openingResources"]["shares"].asText() == balances["sellerShares"].asText()) { "frozen genesis resource mismatch" }
         val stateDir = Path.of(config.path("stateDir").asText("/tmp/$prefix-state")); Files.createDirectories(stateDir)
         val props = Properties().apply { put("bootstrap.servers", broker) }
         val capacity = Semaphore(16384)
@@ -680,7 +739,7 @@ object FinancialRateProbe {
         AdminClient.create(props).use { admin ->
             validateBootstrapBrokerScope(config, broker, brokerScope(admin, broker))
             admin.createTopics(listOf("input", "results").map { NewTopic("$prefix-$it", 1, 3.toShort()).configs(mapOf("cleanup.policy" to "delete", "write.caching" to "false", "min.insync.replicas" to "2")
-                + if (bootstrap) mapOf("max.message.bytes" to "262144") else emptyMap()) }).all().get(30, TimeUnit.SECONDS)
+                + if (bootstrap || diagnostic) mapOf("max.message.bytes" to "262144") else emptyMap()) }).all().get(30, TimeUnit.SECONDS)
             val uuid = admin.describeTopics(listOf("$prefix-input")).allTopicNames().get().getValue("$prefix-input").topicId().toString()
             val journalDir = Path.of(config.path("ackJournalDir").asText(outPath.parent.resolve("ack-journal").toString()))
             val journalCap = if (bootstrap) spec["limits"]["ackJournalMaxBytes"].asLong() else spec.get("ackJournalMaxBytes")?.let { FinancialHeapBounds.integer(it, "ackJournalMaxBytes") } ?: RAW_CAP
@@ -697,7 +756,7 @@ object FinancialRateProbe {
             val topology = FinancialBrokerProbe.topology(workerConfig, "", prefix, { index ->
                 acknowledgedMember(journal, index) { guard.checkpoint("ACK-membership"); checkWorkers() }
             }, uuid)
-            val effectiveProperties = streamProperties(props, prefix, stateDir, bootstrap)
+            val effectiveProperties = streamProperties(props, prefix, stateDir, bootstrap || diagnostic)
             val effectiveClients = if (bootstrap) bootstrapClientConfiguration(effectiveProperties) else null
             val streams = KafkaStreams(topology, effectiveProperties)
             var physicalManifest: JsonNode? = null; var clockReceipt: JsonNode? = null
@@ -726,11 +785,11 @@ object FinancialRateProbe {
             }.getOrNull()
             val os = ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean
             val observer = Thread {
-                try { KafkaConsumer(consumerProperties(props, bootstrap), StringDeserializer(), StringDeserializer()).use { consumer ->
+                try { KafkaConsumer(consumerProperties(props, bootstrap || diagnostic), StringDeserializer(), StringDeserializer()).use { consumer ->
                     val tp = TopicPartition("$prefix-results", 0); consumer.assign(listOf(tp)); consumer.seekToBeginning(listOf(tp))
                     while (!done.get()) for (record in consumer.poll(Duration.ofMillis(50))) {
                         guard.checkpoint("observer-record"); checkWorkers(); val bytes = record.value().toByteArray()
-                        val value = if (bootstrap) parseBootstrapResult(bytes) else json.readTree(bytes); val index = value["inputOrdinal"].asLong(); require(index == covered.get())
+                        val value = if (bootstrap || diagnostic) parseBootstrapResult(bytes) else json.readTree(bytes); val index = value["inputOrdinal"].asLong(); require(index == covered.get())
                         val member = requireNotNull(journal.member(index)) { "missing durable acknowledged member" }; require(value["inputOffset"].asLong() == member["offset"].asLong())
                         retain(bytes); outputBytes.addAndGet(bytes.size.toLong())
                         val histories = value["records"]
@@ -756,7 +815,7 @@ object FinancialRateProbe {
                         // Deadline counts updated at individual event times, never credited from late sample.
                     }
                     heapPeak = maxOf(heapPeak, ManagementFactory.getMemoryMXBean().heapMemoryUsage.used); rss()?.let { rssPeak = maxOf(rssPeak ?: 0, it) }
-                    val snapshot = requireNotNull(physical()) { "physical broker budget monitoring unavailable" }; val disk = localBytes() + snapshot.first + snapshot.second; diskPeak = maxOf(diskPeak, disk); require(disk <= DISK_CAP) { "10GiB budget exceeded" }; Thread.sleep(1000)
+                    val snapshot = requireNotNull(physical()) { "physical broker budget monitoring unavailable" }; val disk = localBytes() + snapshot.first + snapshot.second; diskPeak = maxOf(diskPeak, disk); require(disk <= diskCap) { if (diagnostic && diskCap > DISK_CAP) "16GiB empirical budget exceeded" else "10GiB budget exceeded" }; Thread.sleep(1000)
                 } } catch (error: Throwable) { if (!done.get()) fatal.compareAndSet(null, error) }
             }
             var producerMs = 0L; var observerMs = 0L; var drainMs = 0L; var cpuMs = 0L; var bytesPhysical = 0L; var pendingPhysical = 0L; var identityHeap = 0L
@@ -789,8 +848,8 @@ object FinancialRateProbe {
                 }
                 val producer = KafkaProducer(Properties().apply {
                     putAll(props); put("acks", "all"); put("enable.idempotence", true); put("linger.ms", 2); put("batch.size", 65536)
-                    put("buffer.memory", if (bootstrap) 4194304L else 16L * 1024 * 1024)
-                    if (bootstrap) { put("max.request.size", 262144); put("compression.type", "none"); put("max.in.flight.requests.per.connection", 1)
+                    put("buffer.memory", if (bootstrap || diagnostic) 4194304L else 16L * 1024 * 1024)
+                    if (bootstrap || diagnostic) { put("max.request.size", 262144); put("compression.type", "none"); put("max.in.flight.requests.per.connection", 1)
                         put("max.block.ms", 10000L); put("request.timeout.ms", 10000); put("delivery.timeout.ms", 30000) }
                 }, StringSerializer(), StringSerializer())
                 try {
@@ -879,12 +938,12 @@ object FinancialRateProbe {
                 }
             }
             var resultCut = 0L
-            KafkaConsumer(consumerProperties(props, bootstrap), StringDeserializer(), StringDeserializer()).use { consumer ->
+            KafkaConsumer(consumerProperties(props, bootstrap || diagnostic), StringDeserializer(), StringDeserializer()).use { consumer ->
                 val tp = TopicPartition("$prefix-results", 0); consumer.assign(listOf(tp)); consumer.seekToBeginning(listOf(tp))
                 resultCut = consumer.endOffsets(listOf(tp), Duration.ofSeconds(10)).getValue(tp)
                 val end = restoreStart + TimeUnit.MINUTES.toNanos(5)
                 while (consumer.position(tp) < resultCut && System.nanoTime() < end) { guard.checkpoint("result-only-replay-poll"); heapReplayBatch(guard, consumer.poll(Duration.ofMillis(100))) { record ->
-                    val bytes = record.value().toByteArray(); val value = if (bootstrap) parseBootstrapResult(bytes) else json.readTree(bytes)
+                    val bytes = record.value().toByteArray(); val value = if (bootstrap || diagnostic) parseBootstrapResult(bytes) else json.readTree(bytes)
                     require(record.offset() < resultCut && restoreInputs < ordinal.get() && value["inputOrdinal"].asLong() == restoreInputs)
                     val rows = value["records"]; require(rows.size() == if (restoreInputs == 0L) 2 else 1)
                     require(rows.last()["kind"].asText() == "BUSINESS" && canonical(rows.last()["input"]) == canonical(expectedInput(restoreInputs)))
@@ -927,7 +986,9 @@ object FinancialRateProbe {
                 "parity" to mapOf("completeJournal" to true, "completeOwnerState" to true, "independentOracle" to true, "evidenceSha256" to sha(parityContent.toByteArray())), "lagSamples" to lag,
                 "resources" to mapOf("processCpuMs" to cpuMs, "heapPeakBytes" to heapArtifact.resourcePeakBytes, "heapPeakScope" to heapArtifact.peakScope, "rssPeakBytes" to rssPeak, "diskPeakBytes" to diskPeak, "encodedInputBytes" to inputBytes.get(), "encodedResultBytes" to outputBytes.get(), "encodedTechnicalBytes" to null, "physicalBrokerBytes" to physicalEnd?.first, "physicalChangelogBytes" to physicalEnd?.second, "touchedKeys" to keys.get(), "technicalRecords" to covered.get(), "transactionWaitMs" to txnMs),
                 "heapObservation" to heapArtifact.observation, "stageLatency" to synchronized(latency) { val sorted = latency.sorted(); mapOf("kind" to "sampled-individual", "stage" to "offer-to-read-committed-settlement", "clockDomain" to "same-monotonic", "samples" to sorted.size, "p95Ms" to sorted.getOrNull((sorted.size * .95).toInt()), "p99Ms" to sorted.getOrNull((sorted.size * .99).toInt())) },
-                "restore" to mapOf("kind" to "result-only-replay", "records" to expectedHistory, "bytes" to restoreBytes, "elapsedMs" to restoreMs, "verifiedCut" to true), "ackJournal" to journal.telemetry(), "gaps" to listOf("Actual managed restart remains separate from result-only replay and broker-free journal process-crash controls", "Encoded technical store bytes uninstrumented", "CPU scope same-JVM worker+producer+observer; broker CPU unmeasured", "Touched keys = emitted state/history/coverage/cert writes; framework reads excluded"), "capacityQualification" to false)
+                "restore" to mapOf("kind" to "result-only-replay", "records" to expectedHistory, "bytes" to restoreBytes, "elapsedMs" to restoreMs, "verifiedCut" to true), "ackJournal" to journal.telemetry(), "gaps" to listOf("Actual managed restart remains separate from result-only replay and broker-free journal process-crash controls", "Encoded technical store bytes uninstrumented", "CPU scope same-JVM worker+producer+observer; broker CPU unmeasured", "Touched keys = emitted state/history/coverage/cert writes; framework reads excluded"), "capacityQualification" to false) + if (diagnostic) mapOf("purpose" to "EMPIRICAL_TIMED_DIAGNOSTIC", "heapConservativeBound" to false,
+                "estimatedHeapBytes" to null, "explicitHeapBudgetBytes" to guard.actualMaxHeapBytes,
+                "journalBudgetBytes" to journalCap, "managedRestartVerified" to false, "diskBudgetBytes" to diskCap, "resourceProfile" to spec["resourceProfile"]?.asText()) else emptyMap()
             journal.checkHealthy(); guard.publish(outPath, json.writerWithDefaultPrettyPrinter().writeValueAsString(result) + "\n", parityPath to parityContent); println(json.writeValueAsString(mapOf("artifact" to outPath.toString(), "offered" to offered.get(), "admitted" to admitted.get(), "settled" to settled.get())))
             }
         }

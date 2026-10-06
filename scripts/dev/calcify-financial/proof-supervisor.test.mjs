@@ -761,3 +761,41 @@ test('owned group kills stopped TERM-resistant leaf after leader exits; unrelate
     finally { sentinel.kill('SIGKILL'); if (sentinel.exitCode === null && sentinel.signalCode === null) await once(sentinel, 'exit'); }
   }
 });
+
+
+test('fixed empirical disk profile leaves generic budgets strict and aborts at14GiB', async () => {
+  const { EMPIRICAL_DISK_PROFILE } = await import('./proof-supervisor.mjs');
+  const p = preflight();
+  p.resourceProfile = EMPIRICAL_DISK_PROFILE.name;
+  p.hostLocalResources = { ownedRoot: '/tmp', paths: [
+    { id: 'store', category: 'localStore', path: '/tmp/profile-store' },
+    { id: 'journal', category: 'controllerJournal', path: '/tmp/profile-journal' },
+    { id: 'proof', category: 'proof', path: '/tmp/unique-proof' }] };
+  p.resourcePolicyBinding = { resourceProfile: p.resourceProfile, diskBudgetBytes: 16 * GiB, policySha256: 'a'.repeat(64) };
+  p.wrapper.argv = ['/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java', '-Xms128m', '-Xmx4g', '-cp', '/tmp/classes',
+    'com.reef.platform.calcify.financial.FinancialRateProbe', 'diagnostic-run', '127.0.0.1:41092', 'financial-s1-test', '/tmp/config.json',
+    '--financial-rate-policy', '/tmp/policy.json', '--financial-rate-measurement', '/tmp/measurement.json'];
+  const eight = structuredClone(p);
+  eight.resourceProfile = 'financial-empirical-heap8-disk16-v1'; eight.resourcePolicyBinding.resourceProfile = eight.resourceProfile;
+  eight.wrapper.argv[2] = '-Xmx8g';
+  assert.equal(validatePreflight(eight).wrapper.argv[2], '-Xmx8g');
+  const wrongFlags = structuredClone(eight); wrongFlags.wrapper.argv[2] = '-Xmx4g';
+  assert.throws(() => validatePreflight(wrongFlags));
+  const wrongOldFlags = structuredClone(p); wrongOldFlags.wrapper.argv[2] = '-Xmx8g';
+  assert.throws(() => validatePreflight(wrongOldFlags));
+  const f = validatePreflight(p), observation = sample(f);
+  observation.hostLocalAllocations = p.hostLocalResources.paths.map(r => ({ ...r, allocatedBytes: 0, allocationMode: 'du-allocated' })); observation.containers[0].allocatedBytes = 11 * GiB;
+  assert.equal(validateSample(f, observation, 10000).projectAllocatedBytes, 13 * GiB);
+  observation.containers[0].allocatedBytes = 12 * GiB;
+  assert.throws(() => validateSample(f, observation, 10000), /14GiB/);
+  observation.containers[0].allocatedBytes = 14 * GiB;
+  assert.throws(() => validateSample(f, observation, 10000), /16GiB/);
+  for (const mutate of [q => q.resourceProfile = 'custom', q => q.wrapper.argv[6] = 'run', q => q.wrapper.argv[6] = 'bootstrap-calibrate',
+    q => q.wrapper.argv[2] = '-Xmx8g', q => q.resourcePolicyBinding.diskBudgetBytes = 17 * GiB,
+    q => delete q.resourcePolicyBinding, q => q.externalBrokerFault = {}, q => q.budgets = { hardAllocatedBytes: 20 * GiB }, q => delete q.hostLocalResources]) {
+    const bad = structuredClone(p); mutate(bad); assert.throws(() => validatePreflight(bad));
+  }
+  assert.equal(BUDGETS.abortAllocatedBytes, 9 * GiB); assert.equal(BUDGETS.hardAllocatedBytes, 10 * GiB);
+  const ordinary = sample(); ordinary.containers[0].allocatedBytes = 7 * GiB;
+  assert.throws(() => validateSample(preflight(), ordinary, 10000), /9GiB/);
+});

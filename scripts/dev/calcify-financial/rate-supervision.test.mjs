@@ -202,3 +202,27 @@ test('actual financial runtime validates planned new paths and refuses symlinked
     assert.equal(prepared, 1);
   } finally { await rm(root, { recursive: true, force: true }); await rm(foreign, { recursive: true, force: true }); }
 });
+
+
+test('empirical resource profile must match frozen policy hash and hard budget', async () => {
+  const { validateRateResourcePolicy } = await import('./rate-supervision.mjs');
+  const policy = { schema: 'financial-empirical-timed-policy-v1', status: 'FROZEN_EMPIRICAL_DIAGNOSTIC',
+    resourceProfile: 'financial-empirical-disk16-v1', capacityQualification: false, heapConservativeBound: false,
+    diskBudgetBytes: 16 * 1024 ** 3 };
+  policy.policySha256 = createHash('sha256').update(JSON.stringify(policy)).digest('hex');
+  const p = { resourceProfile: policy.resourceProfile, resourcePolicyBinding: { resourceProfile: policy.resourceProfile,
+    diskBudgetBytes: policy.diskBudgetBytes, policySha256: policy.policySha256 } };
+  assert.equal(validateRateResourcePolicy(p, policy), policy);
+  const eight = { ...policy, resourceProfile: 'financial-empirical-heap8-disk16-v1' }; delete eight.policySha256;
+  eight.policySha256 = createHash('sha256').update(JSON.stringify(eight)).digest('hex');
+  const eightSupervisor = { resourceProfile: eight.resourceProfile, resourcePolicyBinding: { resourceProfile: eight.resourceProfile,
+    diskBudgetBytes: eight.diskBudgetBytes, policySha256: eight.policySha256 } };
+  assert.equal(validateRateResourcePolicy(eightSupervisor, eight), eight);
+  assert.throws(() => validateRateResourcePolicy(p, eight), /RESOURCE_POLICY_MISMATCH/);
+  for (const changed of [{ ...policy, resourceProfile: undefined }, { ...policy, diskBudgetBytes: 10 * 1024 ** 3 },
+    { ...policy, policySha256: 'f'.repeat(64) }, { ...policy, capacityQualification: true }])
+    assert.throws(() => validateRateResourcePolicy(p, changed), /RESOURCE_POLICY_MISMATCH/);
+  assert.throws(() => validateRateResourcePolicy({}, policy), /RESOURCE_POLICY_MISMATCH/);
+  assert.throws(() => validateRateResourcePolicy(p, {}), /RESOURCE_POLICY_MISMATCH/);
+  assert.deepEqual(validateRateResourcePolicy({}, {}), {});
+});

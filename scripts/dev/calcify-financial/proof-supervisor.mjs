@@ -13,6 +13,30 @@ const exec = promisify(execFile);
 const GiB = 1024 ** 3;
 export const BUDGETS = Object.freeze({ abortAllocatedBytes: 9 * GiB, hardAllocatedBytes: 10 * GiB,
   guestFreeBytesFloor: 20 * GiB, rawProofBytes: 256 * 1024 ** 2, sampleIntervalMs: 5000 });
+export const EMPIRICAL_DISK_PROFILE = Object.freeze({ name: 'financial-empirical-disk16-v1',
+  abortAllocatedBytes: 14 * GiB, hardAllocatedBytes: 16 * GiB });
+export const EMPIRICAL_8G_DISK_PROFILE = Object.freeze({ ...EMPIRICAL_DISK_PROFILE, name: 'financial-empirical-heap8-disk16-v1' });
+export function resourceBudgets(p) {
+  if (p.resourceProfile === undefined) {
+    requireValue(p.resourcePolicyBinding === undefined, 'resource policy binding requires named profile');
+    return BUDGETS;
+  }
+  const a = p.wrapper?.argv, b = p.resourcePolicyBinding;
+  const selected = p.resourceProfile === EMPIRICAL_8G_DISK_PROFILE.name ? EMPIRICAL_8G_DISK_PROFILE : EMPIRICAL_DISK_PROFILE;
+  requireValue(p.resourceProfile === selected.name && !p.externalBrokerFault
+    && p.budgets === undefined && p.abortAllocatedBytes === undefined && p.hardAllocatedBytes === undefined
+    && p.hostLocalResources?.paths?.length === 3
+    && Array.isArray(a) && a.length === 14
+    && a[0] === '/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java'
+    && a[1] === '-Xms128m' && a[2] === (selected === EMPIRICAL_8G_DISK_PROFILE ? '-Xmx8g' : '-Xmx4g') && a[3] === '-cp' && a[4]
+    && a[5] === 'com.reef.platform.calcify.financial.FinancialRateProbe' && a[6] === 'diagnostic-run'
+    && a[8].startsWith('financial-s1-') && isAbsolute(a[9])
+    && a[10] === '--financial-rate-policy' && isAbsolute(a[11])
+    && a[12] === '--financial-rate-measurement' && isAbsolute(a[13])
+    && b?.resourceProfile === p.resourceProfile && b.diskBudgetBytes === EMPIRICAL_DISK_PROFILE.hardAllocatedBytes
+    && /^[a-f0-9]{64}$/.test(b.policySha256 ?? ''), 'unsupported empirical resource profile or policy binding');
+  return { ...BUDGETS, ...selected };
+}
 const SAMPLE_LEAD_MS = 200; // start early; strict five-second heartbeat has no grace
 const RECOVERY_SAMPLE_INTERVAL_MS = 1000; // scheduling target; bounded monitor latency may exceed one second
 const SCOPE = '5-second maximum sample-start/freshness window (200ms early start); RECOVERING-only nominal1-second cadence; allocated broker-directory/guest-free/raw-output samples; VM overhead excluded; not continuous peak';
@@ -69,6 +93,7 @@ function validateInspectedBrokerEndpoints(registry, rawInspection) {
 // pin image identity and named data mounts. Only these IDs can ever be stopped.
 export function validatePreflight(input) {
   const p = structuredClone(input), r = p.registeredResources, w = p.wrapper;
+  resourceBudgets(p);
   requireValue(p.schema === 'calcify-proof-supervisor-v1', 'unsupported supervisor schema');
   requireValue(r && typeof r.project === 'string' && /^reef-calcify-[a-z0-9-]+$/.test(r.project), 'unregistered project');
   requireValue(Array.isArray(r.containers) && r.containers.length === 3, 'exactly three registered containers required');
@@ -138,6 +163,7 @@ export function validatePreflight(input) {
 }
 
 export function validateSample(p, sample, nowMs) {
+  const budgets = resourceBudgets(p);
   requireValue(sample && typeof sample.sampledAtMs === 'number' && Number.isFinite(sample.sampledAtMs) &&
     sample.sampledAtMs >= 0 && nowMs >= sample.sampledAtMs && nowMs - sample.sampledAtMs <= BUDGETS.sampleIntervalMs,
   'observer heartbeat stale/invalid');
@@ -178,8 +204,8 @@ export function validateSample(p, sample, nowMs) {
     }
   }
   bytes(total, 'total allocation'); bytes(sample.guestFreeBytes, 'guest free bytes'); bytes(sample.rawProofBytes, 'raw proof bytes');
-  requireValue(total < BUDGETS.hardAllocatedBytes, 'hard 10GiB allocation budget');
-  requireValue(total < BUDGETS.abortAllocatedBytes, '9GiB allocation abort threshold');
+  requireValue(total < budgets.hardAllocatedBytes, p.resourceProfile ? 'hard 16GiB empirical allocation budget' : 'hard 10GiB allocation budget');
+  requireValue(total < budgets.abortAllocatedBytes, p.resourceProfile ? '14GiB empirical allocation abort threshold' : '9GiB allocation abort threshold');
   requireValue(sample.guestFreeBytes >= BUDGETS.guestFreeBytesFloor, 'guest free below 20GiB');
   requireValue(sample.rawProofBytes < BUDGETS.rawProofBytes, 'raw proof reached 256MiB');
   return { ...sample, brokerAllocatedBytes, hostAllocatedBytes: total - brokerAllocatedBytes,
