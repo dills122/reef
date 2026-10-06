@@ -890,6 +890,25 @@ and implementation mapper lifecycle limit comparison. Gross allocation does not
 prove driver peak cause, retained upper or capacity.
 Public financial authority and production matching remain unchanged.
 
+October6 continuation adds a separate fixed fresh 150000-trade,60s empirical
+diagnostic with4GiB JVM and2GiB ACK journal. This records useful work by deadline,
+final drain, complete-history replay and sampled costs without deriving a
+conservative heap upper bound. Named `financial-empirical-disk16-v1` profile
+permits14GiB allocation abort/16GiB hard limit, retaining20GiB guest free floor,
+256MiB raw-proof cap and five-second resource supervision. Original9/10GiB
+profiles remain unchanged; larger budget requires exact diagnostic argv and
+frozen policy/supervisor binding. Separate fixed
+`financial-empirical-heap8-disk16-v1` profile permits exact8GiB JVM with same
+14/16GiB disk guards and unchanged workload. Explicit user review extension
+allowed review4of4; code and concrete envelope Ready before launch. Larger
+permission alone proves no fit, rate, native-memory or conservative upper bound.
+Existing768MiB policy and1000/100 managed-restart
+proof retain their original gates and scope. Prior49-arm correctness is reused
+only for unchanged kernel/managed-adapter source; timed cohort does not gain
+new managed-restart qualification. User direction excludes further test-reference
+memory optimization. [Current sprint exit work](../WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
+owns run outcomes and next finite P3 acceptance slice.
+
 Prior Java21/768MiB two-owner model refuses smallest150000-trade ordinary arm:
 map entries alone require732000000 bytes, above strict644245094-byte heap gate.
 New compact model needs separately bound layout/lifecycle costs; its structural

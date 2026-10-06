@@ -6,6 +6,28 @@ checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
+## Latest empirical checkpoint — October6 UTC
+
+[Current work](../../WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
+owns sprint status; [focused verification](e4-verification-2026-10-06.json) separates
+source-count upper bounds from unmeasured deadline settlement rates. Two fresh
+4GiB attempts aborted at disk then heap limits; original failure journals retained.
+Explicit 8GiB profile passed review4of4 after user extension. Full 150000 settlements,
+300001 histories and result-only replay passed; deadline 63104/60s=1051.73/s missed
+2500/s target. Producer132.040s; post-producer drain8.139s. Sampled JVM heap
+3962293592B; live allocated project sample peak11773079552B. These are different
+measurement scopes, not conservative bounds. Closed input journal independently
+verified300000 complete actions/150000pairs, full hashes/payloads and zero tails.
+Kernel/managed adapter unchanged; prior49-arm proof separate. No new managed
+restart, aged state, SQL/API or production capacity qualification.
+Historical draft/pending wording below
+predates merged Reef473/474/475/477 and Records6–9. Complete [closed session proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d) and [delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md)
+published at Records `2331d97d9f9e6af8638d6ed335adbfac743d2c03`:7628files/1144093245B verified; all three
+journal chunk reassemblies pass. [Records PR10](https://github.com/dills122/reef-records/pull/10)
+draft, not merged. Broker topic volumes retained locally, not exported; archive
+contains input journals and executed probe receipts, not independently replayable
+raw output topics. No tracked Reef originals removed.
+
 ## Current E4 continuation
 
 October5 branch `codex/calcify-e4-readiness`, base `29a8926d`.

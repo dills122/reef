@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated_date": "2026-10-05",
-  "selection_reason": "Unrelated selections/order unchanged. Historical round7 imports immutable. Bounded E3 code/live independent Ready; complete new proof published at Records ed6faadf with1358 remote blobs/53,415,268 bytes verified. Focused current summary/fixtures/profile/owners retained. Archive PR7 landing pending; no tracked source removal. Heap component independently Ready; separate216-file proof published at Records132dae9d, remote bytes verified; PR8 landing pending. Current heap summary retained. Supplemental Linux failure/correction and review cycle3 published at Records2a2abf9e; combined279 remote blobs verified, original manifest unchanged. E4 current bounded baseline/compact actual proof independently Ready; main24719-file proof published at Records87242fe0,843777692 remote bytes independently verified; PR9 draft, no tracked bulk removal. Focused current E4 summary retained; ordinary upper/capacity remain blocked. Pure Reference allocation research and independent review published at Recordsb9b0e17c; all31 supplemental blobs/5956080 bytes remotely verified, original872 namespace unchanged.",
+  "updated_date": "2026-10-06",
+  "selection_reason": "Unrelated selections/order unchanged. Historical round7 imports immutable. Bounded E3 code/live independent Ready; complete new proof published at Records ed6faadf with1358 remote blobs/53,415,268 bytes verified. Focused current summary/fixtures/profile/owners retained. Archive PR7 landing pending; no tracked source removal. Heap component independently Ready; separate216-file proof published at Records132dae9d, remote bytes verified; PR8 landing pending. Current heap summary retained. Supplemental Linux failure/correction and review cycle3 published at Records2a2abf9e; combined279 remote blobs verified, original manifest unchanged. E4 current bounded baseline/compact actual proof independently Ready; main24719-file proof published at Records87242fe0,843777692 remote bytes independently verified; PR9 draft, no tracked bulk removal. Focused current E4 summary retained; ordinary upper/capacity remain blocked. Pure Reference allocation research and independent review published at Recordsb9b0e17c; all31 supplemental blobs/5956080 bytes remotely verified, original872 namespace unchanged. October6 dated correction: financial README current scope/hash refreshed; new empirical E4 summary retained. Exact7628-file/1144093245B proof+review published/verified at Records2331d97d9f9e6af8638d6ed335adbfac743d2c03; all3journal reassemblies pass. Fresh8GiB full-cohort parity/result-only replay passes but deadline1051.73/s misses2500/s target. CPU scope wording corrected to timed load through coverage/drain, excluding later owner digest/replay. Prior unrelated rows/order unchanged; original scoped E3/768MiB/bootstrap archives remain distinct. PR10 draft; no tracked original removed. Focused independent final publication/retention receipt retained as exact copy; no inventory self-hash/circular proof.",
   "files": [
     {
       "path": "docs/evidence/calcify-phase2-implementation/.gitattributes",
@@ -1665,8 +1665,8 @@
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/README.md",
-      "bytes": 12036,
-      "sha256": "b98fdfa6518bd861d38fc6971f2dde74fa2e5bbe534681e82c6f16a475a0f1aa"
+      "bytes": 14017,
+      "sha256": "d041b72646e5b50404237d209aa304f5048582da139078e08e803e28bbe7b688"
     },
     {
       "path": "docs/evidence/calcify-financial-sprint1/broker.compose.yml",
@@ -1707,6 +1707,16 @@
       "path": "docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json",
       "bytes": 26732,
       "sha256": "9dfe894001e2186e399fd453f99d4338629c780f1bd57ffce0899323645b9439"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-06.json",
+      "bytes": 11746,
+      "sha256": "044fab1a10703810fc6aa9e66b9452ada11bdfc510196f608465ebbdf2160167"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/delivery-verification-2026-10-06.json",
+      "bytes": 2952,
+      "sha256": "d26c5e7a959a00357023eac9b94737f53a14802e08486fe7bf80fd3be98d134e"
     }
   ]
 }

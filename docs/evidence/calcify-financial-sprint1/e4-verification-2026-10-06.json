@@ -1,0 +1,223 @@
+{
+  "schema": "calcify-empirical-verification-v1",
+  "alignedUtc": "2026-10-06T03:10:21.499Z",
+  "sourceBaseline": "863503ec23c27f33ecea14fd82724fe28f96d308",
+  "branch": "codex/calcify-sprint1-exit-2026-10-06",
+  "purpose": "Empirical fixed financial test-adapter diagnostic; existing sprint exit reconciliation",
+  "productionFinancialAuthorityChanged": false,
+  "capacityQualified": false,
+  "conservativeHeapUpperProven": false,
+  "newManagedRestartQualified": false,
+  "fullSprintExitComplete": false,
+  "frozenTarget": {
+    "tradesPerSecond": 2500,
+    "seconds": 60,
+    "requiredTrades": 150000,
+    "state": "fresh single hot domain"
+  },
+  "arms": [
+    {
+      "schema": "calcify-empirical-aborted-arm-outcome-v1",
+      "result": "RESOURCE_ABORT",
+      "reason": "9GiB allocatedproject abort threshold",
+      "lastValidProjectAllocatedBytes": 9649577984,
+      "rejectedRawProjectAllocatedBytes": 10155438080,
+      "rawJournalPublishedActions": 272154,
+      "pairedPublishedSettleInputs": 136077,
+      "deadlineSettledTradesUpperBound": 136077,
+      "frozenRequiredTradesByDeadline": 150000,
+      "usefulTargetOutcome": "TARGET_MISSED_BY_SOURCE_MEMBERSHIP_UPPER_BOUND",
+      "measuredDeadlineSettledTrades": null,
+      "measuredDeadlineRate": null,
+      "measuredFinalSettledTrades": null,
+      "finalMeasurementPresent": false,
+      "completedCohortOrReplayVerified": false,
+      "proof": "closed source journal complete published prefix; processor requires published source member before kernel execution",
+      "scope": "upper count bound only, not observed settlement/deadline rate. Source clock120.708s span diagnoses pacing prefix. Raw observations separately timed and sampled.",
+      "arm": "arm3",
+      "originalOutcomeSha256": "75fda8701c57f5ba6b27a5ef1da590df77db618eaa0395a293dd3be4748573e2",
+      "rawPolicyBytesSha256": "24f3dacce6e84c29940b0c76609514590e8d3911bc0ff2e7b0ff944c8d61f3d1",
+      "policySha256": "339cee4c38a0ca1061d8084e69f75284fe981e6e97ce57e1eb7365225579218c"
+    },
+    {
+      "schema": "calcify-empirical-aborted-arm-outcome-v1",
+      "result": "SAMPLED_HEAP_ABORT",
+      "reason": "HEAP_OBSERVED_LIMIT at send; sticky failure from heap-sensor",
+      "configuredMaxHeapBytes": 4294967296,
+      "configuredObservedHeapLimitBytes": 3435973836,
+      "observedHeapPeakBytes": null,
+      "lastValidProjectAllocatedBytes": 11005157376,
+      "rawJournalPublishedActions": 297280,
+      "pairedPublishedSettleInputs": 148640,
+      "deadlineSettledTradesUpperBound": 148640,
+      "frozenRequiredTradesByDeadline": 150000,
+      "usefulTargetOutcome": "TARGET_MISSED_BY_SOURCE_MEMBERSHIP_UPPER_BOUND",
+      "measuredDeadlineSettledTrades": null,
+      "measuredDeadlineRate": null,
+      "measuredFinalSettledTrades": null,
+      "finalMeasurementPresent": false,
+      "completedCohortOrReplayVerified": false,
+      "proof": "closed source journal complete published prefix; processor requires published source member before kernel execution",
+      "scope": "upper count bound only; no observed settlement/deadline rate. First-last source offered span129.572s.",
+      "arm": "arm4",
+      "originalOutcomeSha256": "af47356b051fa2e03a0e57fcd7e8f358932a8990d799288ebe6bbfca0b7477f7",
+      "rawPolicyBytesSha256": "78e7835be970f9f37e74d3320e330c4bd61aee327deff2d0dadf656063c7d580",
+      "policySha256": "4498a13ea289d8470c3d051c1998d802cdfba2f6e3b8dc61d8ae7629081a5455"
+    },
+    {
+      "arm": "arm5",
+      "result": "FAIL_DIAGNOSTIC",
+      "usefulRateOutcome": "TARGET_MISSED",
+      "failures": [
+        "PRODUCER_DURATION_MISS",
+        "DRAIN_MISS",
+        "DEADLINE_USEFUL_RATE_MISS",
+        "LAG_END_OR_GROWTH"
+      ],
+      "policySha256": "bb090140bef683b5d8d5e20487853eb71d862e28233583f0ee83a59ac998a587",
+      "rawPolicyBytesSha256": "751d95935aa2a602a6547332f68c17ef86c9f9e9aa42e0099b1d3401dc02249c",
+      "configSha256": "866eca6e3446fc0f723c768a54ae2f5b920a1becfc9bd1fd40986110064f9d84",
+      "buildSha256": "2a8dc310c26c5973dcdbbea5f4ac0061a2c296a574e71b253bf47d6c09fe5314",
+      "resourceProfile": "financial-empirical-heap8-disk16-v1",
+      "producerElapsedMs": 132040,
+      "drainMs": 8139,
+      "deadline": {
+        "offered": 71296,
+        "callbackSuccess": 71286,
+        "admitted": 71256,
+        "decided": 63104,
+        "settled": 63104,
+        "pending": 0
+      },
+      "deadlineSettledPerSecond": 1051.7333333333333,
+      "deadlineRateScope": "Counts visible at fixed deadline / scheduled duration; conservative covering rates, not individual latency.",
+      "final": {
+        "offered": 150000,
+        "callbackSuccess": 150000,
+        "admitted": 150000,
+        "decided": 150000,
+        "settled": 150000,
+        "pending": 0
+      },
+      "parity": {
+        "completeJournal": true,
+        "completeOwnerState": true,
+        "independentOracle": true,
+        "evidenceSha256": "add621d4d9ded7da583e1390f4ef166dc264869b66e109560282b6c27de851c5"
+      },
+      "rawParity": {
+        "ownerSha256": "3de21e498484169040fff7189bdd9fa1d3a88b500b970a2449bb65e7ad742b82",
+        "historyChecksum": "d922a504f0f3eb5818c7b06fc8405e1fe3dbeca1d712ebf0549aa5b204b854ac",
+        "historyRecords": 300001,
+        "sourceUuid": "zub5R2aGRqSom8eLGByIvQ",
+        "readCommitted": true,
+        "independentCompleteDeltas": true
+      },
+      "restore": {
+        "kind": "result-only-replay",
+        "records": 300001,
+        "bytes": 883951833,
+        "elapsedMs": 98545,
+        "verifiedCut": true
+      },
+      "heapSampleBytes": 3962293592,
+      "heapSampleScope": "Sampled through result assembly snapshot; final serialization and staged writes excluded",
+      "jvmReportedRssBytes": 4726587392,
+      "sameJvmProcessCpuMs": 321184,
+      "cpuScope": "Same JVM worker+producer+observer from timed load start through producer flush/full coverage/drain, including inline validation. Excludes later owner digest/result-only replay/final serialization and broker CPU. Scheduled60s normalization is cost, not actual core utilization.",
+      "encodedInputBytes": 112172230,
+      "encodedResultBytes": 883951833,
+      "stageLatency": {
+        "kind": "sampled-individual",
+        "stage": "offer-to-read-committed-settlement",
+        "clockDomain": "same-monotonic",
+        "samples": 150,
+        "p95Ms": 7904,
+        "p99Ms": 8003
+      },
+      "projectAllocationSamplePeakBytes": 11773079552,
+      "allocationSamples": 53,
+      "allocationScope": "Live5s broker-directory+registered host store/journal/proof allocated blocks; excludes VM overhead; not continuous peak. Probe physical inventory resource fields have different scope/time.",
+      "journalPublishedActions": 300000,
+      "journalLogicalBytes": 336587023,
+      "journalDataSha256": "2a57a05048b965168bc77f22faf23383997722f7b779c116b2aaf5fb72c58238",
+      "closedJournalIndependentVerification": "300000 exact sourceactions/150000pairs, allframes/index/hashchain/publicationwitness/scope/fullpayload valid; before/after bytes unchanged and measurement hashes match",
+      "finalMeasurementBytesSha256": "8dc1974b7ba755c145d59534893befbe0b4c52180917df08325184ed8b4db6da",
+      "supervisorResult": "PROOF_READY; wrapper0; launcher1 for FAIL_DIAGNOSTIC",
+      "strictFirstSampleUtc": "2026-10-06T03:06:14.705Z",
+      "closedUtc": "2026-10-06T03:10:21.499Z",
+      "cleanup": "Exact3stopped/ownedJvmabsent/volumesretained",
+      "gaps": [
+        "Actual managed restart remains separate from result-only replay and broker-free journal process-crash controls",
+        "Encoded technical store bytes uninstrumented",
+        "CPU scope same-JVM worker+producer+observer; broker CPU unmeasured",
+        "Touched keys = emitted state/history/coverage/cert writes; framework reads excluded",
+        "RESOURCE_TELEMETRY_INCOMPLETE",
+        "Empirical resource budget; no conservative heap upper bound or capacity qualification"
+      ]
+    }
+  ],
+  "reviewHistory": {
+    "review1": "Not ready; malformed measurement schema fixed with negative regression",
+    "review2": "Ready4GiB9/10GiB",
+    "review3": "Ready4GiB14/16GiB",
+    "used": 4,
+    "configuredCap": 4,
+    "heap8Proposal": "reviewed/runclosed",
+    "review4": "Ready fixed8GiB implementation and concrete envelope; explicit human extension, original1\u20133 preserved"
+  },
+  "checks": {
+    "review3Source": {
+      "nodeCi": 279,
+      "financial": 111,
+      "failures": 0,
+      "sourcePatchSha256": "fe1401c15ec1e79ea8158bda053f2e5a3f1d04650a67bb664a6b8a905c08487e"
+    },
+    "heap8ProposalSource": {
+      "focusedNode": 102,
+      "focusedKotlin": 43,
+      "failures": 0,
+      "sourcePatchSha256": "da8ad0e573c9d4a17a4da81c425401b08a34f4d3c04b8f301ec4061c1564117b",
+      "independentReview": "review4of4 Ready"
+    },
+    "finalReviewedSource": {
+      "nodeCi": 279,
+      "financial": 112,
+      "failures": 0,
+      "sourcePatchSha256": "da8ad0e573c9d4a17a4da81c425401b08a34f4d3c04b8f301ec4061c1564117b",
+      "beforeAfterHashesEqual": true
+    }
+  },
+  "retention": {
+    "state": "published/verified; draft RecordsPR10 not merged; no Reefsource removal",
+    "ownedBrokerVolumes": "retained locally; not archive exports",
+    "storeBuildDependencies": "excluded",
+    "archiveCommit": "2331d97d9f9e6af8638d6ed335adbfac743d2c03",
+    "archiveUrl": "https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d",
+    "manifestUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/manifests/2026-10-06-calcify-sprint1-exit-proof.json",
+    "reviewSupplementManifestUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/manifests/2026-10-06-calcify-sprint1-exit-review-supplement.json",
+    "deliveryReviewUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md",
+    "recordsPullRequest": "https://github.com/dills122/reef-records/pull/10",
+    "verifiedArchivedFiles": 7628,
+    "verifiedArchivedBytes": 1144093245,
+    "verification": "Authenticated remote fetch/tree binding plus every archived blob SHA256/size against source; all3 journals reassembled exactly",
+    "sourceCheckpoints": [
+      "e8b6c35b5ac9bc8cb987cf05f3ca9a5f38d3c358",
+      "c61beaaf19ff5529be61e514003ac8dc032a0189"
+    ],
+    "localCheckpointsPushedToReef": false
+  },
+  "nextRealWork": "Existing P0 finite source identity/lifecycle gate feeding RFC P3 source-to-read slice; authority adoption remains owner decision",
+  "reviewedImplementationCommit": "1c143125049d18ee5c8c8cf473e7ed81ae25df8c",
+  "executedSourceIdentity": "Baseline marker863503ec plus frozen reviewed working-tree patch da8ad0e...; implementation commit created after run; no source content difference",
+  "corrections": [
+    "Delivery review1 corrected CPU temporal scope: timer stops before later owner digest/result-only replay; initial unpublished wording included replay. Numeric CPU unchanged."
+  ],
+  "deliveryReview": {
+    "milestone": "empirical evidence/sprint reconciliation",
+    "instance": "1of3",
+    "verdict": "Ready empirical evidence/sprint; CPU correction verified. Initial report archived; final publication verification tracked separately.",
+    "url": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md"
+  },
+  "committedPatchMatchesExecutedAndReviewedSource": true
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "calcify-session-retention-v1",
+  "dateUtc": "2026-10-06",
+  "reviewedImplementationCommit": "1c143125049d18ee5c8c8cf473e7ed81ae25df8c",
+  "archiveState": "published and verified; draftPR10 unmerged; no local original removal",
+  "localRetained": [
+    {
+      "path": "docs/WORK_PLAN.md",
+      "reason": "current sprint decisions and exact nextP0/P3 implementation acceptance"
+    },
+    {
+      "path": "docs/README.md",
+      "reason": "current reading order"
+    },
+    {
+      "path": "docs/work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md",
+      "reason": "active proposed architecture/sprint and diagnostic permission boundaries"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/README.md",
+      "reason": "focused latest verification with immutableoriginals navigation"
+    },
+    {
+      "path": "docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-06.json",
+      "reason": "concise latest measured success+targetmiss and failedarms scopes"
+    },
+    {
+      "path": "docs/THROUGHPUT_BASELINES.md",
+      "reason": "append-only measured run ledger and corrections"
+    }
+  ],
+  "guidanceReview": {
+    "AGENTS.md": "no-op; test-onlyresourcepermission retains workflow/invariants",
+    "docs/AI_CONTEXT.md": "no-op; existingcurrentwork/evidence reading path stillcorrect",
+    "docs/steering/": "no-op; no newpublicAPI/events/storage/matching/productionbehavior",
+    "REEF_PROJECT_OVERVIEW.md": "no-op; existingarchitectureunchanged; executionstatus belongsWORK_PLAN",
+    "REEF_TECHNICAL_DESIGN.md": "no-op; nofinancialauthorityadoption/newruntimeboundary",
+    "docs/DECISIONS.md": "no-op; owner gate/reservation/authority choices remain proposed",
+    "docs/CALCIFY_PHASES_OVERVIEW.md": "no-op; productionPhase1/2 unchanged, diagnostic remains test-only"
+  },
+  "archiveSelection": "all closed raw finiteproof incl setuprefusals/4GiBfailures/8GiBtargetmiss+parity/reviews/checks/exactinputjournals",
+  "excluded": "RocksDB/build/deps/current mutableledger/retainedbrokerdata topics\u2014notexports",
+  "sourceRemoval": "none; no trackedReeforiginal removal requested or performed; raw local session retained until archive landing",
+  "priorEvidence": "original bounded768MiB/bootstrap/E3 proof retained in originalarchives; notsuperseded by newempirical scope",
+  "sourceCheckpoints": [
+    "e8b6c35b5ac9bc8cb987cf05f3ca9a5f38d3c358",
+    "c61beaaf19ff5529be61e514003ac8dc032a0189"
+  ],
+  "archiveFiles": 7628,
+  "archiveBytes": 1144093245,
+  "archiveCommit": "2331d97d9f9e6af8638d6ed335adbfac743d2c03",
+  "archiveUrl": "https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d",
+  "manifestUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/manifests/2026-10-06-calcify-sprint1-exit-proof.json",
+  "reviewSupplementManifestUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/manifests/2026-10-06-calcify-sprint1-exit-review-supplement.json",
+  "deliveryReviewUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md",
+  "recordsPullRequest": "https://github.com/dills122/reef-records/pull/10",
+  "checks": {
+    "recordsIntegrityHygiene": "PASS36394 totalarchivefiles",
+    "recordsAppendOnlyBase": "PASS",
+    "unitTests": "4/4PASS",
+    "newArchiveFiles": 7628,
+    "newArchiveBytes": 1144093245,
+    "journalReassembly": "all3PASS",
+    "remoteVerification": "Authenticated fetch/tree identity binding and per-blob SHA256/size against source"
+  }
+}

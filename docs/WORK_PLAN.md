@@ -18,6 +18,84 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify sprint1 exit continuation — October 6, 2026 UTC
+
+Baseline `863503ec`; branch `codex/calcify-sprint1-exit-2026-10-06`.
+Reef PRs #473/#474/#475/#477 and Records PRs #6–#9 merged; earlier
+checkpoint draft/pending wording below records pre-merge scope. Landed E4 source
+tree equals reviewed source; original proof commits remain reachable in Records.
+
+Four-hour continuation follows [existing first experiment sprint](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint).
+User direction removes test-harness memory optimization from critical path.
+Explicit larger test resources may support empirical rate/storage diagnostics;
+no conservative heap bound or production capacity follows from larger budget.
+Fresh fixed 2,500-trades/s,60s diagnostic closed. Two 4GiB attempts hit disk then
+heap guards. Explicit 8GiB permission passed review4of4 after user extension;
+full 150000 trades settled,300001 histories and complete result-only replay passed.
+Deadline 63104 settled/60s=1051.73/s misses2500/s target. Producer132.040s and
+post-producer drain8.139s miss frozen duration/drain gates; later completion does
+not count toward deadline. No harness optimization. Kernel/managed adapter unchanged.
+Final source Node CI279/279, financial112/112. Implementation commit1c143125 created
+after closed run; executed baseline marker and dirty-source hashes retained in
+[focused verification](evidence/calcify-financial-sprint1/e4-verification-2026-10-06.json).
+Old 768 MiB conservative and 1,000/100 bootstrap evidence remain unchanged.
+No new managed-restart qualification or fourth prior E4 qualification instance.
+Complete [raw proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d) and [independent delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md)
+published/verified; [retention inventory](records/2026-10-06-calcify-sprint1-exit-retention.json).
+Records PR10 remains draft; no local tracked original removed.
+
+| Existing sprint exit | Current evidence / next action |
+| --- | --- |
+| Kernel contract | Keep bounded unreserved P1a contract; oracle/reconstruction proofs passed. Live-source integration separate. |
+| Gate protocol | Finite156 + seeded128 model cases passed. Propose RFC source-prefix baseline; credits require concrete isolation/progress need and access proof. Production selection unresolved. |
+| Reservation policy | Proposed executable fixture; owner acceptance absent. Keep live holds deferred; present own-hold/residual/cancel cases for accept/amend. |
+| Adapter recovery | Keep bounded E3 RF3/EOS contract: external4/core24/golden20/activation1 passed. No production/cluster-loss guarantee. |
+| Rate/storage cost | Fresh8GiB empirical deadline1051.73settled/s; targetmiss. Full 150000 parity/result-only replay passed. Sampled costs measured; aged, production SQL/API and full qualification open. |
+
+After measured E4 evidence, select existing P3 first useful-path slice, preceded
+by unresolved P0 source acceptance/identity gate. RFC already defines venue and
+lifecycle input, admission, kernel, one SQL bundle and existing API; shadow step
+alone does not complete P3. Existing `matching-fact-v2` length framing supersedes
+old delimiter collision concern; do not reopen hashing redesign. Source audit confirms retained `(run, order)` IDs reject duplicates, but bounded
+terminal eviction deliberately permits same-run reuse. Snapshot restores retained
+IDs only. Default terminal retention0 preserves all; stress profile250000 does not
+prove full-run uniqueness. First P3 slice may pin retention0 with finite resource
+proof, or add Calcify-scoped durable no-reuse enforcement. Preserve legacy reuse
+semantics; incarnation contract needed only if owner requires same-run reuse.
+Source: `internal/app/terminal_retention_replay_test.go` and
+`internal/app/service_snapshot.go` under `services/matching-engine/`.
+Adoption authority ADR and numeric replay/capacity/SLO choices stay separate from
+synthetic E4 permission. No production financial authority changed.
+
+### Next P3 slice: finite source-to-read path
+
+Proposed scope follows RFC P3: isolated opt-in run, one instrument, two mapped
+accounts/assets, journaled opening resources, unreserved gross DvP, source-prefix
+admission, one SQL bundle, existing authenticated settlement reads, one
+funding/new-attempt repair. Current proof kernel fixes `buyer`/`seller` and
+`USD_NANO`/`ACME_SHARE`; mapping/generalization requires explicit invariant tests.
+Authority adoption remains owner decision; legacy accounts stay isolated.
+
+| Dependency order | Finite acceptance |
+| --- | --- |
+| P0 source gate | Pin retention0 plus finite run/order/resource budget. Real submit/fill/cancel/amend, zero-trade lifecycle, same-run reuse rejection after terminal state and restore; cross-run raw-ID reuse stays valid. |
+| Source/lifecycle closure | Extend existing resolved-trade facts with versioned lifecycle/coverage membership. Every execution and zero-trade member has explicit disposition. Bound slice/fanout/bytes; future-window burst cannot block admitted closure; restore retains exact frontier. |
+| Financial admission/adapter | Durable common order for captures/funding/repair; stable identity/request digest, identical retry returns original disposition, changed request conflicts. Promote reviewed kernel semantics with exact balanced legs and once-only obligation discharge. |
+| SQL and read seam | One transaction writes journal/account/obligation/exception/checkpoint under epoch and entity-version checks. Post-commit crash replay once; stale projector refused. Existing API reads coupled rows/progress under common snapshot. |
+| End-to-end repair/restart | Insufficient resources yield pending with zero partial legs; new funding plus distinct attempt settles once. Restart restores source/admission/owner/SQL cuts; missing required history refuses activation. Record finite stage costs. |
+
+Production Phase1/2 resolved facts, settlement routes/store and legacy projections
+exist. Financial lifecycle/gate/admission, runtime financial adapter and bounded
+SQL projector/common-snapshot progress contract remain implementation work.
+Existing legacy materializer scans complete persisted run facts; it does not
+establish new bounded SQL bundle behavior. Reservations, external effects, netting,
+production migration and full-path throughput qualification remain outside this
+first slice. First implementation task: explicit opt-in finite isolated source
+profile/startup guard pinned to terminal retention0, with terminal duplicate and
+restore acceptance. Existing no-reuse behavior needs binding to declared source
+contract, not another ID set or snapshot redesign. Live adoption remains owner
+decision; lifecycle/coverage follows this scoped gate.
+
 ## Calcify E4 continuation — October 5, 2026
 
 Branch `codex/calcify-e4-readiness`, base `29a8926d`. Test-only bounded diagnostic
