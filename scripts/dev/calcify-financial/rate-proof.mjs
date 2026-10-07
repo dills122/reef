@@ -6,7 +6,7 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { tmpdir } from 'node:os';
 import { EMPIRICAL_DISK_PROFILE, EMPIRICAL_8G_DISK_PROFILE } from './proof-supervisor.mjs';
-import { superviseRateAdapter } from './rate-supervision.mjs';
+import { superviseRateAdapter, policyDigest } from './rate-supervision.mjs';
 import { freezeBootstrap, verifyBootstrapEvidence, validateBootstrapResult } from './bootstrap-calibration.mjs';
 import { readBoundedJSON } from './physical-adapter.mjs';
 
@@ -77,7 +77,7 @@ export function freezeDiagnostic(input) {
     openingResources: { cashNanos: '1500000000000', shares: '150000' }, aged: { identities: 0, pendingItems: 0 },
     diskBudgetBytes: r.resourceProfile ? EMPIRICAL_DISK_PROFILE.hardAllocatedBytes : PLAN.diskBudgetBytes, diskHeadroomBytes: PLAN.diskHeadroomBytes };
   delete frozen.policySha256;
-  return { ...frozen, policySha256: sha(frozen) };
+  return { ...frozen, policySha256: policyDigest(frozen) };
 }
 export async function verifyDiagnosticEvidence(policy, policyPath, configPath, actual = policy.capability) {
   const frozen = freezeDiagnostic(policy), launcher = diagnosticLauncher(policy.resourceProfile);

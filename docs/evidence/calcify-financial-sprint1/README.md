@@ -28,6 +28,27 @@ draft, not merged. Broker topic volumes retained locally, not exported; archive
 contains input journals and executed probe receipts, not independently replayable
 raw output topics. No tracked Reef originals removed.
 
+### PR478 policy review follow-up — October7, 2026
+
+Config identity remains `capability.configSha256`; frozen policy needs no top-level
+config digest. Executable-boundary regression now reads persisted policy JSON,
+verifies fixture/config bytes, then refuses changed config. Empirical producer and
+resource supervisor share `policyDigest`: omit only `policySha256`, preserve v1
+JSON field order. Sorting fields would change already frozen/archive-bound digests;
+v1 intentionally binds field order. Clone, pretty JSON round-trip and digest-field
+relocation preserve binding for both 4GiB/16GiB and 8GiB/16GiB profiles. Changed
+config digest, cohort or policy digest fails resource validation.
+
+Focused Node22.22.1 check: `node --test scripts/dev/calcify-financial/rate-proof.test.mjs scripts/dev/calcify-financial/rate-supervision.test.mjs`,53/53.
+Exact37-file `node --test --experimental-test-coverage` invocation from
+`.github/workflows/ci.yml`:280/280. Initial sandbox run279/280 failed existing bot
+registration test at `listen EPERM 127.0.0.1`; approved unsandboxed rerun280/280.
+`bun scripts/ci/check-records-retention.mjs` passes520 pinned historical files.
+No new timed load or Kotlin execution; earlier measured results retain exact
+source scope. Retention no-op: prior raw proof remains pinned above; no new bulk
+evidence or standalone superseded records. Guidance/architecture/contracts unchanged
+because shared digest calculation preserves existing v1 bytes and runtime behavior.
+
 ## Current E4 continuation
 
 October5 branch `codex/calcify-e4-readiness`, base `29a8926d`.

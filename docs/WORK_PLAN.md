@@ -44,6 +44,12 @@ Complete [raw proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6
 published/verified; [retention inventory](records/2026-10-06-calcify-sprint1-exit-retention.json).
 Records PR10 remains draft; no local tracked original removed.
 
+October7 PR478 follow-up: shared empirical policy digest preserves v1 bindings;
+persisted config evidence and both resource-profile round-trips covered. Focused
+Node53/53 and exact hosted Node invocation280/280; retention check passes.
+[Verification and retention scope](evidence/calcify-financial-sprint1/README.md#pr478-policy-review-follow-up--october7-2026).
+No new timed load; next finite P0 source gate below remains pending.
+
 | Existing sprint exit | Current evidence / next action |
 | --- | --- |
 | Kernel contract | Keep bounded unreserved P1a contract; oracle/reconstruction proofs passed. Live-source integration separate. |

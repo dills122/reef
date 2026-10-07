@@ -31,6 +31,12 @@ export function validateBootstrapRuntime(config, supervisor, output, brokerArgum
   return config;
 }
 
+// v1 binds JSON field order. Preserve archived digests; omit only the digest itself.
+export function policyDigest(policy) {
+  const unsigned = Object.fromEntries(Object.entries(policy).filter(([key]) => key !== 'policySha256'));
+  return createHash('sha256').update(JSON.stringify(unsigned)).digest('hex');
+}
+
 export function validateRateResourcePolicy(p, policy) {
   if (p.resourceProfile === undefined && policy.resourceProfile === undefined) return policy;
   if (![EMPIRICAL_DISK_PROFILE.name, EMPIRICAL_8G_DISK_PROFILE.name].includes(p.resourceProfile) || policy.resourceProfile !== p.resourceProfile
@@ -39,7 +45,7 @@ export function validateRateResourcePolicy(p, policy) {
     || policy.diskBudgetBytes !== EMPIRICAL_DISK_PROFILE.hardAllocatedBytes
     || p.resourcePolicyBinding?.policySha256 !== policy.policySha256
     || p.resourcePolicyBinding?.diskBudgetBytes !== policy.diskBudgetBytes
-    || policy.policySha256 !== createHash('sha256').update(JSON.stringify(Object.fromEntries(Object.entries(policy).filter(([k]) => k !== 'policySha256')))).digest('hex'))
+    || policy.policySha256 !== policyDigest(policy))
     throw Error('RATE_RESOURCE_POLICY_MISMATCH');
   return policy;
 }

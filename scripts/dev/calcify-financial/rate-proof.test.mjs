@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
@@ -547,7 +547,13 @@ test('empirical executable boundary verifies owned raw evidence, config and unch
       runtimeProofHashes, correctness: { ...JSON.parse(correctnessRaw), evidenceSha256: digest(correctnessRaw) },
       fixtureEvidencePath: 'fixture.json', capabilityEvidencePath: 'capability.json', capabilityEvidenceSha256: digest(capabilityRaw),
       correctnessEvidencePath: 'correctness.json' });
-    await verifyDiagnosticEvidence(p, path.join(root, 'policy.json'), path.join(root, 'config.json'));
+    // Config identity belongs to capability; no injected top-level digest required.
+    assert.equal(Object.hasOwn(p, 'configSha256'), false);
+    assert.equal(p.capability.configSha256, digest('{}'));
+    const policyPath = path.join(root, 'policy.json');
+    await writeFile(policyPath, `${JSON.stringify(p, null, 2)}\n`);
+    const persisted = JSON.parse(await readFile(policyPath, 'utf8'));
+    await verifyDiagnosticEvidence(persisted, policyPath, path.join(root, 'config.json'));
     await assert.rejects(verifyDiagnosticEvidence(p, path.join(root, 'policy.json'), path.join(root, 'config.json'), { ...capability, maxHeapBytes: 768 * 1024 ** 2 }), /CAPABILITY_DRIFT/);
     await writeFile(path.join(root, 'config.json'), '{"changed":true}');
     await assert.rejects(verifyDiagnosticEvidence(p, path.join(root, 'policy.json'), path.join(root, 'config.json')), /CONFIG_MISMATCH/);
