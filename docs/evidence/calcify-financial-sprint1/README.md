@@ -38,6 +38,10 @@ JSON field order. Sorting fields would change already frozen/archive-bound diges
 v1 intentionally binds field order. Clone, pretty JSON round-trip and digest-field
 relocation preserve binding for both 4GiB/16GiB and 8GiB/16GiB profiles. Changed
 config digest, cohort or policy digest fails resource validation.
+Follow-up bot request to sort fields conflicts with existing v1 binding: reversed
+fields now explicitly fail original supervisor binding. Refreezing creates different
+digest, accepted only under new matching supervisor binding. No implicit migration
+of immutable archived identities; order-insensitive format would need new version.
 
 Focused Node22.22.1 check: `node --test scripts/dev/calcify-financial/rate-proof.test.mjs scripts/dev/calcify-financial/rate-supervision.test.mjs`,53/53.
 Exact37-file `node --test --experimental-test-coverage` invocation from

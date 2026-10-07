@@ -32,6 +32,7 @@ export function validateBootstrapRuntime(config, supervisor, output, brokerArgum
 }
 
 // v1 binds JSON field order. Preserve archived digests; omit only the digest itself.
+// Reordering creates a new policy identity and requires a new supervisor binding.
 export function policyDigest(policy) {
   const unsigned = Object.fromEntries(Object.entries(policy).filter(([key]) => key !== 'policySha256'));
   return createHash('sha256').update(JSON.stringify(unsigned)).digest('hex');

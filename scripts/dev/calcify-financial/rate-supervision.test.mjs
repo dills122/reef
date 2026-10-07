@@ -252,5 +252,13 @@ test('producer policies survive clone, JSON round-trip and digest-field relocati
     assert.throws(() => validateRateResourcePolicy(p, { ...policy, capability: { ...policy.capability, configSha256: 'c'.repeat(64) } }), /POLICY_MISMATCH/);
     assert.throws(() => validateRateResourcePolicy(p, { ...policy, expectedTimedTrades: 1 }), /POLICY_MISMATCH/);
     assert.throws(() => validateRateResourcePolicy(p, { ...policy, policySha256: 'c'.repeat(64) }), /POLICY_MISMATCH/);
+    // v1 supervisor binds frozen serialization, not an order-insensitive JSON value.
+    const reordered = { ...Object.fromEntries(Object.entries(unsigned).reverse()), policySha256 };
+    assert.throws(() => validateRateResourcePolicy(p, reordered), /POLICY_MISMATCH/);
+    const newlyFrozen = freezeDiagnostic(reordered);
+    assert.notEqual(newlyFrozen.policySha256, policySha256);
+    assert.throws(() => validateRateResourcePolicy(p, newlyFrozen), /POLICY_MISMATCH/);
+    const newlyBound = { ...p, resourcePolicyBinding: { ...p.resourcePolicyBinding, policySha256: newlyFrozen.policySha256 } };
+    assert.equal(validateRateResourcePolicy(newlyBound, newlyFrozen), newlyFrozen);
   }
 });
