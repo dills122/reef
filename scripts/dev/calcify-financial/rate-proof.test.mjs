@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
@@ -449,4 +449,117 @@ test('M3H symlink outside policy ownership and valid hash with changed raw ident
     changedPolicy.heap.review.boundsEvidenceSha256 = changedPolicy.heap.boundsEvidenceSha256;
     await assert.rejects(verifyHeapEvidence(changedPolicy, policyPath), /RAW_EVIDENCE_IDENTITY/);
   } finally { await Promise.all([rm(dir, { recursive: true, force: true }), rm(other, { recursive: true, force: true })]); }
+});
+
+test('empirical timed profile cannot enter conservative or bootstrap admission', async () => {
+  const { freezeDiagnostic, DIAGNOSTIC_LAUNCHER } = await import('./rate-proof.mjs');
+  const request = { sourceHead: 'b'.repeat(40), fixtureSha256: hash, sourceRoot: '/tmp/source',
+    capability: { ...heap.capability, javaVersion: '21.0.8', sourceHead: 'b'.repeat(40), maxHeapBytes: 4 * 1024 ** 3, vmArguments: ['-Xms128m', '-Xmx4g'] },
+    correctness: { result: 'PASS', evidenceSha256: hash, kernelSha256: hash, managedAdapterSha256: hash },
+    runtimeProofHashes: { kernelSha256: hash, managedAdapterSha256: hash },
+    fixtureEvidencePath: 'fixture.json', capabilityEvidencePath: 'capability.json', capabilityEvidenceSha256: hash,
+    correctnessEvidencePath: 'correctness.json' };
+  const p = freezeDiagnostic(request);
+  const larger = freezeDiagnostic({ ...request, resourceProfile: 'financial-empirical-disk16-v1' });
+  assert.equal(larger.diskBudgetBytes, 16 * 1024 ** 3); assert.equal(p.diskBudgetBytes, 10 * 1024 ** 3);
+  assert.throws(() => freezeDiagnostic({ ...request, resourceProfile: 'custom' }), /RESOURCE_PROFILE/);
+  const eight = freezeDiagnostic({ ...request, resourceProfile: 'financial-empirical-heap8-disk16-v1',
+    capability: { ...request.capability, maxHeapBytes: 8 * 1024 ** 3, vmArguments: ['-Xms128m', '-Xmx8g'] } });
+  assert.equal(eight.capability.maxHeapBytes, 8 * 1024 ** 3); assert.equal(eight.diskBudgetBytes, 16 * 1024 ** 3);
+  assert.throws(() => freezeDiagnostic({ ...eight, capability: request.capability }), /PINNED_CAPABILITY/);
+  assert.throws(() => freezeDiagnostic({ ...request, capability: eight.capability }), /PINNED_CAPABILITY/);
+  assert.equal(p.expectedTimedTrades, 150000); assert.equal(p.estimatedHeapBytes, null);
+  assert.equal(p.capacityQualification, false); assert.equal(p.heapConservativeBound, false);
+  assert.equal(p.ackJournalMaxBytes, 2 * 1024 ** 3);
+  assert.deepEqual(DIAGNOSTIC_LAUNCHER.flags, ['-Xms128m', '-Xmx4g']);
+  assert.throws(() => estimateHeap(p, 150000), /HEAP_CONSERVATIVE/);
+  for (const changed of [{ capacityQualification: true }, { heap: {} }, { estimatedHeapBytes: 1 },
+    { arm: { rate: 5000, seconds: 60, state: 'fresh' } }, { runtimeProofHashes: { kernelSha256: 'c'.repeat(64), managedAdapterSha256: hash } }])
+    assert.throws(() => freezeDiagnostic({ ...request, ...changed }));
+  assert.throws(() => freezeDiagnostic({ ...request, capability: { ...request.capability, vmArguments: HEAP_LAUNCHER.flags } }));
+});
+
+
+test('empirical assessment keeps actual deadline rates and never grants capacity', async () => {
+  const { freezeDiagnostic, assessDiagnostic } = await import('./rate-proof.mjs');
+  const p = freezeDiagnostic({ sourceHead: 'b'.repeat(40), fixtureSha256: hash, sourceRoot: '/tmp/source',
+    capability: { ...heap.capability, javaVersion: '21.0.8', sourceHead: 'b'.repeat(40), maxHeapBytes: 4 * 1024 ** 3, vmArguments: ['-Xms128m', '-Xmx4g'] },
+    correctness: { result: 'PASS', evidenceSha256: hash, kernelSha256: hash, managedAdapterSha256: hash },
+    runtimeProofHashes: { kernelSha256: hash, managedAdapterSha256: hash },
+    fixtureEvidencePath: 'fixture.json', capabilityEvidencePath: 'capability.json', capabilityEvidenceSha256: hash, correctnessEvidencePath: 'correctness.json' });
+  const m = { ...measurement(), sourceHead: p.sourceHead, policySha256: p.policySha256,
+    purpose: p.purpose, capacityQualification: false, heapConservativeBound: false,
+    heapObservation: { schema: 'financial-empirical-heap-observation-v1', guardOutcome: 'PASS_SAMPLED', actualMaxHeapBytes: 4 * 1024 ** 3,
+      admissionLimitBytes: Math.floor(4 * 1024 ** 3 * 4 / 5), heapPeakBytes: 1024, estimatedHeapBytes: null, heapConservativeBound: false },
+    restore: { records: 300001, bytes: 1000, elapsedMs: 10, verifiedCut: true },
+    ackJournal: { publishedMembers: 300000, maxAggregateBytes: p.ackJournalMaxBytes } };
+  const pass = assessDiagnostic(p, m);
+  assert.equal(pass.result, 'LIMITED'); assert.equal(pass.usefulRateOutcome, 'TARGET_MET');
+  assert.equal(pass.rates.settledPerSecond, 2500); assert.equal(pass.capacityQualification, false);
+  const larger = freezeDiagnostic({ ...p, resourceProfile: 'financial-empirical-disk16-v1' });
+  const largerMeasurement = { ...m, policySha256: larger.policySha256, resources: { ...m.resources, diskPeakBytes: 12 * 1024 ** 3 } };
+  assert.equal(assessDiagnostic(larger, largerMeasurement).failures.includes('DISK_BUDGET_EXCEEDED'), false);
+  const eight = freezeDiagnostic({ ...larger, resourceProfile: 'financial-empirical-heap8-disk16-v1',
+    capability: { ...larger.capability, maxHeapBytes: 8 * 1024 ** 3, vmArguments: ['-Xms128m', '-Xmx8g'] } });
+  const eightMeasurement = { ...largerMeasurement, policySha256: eight.policySha256,
+    heapObservation: { ...m.heapObservation, actualMaxHeapBytes: 8 * 1024 ** 3, admissionLimitBytes: Math.floor(8 * 1024 ** 3 * 4 / 5) } };
+  assert.equal(assessDiagnostic(eight, eightMeasurement).result, 'LIMITED');
+  assert.ok(assessDiagnostic(eight, { ...eightMeasurement, heapObservation: m.heapObservation }).failures.includes('EMPIRICAL_HEAP_PROTECTION_FAILED'));
+  assert.equal(assessDiagnostic(p, { ...largerMeasurement, policySha256: p.policySha256 }).failures.includes('EMPIRICAL_DISK_BUDGET_EXCEEDED'), true);
+  m.deadline = { offered: 150000, admitted: 75000, decided: 75000, settled: 75000, pending: 0 };
+  const miss = assessDiagnostic(p, m);
+  assert.equal(miss.result, 'FAIL_DIAGNOSTIC'); assert.equal(miss.usefulRateOutcome, 'TARGET_MISSED');
+  assert.equal(miss.rates.settledPerSecond, 1250);
+  m.ackJournal.publishedMembers--;
+  assert.ok(assessDiagnostic(p, m).failures.includes('EMPIRICAL_COMPLETE_ACTION_HISTORY_REQUIRED'));
+  // Reviewer exact failure shape: unsupported schema skips ordinary validation,
+  // yet matching empirical envelope and one deadline settlement used to say TARGET_MET.
+  const wrongSchema = { schema: 'unexpected-schema', purpose: p.purpose, policySha256: p.policySha256,
+    heapConservativeBound: false, capacityQualification: false, deadline: { decided: 1, settled: 1 },
+    heapObservation: m.heapObservation, restore: { records: 300001 },
+    ackJournal: { publishedMembers: 300000, maxAggregateBytes: p.ackJournalMaxBytes } };
+  for (const bad of [wrongSchema, { ...wrongSchema, schema: undefined }, null,
+    { ...m, policySha256: 'c'.repeat(64) }, { ...m, sourceHead: 'c'.repeat(40) },
+    { ...m, fixtureSha256: 'c'.repeat(64) }, { ...m, capacityQualification: true }]) {
+    const assessment = assessDiagnostic(p, bad);
+    assert.equal(assessment.result, 'FAIL_DIAGNOSTIC'); assert.equal(assessment.usefulRateOutcome, 'UNKNOWN');
+  }
+});
+
+test('empirical executable boundary verifies owned raw evidence, config and unchanged proof sources', async () => {
+  const { freezeDiagnostic, verifyDiagnosticEvidence } = await import('./rate-proof.mjs');
+  const { mkdir } = await import('node:fs/promises');
+  const root = await mkdtemp(path.join(tmpdir(), 'financial-empirical-control-'));
+  const digest = b => createHash('sha256').update(b).digest('hex');
+  try {
+    const sourceRoot = path.join(root, 'source'), financial = path.join(sourceRoot, 'services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial');
+    await mkdir(financial, { recursive: true });
+    await writeFile(path.join(financial, 'FinancialKernel.kt'), 'synthetic kernel');
+    await writeFile(path.join(financial, 'FinancialBrokerProbe.kt'), 'synthetic adapter');
+    const runtimeProofHashes = { kernelSha256: digest('synthetic kernel'), managedAdapterSha256: digest('synthetic adapter') };
+    const correctnessRaw = JSON.stringify({ result: 'PASS', ...runtimeProofHashes });
+    const capability = { ...heap.capability, javaVersion: '21.0.8', sourceHead: 'b'.repeat(40), fixtureSha256: digest('{}'),
+      configSha256: digest('{}'), maxHeapBytes: 4 * 1024 ** 3, vmArguments: ['-Xms128m', '-Xmx4g'] };
+    const capabilityRaw = JSON.stringify(capability);
+    await Promise.all([writeFile(path.join(root, 'fixture.json'), '{}'), writeFile(path.join(root, 'config.json'), '{}'),
+      writeFile(path.join(root, 'capability.json'), capabilityRaw), writeFile(path.join(root, 'correctness.json'), correctnessRaw)]);
+    const p = freezeDiagnostic({ sourceRoot, sourceHead: capability.sourceHead, fixtureSha256: capability.fixtureSha256, capability,
+      runtimeProofHashes, correctness: { ...JSON.parse(correctnessRaw), evidenceSha256: digest(correctnessRaw) },
+      fixtureEvidencePath: 'fixture.json', capabilityEvidencePath: 'capability.json', capabilityEvidenceSha256: digest(capabilityRaw),
+      correctnessEvidencePath: 'correctness.json' });
+    // Config identity belongs to capability; no injected top-level digest required.
+    assert.equal(Object.hasOwn(p, 'configSha256'), false);
+    assert.equal(p.capability.configSha256, digest('{}'));
+    const policyPath = path.join(root, 'policy.json');
+    await writeFile(policyPath, `${JSON.stringify(p, null, 2)}\n`);
+    const persisted = JSON.parse(await readFile(policyPath, 'utf8'));
+    await verifyDiagnosticEvidence(persisted, policyPath, path.join(root, 'config.json'));
+    await assert.rejects(verifyDiagnosticEvidence(p, path.join(root, 'policy.json'), path.join(root, 'config.json'), { ...capability, maxHeapBytes: 768 * 1024 ** 2 }), /CAPABILITY_DRIFT/);
+    await writeFile(path.join(root, 'config.json'), '{"changed":true}');
+    await assert.rejects(verifyDiagnosticEvidence(p, path.join(root, 'policy.json'), path.join(root, 'config.json')), /CONFIG_MISMATCH/);
+    await writeFile(path.join(root, 'config.json'), '{}'); await writeFile(path.join(financial, 'FinancialKernel.kt'), 'changed');
+    await assert.rejects(verifyDiagnosticEvidence(p, path.join(root, 'policy.json'), path.join(root, 'config.json')), /SOURCE_DRIFT/);
+    const changed = { ...p, expectedTimedTrades: 1 };
+    await assert.rejects(verifyDiagnosticEvidence(changed, path.join(root, 'policy.json'), path.join(root, 'config.json')), /FROZEN_POLICY_CHANGED/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

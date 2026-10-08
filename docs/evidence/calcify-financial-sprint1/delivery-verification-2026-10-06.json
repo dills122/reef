@@ -1,0 +1,54 @@
+{
+  "schema": "calcify-delivery-publication-verification-v1",
+  "dateUtc": "2026-10-06",
+  "reviewInstance": "1of3",
+  "verdict": "Ready",
+  "scope": "Empirical evidence/sprint reconciliation, final immutable citations and retention metadata; same review instance",
+  "reviewedImplementationCommit": "1c143125049d18ee5c8c8cf473e7ed81ae25df8c",
+  "executedBaseline": "863503ec23c27f33ecea14fd82724fe28f96d308",
+  "executedReviewedPatchSha256": "da8ad0e573c9d4a17a4da81c425401b08a34f4d3c04b8f301ec4061c1564117b",
+  "archiveCommit": "2331d97d9f9e6af8638d6ed335adbfac743d2c03",
+  "archiveFiles": 7628,
+  "archiveBytes": 1144093245,
+  "archiveManifestCounts": [
+    {
+      "manifest": "2026-10-06-calcify-sprint1-exit-proof.json",
+      "files": 7608,
+      "bytes": 1144001319
+    },
+    {
+      "manifest": "2026-10-06-calcify-sprint1-exit-review-supplement.json",
+      "files": 20,
+      "bytes": 91926
+    }
+  ],
+  "publicationChecks": {
+    "remoteFetchedTreeBinding": "PASS",
+    "allArchivedBlobSizesSha256AndSourceCheckpointOids": "7628/7628 PASS",
+    "inputJournalChunkReassembly": "3/3 PASS against originals",
+    "immutableCitationTargets": "4/4 PASS",
+    "initialReviewReportArchivedUnchanged": true,
+    "maintainedRetainedInventory": "Dated2026-10-06 correction verified; previous unrelated entries/order/reason preserved; current README and latest JSON hashes match",
+    "offlineRetention": "PASS520 archived migration entries; active references/fixtures/checksum companions",
+    "pinnedHistoricalRetention": "Root executed PASS520; inspected integration/retention-final.log",
+    "gitDiffCheck": "PASS",
+    "sourceRemoval": "none"
+  },
+  "closedFindings": [
+    "CPU temporal scope corrected:321184ms timed load through full coverage/drain includes inline validation; excludes later owner digest/result-only replay/final serialization/broker CPU",
+    "Required retained README checksum failure corrected in maintained inventory; latest empirical JSON added, prior selections preserved"
+  ],
+  "bounds": {
+    "recordsPr10": "published draft, unmerged; retain local originals until landing",
+    "brokerOutputTopics": "retained local volumes, not exported; no independent raw output-history replay claimed",
+    "capacityQualified": false,
+    "fullSprintExitComplete": false,
+    "newManagedRestartQualified": false,
+    "conservativeHeapUpperProven": false,
+    "implementationPolicyReview": "4of4 unchanged",
+    "priorQualificationReview": "3of3 unchanged"
+  },
+  "initialReportUrl": "https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md",
+  "retentionInventory": "docs/records/2026-10-06-calcify-sprint1-exit-retention.json",
+  "publicationSupplementPolicy": "Concise current receipt retained locally; no new bulk archive/review instance or recursive archive totals"
+}

@@ -198,4 +198,32 @@ class FinancialRateReferenceTest {
             assertNotEquals(digest(expectedOwner), reference.ownerDigest(), "$category changed fact must affect complete digest")
         }
     }
+    @Test fun empiricalTimedPolicyRejectsPromotionAndChangedCohortEvenWhenRehashed() {
+        fun spec() = json.readTree("""{"schema":"financial-empirical-timed-policy-v1","status":"FROZEN_EMPIRICAL_DIAGNOSTIC",
+          "purpose":"EMPIRICAL_TIMED_DIAGNOSTIC","capacityQualification":false,"heapConservativeBound":false,"estimatedHeapBytes":null,
+          "arm":{"rate":2500,"seconds":60,"state":"fresh"},"expectedTimedTrades":150000,"ackJournalMaxBytes":2147483648,
+          "aged":{"identities":0,"pendingItems":0},"diskBudgetBytes":10737418240,"diskHeadroomBytes":21474836480}""") as ObjectNode
+        fun sign(n: ObjectNode): ObjectNode { n.remove("policySha256"); n.put("policySha256", HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(n)))); return n }
+        FinancialRateProbe.validateDiagnosticPolicy(sign(spec()))
+        val larger = spec().apply { put("resourceProfile", "financial-empirical-disk16-v1"); put("diskBudgetBytes", 16L * 1024 * 1024 * 1024) }
+        FinancialRateProbe.validateDiagnosticPolicy(sign(larger))
+        val eight = larger.deepCopy().apply { put("resourceProfile", "financial-empirical-heap8-disk16-v1") }
+        FinancialRateProbe.validateDiagnosticPolicy(sign(eight))
+        assertEquals(FinancialHeapGuard.EMPIRICAL_8G_MAX, FinancialRateProbe.diagnosticHeapMax(eight))
+        assertEquals(FinancialHeapGuard.EMPIRICAL_MAX, FinancialRateProbe.diagnosticHeapMax(larger))
+        assertEquals(FinancialHeapGuard.EMPIRICAL_MAX, FinancialRateProbe.diagnosticHeapMax(spec()))
+        larger.put("diskBudgetBytes", 10L * 1024 * 1024 * 1024)
+        assertFailsWith<IllegalArgumentException> { FinancialRateProbe.validateDiagnosticPolicy(sign(larger)) }
+        larger.put("resourceProfile", "custom")
+        assertFailsWith<IllegalArgumentException> { FinancialRateProbe.validateDiagnosticPolicy(sign(larger)) }
+        for (change in listOf<(ObjectNode) -> Unit>(
+            { it.put("capacityQualification", true) }, { it.put("heapConservativeBound", true) },
+            { it.put("estimatedHeapBytes", 1) }, { it.set<JsonNode>("heap", json.createObjectNode()) },
+            { (it["arm"] as ObjectNode).put("rate", 5000) }, { it.put("expectedTimedTrades", 149999) },
+            { it.put("ackJournalMaxBytes", 2147483647L) })) {
+            val n = spec(); change(n); assertFailsWith<IllegalArgumentException> { FinancialRateProbe.validateDiagnosticPolicy(sign(n)) }
+        }
+        val changed = sign(spec()); changed.put("diskBudgetBytes", 1)
+        assertFailsWith<IllegalArgumentException> { FinancialRateProbe.validateDiagnosticPolicy(changed) }
+    }
 }

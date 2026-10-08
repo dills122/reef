@@ -72,3 +72,21 @@ removal. [Relocation inventory](records/2026-10-03-calcify-e0-migration.json) pi
 source/archive hashes; focused [checkpoint](evidence/calcify-financial-sprint1/README.md),
 frozen inputs and broker fixture remain local. No readiness upgrade or other-topic
 archive sweep. Future completion follows this compact-summary/full-proof split.
+
+
+## October6 Calcify empirical sprint exit
+
+[Retention inventory](records/2026-10-06-calcify-sprint1-exit-retention.json) keeps
+current sprint owner, RFC, documentation map and concise latest verification in
+Reef. [Closed raw proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d) plus [independent delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md)
+published at `2331d97d9f9e6af8638d6ed335adbfac743d2c03`;7628files/1144093245B verified against source and remote
+commit/tree binding. All three input journals reassemble exactly from32MiB chunks.
+Original setup refusals, two4GiB resource-aborted arms,8GiB target miss/full-cohort
+parity and correction/review receipts preserved. No runtime authority or
+conservative capacity qualification follows.
+
+Source checkpoints remain local-only, not pushed to Reef. RocksDB/build/deps and
+retained broker output-topic volumes excluded; complete raw output replay is not
+claimed. No tracked Reef original removed; [Records PR10](https://github.com/dills122/reef-records/pull/10)
+remains draft. Raw local session retained until archive landing. Guidance and
+overviews unchanged for test-only resource permission; affected owners updated.

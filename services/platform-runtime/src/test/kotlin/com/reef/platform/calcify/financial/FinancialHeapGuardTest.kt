@@ -307,4 +307,30 @@ class FinancialHeapGuardTest {
         while (g.failure == null && System.nanoTime() < end) Thread.yield()
         assertNotNull(g.failure)
     }
+    @Test fun empiricalFixedHeapBudgetIsSeparateAndBreachRemainsSticky() {
+        val max = FinancialHeapGuard.EMPIRICAL_MAX; val used = AtomicLong(128)
+        assertFailsWith<IllegalArgumentException> { FinancialHeapBounds.limit(max) }
+        assertFailsWith<IllegalArgumentException> { FinancialHeapGuard.empiricalTimed(max - 1) }
+        FinancialHeapGuard.empiricalTimed(max, { FinancialHeapSnapshot(max, used.get(), 0) }, { 0 }).use { g ->
+            g.start(); assertEquals(max * 4 / 5, g.admissionLimitBytes)
+            assertEquals("financial-empirical-heap-observation-v1", g.telemetry()["schema"])
+            assertEquals(false, g.telemetry()["heapConservativeBound"]); assertEquals(null, g.telemetry()["estimatedHeapBytes"])
+            used.set(max * 4 / 5); assertFailsWith<IllegalStateException> { g.refresh("breach") }
+            used.set(0); assertFailsWith<IllegalStateException> { g.refresh("after-gc") }
+        }
+    }
+    @Test fun empiricalEightGiBRequiresSeparateExplicitAuthorizationAndExactObservedMaximum() {
+        val max = FinancialHeapGuard.EMPIRICAL_8G_MAX
+        assertFailsWith<IllegalArgumentException> { FinancialHeapGuard.empiricalTimed(max) }
+        assertFailsWith<IllegalArgumentException> { FinancialHeapGuard.empiricalTimed(FinancialHeapGuard.EMPIRICAL_MAX, authorizedMax = max) }
+        assertFailsWith<IllegalArgumentException> { FinancialHeapGuard.empiricalTimed(max, authorizedMax = max + 1) }
+        FinancialHeapGuard.empiricalTimed(max, { FinancialHeapSnapshot(max, 128, 0) }, { 0 }, authorizedMax = max).use { g ->
+            g.start(); assertEquals(max * 4 / 5, g.admissionLimitBytes)
+            assertEquals(max, g.telemetry()["actualMaxHeapBytes"])
+            assertEquals(false, g.telemetry()["heapConservativeBound"])
+        }
+        FinancialHeapGuard.empiricalTimed(max, { FinancialHeapSnapshot(FinancialHeapGuard.EMPIRICAL_MAX, 128, 0) }, { 0 }, authorizedMax = max).use {
+            assertFailsWith<IllegalStateException> { it.start() }
+        }
+    }
 }

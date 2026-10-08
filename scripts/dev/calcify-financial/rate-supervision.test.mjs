@@ -202,3 +202,63 @@ test('actual financial runtime validates planned new paths and refuses symlinked
     assert.equal(prepared, 1);
   } finally { await rm(root, { recursive: true, force: true }); await rm(foreign, { recursive: true, force: true }); }
 });
+
+
+test('empirical resource profile must match frozen policy hash and hard budget', async () => {
+  const { validateRateResourcePolicy } = await import('./rate-supervision.mjs');
+  const policy = { schema: 'financial-empirical-timed-policy-v1', status: 'FROZEN_EMPIRICAL_DIAGNOSTIC',
+    resourceProfile: 'financial-empirical-disk16-v1', capacityQualification: false, heapConservativeBound: false,
+    diskBudgetBytes: 16 * 1024 ** 3 };
+  policy.policySha256 = createHash('sha256').update(JSON.stringify(policy)).digest('hex');
+  const p = { resourceProfile: policy.resourceProfile, resourcePolicyBinding: { resourceProfile: policy.resourceProfile,
+    diskBudgetBytes: policy.diskBudgetBytes, policySha256: policy.policySha256 } };
+  assert.equal(validateRateResourcePolicy(p, policy), policy);
+  const eight = { ...policy, resourceProfile: 'financial-empirical-heap8-disk16-v1' }; delete eight.policySha256;
+  eight.policySha256 = createHash('sha256').update(JSON.stringify(eight)).digest('hex');
+  const eightSupervisor = { resourceProfile: eight.resourceProfile, resourcePolicyBinding: { resourceProfile: eight.resourceProfile,
+    diskBudgetBytes: eight.diskBudgetBytes, policySha256: eight.policySha256 } };
+  assert.equal(validateRateResourcePolicy(eightSupervisor, eight), eight);
+  assert.throws(() => validateRateResourcePolicy(p, eight), /RESOURCE_POLICY_MISMATCH/);
+  for (const changed of [{ ...policy, resourceProfile: undefined }, { ...policy, diskBudgetBytes: 10 * 1024 ** 3 },
+    { ...policy, policySha256: 'f'.repeat(64) }, { ...policy, capacityQualification: true }])
+    assert.throws(() => validateRateResourcePolicy(p, changed), /RESOURCE_POLICY_MISMATCH/);
+  assert.throws(() => validateRateResourcePolicy({}, policy), /RESOURCE_POLICY_MISMATCH/);
+  assert.throws(() => validateRateResourcePolicy(p, {}), /RESOURCE_POLICY_MISMATCH/);
+  assert.deepEqual(validateRateResourcePolicy({}, {}), {});
+});
+
+test('producer policies survive clone, JSON round-trip and digest-field relocation for both resource profiles', async () => {
+  const { freezeDiagnostic } = await import('./rate-proof.mjs');
+  const { validateRateResourcePolicy } = await import('./rate-supervision.mjs');
+  const digest = 'a'.repeat(64), sourceHead = 'b'.repeat(40);
+  for (const [resourceProfile, gib] of [['financial-empirical-disk16-v1', 4], ['financial-empirical-heap8-disk16-v1', 8]]) {
+    const policy = freezeDiagnostic({ sourceHead, fixtureSha256: digest, sourceRoot: '/tmp/source', resourceProfile,
+      capability: { schema: 'financial-heap-capability-v1', sourceHead, fixtureSha256: digest, configSha256: digest,
+        buildSha256: digest, classpathSha256: digest, maxHeapBytes: gib * 1024 ** 3, usedHeapBytes: 0,
+        vmArguments: ['-Xms128m', `-Xmx${gib}g`], javaVersion: '21.0.8', javaVendor: 'Oracle Corporation' },
+      correctness: { result: 'PASS', evidenceSha256: digest, kernelSha256: digest, managedAdapterSha256: digest },
+      runtimeProofHashes: { kernelSha256: digest, managedAdapterSha256: digest },
+      fixtureEvidencePath: 'fixture.json', capabilityEvidencePath: 'capability.json', capabilityEvidenceSha256: digest,
+      correctnessEvidencePath: 'correctness.json', policySha256: 'stale input digest' });
+    const p = { resourceProfile, resourcePolicyBinding: { policySha256: policy.policySha256, diskBudgetBytes: policy.diskBudgetBytes } };
+    const { policySha256, ...unsigned } = policy;
+    // Independent legacy calculation protects already archived v1 policy bindings.
+    assert.equal(policySha256, createHash('sha256').update(JSON.stringify(unsigned)).digest('hex'));
+    for (const roundTrip of [structuredClone(policy), JSON.parse(`${JSON.stringify(policy, null, 2)}\n`),
+      { policySha256, ...unsigned }]) {
+      assert.equal(validateRateResourcePolicy(p, roundTrip), roundTrip);
+      assert.deepEqual(freezeDiagnostic(roundTrip), policy);
+    }
+    assert.throws(() => validateRateResourcePolicy(p, { ...policy, capability: { ...policy.capability, configSha256: 'c'.repeat(64) } }), /POLICY_MISMATCH/);
+    assert.throws(() => validateRateResourcePolicy(p, { ...policy, expectedTimedTrades: 1 }), /POLICY_MISMATCH/);
+    assert.throws(() => validateRateResourcePolicy(p, { ...policy, policySha256: 'c'.repeat(64) }), /POLICY_MISMATCH/);
+    // v1 supervisor binds frozen serialization, not an order-insensitive JSON value.
+    const reordered = { ...Object.fromEntries(Object.entries(unsigned).reverse()), policySha256 };
+    assert.throws(() => validateRateResourcePolicy(p, reordered), /POLICY_MISMATCH/);
+    const newlyFrozen = freezeDiagnostic(reordered);
+    assert.notEqual(newlyFrozen.policySha256, policySha256);
+    assert.throws(() => validateRateResourcePolicy(p, newlyFrozen), /POLICY_MISMATCH/);
+    const newlyBound = { ...p, resourcePolicyBinding: { ...p.resourcePolicyBinding, policySha256: newlyFrozen.policySha256 } };
+    assert.equal(validateRateResourcePolicy(newlyBound, newlyFrozen), newlyFrozen);
+  }
+});

@@ -1472,3 +1472,79 @@ Campaign reused Calcify functional smoke, which forces PostgreSQL intake/idempot
 ### Calcify direct-path D7 sustained qualification (October 2, 2026)
 
 Fresh C5-style durable direct ingress16lanes/64instruments/1,024workers/matching batch500 attached Phase1 stub verifier and Phase2 managed resolver. Local10CPU/15.6GiB, RF1/write.caching=false; PostgreSQL startup identity control only. D7 passed300s: conservative deadline rates10,425.19 verified matched trades/s and10,440.92 resolved full-fact contexts/s. All3,142,846trades exact/ordered/unique, zero HTTP failures/retries;64seeded maker orders excluded. Timed durable HTTP ACKs10,475.59orders/s. One aggressor order per trade; does not establish two-sided paired or mixed-command10k trade capacity. Whole-batch matching-entry->verified visibility p99 upper433ms, not exact individual matching-acceptance latency. Bounded poll-level extraction transactions fixed actual backlog: comparable60s paired D4~2,045->D5~5,167verified trades/s. D6 standing-liquidity60s diagnostic precedes fresh D7; workload/retention changes separately declared. [Report/config/corrections](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md), [frozen policy and exact qualification](evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/results.json). Earlier SQL campaign and D1 caching mistake remain historical diagnostics, not intended-path capacity bounds.
+
+
+### Calcify financial empirical diagnostic — October6, 2026 UTC
+
+Baseline863503ec, unchanged financial kernel/managed adapter; prior bounded
+1000/100 managed-restart proof is separate. New fixed fresh single-domain workload:
+2500trades/s for60s,150000trades,300000CAPTURE/SETTLE actions; finite exact
+prefunding,4GiB Java21 JVM,2GiB ACK journal. Three pinned RF3 Redpanda brokers,
+1CPU/2GiB container each, cachingfalse,2000ms commit interval, no compression.
+This is empirical test-adapter scope; no production capacity/conservative upper
+bound, aged state, SQL/API cost or new managed restart.
+
+Two setup refusals preserved: arm1 relative output rejected before payload; arm2
+missing registered store/journal directories rejected before payload and stopped
+owned brokers. Correction uses absolute unique output plus precreated empty
+registered store/journal; proof output stays absent until launcher creates it.
+
+Arm3 strict observation started02:22:28.778Z; allocation guard aborted02:24:34.816Z.
+Last valid project allocation9649577984B; rejected raw sum10155438080B exceeded
+9GiB abort threshold. Broker allocation8690835456B plus host1464602624B at
+rejected observation. No final measurement. Closed journal verifies272154
+published actions/136077paired SETTLE inputs, no tails; first-to-last source
+offered span120.708s. Processor requires published journal membership before
+execution, hence settled count at any cut <=136077, below150000 target. This
+is count upper bound, not observed deadline settlement rate.
+
+Arm4 used fresh cluster and fixed financial-empirical-disk16-v1 profile:
+14GiB abort/16GiB hard,20GiB guest-free floor,256MiB raw-proof cap,5s supervision;
+old9/10GiB limits preserved. Strict observation started02:39:20.457Z; run aborted
+02:41:40.473Z at sampled80% heap guard3435973836B. Actual peak not emitted.
+Last valid project allocation11005157376B stayed below14GiB. Closed journal
+verifies297280actions/148640paired inputs, no tails; offered span129.572s.
+Same source-membership argument bounds any-cut settled count <=148640; target
+miss proven, actual deadline count unknown. Neither arm completed economic/
+history/replay audit. Exact owned brokers/JVM stopped; volumes retained.
+
+Closed read-only volume audits occur after stop and differ from live peak
+allocation observations; do not substitute them for peak or infer causal cost.
+Fixed 8GiB permission retains workload/disk limits, changes no kernel/reference
+algorithm. User authorized one extra review; review4of4 code/concrete envelope Ready.
+Original failures, frozen identities, cleanup and forensic receipts published
+in [immutable closed proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d); exact source bytes and journal reassembly
+verified. Local raw session retained until archive lands; no tracked originals removed. Current execution owner: [work plan](WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc).
+
+
+Arm5 fixed 8GiB/fresh cluster strict sample03:06:14.705Z; closed03:10:21.499Z.
+Wrapper0/PROOF_READY; launcher1/FAIL_DIAGNOSTIC preserves useful target miss.
+At60s: offered71296,callback71286,admitted71256,decided/settled63104,pending0;
+settled covering rate1051.7333/s. Final 150000 offered/admitted/decided/settled,
+300001 complete histories; independent economic/owner/history checks and
+result-only replay pass. Replay98.545s; no separately launched managed restart.
+Producer132.040s, post-producer drain8.139s; frozen producer,drain,rate and lag
+limits fail. Later completion cannot repair deadline miss. Sampled150 individual
+offer-to-read-committed-settlement latencies p95=7904ms,p99=8003ms cover full
+cohort, not just deadline. Closed source journal300000 exact actions/150000pairs,
+3146publication batches, zero tails,112172230source bytes; frame/hash chain/index/
+witness/scope/full payloads independently verify against frozen gross fixture.
+
+JVM sampled heap3962293592B excludes final serialization/staged writes; reported
+RSS4726587392B separate. Same-JVM process CPU321184ms covers timed load through
+full coverage/drain, including worker/producer/observer inline validation. It
+excludes later owner digest, result-only replay, final serialization and brokers.
+Assessment divides by scheduled60s to
+normalize cohort cost;5.353 equivalent cores is not actual core utilization.
+Encoded input112172230B, results883951833B; encoded technical store bytes unknown.
+53strict live allocation samples peak11773079552B include three broker directories
+and registered host store/journal/proof; VM overhead excluded. Probe physical
+inventory disk8831485940B has different measurement scope/time, not replacement
+for allocated project peak. No continuous memory/disk bound or causal bottleneck
+attribution. All owned brokers/JVM stopped; volumes retained. Reviewed implementation
+commit1c143125 follows run; actual baseline863503ec+frozen patchda8ad0e573c9d4a17a4da81c425401b08a34f4d3c04b8f301ec4061c1564117b.
+[Focused current verification](evidence/calcify-financial-sprint1/e4-verification-2026-10-06.json)
+links measured scope and failed original arms; [complete proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d) and
+[delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md) published/verified. Raw output topic records remain
+in retained broker volumes, not exported; external independent replay of every
+owner/history output is not claimed.

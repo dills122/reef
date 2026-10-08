@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { validatePreflight, validateBrokerEndpoints, superviseProof, dockerDependencies, launchOwnedWrapper } from './proof-supervisor.mjs';
+import { validatePreflight, validateBrokerEndpoints, superviseProof, dockerDependencies, launchOwnedWrapper, EMPIRICAL_DISK_PROFILE, EMPIRICAL_8G_DISK_PROFILE } from './proof-supervisor.mjs';
 import { readBoundedJSON } from './physical-adapter.mjs';
 
 export function validateBootstrapRuntime(config, supervisor, output, brokerArgument) {
@@ -29,6 +29,26 @@ export function validateBootstrapRuntime(config, supervisor, output, brokerArgum
     || scope.metadataSource !== 'actual AdminClient describeCluster'
     || scope.bootstrapServers !== brokerArgument || !isDeepStrictEqual(scope.brokers, brokers)) reject('BROKER_SCOPE_MISMATCH');
   return config;
+}
+
+// v1 binds JSON field order. Preserve archived digests; omit only the digest itself.
+// Reordering creates a new policy identity and requires a new supervisor binding.
+export function policyDigest(policy) {
+  const unsigned = Object.fromEntries(Object.entries(policy).filter(([key]) => key !== 'policySha256'));
+  return createHash('sha256').update(JSON.stringify(unsigned)).digest('hex');
+}
+
+export function validateRateResourcePolicy(p, policy) {
+  if (p.resourceProfile === undefined && policy.resourceProfile === undefined) return policy;
+  if (![EMPIRICAL_DISK_PROFILE.name, EMPIRICAL_8G_DISK_PROFILE.name].includes(p.resourceProfile) || policy.resourceProfile !== p.resourceProfile
+    || policy.schema !== 'financial-empirical-timed-policy-v1' || policy.status !== 'FROZEN_EMPIRICAL_DIAGNOSTIC'
+    || policy.capacityQualification !== false || policy.heapConservativeBound !== false
+    || policy.diskBudgetBytes !== EMPIRICAL_DISK_PROFILE.hardAllocatedBytes
+    || p.resourcePolicyBinding?.policySha256 !== policy.policySha256
+    || p.resourcePolicyBinding?.diskBudgetBytes !== policy.diskBudgetBytes
+    || policy.policySha256 !== policyDigest(policy))
+    throw Error('RATE_RESOURCE_POLICY_MISMATCH');
+  return policy;
 }
 
 async function verifyCanonicalRuntimeDirectories(config) {
@@ -68,9 +88,14 @@ export async function superviseRateAdapter(adapter, adapterPath, args, out, env,
     throw Error('RATE_SUPERVISOR_EVIDENCE_HASH_OR_SIZE_MISMATCH');
   const p = validateRateSupervisor(JSON.parse(bytes), adapter.command, args, out);
   if (args[4] === 'com.reef.platform.calcify.financial.FinancialRateProbe'
-    && ['run', 'calibrate', 'bootstrap-calibrate'].includes(args[5])) {
+    && ['run', 'calibrate', 'bootstrap-calibrate', 'diagnostic-run'].includes(args[5])) {
     if (typeof args[8] !== 'string' || !path.isAbsolute(args[8])) throw Error('RATE_RUNTIME_CONFIG_ARGUMENT_REQUIRED');
     const config = validateBootstrapRuntime(await readBoundedJSON(args[8], 1024 * 1024), p, out, args[6]);
+    if (args[5] === 'diagnostic-run') {
+      const index = args.indexOf('--financial-rate-policy');
+      if (index < 0) throw Error('RATE_RESOURCE_POLICY_REQUIRED');
+      validateRateResourcePolicy(p, await readBoundedJSON(args[index + 1], 1024 * 1024));
+    }
     await verifyCanonicalRuntimeDirectories(config);
   }
   const controller = new AbortController(), abort = () => controller.abort();

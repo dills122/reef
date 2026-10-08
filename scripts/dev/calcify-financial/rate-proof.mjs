@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { tmpdir } from 'node:os';
-import { superviseRateAdapter } from './rate-supervision.mjs';
+import { EMPIRICAL_DISK_PROFILE, EMPIRICAL_8G_DISK_PROFILE } from './proof-supervisor.mjs';
+import { superviseRateAdapter, policyDigest } from './rate-supervision.mjs';
 import { freezeBootstrap, verifyBootstrapEvidence, validateBootstrapResult } from './bootstrap-calibration.mjs';
 import { readBoundedJSON } from './physical-adapter.mjs';
 
@@ -42,6 +43,132 @@ export const HEAP_LAUNCHER = Object.freeze({
   flags: ['-Xms128m', '-Xmx768m'], maxHeapBytes: 768 * 1024 ** 2,
   mainClass: 'com.reef.platform.calcify.financial.FinancialRateProbe',
 });
+// Explicit finite empirical resource permission; never conservative admission.
+export const DIAGNOSTIC_LAUNCHER = Object.freeze({ ...HEAP_LAUNCHER,
+  flags: ['-Xms128m', '-Xmx4g'], maxHeapBytes: 4 * 1024 ** 3 });
+export const DIAGNOSTIC_8G_LAUNCHER = Object.freeze({ ...HEAP_LAUNCHER,
+  flags: ['-Xms128m', '-Xmx8g'], maxHeapBytes: 8 * 1024 ** 3 });
+export function diagnosticLauncher(profile) {
+  if (profile === EMPIRICAL_8G_DISK_PROFILE.name) return DIAGNOSTIC_8G_LAUNCHER;
+  if (profile === undefined || profile === EMPIRICAL_DISK_PROFILE.name) return DIAGNOSTIC_LAUNCHER;
+  throw Error('EMPIRICAL_RESOURCE_PROFILE_REQUIRED');
+}
+export function freezeDiagnostic(input) {
+  const r = structuredClone(input), c = r.capability;
+  const launcher = diagnosticLauncher(r.resourceProfile);
+  if (r.heap !== undefined || r.heapConservativeBound === true || r.capacityQualification === true
+    || r.estimatedHeapBytes != null || (r.arm && !isDeepStrictEqual(r.arm, { rate: 2500, seconds: 60, state: 'fresh' })))
+    throw Error('EMPIRICAL_DIAGNOSTIC_SCOPE_REQUIRED');
+  if (!revision(r.sourceHead) || !hash(r.fixtureSha256) || typeof r.sourceRoot !== 'string' || !path.isAbsolute(r.sourceRoot)
+    || c?.schema !== 'financial-heap-capability-v1' || c.sourceHead !== r.sourceHead || c.fixtureSha256 !== r.fixtureSha256
+    || !['configSha256', 'buildSha256', 'classpathSha256'].every(k => hash(c[k]))
+    || c.maxHeapBytes !== launcher.maxHeapBytes || !nonnegative(c.usedHeapBytes)
+    || c.usedHeapBytes >= Math.floor(c.maxHeapBytes * 4 / 5)
+    || !isDeepStrictEqual(c.vmArguments, launcher.flags)
+    || typeof c.javaVersion !== 'string' || !/^21(?:[.+-]|$)/.test(c.javaVersion) || typeof c.javaVendor !== 'string' || !c.javaVendor)
+    throw Error('EMPIRICAL_PINNED_CAPABILITY_REQUIRED');
+  if (r.correctness?.result !== 'PASS' || !hash(r.correctness.evidenceSha256)
+    || !['kernelSha256', 'managedAdapterSha256'].every(k => hash(r.runtimeProofHashes?.[k]) && r.correctness[k] === r.runtimeProofHashes[k])
+    || !['fixtureEvidencePath', 'capabilityEvidencePath', 'correctnessEvidencePath'].every(k => typeof r[k] === 'string' && r[k])
+    || !hash(r.capabilityEvidenceSha256)) throw Error('EMPIRICAL_CORRECTNESS_BINDING_REQUIRED');
+  const frozen = { ...r, schema: 'financial-empirical-timed-policy-v1', status: 'FROZEN_EMPIRICAL_DIAGNOSTIC',
+    purpose: 'EMPIRICAL_TIMED_DIAGNOSTIC', arm: { rate: 2500, seconds: 60, state: 'fresh' }, expectedTimedTrades: 150000,
+    ackJournalMaxBytes: 2 * 1024 ** 3, capacityQualification: false, heapConservativeBound: false, estimatedHeapBytes: null,
+    openingResources: { cashNanos: '1500000000000', shares: '150000' }, aged: { identities: 0, pendingItems: 0 },
+    diskBudgetBytes: r.resourceProfile ? EMPIRICAL_DISK_PROFILE.hardAllocatedBytes : PLAN.diskBudgetBytes, diskHeadroomBytes: PLAN.diskHeadroomBytes };
+  delete frozen.policySha256;
+  return { ...frozen, policySha256: policyDigest(frozen) };
+}
+export async function verifyDiagnosticEvidence(policy, policyPath, configPath, actual = policy.capability) {
+  const frozen = freezeDiagnostic(policy), launcher = diagnosticLauncher(policy.resourceProfile);
+  if (!isDeepStrictEqual(frozen, policy)) throw Error('EMPIRICAL_FROZEN_POLICY_CHANGED');
+  const root = await realpath(path.dirname(path.resolve(policyPath)));
+  const owned = async name => { const file = await realpath(path.resolve(root, name));
+    if (!file.startsWith(root + path.sep)) throw Error('EMPIRICAL_EVIDENCE_OUTSIDE_POLICY'); return file; };
+  for (const [name, digest, object] of [
+    [policy.capabilityEvidencePath, policy.capabilityEvidenceSha256, policy.capability],
+    [policy.correctnessEvidencePath, policy.correctness.evidenceSha256,
+      Object.fromEntries(Object.entries(policy.correctness).filter(([k]) => k !== 'evidenceSha256'))]]) {
+    const bytes = await readFile(await owned(name));
+    if (bytes.length > 1024 * 1024 || createHash('sha256').update(bytes).digest('hex') !== digest
+      || !isDeepStrictEqual(JSON.parse(bytes), object)) throw Error('EMPIRICAL_RAW_EVIDENCE_MISMATCH');
+  }
+  if (createHash('sha256').update(await readFile(await owned(policy.fixtureEvidencePath))).digest('hex') !== policy.fixtureSha256
+    || createHash('sha256').update(await readFile(configPath)).digest('hex') !== policy.capability.configSha256)
+    throw Error('EMPIRICAL_FIXTURE_CONFIG_MISMATCH');
+  const immutable = c => Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'usedHeapBytes'));
+  if (!isDeepStrictEqual(immutable(actual), immutable(policy.capability)) || !nonnegative(actual.usedHeapBytes)
+    || actual.usedHeapBytes >= Math.floor(launcher.maxHeapBytes * 4 / 5)) throw Error('EMPIRICAL_ACTUAL_CAPABILITY_DRIFT');
+  for (const [name, key] of [['FinancialKernel.kt', 'kernelSha256'], ['FinancialBrokerProbe.kt', 'managedAdapterSha256']]) {
+    const file = path.join(policy.sourceRoot, 'services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial', name);
+    if (createHash('sha256').update(await readFile(file)).digest('hex') !== policy.runtimeProofHashes[key]) throw Error('EMPIRICAL_RUNTIME_PROOF_SOURCE_DRIFT');
+  }
+  return frozen;
+}
+export function assessDiagnostic(policy, measurement) {
+  const policyValid = isDeepStrictEqual(freezeDiagnostic(policy), policy), launcher = diagnosticLauncher(policy.resourceProfile);
+  const conservativeShape = { ...policy, status: 'FROZEN', heap: { capability: policy.capability },
+    heapEstimate: { estimatedHeapBytes: null } };
+  conservativeShape.policySha256 = sha(Object.fromEntries(Object.entries(conservativeShape).filter(([k]) => k !== 'policySha256')));
+  const observation = measurement?.heapObservation;
+  const result = assessMeasurement(conservativeShape, { ...measurement, policySha256: conservativeShape.policySha256 });
+  result.gaps = result.gaps.filter(g => g !== 'HEAP_LIFECYCLE_OBSERVATION_REQUIRED');
+  result.failures = result.failures.filter(f => f !== 'HEAP_LIFECYCLE_PROTECTION_FAILED'
+    && !(f === 'DISK_BUDGET_EXCEEDED' && [EMPIRICAL_DISK_PROFILE.name, EMPIRICAL_8G_DISK_PROFILE.name].includes(policy.resourceProfile)));
+  if (nonnegative(measurement?.resources?.diskPeakBytes) && measurement.resources.diskPeakBytes > policy.diskBudgetBytes)
+    result.failures.push('EMPIRICAL_DISK_BUDGET_EXCEEDED');
+  const supportedSchema = measurement?.schema === 'financial-rate-measurement-v1';
+  const validEnvelope = policyValid && supportedSchema && measurement.policySha256 === policy.policySha256
+    && measurement.purpose === 'EMPIRICAL_TIMED_DIAGNOSTIC' && measurement.heapConservativeBound === false
+    && measurement.capacityQualification === false && measurement.sourceHead === policy.sourceHead
+    && measurement.fixtureSha256 === policy.fixtureSha256 && hash(measurement.workloadSha256);
+  if (!supportedSchema) result.failures.push('EMPIRICAL_MEASUREMENT_SCHEMA_REQUIRED');
+  if (!validEnvelope) result.failures.push('EMPIRICAL_SCOPE_OR_PROVENANCE_MISMATCH');
+  if (observation?.schema !== 'financial-empirical-heap-observation-v1' || observation.guardOutcome !== 'PASS_SAMPLED'
+    || observation.actualMaxHeapBytes !== launcher.maxHeapBytes
+    || observation.admissionLimitBytes !== Math.floor(launcher.maxHeapBytes * 4 / 5)
+    || !nonnegative(observation.heapPeakBytes) || observation.heapPeakBytes >= observation.admissionLimitBytes
+    || observation.estimatedHeapBytes !== null || observation.heapConservativeBound !== false)
+    result.failures.push('EMPIRICAL_HEAP_PROTECTION_FAILED');
+  if (measurement?.restore?.records !== 300001 || measurement?.ackJournal?.publishedMembers !== 300000
+    || measurement.ackJournal.maxAggregateBytes !== policy.ackJournalMaxBytes) result.failures.push('EMPIRICAL_COMPLETE_ACTION_HISTORY_REQUIRED');
+  result.result = result.failures.length ? 'FAIL_DIAGNOSTIC' : 'LIMITED';
+  const deadline = measurement?.deadline;
+  const validDeadline = validEnvelope && ['offered', 'admitted', 'decided', 'settled', 'pending'].every(k => nonnegative(deadline?.[k]))
+    && deadline.offered <= policy.expectedTimedTrades && deadline.offered >= deadline.admitted && deadline.offered >= deadline.decided
+    && deadline.admitted >= deadline.settled && deadline.decided === deadline.settled + deadline.pending;
+  result.usefulRateOutcome = !validDeadline ? 'UNKNOWN'
+    : deadline.decided * 1000 / (policy.arm.seconds * 1000) >= policy.arm.rate
+      && deadline.settled * 1000 / (policy.arm.seconds * 1000) >= policy.arm.rate ? 'TARGET_MET' : 'TARGET_MISSED';
+  return { ...result, policySha256: policy.policySha256, heapConservativeBound: false,
+    gaps: [...result.gaps, 'Empirical resource budget; no conservative heap upper bound or capacity qualification'] };
+}
+export async function diagnosticAdapter(policyPath, adapterPath, out, authorize) {
+  if (authorize !== '--authorize-load') throw Error('Explicit --authorize-load required.');
+  const policy = await readBoundedJSON(policyPath, 1024 * 1024), adapter = await readBoundedJSON(adapterPath, 65536);
+  const pinned = pinnedHeapAdapter(adapter, 'diagnostic-run', diagnosticLauncher(policy.resourceProfile));
+  await verifyDiagnosticEvidence(policy, policyPath, pinned[8]);
+  const lockPath = capacityLockPath(), lock = await open(lockPath, 'wx');
+  try {
+    await lock.writeFile(`${JSON.stringify({ pid: process.pid, policyPath, out, mode: 'diagnostic-run' })}\n`);
+    await mkdir(out);
+    await writeFile(path.join(out, 'policy.json'), `${JSON.stringify(policy, null, 2)}\n`);
+    const attempt = await captureHeapCapability(adapter.command, [...pinned.slice(0, 5), 'heap-capability', policy.sourceHead,
+      path.resolve(path.dirname(policyPath), policy.fixtureEvidencePath), pinned[8]]);
+    await writeFile(path.join(out, 'heap-capability-attempt.json'), `${JSON.stringify(attempt, null, 2)}\n`);
+    if (attempt.code !== 0 || attempt.timedOut || attempt.outputOverflow) throw Error('EMPIRICAL_CAPABILITY_PROCESS_FAILED');
+    await verifyDiagnosticEvidence(policy, policyPath, pinned[8], JSON.parse(attempt.stdout));
+    const measurement = path.resolve(out, 'measurement.json');
+    const args = [...pinned, '--financial-rate-policy', path.resolve(policyPath), '--financial-rate-measurement', measurement];
+    await writeFile(path.join(out, 'command.json'), `${JSON.stringify({ command: adapter.command, args }, null, 2)}\n`);
+    const ended = await superviseRateAdapter(adapter, adapterPath, args, out, heapEnvironment());
+    await writeFile(path.join(out, 'process.json'), `${JSON.stringify(ended, null, 2)}\n`);
+    const result = assessDiagnostic(policy, await readBoundedJSON(measurement, 8 * 1024 * 1024));
+    await writeFile(path.join(out, 'assessment.json'), `${JSON.stringify(result, null, 2)}\n`);
+    return result;
+  } finally { await lock.close(); await unlink(lockPath); }
+}
+
 const heapFields = ['identityHeapBytesUpper', 'pendingHeapBytesUpper', 'baselineHeapBytesUpper',
   'transientHeapReserveBytes', 'replayHeapReserveBytes', 'supportedIdentities', 'supportedPendingItems'];
 const heapIdentities = ['sourceHead', 'fixtureSha256', 'configSha256', 'buildSha256', 'classpathSha256'];
@@ -113,10 +240,10 @@ export async function verifyHeapEvidence(policy, policyPath, actual = policy.hea
   return heap;
 }
 
-function pinnedHeapAdapter(adapter, mode = 'run') {
-  if (adapter.command !== HEAP_LAUNCHER.java || !Array.isArray(adapter.args)) throw Error('HEAP_PINNED_LAUNCHER_REQUIRED');
+function pinnedHeapAdapter(adapter, mode = 'run', launcher = HEAP_LAUNCHER) {
+  if (adapter.command !== launcher.java || !Array.isArray(adapter.args)) throw Error('HEAP_PINNED_LAUNCHER_REQUIRED');
   const a = adapter.args;
-  if (a.length !== 9 || a[0] !== HEAP_LAUNCHER.flags[0] || a[1] !== HEAP_LAUNCHER.flags[1]
+  if (a.length !== 9 || a[0] !== launcher.flags[0] || a[1] !== launcher.flags[1]
     || a[2] !== '-cp' || typeof a[3] !== 'string' || !a[3] || a[4] !== HEAP_LAUNCHER.mainClass
     || a[5] !== mode || typeof a[8] !== 'string') throw Error('HEAP_PINNED_LAUNCHER_REQUIRED');
   return a;
@@ -387,6 +514,9 @@ export async function bootstrapAdapter(requestPath, adapterPath, out, authorize)
 async function main(args) {
   const [mode, ...rest] = args;
   if (mode === 'plan') return PLAN;
+  if (mode === 'freeze-diagnostic') return freezeDiagnostic(JSON.parse(await readFile(rest[0], 'utf8')));
+  if (mode === 'diagnostic-run') return diagnosticAdapter(...rest);
+  if (mode === 'assess-diagnostic') return assessDiagnostic(JSON.parse(await readFile(rest[0], 'utf8')), JSON.parse(await readFile(rest[1], 'utf8')));
   if (mode === 'freeze') return preparePolicy(JSON.parse(await readFile(rest[0], 'utf8')));
   if (mode === 'assess') return assessMeasurement(JSON.parse(await readFile(rest[0], 'utf8')), JSON.parse(await readFile(rest[1], 'utf8')));
   if (mode === 'calibrate') return calibrateAdapter(...rest);
