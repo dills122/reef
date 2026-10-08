@@ -49,6 +49,16 @@ merged configuration, inspect `make dev-compose-config` before running.
 
 ## Calcify Phase 1 sidecars
 
+Finite P0 source work uses isolated matching process/stack with
+`MATCHING_ENGINE_CALCIFY_SOURCE_PROFILE` set to JSON from
+[`finite-source-profile-v1.json`](../contracts/calcify/finite-source-profile-v1.json)
+and `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0`. Compose forwards profile;
+unset/empty preserves ordinary dev behavior. Do not enable on shared legacy stack:
+undeclared run/session/instrument commands reject. [Matching profile contract and
+checks](../services/matching-engine/README.md#finite-calcify-p0-source-profile)
+describe finite identity/quantity limits and restore. This is source acceptance,
+not financial settlement or throughput qualification.
+
 Apply forward-only migrations, then add `compose.calcify.yml` to `REEF_COMPOSE_FILES`
 and select profiles `redpanda,calcify-phase1`. This runs independent extractor,
 stub verifier, and receipt worker beside existing post-matching services.

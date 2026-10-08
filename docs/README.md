@@ -24,7 +24,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 | Order | Owner | Read for |
 | --- | --- | --- |
-| 1 | [Current work](WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc) | Merged work, empirical E4 diagnostic, sprint exit decisions and next P3 slice |
+| 1 | [Current work](WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026) | Merged E4 work, finite P0 source gate and next lifecycle/coverage slice |
 | 2 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
 | 3 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
 | 4 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |

@@ -150,6 +150,13 @@ Goal is 10,000 resolved commitments/trades per second sustained. With one trade 
 
 Standing liquidity needs one timed aggressor command per trade after untimed maker seeds; D7 qualifies that distinct workload. Implementation and functional checks do not establish general capacity, fault recovery under sustained load, or production readiness. Consult throughput ledger and original evidence for workload, deployment, rate, lag, reconciliation, and recovery limits.
 
+Finite P0 matching acceptance now has separate opt-in
+[source profile](../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07),
+with retention0 and finite run/order/state envelope. This does not extend Phase1/2
+wire facts or establish financial lifecycle/coverage, broker profile binding or
+financial authority. [Current work](WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
+owns remaining P3 sequence.
+
 ## Source map
 
 - [Phase 1 wire contract](../contracts/calcify/README.md) and [Phase 2 Protobuf](../contracts/proto/calcify.proto).

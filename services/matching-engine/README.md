@@ -58,7 +58,55 @@ The implementation consumes `SubmitOrder`, `ModifyOrder`, and `CancelOrder` comm
 
 Hot book ownership is shard-local. The command router must send all submit/cancel/modify commands for a `runId + venueSessionId + instrumentId` book key to the same durable partition and matching-engine shard owner. The book itself is in-memory Go state; recovery is planned as snapshot plus durable command/event replay with checksum verification. See [`../../docs/HOT_BOOK_SHARDING_PLAN.md`](../../docs/HOT_BOOK_SHARDING_PLAN.md).
 
-### Terminal retention and recovery compatibility
+### Finite Calcify P0 source profile
+
+Opt-in `MATCHING_ENGINE_CALCIFY_SOURCE_PROFILE` binds finite isolated matching
+scope. Example configuration lives in
+[`contracts/calcify/finite-source-profile-v1.json`](../../contracts/calcify/finite-source-profile-v1.json).
+Run IDs, session and instrument must match every submit/modify/cancel; order IDs
+are canonical `p0-1` through configured `maxOrderIds`. Explicit command IDs/timestamps required for deterministic replay. Terminal retention
+must be explicitly `0`. Startup rejects invalid config or quote mismatch before listeners
+or direct-stream replay. Compose forwards profile without changing default stack.
+
+Example isolated-process configuration:
+
+```sh
+export MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0
+export MATCHING_ENGINE_CALCIFY_SOURCE_PROFILE="$(cat contracts/calcify/finite-source-profile-v1.json)"
+```
+
+[Contract](../../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
+owns caps and errors. At most two explicit runs share one session/instrument;
+each run admits at most10000 distinct numbered IDs. Quantity cap1000000,
+price cap1000000000000, each command text field128 bytes. Bounded namespace
+limits retained state with existing `(runId,orderId)` index; no counters/scans.
+Terminal IDs never evict. Cross-run raw-ID reuse remains valid. Command attempts,
+broker history, elapsed time and whole-process heap remain separately bounded by
+future finite source/lifecycle launcher work; these structural caps are not heap
+or throughput measurements.
+
+Whole-service snapshot V4 carries checksum-covered normalized profile hash.
+Restore refuses changed/disabled profile, legacy unbound snapshot, eviction,
+foreign scope and out-of-budget book/order state. Two-run profiles reject scoped
+partial snapshots. Canonical command replay must use same frozen config/profile;
+this change does not register profile against broker history. Existing unprofiled
+snapshot bytes and legacy terminal reuse remain unchanged.
+
+October7 local verification, base `85e513278` plus P0 changes:
+`go test ./...` in `services/matching-engine` passes whole module;
+`go test -race ./internal/app ./internal/streamdirect` and `go vet ./...` pass.
+Compose config with example profile confirms JSON and retention0 forwarding;
+`bun scripts/ci/check-records-retention.mjs` passes520 pinned archive files. Actual domain/stream
+handlers exercise submit, amend-triggered exact2-unit trade at price100,
+zero-trade amend/cancel, filled/cancelled duplicate refusal, collocated run reuse,
+JSON snapshot restore, command replay with batch sizes1/3/20 and failed-publication
+rollback/retry. Stream transport uses test broker doubles; no live broker, financial
+SQL/API integration, capacity or new managed-restart qualification claimed.
+Retention no-op: concise current verification retained here and execution in work
+plan; no new raw bulk bundle or standalone superseded record. Prior E4 proof and
+immutable archive links remain distinct.
+
+## Terminal retention and recovery compatibility
 
 `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0` preserves all terminal
 records. Positive `N` keeps at most `N` terminal records **per exact

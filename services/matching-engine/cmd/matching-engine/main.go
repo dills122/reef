@@ -29,7 +29,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid matching instrument quotes: %v", err)
 	}
-	service := app.NewService(quotes)
+	sourceProfile, err := app.CalcifySourceProfileFromJSON(os.Getenv("MATCHING_ENGINE_CALCIFY_SOURCE_PROFILE"), os.Getenv("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT"))
+	if err != nil {
+		log.Fatalf("invalid Calcify source profile: %v", err)
+	}
+	service := app.NewService(quotes, sourceProfile)
+	if err := service.ValidateCalcifySourceProfile(); err != nil {
+		log.Fatalf("invalid Calcify source profile: %v", err)
+	}
 	server := transport.NewServer(service)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
