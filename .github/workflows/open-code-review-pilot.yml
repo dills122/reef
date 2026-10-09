@@ -23,7 +23,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: alibaba/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # v1.12.9
+      - uses: alibaba/open-code-review@182898cf522da3d04157b422752d028417974e19 # v1.12.12
         with:
           ocr_version: '1.12.9'
           llm_url: https://openrouter.ai/api/v1
