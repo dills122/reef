@@ -28,12 +28,14 @@ spikes. [Reviewed session plan](work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) owns
 task queue and acceptance gates; local manager ledger
 `.planning/calcify-p3-overnight/session.json` owns dispatch/review/resource leases.
 
-O0 source/budget alignment active. O0D doc reconciliation accepted after fresh
-independent review1of3: current guard/profile limits, merged Records checkpoints
-and historical dispatch reconciled; proof bytes preserved. Baseline Kotlin
-Calcify182tests, Go app/stream suites and gate-model23tests pass. O1 lifecycle
-capture, O2 finite ingress/closure, O3 financial admission, O4 atomic SQL/read and
-O5 repair/restart remain gated by reviewed predecessors. Final45min reserved for
+O0 source/budget contract accepted after review2of3; review1 policy failure and
+focused DAY/Open-session research spike retained. [Source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md)
+owns lifecycle membership, logical budgets, closure and restore acceptance.
+O0D doc reconciliation integrated at `7aba4d0a`, fresh review1of3. Baseline Kotlin
+Calcify182tests, Go app/stream suites and gate-model23tests pass. O1 Go producer
+and Kotlin contract/capture dispatch next under disjoint leases, combined review
+cap3. O2 finite ingress/closure, O3 financial admission, O4 atomic SQL/read and O5
+repair/restart remain gated by reviewed predecessors. Final45min reserved for
 verification/retention/handoff. Existing financial authority and capacity claims
 unchanged; no implementation or new broker proof accepted yet.
 
