@@ -10,7 +10,7 @@ assert.equal(parseJavaMajor('openjdk version "21.0.8" 2025-07-15'), 21);
 
 const requirements = repoRequirements();
 assert.equal(requirements.bun, "1.3.14");
-assert.equal(requirements.go, "1.26.0");
+assert.equal(requirements.go, "1.26.9");
 assert.equal(requirements.java, "21");
 assert.equal(requirements.node, "22.22.1");
 

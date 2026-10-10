@@ -19,16 +19,17 @@ import (
 )
 
 type Service struct {
-	booksMu           sync.RWMutex
-	books             map[string]*orderBook
-	orderIndex        *orderIndex
-	now               func() time.Time
-	orderControls     OrderControls
-	sessionControls   SessionControls
-	matchingProfiles  MatchingProfiles
-	stpMode           SelfTradePreventionMode
-	terminalRetention terminalOrderRetention
-	instrumentQuotes  map[string]string
+	booksMu              sync.RWMutex
+	books                map[string]*orderBook
+	orderIndex           *orderIndex
+	now                  func() time.Time
+	orderControls        OrderControls
+	sessionControls      SessionControls
+	matchingProfiles     MatchingProfiles
+	stpMode              SelfTradePreventionMode
+	terminalRetention    terminalOrderRetention
+	calcifySourceProfile *CalcifySourceProfile
+	instrumentQuotes     map[string]string
 }
 
 type restingOrder = hotbook.RestingOrder
@@ -208,6 +209,9 @@ func (s *Service) submitOrder(cmd domain.SubmitOrder, rollback *BatchRollback) d
 	if !validOccurredAt(cmd.OccurredAt) {
 		return invalidOccurredAtResult(cmd.CommandID, cmd.OrderID)
 	}
+	if !s.calcifySourceSubmitOrder(cmd) {
+		return sourceProfileRejection(cmd.CommandID, cmd.OrderID, cmd.OccurredAt)
+	}
 	now := s.occurredAt(cmd.OccurredAt)
 
 	if cmd.OrderID == "" {
@@ -320,6 +324,9 @@ func (s *Service) cancelOrder(cmd domain.CancelOrder, rollback *BatchRollback) d
 	if !validOccurredAt(cmd.OccurredAt) {
 		return invalidOccurredAtResult(cmd.CommandID, cmd.OrderID)
 	}
+	if !s.calcifySourceCancelOrder(cmd) {
+		return sourceProfileRejection(cmd.CommandID, cmd.OrderID, cmd.OccurredAt)
+	}
 	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
@@ -383,6 +390,9 @@ func withCommandOutcomeEventID(result domain.SubmitOrderResult, commandID string
 func (s *Service) modifyOrder(cmd domain.ModifyOrder, rollback *BatchRollback) domain.SubmitOrderResult {
 	if !validOccurredAt(cmd.OccurredAt) {
 		return invalidOccurredAtResult(cmd.CommandID, cmd.OrderID)
+	}
+	if !s.calcifySourceModifyOrder(cmd) {
+		return sourceProfileRejection(cmd.CommandID, cmd.OrderID, cmd.OccurredAt)
 	}
 	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
@@ -864,7 +874,7 @@ func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
 		records:     make(map[orderIdentity]*orderRollback),
 	}
 	for _, scope := range scopes {
-		if scope.InstrumentID == "" {
+		if scope.InstrumentID == "" || !s.calcifySourceScope(scope.RunID, scope.VenueSessionID, scope.InstrumentID) {
 			continue
 		}
 		key := scope.Key()

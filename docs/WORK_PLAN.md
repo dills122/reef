@@ -18,6 +18,30 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify finite P0 source gate — October 7, 2026
+
+Reef478 merged at `85e513278`; Records10 merged at `1419b7e0`.
+Branch `codex/calcify-p0-source-gate` implements next bounded task from P3 ladder:
+opt-in finite matching profile/startup guard pinned to retention0, one or two
+explicit runs, one session/instrument, numbered finite order IDs and bounded
+quantity/price/text. Existing no-reuse index retained; no snapshot redesign or
+second ID store. Optional profile fingerprint extends existing snapshot metadata.
+[Source contract](../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
+and [focused verification](../services/matching-engine/README.md#finite-calcify-p0-source-profile)
+own configuration, restore boundaries and exact local test scope. Whole matching
+module and focused app/stream race checks pass. Canonical command-path tests use
+broker doubles; no live broker or production financial authority qualification.
+Retention pass no-op: no new bulk evidence or standalone superseded record;
+continuously maintained owners updated, prior empirical proof unchanged.
+
+Next bounded task: versioned source lifecycle/coverage membership and finite
+command/history/closure budgets, with exact execution and zero-trade dispositions,
+future-window burst closure and restored frontier. Then financial admission/runtime
+adapter, atomic SQL/read seam and funding/repair/restart acceptance. Profile changes
+still require frozen canonical replay configuration; durable broker profile binding
+is not established by this matching-only gate. Full P0 RFC/adoption decisions stay
+open beyond this finite identity acceptance slice.
+
 ## Calcify sprint1 exit continuation — October 6, 2026 UTC
 
 Baseline `863503ec`; branch `codex/calcify-sprint1-exit-2026-10-06`.
@@ -42,13 +66,13 @@ Old 768 MiB conservative and 1,000/100 bootstrap evidence remain unchanged.
 No new managed-restart qualification or fourth prior E4 qualification instance.
 Complete [raw proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d) and [independent delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md)
 published/verified; [retention inventory](records/2026-10-06-calcify-sprint1-exit-retention.json).
-Records PR10 remains draft; no local tracked original removed.
+Records PR10 was draft at this checkpoint; merged October7 at `1419b7e0`. No local tracked original removed.
 
 October7 PR478 follow-up: shared empirical policy digest preserves v1 bindings;
 persisted config evidence and both resource-profile round-trips covered. Focused
 Node53/53 and exact hosted Node invocation280/280; retention check passes.
 [Verification and retention scope](evidence/calcify-financial-sprint1/README.md#pr478-policy-review-follow-up--october7-2026).
-No new timed load; next finite P0 source gate below remains pending.
+No new timed load; finite P0 source gate now implemented in October7 section above.
 
 | Existing sprint exit | Current evidence / next action |
 | --- | --- |
@@ -96,11 +120,9 @@ SQL projector/common-snapshot progress contract remain implementation work.
 Existing legacy materializer scans complete persisted run facts; it does not
 establish new bounded SQL bundle behavior. Reservations, external effects, netting,
 production migration and full-path throughput qualification remain outside this
-first slice. First implementation task: explicit opt-in finite isolated source
-profile/startup guard pinned to terminal retention0, with terminal duplicate and
-restore acceptance. Existing no-reuse behavior needs binding to declared source
-contract, not another ID set or snapshot redesign. Live adoption remains owner
-decision; lifecycle/coverage follows this scoped gate.
+first slice. Finite profile/startup guard now implemented in October7 section above; terminal
+duplicate and restore acceptance covered locally. Lifecycle/coverage and finite
+command/history budgets follow this scoped gate. Live adoption remains owner decision.
 
 ## Calcify E4 continuation — October 5, 2026
 

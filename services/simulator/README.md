@@ -2,6 +2,11 @@
 
 This directory contains CLI simulation and load-testing tools for Reef.
 
+Go security baseline: module/CI floor `1.26.9`, container builder `1.27.2`.
+October 9, 2026 verification: pinned `govulncheck v1.7.0` reports no
+vulnerabilities; whole-module uncached tests, vet, module tidy and container
+build pass.
+
 ## Fast Tests And Long Runs
 
 Fast simulator tests are part of the normal repository gate:

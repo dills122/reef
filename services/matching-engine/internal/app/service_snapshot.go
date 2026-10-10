@@ -20,6 +20,7 @@ type Snapshot struct {
 const terminalRetentionPolicy = "book-scoped-v1"
 
 type SnapshotMetadata struct {
+	CalcifySourceProfileHash   string   `json:"calcifySourceProfileHash,omitempty"`
 	SnapshotVersion            string   `json:"snapshotVersion"`
 	EngineVersion              string   `json:"engineVersion"`
 	BookCount                  int      `json:"bookCount"`
@@ -67,6 +68,10 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 }
 
 func (s *Service) SnapshotForScope(scope BookScope) (Snapshot, bool) {
+	// A collocated finite profile restores complete run lifetime, not one run's subset.
+	if s.calcifySourceProfile != nil && len(s.calcifySourceProfile.RunIDs) > 1 {
+		return Snapshot{}, false
+	}
 	keys, books, unlock := s.lockSnapshotBooks(func(key string) bool { return key == scope.Key() })
 	defer unlock()
 	if len(keys) == 0 {
@@ -105,6 +110,7 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		TerminalRetentionPolicy:    terminalRetentionPolicy,
 		TerminalRetentionLimit:     s.terminalRetention.limit,
 		InstrumentQuoteCatalogHash: s.instrumentQuoteCatalogHash(),
+		CalcifySourceProfileHash:   s.calcifySourceProfileHash(),
 		EngineVersion:              "matching-engine-app-v1",
 		BookCount:                  len(snapshot.Books),
 		OrderCount:                 len(snapshot.Orders),
@@ -163,6 +169,9 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 		return nil, false
 	}
 	service := NewService(options...)
+	if !service.validCalcifySourceSnapshot(snapshot) {
+		return nil, false
+	}
 	if snapshot.Metadata.InstrumentQuoteCatalogHash != service.instrumentQuoteCatalogHash() {
 		return nil, false
 	}
@@ -304,6 +313,11 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 		builder.WriteString(snapshot.Metadata.TerminalRetentionPolicy)
 		builder.WriteByte(':')
 		builder.WriteString(strconv.Itoa(snapshot.Metadata.TerminalRetentionLimit))
+		builder.WriteByte(';')
+	}
+	if snapshot.Metadata.CalcifySourceProfileHash != "" {
+		builder.WriteString("calcify-source-profile:")
+		builder.WriteString(snapshot.Metadata.CalcifySourceProfileHash)
 		builder.WriteByte(';')
 	}
 	if snapshot.Metadata.InstrumentQuoteCatalogHash != "" {

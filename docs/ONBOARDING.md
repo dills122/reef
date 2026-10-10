@@ -15,7 +15,7 @@ is the detailed runtime and performance runbook after onboarding.
 | Setup | Use it for | What you install |
 |---|---|---|
 | Core local stack | API, data, matching, smoke tests, and most cross-service work | Git, Make, curl, Docker Compose v2, Bun |
-| Full contributor | Native Go/Kotlin work, Bot SDK, Arena UI, docs site, and the full test suite | Core tools plus Node 22, npm, Go 1.25+, Java 21, and repository dependencies |
+| Full contributor | Native Go/Kotlin work, Bot SDK, Arena UI, docs site, and the full test suite | Core tools plus Node 22, npm, Go 1.26.9+, Java 21, and repository dependencies |
 | Optional infrastructure | Kubernetes prototypes, hosted backbone operations, or remote benchmark workers | Full setup plus the tools and access named by that infrastructure runbook |
 
 Normal contributors do **not** need cloud tokens, production database
@@ -49,7 +49,7 @@ Make sure Docker has enough free disk and memory for a multi-container build.
 |---|---|---|
 | Node.js | `22.22.1` in `.node-version` (major 22 is the compatibility floor) | Docs site and frontend toolchains |
 | npm | Bundled with Node 22 | Reproducible docs-site install from `package-lock.json` |
-| Go | `1.25.0` or newer | Matching engine; also satisfies the simulator's Go 1.23.4 floor |
+| Go | `1.26.9` or newer patched release | Matching engine and simulator security floor; CI scans use 1.26.9 and container builders use 1.27.2 |
 | Java/JDK | 21, recorded in `.java-version` | Platform runtime, Arena control plane, and stock-data Gradle builds |
 
 Gradle itself does not need a separate install. The Kotlin services use their

@@ -1,0 +1,10 @@
+{
+  "schema": "calcify-finite-source-v1",
+  "runIds": ["calcify-p0-local"],
+  "venueSessionId": "calcify-p0-session",
+  "instrumentId": "AAPL",
+  "currency": "USD",
+  "maxOrderIds": 1000,
+  "maxQuantityUnits": 100,
+  "maxLimitPrice": 100000000000
+}

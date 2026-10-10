@@ -68,7 +68,10 @@ covers all contract packages.
 Order-index identity is lane-local `(sourceGeneration, runId, orderId)`. Different
 runs may reuse IDs; conflicting immutable acceptance facts within one run remain
 a fault, even after terminal matcher retention. Same-run identity lifetime still
-needs an upstream no-reuse or explicit-incarnation contract before financial use.
+requires upstream no-reuse or explicit incarnation before financial use. Optional
+[finite P0 source profile](../calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
+now enforces retention0/no-reuse inside its declared bounded run scope; ordinary
+matcher eviction/reuse behavior remains unchanged.
 See [current run-scope contract](../calcify/README.md#resolver-run-scope-and-hidden-limit-compatibility-2026-10-02).
 Identical fact,
 acceptance and command replay preserves earliest provenance. Never overwrite
