@@ -89,7 +89,7 @@ assert.match(ci, /protobuf\/releases\/download\/v33\.2\/protoc-33\.2-linux-x86_6
 assert.match(ci, /b24b53f87c151bfd48b112fe4c3a6e6574e5198874f38036aff41df3456b8caf/);
 const goVulnerabilityScan = jobBlocks(ci).get("go-vulnerability-scan");
 assert.doesNotMatch(ci, /golang\/govulncheck-action@/, "vulnerability scanner install must be version-pinned");
-assert.match(goVulnerabilityScan, /go-version: '1\.26\.x'/);
+assert.match(goVulnerabilityScan, /go-version: '1\.26\.9'/);
 assert.match(goVulnerabilityScan, /cache-dependency-path: \$\{\{ matrix\.workdir \}\}\/go\.sum/);
 assert.match(goVulnerabilityScan, /go install golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.7\.0/);
 assert.match(goVulnerabilityScan, /run: govulncheck \.\/\.\.\./);

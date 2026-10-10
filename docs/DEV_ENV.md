@@ -18,7 +18,7 @@ Docker-first workflow on this page specifically, you need at minimum:
 - Docker with Compose plugin
 - `curl`
 - Bun runtime
-- Go 1.25+ (only needed for native Go tests and commands such as
+- Go 1.26.9+ patched release (only needed for native Go tests and commands such as
   `make dev-stress`, which runs the Go load tester)
 
 ## Base workflow

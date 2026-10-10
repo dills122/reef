@@ -34,7 +34,7 @@ credential, Tailscale account, or direct login to the hosted Reef box.
 ## Full Contributor Setup
 
 Developers changing the native services or apps also need the Node version in
-`.node-version` with npm, Go 1.25 or newer, and Java 21. Install the repository, Arena, and docs-site
+`.node-version` with npm, Go 1.26.9 or newer patched release, and Java 21. Install the repository, Arena, and docs-site
 dependency roots, then check the complete toolchain:
 
 ```bash
