@@ -176,21 +176,49 @@ assert.doesNotMatch(ocrPilot, /^      - (?:name:|run:)/gm, "pilot must not execu
 assert.match(ocrPilot, /alibaba\/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d/);
 assert.match(ocrPilot, /ocr_version: '1\.12\.9'/);
 assert.match(ocrPilot, /review_concurrency: '2'/);
+assert.match(ocrPilot, /effort: medium/);
+assert.match(ocrPilot, /max_tokens_budget: '1500000'/);
+assert.doesNotMatch(ocrPilot, /workflow_dispatch:|continue-on-error:|full_review: 'false'/);
 assert.match(ocrPilot, /llm_auth_token: \$\{\{ secrets\.OCR_OPENROUTER_API_KEY \}\}/);
 assert.match(ocrPilot, /upload_artifacts: 'false'/);
 assert.deepEqual(ocrRule, {
   include: ["services/**/*_test.go", "services/**/src/test/**/*.kt"],
-  exclude: ["docs/**", "reports/**"],
+  exclude: ["docs/**", "reports/**", "services/platform-runtime/src/main/java/reef/contracts/calcify/v1/**"],
   rules: [],
 });
 
 const excludedByPilot = (path) => ocrRule.exclude.some((pattern) =>
   path.startsWith(pattern.slice(0, -2))
 );
-for (const path of ["docs/evidence/sample.json", "reports/sample.json"]) {
+for (const path of [
+  "docs/evidence/sample.json",
+  "reports/sample.json",
+  "services/platform-runtime/src/main/java/reef/contracts/calcify/v1/Calcify.java",
+  "services/platform-runtime/src/main/java/reef/contracts/calcify/v1/LifecycleMemberV1.java",
+  "services/platform-runtime/src/main/java/reef/contracts/calcify/v1/OrderLifecycleCommandV1OrBuilder.java",
+]) {
   assert.equal(excludedByPilot(path), true, `${path} must be excluded`);
 }
-for (const path of ["services/matching-engine/main.go", ".github/workflows/ci.yml"]) {
+for (const path of [
+  "services/matching-engine/main.go",
+  "services/matching-engine/internal/app/calcify_source_identity_test.go",
+  "services/matching-engine/internal/app/calcify_source_profile.go",
+  "services/matching-engine/internal/domain/calcify_lifecycle.go",
+  "services/matching-engine/internal/streamdirect/calcify_lifecycle_checksum_test.go",
+  "services/matching-engine/internal/streamdirect/calcify_lifecycle_config_test.go",
+  "services/matching-engine/internal/streamdirect/calcify_lifecycle_test.go",
+  "services/matching-engine/internal/streamdirect/config.go",
+  "services/matching-engine/internal/streamdirect/processor.go",
+  "services/matching-engine/internal/streamdirect/runner.go",
+  ...["FiniteLifecycleCaptureProcessor", "FiniteLifecycleCaptureRuntime", "FiniteLifecycleContract"].flatMap((name) => [
+    `services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/${name}.kt`,
+    `services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/${name}Test.kt`,
+  ]),
+  "contracts/proto/calcify.proto",
+  "contracts/calcify/finite-lifecycle-source-v1-manifest.json",
+  "services/platform-runtime/src/main/java/reef/contracts/orderexecution/v1/ExecutionCreated.java",
+  ".github/workflows/ci.yml",
+]) {
   assert.equal(excludedByPilot(path), false, `${path} must remain reviewable`);
 }
 
