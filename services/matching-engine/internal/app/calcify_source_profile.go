@@ -85,6 +85,8 @@ func (s *Service) calcifySourceProfileHash() string {
 	if s.calcifySourceProfile == nil {
 		return ""
 	}
+	// v1 struct field order and sorted run IDs define immutable snapshot bytes.
+	// New fields/canonicalization require versioned migration, not silent v1 drift.
 	raw, _ := json.Marshal(s.calcifySourceProfile)
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])

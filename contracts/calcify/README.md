@@ -40,6 +40,10 @@ same-run resubmit; different declared runs may independently use same raw ID.
 Rejected submissions do not consume IDs. Submit, modify and cancel use existing
 manual/stream command paths; no extra ID store or admission counter.
 
+Input JSON key order, whitespace and equivalent string escapes do not affect hash.
+V1 struct field order and sorted run IDs are frozen compatibility bytes; new
+fields or canonicalization rules require explicit version/migration design.
+
 Snapshot V4 adds optional checksum-covered `calcifySourceProfileHash`. Restore
 requires identical normalized profile (run-list order ignored), retention0 and
 in-budget scopes, book entries and order records. Unbound legacy snapshots refuse

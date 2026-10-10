@@ -212,3 +212,48 @@ func TestCalcifySourceRestoreRefusesChangedProfileAndForeignState(t *testing.T) 
 		t.Fatal("run-list order changed profile")
 	}
 }
+
+func TestCalcifySourceV1DigestAndRestoreIgnoreInputSerialization(t *testing.T) {
+	// Pin existing v1 bytes/hash: producer and restore must not drift together.
+	const canonical = `{"schema":"calcify-finite-source-v1","runIds":["p0-other","p0-run"],"venueSessionId":"p0-session","instrumentId":"AAPL","currency":"USD","maxOrderIds":8,"maxQuantityUnits":10,"maxLimitPrice":1000}`
+	const digest = "162badd14581eb2de857e228b72b9ad1196eb9a60358c99f195ea02f0fadd66c"
+	service := finiteSourceService(t)
+	if result := service.SubmitOrder(finiteSubmit("p0-1")); result.Accepted == nil {
+		t.Fatal(result)
+	}
+	snapshot := service.Snapshot()
+	if snapshot.Metadata.CalcifySourceProfileHash != digest {
+		t.Fatal("persisted v1 profile identity changed")
+	}
+	var object map[string]any
+	if err := json.Unmarshal([]byte(finiteSourceRaw()), &object); err != nil {
+		t.Fatal(err)
+	}
+	pretty, err := json.MarshalIndent(object, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reordered := `{"maxLimitPrice":1000,"currency":"USD","maxQuantityUnits":10,"instrumentId":"AAPL","maxOrderIds":8,"venueSessionId":"p0-session","runIds":["p0-\u0072un","p0-other"],"schema":"calcify-finite-source-v1"}`
+	for _, raw := range []string{finiteSourceRaw(), canonical, string(pretty) + "\n", reordered} {
+		option := finiteSourceOption(t, raw)
+		candidate := NewService(WithTerminalOrderRetentionLimit(0), option)
+		bytes, err := json.Marshal(candidate.calcifySourceProfile)
+		if err != nil || string(bytes) != canonical || candidate.calcifySourceProfileHash() != digest {
+			t.Fatalf("equivalent input changed v1 identity: %s %v", bytes, err)
+		}
+		restored, ok := Restore(snapshot, WithTerminalOrderRetentionLimit(0), option)
+		if !ok || restored.Snapshot().Checksum != snapshot.Checksum {
+			t.Fatal("equivalent serialization blocked persisted snapshot restore")
+		}
+		if result := restored.SubmitOrder(finiteSubmit("p0-1")); result.Rejected == nil || result.Rejected.Code != "DUPLICATE_ORDER_ID" {
+			t.Fatal("restored identity reservation lost")
+		}
+	}
+	// Future schemas/extensions need explicit compatibility design, not weaker restore checks.
+	for _, raw := range []string{strings.Replace(canonical, "calcify-finite-source-v1", "calcify-finite-source-v2", 1),
+		strings.Replace(canonical, `"schema":`, `"futureField":true,"schema":`, 1)} {
+		if _, err := CalcifySourceProfileFromJSON(raw, "0"); err == nil {
+			t.Fatal("unversioned profile extension accepted")
+		}
+	}
+}

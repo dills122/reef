@@ -106,6 +106,15 @@ Retention no-op: concise current verification retained here and execution in wor
 plan; no new raw bulk bundle or standalone superseded record. Prior E4 proof and
 immutable archive links remain distinct.
 
+October9 PR479 comment follow-up: fixed v1 canonical bytes/digest now pinned by
+`TestCalcifySourceV1DigestAndRestoreIgnoreInputSerialization`. Reordered keys,
+pretty JSON, reversed run roster and equivalent escaped strings restore same
+persisted snapshot, preserve checksum and reject duplicate accepted ID. Unknown
+extensions/v2 refuse; changed limits remain covered by existing restore tests.
+`go test -count=1 ./internal/app` and `go test -race -count=1 ./internal/app` pass.
+Runtime semantics/digests unchanged; no new bulk evidence or superseded standalone
+record. Earlier independent review remains scoped to original implementation.
+
 ## Terminal retention and recovery compatibility
 
 `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0` preserves all terminal
