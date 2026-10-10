@@ -92,6 +92,12 @@ func (s *Service) calcifySourceProfileHash() string {
 	return hex.EncodeToString(digest[:])
 }
 
+// CalcifySourceProfileHash exposes existing immutable v1 identity without
+// exporting mutable profile data or changing canonical bytes.
+func (s *Service) CalcifySourceProfileHash() string {
+	return s.calcifySourceProfileHash()
+}
+
 func (s *Service) calcifySourceScope(run, session, instrument string) bool {
 	p := s.calcifySourceProfile
 	if p == nil {

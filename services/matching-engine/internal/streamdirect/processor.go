@@ -64,25 +64,29 @@ func (e *fatalProcessorError) Error() string { return e.cause.Error() }
 func (e *fatalProcessorError) Unwrap() error { return e.cause }
 
 type Processor struct {
-	service   *app.Service
-	source    CommandSource
-	publisher EventBatchPublisher
-	config    ProcessorConfig
-	stats     *Stats
-	now       func() time.Time
+	service              *app.Service
+	source               CommandSource
+	publisher            EventBatchPublisher
+	config               ProcessorConfig
+	stats                *Stats
+	now                  func() time.Time
+	lifecycleError       error
+	lifecycleProfileHash string
 }
 
 type ProcessorConfig struct {
-	ShardID              string
-	Partition            int
-	BatchSize            int
-	FetchTimeout         time.Duration
-	PollInterval         time.Duration
-	CommandStream        string
-	EventStreamName      string
-	Source               string
-	StopAfterAckFail     bool
-	StopAfterPublishFail bool
+	ShardID                    string
+	Partition                  int
+	BatchSize                  int
+	FetchTimeout               time.Duration
+	PollInterval               time.Duration
+	CommandStream              string
+	EventStreamName            string
+	Source                     string
+	StopAfterAckFail           bool
+	StopAfterPublishFail       bool
+	CalcifyLifecycleEnabled    bool
+	CalcifyFiniteBindingDigest string
 }
 
 type Stats struct {
@@ -143,16 +147,17 @@ type VenueEventBatch struct {
 }
 
 type CommandOutcomeFact struct {
-	RunID          string                   `json:"runId,omitempty"`
-	CommandID      string                   `json:"commandId"`
-	CommandType    string                   `json:"commandType"`
-	StreamSequence uint64                   `json:"streamSequence"`
-	DeliveredCount uint64                   `json:"deliveredCount"`
-	PayloadHash    string                   `json:"payloadHash"`
-	InstrumentID   string                   `json:"instrumentId"`
-	OrderID        string                   `json:"orderId"`
-	Status         string                   `json:"status"`
-	Result         domain.SubmitOrderResult `json:"result"`
+	RunID            string                          `json:"runId,omitempty"`
+	CommandID        string                          `json:"commandId"`
+	CommandType      string                          `json:"commandType"`
+	StreamSequence   uint64                          `json:"streamSequence"`
+	DeliveredCount   uint64                          `json:"deliveredCount"`
+	PayloadHash      string                          `json:"payloadHash"`
+	InstrumentID     string                          `json:"instrumentId"`
+	OrderID          string                          `json:"orderId"`
+	Status           string                          `json:"status"`
+	Result           domain.SubmitOrderResult        `json:"result"`
+	LifecycleCommand *domain.OrderLifecycleCommandV1 `json:"lifecycleCommand,omitempty"`
 }
 
 func NewProcessor(service *app.Service, source CommandSource, publisher EventBatchPublisher, config ProcessorConfig) *Processor {
@@ -176,7 +181,7 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 	stats.LastFetchedAt.Store("")
 	stats.LastAckedAt.Store("")
 	stats.LastBatchID.Store("")
-	return &Processor{
+	processor := &Processor{
 		service:   service,
 		source:    source,
 		publisher: publisher,
@@ -184,6 +189,11 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 		stats:     stats,
 		now:       time.Now,
 	}
+	processor.lifecycleError = validateCalcifyLifecycle(service, config.CalcifyLifecycleEnabled, config.CalcifyFiniteBindingDigest, config.BatchSize)
+	if config.CalcifyLifecycleEnabled && processor.lifecycleError == nil {
+		processor.lifecycleProfileHash = service.CalcifySourceProfileHash()
+	}
+	return processor
 }
 
 func (p *Processor) Stats() Snapshot {
@@ -245,6 +255,9 @@ func (p *Processor) Run(ctx context.Context) error {
 }
 
 func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
+	if p.lifecycleError != nil {
+		return 0, &fatalProcessorError{cause: p.lifecycleError}
+	}
 	deliveries, err := p.source.Fetch(ctx, p.config.BatchSize, p.config.FetchTimeout)
 	if err != nil {
 		return 0, err
@@ -305,6 +318,9 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 // not publish historical event batches: those were made visible atomically
 // with the offsets that define the replay boundary.
 func (p *Processor) RestoreCommitted(ctx context.Context, replayer CommittedCommandReplayer) (int, error) {
+	if p.config.CalcifyLifecycleEnabled {
+		return 0, fmt.Errorf("Calcify lifecycle committed replay requires durable bound recovery (O2)")
+	}
 	return replayer.ReplayCommitted(ctx, p.config.BatchSize, func(deliveries []CommandDelivery) error {
 		_, _, rollback, err := p.buildBatchMode(
 			deliveries,
@@ -395,16 +411,17 @@ func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt strin
 				status = "accepted"
 			}
 			fact = CommandOutcomeFact{
-				RunID:          outcome.RunID,
-				CommandID:      outcome.CommandID,
-				CommandType:    commandType,
-				StreamSequence: delivery.StreamSequence(),
-				DeliveredCount: delivery.DeliveredCount(),
-				PayloadHash:    sha256Hex(delivery.Data()),
-				InstrumentID:   outcome.InstrumentID,
-				OrderID:        outcome.OrderID,
-				Status:         status,
-				Result:         outcome.Result,
+				RunID:            outcome.RunID,
+				CommandID:        outcome.CommandID,
+				CommandType:      commandType,
+				StreamSequence:   delivery.StreamSequence(),
+				DeliveredCount:   delivery.DeliveredCount(),
+				PayloadHash:      sha256Hex(delivery.Data()),
+				InstrumentID:     outcome.InstrumentID,
+				OrderID:          outcome.OrderID,
+				Status:           status,
+				Result:           outcome.Result,
+				LifecycleCommand: outcome.LifecycleCommand,
 			}
 		}
 
@@ -482,13 +499,14 @@ func bestEffortCommandID(data []byte) string {
 }
 
 type processedOutcome struct {
-	RunID          string
-	CommandID      string
-	VenueSessionID string
-	InstrumentID   string
-	OrderID        string
-	Result         domain.SubmitOrderResult
-	DecodeError    string
+	RunID            string
+	CommandID        string
+	VenueSessionID   string
+	InstrumentID     string
+	OrderID          string
+	Result           domain.SubmitOrderResult
+	DecodeError      string
+	LifecycleCommand *domain.OrderLifecycleCommandV1
 }
 
 // decodeCommand unmarshals data into a T, returning the zero value and a
@@ -519,12 +537,13 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 		result := p.service.SubmitOrderInBatch(rollback, command)
 		result.AcceptedOrder = acceptedOrderFact(command, result)
 		return processedOutcome{
-			RunID:          command.RunID,
-			CommandID:      command.CommandID,
-			VenueSessionID: command.VenueSessionID,
-			InstrumentID:   command.InstrumentID,
-			OrderID:        command.OrderID,
-			Result:         result,
+			RunID:            command.RunID,
+			CommandID:        command.CommandID,
+			VenueSessionID:   command.VenueSessionID,
+			InstrumentID:     command.InstrumentID,
+			OrderID:          command.OrderID,
+			Result:           result,
+			LifecycleCommand: p.submitLifecycle(command),
 		}, true
 	case "ModifyOrder":
 		command, decodeErr := decodeCommand[domain.ModifyOrder](delivery.Data(), "modify")
@@ -541,12 +560,13 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 		command.VenueSessionID = venueSessionID
 		command.InstrumentID = instrumentID
 		return processedOutcome{
-			RunID:          command.RunID,
-			CommandID:      command.CommandID,
-			VenueSessionID: venueSessionID,
-			InstrumentID:   instrumentID,
-			OrderID:        command.OrderID,
-			Result:         p.service.ModifyOrderInBatch(rollback, command),
+			RunID:            command.RunID,
+			CommandID:        command.CommandID,
+			VenueSessionID:   venueSessionID,
+			InstrumentID:     instrumentID,
+			OrderID:          command.OrderID,
+			Result:           p.service.ModifyOrderInBatch(rollback, command),
+			LifecycleCommand: p.modifyLifecycle(command),
 		}, true
 	case "CancelOrder":
 		command, decodeErr := decodeCommand[domain.CancelOrder](delivery.Data(), "cancel")
@@ -559,12 +579,13 @@ func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery Comman
 		command.VenueSessionID = venueSessionID
 		command.InstrumentID = instrumentID
 		return processedOutcome{
-			RunID:          command.RunID,
-			CommandID:      command.CommandID,
-			VenueSessionID: venueSessionID,
-			InstrumentID:   instrumentID,
-			OrderID:        command.OrderID,
-			Result:         p.service.CancelOrderInBatch(rollback, command),
+			RunID:            command.RunID,
+			CommandID:        command.CommandID,
+			VenueSessionID:   venueSessionID,
+			InstrumentID:     instrumentID,
+			OrderID:          command.OrderID,
+			Result:           p.service.CancelOrderInBatch(rollback, command),
+			LifecycleCommand: p.cancelLifecycle(command),
 		}, true
 	default:
 		return processedOutcome{CommandID: bestEffortCommandID(delivery.Data())}, false
@@ -604,6 +625,51 @@ func acceptedOrderFact(command domain.SubmitOrder, result domain.SubmitOrderResu
 		Currency:       command.Currency,
 		TimeInForce:    command.TimeInForce,
 		AcceptedAt:     occurredAt,
+	}
+}
+
+func (p *Processor) submitLifecycle(command domain.SubmitOrder) *domain.OrderLifecycleCommandV1 {
+	if !p.config.CalcifyLifecycleEnabled {
+		return nil
+	}
+	return &domain.OrderLifecycleCommandV1{
+		Schema: domain.OrderLifecycleCommandSchemaV1, SourceProfileHash: p.lifecycleProfileHash,
+		FiniteBindingDigest: p.config.CalcifyFiniteBindingDigest, CommandType: "SubmitOrder",
+		CommandID: command.CommandID, RunID: command.RunID, VenueSessionID: command.VenueSessionID, InstrumentID: command.InstrumentID,
+		OrderID: command.OrderID, ParticipantID: command.ParticipantID, AccountID: command.AccountID,
+		TraceID: command.TraceID, CausationID: command.CausationID, CorrelationID: command.CorrelationID, ActorID: command.ActorID, OccurredAt: command.OccurredAt,
+		Submit: &domain.OrderLifecycleSubmitV1{
+			ClientOrderID: command.ClientOrderID, Side: command.Side, OrderType: command.OrderType,
+			QuantityUnits: command.QuantityUnits, LimitPrice: command.LimitPrice, Currency: command.Currency, TimeInForce: command.TimeInForce,
+		},
+	}
+}
+
+func (p *Processor) modifyLifecycle(command domain.ModifyOrder) *domain.OrderLifecycleCommandV1 {
+	if !p.config.CalcifyLifecycleEnabled {
+		return nil
+	}
+	return &domain.OrderLifecycleCommandV1{
+		Schema: domain.OrderLifecycleCommandSchemaV1, SourceProfileHash: p.lifecycleProfileHash,
+		FiniteBindingDigest: p.config.CalcifyFiniteBindingDigest, CommandType: "ModifyOrder",
+		CommandID: command.CommandID, RunID: command.RunID, VenueSessionID: command.VenueSessionID, InstrumentID: command.InstrumentID,
+		OrderID: command.OrderID, ParticipantID: command.ParticipantID, AccountID: command.AccountID,
+		TraceID: command.TraceID, CausationID: command.CausationID, CorrelationID: command.CorrelationID, ActorID: command.ActorID, OccurredAt: command.OccurredAt,
+		Modify: &domain.OrderLifecycleModifyV1{QuantityUnits: command.QuantityUnits, LimitPrice: command.LimitPrice},
+	}
+}
+
+func (p *Processor) cancelLifecycle(command domain.CancelOrder) *domain.OrderLifecycleCommandV1 {
+	if !p.config.CalcifyLifecycleEnabled {
+		return nil
+	}
+	return &domain.OrderLifecycleCommandV1{
+		Schema: domain.OrderLifecycleCommandSchemaV1, SourceProfileHash: p.lifecycleProfileHash,
+		FiniteBindingDigest: p.config.CalcifyFiniteBindingDigest, CommandType: "CancelOrder",
+		CommandID: command.CommandID, RunID: command.RunID, VenueSessionID: command.VenueSessionID, InstrumentID: command.InstrumentID,
+		OrderID: command.OrderID, ParticipantID: command.ParticipantID, AccountID: command.AccountID,
+		TraceID: command.TraceID, CausationID: command.CausationID, CorrelationID: command.CorrelationID, ActorID: command.ActorID, OccurredAt: command.OccurredAt,
+		Cancel: &domain.OrderLifecycleCancelV1{Reason: command.Reason},
 	}
 }
 

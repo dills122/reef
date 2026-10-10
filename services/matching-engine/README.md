@@ -121,6 +121,35 @@ extensions/v2 refuse; changed limits remain covered by existing restore tests.
 Runtime semantics/digests unchanged; no new bulk evidence or superseded standalone
 record. Earlier independent review remains scoped to original implementation.
 
+### Finite Calcify lifecycle source facts (O1)
+
+Optional `lifecycleCommand` in each decoded Submit/Modify/Cancel outcome preserves
+typed attempted economics, routed scope, decoded ownership and command metadata.
+Schema `calcify-order-lifecycle-command-v1` binds existing immutable P0 profile
+hash and separate lowercase SHA256 finite-binding identity. Successful amendments
+carry new total quantity (including filled units) and price; cancel preserves reason.
+Business rejection still includes attempted command evidence, never implied success.
+Submit carries decoded currency; Modify/Cancel have no currency field. Downstream
+capture checks retained acceptance plus immutable instrument/account binding.
+
+`MATCHING_ENGINE_CALCIFY_LIFECYCLE_ENABLED` defaults false; optional digest input is
+`MATCHING_ENGINE_CALCIFY_FINITE_BINDING_DIGEST`. Mode off omits field and preserves
+exact legacy JSON bytes/checksums and source-profile-v1 canonical identity. Model
+processor requires valid P0 profile, binding digest and batch1. Live `StartRunner`
+and committed replay explicitly refuse lifecycle mode until O2 durable registration,
+admission fencing and bound producer recovery replace gate; setting env alone
+cannot activate live mode. No default/bootstrap enablement added.
+
+Focused tests run actual processor through fixed12-command DAY/Open fixture:
+8 accepted outcomes,4 explicit rejections,3 trades/6 units,5 retained identities;
+new capture path expects15 members. Tests cover full mode-off bytes pinned before
+producer changes, complete typed checksum coverage, routed amendment/cancel,
+raw attempted decimal spelling, poison facts, publication rollback/retry and
+startup/replay refusal. Fixture identities parameterize frozen O0 run/session;
+exact values/profile hash/model-only binding published in tiny fixture manifest.
+No durable activation, live broker/restart, financial adoption or capacity proof.
+Retention no-op: new active contract/producer context; no superseded record removed.
+
 ## Terminal retention and recovery compatibility
 
 `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=0` preserves all terminal

@@ -31,6 +31,17 @@ type kafkaRunnerLane struct {
 }
 
 func StartRunner(parent context.Context, service *app.Service, config RuntimeConfig) (*Runner, error) {
+	if config.CalcifyLifecycleEnabled {
+		if err := validateCalcifyLifecycle(service, true, config.CalcifyFiniteBindingDigest, config.BatchSize); err != nil {
+			return nil, err
+		}
+		if config.LogProvider != "redpanda" {
+			return nil, fmt.Errorf("Calcify lifecycle requires transactional redpanda source")
+		}
+		// Model fact/capture proof cannot authorize replay under a new mode.
+		// O2 replaces this gate only after durable registration and bound restore.
+		return nil, fmt.Errorf("Calcify lifecycle live activation requires durable binding and restore (O2)")
+	}
 	if len(config.Partitions) == 0 {
 		return nil, fmt.Errorf("matching-engine direct stream requires at least one partition")
 	}
@@ -199,16 +210,18 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 		commandSource := CommandSource(source)
 		eventPublisher := wrapEventBatchPublisherWithLocalFaultHooks(publisher, config)
 		processor := NewProcessor(service, commandSource, eventPublisher, ProcessorConfig{
-			ShardID:              config.ShardID,
-			Partition:            partition,
-			BatchSize:            config.BatchSize,
-			FetchTimeout:         config.FetchTimeout,
-			PollInterval:         config.PollInterval,
-			CommandStream:        config.CommandStream,
-			EventStreamName:      config.EventStream,
-			Source:               "redpanda",
-			StopAfterAckFail:     config.TestStopAfterAckFail,
-			StopAfterPublishFail: config.TestStopAfterPublishFail,
+			ShardID:                    config.ShardID,
+			Partition:                  partition,
+			BatchSize:                  config.BatchSize,
+			FetchTimeout:               config.FetchTimeout,
+			PollInterval:               config.PollInterval,
+			CommandStream:              config.CommandStream,
+			EventStreamName:            config.EventStream,
+			Source:                     "redpanda",
+			CalcifyLifecycleEnabled:    config.CalcifyLifecycleEnabled,
+			CalcifyFiniteBindingDigest: config.CalcifyFiniteBindingDigest,
+			StopAfterAckFail:           config.TestStopAfterAckFail,
+			StopAfterPublishFail:       config.TestStopAfterPublishFail,
 		})
 		runner.processors = append(runner.processors, processor)
 		lanes = append(lanes, kafkaRunnerLane{
