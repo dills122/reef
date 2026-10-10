@@ -22,9 +22,9 @@
   "localRetained": [
     {
       "path": "docs/evidence/calcify-finite-p3/README.md",
-      "bytes": 10112,
-      "sha256": "cb65be654ec5e63f2166338fe34161d89d5b34ba5ce895e770c3b27f3ef38c69",
-      "reason": "Concise current accepted model scope, exact test source limits, immutable complete proof and remaining gates"
+      "bytes": 14102,
+      "sha256": "a01bc363f3b36dd2e892b5c0a1d9ea11e8172b4375916e8661e1e600ec6c9aa6",
+      "reason": "Current accepted model/OCR/findings scope, immutable original230 and supplemental190 proof, scoped publication checks and remaining live gates"
     },
     {
       "path": "docs/WORK_PLAN.md",
@@ -123,9 +123,7 @@
     "unchangedGoProto": "Prior whole-Go/race/vet and additive/generated governance evidence retained; final independent scope focused"
   },
   "remainingGates": [
-    "Separate approved scoped trusted OCR config fix independent review/merge then retry and actual substantive outcome",
-    "Later publication-head hosted checks after final status commit",
-    "Delivery supplemental proof publication/verification",
+    "Final owner-doc publication-head hosted checks; live ReefPR485 owns actual later outcome",
     "O2 durable binding/ingress/writer isolation/history/live EOS/process restart/full-state resource fit",
     "O3 financial admission",
     "O4 atomic authorized SQL/read",
@@ -141,8 +139,9 @@
     },
     "deliveryDocsCommit": "1dee92a64cc86e58ae5fcff98f9f6118533e2bfd",
     "reefPullRequest": "https://github.com/dills122/reef/pull/485",
-    "reefPullRequestState": "Ready; ocr-pilot initially applied/failed, temporarily removed to suppress identical dispatch during routine status publication; reapply/retry held until approved trusted config merges; no merge claim",
-    "ocrPilot": {
+    "reefPullRequestState": "Ready/unmerged; full pinned hosted OCR and all scoped finding reconciliation accepted; final owner-doc headCI pending, live PR authority",
+    "deliverySupplement": "Published190/2259259 at dff3a1b59f3b4beb8ea88f84833f71cc5a105a56; remote193paths/174blobs and exact-head hosted36814integrity/hygiene/4tests/base verified; original230cbf unchanged. Top-level deliverySupplement owns compact manifest/check receipt",
+    "historicalInitialOcrPilot": {
       "runId": 38066442470,
       "jobId": 114254942453,
       "status": "Failed before substantive dispatch",
@@ -157,7 +156,7 @@
       "research": "Trusted-base literal budget/no override; user approved separate generated-Java exclusion and configured budget500000\u21921500000 fix, independent review/merge then retry pending",
       "labelState": "Temporarily removed after initial applied/failed attempt; reapply after approved trusted config merges"
     },
-    "reefHostedCi": {
+    "historicalSourceHostedCiAt1dee": {
       "head": "1dee92a64cc86e58ae5fcff98f9f6118533e2bfd",
       "successfulChecksObserved": 28,
       "ciRequired": "Success",
@@ -180,14 +179,111 @@
         }
       ]
     },
-    "deliverySupplement": "Preparation only; source-final CI receipts now available, config recovery/OCR retry/later publication-head receipts and publication pending; original230cbf records unchanged",
-    "ocrRecovery": {
+    "historicalInitialRecoveryPlan": {
       "authorization": "User approved separate scoped trusted config fix/review/merge/retry",
       "change": "Generated Java exclusion and budget500000\u21921500000",
       "implementationScope": "Isolated4-path workflow/rule/test/docs config fix; O1 source unchanged",
       "status": "Implementation in progress; independent review/merge/OCR retry pending",
       "retryOutcome": "Not observed; no recovery/pass claim",
       "retryDispatch": "Held until approved trusted config merges; no identical retry during routine doc publication"
+    },
+    "historicalSnapshotScope": "Earlier1dee source/initial pilot/recovery plan preserved exactly; pending wording describes that checkpoint, not current acceptance",
+    "reefHostedCi": {
+      "head": "dcb106c4ddd5ccda60df7c8e6411fca88ef5be14",
+      "successfulChecksObserved": 31,
+      "skippedChecks": 4,
+      "ciRequired": "Success",
+      "runningChecks": [],
+      "failedChecks": [],
+      "receiptScope": "Exact dcb after accepted full pinned OCR; no predicted final owner-doc headCI",
+      "laterPublicationHeadOutcomes": "https://github.com/dills122/reef/pull/485"
+    },
+    "ocrPilot": {
+      "runId": 38070877163,
+      "jobId": 114267851324,
+      "trustedMaster": "3c230521e3b3694f02e609579deaf63d361eb941",
+      "version": "1.12.9",
+      "updaterOptOutObserved": true,
+      "range": "51cd90eee43d257bad4f973fc9bd81f273bb4ef7..dcb106c4ddd5ccda60df7c8e6411fca88ef5be14",
+      "selected": 17,
+      "completed": 17,
+      "reused": 0,
+      "failed": 0,
+      "waived": 0,
+      "excludedGeneratedJava": 31,
+      "findings": 5,
+      "status": "Complete full pinned review execution; scoped finding reconciliation managerAccept",
+      "findingsDisposition": "Five current findings plus older constructor Dispute with canonical/source/test/probe evidence; no confirmed O1 defect",
+      "resolvedBotThreads": 6,
+      "sourceChanges": false,
+      "coverageUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-pinned-coverage-verification.json",
+      "acceptanceUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-manager-acceptance.json",
+      "responseUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-findings-manager-response.md",
+      "researchScope": "Targeted alignment/probes, not new complete engineering review or cap reset",
+      "internalO1ReviewCount": 3,
+      "configReviewCount": 2
+    },
+    "ocrRecovery": {
+      "authorization": "User approved separate bounded trusted config/review/CI-gated merge/retry",
+      "firstPR": "https://github.com/dills122/reef/pull/486",
+      "followupPR": "https://github.com/dills122/reef/pull/487",
+      "trustedMaster": "3c230521e3b3694f02e609579deaf63d361eb941",
+      "status": "Both reviewed and CI-gated fixes merged; all4reviewed hashes/actionCLI pins verified",
+      "change": "Generated Java exclusion/budget500000\u21921500000 and supported pinned CLI updater opt-out; product/source unchanged",
+      "independentInstancesConsumed": 2,
+      "maximum": 3,
+      "actualOCR": "Fullpinned17/17v1.12.9 accepted with scoped finding dispositions; not zero findings or provider-cost ceiling"
     }
+  },
+  "deliverySupplement": {
+    "sourceProofCommit": "575c52b02939ff9600bd461cab0c56e83cb369e1",
+    "sourceProofParent": "dcb106c4ddd5ccda60df7c8e6411fca88ef5be14",
+    "sourceProofState": "Local-only exact no-filter source ref, not pushed or merged into Reef delivery",
+    "archiveCommit": "dff3a1b59f3b4beb8ea88f84833f71cc5a105a56",
+    "archiveTree": "2c8ebbcbc13e944aafff118a46951c85a27599ec",
+    "archiveNamespace": "records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement",
+    "archiveUrl": "https://github.com/dills122/reef-records/tree/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement",
+    "archiveManifest": "manifests/2026-10-10-calcify-finite-p3-o1-delivery-supplement.json",
+    "manifestUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/manifests/2026-10-10-calcify-finite-p3-o1-delivery-supplement.json",
+    "manifestBytes": 149709,
+    "manifestSHA256": "3c4faddcc21efa3b1a156eab95f0b4f287727bb521a3be4671c36642b20051ed",
+    "recordsPullRequest": "https://github.com/dills122/reef-records/pull/11",
+    "archiveState": "Published and remotely raw-byte verified; exact-head hosted integrity/hygiene/4tests/base passed; unmerged; no Reef removal",
+    "archiveFiles": 190,
+    "archiveBytes": 2259259,
+    "original230ProofUnchanged": true,
+    "selection": "Frozen184 originals plus mapping/checksum and4 explicit publication-correction companions; exact integration/config review targets, red attempts, hosted budget/install/drift/noop/fullpinned results, targeted Go/Kotlin finding research and manager acceptance. External manifest owns full190 inventory",
+    "promotionMappingUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/promotion-mapping.json",
+    "checksumsUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/SHA256SUMS",
+    "normalizationCorrection": "First local source checkpoint normalized10CR bytes in one diagnostic log; caught before import. Failed checkpoint/oldchecksums/filter research retained. Final575 no-filter source190/all bytes exact; no original evidence silently rewritten",
+    "correctionUrl": "https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/publication-corrections/supplement-source-checkpoint.json",
+    "checks": {
+      "remoteVerification": {
+        "status": "PASS",
+        "paths": 193,
+        "recordPaths": 190,
+        "metadataPaths": 3,
+        "uniqueBlobs": 174,
+        "method": "Exact commit/tree identity and decoded remote raw blob size/SHA256 matches"
+      },
+      "hostedExactHead": {
+        "status": "PASS",
+        "head": "dff3a1b59f3b4beb8ea88f84833f71cc5a105a56",
+        "runId": 38072313823,
+        "totalRecords": 36814,
+        "unitTests": "4/4 PASS",
+        "integrity": "PASS",
+        "hygiene": "PASS",
+        "base": "1419b7e0a0f30c613bc3bd40f8a6faa993bb0c94",
+        "finalExactBase": "PASS executed hosted",
+        "integrityAndBaseJob": 114272089000,
+        "hygieneJob": 114272088772,
+        "integrityJobUrl": "https://github.com/dills122/reef-records/actions/runs/38072313823/job/114272089000",
+        "hygieneJobUrl": "https://github.com/dills122/reef-records/actions/runs/38072313823/job/114272088772",
+        "logs": "Untruncated actual hosted logs retained locally; no invented local final--base rerun"
+      }
+    },
+    "postPublicationReceiptScope": "Compact current owner receipt and immutable provider links record later actual publication validation. Future archive commit/remote/hosted/final owner-doc head cannot recursively be imported into same immutable proof; live ReefPR owns subsequent head CI",
+    "trackedSourceRemovals": []
   }
 }

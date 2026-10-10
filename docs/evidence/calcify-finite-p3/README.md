@@ -75,33 +75,64 @@ claimed. [Retention receipt](../../records/2026-10-10-calcify-finite-p3-retentio
 owns compact publication/selection verification. Active O2/preflight/O3 planning
 stays local; raw synthetic proof imported explicitly, no cache/class/secret sweep.
 
+## Delivery supplement publication
+
+[Separate supplement](https://github.com/dills122/reef-records/tree/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement) and [manifest](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/manifests/2026-10-10-calcify-finite-p3-o1-delivery-supplement.json), [Records PR11](https://github.com/dills122/reef-records/pull/11):
+190 records/2259259bytes, including independent integration/config reviews,
+all hosted failures/drift/no-op attempts, full pinned OCR and accepted finding
+research. [Mapping](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/promotion-mapping.json) and
+[checksums](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/SHA256SUMS) bind exact source paths/bytes.
+Original230-record/7002941-byte cbf proof and manifest unchanged.
+
+Local-only proof-source `575c52b02939ff9600bd461cab0c56e83cb369e1`, parent
+`dcb106c4ddd5ccda60df7c8e6411fca88ef5be14`, not pushed/merged into Reef.
+First checkpoint normalized10 CR bytes in diagnostic log through Git filter;
+caught before import. [Failure](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/publication-corrections/supplement-source-byte-check-attempt1.json),
+[filter spike](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/publication-corrections/supplement-normalization-research.json)
+and old checksums preserved; final no-filter source190/all bytes exact.
+Remote commit/tree bound; all193 record+metadata paths/174 unique blobs exact.
+Manifest149709bytes/SHA256 `3c4faddcc21efa3b1a156eab95f0b4f287727bb521a3be4671c36642b20051ed`.
+Exact-head hosted [integrity/4tests/base](https://github.com/dills122/reef-records/actions/runs/38072313823/job/114272089000)
+and [hygiene](https://github.com/dills122/reef-records/actions/runs/38072313823/job/114272088772)
+passed:36814 records, final base `1419b7e0a0f30c613bc3bd40f8a6faa993bb0c94`.
+PR11 open/unmerged; no tracked removals. Compact current retention receipt records
+later publication checks and immutable links; archive cannot recursively contain
+its future commit/remote/hosted verification or final owner-doc head.
+
 ## Delivery gates
 
 | Field | Current state |
 | --- | --- |
-| O1 acceptance/source |Ready/manager accepted; exact56 paths committed `0a7df6f8`, proof published above. |
-| Final delivery integration review |Separate review1of3 Ready/manager Accept for exact70-path delivery. O1 source unchanged; internal O1 count remains exhausted3of3. Owner docs committed `1dee92a64cc86e58ae5fcff98f9f6118533e2bfd`. |
-| Reef PR |Ready [PR485](https://github.com/dills122/reef/pull/485); `ocr-pilot` initially applied, temporarily removed after failure to suppress identical dispatch during routine status publication. Reapply/retry held until approved trusted config merges; merge not claimed. |
-| Reef source hosted CI |At exact1dee head:28 successful ordinary checks including `ci-required`,3 conditional jobs skipped; only OCR review failed. Later publication-head/check outcomes owned by PR485, not inferred from this source snapshot. |
-| Records landing |PR11 publication and exact-head hosted checks verified; merge not claimed here. No tracked removal depends on it. |
-| OCR-pilot |Run38066442470/job114254942453 failed48of48 selected tasks before dispatch:1863 used +896928 estimated exceeds configured500000-token budget. Zero substantive findings, no OCR pass. |
-| Final delivery supplement |Prepared separate namespace; source CI receipt observed, config recovery/OCR retry and later publication-head slots remain open. Publication pending; original230 records unchanged. |
+| O1 acceptance/source |Ready/manager accepted; exact56 paths committed `0a7df6f8`; optional model/default off. |
+| Final integration review |Separate review1of3 Ready/manager Accept for exact70 paths; internal O1 cap3of3 unchanged. Initial owner docs `1dee92a6`; later current head owned by PR485. |
+| Reef PR |Ready [PR485](https://github.com/dills122/reef/pull/485), unmerged; actual pinned OCR/reconciliation accepted. Later final owner-doc head CI pending. |
+| Current source hosted CI |Exact `dcb106c4ddd5ccda60df7c8e6411fca88ef5be14`:31success/4skips, no active/failure; later head outcomes owned by PR485. |
+| Trusted config recovery |[PR486](https://github.com/dills122/reef/pull/486) and [PR487](https://github.com/dills122/reef/pull/487) reviewed/CI-gated/merged; config cap2of3. Trusted master `3c230521e3b3694f02e609579deaf63d361eb941`, all4 reviewed hashes/pins match. |
+| Full pinned OCR |Run38070877163/job114267851324, CLI1.12.9 and updater opt-out observed; exact51cd..dcb range,17selected/17completed/0reused/0failed/0waived,31generated Java excluded. |
+| Findings |Five current findings plus older constructor claim disputed with accepted canonical/source/test/probe evidence; six bot threads resolved. No confirmed O1 defect or source change; five findings is not zero findings. |
+| Records proof |Original230 cbf proof unchanged; separate190 supplement published/raw-byte verified and exact-head hosted checks passed. PR11 remains unmerged. |
 
-Partial OCR failure log preserved. Bounded research found trusted-base literal
-rule budget with no override. User approved separate generated-Java exclusion and
-500000→1500000 config budget change. Isolated four-path workflow/rule/test/docs fix
-in progress; independent review/merge then retry pending. O1 source unchanged;
-no recovery success or substantive OCR result yet. Budget refusal establishes no
-substantive review result or source defect. Initial
-hosted snapshots/failure and separate integration proof remain selected for
-append-only delivery supplement; no OCR retry/later publication-head outcome or
-new archive URL fabricated.
+[Full pinned coverage](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-pinned-coverage-verification.json)
+retains observed execution; its pending-reconciliation wording is historical.
+Later [manager acceptance](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-manager-acceptance.json) and
+[finding response](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-findings-manager-response.md) own dispositions.
+[Go research](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-findings-spike/research-v2.md) and
+[Kotlin report](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement/delivery/ocr-kotlin-findings-spike/REPORT.md) preserve exact
+source/probe limits, failed setup attempts and cached-class/bytecode binding.
+Research is targeted reconciliation, not new internal engineering review.
 
-Untruncated hosted source logs: Calcify job114254945375 full Calcify BUILD success
-(6m3s) plus Postgres idempotency (10s); Kotlin job114254945235 test/coverage BUILD
-success (8m39s) plus perf guard (13s). No fabricated test counts or performance
-qualification. These are actual1dee source checks; current PR link owns later
-publication-head outcomes.
+Historical first OCR run38066442470/job114254942453 failed48of48 before dispatch:
+1863 used +896928 estimate exceeded500000-token budget; zero findings was no pass.
+Budget refusal, install failure, unexpected1.12.13 run and same-head0-item retry
+remain separate raw receipts. Approved config raises budget1500000 and excludes
+only31 generated Java paths; pinned action/CLI and opt-out preserved. Actual
+completed review above establishes execution; no provider-cost ceiling inferred.
+
+Earlier source CI at1dee:28 ordinary successes/3 conditional skips, only OCR
+failed. Untruncated Calcify job114254945375 BUILD6m3s/Postgres idempotency10s and
+Kotlin job114254945235 test/coverage BUILD8m39s/perf guard13s remain scoped historical
+receipts; no fabricated test counts or performance qualification. Current dcb
+check snapshot and live PR own newer status.
 
 O2 durable binding/admission, exclusive canonical ingress, real SASL/ACL and SQL
 permissions, history/source authentication, uncertainty handling, actual EOS/

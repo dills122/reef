@@ -42,30 +42,39 @@ Go and exact replay/semantic/JSON probes pass. Earlier213-test receipt remains
 earlier source. Combined O1 review cap exhausted at3of3; no counter reset.
 
 [Focused O1 checkpoint](evidence/calcify-finite-p3/README.md) owns model proof scope
-and pending delivery fields; [handoff](work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
+and current delivery fields; [handoff](work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
 preserves deadline snapshot and resumed checkpoint. O1 accepted/committed;
 complete230-file/7002941-byte proof published and remotely verified at Records
 `cbf2413db33dc7cb65c339cbc51e0eb98c2633f3`, [PR11](https://github.com/dills122/reef-records/pull/11).
 Focused summary and [retention receipt](records/2026-10-10-calcify-finite-p3-retention.json)
 retain exact scopes; local-only proof checkpoint not pushed/merged into Reef,
 no tracked source removal. Separate final integration review1of3 Ready/manager
-Accept for exact70-path delivery; O1 source unchanged. Owner docs committed
-`1dee92a64cc86e58ae5fcff98f9f6118533e2bfd`; ready [Reef PR485](https://github.com/dills122/reef/pull/485)
-initially labeled `ocr-pilot`; label temporarily removed after failure to suppress
-identical dispatch during routine status publication. Reapply after approved
-trusted config merges; retry held. OCR run38066442470/job114254942453 failed all48 selected
-tasks before dispatch:1863 used +896928 estimate exceeds500000-token budget.
-Zero substantive findings does not establish OCR pass. Partial log retained;
-trusted-base rule budget has no override. User approved separate generated-Java
-exclusion and500000→1500000 budget config fix; isolated four-path workflow/rule/
-test/docs change in progress, independent review/merge then OCR retry pending.
-O1 source unchanged. Final source CI at1dee:28 successful checks including
-`ci-required`,3 conditional jobs skipped, only OCR review failed. Untruncated
-Calcify/Kotlin job logs confirm successful builds; no test count inferred.
-[PR485](https://github.com/dills122/reef/pull/485) owns later publication-head/check
-outcomes. Config recovery/retry and delivery supplement publication pending; Records
-exact-head hosted checks passed. O2–O5 unimplemented; live binding/ingress/isolation/
-process-restart and financial qualification remain open.
+Accept for exact70-path delivery; O1 source unchanged. Initial owner docs committed `1dee92a64cc86e58ae5fcff98f9f6118533e2bfd`;
+ready [Reef PR485](https://github.com/dills122/reef/pull/485) remains unmerged.
+Reviewed/CI-gated trusted config [PR486](https://github.com/dills122/reef/pull/486)
+and [PR487](https://github.com/dills122/reef/pull/487) merged; generated-Java
+exclusion,1500000-token budget and pinned-CLI updater opt-out preserve O1 source.
+Config review count2of3; internal O1 count remains3of3.
+
+Full pinned OCR run38070877163/job114267851324: CLI1.12.9, exact51cd..dcb range,
+17 selected/17 completed/0 reused/0 failed/0 waived,31 generated Java excluded.
+Five findings plus older constructor claim reconciled Dispute with canonical/
+source/test/probe evidence; manager Accept, six bot threads resolved. Successful
+execution and scoped finding reconciliation accepted; no zero-finding claim.
+Earlier budget/install failure, version drift and no-op retry retained separately.
+Current source head `dcb106c4ddd5ccda60df7c8e6411fca88ef5be14`:31 successful
+checks/4 skips, no active/failure. [PR485](https://github.com/dills122/reef/pull/485)
+owns later final owner-doc head/check outcomes; those checks remain pending.
+
+[Delivery supplement](https://github.com/dills122/reef-records/tree/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-delivery-supplement), [manifest](https://github.com/dills122/reef-records/blob/dff3a1b59f3b4beb8ea88f84833f71cc5a105a56/manifests/2026-10-10-calcify-finite-p3-o1-delivery-supplement.json) published at
+`dff3a1b59f3b4beb8ea88f84833f71cc5a105a56`:190 records/2259259bytes, all193 record/metadata paths and174 unique
+remote blobs verified. Exact-head hosted integrity36814/hygiene/4tests and
+`--base 1419b7e0` passed. Local-only exact proof-source575c52b0 not pushed;
+first normalization failure/correction preserved, original230 cbf proof unchanged.
+[Retention receipt](records/2026-10-10-calcify-finite-p3-retention.json) records
+publication checks without recursive archival of future verification. Defaults off;
+O2–O5 unimplemented. Live binding/ingress/isolation/process restart, financial
+adoption and resource/capacity qualification remain open.
 
 ## Calcify finite P0 source gate — October 7, 2026
 
