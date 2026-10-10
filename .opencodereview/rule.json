@@ -1,5 +1,5 @@
 {
   "include": ["services/**/*_test.go", "services/**/src/test/**/*.kt"],
-  "exclude": ["docs/**", "reports/**"],
+  "exclude": ["docs/**", "reports/**", "services/platform-runtime/src/main/java/reef/contracts/calcify/v1/**"],
   "rules": []
 }
