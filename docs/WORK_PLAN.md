@@ -28,16 +28,29 @@ spikes. [Reviewed session plan](work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) owns
 task queue and acceptance gates; local manager ledger
 `.planning/calcify-p3-overnight/session.json` owns dispatch/review/resource leases.
 
-O0 source/budget contract accepted after review2of3; review1 policy failure and
-focused DAY/Open-session research spike retained. [Source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md)
-owns lifecycle membership, logical budgets, closure and restore acceptance.
-O0D doc reconciliation integrated at `7aba4d0a`, fresh review1of3. Baseline Kotlin
-Calcify182tests, Go app/stream suites and gate-model23tests pass. O1 Go producer
-and Kotlin contract/capture dispatch next under disjoint leases, combined review
-cap3. O2 finite ingress/closure, O3 financial admission, O4 atomic SQL/read and O5
-repair/restart remain gated by reviewed predecessors. Final45min reserved for
-verification/retention/handoff. Existing financial authority and capacity claims
-unchanged; no implementation or new broker proof accepted yet.
+O0 source/budget contract accepted after review2of3, committed `45211653`;
+O0D documentation/history corrections committed `7aba4d0a`. Eight-hour window
+expired with O1 unaccepted; full P3 target not achieved. User resumed O1 delivery
+and OCR-pilot only. Combined review1of3 restore-semantic/trailing-JSON findings
+fixed after research; resumed review2of3 returned Not ready: certified replay
+accepted invalid or duplicate physical member IDs. Finding accepted, bounded
+research followed, deterministic replay correction completed. Final combined
+review3of3 returned Ready with no findings; both developers accepted verdict.
+Exact56-path O1 model committed `0a7df6f85c1f8636fdb74177afc49fa3eb14d8bd`.
+Final author36 finite/70 surrounding tests pass; independent36 finite, focused
+Go and exact replay/semantic/JSON probes pass. Earlier213-test receipt remains
+earlier source. Combined O1 review cap exhausted at3of3; no counter reset.
+
+[Focused O1 checkpoint](evidence/calcify-finite-p3/README.md) owns model proof scope
+and pending delivery fields; [handoff](work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
+preserves deadline snapshot and resumed checkpoint. O1 accepted/committed;
+complete230-file/7002941-byte proof published and remotely verified at Records
+`cbf2413db33dc7cb65c339cbc51e0eb98c2633f3`, [PR11](https://github.com/dills122/reef-records/pull/11).
+Focused summary and [retention receipt](records/2026-10-10-calcify-finite-p3-retention.json)
+retain exact scopes; local-only proof checkpoint not pushed/merged into Reef,
+no tracked source removal. Final delivery integration review, Reef PR, OCR and
+Reef hosted CI outcomes pending; Records exact-head hosted checks passed. O2–O5 unimplemented; live binding/ingress/isolation/
+process-restart and financial qualification remain open.
 
 ## Calcify finite P0 source gate — October 7, 2026
 

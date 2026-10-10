@@ -239,7 +239,11 @@ No speculative rewrite or resource escalation as substitute for understanding.
 Manager validates research against canonical owner and dependency gates, updates
 scope/acceptance packet, then assigns same or fresh developer. Replacement receives
 failed evidence and remaining review count. One recovery spike/replan per unit
-proposed overnight; second flow failure parks unit with findings and decision request.
+proposed overnight; repeated unresolved blocker after spike/replan parks unit with
+findings and decision request. October10 launch instruction authorizes research
+whenever tasks stall: completed bounded fixture, environment, handoff and newly
+exposed review-gap spikes remain separately recorded; their count does not reset
+review cap or waive acceptance. Session deadline still bounds recovery work.
 Do not hide failure, reset reviewer cap, silently drop acceptance or recurse forever.
 
 ## Verification and resource policy
@@ -335,3 +339,16 @@ failure, conduct or request bounded research spike, realign with manager, then r
 Heavy pivot or exhausted cap returns human decision gate. Return reviewed candidate,
 acceptance mapping, test/evidence receipts, retention outcome and residual risks.
 ```
+
+## October 10 O1 delivery continuation
+
+After original eight-hour window, user authorized finishing O1 review2, correcting
+findings, committing accepted work, opening PR and requesting `ocr-pilot` review.
+This continuation covers O1 delivery and hosted review only; O2–O5 implementation
+remains queued. Original deadline outcome stays preserved in overnight handoff.
+Original O1 review counter remains combined maximum3: review1 and review2 consumed;
+one fresh internal pass remains after bounded replay identity correction. No scope
+split, replacement developer or research spike resets count. Material hosted-review
+fix after exhausted O1 count needs human decision on further internal verification.
+Separately declared final integration unit covers combined delivery, owner docs and
+retention, maximum3. Manager retains sole Git writes and serial build leases.
