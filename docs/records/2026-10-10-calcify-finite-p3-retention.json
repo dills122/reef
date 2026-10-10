@@ -22,8 +22,8 @@
   "localRetained": [
     {
       "path": "docs/evidence/calcify-finite-p3/README.md",
-      "bytes": 8245,
-      "sha256": "403924bc33aa56b76e237b6e150de351646a66c6e11ecce4ccaba26cc9251556",
+      "bytes": 10112,
+      "sha256": "cb65be654ec5e63f2166338fe34161d89d5b34ba5ce895e770c3b27f3ef38c69",
       "reason": "Concise current accepted model scope, exact test source limits, immutable complete proof and remaining gates"
     },
     {
@@ -123,14 +123,71 @@
     "unchangedGoProto": "Prior whole-Go/race/vet and additive/generated governance evidence retained; final independent scope focused"
   },
   "remainingGates": [
-    "Final delivery integration review",
-    "Reef PR",
-    "OCR-pilot actual outcome",
-    "Reef hosted CI outcome",
+    "Separate approved scoped trusted OCR config fix independent review/merge then retry and actual substantive outcome",
+    "Later publication-head hosted checks after final status commit",
+    "Delivery supplemental proof publication/verification",
     "O2 durable binding/ingress/writer isolation/history/live EOS/process restart/full-state resource fit",
     "O3 financial admission",
     "O4 atomic authorized SQL/read",
     "O5 funding/repair/end-to-end restart"
   ],
-  "limits": "Default off; no live activation, financial authority, measured4GiB physical fit, capacity or full P3 completion claim; no receipt self-hash"
+  "limits": "Default off; no live activation, financial authority, measured4GiB physical fit, capacity or full P3 completion claim; no receipt self-hash",
+  "publicationStatus": {
+    "integrationReview": {
+      "instance": "1 of 3 separate integration/delivery unit",
+      "verdict": "Ready",
+      "managerResponse": "Accept",
+      "scope": "Exact70-path frozen delivery; O1 source unchanged, internal O1 cap3of3 exhausted"
+    },
+    "deliveryDocsCommit": "1dee92a64cc86e58ae5fcff98f9f6118533e2bfd",
+    "reefPullRequest": "https://github.com/dills122/reef/pull/485",
+    "reefPullRequestState": "Ready; ocr-pilot initially applied/failed, temporarily removed to suppress identical dispatch during routine status publication; reapply/retry held until approved trusted config merges; no merge claim",
+    "ocrPilot": {
+      "runId": 38066442470,
+      "jobId": 114254942453,
+      "status": "Failed before substantive dispatch",
+      "selectedTasks": 48,
+      "failedTasks": 48,
+      "usedTokens": 1863,
+      "estimatedTokens": 896928,
+      "configuredBudgetTokens": 500000,
+      "substantiveFindings": 0,
+      "pass": false,
+      "receiptLimit": "Partial failure log retained; not complete hosted proof",
+      "research": "Trusted-base literal budget/no override; user approved separate generated-Java exclusion and configured budget500000\u21921500000 fix, independent review/merge then retry pending",
+      "labelState": "Temporarily removed after initial applied/failed attempt; reapply after approved trusted config merges"
+    },
+    "reefHostedCi": {
+      "head": "1dee92a64cc86e58ae5fcff98f9f6118533e2bfd",
+      "successfulChecksObserved": 28,
+      "ciRequired": "Success",
+      "runningChecks": [],
+      "conditionalSkippedChecks": 3,
+      "failedCheck": "OCR review only",
+      "finalOutcome": "Source-head ordinary CI passed; OCR failed",
+      "receiptScope": "Exact source-final check snapshot and untruncated Calcify/Kotlin job logs; no inferred test count",
+      "currentPublicationHeadOutcomes": "Follow https://github.com/dills122/reef/pull/485; later head outcomes not claimed",
+      "hostedJobEvidence": [
+        {
+          "jobId": 114254945375,
+          "scope": "Full Calcify BUILD success6m3s and Postgres idempotency10s",
+          "logTruncated": false
+        },
+        {
+          "jobId": 114254945235,
+          "scope": "Test/coverage BUILD success8m39s and perf guard13s",
+          "logTruncated": false
+        }
+      ]
+    },
+    "deliverySupplement": "Preparation only; source-final CI receipts now available, config recovery/OCR retry/later publication-head receipts and publication pending; original230cbf records unchanged",
+    "ocrRecovery": {
+      "authorization": "User approved separate scoped trusted config fix/review/merge/retry",
+      "change": "Generated Java exclusion and budget500000\u21921500000",
+      "implementationScope": "Isolated4-path workflow/rule/test/docs config fix; O1 source unchanged",
+      "status": "Implementation in progress; independent review/merge/OCR retry pending",
+      "retryOutcome": "Not observed; no recovery/pass claim",
+      "retryDispatch": "Held until approved trusted config merges; no identical retry during routine doc publication"
+    }
+  }
 }

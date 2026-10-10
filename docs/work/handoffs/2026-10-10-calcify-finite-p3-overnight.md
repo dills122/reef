@@ -22,8 +22,21 @@ published/remote-verified at Records `cbf2413db33dc7cb65c339cbc51e0eb98c2633f3`,
 failed attempts, corrections and research preserved. Local-only proof checkpoint
 `2a0df81f78c03fcdd73bc5f8e5139e8488fb7a95` not pushed/merged into Reef; no tracked
 source removal. [Retention receipt](../../records/2026-10-10-calcify-finite-p3-retention.json)
-records exact publication checks. Final delivery integration review, Reef PR,
-OCR and Reef hosted CI outcomes pending; Records exact-head checks passed.
+records exact publication checks. Separate integration review1of3 Ready/manager
+Accept, exact70 paths; O1 source unchanged. Owner docs committed `1dee92a6`;
+ready [Reef PR485](https://github.com/dills122/reef/pull/485) initially labeled `ocr-pilot`.
+Label temporarily removed after failure to suppress identical dispatch during
+routine status publication; reapply/retry held until approved trusted config merges.
+OCR run38066442470/job114254942453 failed48of48 selected tasks before dispatch:
+1863 used +896928 estimated exceeds500000-token budget. Zero substantive findings
+is not pass; partial failure log preserved. Trusted-base literal rule budget has
+no override. User approved separate generated-Java exclusion and budget500000→1500000
+trusted config fix; isolated four-path implementation underway, independent
+review/merge then retry pending. O1 source unchanged. Final source CI at1dee:
+28 success including `ci-required`,3 conditional skips, only OCR review failure.
+Full Calcify/Kotlin successful job logs retained; no test count inferred. PR485
+owns later publication-head/check outcomes. Config recovery/OCR retry and separate delivery
+supplement publication pending; Records exact-head checks passed.
 No reviewed failure hidden or counter reset.
 
 Following sections preserve original deadline snapshot; their unaccepted state

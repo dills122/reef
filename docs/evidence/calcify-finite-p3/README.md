@@ -80,10 +80,28 @@ stays local; raw synthetic proof imported explicitly, no cache/class/secret swee
 | Field | Current state |
 | --- | --- |
 | O1 acceptance/source |Ready/manager accepted; exact56 paths committed `0a7df6f8`, proof published above. |
-| Final delivery integration review |Pending owner-doc/retention/PR-range verification; O1 model verdict does not certify final delivery. |
-| Reef PR and hosted CI |Pending actual PR/check outcomes. |
+| Final delivery integration review |Separate review1of3 Ready/manager Accept for exact70-path delivery. O1 source unchanged; internal O1 count remains exhausted3of3. Owner docs committed `1dee92a64cc86e58ae5fcff98f9f6118533e2bfd`. |
+| Reef PR |Ready [PR485](https://github.com/dills122/reef/pull/485); `ocr-pilot` initially applied, temporarily removed after failure to suppress identical dispatch during routine status publication. Reapply/retry held until approved trusted config merges; merge not claimed. |
+| Reef source hosted CI |At exact1dee head:28 successful ordinary checks including `ci-required`,3 conditional jobs skipped; only OCR review failed. Later publication-head/check outcomes owned by PR485, not inferred from this source snapshot. |
 | Records landing |PR11 publication and exact-head hosted checks verified; merge not claimed here. No tracked removal depends on it. |
-| OCR-pilot |Pending delivered PR and actual result; trigger alone does not establish pass. |
+| OCR-pilot |Run38066442470/job114254942453 failed48of48 selected tasks before dispatch:1863 used +896928 estimated exceeds configured500000-token budget. Zero substantive findings, no OCR pass. |
+| Final delivery supplement |Prepared separate namespace; source CI receipt observed, config recovery/OCR retry and later publication-head slots remain open. Publication pending; original230 records unchanged. |
+
+Partial OCR failure log preserved. Bounded research found trusted-base literal
+rule budget with no override. User approved separate generated-Java exclusion and
+500000→1500000 config budget change. Isolated four-path workflow/rule/test/docs fix
+in progress; independent review/merge then retry pending. O1 source unchanged;
+no recovery success or substantive OCR result yet. Budget refusal establishes no
+substantive review result or source defect. Initial
+hosted snapshots/failure and separate integration proof remain selected for
+append-only delivery supplement; no OCR retry/later publication-head outcome or
+new archive URL fabricated.
+
+Untruncated hosted source logs: Calcify job114254945375 full Calcify BUILD success
+(6m3s) plus Postgres idempotency (10s); Kotlin job114254945235 test/coverage BUILD
+success (8m39s) plus perf guard (13s). No fabricated test counts or performance
+qualification. These are actual1dee source checks; current PR link owns later
+publication-head outcomes.
 
 O2 durable binding/admission, exclusive canonical ingress, real SASL/ACL and SQL
 permissions, history/source authentication, uncertainty handling, actual EOS/

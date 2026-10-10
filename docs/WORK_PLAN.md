@@ -48,8 +48,23 @@ complete230-file/7002941-byte proof published and remotely verified at Records
 `cbf2413db33dc7cb65c339cbc51e0eb98c2633f3`, [PR11](https://github.com/dills122/reef-records/pull/11).
 Focused summary and [retention receipt](records/2026-10-10-calcify-finite-p3-retention.json)
 retain exact scopes; local-only proof checkpoint not pushed/merged into Reef,
-no tracked source removal. Final delivery integration review, Reef PR, OCR and
-Reef hosted CI outcomes pending; Records exact-head hosted checks passed. O2–O5 unimplemented; live binding/ingress/isolation/
+no tracked source removal. Separate final integration review1of3 Ready/manager
+Accept for exact70-path delivery; O1 source unchanged. Owner docs committed
+`1dee92a64cc86e58ae5fcff98f9f6118533e2bfd`; ready [Reef PR485](https://github.com/dills122/reef/pull/485)
+initially labeled `ocr-pilot`; label temporarily removed after failure to suppress
+identical dispatch during routine status publication. Reapply after approved
+trusted config merges; retry held. OCR run38066442470/job114254942453 failed all48 selected
+tasks before dispatch:1863 used +896928 estimate exceeds500000-token budget.
+Zero substantive findings does not establish OCR pass. Partial log retained;
+trusted-base rule budget has no override. User approved separate generated-Java
+exclusion and500000→1500000 budget config fix; isolated four-path workflow/rule/
+test/docs change in progress, independent review/merge then OCR retry pending.
+O1 source unchanged. Final source CI at1dee:28 successful checks including
+`ci-required`,3 conditional jobs skipped, only OCR review failed. Untruncated
+Calcify/Kotlin job logs confirm successful builds; no test count inferred.
+[PR485](https://github.com/dills122/reef/pull/485) owns later publication-head/check
+outcomes. Config recovery/retry and delivery supplement publication pending; Records
+exact-head hosted checks passed. O2–O5 unimplemented; live binding/ingress/isolation/
 process-restart and financial qualification remain open.
 
 ## Calcify finite P0 source gate — October 7, 2026
