@@ -59,10 +59,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
       - name: Run no-persistence stress iteration 1
         env:
           DEV_STRESS_RUN_KIND: scheduled-throughput
@@ -82,7 +82,7 @@ jobs:
           find throughput-artifacts/runtime-nodb -name '*-kpi.md' -print -exec cat {} \; >> "$GITHUB_STEP_SUMMARY" || true
       - name: Upload no-persistence throughput artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: throughput-runtime-nodb
           path: throughput-artifacts/runtime-nodb
@@ -121,10 +121,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
       - name: Start DB-backed runtime stack
         run: JS_RUNTIME=node make dev-up
       - name: Run db-backed stress iteration 1
@@ -146,7 +146,7 @@ jobs:
           find throughput-artifacts/runtime-db -name '*-kpi.md' -print -exec cat {} \; >> "$GITHUB_STEP_SUMMARY" || true
       - name: Upload db-backed throughput artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: throughput-runtime-db
           path: throughput-artifacts/runtime-db
