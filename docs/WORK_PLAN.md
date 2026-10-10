@@ -18,6 +18,55 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify eight-hour P3 session — October 9–10, 2026
+
+Started October9 at22:55:41 America/Toronto; deadline October10 at06:55:41.
+Baseline `51cd90eee` (merged PR479), branch
+`codex/calcify-p3-overnight-2026-10-09`. User authorized manager/developer agent
+orchestration, testing, fresh independent reviews and failure-triggered research
+spikes. [Reviewed session plan](work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) owns
+task queue and acceptance gates; local manager ledger
+`.planning/calcify-p3-overnight/session.json` owns dispatch/review/resource leases.
+
+O0 source/budget contract accepted after review2of3, committed `45211653`;
+O0D documentation/history corrections committed `7aba4d0a`. Eight-hour window
+expired with O1 unaccepted; full P3 target not achieved. User resumed O1 delivery
+and OCR-pilot only. Combined review1of3 restore-semantic/trailing-JSON findings
+fixed after research; resumed review2of3 returned Not ready: certified replay
+accepted invalid or duplicate physical member IDs. Finding accepted, bounded
+research followed, deterministic replay correction completed. Final combined
+review3of3 returned Ready with no findings; both developers accepted verdict.
+Exact56-path O1 model committed `0a7df6f85c1f8636fdb74177afc49fa3eb14d8bd`.
+Final author36 finite/70 surrounding tests pass; independent36 finite, focused
+Go and exact replay/semantic/JSON probes pass. Earlier213-test receipt remains
+earlier source. Combined O1 review cap exhausted at3of3; no counter reset.
+
+[Focused O1 checkpoint](evidence/calcify-finite-p3/README.md) owns model proof scope
+and pending delivery fields; [handoff](work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
+preserves deadline snapshot and resumed checkpoint. O1 accepted/committed;
+complete230-file/7002941-byte proof published and remotely verified at Records
+`cbf2413db33dc7cb65c339cbc51e0eb98c2633f3`, [PR11](https://github.com/dills122/reef-records/pull/11).
+Focused summary and [retention receipt](records/2026-10-10-calcify-finite-p3-retention.json)
+retain exact scopes; local-only proof checkpoint not pushed/merged into Reef,
+no tracked source removal. Separate final integration review1of3 Ready/manager
+Accept for exact70-path delivery; O1 source unchanged. Owner docs committed
+`1dee92a64cc86e58ae5fcff98f9f6118533e2bfd`; ready [Reef PR485](https://github.com/dills122/reef/pull/485)
+initially labeled `ocr-pilot`; label temporarily removed after failure to suppress
+identical dispatch during routine status publication. Reapply after approved
+trusted config merges; retry held. OCR run38066442470/job114254942453 failed all48 selected
+tasks before dispatch:1863 used +896928 estimate exceeds500000-token budget.
+Zero substantive findings does not establish OCR pass. Partial log retained;
+trusted-base rule budget has no override. User approved separate generated-Java
+exclusion and500000→1500000 budget config fix; isolated four-path workflow/rule/
+test/docs change in progress, independent review/merge then OCR retry pending.
+O1 source unchanged. Final source CI at1dee:28 successful checks including
+`ci-required`,3 conditional jobs skipped, only OCR review failed. Untruncated
+Calcify/Kotlin job logs confirm successful builds; no test count inferred.
+[PR485](https://github.com/dills122/reef/pull/485) owns later publication-head/check
+outcomes. Config recovery/retry and delivery supplement publication pending; Records
+exact-head hosted checks passed. O2–O5 unimplemented; live binding/ingress/isolation/
+process-restart and financial qualification remain open.
+
 ## Calcify finite P0 source gate — October 7, 2026
 
 Reef478 merged at `85e513278`; Records10 merged at `1419b7e0`.

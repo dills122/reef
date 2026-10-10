@@ -24,11 +24,12 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 | Order | Owner | Read for |
 | --- | --- | --- |
-| 1 | [Current work](WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026) | Merged E4 work, finite P0 source gate and next lifecycle/coverage slice |
-| 2 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
-| 3 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
-| 4 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |
-| 5 | [Throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026) | Scoped D7 pass; financial capacity remains unmeasured |
+| 1 | [Current work](WORK_PLAN.md#calcify-eight-hour-p3-session--october-910-2026) | Resumed O1 delivery/review and remaining P3 gates; merged P0/E4 checkpoints |
+| 2 | [Finite P3 source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [O1 checkpoint](evidence/calcify-finite-p3/README.md) | Accepted O1 lifecycle/capture model, complete immutable proof and delivery gates; live activation refused |
+| 3 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
+| 4 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
+| 5 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |
+| 6 | [Throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026) and [financial diagnostic](evidence/calcify-financial-sprint1/README.md#latest-empirical-checkpoint--october6-utc) | Scoped D7 pass; measured financial deadline target miss; production/full-path capacity unqualified |
 
 Detailed reviews and raw financial proof remain linked from checkpoint to immutable
 Records commits. Execution status stays in `WORK_PLAN.md`; RFC remains proposed.

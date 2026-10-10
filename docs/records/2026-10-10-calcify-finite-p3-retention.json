@@ -1,0 +1,193 @@
+{
+  "schema": "calcify-finite-p3-retention-v1",
+  "dateUtc": "2026-10-10",
+  "reviewedImplementationCommit": "0a7df6f85c1f8636fdb74177afc49fa3eb14d8bd",
+  "reviewScope": "Combined56-path optional O1 lifecycle producer/capture model and accepted O1 plan; review3of3 Ready, no findings, both developer responses Accept; final delivery integration separate",
+  "sourceRepository": "https://github.com/dills122/reef",
+  "sourceProofCommit": "2a0df81f78c03fcdd73bc5f8e5139e8488fb7a95",
+  "sourceProofState": "Local-only tracked proof ref, not pushed or merged into Reef delivery",
+  "archiveRepository": "https://github.com/dills122/reef-records",
+  "archiveCommit": "cbf2413db33dc7cb65c339cbc51e0eb98c2633f3",
+  "archiveTree": "3bf5b59ba38a7a2d790ebf23c989448eb16b2401",
+  "archiveNamespace": "records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-proof",
+  "archiveUrl": "https://github.com/dills122/reef-records/tree/cbf2413db33dc7cb65c339cbc51e0eb98c2633f3/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-proof",
+  "archiveManifest": "manifests/2026-10-10-calcify-finite-p3-o1-proof.json",
+  "manifestUrl": "https://github.com/dills122/reef-records/blob/cbf2413db33dc7cb65c339cbc51e0eb98c2633f3/manifests/2026-10-10-calcify-finite-p3-o1-proof.json",
+  "recordsPullRequest": "https://github.com/dills122/reef-records/pull/11",
+  "archiveState": "Published and remotely byte-verified; exact-head hosted checks passed; PR landing not claimed",
+  "archiveFiles": 230,
+  "archiveBytes": 7002941,
+  "archiveSelection": "Complete explicitly promoted synthetic baseline/O0/O0D/O1 proof, including red attempts, reviewer targets, failure/correction receipts, research spikes, source probes, class-hash metadata, final reviews and manager acceptance; external manifest owns full file inventory",
+  "trackedSourceRemovals": [],
+  "localRetained": [
+    {
+      "path": "docs/evidence/calcify-finite-p3/README.md",
+      "bytes": 10112,
+      "sha256": "cb65be654ec5e63f2166338fe34161d89d5b34ba5ce895e770c3b27f3ef38c69",
+      "reason": "Concise current accepted model scope, exact test source limits, immutable complete proof and remaining gates"
+    },
+    {
+      "path": "docs/WORK_PLAN.md",
+      "reason": "Current execution and resumed delivery gates"
+    },
+    {
+      "path": "docs/work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md",
+      "reason": "Accepted current source/budget/closure requirements"
+    },
+    {
+      "path": "docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md",
+      "reason": "Deadline snapshot and current resumed delivery checkpoint"
+    },
+    {
+      "path": "contracts/calcify/",
+      "reason": "Current executable source/wire/budget goldens and contract"
+    },
+    {
+      "path": ".planning/calcify-p3-overnight/o2/",
+      "reason": "Active unimplemented binding/activation/uncertainty research"
+    },
+    {
+      "path": ".planning/calcify-p3-overnight/preflight/",
+      "reason": "Active unexecuted resource/auth isolation proposal"
+    },
+    {
+      "path": ".planning/calcify-p3-overnight/o3/",
+      "reason": "Queued financial admission requirements"
+    },
+    {
+      "path": ".planning/calcify-p3-overnight/session.json",
+      "reason": "Current manager dispatch/review/resource state"
+    }
+  ],
+  "excluded": "Compiled classes/build caches/dependencies/credentials/live DB or container state; no ignored-data sweep",
+  "guidanceReview": {
+    "updatedOwners": [
+      "docs/WORK_PLAN.md",
+      "docs/README.md",
+      "docs/CALCIFY_PHASES_OVERVIEW.md",
+      "docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md",
+      "docs/evidence/calcify-finite-p3/README.md",
+      "docs/RECORDS_RETENTION.md"
+    ],
+    "noOp": [
+      "AGENTS.md",
+      "docs/AI_CONTEXT.md",
+      "REEF_PROJECT_OVERVIEW.md",
+      "REEF_TECHNICAL_DESIGN.md",
+      "docs/DECISIONS.md"
+    ],
+    "reason": "Existing workflow/source reading remains valid; optional model/source schema additive with contracts/tests updated, production authority/setup unchanged. No RFC adoption or live runtime boundary accepted"
+  },
+  "checks": {
+    "recordsIntegrity": {
+      "status": "PASS",
+      "totalRecords": 36624
+    },
+    "recordsHygiene": "PASS",
+    "recordsUnitTests": "4/4 PASS",
+    "newManifestHashes": "All230 exact unchanged",
+    "appendOnlyAdditions": {
+      "status": "PASS scoped cached name-status",
+      "recordAndManifestAdditions": 231,
+      "allowedStatus": "A",
+      "base": "1419b7e0a0f30c613bc3bd40f8a6faa993bb0c94"
+    },
+    "earlierBaselineAppendOnlyBase": "PASS earlier --base origin/main; not final import recheck",
+    "finalHostedExactBase": {
+      "status": "PASS",
+      "head": "cbf2413db33dc7cb65c339cbc51e0eb98c2633f3",
+      "base": "1419b7e0a0f30c613bc3bd40f8a6faa993bb0c94",
+      "jobId": 114251777460,
+      "verifiedAtUtc": "2026-10-10T15:54:07Z",
+      "command": "python3 scripts/check_records.py --mode integrity --base \"$BASE_SHA\"",
+      "executionScope": "Hosted final exact-base check; no local final --base rerun"
+    },
+    "remoteVerification": {
+      "status": "PASS",
+      "recordPaths": 230,
+      "metadataPaths": 3,
+      "uniqueBlobs": 199,
+      "method": "GitHub commit/tree identity and decoded remote blob bytes matched exact committed SHA256 and size"
+    },
+    "recordsHostedHead": {
+      "status": "Both checks success",
+      "head": "cbf2413db33dc7cb65c339cbc51e0eb98c2633f3",
+      "integrityAndUnitTests": "36624 records and4tests PASS",
+      "hygiene": "PASS"
+    }
+  },
+  "testScope": {
+    "finalAuthor": "36 finite and70 surrounding tests, zero failures/errors/skips",
+    "independentFinal": "36 finite, Go app/streamdirect, exact7 replay-ID/5 semantic/7 trailing-JSON probes plus valid replay/whitespace controls",
+    "earlier213": "Earlier source receipt retained; not rerun/attributed to final source",
+    "unchangedGoProto": "Prior whole-Go/race/vet and additive/generated governance evidence retained; final independent scope focused"
+  },
+  "remainingGates": [
+    "Separate approved scoped trusted OCR config fix independent review/merge then retry and actual substantive outcome",
+    "Later publication-head hosted checks after final status commit",
+    "Delivery supplemental proof publication/verification",
+    "O2 durable binding/ingress/writer isolation/history/live EOS/process restart/full-state resource fit",
+    "O3 financial admission",
+    "O4 atomic authorized SQL/read",
+    "O5 funding/repair/end-to-end restart"
+  ],
+  "limits": "Default off; no live activation, financial authority, measured4GiB physical fit, capacity or full P3 completion claim; no receipt self-hash",
+  "publicationStatus": {
+    "integrationReview": {
+      "instance": "1 of 3 separate integration/delivery unit",
+      "verdict": "Ready",
+      "managerResponse": "Accept",
+      "scope": "Exact70-path frozen delivery; O1 source unchanged, internal O1 cap3of3 exhausted"
+    },
+    "deliveryDocsCommit": "1dee92a64cc86e58ae5fcff98f9f6118533e2bfd",
+    "reefPullRequest": "https://github.com/dills122/reef/pull/485",
+    "reefPullRequestState": "Ready; ocr-pilot initially applied/failed, temporarily removed to suppress identical dispatch during routine status publication; reapply/retry held until approved trusted config merges; no merge claim",
+    "ocrPilot": {
+      "runId": 38066442470,
+      "jobId": 114254942453,
+      "status": "Failed before substantive dispatch",
+      "selectedTasks": 48,
+      "failedTasks": 48,
+      "usedTokens": 1863,
+      "estimatedTokens": 896928,
+      "configuredBudgetTokens": 500000,
+      "substantiveFindings": 0,
+      "pass": false,
+      "receiptLimit": "Partial failure log retained; not complete hosted proof",
+      "research": "Trusted-base literal budget/no override; user approved separate generated-Java exclusion and configured budget500000\u21921500000 fix, independent review/merge then retry pending",
+      "labelState": "Temporarily removed after initial applied/failed attempt; reapply after approved trusted config merges"
+    },
+    "reefHostedCi": {
+      "head": "1dee92a64cc86e58ae5fcff98f9f6118533e2bfd",
+      "successfulChecksObserved": 28,
+      "ciRequired": "Success",
+      "runningChecks": [],
+      "conditionalSkippedChecks": 3,
+      "failedCheck": "OCR review only",
+      "finalOutcome": "Source-head ordinary CI passed; OCR failed",
+      "receiptScope": "Exact source-final check snapshot and untruncated Calcify/Kotlin job logs; no inferred test count",
+      "currentPublicationHeadOutcomes": "Follow https://github.com/dills122/reef/pull/485; later head outcomes not claimed",
+      "hostedJobEvidence": [
+        {
+          "jobId": 114254945375,
+          "scope": "Full Calcify BUILD success6m3s and Postgres idempotency10s",
+          "logTruncated": false
+        },
+        {
+          "jobId": 114254945235,
+          "scope": "Test/coverage BUILD success8m39s and perf guard13s",
+          "logTruncated": false
+        }
+      ]
+    },
+    "deliverySupplement": "Preparation only; source-final CI receipts now available, config recovery/OCR retry/later publication-head receipts and publication pending; original230cbf records unchanged",
+    "ocrRecovery": {
+      "authorization": "User approved separate scoped trusted config fix/review/merge/retry",
+      "change": "Generated Java exclusion and budget500000\u21921500000",
+      "implementationScope": "Isolated4-path workflow/rule/test/docs config fix; O1 source unchanged",
+      "status": "Implementation in progress; independent review/merge/OCR retry pending",
+      "retryOutcome": "Not observed; no recovery/pass claim",
+      "retryDispatch": "Held until approved trusted config merges; no identical retry during routine doc publication"
+    }
+  }
+}

@@ -1,69 +1,99 @@
 package streamdirect
 
 import (
+	"encoding/hex"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dills122/reef/services/matching-engine/internal/app"
 )
 
 type RuntimeConfig struct {
-	Enabled                  bool
-	LogProvider              string
-	ShardID                  string
-	NatsURL                  string
-	KafkaBootstrap           string
-	CommandStream            string
-	CommandSubjectPrefix     string
-	EventStream              string
-	EventSubjectPrefix       string
-	OwnershipTopic           string
-	OwnershipGroup           string
-	PartitionCount           int
-	Partitions               []int
-	DurablePrefix            string
-	BatchSize                int
-	ConnectTimeout           time.Duration
-	RecoveryTimeout          time.Duration
-	FetchTimeout             time.Duration
-	PollInterval             time.Duration
-	AckWait                  time.Duration
-	MaxAckPending            int
-	TestFailAckOnce          bool
-	TestStopAfterAckFail     bool
-	TestFailPublishOnce      bool
-	TestStopAfterPublishFail bool
+	Enabled                    bool
+	LogProvider                string
+	ShardID                    string
+	NatsURL                    string
+	KafkaBootstrap             string
+	CommandStream              string
+	CommandSubjectPrefix       string
+	EventStream                string
+	EventSubjectPrefix         string
+	OwnershipTopic             string
+	OwnershipGroup             string
+	PartitionCount             int
+	Partitions                 []int
+	DurablePrefix              string
+	BatchSize                  int
+	ConnectTimeout             time.Duration
+	RecoveryTimeout            time.Duration
+	FetchTimeout               time.Duration
+	PollInterval               time.Duration
+	AckWait                    time.Duration
+	MaxAckPending              int
+	TestFailAckOnce            bool
+	TestStopAfterAckFail       bool
+	TestFailPublishOnce        bool
+	TestStopAfterPublishFail   bool
+	CalcifyLifecycleEnabled    bool
+	CalcifyFiniteBindingDigest string
 }
 
 func RuntimeConfigFromEnv() RuntimeConfig {
 	partitionCount := envInt("STREAM_ACK_PARTITION_COUNT", 64)
 	return RuntimeConfig{
-		Enabled:                  envBool("MATCHING_ENGINE_DIRECT_STREAM_ENABLED", false),
-		LogProvider:              streamLogProvider(),
-		ShardID:                  envString("MATCHING_ENGINE_SHARD_ID", "engine-0"),
-		NatsURL:                  envString("STREAM_ACK_NATS_URL", "nats://localhost:4222"),
-		KafkaBootstrap:           envString("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
-		CommandStream:            envString("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS"),
-		CommandSubjectPrefix:     envString("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1"),
-		EventStream:              envString("MATCHING_ENGINE_EVENT_STREAM", "REEF_VENUE_EVENTS"),
-		EventSubjectPrefix:       envString("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.venue.events.v1"),
-		OwnershipTopic:           envString("MATCHING_ENGINE_OWNERSHIP_TOPIC", "REEF_ENGINE_OWNERSHIP"),
-		OwnershipGroup:           envString("MATCHING_ENGINE_OWNERSHIP_GROUP", "reef-matching-engine-ownership-v1"),
-		PartitionCount:           partitionCount,
-		Partitions:               envPartitions("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", partitionCount),
-		DurablePrefix:            envString("MATCHING_ENGINE_DIRECT_STREAM_DURABLE_PREFIX", "reef-engine-direct"),
-		BatchSize:                envInt("MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE", 500),
-		ConnectTimeout:           time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_CONNECT_TIMEOUT_MS", 60000)) * time.Millisecond,
-		RecoveryTimeout:          time.Duration(envInt("MATCHING_ENGINE_KAFKA_RECOVERY_TIMEOUT_MS", 900000)) * time.Millisecond,
-		FetchTimeout:             time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_FETCH_TIMEOUT_MS", 200)) * time.Millisecond,
-		PollInterval:             time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_POLL_MS", 5)) * time.Millisecond,
-		AckWait:                  time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS", 60000)) * time.Millisecond,
-		MaxAckPending:            envInt("MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING", 4000),
-		TestFailAckOnce:          envBool("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", false),
-		TestStopAfterAckFail:     envBool("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", false),
-		TestFailPublishOnce:      envBool("MATCHING_ENGINE_DIRECT_TEST_FAIL_PUBLISH_ONCE", false),
-		TestStopAfterPublishFail: envBool("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE", false),
+		Enabled:                    envBool("MATCHING_ENGINE_DIRECT_STREAM_ENABLED", false),
+		LogProvider:                streamLogProvider(),
+		ShardID:                    envString("MATCHING_ENGINE_SHARD_ID", "engine-0"),
+		NatsURL:                    envString("STREAM_ACK_NATS_URL", "nats://localhost:4222"),
+		KafkaBootstrap:             envString("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+		CommandStream:              envString("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS"),
+		CommandSubjectPrefix:       envString("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1"),
+		EventStream:                envString("MATCHING_ENGINE_EVENT_STREAM", "REEF_VENUE_EVENTS"),
+		EventSubjectPrefix:         envString("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.venue.events.v1"),
+		OwnershipTopic:             envString("MATCHING_ENGINE_OWNERSHIP_TOPIC", "REEF_ENGINE_OWNERSHIP"),
+		OwnershipGroup:             envString("MATCHING_ENGINE_OWNERSHIP_GROUP", "reef-matching-engine-ownership-v1"),
+		PartitionCount:             partitionCount,
+		Partitions:                 envPartitions("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", partitionCount),
+		DurablePrefix:              envString("MATCHING_ENGINE_DIRECT_STREAM_DURABLE_PREFIX", "reef-engine-direct"),
+		BatchSize:                  envInt("MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE", 500),
+		ConnectTimeout:             time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_CONNECT_TIMEOUT_MS", 60000)) * time.Millisecond,
+		RecoveryTimeout:            time.Duration(envInt("MATCHING_ENGINE_KAFKA_RECOVERY_TIMEOUT_MS", 900000)) * time.Millisecond,
+		FetchTimeout:               time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_FETCH_TIMEOUT_MS", 200)) * time.Millisecond,
+		PollInterval:               time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_POLL_MS", 5)) * time.Millisecond,
+		AckWait:                    time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS", 60000)) * time.Millisecond,
+		MaxAckPending:              envInt("MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING", 4000),
+		TestFailAckOnce:            envBool("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", false),
+		TestStopAfterAckFail:       envBool("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", false),
+		TestFailPublishOnce:        envBool("MATCHING_ENGINE_DIRECT_TEST_FAIL_PUBLISH_ONCE", false),
+		TestStopAfterPublishFail:   envBool("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE", false),
+		CalcifyLifecycleEnabled:    envBool("MATCHING_ENGINE_CALCIFY_LIFECYCLE_ENABLED", false),
+		CalcifyFiniteBindingDigest: envString("MATCHING_ENGINE_CALCIFY_FINITE_BINDING_DIGEST", ""),
 	}
+}
+
+// Lifecycle facts require explicit finite model identity. This validates format
+// only; O2 must verify durable registration and bound recovery before live use.
+func validateCalcifyLifecycle(service *app.Service, enabled bool, binding string, batchSize int) error {
+	if !enabled {
+		return nil
+	}
+	decoded, err := hex.DecodeString(binding)
+	if err != nil || len(decoded) != 32 || len(binding) != 64 || binding != strings.ToLower(binding) {
+		return fmt.Errorf("Calcify lifecycle requires lowercase SHA256 finite binding digest")
+	}
+	if service == nil || service.CalcifySourceProfileHash() == "" {
+		return fmt.Errorf("Calcify lifecycle requires finite source profile")
+	}
+	if err := service.ValidateCalcifySourceProfile(); err != nil {
+		return err
+	}
+	if batchSize != 1 {
+		return fmt.Errorf("Calcify lifecycle requires batch size 1")
+	}
+	return nil
 }
 
 func streamLogProvider() string {

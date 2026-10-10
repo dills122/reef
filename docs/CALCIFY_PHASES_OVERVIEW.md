@@ -153,9 +153,15 @@ Standing liquidity needs one timed aggressor command per trade after untimed mak
 Finite P0 matching acceptance now has separate opt-in
 [source profile](../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07),
 with retention0 and finite run/order/state envelope. This does not extend Phase1/2
-wire facts or establish financial lifecycle/coverage, broker profile binding or
-financial authority. [Current work](WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
-owns remaining P3 sequence.
+wire facts or establish broker profile binding or financial authority. Separate
+[Accepted O1 model](evidence/calcify-finite-p3/README.md) adds optional typed source
+lifecycle facts and additive capture protobuf for bounded source-prefix model;
+mode-off source bytes/P0 identity stay unchanged. Final combined review3of3 Ready
+after restore/JSON/replay identity corrections; source committed `0a7df6f8` and
+complete proof published. Live activation refuses pending O2 binding/ingress/isolation/history
+proof. [Current work](WORK_PLAN.md#calcify-eight-hour-p3-session--october-910-2026)
+owns resumed delivery and remaining P3 sequence. No financial authority or
+capacity qualification follows.
 
 ## Source map
 

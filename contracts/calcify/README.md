@@ -87,3 +87,107 @@ missing/different version fault and retain index, cursor, pending and fault suff
 evidence. No automatic key rename, fault clearing, source-generation bump or new
 application namespace is allowed. See recovery procedure in
 [Phase 2 implementation](../../docs/work/CALCIFY_PHASE2_IMPLEMENTATION.md).
+
+## Finite lifecycle capture model (O1, October 10, 2026)
+
+Additive `OrderLifecycleCommandV1` describes decoded Submit/Modify/Cancel attempts.
+Go source JSON field `lifecycleCommand` is present only in explicit lifecycle mode;
+mode off omits field and preserves prior semantic checksum/bytes. New typed fields
+participate in existing full-body checksum. Capture consumes every full source
+record directly, including zero-trade/empty records. Existing Phase 1 links and
+verified-led resolver remain unchanged.
+
+Source fact binds schema, profile hash, separate finite binding digest, decoded
+ownership, routed run/session/instrument/order, command identity and exact metadata.
+Submit retains side, type spelling, TIF, quantity, price and currency. Modify retains
+attempted quantity/price; Cancel retains reason. Participant/account come from decoded
+command, validated against immutable mapped roles. Modify/Cancel quote/security
+context comes from retained acceptance plus instrument binding; command facts contain
+no invented currency. Attempted facts attached to rejected Submit never become
+immutable acceptance. Parser rejects duplicate JSON keys, absent/unknown typed
+fields, wrong types, outer/typed disagreement, bad checksums/bindings, unsupported
+policy and contradictory acceptance/rejection/trade/execution shapes. Source value
+must be one JSON object followed only by whitespace; trailing roots/scalars/garbage
+create retained lane fault. Attempted quantity/price remain bounded decoded strings,
+including original spelling; positive numeric caps apply to accepted state and trades,
+not rejected attempts. JSON numbers cannot replace required string fields.
+
+`FiniteLifecycleCaptureV1` emits complete ordered command and trade members with
+structured source/topic UUID/ordinal identity, original acceptance, economic revision,
+previous effects, explicit disposition and dependencies. Trade members retain both
+canonical `ExecutionCreated` facts, including source maker/taker roles. Accepted
+Submit creates revision0; Modify/Cancel advance revision, preserving original
+acceptance; trades update filled quantity/effect without changing revision economics.
+Rejected outcomes never mutate orders. Quantity conservation, current limit prices,
+ownership and terminal state checked before any output. Identical physical replay
+is no-op; identical batch/checksum at new offset emits `REPLAY` members referencing
+first batch, new coverage and zero repeated mutation. Changed batch replay or reused
+execution outside certified replay faults. Offset gaps are legal.
+
+Envelope `content_digest` is lowercase SHA256 of ASCII
+`calcify-finite-capture-content-v1` plus NUL plus protobuf serialization with digest
+field empty. No maps; repeated fields follow explicit source order. Source byte count
+and SHA256 refer to original value bytes. Final envelope serialization capped131072
+bytes. Coverage frontier names last actual closed source record; `resume_offset`
+names next broker position. Closure proves source capture, never financial completion.
+
+Default model caps: 16 source publications, 1 outcome/record, 8 trades/outcome,
+1 synchronous open window, 8 retained orders, 65536 source bytes/record,
+131072 capture bytes/record. Entire finite suffix reserves1048576 source bytes;
+faulted record plus at most15 other records retained. Closed plus retained records
+never exceed16. Managed state caps orders8, batch identities16, execution IDs128,
+completed records16, source bytes1048576, capture bytes2097152 and total encoded
+state6307840 bytes (two bounded copies of capture history, source suffix, order
+dependency allowance and control allowance). These are logical serialized bounds;
+Kafka fetch ceilings are soft for first oversized batch, so physical fetch/native/JVM
+bound and producer/topic ceilings remain O2 preflight gates.
+
+Managed model topology validates whole record against immutable state before
+forward/store writes. No decoded cache. Rollback re-reads managed bytes. Fault persists
+lane barrier and bounded raw suffix; successful coverage/resume/order state stays at
+last closed record, with no partial envelope. Streams may checkpoint retained fault
+input separately under EOS; source remains canonical and suffix explicitly accounts
+for input beyond successful cut. Unretainable/overflow suffix throws and requires
+transaction abort/replay. Certified restore reconstructs bounded receipts and checks
+every acceptance/revision/effect, execution identity, batch, byte counter and frontier.
+Fresh capture and receipt reconstruction share result identity/time, immutable submit
+acceptance, complete trade provenance/economics/execution pairs and current order
+transition checks. Trade receipts must match their accepted non-cancel command outcome.
+Recomputed receipt digests do not authenticate source history; O2 still owns durable
+source correspondence and activation proof.
+Missing/changed binding, dependency history or source range refuses model initialization.
+Empty store requires explicit registered genesis model cut; earliest-offset inference
+and app-ID reset forbidden.
+
+`FiniteLifecycleCaptureRuntime.run()` explicitly refuses live activation. Model
+topology/Properties use EOSv2; TopologyTestDriver and managed-byte rollback/reopen
+tests prove model behavior only. Durable binding/admission, authenticated writer
+isolation, broker transactions/restart and operational activation remain O2 gates.
+No default production wiring, broker start or financial authority change.
+
+Actual Go `Processor.ProcessOnce` fixture
+[source](finite-lifecycle-source-v1.jsonl) and [manifest](finite-lifecycle-source-v1-manifest.json)
+pin12 outcomes/8 applied/4 rejected/3 trades/6 units/15 members/5 retained identities.
+Fixture parameterization uses `p3-run`, `p3-session`, `buyer`/`buyer-account` and
+`seller`/`seller-account`, instrumentAAPL/quoteUSD; semantic sequence and caps match
+[finite source contract](../../docs/work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md).
+Manifest digest is model-only, never durable registration proof. Source fileSHA256
+`1a8cf1c8c769e3e2bf32fa80792f36da206f07e6e27ab4bbbc9511c925fb1811`.
+[Paired mode-off source](finite-lifecycle-legacy-source-v1.jsonl) remains16647 bytes,
+SHA256`bdd4df11f562ba2f4dd217168a3e81e60f96fa4c3fa4a25c01e75830dda26506`.
+
+[Finite budget canonical bytes](finite-lifecycle-budget-v1.hex) are260 bytes,
+SHA256`6d49b6dd66e9cfa099e7b1c3cd02c9c275a9bf401d92069aace9634b5b4feee3`:
+ASCII version plus NUL, raw32-byte P0 digest, framed policy/run/session/instrument/
+currency, sorted framed party/account plus side byte, then big-endian u64 attempt,
+publication, command-byte, outcome, trade, window, source-byte, capture-byte,
+attempt-row-byte and opening-byte caps. Length frames use big-endian u32 UTF-8
+lengths, no normalization. P0 v1 profile/hash unchanged. Internal model binding
+identity additionally frames all three topic names/UUIDs, application/state version,
+generation/partition/genesis and matcher caps; this rebuildable model identity is
+separate from future durable O2 registration contract.
+[Command capture wire](finite-lifecycle-capture-command-v1.hex) and
+[multi-fill capture wire](finite-lifecycle-capture-multi-fill-v1.hex) pin actual source
+reduction output. Focused tests validate wire bytes, metadata, compatibility,
+counts/dependencies, malformed atomicity, gaps/replay, exact caps, fault suffix,
+managed rollback/reopen and changed/missing restore history.
