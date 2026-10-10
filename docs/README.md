@@ -28,7 +28,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 | 2 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
 | 3 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
 | 4 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |
-| 5 | [Throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026) | Scoped D7 pass; financial capacity remains unmeasured |
+| 5 | [Throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026) and [financial diagnostic](evidence/calcify-financial-sprint1/README.md#latest-empirical-checkpoint--october6-utc) | Scoped D7 pass; measured financial deadline target miss; production/full-path capacity unqualified |
 
 Detailed reviews and raw financial proof remain linked from checkpoint to immutable
 Records commits. Execution status stays in `WORK_PLAN.md`; RFC remains proposed.

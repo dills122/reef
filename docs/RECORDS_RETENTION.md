@@ -88,5 +88,7 @@ conservative capacity qualification follows.
 Source checkpoints remain local-only, not pushed to Reef. RocksDB/build/deps and
 retained broker output-topic volumes excluded; complete raw output replay is not
 claimed. No tracked Reef original removed; [Records PR10](https://github.com/dills122/reef-records/pull/10)
-remains draft. Raw local session retained until archive landing. Guidance and
+was draft at October6 checkpoint; merged October7 at `1419b7e0`.
+Archive landing supersedes original local-retention-until-landing tasking; no
+local cleanup performed by this documentation correction. Guidance and
 overviews unchanged for test-only resource permission; affected owners updated.

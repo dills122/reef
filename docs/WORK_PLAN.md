@@ -18,6 +18,25 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify eight-hour P3 session — October 9–10, 2026
+
+Started October9 at22:55:41 America/Toronto; deadline October10 at06:55:41.
+Baseline `51cd90eee` (merged PR479), branch
+`codex/calcify-p3-overnight-2026-10-09`. User authorized manager/developer agent
+orchestration, testing, fresh independent reviews and failure-triggered research
+spikes. [Reviewed session plan](work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) owns
+task queue and acceptance gates; local manager ledger
+`.planning/calcify-p3-overnight/session.json` owns dispatch/review/resource leases.
+
+O0 source/budget alignment active. O0D doc reconciliation accepted after fresh
+independent review1of3: current guard/profile limits, merged Records checkpoints
+and historical dispatch reconciled; proof bytes preserved. Baseline Kotlin
+Calcify182tests, Go app/stream suites and gate-model23tests pass. O1 lifecycle
+capture, O2 finite ingress/closure, O3 financial admission, O4 atomic SQL/read and
+O5 repair/restart remain gated by reviewed predecessors. Final45min reserved for
+verification/retention/handoff. Existing financial authority and capacity claims
+unchanged; no implementation or new broker proof accepted yet.
+
 ## Calcify finite P0 source gate — October 7, 2026
 
 Reef478 merged at `85e513278`; Records10 merged at `1419b7e0`.
