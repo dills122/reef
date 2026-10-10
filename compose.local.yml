@@ -164,7 +164,7 @@ services:
         condition: service_healthy
 
   redpanda:
-    image: redpandadata/redpanda:v26.2.3
+    image: redpandadata/redpanda:v26.2.4
     container_name: reef-redpanda
     profiles: ["redpanda"]
     command:
@@ -211,7 +211,7 @@ services:
       - "${REEF_JAEGER_UI_HOST_PORT:-16686}:16686"
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.161.0
+    image: otel/opentelemetry-collector-contrib:0.162.0
     container_name: reef-otel-collector
     profiles: ["observability"]
     command: ["--config=/etc/otelcol/config.yaml"]
