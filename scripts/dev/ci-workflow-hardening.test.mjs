@@ -175,6 +175,8 @@ assert.equal((ocrPilot.match(/^      - uses:/gm) ?? []).length, 1, "pilot must r
 assert.doesNotMatch(ocrPilot, /^      - (?:name:|run:)/gm, "pilot must not execute PR code");
 assert.match(ocrPilot, /alibaba\/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d/);
 assert.match(ocrPilot, /ocr_version: '1\.12\.9'/);
+assert.match(ocrPilot, /      - uses: alibaba\/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # v1\.12\.9\n        env:\n          OCR_NO_UPDATE: '1'\n        with:/, "pinned OCR step must disable background global auto-update before version/config/review commands");
+assert.equal((ocrPilot.match(/OCR_NO_UPDATE:/g) ?? []).length, 1, "OCR auto-update opt-out belongs on pinned Action step only");
 assert.match(ocrPilot, /review_concurrency: '2'/);
 assert.match(ocrPilot, /effort: medium/);
 assert.match(ocrPilot, /max_tokens_budget: '1500000'/);
