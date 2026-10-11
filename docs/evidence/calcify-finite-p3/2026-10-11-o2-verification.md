@@ -90,6 +90,28 @@ Not replayed locally: GitHub-hosted job runtime (ubuntu, Node 22.x, Bun setup ac
 builds, docs-site, scenario-replay, infrastructure-config, dependency-alignment, Gradle
 `kotlin-platform-runtime` in full.
 
+## Independent review instance 3 of 3 (October 11, 2026) — final
+
+Fresh cold subagent, blind pass first, targeted at `git diff 0d8eca82b..230de260f` plus a hunt for other
+inputs that pass Kotlin and make `begin_attempt` throw (stopping the run uncharged). Verdict:
+**Ready with non-blocking follow-ups**; no P0-P2. Scope as instance 2: landing O2 behind its off-by-default
+switch; G1-G8/G10 live evidence still not independently replayed. Review budget is now exhausted (3 of 3).
+
+Reviewer evidence: P2-1 reproduced against real Postgres on the pre-fix code (503 `DURABLE_INTAKE_FAILED`,
+0 attempts charged, run STOPPED) and confirmed fixed (400, 0 attempts, run ACTIVE); the new ingress test fails
+on the pre-fix head (`expected 400 but was 202`); about 35 real HTTP→ingress→Postgres probes (huge/odd numerics, deep
+nesting, control characters other than NUL, surrogates, odd keys, 128-byte multibyte ids) all either admitted and charged
+once or were uncharged 4xx with the run still ACTIVE. Coverage gate reproduced 70.0% before / 76.3% after the probe
+exclusion. Skip-guard regex matches the real Gradle XML attribute order. The reviewer's hosted-CI observation was
+limited: `calcify-tests` was still pending for `230de260f`.
+
+| Finding | Severity | Disposition |
+| --- | --- | --- |
+| F1 NUL guard had no Postgres-backed test | P3 | Accepted and done: `FiniteBindingStorePostgresTest.nulPayloadThroughRealHttpAndStoreIsUnchargedBadRequestWhileSqlCastWouldThrow` asserts the raw SQL call throws, the real HTTP path returns 400 with 0 attempts and the run ACTIVE, and a valid command is still admitted (suite 11/11 locally) |
+| F2 raw `1e200000` would overflow the SQL numeric cast if `FiniteIngress` were fed non-canonicalised JSON | P3 | Not reachable today (`FiniteHttpServer` re-encodes through `FiniteBindingContract.encode`; probes returned 202, charged once). Recorded as a coupling: SQL safety relies on that canonicalisation. |
+| F3 Go coverage exclusion masks 910 low-covered statements; 0.3-point margin | P3 | Disclosed above; no change. Track finite runner/startup coverage. |
+| F4 Bun harness tests no longer run in CI | P3 | Disclosed; `make test-finite-o2-harness` is a manual gate for anyone touching `finite-o2*`. |
+
 ## Hosted CI correction (first run, head `0d8eca82b`)
 
 The local replay above missed two failures that hosted CI (ubuntu, Node 22, Bun 1.3.14) caught:

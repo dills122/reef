@@ -185,6 +185,33 @@ class FiniteBindingStorePostgresTest {
         }finally{server.close();scheduler.shutdownNow()}
     }
 
+    @Test fun nulPayloadThroughRealHttpAndStoreIsUnchargedBadRequestWhileSqlCastWouldThrow() {
+        val o=opening();register(o);activate(o)
+        val url=System.getenv("CALCIFY_FINITE_POSTGRES_TEST_JDBC_URL")?:return
+        val ds=PGSimpleDataSource().apply {setURL(url);user=System.getenv("CALCIFY_FINITE_POSTGRES_TEST_RUNTIME_USER")
+            password=FiniteRuntime.privateBytes(Path.of(System.getenv("CALCIFY_FINITE_POSTGRES_TEST_RUNTIME_PASSWORD_FILE")),8192).toString(Charsets.UTF_8).trimEnd('\n','\r')}
+        val store=PostgresFiniteBindingStore(ds);val scheduler=Executors.newSingleThreadScheduledExecutor();var sends=0
+        val ingress=FiniteIngress(o,1,store,FiniteCommandPublisher{sends++;java.util.concurrent.CompletableFuture.completedFuture(FiniteBrokerAck(o.topic("COMMAND").name,0,0))},scheduler,1000)
+        val clients=mapOf("sql-test" to com.reef.platform.api.StaticTokenClientConfig("buyer-test-token",com.reef.platform.api.ExternalApiPrincipal("sql-test",setOf("buyer"),setOf("buyer"),setOf("buyer-account"))))
+        val server=FiniteHttpServer(o,ingress,clients,"service-test-token",java.net.InetSocketAddress("127.0.0.1",0),{error("must not read witness")},{error("must not read capture")})
+        val good=request(o);val payload=good["payload"].textValue();check(payload.endsWith("}"))
+        val client=java.net.http.HttpClient.newHttpClient()
+        fun call(id:String,body:String):java.net.http.HttpResponse<String> = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI("http://127.0.0.1:"+server.port+"/api/v1/orders/submit"))
+            .header("X-Client-Id","sql-test").header("Idempotency-Key",id).header("Authorization","Bearer buyer-test-token")
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body)).build(),java.net.http.HttpResponse.BodyHandlers.ofString())
+        try {
+            // The unguarded SQL cast really does throw: this is what the Kotlin guard protects the run from.
+            val raw=request(o);raw.put("payload",payload.dropLast(1)+",\"traceId\":\"a\\u0000\"}")
+            assertFails{store.beginAttempt(o.digest,1,raw)}
+            assertEquals("0",snapshot(o)["run"]["recordedAttempts"].textValue())
+            server.start()
+            val nul=call(good["commandId"].textValue(),payload.dropLast(1)+",\"traceId\":\"a\\u0000\"}")
+            assertEquals(400,nul.statusCode())
+            assertEquals("0",snapshot(o)["run"]["recordedAttempts"].textValue());assertEquals("ACTIVE",snapshot(o)["run"]["admissionState"].textValue());assertEquals(0,sends)
+            assertEquals(202,call(good["commandId"].textValue(),payload).statusCode());assertEquals(1,sends)
+        }finally{server.close();scheduler.shutdownNow()}
+    }
+
     @Test fun unresolvedStoppedRestorePreservesKnownReceiptAndCannotStageOrAdmit() {
         val o=opening();register(o);activate(o);val known=request(o);val unknown=request(o)
         for(q in listOf(known,unknown)){begin(o,q);connection().use{assertEquals("t",sql(it,"SELECT boundary.calcify_finite_authorize_send(?,1,?)",o.digest,q["commandId"].textValue()))}}

@@ -36,7 +36,9 @@ financial authority, production adoption or capacity claim follows.
   binding-store and 11 ingress tests, proto regeneration, retention, and local replay of the CI
   steps O2 touches (CI breakers fixed: migration-list test, harness-test wiring as a local make target, Go coverage gate exclusion for the fixture-only probe).
   Results, commands and limits: [O2 verification record](evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
-- Open: independent review 2 of 3 on the final diff (fresh reviewer); G1–G8 and G10 live
+- Independent reviews: instance 2 and 3 of 3 both **Ready with non-blocking follow-ups** (no P0-P2; review budget exhausted).
+  Instance 2's P2-1 (NUL in payload fenced the run uncharged) is fixed with unit and Postgres-backed tests.
+- Open: G1–G8 and G10 live
   evidence is still Codex's recorded claims (ledger under the snapshot's
   `.planning/calcify-p3-o2-2026-10-10/`); Postgres role grants used in tests were inferred and
   need an operator-reviewed definition; hosted CI run. O3–O5 stay gated on accepted O2.
