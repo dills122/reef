@@ -39,6 +39,7 @@ type RuntimeConfig struct {
 	TestStopAfterPublishFail   bool
 	CalcifyLifecycleEnabled    bool
 	CalcifyFiniteBindingDigest string
+	Finite                     *FiniteRuntimeConfig
 }
 
 func RuntimeConfigFromEnv() RuntimeConfig {
@@ -71,6 +72,14 @@ func RuntimeConfigFromEnv() RuntimeConfig {
 		TestStopAfterPublishFail:   envBool("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE", false),
 		CalcifyLifecycleEnabled:    envBool("MATCHING_ENGINE_CALCIFY_LIFECYCLE_ENABLED", false),
 		CalcifyFiniteBindingDigest: envString("MATCHING_ENGINE_CALCIFY_FINITE_BINDING_DIGEST", ""),
+		Finite: &FiniteRuntimeConfig{
+			BindingEndpoint:   envString("MATCHING_ENGINE_CALCIFY_BINDING_ENDPOINT", ""),
+			ServiceTokenFile:  envString("MATCHING_ENGINE_CALCIFY_SERVICE_TOKEN_FILE", ""),
+			KafkaUsername:     envString("MATCHING_ENGINE_CALCIFY_KAFKA_USERNAME", ""),
+			KafkaPasswordFile: envString("MATCHING_ENGINE_CALCIFY_KAFKA_PASSWORD_FILE", ""),
+			KafkaTLSEnabled:   envBool("MATCHING_ENGINE_CALCIFY_KAFKA_TLS_ENABLED", false),
+			KafkaCAFile:       envString("MATCHING_ENGINE_CALCIFY_KAFKA_CA_FILE", ""),
+		},
 	}
 }
 

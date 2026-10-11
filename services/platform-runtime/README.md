@@ -56,6 +56,15 @@ GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
 GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
 ```
 
+Opt-in Calcify finite O2 runtime:
+
+- Set `CALCIFY_FINITE_BINDING_DIGEST` only for separately provisioned finite fixture. Dedicated composition runs canonical submit/modify/cancel API and lifecycle capture in one JVM; startup validates existing binding, topic identities, source generation and managed state.
+- Provision `boundary/0013` and `runtime/0076` through trusted migration owner. Runtime validates schema and uses restricted function grants. Registrar stages/releases only after fresh engine/capture nonce receipts and exact current SQL/broker cuts.
+- Supply private DB, ingress-Kafka, capture-Kafka, service and client credential files using `CALCIFY_FINITE_*_PASSWORD_FILE`, `CALCIFY_FINITE_SERVICE_TOKEN_FILE` and `CALCIFY_FINITE_CLIENT_TOKEN_FILE`. Ingress and capture use separate broker principals; client file pins actor/participant/account scopes.
+- Pin `CALCIFY_FINITE_OWNER_INSTANCE_ID`, `CALCIFY_FINITE_STATE_DIRECTORY`, authenticated Kafka protocol and canonical binding. Initial start and same-binding restart remain STOPPED until fresh trusted release. Unresolved publication blocks release; stopped capture may drain already known source.
+- `202` follows actual typed broker ACK plus durable PUBLISHED/receipt write. Timeout records uncertainty and stops admission; late positive ACK repairs original charge without reopening or resending.
+- [Finite contract](../../contracts/calcify/README.md), [source scope](../../docs/work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [current O2 status](../../docs/WORK_PLAN.md#calcify-o2-continuation--october-10-2026) own exact configuration and acceptance. Application author checks pass; actual broker/fault/resource proof and fresh independent review pending. Financial adoption and throughput qualification remain later gates.
+
 Transport config:
 
 - `PLATFORM_HTTP_SERVER=jdk|netty` selects the runtime HTTP adapter (default `jdk`). The `netty` adapter is currently a measured hot-path adapter for submit/status/internal stats during no-DB ceiling tests.

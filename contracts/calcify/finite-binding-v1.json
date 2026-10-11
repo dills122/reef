@@ -1,0 +1,92 @@
+{
+  "schema": "calcify-finite-binding-v1",
+  "profile": {
+    "schema": "calcify-finite-source-v1",
+    "runIds": [
+      "p3-run"
+    ],
+    "venueSessionId": "p3-session",
+    "instrumentId": "AAPL",
+    "currency": "USD",
+    "maxOrderIds": 8,
+    "maxQuantityUnits": 10,
+    "maxLimitPrice": 100000000000
+  },
+  "profileHash": "1016a4bf5a9d63c61858cd25f9f2d42388bb50d7d3447e19846badda43ead8e0",
+  "budget": {
+    "attempts": "32",
+    "publications": "16",
+    "commandBytes": "8192",
+    "outcomes": "1",
+    "trades": "8",
+    "openWindows": "1",
+    "sourceBytes": "65536",
+    "captureBytes": "131072",
+    "attemptBytes": "4096",
+    "openingBytes": "16384"
+  },
+  "budgetHash": "6d49b6dd66e9cfa099e7b1c3cd02c9c275a9bf401d92069aace9634b5b4feee3",
+  "lifecycleSchema": "calcify-order-lifecycle-command-v1",
+  "policyId": "calcify-limit-day-v1",
+  "runId": "p3-run",
+  "venueSessionId": "p3-session",
+  "instrumentId": "AAPL",
+  "quoteCurrency": "USD",
+  "baseAssetId": "fixture-base-AAPL",
+  "parties": [
+    {
+      "participantId": "buyer",
+      "accountId": "buyer-account",
+      "side": "BUY"
+    },
+    {
+      "participantId": "seller",
+      "accountId": "seller-account",
+      "side": "SELL"
+    }
+  ],
+  "topics": [
+    {
+      "role": "COMMAND",
+      "name": "CALCIFY_P3_COMMANDS",
+      "topicId": "AAAAAAAAAAAAAAAAAAAAAQ"
+    },
+    {
+      "role": "SOURCE",
+      "name": "CALCIFY_P3_SOURCE",
+      "topicId": "AAAAAAAAAAAAAAAAAAAAAg"
+    },
+    {
+      "role": "CAPTURE",
+      "name": "CALCIFY_P3_CAPTURE",
+      "topicId": "AAAAAAAAAAAAAAAAAAAAAw"
+    },
+    {
+      "role": "OWNERSHIP",
+      "name": "CALCIFY_P3_OWNERSHIP",
+      "topicId": "AAAAAAAAAAAAAAAAAAAABA"
+    },
+    {
+      "role": "CAPTURE_CHANGELOG",
+      "name": "p3-fixture-capture-finite-lifecycle-changelog",
+      "topicId": "AAAAAAAAAAAAAAAAAAAABQ"
+    }
+  ],
+  "sourceGeneration": 1,
+  "partition": 0,
+  "partitionCount": 1,
+  "commandConsumerGroup": "p3-fixture-engine-p00",
+  "ownershipGroup": "p3-fixture-ownership",
+  "matcherShardId": "p3-fixture-shard",
+  "commandSubjectPrefix": "reef.commands",
+  "sourceSubjectPrefix": "reef.events",
+  "brokerClusterId": "p3-fixture-cluster",
+  "captureApplicationId": "p3-fixture-capture",
+  "storeName": "finite-lifecycle",
+  "stateVersion": "calcify-finite-capture-state-v1",
+  "openingMode": "GENESIS",
+  "initialCommandNextOffset": "0",
+  "initialSourceNextOffset": "0",
+  "initialCaptureNextOffset": "0",
+  "initialCaptureSourceGroupNextOffset": "0"
+}

@@ -17,6 +17,7 @@ type Runner struct {
 	processors []*Processor
 	close      func()
 	wg         sync.WaitGroup
+	finite     *finiteReadiness
 }
 
 type fatalStartupError struct{ cause error }
@@ -38,9 +39,7 @@ func StartRunner(parent context.Context, service *app.Service, config RuntimeCon
 		if config.LogProvider != "redpanda" {
 			return nil, fmt.Errorf("Calcify lifecycle requires transactional redpanda source")
 		}
-		// Model fact/capture proof cannot authorize replay under a new mode.
-		// O2 replaces this gate only after durable registration and bound restore.
-		return nil, fmt.Errorf("Calcify lifecycle live activation requires durable binding and restore (O2)")
+		return startFiniteRunner(parent, service, config)
 	}
 	if len(config.Partitions) == 0 {
 		return nil, fmt.Errorf("matching-engine direct stream requires at least one partition")

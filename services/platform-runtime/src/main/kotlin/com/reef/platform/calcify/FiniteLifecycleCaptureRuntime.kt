@@ -51,4 +51,18 @@ internal object FiniteLifecycleCaptureRuntime {
     fun run(): Nothing = throw IllegalStateException(
         "finite lifecycle live activation unavailable: O2 durable binding, canonical ingress, writer isolation and history/restore verification required"
     )
+
+    /** Full managed-state transport fit; live wrapper must independently verify broker identities/history. */
+    fun liveProperties(binding:FiniteLifecycleBinding,authenticated:Properties,stateDirectory:String):Properties = modelProperties(binding,authenticated["bootstrap.servers"].toString()).apply {
+        putAll(authenticated)
+        put(StreamsConfig.STATE_DIR_CONFIG,stateDirectory)
+        val transport=Math.toIntExact(binding.budget.stateBytes+1024)
+        put(StreamsConfig.producerPrefix("max.request.size"),transport)
+        put(StreamsConfig.producerPrefix("buffer.memory"),2L*transport)
+        put(StreamsConfig.consumerPrefix("max.partition.fetch.bytes"),transport)
+        put(StreamsConfig.consumerPrefix("fetch.max.bytes"),transport)
+        put(StreamsConfig.producerPrefix("max.block.ms"),1000)
+        put(StreamsConfig.producerPrefix("transaction.timeout.ms"),10000)
+        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG,100)
+    }
 }
