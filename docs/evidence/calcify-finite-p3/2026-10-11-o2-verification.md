@@ -45,12 +45,28 @@ attempt failed 8/21 because only migration 0013 was applied (missing
 `boundary.stream_command_intake`); that was fixture setup, not a product defect, and is kept here.
 Container and password files removed after the run.
 
-## Known failures not caused by O2
+## CI-readiness check (local replay of the `ci.yml` jobs O2 touches)
 
-`bun test scripts/dev/calcify-financial/proof-supervisor.test.mjs`: 46 pass, 4 fail (timing and
-adapter publication-boundary cases). The file is unchanged by O2 (`git diff master` shows only
-added files). Not investigated; reproduced twice. Run under `node --test`, three Bun-only
-O2 harness files fail to load (`bun:` scheme / `Bun` global); CI invokes them with Bun.
+Replayed in a clean `git worktree` where relevant (local `artifacts/` holds a broken symlink that
+makes `script-surface-check` crash only in the dirty checkout).
+
+| CI job / step | Before | Cause | Fix |
+| --- | --- | --- | --- |
+| node-dev-tooling: `script-surface-check` | exit 1 | `finite-o2-{engine-adverse,proof,resource-monitor}.test.mjs` not wired anywhere | New Bun step in `ci.yml` |
+| node-dev-tooling / postgres-schema-placement: `migrate.test.mjs` | 1 fail | expected runtime migration list lacked `0076_calcify_finite_topic_roles.sql` | Added to expected list |
+| node-dev-tooling: 38 CI-listed test files under `node --test` | 280/281 pass before fix | the `migrate.test.mjs` case above | 281/281 expected after fix; `migrate` + `ci-workflow-hardening` re-run: 26/26 |
+| Bun step contents under Bun 1.3.14 (CI pin) | n/a | n/a | 151 pass, 0 fail, 27 s |
+| postgres-schema-placement: migrations on fresh `postgres:16` | n/a | n/a | runtime 0001–0076 and boundary 0001–0013 apply with no error (not the full `make dev-db-migrate` multi-database path) |
+
+Correction: an earlier draft of this record called `proof-supervisor.test.mjs` a pre-existing
+failure. That was wrong — it was run with `bun test`, but CI runs it under `node --test`
+(Node 22), where it passes (187/187 across the calcify node files). Those 4 Bun-only
+timing failures are not a CI condition. Running O2's three Bun-API harness files under plain
+`node --test` also fails to load (`bun:` scheme, `Bun` global); they now run only in the Bun step.
+
+Not replayed locally: GitHub-hosted job runtime (ubuntu, Node 22.x, Bun setup action), container
+builds, docs-site, scenario-replay, infrastructure-config, dependency-alignment, Gradle
+`kotlin-platform-runtime` in full.
 
 ## Hygiene change
 
