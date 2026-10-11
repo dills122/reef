@@ -99,6 +99,16 @@ and [policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) retain current decisions; full
 joins RecordsPR12. Session delivery bundles initial review, kernel/queue probes,
 aged treatment/control, arena goalpost and credit proof on existing feature branch.
 
+## Calcify finite P3 O3 packet — October 11, 2026
+
+O2 is merged (PR488, `85115ac80`). O3 (financial admission) is unstarted in code; a **draft** packet is in
+[O3 packet](work/CALCIFY_FINITE_P3_O3_PACKET.md) with owner decisions D1-D7 recorded (D4: operator control actions; D7: option B, order
+established in the financial processor's own history, which needs a new binding schema version before O3b). It is not reviewed
+and implies no implementation, financial authority or capacity. The O2 follow-up "operator-reviewed role definition" now has a
+[draft role definition](work/CALCIFY_FINITE_P3_DB_ROLES.md) with an observed privilege matrix; operator sign-off, Records archive
+publication and the live replay of G1-G8/G10 remain open.
+
+
 ## Calcify finite P3 O2 — October 11, 2026
 
 Publication update: [O2 PR488](https://github.com/dills122/reef/pull/488) merged
