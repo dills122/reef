@@ -202,7 +202,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
             str(inputDigest); str(disposition.name); int(legs.size); legs.forEach { leg(it) }
         }
 
-    private fun stateDigest(s: FinanceState) = Canon.sha(stateBytes(s, includeChain = false))
+    internal fun stateDigest(s: FinanceState) = Canon.sha(stateBytes(s, includeChain = false))
 
     private fun stateBytes(s: FinanceState, includeChain: Boolean) = Canon.bytes {
         str("calcify-finance-state-v1"); long(s.sequence); if (includeChain) str(s.chain); int(s.controls)

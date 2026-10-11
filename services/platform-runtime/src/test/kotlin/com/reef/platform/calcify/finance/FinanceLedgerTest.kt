@@ -319,13 +319,13 @@ class FinanceLedgerTest {
     // ---- O3a review 1 (finding F1): assertions that kill the surviving mutants ----
 
     /** Test-side copy of the decision byte layout, so a forged decision carries a checksum that is valid for its own fields. */
-    private fun forge(d: Decision, sequence: Long = d.sequence, priorChain: String = d.priorChain): Decision {
+    private fun forge(d: Decision, sequence: Long = d.sequence, priorChain: String = d.priorChain, stateDigest: String = d.stateDigest): Decision {
         val bytes = Canon.bytes {
-            str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(d.stateDigest)
+            str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(stateDigest)
             str(d.action.namespace); str(d.action.domain); str(d.action.actionId)
             str(d.inputDigest); str(d.disposition.name); int(d.legs.size); d.legs.forEach { leg(it) }
         }
-        return d.copy(sequence = sequence, priorChain = priorChain, checksum = Canon.sha(bytes))
+        return d.copy(sequence = sequence, priorChain = priorChain, stateDigest = stateDigest, checksum = Canon.sha(bytes))
     }
 
     @Test fun duplicateExecutionWithChangedPriceConflicts() {
@@ -438,9 +438,15 @@ class FinanceLedgerTest {
         assertFails { ledger.restore(cp.copy(checksum = "0".repeat(64)), r.decisions.last()) }
     }
 
-    @Test fun restoreRunsInvariantsEvenWithAValidChecksum() {
+    @Test fun restoreRunsInvariantsEvenWhenTheHeadCommitsToTheBadState() {
+        // A head decision that genuinely commits to an invariant-violating state (a buggy producer): the commitment matches, so only
+        // the invariant check can refuse it.
+        val r = run(); r.go(fund("seed", seller, aapl, 1))
         val bad = ledger.genesis().copy(positions = mapOf((buyer to usd) to -5L, (opening to usd) to 5L))
-        assertFails { ledger.restore(ledger.checkpoint(bad), null) }
+        val head = forge(r.decisions.single(), sequence = 0, stateDigest = ledger.stateDigest(bad))
+        val committed = bad.copy(chain = head.checksum)
+        val e = assertFailsWith<IllegalStateException> { ledger.restore(ledger.checkpoint(committed), head) }
+        assertTrue(e.message!!.contains("negative non-opening position"), e.message)
     }
 
     @Test fun invariantCheckerRejectsNegativeUnbalancedAndUnknownAccounts() {
