@@ -18,6 +18,15 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify finite P3 O3 packet — October 11, 2026
+
+O2 is merged (PR488, `85115ac80`). O3 (financial admission) is unstarted in code; a **draft** packet is in
+[O3 packet](work/CALCIFY_FINITE_P3_O3_PACKET.md) with owner decisions D1-D3, D5, D6 recorded, D4 proposed and **D7 open**
+(where the single durable input order lives; likely needs an additive binding extension, a human gate). It is not reviewed
+and implies no implementation, financial authority or capacity. The O2 follow-up "operator-reviewed role definition" now has a
+[draft role definition](work/CALCIFY_FINITE_P3_DB_ROLES.md) with an observed privilege matrix; operator sign-off, Records archive
+publication and the live replay of G1-G8/G10 remain open.
+
 ## Calcify finite P3 O2 — October 11, 2026
 
 O1 is merged (PR485, `b9a8756e8`). O2 (durable finite ingress, binding, stop/drain,
