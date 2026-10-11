@@ -30,10 +30,10 @@ Observable acceptance (each becomes a named test in section 8):
 | D1 | **Generalize accounts/assets.** The module is typed over account and asset identifiers taken from the registered opening (`parties[].accountId`, `quoteCurrency`, `baseAssetId`), not the reference kernel's literals `buyer`/`seller`/`USD_NANO`/`ACME_SHARE`. The fixture is one 2-account x 2-asset instance. Negative tests must fail any hidden fixed-name assumption (swapped roles, renamed assets, a third account that must be refused). | Accepted by owner, Oct 11 |
 | D2 | **Unreserved gross DvP only.** No reservations, netting, partial settlement, or external effects. | Accepted by owner, Oct 11 |
 | D3 | **Durable credit redesign out of scope.** | Accepted by owner, Oct 11 |
-| D4 | **Funding/repair are control actions** issued by an authenticated operator principal (the reference kernel's `opening-resource-owner` authority), never by trading principals; permitted while the run is `ACTIVE` **or** `STOPPED` (closure of already-admitted work needs them after stop); charged to the reserved control capacity (8 controls) and to the 160-attempt financial budget. | **Proposed default; needs explicit owner confirmation** |
+| D4 | **Funding/repair are control actions** issued by an authenticated operator principal (the reference kernel's `opening-resource-owner` authority), never by trading principals; permitted while the run is `ACTIVE` **or** `STOPPED` (closure of already-admitted work needs them after stop); charged to the reserved control capacity (8 controls) and to the 160-attempt financial budget. | **Accepted by owner, Oct 11** (as proposed) |
 | D5 | Budgets as in the contract: 128 source executions (16 publications x 8) plus 8 controls; <=160 admitted financial attempts; <=320 result/history records; 4 positions (2 accounts x 2 assets); <=256 obligations before retirement. | Accepted by owner, Oct 11 |
 | D6 | **Two delivery units, declared now:** O3a pure typed module (no I/O) and O3b durable adapter and order integration. Each has its own cap of 3 independent reviews; O3b starts only after O3a is accepted. Declaring the split up front is not review-cap evasion. | Accepted by owner, Oct 11 (as recommended) |
-| D7 | **Common durable order mechanism and topic registration** (section 5). | **OPEN; blocks O3b; needs owner decision** |
+| D7 | **Common durable order: option B** (section 5): order is established in the financial processor's own transactional history; a CONTROL input topic and a financial changelog role are registered by an additive binding extension. | **Accepted by owner, Oct 11** (option B). Binding-extension details still to be specified and reviewed (section 5) |
 
 ## 3. What O3 receives from O1/O2
 
@@ -61,24 +61,41 @@ Observable acceptance (each becomes a named test in section 8):
 | JSON tree state (string-typed numbers, path-based deltas) | **Replace** with typed Kotlin/protobuf values; signed64 checked arithmetic |
 | Whole state as one object | **Do not repeat** (see C1) |
 
-## 5. Open design question D7: where is the single durable order?
+## 5. D7 decision: option B, and what it implies
 
-The contract requires one durable order shared by source-derived inputs, opening, funding and repair. Three shapes:
+**Decided (owner, Oct 11): option B.** The financial processor reads the CAPTURE topic and a CONTROL topic. Each input it
+accepts is assigned the next position in its own transactional history when it is recorded (the reference kernel's
+staging `position` idea). Replay and restore use the recorded history, never re-consumption, so cross-topic arrival order
+cannot change results. Rejected: A (single new input topic and writer, needs a heavier binding rewrite) and C (controls through
+the O2 ingress adapter, mixes financial control traffic into the matcher's COMMAND stream and weakens isolation).
 
-- **A. New versioned binding adding a `FINANCIAL_INPUT` (and changelog) topic role.** One transactional writer appends
-  both capture-derived executions and control inputs, giving a literal total order on a single partition. Cost: the
-  finite binding v1 digest and the five registered topic roles are frozen; this needs a binding **v2**, an additive CHECK
-  change like migration `0076`, new golden bytes, and Go/Kotlin parser changes. Heavy, but the cleanest.
-- **B. Order established inside the financial processor's own transactional history.** The processor reads CAPTURE and a
-  CONTROL topic; each accepted input is assigned the next history position when it is recorded (the reference kernel's
-  staging/`position` idea). Replay then uses the recorded history, not re-consumption, so cross-topic arrival order cannot
-  change results. Still needs a registered CONTROL topic and a financial changelog role, so it also touches the binding,
-  but not the capture path.
-- **C. Controls through the O2 ingress adapter.** Reuses existing auth, budget and durability, but mixes trading and
-  financial control traffic in the COMMAND stream that the matcher consumes. Likely unacceptable for isolation.
+Consequences to specify in this packet before O3b (each is a contract change and is **not** done by this decision):
 
-Recommendation: **B**, with the binding extension specified as a small additive v1.1 or v2 in the packet. This is a
-contract change and the overnight plan treats a heavy contract pivot as a human gate; it is flagged here, not decided.
+1. **Binding extension.** The registered opening has five topic roles (`COMMAND`, `SOURCE`, `CAPTURE`, `OWNERSHIP`,
+   `CAPTURE_CHANGELOG`) and its canonical bytes and digest are frozen as `calcify-finite-binding-v1`. B needs at least a
+   `CONTROL` input role and a financial changelog role (name TBD, for example `FINANCIAL_CHANGELOG`), and a financial
+   application id and state-store name. Because canonical bytes and the digest change when fields or roles are added, this
+   is a **new schema version** (working name `calcify-finite-binding-v2`, with new golden bytes and manifest), not a silent
+   append to v1. v1 stays valid and unchanged for existing O1/O2 runs. Recommendation: v2, because it keeps v1 digests and
+   fixtures stable. Also requires an additive `runtime.calcify_topic_identities.role` CHECK (as migration `0076` did) and Go and
+   Kotlin parser support; a binding v2 migration/compatibility rule is a review item.
+2. **Control ingress.** Controls (opening, funding, repair) reach the CONTROL topic through an authenticated operator
+   path (D4). It must be a single transactional writer with exclusive topic ACLs (the same containment standard as the COMMAND
+   topic), idempotent by action key, and charged to the 8-control and 160-attempt budgets. Where this writer lives (extension of
+   the finite ingress adapter's control path versus a separate small component) is an O3b design question; it must **not** put
+   controls on the COMMAND stream.
+3. **Deterministic merge.** Because the processor consumes two topics, arrival interleaving is nondeterministic across runs.
+   The decision log, not the arrival order, is authoritative: once an input is recorded at position N, every restore and replay
+   reproduces exactly that order. Tests must prove two different interleavings of the same inputs are both valid and each is
+   reproducible from its own recorded history, and that a crash between consuming and recording an input neither loses nor
+   duplicates it (offset commit and history append in one transaction).
+4. **Restore cuts.** The restore cut must name the CAPTURE offset, the CONTROL offset and the financial history position
+   together; activation refuses if any is missing or the binding changed (extending the O2 refusal rules).
+5. **Isolation.** Financial changelog and CONTROL topics are written only by their registered principals; the O2 isolation
+   proof pattern applies. No new shared writable balances with legacy runs.
+
+Because (1) changes a frozen contract and touches shared files, it is a manager-leased change with its own independent review,
+and the packet's O3b cannot start until the binding v2 specification is accepted.
 
 ## 6. Design constraints for the pure module (O3a)
 
@@ -138,6 +155,6 @@ SQL/read APIs (O4), end-to-end fixture (O5), throughput/capacity, any financial-
 
 ## 12. Decisions needed before this packet can be reviewed
 
-1. Confirm D4 (control principal, allowed states, budget charging).
-2. Decide D7 (recommend B) and whether a binding v1.1/v2 is acceptable now.
-3. Confirm the serialized-bound derivation method (C5) rather than reusing the reference kernel's 64 KiB.
+1. Confirm the serialized-bound derivation method (C5), rather than reusing the reference kernel's 64 KiB.
+2. Confirm the recommended binding versioning for D7: new schema version `calcify-finite-binding-v2` (v1 unchanged).
+3. Choose where the control writer lives (section 5, item 2) before O3b design, or leave it to the O3b design review.
