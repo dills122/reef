@@ -238,8 +238,8 @@ Full backend/decision detail for every boundary-owned store (idempotency, comman
 
 ### Opt-in Calcify finite ingress (`boundary/0013`)
 
-O2 application source author-tested; actual broker acceptance and independent
-review pending. [Current status](WORK_PLAN.md#calcify-o2-continuation--october-10-2026)
+O2 application source author-tested and re-verified (broker transport, Postgres store);
+independent review 2 of 3 pending. [Current status](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026)
 and [finite contract](../contracts/calcify/README.md) own scope and verification.
 
 | Table | Keys and bounded facts |

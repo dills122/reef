@@ -18,259 +18,33 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
-## Calcify O2 SOURCE fixture fix — October10,23:41Toronto
+## Calcify finite P3 O2 — October 11, 2026
 
-User approved five-line test-only padding fix and focused offline checks.
-Healthy/fault payload8192→8000 applied in two test files; focused3Kotlin checks
-PASS, zero failures/errors/skips, build15s. Other56public source hashes unchanged;
-product/probe limits and full6307840B managed-state proof held. Bound6162176B
-unchanged. New model receipts captured separately; original frozen receipts restored
-exactly. Source27 snapshot is source-only; no new fault distribution packaged,
-live retry or review2 dispatched. G9/F1 OPEN; reviewcount1of3. HOLD pending user
-direction. Active original failures/evidence retained for review; Records delivery
-completion remains pending. Verification: manager/g9-source-publish-spike/
-fix-verification/verification.json and fix-completion.json.
+O1 is merged (PR485, `b9a8756e8`). O2 (durable finite ingress, binding, stop/drain,
+same-binding restore) is implemented on `claude/calcify-o2-finish` as an unmerged draft PR; it is
+Codex's October 10 work, preserved unmodified at `wip/calcify-o2-codex-snapshot-2026-10-11`, plus
+corrections below. Defaults stay off and live activation requires the explicit O2 opening; no
+financial authority, production adoption or capacity claim follows.
 
-## Calcify O2 SOURCE publish research spike — October10,23:28Toronto
-
-User approved bounded diagnosis/proposal only; no fixes or live retries.
-Offline Sarama1.61 producer replay of retained MAIN38 input returned actual
-ConfigurationError: record8254B exceeds unchanged Producer.MaxMessageBytes8192B.
-Breakdown: value8192B + run-ID key26B + Sarama record overhead36B. Probe redacts
-that client error to operation_failed. Original live receipt remains generic;
-offline reproduction establishes deterministic rejection, not broker history proof.
-
-Smallest patch prepared: five lines in two test-only Kotlin files reduce healthy/
-fault padding8192→8000 and matching focused checks/receipt. All8 retained healthy
-JSON bodies unchanged; candidate record8062B fits existing8192B probe cap.
-Product limits, NONE compression and full6307840B managed-state proof held.
-Patch not applied; no live retry, service start or infrastructure tuning. Original
-MAIN38 failure retained; G9/F1 and review2 remain blocked pending complete evidence.
-Detailed evidence/proposal: active manager/g9-source-publish-spike artifacts.
-
-## Calcify O2 MAIN38 retry grant — October10,23:17Toronto
-
-Terminal MAIN38 FAILED at03:22:39UTC after91.701s. Healthy initialization passed;
-first SOURCE fixture publication returned Go probe status error/code operation_failed,
-causing strict semantic-status refusal. Underlying error not exposed in response;
-bounded retained runtime/broker logs show no exception. Publication acceptance
-unknown; no healthy/fault/transport restoration witness earned. Monitor exit0/four
-cleanup exit0 and actual owned running inventory0 verified. Sole grant consumed;
-stopped with original failure retained. No retry, timeout change or review2.
-
-User approved initialization fixture wait30→60s, one fresh MAIN38 run≤600s,
-then independent review2 only if complete evidence passes. Retained inventory72→74;
-disk abort3.625GiB/ceiling4GiB and all product limits held. Exact patch applied;
-syntax and74accepted/75refused boundary check passed. Source26 frozen58sources;
-Java/Go executable artifacts identical to source25. Fresh retained measurement
-pending; no MAIN38 live attempt started at preparation checkpoint. MAIN36/37
-original failures preserved; G9/F1 OPEN, reviewcount1of3 unchanged. Active evidence
-retained for review; Records delivery/retention publication remains pending.
-
-## Calcify O2 canonical-opening retry checkpoint — October10,23:08Toronto
-
-MAIN37 terminal FAILED at03:13:00UTC after91.857s. Healthy-write initialization
-marker arrived30.343s after manager start gate, beyond fixed30s fixture wait.
-No SOURCE fixture inputs published; no G9 healthy/fault/transport witness earned.
-Retained runtime log has no JVM exception. Monitor exit0/four cleanup exit0;
-actual owned running inventory0 verified. Sole approved attempt consumed; stopped,
-no timeout tuning, retry or review2. Source25 remains frozen; G9/F1 OPEN.
-
-User approved one-line canonical-opening fix, actual parser check within5min,
-one fresh MAIN37 run capped600s, and review2 only after passing evidence.
-Retained-volume inventory70→72 approved; disk abort3.625GiB and product caps held.
-Actual compiled Kotlin parser check PASS at03:08:16UTC: retained newline rejected,
-compact bytes accepted with same binding digest. Original failure preserved.
-
-Before live, developer flagged another fixture assertion mismatch: Kotlin receipt
-emits producerBufferBytes string12617728; driver expects number12617728.
-Exact string assertion correction separately approved and applied; wrong type/value
-still refused. Fresh preflight3496493056B/70volumes passed; MAIN37 admitted and
-executed once under600s bound. Earlier preparation checkpoint had unused attempt;
-terminal outcome above supersedes that status. No retry or optimization.
-G9/F1 still OPEN; review2 not dispatched; review count1of3. Active records needed
-for review retained; Records delivery/retention publication remains pending.
-
-## Calcify O2 G9 stopped checkpoint — October10,22:35Toronto
-
-Approved prep completed before30min deadline.151public checks and46focused
-Kotlin checks passed; conservative canonical state bound6162176B checked against
-6307840B guard. Source24 frozen58public sources, fresh production/probe artifacts.
-
-Sole MAIN36 live attempt FAILED after61.245s at healthy-write startup. Root manager
-fixture appended newline to binding file; strict canonical-byte decoder correctly
-rejected it before SOURCE inputs. No G9 healthy/fault/full-envelope witness earned.
-Monitor0, all fourcleanup0, actualrunningservices0; original failure retained.
-G9/F1 remains OPEN; review1 Not ready,1of3 consumed; review2 not dispatched.
-Compression F2 author-fixed, independent recheck pending. No retry or publication.
-Concrete one-line fixture correction prepared, not applied. Fresh run requires new
-explicit grant and inventory72 (current70 retained); approved3.625GiB disk abort
-and4GiB ceiling still held, fresh actual preflight required. Active evidence retained
-for review; required Records delivery/retention publication remains pending.
-
-## Calcify O2 bounded G9 follow-up — October10,22:13Toronto
-
-User approved≤30min prep (deadline October11,02:43:41UTC), then one≤600s
-live attempt and independent review2 if evidence passes. Diagnostic disk abort
-3.125→3.625GiB, retained volume inventory68→70; product limits and4GiB ceiling
-unchanged. Review1 remains Not ready: missing Java managed-state full-envelope
-cold restore proof. Compression fix author-tested; independent recheck pending.
-No retries, infrastructure optimization or publication scope. Raw failures retained.
-
-Prep checkpoint:151public checks passed with required host process access;
-retained preflight3170627584B/68volumes. Initial history-isolation blocker flagged
-and prep paused; samebinding healthy→fault→transportLAST ordering fits original
-grant without new ACLs/mounts/credentials/reset. Full envelope remains6307840B;
-typed live inputs retain existing8192B diagnostic publication cap. Author bound
-candidate4266774B and fresh Kotlin probe/build checks pending. No live run/review2.
-
-## Calcify O2 continuation — October 10, 2026
-
-October10 21:55 America/Toronto: independent combined review1of3 returned
-**Not ready**. Twelve terminal crash/budget/adverse cases and separate MAIN18
-restart/cache proof verified; fresh Go suite/race/vet and151 Bun tests passed.
-P2 finite matcher inherited ambient/default compression outside pinned-none
-profile; finite-only pin fixed locally,9 codec cases and streamdirect suite PASS,
-ordinary mode preserved. Fresh Go artifacts cross-built; no post-fix live claim.
-P1 G9 actual Java managed-state/changelog/fetch/restore qualification at justified
-typed bound remains OPEN. Synthetic framing, real Go binary canary and small typed
-restore retain scope; no full-capacity claim or gate waiver. Five-minute read-only
-remediation spike prepares bounded proposal; extra live grant not given. O2
-uncommitted/unpublished; review2 waits for missing evidence, O3–O5 remain gated.
-
-October10 21:40 America/Toronto: final fresh MAIN35 suffix run PASS. All12
-remaining crash/budget/adverse cases have original terminal passes, independent
-monitor exit0 and four owned-service cleanup exits0; MAIN18 restart/cache recovery
-PASS remains separate scope. Fresh suffix proof verifies exact12-command/SOURCE/
-CAPTURE correspondence,3 trades/15 members, unchanged charged accounting and
-independent terminal containment. Actual owned Docker running inventory0 verified.
-151 source22 harness checks and10 operator checks pass; product artifacts unchanged
-from earlier live cases. Approved diagnostic disk/inventory exception remains
-3GiB+128MiB/68; product budgets and4GiB ceiling intact. Original MAIN34 remains
-FAILED with separately labelled offline supplement. Independent review1of3 next;
-no acceptance verdict yet, O2 uncommitted/unpublished, O3–O5 still gated. Active
-proofs retained for review; final delivery/Records publication pass pending.
-
-October10 21:36 America/Toronto correction: remaining campaign has11 terminal
-passes (publication/attempt budgets, four crash cuts, late ACK, mixed prefix,
-topic identity, scope and missing COMMAND genesis). MAIN18 restart/cache restore
-passed separately. MAIN34 published-suffix live run FAILED because helper read
-trades at batch top level instead of `outcomes[].result.trades`; retained histories
-validate offline as12 commands/12 source/12 capture,8 applied/4 rejected,3 trades,
-15 members. Offline supplement does not close terminal live gate: final SQL
-snapshot and independent stopped-process witnesses were never reached.
-
-User approved one fresh MAIN35 suffix run with diagnostic disk abort3GiB+128MiB
-and inventory68 retained volumes; product limits and4GiB ceiling unchanged.
-Source22 frozen55 sources; matcher/probe/runtime/fault artifacts identical source21.
-Joined151 harness checks and10 private operator checks pass. Live preflight pending;
-review0of3, no O2 commit/publication. G9 evidence scope remains question for fresh
-plan/code review; no whole-process capacity or throughput claim. Failed evidence
-retained for active review; final delivery/Records retention pass remains pending.
-
-October10 21:16 America/Toronto: user authorized remaining O2 crash/budget tests
-then independent review, with unchanged product limits and no infrastructure
-optimization detours. Ten campaign cases PASS: both budget caps, four real crash
-cuts, broker-ACK repair/restart, late ACK, mixed committed-prefix recovery,
-UUID and scope refusal; separate MAIN18 same-binding restart/changelog recovery
-also PASS. Missing-history and published-suffix live gates remain open. MAIN32
-correctly observed Go missing-prefix refusal, then fixture failed by expecting a
-successful genesis read after deliberate truncation; failed gate remains failed.
-Minimal exact negative-witness correction and finite diagnostic volume inventory
-64→66 underway; physical disk/memory/security bounds remain unchanged. Source20
-frozen, subsequent source21 not yet admitted. Review0of3; O2 uncommitted and
-unpublished. Earlier dated failures/approval scope below remain historical facts.
-
-October10 20:00 America/Toronto: user approved diagnostic controller allowance
-128→256MiB and one restart/recovery run, with results within30minutes and
-immediate blocker reporting. Product cgroups, disk limits and review gates stay
-intact. No optimization detours or further campaign dispatch authorized by this
-bounded step. Earlier128MiB aborts and evidence below retain original scope.
-
-October10 20:08 America/Toronto: approved MAIN18 restart/recovery PASS.
-Canonical12-command flow, same-binding restart and committed changelog recovery
-after preserved local-cache loss passed; counters/journal/cuts/state retained in
-their tested scopes. Source18 frozen55 paths unchanged after run; production
-artifacts unchanged. Focused harness129pass/0fail. Sampled controller maximum
-141.21875MiB against approved256MiB; product limits unchanged. Independent
-monitor exited0; all four owned services stopped, verified actual running0.
-Result `.planning/calcify-p3-o2-2026-10-10/manager/main18-result-summary.json`
-pins original proof hashes. Remaining crash/budget/adverse gates and independent
-review0of3 stay open. Awaiting user approval for next scope; O2 uncommitted.
-
-User authorized O2 continuation at14:21 America/Toronto after O1 delivery.
-Branch `codex/calcify-p3-o2-2026-10-10`, accepted O1 base
-`5730b6be1ef1fe702be5f3d5bf752e5233ab9016`; PR485 remains open/unmerged.
-[Reviewed plan](work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) and
-[finite source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) govern.
-Manager ledger `.planning/calcify-p3-o2-2026-10-10/session.json` records leases.
-
-Current state: resumed by user October10; application implementation and author
-checks complete, O2 acceptance pending. Test-only crash selector alignment
-precedes fresh isolated flow, recovery and fault checks; independent review follows
-live acceptance. Previous owned services stopped, failed evidence preserved.
-Final Kotlin package passes112 checks with zero skips, including10 actual
-PostgreSQL/HTTP cases and78 O1/legacy tests. Go full-module, race and vet checks
-pass; fresh matcher/probe binaries and JVM artifact frozen. Isolated attempts
-reached strict broker/security/topic readback, durable binding registration and
-actual JVM startup. Fixture/monitor/adverse helpers pass139 checks; private operator passes10. Corrected
-test-only capture selector passes nine focused JVM checks. Actual command/member
-identity selects crash barrier; physical offset comes from matched record. Fresh
-fault distribution retains identical production files. Prior run
-stopped automatically when controller RSS crossed128MiB; all three started
-services verified stopped, volumes preserved. Native-library qualification
-reproduced default tmpfs `noexec` failures and passed explicit `exec` with
-existing32MiB/mode1777/security flags. Both controller processes use
-Bun `--smol`, selected from bounded offline comparison; live cap unchanged.
-Fresh run passed four-service startup, full-size transport canary and trusted
-release. All12 canonical commands returned durable202; engine frontier12 and
-capture completed12/source-group36 observed. Typed history research found matcher
-compression default; fixture now explicitly requests `none`. Fresh run read all
-three12-record histories; final checker expected `applied` where existing wire
-contract requires `accepted`. Offline receipt replay with minimal correction
-passes remaining checks, including three trades/six units; this is research,
-not complete canonical acceptance. Writers contained, monitor stopped after60
-samples, all four services verified stopped, histories preserved. Narrow checker
-fix passes standalone public-record replay and recomputed-checksum negative
-checks. Fresh main15 then passed actual canonical12/12/12 histories,
-eight accepted/four rejected batches,15 members, three trades/six units,
-published retry without another publication, SQL authority and API isolation.
-Restart aborted independent resource monitor during same-ID stop/start; failed
-sample guard was lost and last-good measurements were mislabeled. All four
-services stopped, failed evidence preserved. Bounded monitor research completed;
-lifecycle-coherent sampling and safe failure diagnostics pass focused checks.
-Separate source research found fault-to-normal container replacement hazard;
-independent stopped-runtime acknowledgement and bounded current-inventory sampling
-pass focused positive/negative checks, with unchanged caps/cadence/deadline.
-Failed stats commands and initial list/inspect races remain fatal; live
-replacement qualification pending, no race-free claim.
-Fresh main16 repeated actual canonical flow, SQL authority and API isolation.
-Restart again aborted: sequential app stops changed matcher lifecycle in second
-stats round. All four services verified stopped; evidence preserved. Bounded
-research narrowed fix to independent complete monitor samples after each
-controlled app stop/start, including explicit exited-state refusal witnesses.
-Monitor acceptance policy, caps and timing remain unchanged. Separate monitor
-process regression reproduces ungated double-stop abort and verifies distinct
-published stopped/running samples for gated sequence; Docker measurements are
-injected in this test, not live proof. Combined harness checks pass139 public
-and10 private tests. Repeated containment uses exclusive contexts per actual
-owned-resource receipt generation. Fresh source freeze and resource admission
-precede live retry. Fresh main17 passed canonical flow, authority and isolation
-again. Controlled app lifecycle barriers passed runtime/matcher stops and runtime
-restart; final matcher-running witness stopped when combined controller RSS
-reached134,479,872 bytes against134,217,728-byte cap. All four services verified
-stopped; bounded memory research found repeated stale sample parsing; paired
-offline qualification pending after actual guard setup passed. Separate G9
-research distinguishes full transport canary from Java managed-state framing;
-pinned codec ceiling check pending. Full restart, local-cache recovery, finite
-budget closure and fault acceptance remain pending. O2 covers durable binding, canonical finite admission and
-uncertainty accounting, writer isolation, stop/drain and actual restore proof.
-Combined O2 independent review cap3, used0; O1 cap3of3 unchanged. Self-tests,
-fresh blind review, developer finding responses and manager acceptance required;
-stall/knowledge failures trigger bounded research before retry. O3–O5 remain
-gated. Original eight-hour deadline/history unchanged; no new capacity or live
-financial authority claim. Temporary owned PostgreSQL tests completed and stopped;
-failed isolated broker attempts stopped with volumes preserved. No shared reset.
+- Independent review 1 of 3: **Not ready**. F2 (finite matcher inherited ambient compression):
+  fixed with a finite-only `CompressionNone` pin and tests; ordinary mode unchanged. F1 (G9, full
+  managed-state transport): `FiniteG9BrokerTransportTest` writes the declared 6,307,840-byte
+  state through the production managed store and `liveProperties`, reads it back from the
+  changelog, and restores it after local-state loss on a disposable Redpanda. Transport only —
+  synthetic bytes, unauthenticated RF1 broker, one run.
+- Re-verified October 11: Go build/vet/test/race, Kotlin `Finite*` including the 10 Postgres-backed
+  binding-store and 11 ingress tests, proto regeneration, retention, and local replay of the CI
+  steps O2 touches (two CI breakers fixed: unwired Bun harness tests, migration-list test).
+  Results, commands and limits: [O2 verification record](evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
+- Open: independent review 2 of 3 on the final diff (fresh reviewer); G1–G8 and G10 live
+  evidence is still Codex's recorded claims (ledger under the snapshot's
+  `.planning/calcify-p3-o2-2026-10-10/`); Postgres role grants used in tests were inferred and
+  need an operator-reviewed definition; hosted CI run. O3–O5 stay gated on accepted O2.
+- Retention: the earlier hour-by-hour O2 checkpoints formerly in this section are preserved in git
+  history (snapshot commit `4c5a1f6011dadf2e1bdcd29e67a626e742d781d6`). Records archive
+  publication of O2 evidence has **not** been done; retention is incomplete.
+- Test infrastructure: per [delivery policy](ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery),
+  leave the usable harness alone; G9 closed without further harness work.
 
 ## Calcify eight-hour P3 session — October 9–10, 2026
 

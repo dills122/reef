@@ -24,7 +24,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 | Order | Owner | Read for |
 | --- | --- | --- |
-| 1 | [Current work](WORK_PLAN.md#calcify-o2-continuation--october-10-2026) | O2 implementation in progress after accepted O1 delivery; remaining P3 gates; merged P0/E4 checkpoints |
+| 1 | [Current work](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026) | O2 re-verified, draft PR and independent review 2 of 3 pending after merged O1; remaining P3 gates; merged P0/E4 checkpoints |
 | 2 | [Finite P3 source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [O1 checkpoint](evidence/calcify-finite-p3/README.md) | Accepted O1 lifecycle/capture model, complete immutable proof and delivery gates; live activation refused |
 | 3 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
 | 4 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
