@@ -192,13 +192,15 @@ reduction output. Focused tests validate wire bytes, metadata, compatibility,
 counts/dependencies, malformed atomicity, gaps/replay, exact caps, fault suffix,
 managed rollback/reopen and changed/missing restore history.
 
-## Finite O2 binding contract — implementation in progress
+## Finite O2 binding contract — merged (PR488), opt-in
 
 [Synthetic opening](finite-binding-v1.json), [canonical bytes](finite-binding-v1.hex),
 [startup witness](finite-startup-v1.json) and [manifest](finite-binding-v1-manifest.json)
 freeze cross-language parser/identity inputs. Synthetic cluster/topic identities
-cannot establish live activation. O2 remains unaccepted until real SQL/broker,
-writer-isolation, stop/drain/restart and independent-review gates pass.
+cannot establish live activation. O2 merged in PR488 after independent reviews 2 and 3
+("Ready with non-blocking follow-ups"); the Postgres store suite, G9 broker transport and
+writer-isolation tests pass per the [O2 verification record](../../docs/evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
+Live replay of G1-G8/G10 on master and operator sign-off of the role split remain open.
 
 Binding domain is ASCII `calcify-finite-binding-v1` plus NUL. Framed text means
 u32 big-endian UTF-8 byte length followed by exact bytes, without normalization.

@@ -158,10 +158,12 @@ wire facts or establish broker profile binding or financial authority. Separate
 lifecycle facts and additive capture protobuf for bounded source-prefix model;
 mode-off source bytes/P0 identity stay unchanged. Final combined review3of3 Ready
 after restore/JSON/replay identity corrections; source committed `0a7df6f8` and
-complete proof published. Live activation refuses pending O2 binding/ingress/isolation/history
-proof. [Current work](WORK_PLAN.md#calcify-eight-hour-p3-session--october-910-2026)
-owns resumed delivery and remaining P3 sequence. No financial authority or
-capacity qualification follows.
+complete proof published. O2 (durable finite ingress, binding, stop/drain, same-binding
+restore, live capture wiring; opt-in, off by default) merged in PR488 after independent
+reviews 2 and 3 returned "Ready with non-blocking follow-ups"; its G1-G8/G10 live
+evidence is not yet independently replayed. O3a (pure typed unreserved gross DvP ledger
+model) is merged unreviewed and unwired. [Program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md)
+owns the current state and next work. No financial authority or capacity qualification follows.
 
 ## Source map
 
