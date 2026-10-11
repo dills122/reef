@@ -98,6 +98,7 @@ The local replay above missed two failures that hosted CI (ubuntu, Node 22, Bun 
 | --- | --- | --- | --- |
 | `node-dev-tooling` Bun step | `EACCES: permission denied, mkdir '/private'` | The O2 harness pins `/private/tmp/calcify-o2-*` lease roots (macOS) in `finite-o2-proof.mjs`/`finite-o2-resource-monitor.mjs` and its tests | CI step removed; tests kept as local `make test-finite-o2-harness`. Harness left unchanged per the delivery policy. |
 | `go-matching-engine` | gated coverage 70.0% < 76% | `cmd/calcify-finite-probe` (fixture-only, not built into any image, 910 statements, 43.5% covered) counted in the gate | Added to the gate's exclusion regex next to `cmd/matching-engine`. Reproduced locally: 70.0% before, 76.3% after (margin 0.3 pt). Finite product code coverage is itself low: `calcify_finite_runner.go` 30.5%, `calcify_finite_startup.go` 48.6%, `streamdirect/runner.go` 28.7%. |
+| `calcify-tests` Postgres fixture step (added in `1bd990380`) | `relation "calcify_finite_bindings" already exists` | `dev-db-migrate` already applies the `boundary` domain (incl. 0013) to the primary database in that job; the fixture step re-applied it | Step now only creates the two roles and grants. Replayed against a disposable postgres:16 with boundary pre-applied: step exit 0, 10/10 Postgres tests pass. |
 
 ## Hygiene change
 

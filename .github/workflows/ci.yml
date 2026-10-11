@@ -674,9 +674,10 @@ jobs:
         # this job never starts those containers.
         run: JS_RUNTIME=node REEF_PROJECTION_POSTGRES_MIGRATIONS=0 REEF_BOUNDARY_POSTGRES_MIGRATIONS=0 make dev-db-migrate
       - name: Provision isolated finite binding-store fixture
-        # FiniteBindingStorePostgresTest skips without CALCIFY_FINITE_POSTGRES_TEST_* env. Apply the boundary schema
-        # to this disposable database and create two login roles with per-function EXECUTE only (production roles
-        # are operator-provisioned; this mirrors the test call sites, not a runbook).
+        # FiniteBindingStorePostgresTest skips without CALCIFY_FINITE_POSTGRES_TEST_* env. The boundary schema
+        # (incl. migration 0013) is already applied to this disposable database by dev-db-migrate; create two
+        # login roles with per-function EXECUTE only (production roles are operator-provisioned; this mirrors
+        # the test call sites, not a runbook).
         run: |
           set -euo pipefail
           umask 077
@@ -684,8 +685,6 @@ jobs:
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/runtime.pw"
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/registrar.pw"
           psql_() { docker compose -f compose.base.yml -f compose.local.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U reef -d reef "$@"; }
-          psql_ -c "CREATE SCHEMA IF NOT EXISTS boundary"
-          for f in $(ls scripts/dev/db/migrations/boundary/*.sql | sort); do psql_ < "$f" > /dev/null; done
           psql_ -c "CREATE ROLE fin_runtime LOGIN PASSWORD '$(cat "$RUNNER_TEMP/finite-pg/runtime.pw")'" \
                 -c "CREATE ROLE fin_registrar LOGIN PASSWORD '$(cat "$RUNNER_TEMP/finite-pg/registrar.pw")'" \
                 -c "GRANT USAGE ON SCHEMA boundary TO fin_runtime, fin_registrar" \
