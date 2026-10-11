@@ -17,6 +17,16 @@ Reef should model one post-trade domain with multiple timing/policy profiles, no
 
 Instant-post-trade is an accelerated profile. It must not become a shortcut that writes final balances directly or skips post-trade causality.
 
+October11 Calcify arena goalpost: owner requires10k/s through completed trading
+information visible via normal user/bot API, before settlement finality.
+[Proposed operating contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) separates
+simulated policy wait, eligible processing lag and SQL/API visibility; recommends
+p99 eligible settlement5s and session reconciliation30s. Numeric targets remain
+proposed. Owner selected immediate reuse of booked unsettled proceeds under explicit
+risk/credit limits for first arena profile. Account booking, reservations and credit
+accounting must stay current; precise limits and failure rules remain open. No
+deployed score, credit or timing profile changed.
+
 ## Industry Baseline
 
 Default baseline should follow current U.S. institutional equity shape:

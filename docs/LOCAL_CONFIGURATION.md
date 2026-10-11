@@ -81,6 +81,17 @@ are recorded in [direct throughput campaign](research/CALCIFY_DIRECT_THROUGHPUT_
 This route reuses C5 in-memory intake and direct matching controls, runs Calcify
 through managed resolved output, and omits receipt/legacy SQL settlement workers.
 Source generation/topic identity SQL remains startup/rebalance control work.
+For isolated research bootstrap, optional `CALCIFY_DIRECT_PROJECT` assigns unique
+container names and proof labels; `CALCIFY_DIRECT_SUBNET` selects an inspected unused
+subnet and `CALCIFY_DIRECT_BROKER_IMAGE` records explicit broker-version override.
+Defaults remain unchanged; host ports must still be free. See
+[aged contention proof](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md) for
+frozen setup, synthetic financial contender and measured limits.
+Research runner `run-contention.mjs` accepts `control` to retain financial
+start/crash/replay while omitting resolver cold restart; `CALCIFY_CONTENTION_PLAN`
+pins explicit plan file. [Matched control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
+records configuration equality and sequential-run limits. Do not reinterpret
+no-restart capacity as a successful recovery proof.
 `MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES` defaults to 1 MiB; explicit larger values
 must coordinate source topic `max.message.bytes` and consumer source-byte budgets.
 This setting changes neither command batch size nor transaction ordering.

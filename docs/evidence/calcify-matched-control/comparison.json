@@ -1,0 +1,738 @@
+{
+  "schema": "calcify-contention-comparison-v1",
+  "phases": [
+    {
+      "startSeconds": 0,
+      "endSeconds": 60,
+      "verified": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 618810,
+          "countLower": 618810,
+          "rateLower": 10313.5,
+          "startSlackMs": 0,
+          "endSlackMs": 16.968542000002344,
+          "countUpper": 630337,
+          "rateUpper": 10505.616666666667
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 620041,
+          "countLower": 620041,
+          "rateLower": 10334.016666666666,
+          "startSlackMs": 0,
+          "endSlackMs": 30.457125000000815,
+          "countUpper": 632182,
+          "rateUpper": 10536.366666666667
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": -171.60000000000036,
+          "rateUpper": 222.8666666666668
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 614909,
+          "countLower": 614909,
+          "rateLower": 10248.483333333334,
+          "startSlackMs": 0,
+          "endSlackMs": 83.45604199999798,
+          "countUpper": 625429,
+          "rateUpper": 10423.816666666668
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 614839,
+          "countLower": 614839,
+          "rateLower": 10247.316666666668,
+          "startSlackMs": 0,
+          "endSlackMs": 68.73295900000085,
+          "countUpper": 625334,
+          "rateUpper": 10422.233333333334
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": -176.5,
+          "rateUpper": 173.75
+        }
+      }
+    },
+    {
+      "startSeconds": 60,
+      "endSeconds": 150,
+      "verified": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 630337,
+          "endCountLower": 1553632,
+          "countLower": 923295,
+          "rateLower": 10258.833333333334,
+          "startSlackMs": 1037.7442909999954,
+          "endSlackMs": 688.2131250000093,
+          "countUpper": 948140,
+          "rateUpper": 10534.888888888889
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 632182,
+          "endCountLower": 1564281,
+          "countLower": 932099,
+          "rateLower": 10356.655555555555,
+          "startSlackMs": 968.4153750000041,
+          "endSlackMs": 65.65650000001187,
+          "countUpper": 951986,
+          "rateUpper": 10577.622222222222
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": -178.23333333333358,
+          "rateUpper": 318.7888888888883
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 625429,
+          "endCountLower": 1510739,
+          "countLower": 885310,
+          "rateLower": 9836.777777777777,
+          "startSlackMs": 926.1325829999987,
+          "endSlackMs": 861.2455000000191,
+          "countUpper": 904917,
+          "rateUpper": 10054.633333333333
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 625334,
+          "endCountLower": 1536268,
+          "countLower": 910934,
+          "rateLower": 10121.488888888889,
+          "startSlackMs": 955.3129160000026,
+          "endSlackMs": 414.41754200001014,
+          "countUpper": 931133,
+          "rateUpper": 10345.922222222222
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 66.85555555555584,
+          "rateUpper": 509.14444444444416
+        }
+      }
+    },
+    {
+      "startSeconds": 150,
+      "endSeconds": 180,
+      "verified": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 1566950,
+          "endCountLower": 1869515,
+          "countLower": 302565,
+          "rateLower": 10085.5,
+          "startSlackMs": 392.4513330000045,
+          "endSlackMs": 608.0451250000042,
+          "countUpper": 325946,
+          "rateUpper": 10864.866666666667
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 1572027,
+          "endCountLower": 1880029,
+          "countLower": 308002,
+          "rateLower": 10266.733333333334,
+          "startSlackMs": 939.8922500000044,
+          "endSlackMs": 126.53450000000885,
+          "countUpper": 324288,
+          "rateUpper": 10809.6
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": -598.1333333333332,
+          "rateUpper": 724.1000000000004
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 1519826,
+          "endCountLower": 1758842,
+          "countLower": 239016,
+          "rateLower": 7967.2,
+          "startSlackMs": 221.39174999998068,
+          "endSlackMs": 583.1024170000164,
+          "countUpper": 256718,
+          "rateUpper": 8557.266666666666
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 1545972,
+          "endCountLower": 1836269,
+          "countLower": 290297,
+          "rateLower": 9676.566666666668,
+          "startSlackMs": 634.0999580000062,
+          "endSlackMs": 136.70866699999897,
+          "countUpper": 310725,
+          "rateUpper": 10357.5
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 1119.300000000001,
+          "rateUpper": 2390.3
+        }
+      }
+    },
+    {
+      "startSeconds": 180,
+      "endSeconds": 300,
+      "verified": {
+        "treatment": {
+          "proven": false,
+          "startCountUpper": 1879578,
+          "endCountLower": 3051648,
+          "countLower": 1172070,
+          "rateLower": 9767.25,
+          "startSlackMs": 461.7637499999837,
+          "endSlackMs": 258.08787500002654,
+          "reason": "missing exterior observations for upper bound"
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 1888569,
+          "endCountLower": 3121383,
+          "countLower": 1232814,
+          "rateLower": 10273.450000000003,
+          "startSlackMs": 913.4319160000014,
+          "endSlackMs": 579.3989999999758,
+          "countUpper": 1251851,
+          "rateUpper": 10432.091666666669
+        },
+        "controlMinusTreatment": {
+          "proven": false
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 1767457,
+          "endCountLower": 2432098,
+          "countLower": 664641,
+          "rateLower": 5538.675,
+          "startSlackMs": 435.1447909999988,
+          "endSlackMs": 761.2654590000166,
+          "countUpper": 684691,
+          "rateUpper": 5705.758333333333
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 1846993,
+          "endCountLower": 3096362,
+          "countLower": 1249369,
+          "rateLower": 10411.408333333336,
+          "startSlackMs": 880.377416000003,
+          "endSlackMs": 765.6094169999706,
+          "countUpper": 1268586,
+          "rateUpper": 10571.550000000003
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 4705.650000000003,
+          "rateUpper": 5032.875000000003
+        }
+      }
+    },
+    {
+      "startSeconds": 60,
+      "endSeconds": 300,
+      "verified": {
+        "treatment": {
+          "proven": false,
+          "startCountUpper": 630337,
+          "endCountLower": 3051648,
+          "countLower": 2421311,
+          "rateLower": 10088.795833333334,
+          "startSlackMs": 1037.7442909999954,
+          "endSlackMs": 258.08787500002654,
+          "reason": "missing exterior observations for upper bound"
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 632182,
+          "endCountLower": 3121383,
+          "countLower": 2489201,
+          "rateLower": 10371.670833333335,
+          "startSlackMs": 968.4153750000041,
+          "endSlackMs": 579.3989999999758,
+          "countUpper": 2511839,
+          "rateUpper": 10465.995833333334
+        },
+        "controlMinusTreatment": {
+          "proven": false
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 625429,
+          "endCountLower": 2432098,
+          "countLower": 1806669,
+          "rateLower": 7527.7875,
+          "startSlackMs": 926.1325829999987,
+          "endSlackMs": 761.2654590000166,
+          "countUpper": 1828624,
+          "rateUpper": 7619.266666666666
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 625334,
+          "endCountLower": 3096362,
+          "countLower": 2471028,
+          "rateLower": 10295.95,
+          "startSlackMs": 955.3129160000026,
+          "endSlackMs": 765.6094169999706,
+          "countUpper": 2490016,
+          "rateUpper": 10375.066666666668
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 2676.6833333333343,
+          "rateUpper": 2847.279166666667
+        }
+      }
+    },
+    {
+      "startSeconds": 0,
+      "endSeconds": 180,
+      "verified": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 1869515,
+          "countLower": 1869515,
+          "rateLower": 10386.194444444445,
+          "startSlackMs": 0,
+          "endSlackMs": 608.0451250000042,
+          "countUpper": 1879578,
+          "rateUpper": 10442.1
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 1880029,
+          "countLower": 1880029,
+          "rateLower": 10444.605555555556,
+          "startSlackMs": 0,
+          "endSlackMs": 126.53450000000885,
+          "countUpper": 1888569,
+          "rateUpper": 10492.05
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 2.5055555555554747,
+          "rateUpper": 105.85555555555402
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 1758842,
+          "countLower": 1758842,
+          "rateLower": 9771.344444444445,
+          "startSlackMs": 0,
+          "endSlackMs": 583.1024170000164,
+          "countUpper": 1767457,
+          "rateUpper": 9819.205555555556
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 1836269,
+          "countLower": 1836269,
+          "rateLower": 10201.494444444445,
+          "startSlackMs": 0,
+          "endSlackMs": 136.70866699999897,
+          "countUpper": 1846993,
+          "rateUpper": 10261.072222222223
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 382.2888888888883,
+          "rateUpper": 489.7277777777781
+        }
+      }
+    },
+    {
+      "startSeconds": 0,
+      "endSeconds": 300,
+      "verified": {
+        "treatment": {
+          "proven": false,
+          "startCountUpper": 0,
+          "endCountLower": 3051648,
+          "countLower": 3051648,
+          "rateLower": 10172.16,
+          "startSlackMs": 0,
+          "endSlackMs": 258.08787500002654,
+          "reason": "missing exterior observations for upper bound"
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 3121383,
+          "countLower": 3121383,
+          "rateLower": 10404.61,
+          "startSlackMs": 0,
+          "endSlackMs": 579.3989999999758,
+          "countUpper": 3131880,
+          "rateUpper": 10439.6
+        },
+        "controlMinusTreatment": {
+          "proven": false
+        }
+      },
+      "resolved": {
+        "treatment": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 2432098,
+          "countLower": 2432098,
+          "rateLower": 8106.993333333333,
+          "startSlackMs": 0,
+          "endSlackMs": 761.2654590000166,
+          "countUpper": 2443533,
+          "rateUpper": 8145.11
+        },
+        "control": {
+          "proven": true,
+          "startCountUpper": 0,
+          "endCountLower": 3096362,
+          "countLower": 3096362,
+          "rateLower": 10321.206666666667,
+          "startSlackMs": 0,
+          "endSlackMs": 765.6094169999706,
+          "countUpper": 3104855,
+          "rateUpper": 10349.516666666666
+        },
+        "controlMinusTreatment": {
+          "proven": true,
+          "rateLower": 2176.0966666666673,
+          "rateUpper": 2242.5233333333335
+        }
+      }
+    }
+  ],
+  "postMinusPreDifference": {
+    "proven": true,
+    "rateLower": 4215.922222222225,
+    "rateUpper": 4650.586111111114
+  },
+  "runs": {
+    "treatment": {
+      "pass": false,
+      "reasons": [
+        "resolved below target contexts/s",
+        "resolved drain exceeded"
+      ],
+      "accepted": 3063383,
+      "acceptedAtHttpDeadline": 3062570,
+      "dropped": 86617,
+      "rates": {
+        "verified": {
+          "coveredBeforeConservativeDeadline": 3051648,
+          "contextsPerSecond": 10172.16,
+          "endGapUpperContexts": 11735,
+          "drainUpperMs": 1195.0405829999945,
+          "scheduledDeadlineDrainUpperMs": 1230.0405829999945
+        },
+        "resolved": {
+          "coveredBeforeConservativeDeadline": 2432098,
+          "contextsPerSecond": 8106.993333333333,
+          "endGapUpperContexts": 631285,
+          "drainUpperMs": 29118.950249999994,
+          "scheduledDeadlineDrainUpperMs": 29153.950249999994
+        }
+      },
+      "oracle": {
+        "sourceTopic": "REEF_CONTENTION-AGED-02_EVENTS",
+        "resolvedTopic": "REEF_CONTENTION-AGED-02_RESOLVED",
+        "sourceTopicId": "FdG_ngVyRZe3hocUGgWImQ",
+        "generation": 4,
+        "policyVersion": 1,
+        "sourceBatches": 27453,
+        "sourceBytes": 7768171435,
+        "maxSourceRecordBytes": 717032,
+        "acceptedOrders": 3063447,
+        "records": 3063383,
+        "expected": 3063383,
+        "fullFactParity": true,
+        "orderedUnique": true,
+        "independentFactDecoder": true,
+        "checksumValidator": "shared CalcifySourceBatch.checked",
+        "sourceCommittedEnds": {
+          "0": 5007,
+          "1": 5247,
+          "2": 5223,
+          "3": 4992,
+          "4": 4995,
+          "5": 5022,
+          "6": 5193,
+          "7": 5226,
+          "8": 5178,
+          "9": 5211,
+          "10": 5502,
+          "11": 5031,
+          "12": 5250,
+          "13": 4995,
+          "14": 5040,
+          "15": 5247
+        },
+        "resolvedCommittedEnds": {
+          "0": 192336,
+          "1": 192335,
+          "2": 192380,
+          "3": 192337,
+          "4": 192355,
+          "5": 192415,
+          "6": 192383,
+          "7": 192358,
+          "8": 192344,
+          "9": 192416,
+          "10": 192363,
+          "11": 192389,
+          "12": 192356,
+          "13": 192365,
+          "14": 192348,
+          "15": 192297
+        },
+        "partitionSha256": {
+          "0": "8fdf8aafb3ab47ef0a3b18fcb8b0292ffe66e619b322488dcb499466024d4c3f",
+          "1": "b38509bff7adb7f8caa572cd5dd04d90b97556f41b1dbbb822093155f13bc456",
+          "2": "a39cfb91fd491a78f272e4086555c198a6778f24266eb653d9c702bd557b049c",
+          "3": "c08c82673801a9f61028b36586b35f1cd337cd20937609ab646c02d02fca5494",
+          "4": "9e2f0fe82643e47d2f80b66bc817944bfc7db024ba43676951a3c1878d867a7d",
+          "5": "532e2d04dfeef6ae9e4824373bfa21e2a1e27649b2686d73b5af9fd0e3147e95",
+          "6": "876f45f099161b3533d807debbdd48fb6ac8d3afa640b446a36386699c0f988c",
+          "7": "1f454e6d9c4c4f114e6f9a10c08eaf036d18a7ea07fccfd0a8bc944dded93a9f",
+          "8": "cfb6dd4e1c9c38c5218908d856d45d4c520f49cd93b2c03d9888d4d4bd16a6e6",
+          "9": "367aa4e8000fa4be7706c341a078877e01dfa54fc6c1bbc170e3bf37b9a3bfae",
+          "10": "2c131d19356486804104bdf4e7afd7bdfaa81946db1f769792b032fa384d990b",
+          "11": "9f308c28ec043d8cd0ebfa7e3ec93de3fb02010a097e382aa643bf477158cd9b",
+          "12": "43585de3fa79cec92e986615e9defdf729a81a88e84c2eddf9cf2d1a24af0ccd",
+          "13": "a740ae8214c9436c96ac0a8b95c29c019dc81750a3c236c0fe8e52fd4d9c38d7",
+          "14": "6f29913ce1a676a97b44159610c344494e57a1babc6632554d935ef19c765c60",
+          "15": "a6e163d5c120841e19662f91c360fdeafac3c5e2e68b7566271e668810de15f0"
+        },
+        "pass": true
+      },
+      "financialAudit": {
+        "auditPass": true,
+        "committedTrades": 366625,
+        "domains": 37,
+        "fullHistoryReplay": true,
+        "sqlBalancesMatch": true
+      },
+      "events": [
+        {
+          "kind": "load-detected",
+          "epochMs": 1791740004764,
+          "elapsedMs": 3234.885167,
+          "timing": "file creation observed; fault scheduling only, not throughput deadline"
+        },
+        {
+          "kind": "financial-start",
+          "epochMs": 1791740069937,
+          "elapsedMs": 68406.992,
+          "name": "reef-calcify-contention-20261011-financial-contention-aged-02-1"
+        },
+        {
+          "kind": "financial-killed",
+          "epochMs": 1791740160597,
+          "elapsedMs": 159065.35995900002
+        },
+        {
+          "kind": "financial-start",
+          "epochMs": 1791740161248,
+          "elapsedMs": 159716.318667,
+          "name": "reef-calcify-contention-20261011-financial-contention-aged-02-2"
+        },
+        {
+          "kind": "resolver-cold-restart-start",
+          "epochMs": 1791740188388,
+          "elapsedMs": 186856.2985
+        },
+        {
+          "kind": "resolver-cold-restart-submitted",
+          "epochMs": 1791740192492,
+          "elapsedMs": 190960.22745900002
+        }
+      ]
+    },
+    "control": {
+      "pass": true,
+      "reasons": [],
+      "accepted": 3131951,
+      "acceptedAtHttpDeadline": 3130847,
+      "dropped": 18049,
+      "rates": {
+        "verified": {
+          "coveredBeforeConservativeDeadline": 3121383,
+          "contextsPerSecond": 10404.61,
+          "endGapUpperContexts": 10568,
+          "drainUpperMs": 1291.263957999996,
+          "scheduledDeadlineDrainUpperMs": 1382.263957999996
+        },
+        "resolved": {
+          "coveredBeforeConservativeDeadline": 3096362,
+          "contextsPerSecond": 10321.206666666667,
+          "endGapUpperContexts": 35589,
+          "drainUpperMs": 2404.8616660000407,
+          "scheduledDeadlineDrainUpperMs": 2495.8616660000407
+        }
+      },
+      "oracle": {
+        "sourceTopic": "REEF_CONTENTION-CTRL-01_EVENTS",
+        "resolvedTopic": "REEF_CONTENTION-CTRL-01_RESOLVED",
+        "sourceTopicId": "At9BGex-R0G6Ds1bNSbKaw",
+        "generation": 5,
+        "policyVersion": 1,
+        "sourceBatches": 29661,
+        "sourceBytes": 7941480221,
+        "maxSourceRecordBytes": 953768,
+        "acceptedOrders": 3132015,
+        "records": 3131951,
+        "expected": 3131951,
+        "fullFactParity": true,
+        "orderedUnique": true,
+        "independentFactDecoder": true,
+        "checksumValidator": "shared CalcifySourceBatch.checked",
+        "sourceCommittedEnds": {
+          "0": 5430,
+          "1": 5670,
+          "2": 5592,
+          "3": 5448,
+          "4": 5403,
+          "5": 5439,
+          "6": 5583,
+          "7": 5673,
+          "8": 5559,
+          "9": 5661,
+          "10": 5910,
+          "11": 5442,
+          "12": 5607,
+          "13": 5442,
+          "14": 5448,
+          "15": 5676
+        },
+        "resolvedCommittedEnds": {
+          "0": 196678,
+          "1": 196576,
+          "2": 196673,
+          "3": 196531,
+          "4": 196641,
+          "5": 196561,
+          "6": 196637,
+          "7": 196549,
+          "8": 196695,
+          "9": 196532,
+          "10": 196668,
+          "11": 196540,
+          "12": 196724,
+          "13": 196561,
+          "14": 196713,
+          "15": 196530
+        },
+        "partitionSha256": {
+          "0": "a5b696dee3eb166e09823dc85d143897e676767157f64690d0699867e8f8e25a",
+          "1": "27ab7f6230c493e0e4f763c56cce35e626e91ad97b64e9ea37efe9d89bbb0933",
+          "2": "ae413cdfeb325f769b8bd08d5ec87b1169325a5149a107bfa6124d9e8a59c3b5",
+          "3": "98e0f78bd0d2dfcc7c9bbb63a0b415286587b7999cdb10dab918839dc0ca30f9",
+          "4": "a9c3da2a85b1c81d54b7839ba02866b69daa87ea4a61c2638c6271067769bdaa",
+          "5": "3abf4bd44b6f7999adcc1e5cef74d01a51feff78d874048ad6bb0a72037a8498",
+          "6": "26da475a0f8a9d8faba8ae0cffe895f8ec1bb0f99341acc533f44cd78b86f2a5",
+          "7": "68985125a21aa43f97bdbe7c1c412b0aa1f352a54b2367812ee1e85136f9675e",
+          "8": "ca82b2e4149fffa569fffad108a4e4f013c4f2596aa44b44c9fbf0a0dd41892a",
+          "9": "faf9ad8a64a2e55d1ed70ba68d6b5285d77181720f2f08b5e368a3476c48e1f2",
+          "10": "33cc826d01ec8361805c103e506d003758787ebf9b1b1d8d4a94f3e2d36f17cc",
+          "11": "8675b60b2a704027361813c3058052c757abbb9d1b8ed55ee4f7b2272baa3753",
+          "12": "bd5fabd6597cf9b905a1a57430f7814b89b14eb1e83541fb97442ad2698f606a",
+          "13": "e5aefc157830ed98776696bffdef2cc4b0b3c70c29a8b106a1079c952a75a1d0",
+          "14": "e945ebfbbb4bb1bf156aed159bb7a650a46c5edd6258dbf727973e22d4549f7e",
+          "15": "575799949595e8bf9be9c76f164a07011250127fb9d4ac10e5904a793dee0f22"
+        },
+        "pass": true
+      },
+      "financialAudit": {
+        "auditPass": true,
+        "committedTrades": 361075,
+        "domains": 37,
+        "fullHistoryReplay": true,
+        "sqlBalancesMatch": true
+      },
+      "events": [
+        {
+          "kind": "load-detected",
+          "epochMs": 1791742157392,
+          "elapsedMs": 3254.1986669999997,
+          "timing": "file creation observed; fault scheduling only, not throughput deadline"
+        },
+        {
+          "kind": "financial-start",
+          "epochMs": 1791742221329,
+          "elapsedMs": 67190.174125,
+          "name": "reef-calcify-contention-20261011-financial-contention-ctrl-01-1"
+        },
+        {
+          "kind": "financial-killed",
+          "epochMs": 1791742310217,
+          "elapsedMs": 156076.0965
+        },
+        {
+          "kind": "financial-start",
+          "epochMs": 1791742310649,
+          "elapsedMs": 156508.53983400002,
+          "name": "reef-calcify-contention-20261011-financial-contention-ctrl-01-2"
+        },
+        {
+          "kind": "resolver-cold-restart-omitted",
+          "epochMs": 1791742340606,
+          "elapsedMs": 186465.162417,
+          "reason": "matched control; resolver remains running"
+        }
+      ]
+    }
+  },
+  "limits": [
+    "Rate ranges bound observation timing, not statistical confidence or causal attribution",
+    "Sequential fresh cohorts share workload/profile but not identical arrivals, cache state or physical disk occupancy",
+    "Financial pacing policy matches; achieved financial progress must be compared separately",
+    "Final financial audits include post-load work; no captured-trade financial integration claim"
+  ],
+  "sourceBaseline": "b9a8756e8d0efc5e8b665a5c62da1ab064d01539",
+  "verdict": "CONTROL_CAPTURE_PASS_FINANCIAL_INTEGRITY_PASS; COLD_RECOVERY_GATE_REMAINS_FAILED",
+  "resourceSummary": {
+    "controlMatchingPeakGiB": 4.707,
+    "controlResolverFinalBytes": 2352406848,
+    "minGuestFreeBytes": 15879954432,
+    "scope": "sampled Docker memory, logical post-run state; not continuous peak bounds",
+    "controlMatchingPeakBytes": 5054102765.568
+  },
+  "knownDifferences": {
+    "recordedUtc": "2026-10-11T18:14:36.426969+00:00",
+    "knownAdditionalDifferences": [
+      "Docker broker/Postgres processes restarted for control after prior closure; treatment reused their running processes from earlier attempt. Same image/command/resource settings and retained volumes.",
+      "Health observer starts near control onset; prior treatment observer begins about116s. Same5s read-only health sampling once active.",
+      "Local Node script-surface and22-test harness validation completed during control timed window around190\u2013220s; no runtime rebuild. Small unmeasured host overhead is a comparison limitation."
+    ],
+    "sourceQuery": "Graph clean metadata for resolver runtime/processor; scripts excluded and probe untracked, verified source directly. No runtime source modification."
+  },
+  "closure": {
+    "ownedServicesStopped": true,
+    "volumesPreserved": true
+  }
+}

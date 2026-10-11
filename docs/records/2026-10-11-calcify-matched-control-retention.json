@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "topic": "Calcify matched no-cold-restart control",
+  "product_baseline": "b9a8756e8d0efc5e8b665a5c62da1ab064d01539",
+  "local_only_source_checkpoint": "754b24889abfe2f00b2b24a3a7bdf6f6fc05e1ff",
+  "source_checkpoint_scope": "59 raw proof/comparison files plus8 source overlay paths; local-only alternate-index snapshot; working branch/index untouched",
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "be2a834af72234785afff8eadf504349aa2d52b1",
+  "archive_parent": "8fedbbe309a75a72a0bd58ba2640cd9c9aa9fb51",
+  "archive_pull_request": "https://github.com/dills122/reef-records/pull/12",
+  "archive_pr_state": "draft; unmerged",
+  "archive_bundle": "https://github.com/dills122/reef-records/tree/be2a834af72234785afff8eadf504349aa2d52b1/records/reef/docs/evidence/calcify-matched-control/run-2026-10-11-b9a8756e",
+  "archive_manifest": "https://github.com/dills122/reef-records/blob/be2a834af72234785afff8eadf504349aa2d52b1/manifests/2026-10-11-calcify-matched-control.json",
+  "manifest_sha256": "54a661ccfa7c23efad84f46044878e5268a7e350d9b9882b52977fc6ec03d2e3",
+  "archived_records": 59,
+  "archived_record_bytes": 2040363,
+  "combined_campaign_records": 161,
+  "combined_campaign_record_bytes": 4262360,
+  "remote_verification": {
+    "archive_commit": "be2a834af72234785afff8eadf504349aa2d52b1",
+    "remote_blobs_verified": 62,
+    "remote_bytes_verified": 2216834,
+    "prior_immutable_paths_modified_or_removed": 0,
+    "verified_commit_changed_paths": 62,
+    "method": "full new remote blob bytes compared with local selected bytes; SHA256; complete single-commit diff has exactly62 expected paths, protected imports additions only"
+  },
+  "remote_verification_completed_utc": "2026-10-11T18:30:03.157322+00:00",
+  "hosted_checks": {
+    "status": "success",
+    "source_head": "be2a834af72234785afff8eadf504349aa2d52b1",
+    "run_id": 38163969954,
+    "url": "https://github.com/dills122/reef-records/actions/runs/38163969954",
+    "unit_tests": "4/4 passed",
+    "jobs": [
+      {
+        "name": "Archive integrity",
+        "conclusion": "success",
+        "url": "https://github.com/dills122/reef-records/actions/runs/38163969954/job/114542552823",
+        "completed_at": "2026-10-11T18:30:24Z"
+      },
+      {
+        "name": "Repository hygiene",
+        "conclusion": "success",
+        "url": "https://github.com/dills122/reef-records/actions/runs/38163969954/job/114542553012",
+        "completed_at": "2026-10-11T18:30:37Z"
+      }
+    ]
+  },
+  "local_checks": {
+    "focused_node_tests_passed": 22,
+    "comparison_regeneration": "byte-identical after stricter missing fault-field validation;11 summary/comparison tests rerun pass",
+    "script_surface": "pass",
+    "retention": "passed; current comparison and receipt added to retained-evidence inventory"
+  },
+  "verdict": {
+    "control_capture": "pass;10321.21\u201310349.52 full contexts/s",
+    "treatment_capture": "failed;8106.99\u20138145.11/s",
+    "control_context_integrity": "3131951 full source/context matches, ordered unique",
+    "control_financial_sql": "361075 independent synthetic trades/37domains replay and balances pass; includes post-load work",
+    "causality": "Sequential pair and pre180 difference; bounds reflect observation timing, not isolated causal cost or statistical confidence",
+    "qualification_limit": "No cold recovery, warm restart, host-loss, unbounded identity lifetime or production financial integration qualification"
+  },
+  "retention_pass": {
+    "tracked_reef_source_removed": false,
+    "prior_imports_or_manifests_modified": false,
+    "retained_current": [
+      "docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md",
+      "docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md",
+      "docs/evidence/calcify-matched-control/comparison.json",
+      "current RFC/work plan/performance/configuration guidance",
+      "executable research control/comparison scripts and tests"
+    ],
+    "reason": "Current paired review and next recovery experiment contract stay active; complete bulk control published alongside immutable treatment. No source removal before archive landing."
+  },
+  "closure": {
+    "owned_services_stopped": true,
+    "volumes_preserved": true,
+    "raw_broker_sql_resolver_state_exported": false,
+    "unrelated_resources_changed": false
+  },
+  "measurement_clarification": "Comparison resource summary uses timed0\u2013300s sampled peak4.707GiB for matching; full observation peak4.708GiB occurs after load at411.10s. Both round to4.71GiB; no continuous peak claim."
+}

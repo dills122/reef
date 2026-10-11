@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "topic": "Calcify credit and initial kernel research proof",
+  "archive_commit": "c7b294e4a578a9c8d279e35fb2ee1eeca78268a7",
+  "archive_pull_request": "https://github.com/dills122/reef-records/pull/12",
+  "archive_bundle": "https://github.com/dills122/reef-records/tree/c7b294e4a578a9c8d279e35fb2ee1eeca78268a7/records/reef/docs/evidence/calcify-arena-credit/run-2026-10-11-b9a8756e",
+  "archive_manifest": "https://github.com/dills122/reef-records/blob/c7b294e4a578a9c8d279e35fb2ee1eeca78268a7/manifests/2026-10-11-calcify-arena-credit.json",
+  "local_only_source_checkpoint": "966584dd3181896c863d9bcb6465aecc1c28faed",
+  "archived_records": 202,
+  "archived_record_bytes": 780789,
+  "remote_verification": {
+    "archive_commit": "c7b294e4a578a9c8d279e35fb2ee1eeca78268a7",
+    "remote_blobs_verified": 205,
+    "remote_bytes_verified": 1030550,
+    "prior_immutable_paths_modified_or_removed": 0,
+    "verified_commit_changed_paths": 205,
+    "method": "full new remote blob bytes compared with local selected bytes; SHA256; complete single-commit diff has exactly205 expected paths, protected imports additions only"
+  },
+  "hosted_checks": {
+    "status": "success",
+    "head": "c7b294e4a578a9c8d279e35fb2ee1eeca78268a7",
+    "run_id": 38170617492,
+    "url": "https://github.com/dills122/reef-records/actions/runs/38170617492",
+    "jobs": [
+      {
+        "name": "Repository hygiene",
+        "conclusion": "success"
+      },
+      {
+        "name": "Archive integrity",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "source_removal": false,
+  "guidance_review": "AGENTS/AI context/repository steering/overviews/accepted ADRs reviewed: proposal and test-only code do not adopt runtime authority or new public contracts. Active RFC/WORK_PLAN/measurement policy/navigation updated. Earlier scoped proofs retained; new raw appended. No superseded standalone owner to remove."
+}

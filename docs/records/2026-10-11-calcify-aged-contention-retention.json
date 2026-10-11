@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "topic": "Calcify aged capture with independent financial/SQL contention and recovery",
+  "product_baseline": "b9a8756e8d0efc5e8b665a5c62da1ab064d01539",
+  "local_only_source_checkpoint": "42bc04487d6fe284e83327c9b5aca66d16537596",
+  "source_checkpoint_scope": "102 proof files plus frozen source overlay; not pushed/merged into Reef; alternate index leaves working branch/index untouched",
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "8fedbbe309a75a72a0bd58ba2640cd9c9aa9fb51",
+  "archive_tree": "638daabad49558a3e187ad9b56492d9d3a2609f5",
+  "archive_pull_request": "https://github.com/dills122/reef-records/pull/12",
+  "archive_pr_state": "draft; unmerged",
+  "archive_bundle": "https://github.com/dills122/reef-records/tree/8fedbbe309a75a72a0bd58ba2640cd9c9aa9fb51/records/reef/docs/evidence/calcify-aged-contention/run-2026-10-11-b9a8756e",
+  "archive_manifest": "https://github.com/dills122/reef-records/blob/8fedbbe309a75a72a0bd58ba2640cd9c9aa9fb51/manifests/2026-10-11-calcify-aged-contention.json",
+  "manifest_sha256": "ef995f2f29cf47510042b80c5063760af951c6b1cbbb83659beae0beb827edf8",
+  "archived_records": 102,
+  "archived_record_bytes": 2221997,
+  "remote_verification": {
+    "archive_commit": "8fedbbe309a75a72a0bd58ba2640cd9c9aa9fb51",
+    "remote_blobs_verified": 105,
+    "remote_bytes_verified": 2420983,
+    "prior_immutable_paths_modified_or_removed": 0,
+    "verified_commit_changed_paths": 105,
+    "method": "full new remote blob bytes compared with local selected bytes; SHA256; complete single-commit diff has exactly105 expected paths, protected imports additions only"
+  },
+  "remote_verification_completed_utc": "2026-10-11T17:59:14.077576+00:00",
+  "publication_corrections": [
+    "GitHub connector PR-create scope unavailable; draft PR created with configured Keychain-backed gh credential",
+    "Recursive repository tree response truncated; verification used complete105-path single-commit diff and fetched every changed blob for byte comparison"
+  ],
+  "hosted_checks": {
+    "run_id": 38161760053,
+    "url": "https://github.com/dills122/reef-records/actions/runs/38161760053",
+    "source_head": "8fedbbe309a75a72a0bd58ba2640cd9c9aa9fb51",
+    "inventory": "passed",
+    "unit_tests": "4/4 passed",
+    "hygiene": "passed",
+    "append_only": "passed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "Repository hygiene",
+        "conclusion": "success",
+        "url": "https://github.com/dills122/reef-records/actions/runs/38161760053/job/114535970407",
+        "completed_at": "2026-10-11T17:58:13Z"
+      },
+      {
+        "name": "Archive integrity",
+        "conclusion": "success",
+        "url": "https://github.com/dills122/reef-records/actions/runs/38161760053/job/114535970549",
+        "completed_at": "2026-10-11T17:58:54Z"
+      }
+    ],
+    "inventory_records": 36496
+  },
+  "local_checks": {
+    "compiled_current_runtime_and_probe": true,
+    "focused_node_tests": 17,
+    "script_surface": "passed",
+    "records_retention": "passed after adding current verification and retention receipt to retained-evidence inventory",
+    "summary_regeneration": "byte-identical after removing unused absent offeredPairs property from current generator; archived original generator retained"
+  },
+  "retention_pass": {
+    "tracked_reef_source_removed": false,
+    "existing_archives_modified": false,
+    "bulk_selected_explicitly": true,
+    "retained_current": [
+      "docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md",
+      "docs/research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md",
+      "docs/evidence/calcify-aged-contention/verification.json",
+      "current RFC/work plan/performance/configuration guidance",
+      "executable research probe/harness and focused tests"
+    ],
+    "reason": "Current review/proof conclusions and next experiment contract remain active. Bulk smoke/failures/corrections/completed attempt published as102 immutable records. Prior research and historical imports unchanged; no removal before archive landing."
+  },
+  "closure": {
+    "owned_services_stopped": true,
+    "unrelated_resources_changed": false,
+    "broker_sql_resolver_volumes_preserved": true,
+    "raw_state_exported": false
+  },
+  "capacity": "FAIL; final capture integrity and independent synthetic financial/SQL audits PASS; no production integration qualification"
+}
