@@ -57,6 +57,9 @@ scope, not an instruction to reopen old work.
 - Keep changes small and local-first. Prefer Bun scripts under `scripts/` and
   thin Make wrappers. Do not change public behavior or scenario determinism
   without explicit intent.
+- Leave usable test infrastructure alone. Fix only failures that block required
+  tests or invalidate their evidence; do not stall feature delivery on harness
+  optimization. Follow [test infrastructure delivery rules](docs/ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery), including cumulative debugging timeboxes and prompt blocker escalation.
 - Use feature branches; do not commit directly to `main`. Preserve unrelated
   working-tree changes. When ready, provide branch, PR title, summary, and tests.
 - Default loop: `cp .env.example .env`, `make dev-doctor`, `make dev-up`,

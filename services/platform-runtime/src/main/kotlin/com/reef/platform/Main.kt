@@ -6,6 +6,10 @@ import com.reef.platform.api.PlatformHttpServer
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 fun main() {
+    if (RuntimeEnv.string("CALCIFY_FINITE_BINDING_DIGEST", "").isNotBlank()) {
+        com.reef.platform.calcify.FiniteRuntime.run()
+        return
+    }
     val calcifyStage = RuntimeEnv.string("CALCIFY_STAGE", "").trim()
     if (calcifyStage.isNotEmpty()) {
         CalcifyPipeline.run(calcifyStage)

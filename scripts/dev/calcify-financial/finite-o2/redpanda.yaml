@@ -1,0 +1,18 @@
+redpanda:
+  data_directory: /var/lib/redpanda/data
+  node_id: 0
+  seed_servers: []
+  rpc_server: {address: 0.0.0.0, port: 33145}
+  advertised_rpc_api: {address: broker, port: 33145}
+  kafka_api:
+    - {address: 0.0.0.0, port: 9092, name: finite, authentication_method: sasl}
+  advertised_kafka_api:
+    - {address: broker, port: 9092, name: finite}
+  admin:
+    - {address: 0.0.0.0, port: 9644}
+rpk:
+  kafka_api: {brokers: [broker:9092]}
+  admin_api: {addresses: [broker:9644]}
+# Startup setup has no application writers/public ports. Supervisor provisions
+# SCRAM-backed users through Admin HTTP then enables PLAIN+SCRAM, authorization
+# and required BASIC admin auth. Actual readback/denials precede registration.
