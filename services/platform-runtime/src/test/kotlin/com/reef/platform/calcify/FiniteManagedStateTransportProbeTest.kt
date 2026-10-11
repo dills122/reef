@@ -70,7 +70,7 @@ class FiniteManagedStateTransportProbeTest {
             put("orderSourceBatchIdUpperBytes",orderBatchIdBound.toString());put("otherBatchIdUpperBytes",budget.sourceBytes)
             put("basis","Canonical typed strings<=128UTF8 bytes through validation/equality to command fields, except batchId: source/frame<=65536; order-effect batch IDs<=captureBytes/4 from source+frontier+memberId+APPLIED revision.command or READY_EXECUTION trade.source copies. Rejected/replayed members never change order rows. Fault.take(2048)<=8192UTF8 bytes. Complete capture guard covers all nested/imported fields; orders<=8; execution IDs<=128; batches<=completed; completed+suffix<=16. Restored corruption separately guarded by exact serializedSize before put.")
         }
-        val dir=Path.of("../../.planning/calcify-p3-o2-2026-10-10/kotlin/g9-transport-prep");Files.createDirectories(dir);Files.write(dir.resolve("checked-bound.json"),FiniteBindingContract.encode(receipt))
+        val dir=Path.of("build/finite-o2-receipts/g9-transport-prep");Files.createDirectories(dir);Files.write(dir.resolve("checked-bound.json"),FiniteBindingContract.encode(receipt))
     }
     @Test fun effectSourceBatchIdsHaveFourCanonicalSerializedCopies(){
         val binding=FiniteLifecycleFixtures.binding();val canonical=FiniteLifecycleFixtures.sequence()
@@ -123,6 +123,6 @@ class FiniteManagedStateTransportProbeTest {
         FiniteManagedStateTransportProbe.preParserCheck(binding,true,FiniteLifecycleContract.sha(synthetic),synthetic)
         assertFails{FiniteManagedStateTransportProbe.preParserCheck(binding,true,"0".repeat(64),synthetic)}
         val receipt=FiniteBindingContract.strictObject("{}".toByteArray(),2).apply{put("schema","calcify-g9-preparation-model-v1");put("healthyStateBytes",healthy!!.serializedSize);put("faultStateBytes",fault!!.serializedSize);put("healthyCompleted",8);put("faultSuffix",7);put("sourceRecordBytes",8000);put("syntheticBytes",synthetic.size);put("liveOrColdRestoreClaim",false)}
-        val dir=Path.of("../../.planning/calcify-p3-o2-2026-10-10/kotlin/g9-transport-prep");Files.createDirectories(dir);Files.write(dir.resolve("model-seam.json"),FiniteBindingContract.encode(receipt))
+        val dir=Path.of("build/finite-o2-receipts/g9-transport-prep");Files.createDirectories(dir);Files.write(dir.resolve("model-seam.json"),FiniteBindingContract.encode(receipt))
     }
 }

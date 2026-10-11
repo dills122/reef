@@ -76,7 +76,7 @@ class FiniteCaptureProofTest {
         receipt.put("fullFaultSuffixSerializedBytes",fault.serializedSize);receipt.put("nonzeroTradeFixtureStateSerializedBytes",tradeState.serializedSize)
         receipt.put("nonzeroTradeFixtureMaximumTradesPerRecord",tradeState.completedRecordsList.maxOf{it.tradeCount});receipt.put("fullTransportWithFramingBytes",transport)
         receipt.put("exactReachableWorstStateMeasured",false)
-        val path=Path.of("../../.planning/calcify-p3-o2-2026-10-10/kotlin/managed-state-serialization.json");Files.createDirectories(path.parent);Files.write(path,FiniteBindingContract.encode(receipt))
+        val path=Path.of("build/finite-o2-receipts/managed-state-serialization.json");Files.createDirectories(path.parent);Files.write(path,FiniteBindingContract.encode(receipt))
         assertTrue(listOf(state,fault,tradeState).all{it.serializedSize<=opening.budget.stateBytes})
     }
 }
