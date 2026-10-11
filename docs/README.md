@@ -24,7 +24,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 | Order | Owner | Read for |
 | --- | --- | --- |
-| 1 | [Current work](WORK_PLAN.md#calcify-eight-hour-p3-session--october-910-2026) | Resumed O1 delivery/review and remaining P3 gates; merged P0/E4 checkpoints |
+| 1 | [Current work](WORK_PLAN.md#calcify-single-server-pressure-test--october-11-2026) and [arena throughput contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) | Owner's10k goal now includes user-facing trading API; proposed latency, settlement, session and recovery gates; integrated qualification remains open |
 | 2 | [Finite P3 source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [O1 checkpoint](evidence/calcify-finite-p3/README.md) | Accepted O1 lifecycle/capture model, complete immutable proof and delivery gates; live activation refused |
 | 3 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
 | 4 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
@@ -34,6 +34,9 @@ have separate runbooks under [`infra/`](../infra/README.md).
 Detailed reviews and raw financial proof remain linked from checkpoint to immutable
 Records commits. Execution status stays in `WORK_PLAN.md`; RFC remains proposed.
 
+- [Arena credit policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) proposes funded reuse, account/run limits and failure rules; small proofs cover double spending and process replay. Runtime adoption and integrated10k qualification remain open.
+- [Matched control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) passes aged capture with independent financial/SQL contention without cold restart; cold recovery still fails. These component results do not qualify new API-visible trading goal.
+- [Single-server pressure test](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md) joins primary-source research, current code and reproducible kernel/budget probes; recommends state-layout and proof changes under initial capture-only10k constraint. Later API-boundary clarification lives in arena contract; capacity and authority adoption remain unqualified.
 - [Calcify Phases 1 and 2](CALCIFY_PHASES_OVERVIEW.md) explains implemented flow, worker wiring, source facts, managed state, and capacity boundaries.
 - [Calcify discovery](work/CALCIFY_DISCOVERY.md) records open post-match redesign questions, proposed logical flow, and phased proof gates; it is not an approved architecture.
 - [Calcify system RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) proposes full post-trade architecture and bounded financial proofs; [research and review reconciliation](research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md) compares authorities and corrects historical findings against October 2 master. Neither accepts a new architecture or claims capacity qualification.

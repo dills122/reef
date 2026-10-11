@@ -10,10 +10,56 @@ Finite source identity/profile gate merged in PR479; production financial
 integration, lifecycle/coverage and durable budgets remain open. RFC remains
 proposed; [current work](../WORK_PLAN.md) owns execution status.
 
+October11 initial owner clarification: single-server deployment; a larger server
+may be justified by measurements. At that checkpoint hard10k/s gate covered
+capture/context; settlement could lag. Financial/SQL service, backlog, retention and recovery remain separately
+bounded operating contracts. [Single-server pressure test](../research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md)
+records baseline O1 merge, primary-source research, local kernel experiments,
+state-layout risks and next proofs. It does not adopt financial authority or
+qualify a new runtime; prior dated measurements retain their original scope.
+
+October11 measured follow-up: [aged contention/recovery proof](../research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md)
+fails10k full-context gate on local10CPU/~15.6GiB VM:8,106.99–8,145.11/s within300s,
+despite final exact3,063,383-context parity. Synthetic financial/SQL recovery audit
+passes; captured-trade financial integration remains unproved. Candidate now
+requires explicit aged identity limits, CPU/memory/disk recovery reserve, separate
+restored/caught-up frontiers, and backlog/freshness bounds. Healthy process or
+post-load drain cannot satisfy timed capacity gate. Measure matched aged control
+then isolate one recovery/resource change before hardware or authority pivot.
+This tightens proposed acceptance contract; no production authority adoption.
+
+October11 matched control: [same financial/SQL and aged workload without cold resolver restart](../research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
+passes10k capture at10,321.21–10,349.52/s with full3,131,951-context integrity.
+Cold recovery remains failed; sequential-run differences prevent exact causal
+cost attribution. Prioritize compatible persisted-state restart proof on current
+host, then isolate recovery reserve/parallelism/standby if needed. Capture service
+must exceed continuing arrivals enough to repay declared recovery backlog; steady
+10k alone does not define recovery capacity. Identity/storage limits and full
+financial integration stay open. No hardware resize or runtime tuning adopted.
+
+October11 subsequent owner clarification extends headline10k boundary through
+normal user/bot API: execution complete and booked, settlement still permitted to
+lag. [Arena throughput contract](CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) owns proposed
+milestones, 5/15/30/60-minute workloads, measurement rules and numeric targets:
+p99 trading visibility1s, eligible settlement5s, session finalization30s. These
+numbers remain proposed. Owner selected immediate reuse of booked unsettled proceeds
+under explicit risk/credit limits for first arena profile; limits/rules now have a reference proposal below;
+calibration and runtime qualification remain open. API boundary and single-server constraint are owner
+requirements. Prior capture proofs retain original
+scope and do not qualify this larger boundary. Booking/risk and coherent SQL/API
+visibility enter foreground capacity gate; settlement needs bounded lag and
+enough long-run service to avoid session-sized cleanup.
+
 Companions: [research / review reconciliation](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md),
 [supplied proposals](../research/calcify-system-architecture-inputs/README.md),
 [current Phase1/2 wiring](../CALCIFY_PHASES_OVERVIEW.md),
 [accepted decisions](../DECISIONS.md), [throughput evidence](../THROUGHPUT_BASELINES.md).
+
+[Credit follow-up](CALCIFY_ARENA_CREDIT_POLICY.md) proposes25% opening-cash account
+caps and10% funded aggregate pool, with undrawn reservations before matching.
+34 reference tests/20 process crashes pass; age-reset and missing-tail review gaps
+closed in model. Requires real admission/booking integration and calibration;
+shared pool must participate in financial ownership/ordering and recovery.
 
 ## 1. Decision and scope
 
@@ -33,9 +79,10 @@ Adoption would amend D-009 / technical design's relational authority boundary.
 Until owner selects that boundary, existing PostgreSQL authority is unchanged.
 Prototype results do not permit two financial authorities or a legacy cutover.
 
-Target from supplied RFC: 10,000 **trades**/s for600s and7,500/s for900s with declared
-replay contract. Reconfirm workload and latency/freshness/recovery limits before
-qualification; proposed p95 values in older RFC are not accepted SLOs. Trade capture
+Original target from supplied RFC: 10,000 **trades**/s for600s and7,500/s for900s
+with declared replay contract. Current owner goal extends to API-visible trades
+in arena sessions; use [proposed arena contract](CALCIFY_ARENA_THROUGHPUT_CONTRACT.md)
+before new qualification. Proposed p95 values in older RFC are not accepted SLOs. Trade capture
 rate, decisions/s, postings/s, settlement rate and commands/s remain distinct.
 
 ## 2. Flow: short physical path, explicit business steps
@@ -400,6 +447,12 @@ one security asset per trade, gross simulated DvP, no credit/fees/netting/extern
 finality. Seed funding is journaled against an explicit opening-resource account;
 conservation checked per asset and journal group. No implicit infinite funding.
 
+This no-credit model remains a bounded proof fixture. October11 owner-selected
+arena profile permits immediate reuse of booked unsettled proceeds under explicit
+risk/credit limits; [arena contract](CALCIFY_ARENA_THROUGHPUT_CONTRACT.md#settlement-clocks-and-gameplay)
+adds required policy and proof cases. Existing fixture does not qualify that credit
+behavior or authorize its production activation.
+
 Example: buyer cash100, seller shares10; trade5 shares at10 cash/share. Decision
 records execution/workflow, obligation and instruction, attempt, cash buyer−50 /
 seller+50, shares seller−5 / buyer+5, and settlement. Both resource checks pass
@@ -647,7 +700,7 @@ next slice. Pure kernel work can use complete fixtures while source contracts cl
 | P2: real broker adapter | Pinned production adapter/client/Redpanda, RF3 durability; managed state/input/output and read-committed observer; early core-rate/size measurement | Explicit fail-handler/startup checks; inject after each store mutation, serialization/forward boundary, before/after commit and ambiguous ack; several decisions/transaction and domains/partition; stale owner, local/changelog loss; restore staging without suppressing funding. Certified physical cut, exact authority/state agreement and no re-emitted old results. |
 | P3: first useful path | Real venue→source/lifecycle gate→admission→kernel→one SQL bundle→existing API; one funding/repair path | Chosen gate high-water closure under future-window burst and restore, zero-trade cancel/amend dependency, offsets with gaps, projection crash after SQL commit, stale projector, common SQL read snapshot and finite retention preflight. Preserve every execution; exact business rows/API progress. |
 | P4: capacity decision | One hot shared-account domain, then independent spread/skew domains; aged state, real payload/journal/API reads; injected failure/catch-up | Freeze objectives/topology; meet hot-domain required rate and recovery headroom. Diagnose binding stage; compare financial authority only for demonstrated financial commit/state/recovery limitation or unfavorable total operational cost. |
-| Qualification | Unchanged candidate, declared10k/600s and7.5k/900s workload; real upstream path and required observers | No loss/duplicate effect, all stages reconcile, no growing lag, fixed latency/freshness/drain/recovery limits. Distinguish component diagnostic from full-system pass. |
+| Qualification | Unchanged candidate, real order-to-trading-API path and required observers; freeze duration/workload using [arena contract](CALCIFY_ARENA_THROUGHPUT_CONTRACT.md). Earlier10k/600s and7.5k/900s arms retain diagnostic scope. | No loss/duplicate effect, all stages reconcile, bounded lag, fixed latency/freshness/drain/recovery limits. Distinguish component diagnostic from full-system pass. |
 
 P1 proves `evolve(genesis, historyRecords)` equals that history's full live owner
 state. Across same-admission recomputations, compare business state/decisions at
@@ -1016,9 +1069,11 @@ Five owner choices before adoption, with proposed defaults:
    seed-only simulation requires separate closed-loop proof.
 4. **Availability:** bounded run/retry/replay/outage windows, archive opt-in beyond
    broker coverage; missing history refuses continuation. Numeric values need owner.
-5. **Capacity envelope:** keep10k trades/s600s and7.5k900s direction; freeze hot-domain
-   share, hardware, state age, latency/freshness/drain/RTO and observation method
-   before qualification. No invented accepted SLO.
+5. **Capacity envelope:** owner now requires10k trades/s through trading API for
+   bounded arena sessions. [Arena contract](CALCIFY_ARENA_THROUGHPUT_CONTRACT.md)
+   proposes5/15/30/60m ladder and numeric latency/settlement/close/recovery targets.
+   Freeze hot-domain share, hardware, state age, read load and observation method;
+   adopt numeric targets explicitly before qualification. No invented accepted SLO.
 
 This RFC provides architecture review target and finite experiments. It does not
 authorize full-system implementation or convert future capability contracts into

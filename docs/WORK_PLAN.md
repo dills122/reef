@@ -18,6 +18,85 @@ Source/test/artifact reconciliation:
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
+## Calcify single-server pressure test — October 11, 2026
+
+Research baseline `b9a8756e8d0efc5e8b665a5c62da1ab064d01539` includes merged
+O1/PR485; earlier delivery statements below describe their dated checkpoint.
+Concurrent O2 branch excluded from this review; no global claim about its status.
+Owner initially confirmed one server, larger size allowed with evidence, and
+hard10k/s capture/context gate with settlement allowed to lag. Later clarification
+extends headline boundary through user-facing trading API; see goalpost update below.
+
+[Architecture pressure test](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md)
+retains deterministic owner/log candidate and recommends incremental keyed state,
+separate correctness/capacity proofs, explicit identity/retention/backlog budgets
+and co-resident qualification. Five offline kernel runs and isolated encoder
+comparison pass scoped correctness/parity checks; arithmetic model checks5239
+cases. [Verification](evidence/calcify-architecture-pressure-test/verification.json)
+records all attempts and limits. No new broker/SQL/capture qualification, production
+change, authority adoption or O1 review-counter reset.
+
+Follow-up [aged contention proof](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md)
+completed300s on local10CPU/~15.6GiB Docker VM. Capture verified10,172.16/s lower
+bound; full contexts8,106.99–8,145.11/s: **10k gate fails**. Final3,063,383 exact
+contexts and independent366,625-trade synthetic financial/SQL replay audit pass.
+Financial total includes post-load work; capture-to-financial integration remains
+open. Cold resolver recovery, retained identities and co-resident resource cost
+now constrain candidate. [Compact receipt](evidence/calcify-aged-contention/verification.json)
+and [retention](records/2026-10-11-calcify-aged-contention-retention.json) preserve
+failed first attempt, correction and completed target miss; owned services stopped,
+volumes retained. No production behavior or authority change.
+
+Matched [no-cold-restart control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
+now passes300s capture gate:10,321.21–10,349.52 full contexts/s; aged60–300s lower
+10,295.95/s. Final3,131,951 exact contexts and361,075 independent synthetic
+financial/SQL trades pass audits; latter includes post-load work. Same runtime
+images/resources and normalized workload settings; financial crash/replay remains.
+First-minute ranges overlap, but control already leads before180s; no exact causal
+attribution. Post180 resolved bounds10,411.41–10,571.55/s versus treatment
+5,538.68–5,705.76/s support prioritizing recovery. Resolver container never restarts.
+Control did more timed financial work; matched policy is not identical achieved
+activity. [Comparison](evidence/calcify-matched-control/comparison.json) owns bounds.
+
+Next proof: finite O2 remains separate; test restart with compatible retained
+resolver state directory at same age and financial/SQL workload. Freeze recovery
+interruption/freshness/drain allowance; instrument restoration, GC/compilation,
+disk latency and all process resources. If warm restart fails, isolate one reserve,
+parallelism or standby change before hardware decision. Current host demonstrates
+steady aged capture, not cold recovery or production financial integration.
+Matching sampled4.71GiB; identity lifetime budget remains open. Further full runs
+need disk headroom above8GB reserve; no retained proof state deleted. Larger single
+server allowed with measured justification. Historical originals unchanged.
+
+Goalpost research follow-up: owner defines10k as real user/bot orders matched,
+processed through Calcify and visible as completed trades awaiting settlement.
+[Proposed arena contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) defines booked
+trading state, settlement clocks, API visibility, session cuts and stage diagnosis.
+Recommended initial p99 visibility1s, eligible settlement5s, close30s; numeric
+targets await adoption. Owner selected immediate reuse of booked unsettled proceeds
+under explicit risk/credit limits for first arena profile. [Credit proposal](work/CALCIFY_ARENA_CREDIT_POLICY.md) now defines account25%/pool10%
+limits, eligibility and failure rules; calibration and runtime implementation remain open. Booking and
+credit accounting belong inside10k gate; existing no-credit fixture is insufficient.
+Arithmetic shows9k/s
+settlement behind10k/s arrivals needs400s cleanup after60m if service stays9k/s.
+Long sessions therefore require near-arrival-rate settlement plus catch-up reserve.
+Primary sources and current API/code checked; no new throughput run or runtime
+change. Capture-only pass remains scoped; integrated product gate unqualified.
+Next integrated work: calibrate proposed caps and freeze bundle/policy, instrument real order-to-API slice,
+then paired-order rate/duration ladder and recovery. Retained-state capture
+control remains useful component proof; it cannot qualify enlarged API boundary.
+Retention no-op: active proposal adds goalposts; prior scoped reports remain evidence.
+
+Credit follow-up:34/34 reference tests pass, including676 ordered competing-order
+schedules and20 actual SIGKILL cutpoints. Drawn plus undrawn exposure reserves a
+prefunded pool; failure freezes new admission while preserving matched commitments.
+Review tightened original-age retention and committed-head binding; hash chain
+alone cannot detect a removed tail. Single-owner model only, no production credit,
+distributed race, host-loss or10k API qualification. [Verification](evidence/calcify-arena-credit/verification.json)
+and [policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) retain current decisions; full proof
+joins RecordsPR12. Session delivery bundles initial review, kernel/queue probes,
+aged treatment/control, arena goalpost and credit proof on existing feature branch.
+
 ## Calcify eight-hour P3 session — October 9–10, 2026
 
 Started October9 at22:55:41 America/Toronto; deadline October10 at06:55:41.

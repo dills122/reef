@@ -1,0 +1,1301 @@
+{
+  "schema": "calcify-architecture-pressure-test-v1",
+  "date": "2026-10-11",
+  "sourceBaseline": "b9a8756e8d0efc5e8b665a5c62da1ab064d01539",
+  "branch": "codex/calcify-architecture-pressure-test",
+  "purpose": "Research diagnostics; not broker, SQL, financial-adapter or capture capacity qualification",
+  "userConstraints": {
+    "deployment": "one server; larger allowed if justified",
+    "hardGate": "10000 captured/context-complete trades per second",
+    "settlementMayLag": true
+  },
+  "hostScope": "Local shared macOS execution; hardware and contention not frozen; not a host-sizing result",
+  "productionFilesChanged": false,
+  "originalKernelSha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e",
+  "proofSources": {
+    "scripts/dev/calcify-financial/research/KernelProbe.kt": "0eb15e90f33b12f1a06b9cb9c849316c0a5a4a58120dd39c9f1abea989b2c6a5",
+    "scripts/dev/calcify-financial/research/budget-model.mjs": "c8dda9000d16a0163f332f37f2921d43effa2fe8b72ed62aa179456a5bcfc432",
+    "scripts/dev/calcify-financial/research/run-kernel-probe.mjs": "f607f9798511d22cf97cd518de45ab9449fa13e633ae0b187c1b69f13422d2b2",
+    "scripts/dev/calcify-financial/research/streaming-canonical.kt.txt": "864c2354a2e43c1cc31eab3492f1a5200ba3cf4d9b50f5b30718055872559d34"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "scratchDirectory": "/private/tmp/calcify-architecture-kernel-01",
+      "variant": "baseline",
+      "harnessChange": "initial harness",
+      "originalKernelSha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e",
+      "sources": [
+        {
+          "file": "FinancialKernel.kt",
+          "sha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e"
+        },
+        {
+          "file": "KernelProbe.kt",
+          "sha256": "c1bcac9c36b1bceb280ffe7138c7e27e727fa2b972bcfbbbb705ce96cfee27b6"
+        }
+      ],
+      "dependencies": [
+        {
+          "file": "kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "file": "annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "file": "jackson-databind-2.22.3.jar",
+          "sha256": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9"
+        },
+        {
+          "file": "jackson-core-2.22.3.jar",
+          "sha256": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c"
+        },
+        {
+          "file": "jackson-annotations-2.22.jar",
+          "sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+        },
+        {
+          "file": "kotlin-compiler-embeddable-2.4.20.jar",
+          "sha256": "cf97161430683fb9af96dc6a7017ffae1fe8737b80d12eee11f2fe3e76f8ded8"
+        },
+        {
+          "file": "kotlin-build-tools-api-2.4.20.jar",
+          "sha256": "47a622dce7231b1916334b69a00bc1094adf6577e6492f9f06b3d9c2450fe459"
+        },
+        {
+          "file": "kotlin-script-runtime-2.4.20.jar",
+          "sha256": "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4"
+        },
+        {
+          "file": "kotlin-daemon-embeddable-2.4.20.jar",
+          "sha256": "eef72cf8f17e6d98d33e5b7c7e1cab31a1cf5fc34084dd5e563e7b1f3ef53435"
+        },
+        {
+          "file": "kotlin-reflect-1.6.10.jar",
+          "sha256": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203"
+        },
+        {
+          "file": "kotlinx-coroutines-core-jvm-1.8.0.jar",
+          "sha256": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+        }
+      ],
+      "javaBinary": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java",
+      "compileExitCode": 0,
+      "probeExitCode": 0,
+      "rawFileSha256": {
+        "inputs.json": "c9612fe1524d57ad8edfa8c71dfb742a3177f9b682a651f0687d0ca98bc4a797",
+        "result.json": "f27079eb21b1bc68048a1ff33b42133ddda764bbbc7166bd26e2afbf8bfeea20",
+        "compile.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.status.json": "60aa82cf41005db5d47460782c5521da01a8565a740c0d0ec3ba97a13ba1eed3",
+        "probe.stdout": "c08b2116995ce028d07764736f5097fba6cb64cf14b4046bf81d6f8da632e8ed",
+        "probe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "probe.status.json": "54dec301b56f57d4ebb90a56d1f75c23e9e0b4166ec0dfb13b212e790a772234"
+      },
+      "result": {
+        "schema": "calcify-kernel-research-v1",
+        "checks": {
+          "fullyFunded": true,
+          "duplicateNoHistory": true,
+          "replayExact": true,
+          "checkpointRestoreExact": true,
+          "insufficientCashZeroLegs": true,
+          "changedRetryConflict": true,
+          "corruptHistoryRejected": true
+        },
+        "java": "21",
+        "maxHeapBytes": 805306368,
+        "scope": "unchanged test-only kernel including action construction; no broker/SQL; sampled heap shared JVM, no attribution or hard bound; sequential ABBA diagnostic, not controlled benchmark",
+        "warmupTrades": 2000,
+        "results": [
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2911.073667,
+            "tradesPerSecond": 3435.158688479868,
+            "each1000TradesMs": [
+              303.718333,
+              296.497542,
+              277.135167,
+              284.368583,
+              343.440458,
+              281.804042,
+              275.055417,
+              295.175333,
+              276.866208,
+              276.99375
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 304015512,
+            "finalEconomicsChecked": true
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2945.96675,
+            "tradesPerSecond": 3394.4714413358533,
+            "each1000TradesMs": [
+              314.69,
+              298.815167,
+              298.482375,
+              285.875208,
+              284.416375,
+              282.009292,
+              313.408208,
+              291.433667,
+              289.318417,
+              287.500916
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 365332968,
+            "finalEconomicsChecked": true
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2883.921333,
+            "tradesPerSecond": 3467.5009632102197,
+            "each1000TradesMs": [
+              293.262958,
+              295.987584,
+              290.239333,
+              289.194875,
+              279.295333,
+              288.38325,
+              286.071667,
+              288.532417,
+              286.095458,
+              286.841708
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 424317912,
+            "finalEconomicsChecked": true
+          },
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2795.723667,
+            "tradesPerSecond": 3576.8914210075254,
+            "each1000TradesMs": [
+              278.823875,
+              275.17575,
+              282.175583,
+              272.651167,
+              266.332208,
+              274.93225,
+              275.916542,
+              272.452917,
+              314.7075,
+              282.532
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 502944720,
+            "finalEconomicsChecked": true
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 2,
+      "scratchDirectory": "/private/tmp/calcify-architecture-kernel-02",
+      "variant": "baseline",
+      "harnessChange": "final history checksum added",
+      "originalKernelSha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e",
+      "sources": [
+        {
+          "file": "FinancialKernel.kt",
+          "sha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e"
+        },
+        {
+          "file": "KernelProbe.kt",
+          "sha256": "36fb909d859888b0229a534f37080c9aad1abaf81efb75808a1d59a1e6f7e3b6"
+        }
+      ],
+      "dependencies": [
+        {
+          "file": "kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "file": "annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "file": "jackson-databind-2.22.3.jar",
+          "sha256": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9"
+        },
+        {
+          "file": "jackson-core-2.22.3.jar",
+          "sha256": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c"
+        },
+        {
+          "file": "jackson-annotations-2.22.jar",
+          "sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+        },
+        {
+          "file": "kotlin-compiler-embeddable-2.4.20.jar",
+          "sha256": "cf97161430683fb9af96dc6a7017ffae1fe8737b80d12eee11f2fe3e76f8ded8"
+        },
+        {
+          "file": "kotlin-build-tools-api-2.4.20.jar",
+          "sha256": "47a622dce7231b1916334b69a00bc1094adf6577e6492f9f06b3d9c2450fe459"
+        },
+        {
+          "file": "kotlin-script-runtime-2.4.20.jar",
+          "sha256": "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4"
+        },
+        {
+          "file": "kotlin-daemon-embeddable-2.4.20.jar",
+          "sha256": "eef72cf8f17e6d98d33e5b7c7e1cab31a1cf5fc34084dd5e563e7b1f3ef53435"
+        },
+        {
+          "file": "kotlin-reflect-1.6.10.jar",
+          "sha256": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203"
+        },
+        {
+          "file": "kotlinx-coroutines-core-jvm-1.8.0.jar",
+          "sha256": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+        }
+      ],
+      "javaBinary": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java",
+      "compileExitCode": 0,
+      "probeExitCode": 0,
+      "rawFileSha256": {
+        "inputs.json": "281cc03146a9bb0a7326dcb0285c27cd608ed3ceaa7a5e9af5a3c04e56bbd665",
+        "result.json": "b888427b56bc8567cecd8c2eed80099aefe0022759ce8451ef0fff67b1bc4d25",
+        "compile.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.status.json": "2bebeca12e069a0c0fd356bf6234028631e05f715520350cf11bba8bf12b9785",
+        "probe.stdout": "6de9725f9d0fe4b652aac6805eeff0f363ce9a6187f3c432407ac12048d8c7c9",
+        "probe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "probe.status.json": "a81fb67da4bc34841f9fa14b6095b4552e210b6bb9bc35c8dd0eaec33bd9f3b1"
+      },
+      "result": {
+        "schema": "calcify-kernel-research-v1",
+        "checks": {
+          "fullyFunded": true,
+          "duplicateNoHistory": true,
+          "replayExact": true,
+          "checkpointRestoreExact": true,
+          "insufficientCashZeroLegs": true,
+          "changedRetryConflict": true,
+          "corruptHistoryRejected": true
+        },
+        "java": "21",
+        "maxHeapBytes": 805306368,
+        "scope": "selected test kernel including action construction; no broker/SQL; sampled heap shared JVM, no attribution or hard bound; sequential ABBA diagnostic, not controlled benchmark",
+        "warmupTrades": 2000,
+        "results": [
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2832.301875,
+            "tradesPerSecond": 3530.6970942142243,
+            "each1000TradesMs": [
+              301.474709,
+              291.864583,
+              278.987833,
+              278.679959,
+              275.626125,
+              285.59875,
+              283.933875,
+              279.918083,
+              278.879292,
+              277.323416
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 244872408,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 3069.748167,
+            "tradesPerSecond": 3257.5962118002626,
+            "each1000TradesMs": [
+              325.03,
+              343.95,
+              348.885292,
+              329.073333,
+              282.702209,
+              285.358708,
+              289.261292,
+              283.643625,
+              288.428708,
+              293.399958
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 315567408,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2964.199458,
+            "tradesPerSecond": 3373.5921423948926,
+            "each1000TradesMs": [
+              294.579292,
+              301.625083,
+              299.387375,
+              300.333167,
+              293.593791,
+              291.597125,
+              298.4975,
+              295.451375,
+              292.5275,
+              296.59
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 481913600,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2799.656167,
+            "tradesPerSecond": 3571.867187789564,
+            "each1000TradesMs": [
+              297.696167,
+              291.806833,
+              290.485125,
+              275.919417,
+              269.944083,
+              275.530625,
+              274.455792,
+              275.0275,
+              275.44325,
+              273.325291
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 525160960,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 3,
+      "scratchDirectory": "/private/tmp/calcify-architecture-kernel-03",
+      "variant": "streaming",
+      "harnessChange": "scratch-only streaming canonical encoder",
+      "originalKernelSha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e",
+      "sources": [
+        {
+          "file": "FinancialKernel.kt",
+          "sha256": "544fdc7224afec4ad75e8c3209e075418d216396bd38a13470a4d30f194c15d0"
+        },
+        {
+          "file": "KernelProbe.kt",
+          "sha256": "36fb909d859888b0229a534f37080c9aad1abaf81efb75808a1d59a1e6f7e3b6"
+        }
+      ],
+      "dependencies": [
+        {
+          "file": "kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "file": "annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "file": "jackson-databind-2.22.3.jar",
+          "sha256": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9"
+        },
+        {
+          "file": "jackson-core-2.22.3.jar",
+          "sha256": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c"
+        },
+        {
+          "file": "jackson-annotations-2.22.jar",
+          "sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+        },
+        {
+          "file": "kotlin-compiler-embeddable-2.4.20.jar",
+          "sha256": "cf97161430683fb9af96dc6a7017ffae1fe8737b80d12eee11f2fe3e76f8ded8"
+        },
+        {
+          "file": "kotlin-build-tools-api-2.4.20.jar",
+          "sha256": "47a622dce7231b1916334b69a00bc1094adf6577e6492f9f06b3d9c2450fe459"
+        },
+        {
+          "file": "kotlin-script-runtime-2.4.20.jar",
+          "sha256": "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4"
+        },
+        {
+          "file": "kotlin-daemon-embeddable-2.4.20.jar",
+          "sha256": "eef72cf8f17e6d98d33e5b7c7e1cab31a1cf5fc34084dd5e563e7b1f3ef53435"
+        },
+        {
+          "file": "kotlin-reflect-1.6.10.jar",
+          "sha256": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203"
+        },
+        {
+          "file": "kotlinx-coroutines-core-jvm-1.8.0.jar",
+          "sha256": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+        }
+      ],
+      "javaBinary": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java",
+      "compileExitCode": 0,
+      "probeExitCode": 0,
+      "rawFileSha256": {
+        "inputs.json": "94370574c97041a703d5ae9e24ed0eb8322b55ef3e0a148dcbbae8927bba9b68",
+        "result.json": "a9015c08d9c9c47b9564ea1214fb51d01b8355940ec604de82a76341e3bf2b86",
+        "compile.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.status.json": "73049e2d0f46d6eb5ae3e09652ccaee5d09f3c8d976ded22cc0044d958f4071f",
+        "probe.stdout": "113582253e4cc3a6519b36570cf0ebc2085ab30b5ae9cc11af232ac90f5eecaa",
+        "probe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "probe.status.json": "2b45a58a2538321d68ebce89b415820e7aae3392554c3ebe410841e7c4ba6a9a"
+      },
+      "result": {
+        "schema": "calcify-kernel-research-v1",
+        "checks": {
+          "fullyFunded": true,
+          "duplicateNoHistory": true,
+          "replayExact": true,
+          "checkpointRestoreExact": true,
+          "insufficientCashZeroLegs": true,
+          "changedRetryConflict": true,
+          "corruptHistoryRejected": true
+        },
+        "java": "21",
+        "maxHeapBytes": 805306368,
+        "scope": "selected test kernel including action construction; no broker/SQL; sampled heap shared JVM, no attribution or hard bound; sequential ABBA diagnostic, not controlled benchmark",
+        "warmupTrades": 2000,
+        "results": [
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2200.839875,
+            "tradesPerSecond": 4543.719928738568,
+            "each1000TradesMs": [
+              314.173708,
+              259.43325,
+              164.648042,
+              178.610958,
+              170.800834,
+              274.501333,
+              253.923292,
+              236.86125,
+              173.502166,
+              174.365584
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 239045864,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2041.214083,
+            "tradesPerSecond": 4899.0451728134585,
+            "each1000TradesMs": [
+              293.014958,
+              190.5075,
+              189.027167,
+              175.340417,
+              185.728875,
+              202.539666,
+              200.711084,
+              216.839333,
+              206.407917,
+              181.080916
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 319061312,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 1803.014792,
+            "tradesPerSecond": 5546.266200571471,
+            "each1000TradesMs": [
+              184.201209,
+              180.469833,
+              181.894583,
+              182.644792,
+              178.951792,
+              175.454875,
+              180.098666,
+              177.678334,
+              182.876166,
+              178.72675
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 406636072,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 1654.675667,
+            "tradesPerSecond": 6043.480423042929,
+            "each1000TradesMs": [
+              172.299417,
+              168.366208,
+              165.342,
+              161.470542,
+              156.934791,
+              160.639584,
+              163.349458,
+              186.173,
+              157.874125,
+              162.207125
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 401793048,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 4,
+      "scratchDirectory": "/private/tmp/calcify-architecture-kernel-04",
+      "variant": "streaming",
+      "harnessChange": "1000-case canonical corpus added",
+      "originalKernelSha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e",
+      "sources": [
+        {
+          "file": "FinancialKernel.kt",
+          "sha256": "544fdc7224afec4ad75e8c3209e075418d216396bd38a13470a4d30f194c15d0"
+        },
+        {
+          "file": "KernelProbe.kt",
+          "sha256": "0eb15e90f33b12f1a06b9cb9c849316c0a5a4a58120dd39c9f1abea989b2c6a5"
+        }
+      ],
+      "dependencies": [
+        {
+          "file": "kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "file": "annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "file": "jackson-databind-2.22.3.jar",
+          "sha256": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9"
+        },
+        {
+          "file": "jackson-core-2.22.3.jar",
+          "sha256": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c"
+        },
+        {
+          "file": "jackson-annotations-2.22.jar",
+          "sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+        },
+        {
+          "file": "kotlin-compiler-embeddable-2.4.20.jar",
+          "sha256": "cf97161430683fb9af96dc6a7017ffae1fe8737b80d12eee11f2fe3e76f8ded8"
+        },
+        {
+          "file": "kotlin-build-tools-api-2.4.20.jar",
+          "sha256": "47a622dce7231b1916334b69a00bc1094adf6577e6492f9f06b3d9c2450fe459"
+        },
+        {
+          "file": "kotlin-script-runtime-2.4.20.jar",
+          "sha256": "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4"
+        },
+        {
+          "file": "kotlin-daemon-embeddable-2.4.20.jar",
+          "sha256": "eef72cf8f17e6d98d33e5b7c7e1cab31a1cf5fc34084dd5e563e7b1f3ef53435"
+        },
+        {
+          "file": "kotlin-reflect-1.6.10.jar",
+          "sha256": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203"
+        },
+        {
+          "file": "kotlinx-coroutines-core-jvm-1.8.0.jar",
+          "sha256": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+        }
+      ],
+      "javaBinary": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java",
+      "compileExitCode": 0,
+      "probeExitCode": 0,
+      "rawFileSha256": {
+        "inputs.json": "adbcac366a24d895ae406db7a2b2e12c0799b4e714a09eb01e5d35a37e3dffb4",
+        "result.json": "e2ba8708eb1188fc840c116f8e8b78790867ad6073b32f2e310ce4ae55bbb143",
+        "compile.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.status.json": "d6c7df81caa0bfd23126794e97d641f341959b9d0ab69dad6adf1c4c54eee82e",
+        "probe.stdout": "f946f1f59fdebc3624e18525ee814d4841b303b6e6d22c98783e9f7d6c19ba8c",
+        "probe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "probe.status.json": "da7c145c4492c88e9a7264f70af7b9b75f7d3b790b62517bd62b253dde307eee"
+      },
+      "result": {
+        "schema": "calcify-kernel-research-v1",
+        "checks": {
+          "fullyFunded": true,
+          "duplicateNoHistory": true,
+          "replayExact": true,
+          "checkpointRestoreExact": true,
+          "insufficientCashZeroLegs": true,
+          "changedRetryConflict": true,
+          "corruptHistoryRejected": true
+        },
+        "canonicalCorpusCases": 1000,
+        "canonicalCorpusSha256": "76d17b8bb83cfb0bb083c5fd7b62c1ccdc220000925d083310902920d194750c",
+        "java": "21",
+        "maxHeapBytes": 805306368,
+        "scope": "selected test kernel including action construction; no broker/SQL; sampled heap shared JVM, no attribution or hard bound; sequential ABBA diagnostic, not controlled benchmark",
+        "warmupTrades": 2000,
+        "results": [
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 1668.664083,
+            "tradesPerSecond": 5992.817908576031,
+            "each1000TradesMs": [
+              198.553417,
+              176.699333,
+              166.076792,
+              163.859666,
+              162.293125,
+              156.651375,
+              164.26375,
+              160.533584,
+              160.771375,
+              158.940291
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 229496608,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 1819.166208,
+            "tradesPerSecond": 5497.023832140136,
+            "each1000TradesMs": [
+              197.956958,
+              177.881834,
+              185.193958,
+              180.863167,
+              179.578208,
+              179.060542,
+              181.866458,
+              178.015708,
+              176.561334,
+              182.173916
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 262983272,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 1807.357167,
+            "tradesPerSecond": 5532.940684103311,
+            "each1000TradesMs": [
+              193.042917,
+              190.94525,
+              181.543541,
+              177.98425,
+              177.050334,
+              175.491708,
+              177.367917,
+              179.345125,
+              176.249,
+              178.321541
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 233133368,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 1623.169,
+            "tradesPerSecond": 6160.787940134391,
+            "each1000TradesMs": [
+              164.49625,
+              162.255667,
+              163.432083,
+              157.759709,
+              159.851458,
+              162.639458,
+              160.781125,
+              164.552042,
+              158.529667,
+              168.856291
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 382816304,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          }
+        ]
+      }
+    },
+    {
+      "attempt": 5,
+      "scratchDirectory": "/private/tmp/calcify-architecture-kernel-05",
+      "variant": "baseline",
+      "harnessChange": "baseline with identical latest harness",
+      "originalKernelSha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e",
+      "sources": [
+        {
+          "file": "FinancialKernel.kt",
+          "sha256": "9f76e87940d7600dac11bb26aba9ad40e39e7fbf41ec28dc8ab990790f0e637e"
+        },
+        {
+          "file": "KernelProbe.kt",
+          "sha256": "0eb15e90f33b12f1a06b9cb9c849316c0a5a4a58120dd39c9f1abea989b2c6a5"
+        }
+      ],
+      "dependencies": [
+        {
+          "file": "kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "file": "annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "file": "jackson-databind-2.22.3.jar",
+          "sha256": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9"
+        },
+        {
+          "file": "jackson-core-2.22.3.jar",
+          "sha256": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c"
+        },
+        {
+          "file": "jackson-annotations-2.22.jar",
+          "sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+        },
+        {
+          "file": "kotlin-compiler-embeddable-2.4.20.jar",
+          "sha256": "cf97161430683fb9af96dc6a7017ffae1fe8737b80d12eee11f2fe3e76f8ded8"
+        },
+        {
+          "file": "kotlin-build-tools-api-2.4.20.jar",
+          "sha256": "47a622dce7231b1916334b69a00bc1094adf6577e6492f9f06b3d9c2450fe459"
+        },
+        {
+          "file": "kotlin-script-runtime-2.4.20.jar",
+          "sha256": "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4"
+        },
+        {
+          "file": "kotlin-daemon-embeddable-2.4.20.jar",
+          "sha256": "eef72cf8f17e6d98d33e5b7c7e1cab31a1cf5fc34084dd5e563e7b1f3ef53435"
+        },
+        {
+          "file": "kotlin-reflect-1.6.10.jar",
+          "sha256": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203"
+        },
+        {
+          "file": "kotlinx-coroutines-core-jvm-1.8.0.jar",
+          "sha256": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+        }
+      ],
+      "javaBinary": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java",
+      "compileExitCode": 0,
+      "probeExitCode": 0,
+      "rawFileSha256": {
+        "inputs.json": "ee95e8427e9bd619afce0fee01254beb312bf728add84b1e349d7c350abefa02",
+        "result.json": "32c5c670a8a2908b314f27e7aa451b3e90ff43cbbcbb695fa37d1a6d80d8078f",
+        "compile.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "compile.status.json": "0d1f623b233a426aed53fb8a24a025cd12103f06ff58ed0d2afb7dbab61892ec",
+        "probe.stdout": "39e5dc0f7a7b6dbe574fe030db0cae82d19b224406d4486d770d684f7217b48e",
+        "probe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "probe.status.json": "cec905c22d2d7b0e9cd4f69a4e9849d0415eeb3a0d3815be63eb8a0131925711"
+      },
+      "result": {
+        "schema": "calcify-kernel-research-v1",
+        "checks": {
+          "fullyFunded": true,
+          "duplicateNoHistory": true,
+          "replayExact": true,
+          "checkpointRestoreExact": true,
+          "insufficientCashZeroLegs": true,
+          "changedRetryConflict": true,
+          "corruptHistoryRejected": true
+        },
+        "canonicalCorpusCases": 1000,
+        "canonicalCorpusSha256": "76d17b8bb83cfb0bb083c5fd7b62c1ccdc220000925d083310902920d194750c",
+        "java": "21",
+        "maxHeapBytes": 805306368,
+        "scope": "selected test kernel including action construction; no broker/SQL; sampled heap shared JVM, no attribution or hard bound; sequential ABBA diagnostic, not controlled benchmark",
+        "warmupTrades": 2000,
+        "results": [
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2899.194583,
+            "tradesPerSecond": 3449.2338177771767,
+            "each1000TradesMs": [
+              317.939125,
+              300.282167,
+              284.522125,
+              283.385041,
+              284.055834,
+              281.574125,
+              286.7115,
+              285.832541,
+              291.042334,
+              283.830916
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 216627496,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2991.847,
+            "tradesPerSecond": 3342.4169083512625,
+            "each1000TradesMs": [
+              323.132833,
+              313.869459,
+              304.897166,
+              288.810792,
+              290.246042,
+              296.017041,
+              296.1095,
+              292.617042,
+              293.345042,
+              292.784416
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 370656232,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": true,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2965.66,
+            "tradesPerSecond": 3371.9307000802523,
+            "each1000TradesMs": [
+              302.809958,
+              306.116625,
+              304.598459,
+              297.50275,
+              286.431333,
+              295.333458,
+              292.541709,
+              289.213125,
+              297.590458,
+              293.505083
+            ],
+            "encodedHistoryBytesExcludingGenesis": 53532284,
+            "sampledHeapBytes": 403631720,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          },
+          {
+            "encodeResult": false,
+            "trades": 10000,
+            "actions": 20000,
+            "elapsedMs": 2812.077458,
+            "tradesPerSecond": 3556.0898123738666,
+            "each1000TradesMs": [
+              287.350875,
+              289.303333,
+              289.056333,
+              280.510625,
+              276.585709,
+              278.95125,
+              276.835375,
+              274.920416,
+              284.175875,
+              274.369834
+            ],
+            "encodedHistoryBytesExcludingGenesis": 0,
+            "sampledHeapBytes": 429478120,
+            "finalEconomicsChecked": true,
+            "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0"
+          }
+        ]
+      }
+    }
+  ],
+  "profile": {
+    "attempt": "separate initial-baseline rerun",
+    "scratchDirectory": "/private/tmp/calcify-architecture-kernel-01",
+    "exitCode": 0,
+    "summary": {
+      "scope": "14s JFR profile of separate same-code probe; stack sampling and weighted allocations, not causal or exact per-operation CPU costs",
+      "executionSamples": 770,
+      "nearestKernelFrames": [
+        [
+          "<no FinancialKernel frame>",
+          421
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion.canonical",
+          202
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion.canonical$lambda$1",
+          72
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel.evolve",
+          19
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion.obj",
+          11
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion.at",
+          8
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Changes.put",
+          4
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion.semantic",
+          4
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel.process",
+          3
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Changes.encoded",
+          3
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion.normalizePayload",
+          3
+        ],
+        [
+          "com.reef.platform.calcify.financial.FinancialKernel$Companion$canonical$$inlined$sortedBy$1.compare",
+          3
+        ]
+      ],
+      "weightedAllocationBytesByClass": [
+        [
+          "[B",
+          16995737824
+        ],
+        [
+          "com/fasterxml/jackson/core/json/WriterBasedJsonGenerator",
+          4968808952
+        ],
+        [
+          "com/fasterxml/jackson/databind/ser/DefaultSerializerProvider$Impl",
+          4311252688
+        ],
+        [
+          "java/lang/String",
+          3977968088
+        ],
+        [
+          "com/fasterxml/jackson/core/io/IOContext",
+          3194023472
+        ],
+        [
+          "com/fasterxml/jackson/core/json/JsonWriteContext",
+          2865299520
+        ],
+        [
+          "com/fasterxml/jackson/core/util/TextBuffer",
+          2502597496
+        ],
+        [
+          "com/fasterxml/jackson/core/io/ContentReference",
+          2374266784
+        ]
+      ],
+      "gcEvents": 268
+    },
+    "result": {
+      "schema": "calcify-kernel-research-v1",
+      "checks": {
+        "fullyFunded": true,
+        "duplicateNoHistory": true,
+        "replayExact": true,
+        "checkpointRestoreExact": true,
+        "insufficientCashZeroLegs": true,
+        "changedRetryConflict": true,
+        "corruptHistoryRejected": true
+      },
+      "java": "21",
+      "maxHeapBytes": 805306368,
+      "scope": "unchanged test-only kernel including action construction; no broker/SQL; sampled heap shared JVM, no attribution or hard bound; sequential ABBA diagnostic, not controlled benchmark",
+      "warmupTrades": 2000,
+      "results": [
+        {
+          "encodeResult": false,
+          "trades": 10000,
+          "actions": 20000,
+          "elapsedMs": 3031.581583,
+          "tradesPerSecond": 3298.608243326302,
+          "each1000TradesMs": [
+            324.067833,
+            313.892625,
+            300.607167,
+            295.967041,
+            304.032125,
+            300.660542,
+            297.330542,
+            301.808,
+            295.647333,
+            297.549083
+          ],
+          "encodedHistoryBytesExcludingGenesis": 0,
+          "sampledHeapBytes": 254823728,
+          "finalEconomicsChecked": true
+        },
+        {
+          "encodeResult": true,
+          "trades": 10000,
+          "actions": 20000,
+          "elapsedMs": 3164.019917,
+          "tradesPerSecond": 3160.5363627045713,
+          "each1000TradesMs": [
+            319.0945,
+            313.774417,
+            317.055917,
+            309.630916,
+            316.266834,
+            335.736833,
+            312.488083,
+            316.637167,
+            314.729792,
+            308.588125
+          ],
+          "encodedHistoryBytesExcludingGenesis": 53532284,
+          "sampledHeapBytes": 332307752,
+          "finalEconomicsChecked": true
+        },
+        {
+          "encodeResult": true,
+          "trades": 10000,
+          "actions": 20000,
+          "elapsedMs": 3161.94875,
+          "tradesPerSecond": 3162.6066045504376,
+          "each1000TradesMs": [
+            321.381208,
+            315.45125,
+            313.561875,
+            311.639125,
+            367.164917,
+            305.371542,
+            309.574583,
+            307.111708,
+            303.29875,
+            307.374584
+          ],
+          "encodedHistoryBytesExcludingGenesis": 53532284,
+          "sampledHeapBytes": 347953568,
+          "finalEconomicsChecked": true
+        },
+        {
+          "encodeResult": false,
+          "trades": 10000,
+          "actions": 20000,
+          "elapsedMs": 3106.291167,
+          "tradesPerSecond": 3219.2732304801357,
+          "each1000TradesMs": [
+            304.903167,
+            309.526833,
+            303.804167,
+            289.880166,
+            289.658334,
+            293.849208,
+            294.60725,
+            309.605542,
+            348.144708,
+            362.293333
+          ],
+          "encodedHistoryBytesExcludingGenesis": 0,
+          "sampledHeapBytes": 420917184,
+          "finalEconomicsChecked": true
+        }
+      ]
+    },
+    "rawFileSha256": {
+      "profile-summary.json": "6ba52468e1cca1224b03741d6d00d5c333d77606082e4b0dd4c3813ad214883b",
+      "profile.stdout": "df205b0a57b79b31bd1e577e6a964d70bd3b0b4c0a8d1fe96180090e654de01d",
+      "profile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "profile.status.json": "d5810187a27b4ae66e2301c0dfc703e54569e67f457cf721ea85cbc9f96dc983"
+    },
+    "retention": "Raw JFR excluded: contains unrelated process metadata. Aggregate summary and result retained here."
+  },
+  "parity": {
+    "latestHarnessSourceMatches": true,
+    "canonicalCorpusCases": 1000,
+    "canonicalCorpusSha256": "76d17b8bb83cfb0bb083c5fd7b62c1ccdc220000925d083310902920d194750c",
+    "finalHistoryChecksum": "c8b44d6f98c4a8c1574d0c5e9e4047214aff3824f0fe81eadee5e2bbb08de7b0",
+    "encodedBytesPer10000TradesExcludingGenesis": 53532284,
+    "scope": "Selected gross fixture and finite encoding corpus only; not full input/schema compatibility"
+  },
+  "budgetModel": {
+    "schema": "calcify-architecture-budget-v1",
+    "scope": "arithmetic and finite toy model only",
+    "checks": {
+      "queueRecurrenceCases": 5239,
+      "readCommittedHeadOfLine": true,
+      "separatePartitionControl": true
+    },
+    "scenarios": [
+      {
+        "arrivalPerSecond": 10000,
+        "servicePerSecond": 0,
+        "seconds": 600,
+        "bytesPerQueuedTrade": 2048,
+        "backlog": 6000000,
+        "logicalBacklogBytes": 12288000000,
+        "drainSecondsAfterStop": null,
+        "sustainableDutyFraction": 0
+      },
+      {
+        "arrivalPerSecond": 10000,
+        "servicePerSecond": 1051.7333333333333,
+        "seconds": 600,
+        "bytesPerQueuedTrade": 2048,
+        "backlog": 5368960,
+        "logicalBacklogBytes": 10995630080,
+        "drainSecondsAfterStop": 5104.868154158215,
+        "sustainableDutyFraction": 0.10517333333333334
+      },
+      {
+        "arrivalPerSecond": 10000,
+        "servicePerSecond": 3500,
+        "seconds": 600,
+        "bytesPerQueuedTrade": 2048,
+        "backlog": 3900000,
+        "logicalBacklogBytes": 7987200000,
+        "drainSecondsAfterStop": 1114.2857142857142,
+        "sustainableDutyFraction": 0.35
+      },
+      {
+        "arrivalPerSecond": 10000,
+        "servicePerSecond": 7500,
+        "seconds": 600,
+        "bytesPerQueuedTrade": 2048,
+        "backlog": 1500000,
+        "logicalBacklogBytes": 3072000000,
+        "drainSecondsAfterStop": 200,
+        "sustainableDutyFraction": 0.75
+      },
+      {
+        "arrivalPerSecond": 10000,
+        "servicePerSecond": 10000,
+        "seconds": 600,
+        "bytesPerQueuedTrade": 2048,
+        "backlog": 0,
+        "logicalBacklogBytes": 0,
+        "drainSecondsAfterStop": 0,
+        "sustainableDutyFraction": 1
+      },
+      {
+        "arrivalPerSecond": 10000,
+        "servicePerSecond": 12000,
+        "seconds": 600,
+        "bytesPerQueuedTrade": 2048,
+        "backlog": 0,
+        "logicalBacklogBytes": 0,
+        "drainSecondsAfterStop": 0,
+        "sustainableDutyFraction": 1
+      }
+    ],
+    "historicE4": {
+      "resultBytesPerTrade": 5893.01222,
+      "inputBytesPerTrade": 747.8148666666667,
+      "stateWritesPerTrade": 37.00011333333333,
+      "resultBytesAtSixMillionTrades": 35358073320,
+      "forceSeconds": 60.525331066,
+      "producerSeconds": 132.04,
+      "note": "Arithmetic from archived test adapter measurement; excludes additional source, context, changelog, SQL/WAL, replication, indexes and compaction."
+    },
+    "finiteO1": {
+      "fixtureCommands": 12,
+      "fixtureTrades": 3,
+      "fixtureSourceBytes": 24797,
+      "fixtureModeOffSourceBytes": 16647,
+      "fixtureCaptureBytes": 29930,
+      "sourceExpansionRatio": 1.4895777016879919,
+      "allPayloadBytesPerFixtureTrade": 18242.333333333332,
+      "maxPublicationTradeAllowance": 128,
+      "maximumSecondsAt10kIgnoringOtherLimits": 0.0128,
+      "note": "Actual tiny fixture mix; not a throughput or representative bytes/trade estimate."
+    },
+    "recovery": {
+      "arrivalPerSecond": 10000,
+      "outageSeconds": 60,
+      "requiredDrainSeconds": 300,
+      "requiredServicePerSecond": 12000
+    },
+    "snapshotIllustration": {
+      "records": 6000000,
+      "bytesAddedPerRecord": 128,
+      "fullImageLogicalBytes": 2304000384000000,
+      "keyedDeltaLogicalBytes": 768000000,
+      "note": "Hypothetical append-growing state; demonstrates quadratic rewrite cost, not measured finite reducer cost."
+    }
+  },
+  "historicalMeasurementSource": {
+    "recordsCommit": "2331d97d9f9e6af8638d6ed335adbfac743d2c03",
+    "path": "records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d/arm5/proof/measurement.json",
+    "scope": "Original read; prior failed arms assessed from focused checkpoint, not independently rerun"
+  },
+  "verificationAssemblyCorrections": [
+    "JFR stdout includes startup text: extracted JSON result line.",
+    "Profiler status uses returncode, runner uses status."
+  ],
+  "limitations": [
+    "No new managed-broker or SQL test",
+    "No source/capture 10k qualification",
+    "No off-host durability or recovery proof",
+    "Sequential shared-host runs with warmup/order effects",
+    "Sampled heap shares JVM across arms, not a live-set comparison or hard bound",
+    "Toy visibility model is not broker model checking",
+    "Scratch directories are ephemeral; receipt is retained result authority"
+  ],
+  "retentionPass": "No superseded tracked artifacts removed or bulk proof added; current probes/research/compact receipt retained; historical D7/E4/O1 unchanged.",
+  "finalChecks": {
+    "javascriptSyntax": "Both research mjs files passed node --check",
+    "budgetModel": "5239 queue recurrence cases and controls passed",
+    "sourceParity": "Original kernel unchanged; latest harness hashes match; final history and canonical corpus digests equal",
+    "reportLinks": "9 local links checked; no missing files",
+    "whitespace": "Tracked diff and all new files passed",
+    "recordsRetention": "bun run repo:check:records passed: 520 archived files; active references, fixtures and checksum companions verified",
+    "suiteScope": "No production runtime changes; full platform suite and managed broker run not executed. Research diagnostics retain their stated scope."
+  }
+}

@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "baseline_commit": "b9a8756e8d0efc5e8b665a5c62da1ab064d01539",
+  "source_scope": "baseline production source plus frozen research probe/bootstrap/orchestration overlay; see archive source snapshot",
+  "verdict": "CAPACITY_FAIL_INTEGRITY_PASS",
+  "attempt": "contention-aged-02",
+  "run_id": "cf49e728",
+  "capture_pass": false,
+  "reasons": [
+    "resolved below target contexts/s",
+    "resolved drain exceeded"
+  ],
+  "host": {
+    "docker_cpus": 10,
+    "docker_memory_bytes": 16745824256,
+    "physical_host_memory_gib": 64,
+    "load_driver": "macOS host; same physical server, outside Docker VM memory budget"
+  },
+  "workload": {
+    "seconds": 300,
+    "offered_trades_per_second": 10500,
+    "http_workers": 1024,
+    "makers_excluded": 64,
+    "terminal_retention": "0/no eviction",
+    "finite_lifecycle_profile": false,
+    "financial_scope": "independent synthetic gross kernel with atomic SQL journal/legs/balances/checkpoint; no captured-trade or production materializer integration"
+  },
+  "http": {
+    "scheduledPairs": 3150000,
+    "dispatchedPairs": 3063383,
+    "droppedPairs": 86617,
+    "completedTrades": 3063383,
+    "acceptedOrders": 3063383,
+    "acceptedOrdersAtDeadline": 3062570,
+    "elapsedMs": 300035,
+    "failures": 0,
+    "retries": 0,
+    "gatePassed": true
+  },
+  "capture": {
+    "deadline_bounds": {
+      "verified": {
+        "deadlineCountLower": 3051648,
+        "deadlineCountUpper": 3063383,
+        "rateLower": 10172.16,
+        "rateUpper": 10211.276666666667
+      },
+      "resolved": {
+        "deadlineCountLower": 2432098,
+        "deadlineCountUpper": 2443533,
+        "rateLower": 8106.993333333333,
+        "rateUpper": 8145.11
+      }
+    },
+    "rates_and_drain_bounds": {
+      "verified": {
+        "coveredBeforeConservativeDeadline": 3051648,
+        "contextsPerSecond": 10172.16,
+        "endGapUpperContexts": 11735,
+        "drainUpperMs": 1195.0405829999945,
+        "scheduledDeadlineDrainUpperMs": 1230.0405829999945
+      },
+      "resolved": {
+        "coveredBeforeConservativeDeadline": 2432098,
+        "contextsPerSecond": 8106.993333333333,
+        "endGapUpperContexts": 631285,
+        "drainUpperMs": 29118.950249999994,
+        "scheduledDeadlineDrainUpperMs": 29153.950249999994
+      }
+    },
+    "final_oracle": {
+      "sourceTopic": "REEF_CONTENTION-AGED-02_EVENTS",
+      "resolvedTopic": "REEF_CONTENTION-AGED-02_RESOLVED",
+      "sourceTopicId": "FdG_ngVyRZe3hocUGgWImQ",
+      "generation": 4,
+      "policyVersion": 1,
+      "sourceBatches": 27453,
+      "sourceBytes": 7768171435,
+      "maxSourceRecordBytes": 717032,
+      "acceptedOrders": 3063447,
+      "records": 3063383,
+      "expected": 3063383,
+      "fullFactParity": true,
+      "orderedUnique": true,
+      "independentFactDecoder": true,
+      "checksumValidator": "shared CalcifySourceBatch.checked",
+      "sourceCommittedEnds": {
+        "0": 5007,
+        "1": 5247,
+        "2": 5223,
+        "3": 4992,
+        "4": 4995,
+        "5": 5022,
+        "6": 5193,
+        "7": 5226,
+        "8": 5178,
+        "9": 5211,
+        "10": 5502,
+        "11": 5031,
+        "12": 5250,
+        "13": 4995,
+        "14": 5040,
+        "15": 5247
+      },
+      "resolvedCommittedEnds": {
+        "0": 192336,
+        "1": 192335,
+        "2": 192380,
+        "3": 192337,
+        "4": 192355,
+        "5": 192415,
+        "6": 192383,
+        "7": 192358,
+        "8": 192344,
+        "9": 192416,
+        "10": 192363,
+        "11": 192389,
+        "12": 192356,
+        "13": 192365,
+        "14": 192348,
+        "15": 192297
+      },
+      "partitionSha256": {
+        "0": "8fdf8aafb3ab47ef0a3b18fcb8b0292ffe66e619b322488dcb499466024d4c3f",
+        "1": "b38509bff7adb7f8caa572cd5dd04d90b97556f41b1dbbb822093155f13bc456",
+        "2": "a39cfb91fd491a78f272e4086555c198a6778f24266eb653d9c702bd557b049c",
+        "3": "c08c82673801a9f61028b36586b35f1cd337cd20937609ab646c02d02fca5494",
+        "4": "9e2f0fe82643e47d2f80b66bc817944bfc7db024ba43676951a3c1878d867a7d",
+        "5": "532e2d04dfeef6ae9e4824373bfa21e2a1e27649b2686d73b5af9fd0e3147e95",
+        "6": "876f45f099161b3533d807debbdd48fb6ac8d3afa640b446a36386699c0f988c",
+        "7": "1f454e6d9c4c4f114e6f9a10c08eaf036d18a7ea07fccfd0a8bc944dded93a9f",
+        "8": "cfb6dd4e1c9c38c5218908d856d45d4c520f49cd93b2c03d9888d4d4bd16a6e6",
+        "9": "367aa4e8000fa4be7706c341a078877e01dfa54fc6c1bbc170e3bf37b9a3bfae",
+        "10": "2c131d19356486804104bdf4e7afd7bdfaa81946db1f769792b032fa384d990b",
+        "11": "9f308c28ec043d8cd0ebfa7e3ec93de3fb02010a097e382aa643bf477158cd9b",
+        "12": "43585de3fa79cec92e986615e9defdf729a81a88e84c2eddf9cf2d1a24af0ccd",
+        "13": "a740ae8214c9436c96ac0a8b95c29c019dc81750a3c236c0fe8e52fd4d9c38d7",
+        "14": "6f29913ce1a676a97b44159610c344494e57a1babc6632554d935ef19c765c60",
+        "15": "a6e163d5c120841e19662f91c360fdeafac3c5e2e68b7566271e668810de15f0"
+      },
+      "pass": true
+    },
+    "resolved_payload_bytes": 6097277845,
+    "latency_scope": "received observations bound coverage/drain, not actual per-trade acceptance latency"
+  },
+  "phase_bounds": [
+    {
+      "startSeconds": 0,
+      "endSeconds": 60,
+      "verified": {
+        "proven": true,
+        "startCountUpper": 0,
+        "endCountLower": 618810,
+        "countLower": 618810,
+        "rateLower": 10313.5,
+        "startSlackMs": 0,
+        "endSlackMs": 16.968542000002344
+      },
+      "resolved": {
+        "proven": true,
+        "startCountUpper": 0,
+        "endCountLower": 614909,
+        "countLower": 614909,
+        "rateLower": 10248.483333333334,
+        "startSlackMs": 0,
+        "endSlackMs": 83.45604199999798
+      }
+    },
+    {
+      "startSeconds": 60,
+      "endSeconds": 150,
+      "verified": {
+        "proven": true,
+        "startCountUpper": 630337,
+        "endCountLower": 1553632,
+        "countLower": 923295,
+        "rateLower": 10258.833333333334,
+        "startSlackMs": 1037.7442909999954,
+        "endSlackMs": 688.2131250000093
+      },
+      "resolved": {
+        "proven": true,
+        "startCountUpper": 625429,
+        "endCountLower": 1510739,
+        "countLower": 885310,
+        "rateLower": 9836.777777777777,
+        "startSlackMs": 926.1325829999987,
+        "endSlackMs": 861.2455000000191
+      }
+    },
+    {
+      "startSeconds": 150,
+      "endSeconds": 180,
+      "verified": {
+        "proven": true,
+        "startCountUpper": 1566950,
+        "endCountLower": 1869515,
+        "countLower": 302565,
+        "rateLower": 10085.5,
+        "startSlackMs": 392.4513330000045,
+        "endSlackMs": 608.0451250000042
+      },
+      "resolved": {
+        "proven": true,
+        "startCountUpper": 1519826,
+        "endCountLower": 1758842,
+        "countLower": 239016,
+        "rateLower": 7967.2,
+        "startSlackMs": 221.39174999998068,
+        "endSlackMs": 583.1024170000164
+      }
+    },
+    {
+      "startSeconds": 180,
+      "endSeconds": 300,
+      "verified": {
+        "proven": true,
+        "startCountUpper": 1879578,
+        "endCountLower": 3051648,
+        "countLower": 1172070,
+        "rateLower": 9767.25,
+        "startSlackMs": 461.7637499999837,
+        "endSlackMs": 258.08787500002654
+      },
+      "resolved": {
+        "proven": true,
+        "startCountUpper": 1767457,
+        "endCountLower": 2432098,
+        "countLower": 664641,
+        "rateLower": 5538.675,
+        "startSlackMs": 435.1447909999988,
+        "endSlackMs": 761.2654590000166
+      }
+    },
+    {
+      "startSeconds": 60,
+      "endSeconds": 300,
+      "verified": {
+        "proven": true,
+        "startCountUpper": 630337,
+        "endCountLower": 3051648,
+        "countLower": 2421311,
+        "rateLower": 10088.795833333334,
+        "startSlackMs": 1037.7442909999954,
+        "endSlackMs": 258.08787500002654
+      },
+      "resolved": {
+        "proven": true,
+        "startCountUpper": 625429,
+        "endCountLower": 2432098,
+        "countLower": 1806669,
+        "rateLower": 7527.7875,
+        "startSlackMs": 926.1325829999987,
+        "endSlackMs": 761.2654590000166
+      }
+    }
+  ],
+  "fault_events": [
+    {
+      "kind": "load-detected",
+      "epochMs": 1791740004764,
+      "elapsedMs": 3234.885167,
+      "timing": "file creation observed; fault scheduling only, not throughput deadline"
+    },
+    {
+      "kind": "financial-start",
+      "epochMs": 1791740069937,
+      "elapsedMs": 68406.992,
+      "name": "reef-calcify-contention-20261011-financial-contention-aged-02-1"
+    },
+    {
+      "kind": "financial-killed",
+      "epochMs": 1791740160597,
+      "elapsedMs": 159065.35995900002
+    },
+    {
+      "kind": "financial-start",
+      "epochMs": 1791740161248,
+      "elapsedMs": 159716.318667,
+      "name": "reef-calcify-contention-20261011-financial-contention-aged-02-2"
+    },
+    {
+      "kind": "resolver-cold-restart-start",
+      "epochMs": 1791740188388,
+      "elapsedMs": 186856.2985
+    },
+    {
+      "kind": "resolver-cold-restart-submitted",
+      "epochMs": 1791740192492,
+      "elapsedMs": 190960.22745900002
+    }
+  ],
+  "financial": {
+    "final_audit": {
+      "auditPass": true,
+      "committedTrades": 366625,
+      "domains": 37,
+      "fullHistoryReplay": true,
+      "sqlBalancesMatch": true
+    },
+    "next_trade_after_restore": 41200,
+    "history_restore_ms": 1289,
+    "timing_limit": "restore excludes JVM startup; final audit total includes post-load work; no settlement rate claim"
+  },
+  "resources": {
+    "peaks": {
+      "reef-calcify-contention-20261011-calcify-resolver": {
+        "sampledMaxMemoryBytes": 1508607262.72,
+        "sampledMaxCpuPercent": 254.3
+      },
+      "reef-calcify-contention-20261011-calcify-verifier": {
+        "sampledMaxMemoryBytes": 195978854.4,
+        "sampledMaxCpuPercent": 44.05
+      },
+      "reef-calcify-contention-20261011-calcify-extractor": {
+        "sampledMaxMemoryBytes": 307127910.4,
+        "sampledMaxCpuPercent": 74.81
+      },
+      "reef-calcify-contention-20261011-platform-api": {
+        "sampledMaxMemoryBytes": 724461158.4,
+        "sampledMaxCpuPercent": 297.55
+      },
+      "reef-calcify-contention-20261011-matching-engine": {
+        "sampledMaxMemoryBytes": 4515084369.92,
+        "sampledMaxCpuPercent": 485.32
+      },
+      "reef-calcify-contention-20261011-postgres": {
+        "sampledMaxMemoryBytes": 350329241.6,
+        "sampledMaxCpuPercent": 54.67
+      },
+      "reef-calcify-contention-20261011-redpanda": {
+        "sampledMaxMemoryBytes": 2230161768.448,
+        "sampledMaxCpuPercent": 119.61
+      },
+      "reef-calcify-contention-20261011-financial-contention-aged-02-1": {
+        "sampledMaxMemoryBytes": 715862835.2,
+        "sampledMaxCpuPercent": 173.57
+      },
+      "reef-calcify-contention-20261011-financial-contention-aged-02-2": {
+        "sampledMaxMemoryBytes": 1127428915.2,
+        "sampledMaxCpuPercent": 115.59
+      }
+    },
+    "sampleCount": 146,
+    "samplingScope": "Named service and financial containers only; capture observers and host load driver excluded; sampled Docker stats, not heap or continuous RSS bounds",
+    "minFreeBytes": 34705408000,
+    "deadlineBounds": {
+      "verified": {
+        "deadlineCountLower": 3051648,
+        "deadlineCountUpper": 3063383,
+        "rateLower": 10172.16,
+        "rateUpper": 10211.276666666667
+      },
+      "resolved": {
+        "deadlineCountLower": 2432098,
+        "deadlineCountUpper": 2443533,
+        "rateLower": 8106.993333333333,
+        "rateUpper": 8145.11
+      }
+    },
+    "financial": [
+      {
+        "file": "financial-before-crash.log",
+        "ready": [
+          {
+            "ready": true,
+            "nextTrade": 0,
+            "restoreMs": 0,
+            "domain": -1
+          }
+        ],
+        "last": {
+          "progress": true,
+          "committedTrades": 40925,
+          "elapsedMs": 87739,
+          "domain": 4
+        }
+      },
+      {
+        "file": "reef-calcify-contention-20261011-financial-contention-aged-02-1.log",
+        "ready": [
+          {
+            "ready": true,
+            "nextTrade": 0,
+            "restoreMs": 0,
+            "domain": -1
+          }
+        ],
+        "last": {
+          "progress": true,
+          "committedTrades": 40925,
+          "elapsedMs": 87739,
+          "domain": 4
+        }
+      },
+      {
+        "file": "reef-calcify-contention-20261011-financial-contention-aged-02-2.log",
+        "ready": [
+          {
+            "ready": true,
+            "nextTrade": 41200,
+            "restoreMs": 1289,
+            "domain": 4
+          }
+        ],
+        "last": {
+          "progress": true,
+          "committedTrades": 366100,
+          "elapsedMs": 324890,
+          "domain": 36
+        }
+      }
+    ]
+  },
+  "retained_state": {
+    "resolverState": "1413794317\t/app/calcify-state/reef-contention-aged-02-g4\n2332079011\t/app/calcify-state/cold-recovery-1\n",
+    "postgresDatabaseAndCurrentHistoryCount": "1363713047|733287\n",
+    "brokerFilesystem": "Filesystem        1B-blocks         Used   Available Use% Mounted on\n/dev/vda1      160315707392 117014732800 35123818496  77% /var/lib/redpanda/data\n"
+  },
+  "attempt01": {
+    "qualifying": false,
+    "reason": "cold restart omitted Compose profiles; runner interrupted; no final source/capture reconciliation",
+    "financial_audit": {
+      "auditPass": true,
+      "committedTrades": 49100,
+      "domains": 5,
+      "fullHistoryReplay": true,
+      "sqlBalancesMatch": true
+    }
+  },
+  "smoke": {
+    "contexts": 15000,
+    "full_fact_parity": true,
+    "financial_audited_trades": 500,
+    "capacity_qualified": false
+  },
+  "validation": {
+    "runtime_and_test_classes_compiled": true,
+    "focused_node_tests_passed": 17,
+    "new_conservative_window_tests": 6,
+    "script_surface": "pass",
+    "records_check": "pass before archive publication; final check recorded separately"
+  },
+  "closure": {
+    "owned_services_stopped": true,
+    "remaining_running_owned": "",
+    "volumes_preserved": true
+  },
+  "raw_root_during_execution": "/private/tmp/calcify-contention-20261011",
+  "limits": [
+    "One completed mixed-fault trial; cannot isolate causality",
+    "Local RF1 cached Redpanda26.2.3, not default26.2.4 or host-loss proof",
+    "State ages within300s, not multi-day retention qualification",
+    "Resource samples omit capture observers and host driver",
+    "Raw broker/SQL/state volumes preserved locally, not exported for portable independent replay"
+  ]
+}

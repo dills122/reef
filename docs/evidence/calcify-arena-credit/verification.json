@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "policy": "arena-receivable-credit-research-v1",
+  "status": "reference proof passed; proposed caps not adopted or workload-qualified",
+  "product_baseline": "b9a8756e8d0efc5e8b665a5c62da1ab064d01539",
+  "local_only_source_checkpoint": "966584dd3181896c863d9bcb6465aecc1c28faed",
+  "command": "CALCIFY_CREDIT_PROOF_DIR=<fresh-output-directory> node --test scripts/dev/calcify-financial/research/arena-credit-model.test.mjs",
+  "runtime": "Node v22.22.1",
+  "results": {
+    "initial_tests": 29,
+    "initial_passed": 29,
+    "final_tests": 34,
+    "final_passed": 34,
+    "failed": 0,
+    "ordered_competing_order_schedules": 676,
+    "actual_child_process_sigkills": 20,
+    "sigkill_transitions": [
+      "reserve",
+      "book",
+      "advance",
+      "repay",
+      "fail"
+    ],
+    "cutpoints": [
+      "before-write",
+      "torn-write",
+      "after-sync",
+      "after-ack"
+    ],
+    "other_session_focused_tests": 22
+  },
+  "sources": [
+    {
+      "path": "scripts/dev/calcify-financial/research/arena-credit-model.mjs",
+      "sha256": "59ae94ff04461c4070a3b32cf4c0cf40ea1fc3cbad3a7ba8d52ed1283fc28b40"
+    },
+    {
+      "path": "scripts/dev/calcify-financial/research/arena-credit-journal.mjs",
+      "sha256": "d624ada5be4e2cb78b8a10147c5a32de582a6b09f47010743d938e55e3369e57"
+    },
+    {
+      "path": "scripts/dev/calcify-financial/research/arena-credit-model.test.mjs",
+      "sha256": "612a4b675ebac20d4d43c41de9a684d69c5a137d89233493751e19c255e20104"
+    }
+  ],
+  "design_corrections": [
+    "Reserve undrawn plus drawn credit at order admission",
+    "Fund pool with explicit house cash; authorization alone cannot settle DvP",
+    "Retire receivable and repay debt atomically",
+    "Preserve original eligibility age through repair",
+    "Require committed-head binding to detect a cleanly removed tail"
+  ],
+  "scope_limits": [
+    "Single serialized reference owner; no concurrent replica or runtime grant protocol proof",
+    "Actual SIGKILL of journal process on same host; no power-loss, directory durability, storage-loss or failover proof",
+    "Torn journal fails closed; no automatic truncation/recovery implementation",
+    "No integrated throughput qualification or deployed credit/score change",
+    "Initial intermediate source snapshot missing; known differences recorded; final source exact hashes retained"
+  ],
+  "archive": {
+    "commit": "c7b294e4a578a9c8d279e35fb2ee1eeca78268a7",
+    "pull_request": "https://github.com/dills122/reef-records/pull/12",
+    "bundle": "https://github.com/dills122/reef-records/tree/c7b294e4a578a9c8d279e35fb2ee1eeca78268a7/records/reef/docs/evidence/calcify-arena-credit/run-2026-10-11-b9a8756e",
+    "manifest": "https://github.com/dills122/reef-records/blob/c7b294e4a578a9c8d279e35fb2ee1eeca78268a7/manifests/2026-10-11-calcify-arena-credit.json",
+    "records": 202,
+    "record_bytes": 780789,
+    "remote_verification": {
+      "archive_commit": "c7b294e4a578a9c8d279e35fb2ee1eeca78268a7",
+      "remote_blobs_verified": 205,
+      "remote_bytes_verified": 1030550,
+      "prior_immutable_paths_modified_or_removed": 0,
+      "verified_commit_changed_paths": 205,
+      "method": "full new remote blob bytes compared with local selected bytes; SHA256; complete single-commit diff has exactly205 expected paths, protected imports additions only"
+    },
+    "hosted_checks": {
+      "status": "success",
+      "head": "c7b294e4a578a9c8d279e35fb2ee1eeca78268a7",
+      "run_id": 38170617492,
+      "url": "https://github.com/dills122/reef-records/actions/runs/38170617492",
+      "jobs": [
+        {
+          "name": "Repository hygiene",
+          "conclusion": "success"
+        },
+        {
+          "name": "Archive integrity",
+          "conclusion": "success"
+        }
+      ]
+    }
+  },
+  "retention": {
+    "tracked_source_removed": false,
+    "prior_imports_changed": false,
+    "raw_scope": "Both credit attempts including crash journals/results/TAP, final model snapshot, five initial kernel runs and budget companions",
+    "excluded": "JFR binary explicitly prohibited by archive hygiene; local original retained with SHA256 in archive exclusions; compiled classes/dependencies/state volumes excluded",
+    "local_archive_integrity": "202 records pass; full hygiene deferred to hosted checkout after partial local staging lacked root docs",
+    "retained_current": "Executable model/tests, compact receipts, active policy/goalposts/review and current owner updates"
+  }
+}
