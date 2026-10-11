@@ -10,7 +10,10 @@ internal class FinanceLedger(val config: FinanceConfig) {
     private val cash get() = config.cashAsset
     private val security get() = config.securityAsset
 
-    fun genesis(): FinanceState = FinanceState(emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), 0, GENESIS_CHAIN)
+    /** Chain start, bound to the configuration so histories from a different config never verify. */
+    val genesisChain: String = Canon.sha(Canon.bytes { str("calcify-finance-genesis-v1"); str(config.digest()) })
+
+    fun genesis(): FinanceState = FinanceState(emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), 0, genesisChain)
 
     fun decide(state: FinanceState, input: FinanceInput): Outcome {
         val digest = input.digest()
@@ -18,18 +21,23 @@ internal class FinanceLedger(val config: FinanceConfig) {
             return if (prior.digest == digest) Outcome(state, Disposition.PRIOR_RESULT, null, prior.disposition)
             else Outcome(state, Disposition.ACTION_CONFLICT, null)
         }
-        if (state.sequence >= config.maxAttempts) return Outcome(state, Disposition.BUDGET_EXCEEDED, null)
-        if (input is FinanceInput.Capture && input.execution !in state.executions && state.obligations.size >= config.maxObligations) {
-            return Outcome(state, Disposition.BUDGET_EXCEEDED, null)
-        }
         val draft = Draft(state)
         val result = evaluate(draft, input)
+        // Refusals and no-ops are neither recorded nor counted: junk cannot consume a budget class (review F2).
+        if (!result.recorded) return Outcome(state, result.disposition, null)
+        val exceeded = when (input) {
+            is FinanceInput.Capture -> state.executions.size >= config.maxCaptures || state.obligations.size >= config.maxObligations
+            is FinanceInput.Fund -> state.controls >= config.maxControls
+            is FinanceInput.Settle -> state.attempts.size >= config.maxSettleAttempts
+        }
+        if (exceeded) return Outcome(state, Disposition.BUDGET_EXCEEDED, null)
         val sequence = state.sequence + 1
         val checksum = Canon.sha(decisionBytes(sequence, input.action, digest, result.disposition, result.legs, state.chain))
         val decision = Decision(sequence, input.action, digest, result.disposition, result.legs, state.chain, checksum)
         val next = FinanceState(
             draft.positions, draft.executions, draft.obligations, draft.attempts,
             state.actions + (input.action to ActionRecord(digest, result.disposition)), sequence, checksum,
+            state.controls + if (input is FinanceInput.Fund) 1 else 0,
         )
         checkInvariants(next)
         return Outcome(next, result.disposition, decision)
@@ -42,7 +50,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
         val attempts = s.attempts.toMutableMap()
         fun position(account: AccountId, asset: AssetId): Long = positions[account to asset] ?: 0L
     }
-    private data class Eval(val disposition: Disposition, val legs: List<Leg> = emptyList())
+    private data class Eval(val disposition: Disposition, val legs: List<Leg> = emptyList(), val recorded: Boolean = false)
 
     private fun evaluate(d: Draft, input: FinanceInput): Eval = when (input) {
         is FinanceInput.Capture -> capture(d, input)
@@ -60,7 +68,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
         }
         d.executions[i.execution] = captured
         d.obligations[i.execution] = Obligation(ObligationStatus.PENDING, amount, i.quantity)
-        return Eval(Disposition.CAPTURED)
+        return Eval(Disposition.CAPTURED, recorded = true)
     }
 
     private fun fund(d: Draft, i: FinanceInput.Fund): Eval {
@@ -68,7 +76,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
         if (i.account !in config.accounts) return Eval(Disposition.UNKNOWN_ACCOUNT)
         if ((i.asset != cash && i.asset != security) || i.amount <= 0) return Eval(Disposition.INVALID_INPUT)
         val legs = listOf(Leg(config.openingAccount, i.asset, -i.amount), Leg(i.account, i.asset, i.amount))
-        return apply(d, legs, Disposition.FUNDED)
+        return apply(d, legs, Disposition.FUNDED).let { if (it.disposition == Disposition.FUNDED) it.copy(recorded = true) else it }
     }
 
     private fun settle(d: Draft, i: FinanceInput.Settle): Eval {
@@ -83,7 +91,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
             d.position(execution.seller, security) < obligation.shareResidual -> Disposition.INSUFFICIENT_SHARES
             else -> null
         }
-        if (status != null) { d.attempts[attemptKey] = status; return Eval(status) }
+        if (status != null) { d.attempts[attemptKey] = status; return Eval(status, recorded = true) }
         val legs = listOf(
             Leg(execution.buyer, cash, -obligation.cashResidual), Leg(execution.seller, cash, obligation.cashResidual),
             Leg(execution.seller, security, -obligation.shareResidual), Leg(execution.buyer, security, obligation.shareResidual),
@@ -91,20 +99,20 @@ internal class FinanceLedger(val config: FinanceConfig) {
         val result = apply(d, legs, Disposition.SETTLED)
         d.attempts[attemptKey] = result.disposition
         if (result.disposition == Disposition.SETTLED) d.obligations[i.execution] = Obligation(ObligationStatus.SETTLED, 0, 0)
-        return result
+        return result.copy(recorded = true)
     }
 
     /** Applies all legs or none: overflow leaves positions untouched and yields no legs. */
     private fun apply(d: Draft, legs: List<Leg>, success: Disposition): Eval {
         val updated = d.positions.toMutableMap()
         try {
-            for (leg in legs) {
+            for (leg in legs.filter { it.amount != 0L }) {
                 val key = leg.account to leg.asset
                 updated[key] = Math.addExact(updated[key] ?: 0L, leg.amount)
             }
         } catch (_: ArithmeticException) { return Eval(Disposition.BALANCE_OVERFLOW) }
         d.positions = updated
-        return Eval(success, legs)
+        return Eval(success, legs.filter { it.amount != 0L })
     }
 
     /** Throws [IllegalStateException] if any packet invariant (C4) is violated; a violation is a bug, not an input error. */
@@ -126,16 +134,19 @@ internal class FinanceLedger(val config: FinanceConfig) {
             }
         }
         check(state.sequence == state.actions.size.toLong()) { "action count differs from sequence" }
-        check(state.executions.size <= config.maxObligations && state.sequence <= config.maxAttempts) { "pinned budget exceeded" }
+        check(state.executions.size <= config.maxCaptures && state.obligations.size <= config.maxObligations) { "capture budget exceeded" }
+        check(state.attempts.size <= config.maxSettleAttempts) { "settle attempt budget exceeded" }
+        check(state.controls <= config.maxControls && state.controls == state.actions.values.count { it.disposition == Disposition.FUNDED }) { "control budget or count drift" }
+        check(state.sequence <= config.maxCaptures + config.maxSettleAttempts + config.maxControls) { "record budget exceeded" }
     }
 
-    /** True if every decision's checksum recomputes and links to its predecessor starting from [GENESIS_CHAIN]. */
+    /** True if every decision's checksum recomputes and links to its predecessor starting from this ledger's [genesisChain]. */
     fun verifyChain(decisions: List<Decision>): Boolean {
-        var prior = GENESIS_CHAIN
+        var prior = genesisChain
         var sequence = 0L
         for (d in decisions) {
             if (d.sequence != sequence + 1 || d.priorChain != prior) return false
-            if (d.checksum != Canon.sha(decisionBytes(d.sequence, d.action, d.inputDigest, d.disposition, d.legs, prior))) return false
+            if (d.checksum != Canon.sha(decisionBytes(d.sequence, d.action, d.inputDigest, d.disposition, d.legs, d.priorChain))) return false
             prior = d.checksum; sequence = d.sequence
         }
         return true
@@ -143,8 +154,13 @@ internal class FinanceLedger(val config: FinanceConfig) {
 
     fun checkpoint(state: FinanceState): FinanceCheckpoint = FinanceCheckpoint(state, Canon.sha(stateBytes(state)))
 
-    /** Verifies the checkpoint's own checksum and invariants before it can be used as a restore base. */
-    fun restore(checkpoint: FinanceCheckpoint): FinanceState {
+    /**
+     * Verifies the checkpoint's own checksum, that it sits at [expectedChainHead] (the head of the decision history the caller
+     * trusts), and the ledger invariants. A forged but internally consistent state with a recomputed checksum is refused unless
+     * its chain head matches the trusted history.
+     */
+    fun restore(checkpoint: FinanceCheckpoint, expectedChainHead: String): FinanceState {
+        require(checkpoint.state.chain == expectedChainHead) { "checkpoint is not at the trusted history head" }
         require(Canon.sha(stateBytes(checkpoint.state)) == checkpoint.checksum) { "checkpoint tamper" }
         checkInvariants(checkpoint.state)
         return checkpoint.state
@@ -158,14 +174,14 @@ internal class FinanceLedger(val config: FinanceConfig) {
         }
 
     private fun stateBytes(s: FinanceState) = Canon.bytes {
-        str("calcify-finance-state-v1"); long(s.sequence); str(s.chain)
+        str("calcify-finance-state-v1"); long(s.sequence); str(s.chain); int(s.controls)
         val positions = s.positions.entries.sortedWith(compareBy({ it.key.first.value }, { it.key.second.value }))
         int(positions.size); positions.forEach { str(it.key.first.value); str(it.key.second.value); long(it.value) }
         val executions = s.executions.entries.sortedWith(compareBy({ it.key.runId }, { it.key.venueSessionId }, { it.key.instrumentId }, { it.key.executionId }))
         int(executions.size)
         executions.forEach {
             execution(it.key); str(it.value.buyer.value); str(it.value.seller.value); long(it.value.quantity); long(it.value.priceNanos)
-            val o = s.obligations.getValue(it.key); str(o.status.name); long(o.cashResidual); long(o.shareResidual)
+            val o = s.obligations[it.key] ?: throw IllegalArgumentException("execution without obligation"); str(o.status.name); long(o.cashResidual); long(o.shareResidual)
         }
         val attempts = s.attempts.entries.sortedWith(compareBy({ it.key.first.runId }, { it.key.first.venueSessionId }, { it.key.first.instrumentId }, { it.key.first.executionId }, { it.key.second }))
         int(attempts.size); attempts.forEach { execution(it.key.first); int(it.key.second); str(it.value.name) }
@@ -173,5 +189,4 @@ internal class FinanceLedger(val config: FinanceConfig) {
         int(actions.size); actions.forEach { str(it.key.namespace); str(it.key.domain); str(it.key.actionId); str(it.value.digest); str(it.value.disposition.name) }
     }
 
-    companion object { const val GENESIS_CHAIN = "GENESIS" }
 }
