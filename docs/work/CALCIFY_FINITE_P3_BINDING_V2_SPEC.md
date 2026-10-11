@@ -1,163 +1,233 @@
 # Calcify Finite P3: Binding v2 Specification (S1-B1)
 
-Status: **draft for independent docs review.** Specification only; no code, no schema change, no migration is made by this
-document. It discharges the O3 packet section 5 requirement that the binding v2 specification be accepted before O3b starts.
-Decisions D7 (option B) and the proposed policies P-3 (new schema version) and P-4 (budget classes) are inputs; see the
-[O3 packet](CALCIFY_FINITE_P3_O3_PACKET.md) and the [program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md).
+Status: **revision 2, for independent docs re-review** (review 1 of 3 returned Not ready; every P0/P1 finding is addressed
+below and listed in section 14). Specification only; no code, no schema change, no migration is made by this document. It
+discharges the [O3 packet](CALCIFY_FINITE_P3_O3_PACKET.md) section 5 requirement that the binding v2 specification be accepted
+before O3b starts. Inputs: D7 (option B), P-3 (new schema version), P-4 (budget classes); see the
+[program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md).
 
 ## 1. Scope and non-goals
 
-In scope: the registered opening for runs that include financial admission: schema id, roles, identities, canonical bytes and
-digest, registry constraint, parsers, control-writer placement, isolation proof pattern, restore cut and refusal rules, test
-plan. Out of scope: the financial processor itself (O3b), SQL/read seam (O4), capacity claims.
-
-Non-goals: changing any v1 byte, digest, fixture, parser behavior or migration. v1 runs (O1/O2) stay valid and readable.
+In scope: schema id, roles, identities, canonical bytes and digest, registration and registry constraints, parsers, control
+writer, isolation matrix, startup witness, restore cut and refusal rules, test plan. Out of scope: the financial processor
+(O3b), SQL/read seam (O4), capacity claims. Non-goals: changing any v1 byte, digest, fixture, parser behavior or migration.
 
 ## 2. Versioning (confirms P-3)
 
-New schema `calcify-finite-binding-v2`. v1 is frozen. A parser dispatches on the `schema` field **before** any other field is
-interpreted; an unknown schema is refused. There is no in-place upgrade: a v2 opening is a **new** registered opening with a
-new digest, never a rewrite of a v1 row. A run is bound to exactly one binding digest for its lifetime.
+New schema `calcify-finite-binding-v2`; v1 is frozen. Parsers dispatch on `schema` **before** interpreting any other field; an
+unknown schema is refused. There is no in-place upgrade: a v2 opening is a new registration with a new digest. A run is bound
+to exactly one binding digest for life. **A v2 run requires a fresh `sourceGeneration`** (the registry primary key is
+`(source_generation, role)`, so reusing a v1 generation would collide on the COMMAND/CAPTURE/OWNERSHIP/CAPTURE_CHANGELOG rows
+unless the topics were identical; v2 does not allow reuse).
 
 ## 3. Opening document (v2)
 
-v2 is the v1 opening plus a finance block. Every v1 field keeps its name, type and validation. Differences:
+v2 is the v1 opening plus a finance block; every v1 field keeps its name, type and validation except as listed.
 
 | Field | v1 | v2 |
 | --- | --- | --- |
 | `schema` | `calcify-finite-binding-v1` | `calcify-finite-binding-v2` |
-| `topics` | 5 entries, roles in fixed order `COMMAND, SOURCE, CAPTURE, OWNERSHIP, CAPTURE_CHANGELOG` | 8 entries, fixed order: the five above, then `CONTROL, FINANCE_DECISIONS, FINANCE_CHANGELOG` |
-| `financeApplicationId` | absent | required, operational text, distinct from `captureApplicationId` |
-| `financeStoreName` | absent | required, fixed `finite-finance` |
-| `financeStateVersion` | absent | required, fixed `calcify-finite-finance-state-v1` |
-| `financeConfigDigest` | absent | required, 64 lowercase hex: `FinanceConfig.digest()` of the pinned accounts and assets (O3a) |
-| `financeBudget` | absent | required decimal-string object `{captures, controls, settleAttempts, records}` = the pinned per-class limits (128, 8, 160, 296) |
-| `controlConsumerGroup`, `financeConsumerGroup` | absent | required, distinct from each other and from every v1 group |
-| `initialControlNextOffset`, `initialFinanceCaptureGroupNextOffset` | absent | required, genesis value `"0"` |
+| `topics` | exactly 5, roles in order `COMMAND, SOURCE, CAPTURE, OWNERSHIP, CAPTURE_CHANGELOG` | exactly 8: those five, then `CONTROL, FINANCE_DECISIONS, FINANCE_CHANGELOG` |
+| `financeApplicationId` | absent | operational text, distinct from `captureApplicationId` and from every group id, topic name and `matcherShardId` |
+| `financeStoreName` | absent | fixed `finite-finance` |
+| `financeStateVersion` | absent | fixed `calcify-finite-finance-state-v1` |
+| `openingAccountId` | absent | text, distinct from every `parties[].accountId` (the ledger's source of funds; O3a `FinanceConfig.openingAccount`) |
+| `financeConfigDigest` | absent | 64 lowercase hex; must equal the O3a `FinanceConfig.digest()` recomputed from the opening (section 4) |
+| `financeBudget` | absent | decimal-string object `{obligations, captures, settleAttempts, controls}` = `{"256","128","160","8"}`; the record bound (296 = 128 + 160 + 8) is **derived**, not stored |
+| `initialControlNextOffset`, `initialFinanceDecisionsNextOffset`, `initialFinanceCaptureNextOffset`, `initialFinanceControlNextOffset` | absent | decimal strings, genesis value `"0"` (topic end offsets for CONTROL and FINANCE_DECISIONS; the finance application group's next offsets on CAPTURE and CONTROL) |
 
-Rules carried over unchanged: strict duplicate-key detection, exact field sets (missing and unknown fields refused), decimal
-string spelling for numbers, UTF-8 strictness, party normalization, topic UUID spelling, all names and topic ids distinct,
-`FINANCE_CHANGELOG` name = `financeApplicationId + "-finite-finance-changelog"` (mirrors the v1 changelog-name rule), genesis
-offsets all zero, opening byte cap (v2 raises `openingBytes` cap to 24,576 and the budget hash covers it).
+There is **no separate finance or control consumer group**. The finance processor is one Kafka Streams application; its group
+id is `financeApplicationId` and it consumes both CAPTURE and CONTROL under that single group, committing both partitions'
+offsets, the history append and the decision publication in one transaction (section 8).
 
-The financial parties and assets are **derived, not duplicated**: accounts come from `parties[].accountId`, assets are
-`quoteCurrency` (cash) and `baseAssetId` (security), and the opening account id is a fixed reserved literal pinned in the
-spec of `financeConfigDigest` (see the O3a `FinanceConfig`); the digest binds them so a mismatch refuses activation.
+Carried over unchanged: strict duplicate-key detection, exact field sets (missing and unknown refused), decimal-string numbers,
+strict UTF-8, party normalization, topic UUID spelling, all names and ids distinct, genesis offsets zero.
+`FINANCE_CHANGELOG` name must equal `financeApplicationId + "-finite-finance-changelog"`.
 
-## 4. Canonical bytes and digest
+**Opening size.** The v1 hard caps stay: opening JSON and canonical bytes <= **16,384** (Go `finiteStrictJSON` cap, Kotlin
+`parseOpening`, boundary CHECKs, `openingBytes` budget), startup witness header <= 8,192 and wire <= 32,768. The v2 opening adds
+roughly 1.2 KB to a ~2.5 KB v1 fixture, well within 16,384; O3b must assert the measured v2 fixture and the v2 witness header
+fit these caps (acceptance item, section 12).
 
-`canonicalBytes()` for v2 = ASCII prefix `calcify-finite-binding-v2\0`, then **the v1 body algorithm unchanged** applied to the v2
-document (profile hash, budget hash, the seven framed strings, parties sorted, **all eight** topics framed name+id, the three
-ints, the nine v1 framed strings, the genesis byte, the four v1 initial offsets), then the finance suffix:
+## 4. Derived finance configuration and digest
+
+The processor derives its `FinanceConfig` from the opening and refuses on any mismatch with `financeConfigDigest`:
+
+- accounts = `parties[].accountId` (2 accounts, sorted by value inside the digest);
+- cash asset id = `quoteCurrency`; security asset id = `baseAssetId`;
+- opening account = `openingAccountId`;
+- limits = `financeBudget` (`maxObligations`, `maxCaptures`, `maxSettleAttempts`, `maxControls`).
+
+`FinanceConfig.digest()` is exactly: SHA-256 over `frame("calcify-finance-config-v1")`, `int32(accountCount)`, each sorted
+account `frame`, `frame(cash)`, `frame(security)`, `frame(opening)`, then `int32` of obligations, captures, settleAttempts,
+controls, where `frame(x)` = `int32(len(utf8))` big-endian followed by the bytes. This is pinned by an independent-encoder golden
+in `FinanceLedgerTest.digestsGenesisDecisionAndCheckpointMatchIndependentGoldens` (PR 494), so a Python reference can
+reproduce `financeConfigDigest` for the fixture. The ledger's genesis chain is derived from the config digest (O3a
+`genesisChain`), so **no genesis chain or sequence field is stored in the opening**: genesis history sequence is 0 and its chain
+head is `genesisChain`.
+
+## 5. Canonical bytes and digest
+
+`canonicalBytes()` for v2 = ASCII `calcify-finite-binding-v2\0`, then the **v1 body algorithm unchanged** over the v2 document
+(profile hash, budget hash, the seven framed strings, party count and sorted parties, **all eight** topic name+id frames, the
+three int32, the nine framed strings, the genesis byte `1`, the four v1 initial offsets), then the finance suffix:
 
 ```
-frame(financeApplicationId) frame(financeStoreName) frame(financeStateVersion) hex32(financeConfigDigest)
-int32(captures) int32(controls) int32(settleAttempts) int32(records)
-frame(controlConsumerGroup) frame(financeConsumerGroup) int64(initialControlNextOffset) int64(initialFinanceCaptureGroupNextOffset)
+frame(financeApplicationId) frame(financeStoreName) frame(financeStateVersion) frame(openingAccountId) hex32(financeConfigDigest)
+int32(obligations) int32(captures) int32(settleAttempts) int32(controls)
+int64(initialControlNextOffset) int64(initialFinanceDecisionsNextOffset) int64(initialFinanceCaptureNextOffset) int64(initialFinanceControlNextOffset)
 ```
 
-Digest = SHA-256 of those bytes. Because the prefix differs and the topic count is framed into the body, a v1 byte string can
-never collide with a v2 byte string. The v1 digest of the same run is **not** reused; operators must treat the two as
-different registrations.
+Digest = SHA-256 of those bytes. v1 and v2 byte strings can never collide **because the prefixes differ** (v1 body bytes always
+follow the v1 prefix); v1 does not frame a topic count, so the prefix is the only separator and the v2 body is not a
+prefix-extension of any v1 string. The v1 digest of the same run is not reused; operators treat them as different registrations.
 
-Golden plan: a Python reference encoder (independent of Go and Kotlin) produces the expected hex for the fixture
-`contracts/calcify/finite-binding-v2.json`; the Go parser and the Kotlin parser must each reproduce the digest and the full
-canonical hex. Mutation corpus: every field changed one at a time changes the digest; each reordered role, duplicate topic,
-missing finance field, extra field and v1/v2 schema confusion is refused.
+Golden plan: a Python reference encoder (independent of Go and Kotlin) produces the expected canonical hex and digest for
+`contracts/calcify/finite-binding-v2.json`; Go and Kotlin must each reproduce both. Mutation corpus: every field changed one at a
+time changes the digest; each reordered role, duplicate topic, missing/extra field, `financeConfigDigest` mismatch and v1/v2
+schema confusion is refused.
 
-## 5. Registry (`runtime.calcify_topic_identities`)
+## 6. Registration and registry
 
-Additive migration `0077`: replace the role CHECK with the set `{verified, output, COMMAND, CAPTURE, OWNERSHIP,
-CAPTURE_CHANGELOG, CONTROL, FINANCE_DECISIONS, FINANCE_CHANGELOG}` (same pattern as `0076`). `SOURCE` is deliberately absent
-from the CHECK today: per `0076` it remains a row in the source-generation registry, not a topic-identity role, and v2 keeps
-that. Existing rows unchanged. The
-registrar role gets no new privileges beyond inserting the new role values (see the [DB roles](CALCIFY_FINITE_P3_DB_ROLES.md));
-`scripts/dev/db/migrate.test.mjs` gains the new migration entry and a CHECK test that v1 role values still insert and an unknown
-role is refused.
+1. **Boundary migration `0014`** (replaces `boundary.calcify_finite_register`, which today raises unless
+   `o->>'schema' = 'calcify-finite-binding-v1'`): accept `calcify-finite-binding-v1` **or** `calcify-finite-binding-v2`, keep every
+   other check, and leave the table CHECKs at 16,384 (no raise, section 3). `begin_attempt`, `snapshot` and the remaining ten
+   functions are unchanged and must be proven to behave identically for a v2 row. The DB-roles doc function list gains the
+   changed signature note; `scripts/dev/db/migrate.test.mjs` gains the entry plus a test that a v1 registration still works and
+   an unknown schema is refused.
+2. **Runtime migration `0077`**: replace the `calcify_topic_identities` role CHECK with `{verified, output, COMMAND, CAPTURE,
+   OWNERSHIP, CAPTURE_CHANGELOG, CONTROL, FINANCE_DECISIONS, FINANCE_CHANGELOG}` (pattern of `0076`). `SOURCE` stays a row in the
+   source-generation registry, not a topic-identity role. Existing rows unchanged.
+3. No new Postgres role: no new component needs DB state (section 7). The registrar's privileges are unchanged.
 
-## 6. Application, store, and processor identity
+## 7. Control writer
 
-- `financeApplicationId`: Kafka Streams application id, distinct from `captureApplicationId`; its internal topics are named
-  from it and must not collide with the capture application's.
-- `financeStoreName`: `finite-finance`; per-entity keyed state (positions, executions, obligations, attempts, actions) with
-  separate keys, never a whole-state value (G9 lesson).
-- Consumer groups: `financeConsumerGroup` reads CAPTURE; `controlConsumerGroup` reads CONTROL. Offsets for both are committed
-  in the same Kafka transaction as the history append (section 8).
+**Decision: a separate small component, `FiniteControlWriter`, in platform-runtime, with its own Kafka principal and
+transactional id, no Postgres state, no extension of the ingress adapter.** Reason: the ingress adapter's authority and proof are
+built on the COMMAND stream; sharing its credential would let a COMMAND-topic principal write controls, and D4 says trading
+principals never fund or repair. (This resolves the control-writer placement question in the O3 packet section 5, item 2; it is
+unrelated to P-3 and P-4.)
 
-## 7. Control writer placement (resolves the O3 packet item P-3/P-4 question)
+Design:
 
-**Decision proposed: a separate small component, `FiniteControlWriter`, in platform-runtime, with its own principal and
-transactional id, not an extension of the finite ingress adapter.** Reasons: the ingress adapter's authority is the COMMAND
-stream and its isolation proof is built on that; sharing a principal would let a COMMAND-topic credential write controls, and
-D4 says trading principals never fund. The writer: authenticates an OPERATOR principal; maps a request to `FinanceInputV1`
-(`calcify_finance.proto`, PR 494) with `FinanceAuthorityV1.OPERATOR`; is idempotent by `ActionKey`; refuses beyond the control
-budget; publishes in a Kafka transaction with a deterministic transactional id; keys are null and partition is 0. It never
-writes COMMAND, SOURCE, CAPTURE or OWNERSHIP.
+- **Authentication**: only an authenticated OPERATOR principal may call it; the writer stamps `FinanceAuthorityV1.OPERATOR`
+  itself and never copies a caller-supplied authority. The concrete operator-auth mechanism is an O3b design item (**P-5**,
+  recorded in section 13) and must be a platform authority, not a request header the caller controls.
+- **Payload**: `FinanceInputV1` (`calcify_finance.proto`) for Fund and Settle (repair). The writer rejects a Capture (captures
+  come only from the CAPTURE topic).
+- **Durability without a database**: the CONTROL topic's read-committed log **is** the writer's state. On start and before each
+  publish it reads the CONTROL log (at most 8 funding records plus settle repairs, bounded by the 168-record control+repair
+  envelope), derives the set of `ActionKey`s already written and the count of controls, and refuses beyond the budget.
+- **Unknown outcome**: after a failed or timed-out transactional send, the writer re-reads the read-committed log; if the action
+  key is present the call returns the prior result, else it resends. The deterministic transactional id
+  (`<financeApplicationId>-control-writer`) fences zombie producers.
+- **No Postgres role**: the Kafka principal `calcify_finite_control` is distinct from every Postgres role in the
+  [DB roles](CALCIFY_FINITE_P3_DB_ROLES.md).
+- Never writes COMMAND, SOURCE, CAPTURE or OWNERSHIP; keys null, partition 0.
 
-Alternative considered and rejected: extend the ingress adapter. It would put control traffic behind the COMMAND-stream
-credential and reuse its admission state, weakening the exclusive-writer proof.
+Alternative rejected: extending the ingress adapter (shared credential and admission state weaken the exclusive-writer proof).
+The prior open question 1 (same process, separate principal) is closed as: separate component, because the same-process variant
+shares fault and memory domain with the COMMAND writer.
 
 ## 8. Determinism and restore cut (option B)
 
-The financial processor consumes CAPTURE and CONTROL. When it accepts an input it appends it to its own transactional history
-(a `FINANCE_DECISIONS` record carrying the O3a `Decision`) and commits both consumer offsets and the history append in **one**
-Kafka transaction. Order is therefore defined by the history, not by arrival.
+The processor consumes CAPTURE and CONTROL under one group. For each consumed record, in one Kafka transaction, it: assigns the
+next position in its own **history** (an entry `{position, input, sourceRole, sourcePartition, sourceOffset}` stored per entity in
+the keyed finance store), decides with the O3a ledger, publishes the `FinanceDecisionV1` (including `stateDigest`) to
+`FINANCE_DECISIONS`, and commits both input partitions' offsets. Order is defined by the history, not arrival. The spike
+([result](CALCIFY_FINITE_P3_B2_SPIKE_RESULT.md)) shows two interleavings both valid and each reproducible from its history.
 
-Restore cut = the tuple `(captureOffset, controlOffset, financeHistorySequence, financeChain)`:
+**Restore cut** = `(historyPosition, headDecision, captureNextOffset, controlNextOffset, bindingDigest)`:
 
-1. The cut names all four; any missing component refuses activation.
-2. `financeChain` must equal the head of the replayed `FINANCE_DECISIONS` history (O3a `restore(checkpoint, expectedChainHead)`
-   semantics); a checkpoint that does not sit at the trusted head is refused.
-3. Binding digest on the cut must equal the active v2 digest; a v1 digest on a v2 cut (or the reverse) refuses.
-4. Replay from the cut over the recorded history reproduces byte-equal decisions; re-consumption is never used to rebuild order.
-5. Offsets beyond the recorded history (consumed but not recorded) cannot exist by construction (single transaction); if
-   observed, activation refuses as `FINANCE_OFFSET_AHEAD_OF_HISTORY`.
+1. `headDecision` is the last record of the read-committed `FINANCE_DECISIONS` log after `verifyChain` succeeds over the whole
+   log from `genesisChain`; an empty log means genesis.
+2. The restored state must be the state committed by `headDecision.stateDigest`: O3a `restore(checkpoint, trustedHead)` refuses
+   any checkpoint whose recomputed state digest differs, so a forged but invariant-consistent state cannot be adopted (O3a review
+   2, P1-1).
+3. `bindingDigest` on the cut must equal the active v2 digest; a v1 digest on a v2 cut, or the reverse, refuses.
+4. **Offsets versus history.** Each history entry records its source role/partition/offset. Let `lastCapture` / `lastControl` be the
+   highest recorded source offsets. Activation refuses `FINANCE_OFFSET_AHEAD_OF_HISTORY` when a committed group next offset exceeds
+   `lastRecorded + 1` by more than the transaction-marker offsets in that gap, evaluated against `readCommittedEndOffset` (control
+   markers occupy offsets in read-committed topics, which is why the v1 witness already carries both end offsets). The inverse
+   (history ahead of committed offsets) is impossible by the single transaction and refuses as `FINANCE_HISTORY_AHEAD_OF_OFFSET`.
+5. Replay from the cut reproduces byte-equal decisions; re-consumption never rebuilds order.
 
-Spike S1-B2 tests items 3 and 5 against `TopologyTestDriver` before O3b begins.
+## 9. Isolation and ACL matrix
 
-## 9. Isolation and ACL proof pattern
+Principals: `calcify_finite_ingress` (existing COMMAND writer), `calcify_finite_capture` (existing capture Streams app),
+`calcify_finite_control` (new, section 7), `calcify_finite_finance` (new, the finance Streams app), operators (read only).
 
-Reuse the O2 pattern (`FiniteIngress`, role matrix, isolation proof):
-
-| Topic role | Writer principal | Reader principals |
+| Resource | Allowed | Everything else |
 | --- | --- | --- |
-| CONTROL | `calcify_finite_control` only | finance processor group |
-| FINANCE_DECISIONS | finance processor transactional id only | verifier/read seam (O4), operator |
-| FINANCE_CHANGELOG | finance Streams app (internal) only | finance Streams app |
+| CONTROL topic | Write: `control`; Read: `finance` | refused (incl. `ingress`, `capture`) |
+| FINANCE_DECISIONS | Write: `finance`; Read: `finance`, verifier/read seam (O4), operators | refused |
+| FINANCE_CHANGELOG and finance internal/repartition topics (prefix `financeApplicationId-`) | Read/Write/Create: `finance` | refused |
+| CAPTURE topic | Write: `capture` (unchanged); Read: `finance`, `capture` | `finance` and `control` cannot write |
+| TransactionalId `<financeApplicationId>-control-writer` | `control` | refused |
+| TransactionalId prefix `financeApplicationId` | `finance` | refused |
+| Group `financeApplicationId` | Read: `finance` | refused |
 
-Proof: a negative test per pair (every other principal's produce attempt is refused by the broker), plus detection that the
-CONTROL topic cannot be written by the ingress principal. DB side: the registrar role registers the three new roles; no
-financial role can write the capture identities.
+Proof (extends the O2 pattern): a negative produce/consume test for every denied principal-resource pair in the table, plus
+tests that the `ingress` and `capture` principals cannot write CONTROL/FINANCE_*, that `finance` cannot write CAPTURE or
+COMMAND, and the transactional-id fencing test. DB side: nothing new.
 
-## 10. Parser plan
+## 10. Parser plan and startup witness
 
-- Go: `services/matching-engine/internal/streamdirect/calcify_finite_binding.go` gains `ParseFiniteBindingV2`, dispatch by
-  schema; v1 path untouched; shared validators extracted without changing v1 behavior (v1 golden test must still pass byte for byte).
-- Kotlin: `FiniteBindingContract.kt` gains a v2 opening type and `canonicalBytes()` v2; `roles` stays the v1 list and a new
-  `rolesV2` is introduced; the startup witness for v2 adds the three ranges and the two new group cuts (`finite-startup-v2`).
-- Cross-check: Go, Kotlin and the Python reference all agree on the fixture digest and canonical hex.
+- Go `services/matching-engine/internal/streamdirect/calcify_finite_binding.go`: `ParseFiniteBindingV2` and dispatch by schema;
+  v1 path untouched. Kotlin `FiniteBindingContract.kt`: v2 opening type and `canonicalBytes()`.
+- **Explicit v2 validators** (the v1 code hard-codes these, so each needs a v2 variant): `topics.size == 8` and 8 distinct names and
+  ids; `roles` list of eight in the section 3 order; changelog-name checks at **index 4 (capture) and index 7 (finance)**;
+  `openingFields` exact set including the new fields; per-field text validation for all new fields; `financeApplicationId`,
+  `openingAccountId` distinctness rules; `financeConfigDigest` recomputation; fixed `financeStoreName` / `financeStateVersion`; the
+  `limits[]` budget array unchanged.
+- **Startup witness `calcify-finite-startup-v2`**: `opening` (v2), `run`, `cuts`, `journal` as v1, with `cuts.ranges` extended to 8
+  entries in role order (`role, partition, beginningOffset, endOffset, readCommittedEndOffset`, same invariants
+  `begin <= committed <= end`), and `cuts.financeGroup = {groupId, captureNextOffset, controlNextOffset}` with `groupId ==
+  financeApplicationId` (v1's `commandGroup` and `captureSourceGroup` retained). Wire cap 32,768 and header cap 8,192 unchanged;
+  O3b measures the v2 witness against them.
 
 ## 11. Refusal rules (activation)
 
-Refuse (fail closed, no run state mutated) when: schema unknown or v1/v2 confused; any v2 field missing, unknown or
-duplicated; role order differs; any topic name or id duplicates another; `financeConfigDigest` does not match the digest the
-processor computes from the opening's parties and assets; finance budgets differ from the compiled O3a limits; CONTROL or
-FINANCE topics exist with non-empty content at genesis; restore cut incomplete or binding digest mismatched; broker topic
-UUID differs from the registry.
+Refuse, with no run state mutated, when: schema unknown or v1/v2 confused; any v2 field missing, unknown or duplicated; role order
+differs; any topic name or id duplicates another; `financeConfigDigest` does not equal the digest recomputed from the opening;
+budgets differ from the compiled O3a limits (256/128/160/8); `openingAccountId` collides with a party account; CONTROL or
+FINANCE topics non-empty at genesis, or a genesis offset is not zero; the source generation is already registered for another
+binding; the restore cut is incomplete, mismatched or violates section 8; broker topic UUID differs from the registry.
 
-## 12. Test plan (O3b implementation)
+## 12. Test plan (O3b)
 
-1. Golden and mutation corpus (section 4) in Go and Kotlin.
-2. Migration `0077` CHECK test and `migrate.test.mjs` entry.
-3. v1 regression: all O1/O2 tests pass unchanged; v1 fixtures keep their digests.
-4. Isolation matrix (section 9) on the real broker harness.
-5. Restore-cut refusal table (section 8).
-6. Determinism spike results (S1-B2) attached to the O3b design.
+1. Golden and mutation corpus (section 5) in Go and Kotlin against the Python reference.
+2. Boundary `0014` and runtime `0077` migration tests; v1 registration regression.
+3. v1 regression: all O1/O2 tests unchanged; v1 fixtures keep their digests.
+4. Size acceptance: v2 fixture <= 16,384 bytes; v2 witness header <= 8,192 and wire <= 32,768 with a full journal.
+5. Isolation matrix (section 9) on the real broker harness, including producer fencing.
+6. Restore-cut refusal table (section 8), including a forged-but-consistent checkpoint and the offset/history gap with markers.
+7. Real-broker crash test between poll and commit (the atomicity limit recorded in the spike result).
 
-## 13. Open questions for the docs review
+## 13. Open items and decisions for the re-review
 
-1. Is a separate `FiniteControlWriter` accepted, or should the control path ride the ingress adapter's process with a separate
-   principal (same isolation, less code)?
-2. Raise the `openingBytes` cap to 24,576 as proposed, or hold at 16,384 and trim fields?
-3. `records = 296` (128 + 160 + 8) versus the contract's 320 history records: confirm 296 or restore 320 as the record bound.
-4. Should `financeConfigDigest` include the opening account id literal, or is a fixed reserved id acceptable?
+Decided here (confirm in review): fresh source generation for v2; separate control writer with no database; single finance group
+`financeApplicationId`; openingBytes held at 16,384; 296 (derived) as the ledger record bound under the packet's 320 envelope
+(captures are in practice also limited by the v1 budget of 8 trades).
+
+Open: **P-5** operator authentication mechanism for the control writer (platform admin authority; O3b design); whether history
+entries live in the changelog-backed store or a dedicated role (decided in the O3b design review, constraint: per-entity keys, no
+whole-state value).
+
+## 14. Review 1 disposition
+
+| Finding | Disposition |
+| --- | --- |
+| P0-1 registration | Fixed: boundary `0014` (section 6) |
+| P0-2 opening size | Fixed: hold 16,384; witness caps retained (section 3, 10, 12.4) |
+| P0-3 config digest | Fixed: explicit `openingAccountId`, asset mapping, `maxObligations`, exact recomputation (section 4) |
+| P1-1 false topic-count claim | Fixed (section 5) |
+| P1-2 consumer groups | Fixed: single group = application id (section 3, 8) |
+| P1-3 genesis anchoring | Fixed: derived genesis chain, explicit topic and group genesis offsets (sections 3, 4) |
+| P1-4 offset-ahead rule | Fixed: history records source offsets; marker-aware rule (section 8.4) |
+| P1-5 control writer state | Fixed: topic-as-state, recovery algorithm, fencing, no PG role (section 7); P-5 open |
+| P2-1 generation scope | Fixed (section 2) |
+| P2-2 validators | Fixed (section 10) |
+| P2-3 budgets | Fixed: derived 296 under 320 envelope (sections 3, 13) |
+| P2-4 ACL | Fixed (section 9) |
+| P2-5 witness v2 | Fixed (section 10) |
