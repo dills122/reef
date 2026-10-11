@@ -162,7 +162,7 @@ complete proof published. O2 (durable finite ingress, binding, stop/drain, same-
 restore, live capture wiring; opt-in, off by default) merged in PR488 after independent
 reviews 2 and 3 returned "Ready with non-blocking follow-ups"; its G1-G8/G10 live
 evidence is not yet independently replayed. O3a (pure typed unreserved gross DvP ledger
-model) is merged unreviewed and unwired. [Program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md)
+model) is merged and unwired; its independent review 1 of 3 returned "Ready with non-blocking follow-ups". [Program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md)
 owns the current state and next work. No financial authority or capacity qualification follows.
 
 ## Source map

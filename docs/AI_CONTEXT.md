@@ -12,6 +12,7 @@ higher authority than source, tests, accepted decisions, and recorded evidence.
 | Current work/status | [Work plan](WORK_PLAN.md), source/tests and latest relevant evidence | Records only when dated comparison or prior rationale is needed |
 | Throughput | [Throughput ledger](THROUGHPUT_BASELINES.md), [measured run selector](LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need), [Performance Learnings](PERFORMANCE_LEARNINGS.md), active scaling plan | Original success and failure artifacts for the exact profile; distinguish venue-core from full-projection claims |
 | Arena release | [Release readiness](BOT_ARENA_RELEASE_READINESS.md) | [Invite preview sprint](BOT_ARENA_INVITE_PREVIEW_SPRINT.md), current code and hosted run artifacts |
+| Calcify | [Program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md), then the [Calcify map](README.md#calcify-map) for the task's contract (finite source contract, O3 packet, role definition) | Evidence and research only when a claim cites them; handoffs and the [history log](work/CALCIFY_HISTORY_LOG.md) are history, not tasks. No financial-authority, credit or capacity claim without its own evidence and an owner decision |
 | Post-trade | [Post-match standards](POST_MATCH_STANDARDS.md), [Work plan](WORK_PLAN.md) | Relevant settlement contracts and remaining lifecycle sprint |
 
 ## Context budget rules

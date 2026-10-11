@@ -1,8 +1,11 @@
 # Handoff: Calcify sprint1 bounded proof and remaining qualification
 
+> **Status (October 11, 2026): historical handoff.** Financial sprint 1 (E0-E4) is complete as test-only evidence; continuation is in the
+> [program plan](../CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md). Open items below describe the October 4-9 state.
+
 ## Current continuation — October9, 2026
 
-[Current work](../../WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
+[Current work](../../work/CALCIFY_HISTORY_LOG.md#calcify-finite-p0-source-gate--october-7-2026)
 owns execution status. Reef473/474/475/477/478/479 and Records6–10 merged;
 Records10 landed October7 at `1419b7e0`. Bounded E1/E3 correctness and recovery
 proofs remain test-only. October6 empirical E4 completed150000 settlements and
@@ -31,7 +34,7 @@ Required CI passed. Records PR6 was open at this checkpoint; pinned proof commit
 
 ## Historical October5 E4 continuation
 
-Branch `codex/calcify-e4-readiness`, base `29a8926d`. [Current work](../../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
+Branch `codex/calcify-e4-readiness`, base `29a8926d`. [Current work](../../work/CALCIFY_HISTORY_LOG.md#calcify-e4-continuation--october-5-2026)
 owns latest status. Attempt1 bounded diagnostic code: financial97/97, NodeCI274/274,
 independent Attempt1 cycle3 Ready. Same-candidate49 E3 arms pass; actual proof
 and unchanged original are retained separately from lossless bounded export.
@@ -98,7 +101,7 @@ Final integrated review Ready; M0 Attempt2 cycle3, M1 Attempt1 cycle3,
 M2 Attempt1 cycle2; no findings. [New proof](https://github.com/dills122/reef-records/tree/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75) and [review](https://github.com/dills122/reef-records/blob/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75/integration-review/final2-review/report.md)
 published at `ed6faadf`; all1358 remote bytes/hash entries verified.
 [Records PR7](https://github.com/dills122/reef-records/pull/7) draft; landing pending, no tracked bulk removed. See
-[current execution status](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026).
+[current execution status](../../work/CALCIFY_HISTORY_LOG.md#calcify-e3-continuation--october-5-2026).
 
 ## OCR follow-up
 

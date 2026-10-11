@@ -1522,7 +1522,7 @@ Fixed 8GiB permission retains workload/disk limits, changes no kernel/reference
 algorithm. User authorized one extra review; review4of4 code/concrete envelope Ready.
 Original failures, frozen identities, cleanup and forensic receipts published
 in [immutable closed proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d); exact source bytes and journal reassembly
-verified. Local raw session retained until archive lands; no tracked originals removed. Current execution owner: [work plan](WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc).
+verified. Local raw session retained until archive lands; no tracked originals removed. Current execution owner: [work plan](work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc).
 
 
 Arm5 fixed 8GiB/fresh cluster strict sample03:06:14.705Z; closed03:10:21.499Z.

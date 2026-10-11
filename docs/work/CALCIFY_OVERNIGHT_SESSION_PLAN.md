@@ -1,5 +1,9 @@
 # Calcify documentation review and overnight session plan
 
+> **Status (October 11, 2026): executed; historical.** O0-O2 were delivered and merged (PR485, PR488). O3 onward is governed by the
+> [O3 packet](CALCIFY_FINITE_P3_O3_PACKET.md) and the [program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md). Its dispatch,
+> review-cap and spike process remains the working template; its schedule and open-task lists are not current.
+
 Review date: October 9, 2026, America/Toronto. Baseline:
 `51cd90eee43d257bad4f973fc9bd81f273bb4ef7`. GitHub comparison confirms remote
 `master` identical to baseline; [PR479](https://github.com/dills122/reef/pull/479)

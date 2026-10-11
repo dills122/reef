@@ -37,6 +37,10 @@ scope, not an instruction to reopen old work.
 - Current work: `docs/WORK_PLAN.md`, current source/tests and latest relevant
   evidence. Board alignment dates bound status claims; verify newer changes.
   Fetch historical snapshots from Records only when task needs dated comparison.
+- Calcify: [program status and sprint plan](docs/work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md), then the
+  [Calcify map](docs/README.md#calcify-map) for the task's contract. Handoffs, the history log and dated research are evidence,
+  not tasks. Make no financial-authority, credit or capacity claim without its own evidence and an owner decision; use
+  fresh-context independent review (3-instance cap) and replay hosted-CI steps in a clean checkout before pushing.
 - Throughput: first read `docs/THROUGHPUT_BASELINES.md`, original relevant
   success and failure artifacts, `docs/PERFORMANCE_LEARNINGS.md`, and active
   scaling plan. State baseline, code/config/workload/measurement differences,

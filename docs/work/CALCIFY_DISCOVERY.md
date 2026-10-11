@@ -1,5 +1,9 @@
 # Calcify — post-match redesign discovery
 
+> **Status (October 11, 2026): superseded; historical.** Discovery concluded; Phase 1/2 are implemented ([overview](../CALCIFY_PHASES_OVERVIEW.md))
+> and direction is in the [proposed RFC](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) and [program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md).
+> The "in progress" status below is the September 28 record, kept for the questions it captured.
+
 Recorded status: discovery in progress; Phase 1 outline and match-commitment meaning agreed, implementation details open.
 Recorded: 2026-09-28 America/Toronto (2026-09-29 UTC).
 Base: `origin/master` at `368a9247b31c8997c5dd9f51aeb88a911adebfe7` (rollback PR #428 merged).

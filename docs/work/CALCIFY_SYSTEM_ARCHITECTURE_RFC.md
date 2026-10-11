@@ -2,7 +2,22 @@
 
 Date: October 2, 2026. Status: **proposed, awaiting proofs and owner decisions**.
 Source baseline: `16e15340919bc9330afbbfec0f9b089115f3e57f` (master after #461).
-No runtime implementation or accepted ADR change accompanies this RFC.
+No runtime implementation or accepted ADR change accompanied this RFC at publication; the snapshot below shows what has
+since landed. It is a status index, not an acceptance: the RFC remains **proposed**.
+
+**Implementation status snapshot (October 11, 2026; [program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md) owns detail):**
+
+| RFC area | State |
+| --- | --- |
+| 5.1 Source extension (typed lifecycle facts) | Implemented at finite scale: O1, PR485 (merged, independently reviewed) |
+| 5.2 Bounded gate with closure path | Finite P0 (PR479) and O2 durable ingress/stop-drain/restore (PR488, merged, reviewed); live G1-G8/G10 replay open |
+| 5.3 Durable input and arbitration | Decided, not built: O3 D7 option B (order recorded in the financial processor's own history; needs binding v2) |
+| 6.1 Pure decision and reconstruction | Test-only kernel (E1) as reference; **O3a** typed pure ledger merged (PR491), unreviewed and unwired |
+| 6.2 Small business model | Unreserved gross DvP decided for O3 (D2); reservations/credit are a separate proposal awaiting calibration and an owner decision |
+| 6.4 Logical time and continuations | Out of O3 scope (not in the finite fixture) |
+| 7 SQL reads, APIs | Planned as O4; not started |
+| 8 Recovery, retention | Same-binding restore proven for finite O2; aged-state recovery is the open 10k gate (warm-restart proof pending) |
+| 10 Proof plan | E0-E4 test-only experiments complete; E4 timed settlement target missed; single-server pressure test and arena goalpost added (PR490) |
 
 October9 source alignment: bounded test-only E1/E3 proofs and empirical E4 now
 recorded in [financial checkpoint](../evidence/calcify-financial-sprint1/README.md).
@@ -772,7 +787,7 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
+**Status:** [Current work checkpoint](../work/CALCIFY_HISTORY_LOG.md#calcify-finite-p0-source-gate--october-7-2026)
 and [focused verification](../evidence/calcify-financial-sprint1/README.md) own execution status;
 E0 preparation history remains linked from evidence. Acceptance gates below unchanged.
 Decision owner: Reef project owner. Planning checkpoint:
@@ -942,7 +957,7 @@ and complete committed-result replay. Initial finite bootstrap is1000 settled
 trades plus100 pending,0 aged identities. Its strict heap/record/client/journal
 limits authorize empirical diagnostic only; sampled averages are not conservative
 upper bounds. Current-candidate49-arm E3 proof and frozen reviewed source/build/
-classpath/config/cluster identities remain prerequisites. [Current checkpoint](../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
+classpath/config/cluster identities remain prerequisites. [Current checkpoint](../work/CALCIFY_HISTORY_LOG.md#calcify-e4-continuation--october-5-2026)
 owns execution status, distinct from implementation review.
 
 Ordinary-shape bounded bootstrap passed complete raw owner/history parity,
@@ -975,7 +990,7 @@ Existing768MiB policy and1000/100 managed-restart
 proof retain their original gates and scope. Prior49-arm correctness is reused
 only for unchanged kernel/managed-adapter source; timed cohort does not gain
 new managed-restart qualification. User direction excludes further test-reference
-memory optimization. [Current sprint exit work](../WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
+memory optimization. [Current sprint exit work](../work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
 owns run outcomes and next finite P3 acceptance slice.
 
 Prior Java21/768MiB two-owner model refuses smallest150000-trade ordinary arm:
