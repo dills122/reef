@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Mutation check for the Calcify O3a finance ledger (docs/work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md, S1-A1).
 // Applies one source mutation at a time under --root, runs the finance tests, and reports which mutants the tests kill.
-// Test-support tooling only: slow (one Gradle run per mutant), local, never required in CI.
+// Test-support tooling only: one Gradle run per mutant (reuses a Gradle daemon; run it on a scratch worktree), local, never required in CI.
 //   node scripts/dev/calcify-financial/research/finance-mutation-check.mjs [--root <checkout>] [--min-kill 0.95] [--only <substring>] [--list]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -96,7 +96,7 @@ function main() {
     try {
       writeFileSync(path, original.replace(from, to));
       const r = spawnSync('./services/platform-runtime/gradlew',
-        ['--no-daemon', '-p', 'services/platform-runtime', 'test', '--tests', 'com.reef.platform.calcify.finance.*', '-x', 'jacocoTestReport', '-q'],
+        ['-p', 'services/platform-runtime', 'test', '--tests', 'com.reef.platform.calcify.finance.*', '-x', 'jacocoTestReport', '-q'],
         { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
       const status = classify(r);
       results.push({ name, status }); console.log(status.padEnd(14), name);
