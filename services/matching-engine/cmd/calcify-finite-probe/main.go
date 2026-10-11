@@ -826,7 +826,10 @@ func execute(ctx context.Context, q request) (receipt, error) {
 		return r, nil
 	}
 	if q.Mode == "wire-fit" {
+		// Package-global: restore so nothing else in this process inherits the enlarged request ceiling.
+		previousMaxRequestSize := sarama.MaxRequestSize
 		sarama.MaxRequestSize = 6307840 + 1024
+		defer func() { sarama.MaxRequestSize = previousMaxRequestSize }()
 	}
 	c, err := sarama.NewClient([]string{"broker:9092"}, kafkaConfig(q))
 	if err != nil {
