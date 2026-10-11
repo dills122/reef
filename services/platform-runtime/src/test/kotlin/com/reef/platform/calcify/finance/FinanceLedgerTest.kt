@@ -243,6 +243,16 @@ class FinanceLedgerTest {
             val e = assertFailsWith<IllegalArgumentException>(name) { ledger.restore(ledger.checkpoint(forged), head) }
             assertTrue(e.message!!.contains("committed by the trusted head"), "$name: ${e.message}")
         }
+        // The chain head is outside the state digest, so it is bound separately: same content under a different chain is refused,
+        // and so is a head decision whose own checksum does not verify even when the state names it.
+        val rechained = s.copy(chain = "e".repeat(64))
+        val e1 = assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(rechained), head) }
+        assertTrue(e1.message!!.contains("trusted history head"), e1.message)
+        val badHead = head.copy(checksum = "0".repeat(64))
+        val e2 = assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(s.copy(chain = badHead.checksum)), badHead) }
+        assertTrue(e2.message!!.contains("trusted head does not verify"), e2.message)
+        val shifted = s.copy(sequence = s.sequence + 1)
+        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(shifted), head) }
         // Genesis: minting cash into the empty state is refused too.
         val mint = ledger.genesis().copy(positions = mapOf((buyer to usd) to 99L, (opening to usd) to -99L))
         assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(mint), null) }
