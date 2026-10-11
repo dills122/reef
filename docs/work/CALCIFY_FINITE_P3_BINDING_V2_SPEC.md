@@ -68,8 +68,9 @@ missing finance field, extra field and v1/v2 schema confusion is refused.
 ## 5. Registry (`runtime.calcify_topic_identities`)
 
 Additive migration `0077`: replace the role CHECK with the set `{verified, output, COMMAND, CAPTURE, OWNERSHIP,
-CAPTURE_CHANGELOG, CONTROL, FINANCE_DECISIONS, FINANCE_CHANGELOG}` (same pattern as `0076`; `SOURCE` is intentionally the
-existing pre-registered case, check against the live constraint during implementation). Existing rows unchanged. The
+CAPTURE_CHANGELOG, CONTROL, FINANCE_DECISIONS, FINANCE_CHANGELOG}` (same pattern as `0076`). `SOURCE` is deliberately absent
+from the CHECK today: per `0076` it remains a row in the source-generation registry, not a topic-identity role, and v2 keeps
+that. Existing rows unchanged. The
 registrar role gets no new privileges beyond inserting the new role values (see the [DB roles](CALCIFY_FINITE_P3_DB_ROLES.md));
 `scripts/dev/db/migrate.test.mjs` gains the new migration entry and a CHECK test that v1 role values still insert and an unknown
 role is refused.
