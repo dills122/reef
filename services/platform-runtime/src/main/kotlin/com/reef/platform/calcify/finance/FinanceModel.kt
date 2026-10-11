@@ -59,8 +59,9 @@ internal sealed interface FinanceInput {
                        val quantity: Long, val priceNanos: Long) : FinanceInput
     data class Fund(override val action: ActionKey, val authority: Authority, val account: AccountId, val asset: AssetId,
                     val amount: Long) : FinanceInput
-    /** [attempt] is a caller-chosen ordinal; each (execution, attempt) is evaluated at most once. */
-    data class Settle(override val action: ActionKey, val execution: ExecutionKey, val attempt: Int) : FinanceInput
+    /** Repair is an operator control (D4): [authority] must be OPERATOR, so trading principals cannot burn the attempt budget.
+     *  [attempt] is a caller-chosen ordinal; each (execution, attempt) is evaluated at most once. */
+    data class Settle(override val action: ActionKey, val authority: Authority, val execution: ExecutionKey, val attempt: Int) : FinanceInput
 
     fun canonical(): ByteArray = Canon.bytes {
         str("calcify-finance-input-v1")
@@ -68,7 +69,7 @@ internal sealed interface FinanceInput {
         when (val i = this@FinanceInput) {
             is Capture -> { str("CAPTURE"); execution(i.execution); str(i.buyer.value); str(i.seller.value); long(i.quantity); long(i.priceNanos) }
             is Fund -> { str("FUND"); str(i.authority.name); str(i.account.value); str(i.asset.value); long(i.amount) }
-            is Settle -> { str("SETTLE"); execution(i.execution); int(i.attempt) }
+            is Settle -> { str("SETTLE"); str(i.authority.name); execution(i.execution); int(i.attempt) }
         }
     }
     fun digest(): String = Canon.sha(canonical())
@@ -113,7 +114,9 @@ internal data class FinanceState(
 
 internal data class Decision(
     val sequence: Long, val action: ActionKey, val inputDigest: String, val disposition: Disposition,
-    val legs: List<Leg>, val priorChain: String, val checksum: String,
+    val legs: List<Leg>, val priorChain: String,
+    /** SHA-256 of the state this decision produced, excluding the chain head (which is this decision's checksum). Commits state to the chain. */
+    val stateDigest: String, val checksum: String,
 ) {
     init { require(!disposition.neverRecorded) { "non-recorded disposition in decision" } }
 }

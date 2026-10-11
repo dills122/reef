@@ -2,7 +2,7 @@
 // Mutation check for the Calcify O3a finance ledger (docs/work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md, S1-A1).
 // Applies one source mutation at a time under --root, runs the finance tests, and reports which mutants the tests kill.
 // Test-support tooling only: one Gradle run per mutant (reuses a Gradle daemon; run it on a scratch worktree), local, never required in CI.
-//   node scripts/dev/calcify-financial/research/finance-mutation-check.mjs [--root <checkout>] [--min-kill 0.95] [--only <substring>] [--list]
+//   node scripts/dev/calcify-financial/research/finance-mutation-check.mjs --root <scratch checkout> [--min-kill 0.95] [--only <substring>] [--list]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
@@ -28,18 +28,23 @@ export const MUTANTS = [
   ['no share check', LEDGER, 'd.position(execution.seller, security) < obligation.shareResidual -> Disposition.INSUFFICIENT_SHARES', 'false -> Disposition.INSUFFICIENT_SHARES'],
   ['no priorChain verify', LEDGER, 'd.priorChain != prior', 'false'],
   ['no sequence verify', LEDGER, 'd.sequence != sequence + 1 || ', ''],
-  ['restore skips invariants', LEDGER, '        checkInvariants(checkpoint.state)\n', ''],
-  ['restore skips head binding', LEDGER, 'require(checkpoint.state.chain == expectedChainHead)', 'require(true)'],
-  ['restore skips checksum', LEDGER, 'require(Canon.sha(stateBytes(checkpoint.state)) == checkpoint.checksum)', 'require(true)'],
+  ['restore skips invariants', LEDGER, '        checkInvariants(state)\n', ''],
+  ['restore skips head binding', LEDGER, 'require(state.chain == trustedHead.checksum && state.sequence == trustedHead.sequence)', 'require(true)'],
+  ['restore skips checksum', LEDGER, 'require(Canon.sha(stateBytes(state, includeChain = true)) == checkpoint.checksum)', 'require(true)'],
+  ['restore skips state commitment', LEDGER, 'require(stateDigest(state) == trustedHead.stateDigest)', 'require(true)'],
+  ['restore skips head verification', LEDGER, 'require(trustedHead.checksum == Canon.sha(', 'require(true || trustedHead.checksum == Canon.sha('],
+  ['restore accepts any state at genesis', LEDGER, 'require(state == genesis())', 'require(true)'],
   ['duplicate compare ignores price', LEDGER, 'if (old == captured)', 'if (old.quantity == captured.quantity)'],
   ['insufficient attempt not recorded', LEDGER, 'd.attempts[attemptKey] = status; return', 'return'],
   ['no asset check on fund', LEDGER, '(i.asset != cash && i.asset != security) || ', ''],
-  ['no authority check', LEDGER, 'if (i.authority != Authority.OPERATOR) return Eval(Disposition.UNAUTHORIZED)', ''],
+  ['no fund authority check', LEDGER, 'if (i.authority != Authority.OPERATOR) return Eval(Disposition.UNAUTHORIZED)\n        if (i.account', 'if (i.account'],
+  ['no settle authority check', LEDGER, 'Eval {\n        if (i.authority != Authority.OPERATOR) return Eval(Disposition.UNAUTHORIZED)\n        val obligation', 'Eval {\n        val obligation'],
   ['no ALREADY_SETTLED', LEDGER, 'if (obligation.status == ObligationStatus.SETTLED) return Eval(Disposition.ALREADY_SETTLED)', ''],
   ['no per-asset balance check', LEDGER, 'check(sum.signum() == 0) { "legs do not balance for asset" }', ''],
   ['settle leg amount off by one', LEDGER, 'Leg(execution.seller, cash, obligation.cashResidual)', 'Leg(execution.seller, cash, obligation.cashResidual - 1)'],
   ['digest omits authority', MODEL, 'str(i.authority.name); ', ''],
-  ['digest omits attempt', MODEL, 'str("SETTLE"); execution(i.execution); int(i.attempt)', 'str("SETTLE"); execution(i.execution)'],
+  ['digest omits attempt', MODEL, 'execution(i.execution); int(i.attempt)', 'execution(i.execution)'],
+  ['settle digest omits authority', MODEL, 'str("SETTLE"); str(i.authority.name); ', 'str("SETTLE"); '],
   ['unchecked add', LEDGER, 'Math.addExact(updated[key] ?: 0L, leg.amount)', '(updated[key] ?: 0L) + leg.amount'],
   ['unchecked multiply', LEDGER, 'Math.multiplyExact(i.quantity, i.priceNanos)', 'i.quantity * i.priceNanos'],
   ['no negative-position check', LEDGER, 'check(key.first == config.openingAccount || value >= 0)', 'check(true)'],
@@ -49,7 +54,9 @@ export const MUTANTS = [
   ['decision checksum omits legs', LEDGER, 'int(legs.size); legs.forEach { leg(it) }', 'int(0)'],
   ['state bytes omit actions', LEDGER, 'int(actions.size); actions.forEach', 'int(0); actions.take(0).forEach'],
   ['state bytes omit attempts', LEDGER, 'int(attempts.size); attempts.forEach', 'int(0); attempts.take(0).forEach'],
-  ['state bytes omit chain', LEDGER, 'long(s.sequence); str(s.chain)', 'long(s.sequence)'],
+  ['state bytes omit chain', LEDGER, 'if (includeChain) str(s.chain)', ''],
+  ['state digest includes chain', LEDGER, 'stateBytes(s, includeChain = false)', 'stateBytes(s, includeChain = true)'],
+  ['decision omits state digest', LEDGER, 'long(sequence); str(stateDigest)', 'long(sequence)'],
   ['canonical framing removed', MODEL, 'out.writeInt(b.size); out.write(b)', 'out.write(b)'],
   ['config allows shared opening account', MODEL, 'require(openingAccount !in accounts) { "opening account must be distinct" }', ''],
   ['config allows identical assets', MODEL, 'require(cashAsset != securityAsset) { "distinct assets" }', ''],
@@ -71,6 +78,13 @@ export const MUTANTS = [
   ['genesis not bound to config', LEDGER, 'str("calcify-finance-genesis-v1"); str(config.digest())', 'str("calcify-finance-genesis-v1")'],
   ['decision accepts non-recorded disposition', MODEL, 'init { require(!disposition.neverRecorded) { "non-recorded disposition in decision" } }', ''],
   ['action record accepts non-recorded disposition', MODEL, 'init { require(!disposition.neverRecorded) { "non-recorded disposition in action record" } }', ''],
+  ['no position-asset invariant', LEDGER, 'check(key.second == cash || key.second == security)', 'check(true)'],
+  ['no never-recorded action invariant', LEDGER, 'check(state.actions.values.all { it.disposition in recordedDispositions })', 'check(true)'],
+  ['no captures==executions invariant', LEDGER, 'check(state.actions.values.count { it.disposition == Disposition.CAPTURED } == state.executions.size)', 'check(true)'],
+  ['no settle-actions==attempts invariant', LEDGER, 'check(state.actions.values.count { it.disposition in settleDispositions } == state.attempts.size)', 'check(true)'],
+  ['no attempt-execution invariant', LEDGER, 'check(attempt.second >= 1 && attempt.first in state.executions)', 'check(true)'],
+  ['no attempt-disposition invariant', LEDGER, 'check(disposition in settleDispositions)', 'check(true)'],
+  ['no settled-attempt invariant', LEDGER, 'check(settledAttempts == if (obligation.status == ObligationStatus.SETTLED) 1 else 0)', 'check(true)'],
   ['fund overflow recorded', LEDGER, 'if (it.disposition == Disposition.FUNDED) it.copy(recorded = true) else it', 'it.copy(recorded = true)'],
 ];
 
@@ -84,21 +98,27 @@ function classify(r) {
 }
 
 function main() {
-  const root = resolve(arg('--root', process.cwd()));
+  const rootArg = arg('--root', '');
+  if (!rootArg && !process.argv.includes('--list')) { console.error('--root <scratch checkout> is required: mutants edit files in place'); process.exit(2); }
+  const root = resolve(rootArg || process.cwd());
   const only = arg('--only', '');
   const minKill = Number(arg('--min-kill', '0.95'));
   const list = MUTANTS.filter(([name]) => name.includes(only));
   if (process.argv.includes('--list')) { for (const [name] of list) console.log(name); return; }
   const results = [];
+  const gradle = (cwd) => spawnSync('./services/platform-runtime/gradlew',
+    ['-p', 'services/platform-runtime', 'test', '--tests', 'com.reef.platform.calcify.finance.*', '-x', 'jacocoTestReport', '-q'],
+    { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const baseline = gradle(root);
+  if (baseline.status !== 0) { console.error('baseline (unmutated) run is not green; refusing to score mutants'); console.error(`${baseline.stdout ?? ''}${baseline.stderr ?? ''}`.slice(-2000)); process.exit(2); }
+  console.log('baseline green');
   for (const [name, file, from, to] of list) {
     const path = join(root, file);
     const original = readFileSync(path, 'utf8');
     if (!original.includes(from)) { results.push({ name, status: 'NOT_APPLICABLE' }); console.log('NOT_APPLICABLE', name); continue; }
     try {
       writeFileSync(path, original.replace(from, to));
-      const r = spawnSync('./services/platform-runtime/gradlew',
-        ['-p', 'services/platform-runtime', 'test', '--tests', 'com.reef.platform.calcify.finance.*', '-x', 'jacocoTestReport', '-q'],
-        { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      const r = gradle(root);
       const status = classify(r);
       results.push({ name, status }); console.log(status.padEnd(14), name);
     } finally { writeFileSync(path, original); }
@@ -109,7 +129,7 @@ function main() {
   console.log(JSON.stringify({ mutants: results.length, valid: valid.length, killed, survived: valid.length - killed,
     killRate: Number(rate.toFixed(3)), minKill, survivors: valid.filter((r) => r.status === 'SURVIVED').map((r) => r.name),
     notApplicable: results.filter((r) => r.status === 'NOT_APPLICABLE').map((r) => r.name) }, null, 2));
-  process.exitCode = rate >= minKill && !results.some((r) => r.status === 'NOT_APPLICABLE' || r.status === 'OTHER_FAILURE') ? 0 : 1;
+  process.exitCode = rate >= minKill && !results.some((r) => r.status === 'NOT_APPLICABLE' || r.status === 'OTHER_FAILURE' || r.status === 'COMPILE_ERROR') ? 0 : 1;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();
