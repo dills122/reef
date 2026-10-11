@@ -897,3 +897,55 @@ Investigation identified producer `ON CONFLICT DO NOTHING` invalidation coalesci
 Durable direct-ingress comparison found extractor source lag growing while downstream verifier/resolver lag stayed small. One Kafka transaction per source batch, despite poll100, limited paired-trade output~2.1k/s. Atomic valid-prefix batching across bounded poll raised comparable60s verified output~5.2k/s; source offsets remain inside output transaction. After explicitly switching to64standing makers and one timed aggressor per trade, fresh300s D7 delivered10,425.19verified/10,440.92resolved trades/s,3,142,846exact outputs. Workload changes must not be credited entirely to batching.
 
 Requested broker durability differs from actual durability: unsupported redpanda.write.caching key left D1 cache enabled; corrected write.caching=false and actual-topic inspection required before promotion. Matching acceptance uses simulated acceptedAt, so measured batch-entry->verified p99 upper433ms is conservative bound, not exact acceptance latency. Per-book retention250k across64books means16m terminals; fresh test3,906/book narrows lookup/reuse horizon and requires new state. [Detailed report and evidence](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
+
+## Calcify aged state and recovery compete with capture (October 11, 2026)
+
+Local same-server300s trial passed final3,063,383-context integrity but failed
+full-context capacity:8,106.99–8,145.11/s at deadline versus10k gate. Independent
+financial/SQL workload and cold resolver restore shared10CPU/~15.6GiB VM; financial
+replay/balance audit passed. Matching sampled memory reached4.205GiB with terminal
+eviction disabled. Cold restore retained old state alongside new2.33GB logical
+state. Fresh steady throughput and process RUNNING do not establish aged recovery
+capacity. Budget exact identity lifetime and old+new recovery space, distinguish
+restored from caught-up frontiers, and reserve capture resources before admission.
+Combined trial cannot isolate bottleneck; matched aged control precedes tuning or
+hardware pivot. [Proof and scope](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md).
+
+## Calcify control distinguishes steady service from recovery (October 11, 2026)
+
+Matched no-cold-restart control passes10,321.21–10,349.52 full contexts/s, including
+aged60–300s lower10,295.95/s and exact3,131,951-context audit. Financial/SQL
+process still crashes/replays; timed financial work is greater than treatment.
+Cold-restart treatment remains8,106.99–8,145.11/s. First-minute bounds overlap;
+pre180 difference and sequential-run confounders prohibit exact causal estimate.
+Prioritize persisted-state restart/recovery service proof before hardware choice.
+A20s pause at10k arrivals/s creates200k backlog; clearing it in60s requires
+13,333/s service, before other interference. This is arithmetic headroom scenario,
+not measured capacity or adopted SLO. Process RUNNING alone cannot close recovery.
+[Comparison and remaining limits](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md).
+
+## Calcify arena completion and session budgets (October 11, 2026)
+
+Owner's clarified10k goal ends at normal API-visible trading state after Calcify,
+not context topic alone. Booked obligations/exposure and risk-consistent trading
+balances belong before completion: owner selected immediate reuse of booked unsettled
+proceeds under explicit risk/credit limits for first arena profile. Credit utilization
+must remain bounded; delayed settlement can still constrain trading when limits fill.
+Settlement
+business due time and wall-clock processing backlog are different clocks.
+At10k eligible trades/s, settlement9k/s accumulates3.6m backlog over60m and takes
+400s to drain if service remains9k/s; settlement5k/s needs another whole session.
+These are constant-rate arithmetic examples, not capacity measurements. Bounded
+flush therefore requires near-arrival-rate long-run service plus recovery surplus.
+[Proposed contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) supplies target rationale,
+5/15/30/60m population budgets, fixed-deadline measurement, API probes and close cuts.
+Historical capture passes retain narrower scope; integrated gate remains unqualified.
+
+Credit follow-up: [reference proof](work/CALCIFY_ARENA_CREDIT_POLICY.md) distinguishes
+credit authorization from settlement cash. Reserve drawn and undrawn exposure
+against funded pool before matching. At10k trades/s ×$1k ×10% credit-funded flow,
+5s advance duration implies about$5m exposure;30s implies$30m. A$10m pool fails
+that latter mix even if30s age target passes. These are sensitivity calculations,
+not measured workload or reason to silently raise caps. Credit refusals belong
+in offered-load accounting.34 reference tests/20 process-crash cases pass; no
+integrated capacity qualification follows.

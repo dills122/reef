@@ -32,6 +32,14 @@ Throughput PRs/handoffs must cite baseline IDs, prior attempts considered,
 changed variable, actual result/artifact location, limitations and next decision.
 Read-only evidence review is not a new approval gate for already authorized work.
 
+Current goal clarification, October11: owner now requires10k distinct trades/s
+through user-facing trading API after Calcify, with settlement allowed to lag.
+[Proposed arena contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) defines complete
+booked view, clocks, fixed deadlines, paired-order workloads and bounded session
+flush. Numeric targets remain proposals, not measured results. Earlier capture,
+venue-core and financial entries keep original scope; none alone qualifies this
+extended product boundary. No new benchmark run accompanies goalpost research.
+
 ## Calcify Phase 2 managed resolver diagnostic, CAL-P2-I1 (September30/October1)
 
 Baseline considered: CAL-P2-E4 (~10k local WAL-off joins/s, excluding source decode/broker/Streams), CAL-P1-L9 (~5k successful full-path commands/s), L6/L8 failures. New implementation uses production Protobuf resolver, sequential full JSON/checksum decode, persistent RocksDB index and EOS changelog/output on three local Redpanda26.2.3 brokers. Explicit `write.caching=false`, RF3, two partitions/threads,1MiB probe topic segments; each broker1CPU/1GiB heap/2GiB container limit. Host MacBookPro18,4,10CPU/64GiB; Docker VM15.6GiB. Upstream logs injected from real Go200-outcome/100-trade fixture; no HTTP throughput claim. Source topics fresh, long IDs, two new accepted facts per resolved trade; output~2KiB.
@@ -1548,3 +1556,83 @@ links measured scope and failed original arms; [complete proof](https://github.c
 [delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md) published/verified. Raw output topic records remain
 in retained broker volumes, not exported; external independent replay of every
 owner/history output is not claimed.
+
+## Calcify architecture diagnostic — October 11, 2026
+
+Scope: offline test kernel, baseline `b9a8756e8d0efc5e8b665a5c62da1ab064d01539`,
+Java21/Kotlin2.4.20/Jackson2.22.3,768MiB heap, one hot buyer/seller domain.
+No broker, SQL, managed adapter or new capture qualification. Owner clarified
+hard10k/s capture/context only, single server; settlement may lag within an
+explicit operating envelope. Larger server allowed if justified.
+
+[Research](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md#5-new-experiment-diagnose-the-kernel-before-blaming-its-adapter)
+and [compact receipt](evidence/calcify-architecture-pressure-test/verification.json)
+record all five runs, initial profiling run and harness changes. Each run warms
+2000 trades then executes four10000-trade arms (encode off/on/on/off). Latest
+baseline encoded arms3342.42/3371.93 trades/s; scratch-copy streaming canonical
+encoder5497.02/5532.94. Seven correctness checks, final economics and1000-case
+canonical digest parity pass; history checksum and encoded byte count match.
+Original kernel unchanged. Sequential shared-host diagnostic, with warmup/order
+effects; no production gain, comparative heap bound or financial10k claim.
+
+Budget model checks5239 finite queue recurrences plus illustrative visibility and
+headroom controls. These are arithmetic/toy-model checks, not measured service
+capacity or broker fault tests. D7 retains original standing-liquidity/retention
+scope; it does not qualify P0 no-reuse state at millions of order IDs.
+
+## Calcify aged single-server contention/recovery — October 11, 2026
+
+[Proof](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md),
+[compact receipt](evidence/calcify-aged-contention/verification.json), and
+[retention](records/2026-10-11-calcify-aged-contention-retention.json).
+Baseline b9a8756e plus research probe/harness; current Phase1/2, finite P0 off,
+64 standing makers, terminal retention0/no eviction,300s@10,500 offered trades/s.
+Local Docker10CPU/16,745,824,256B; host HTTP driver on same64GiB Mac. RF1 cached
+Redpanda26.2.3 differs from checkout26.2.4; all5topic write.caching=false inspected.
+Financial/atomic SQL contender starts, crashes/replays, then resolver cold-restores
+while intake continues. Contender uses independent synthetic trades, not captured
+trade integration or production financial/SQL materializers.
+
+Completed attempt02:3,063,383 accepted timed trades,64 makers excluded,86,617
+scheduler drops, zero HTTP failures/retries. Verified deadline lower3,051,648
+(10,172.16/s); resolved lower2,432,098, first following sample2,443,533
+(**8,106.99–8,145.11/s; target miss proven**). Full-context end gap upper631,285;
+HTTP-completion-to-resolved drain upper29,118.95ms. Bounds are not exact latencies.
+Final full-fact parity/ordered uniqueness pass for all3,063,383 contexts. SQL full
+history/balance replay passes366,625 synthetic settlements/37domains, including
+post-load activity. Restored current domain at nextTrade41,200 in1,289ms excluding
+JVM startup. No10k financial rate or integrated financial readiness claim.
+
+Sampled matching memory4.205GiB; resolver final logical state2,332,079,011B plus
+old retained1,413,794,317B.146 named-service/financial samples exclude observers
+and host driver; no continuous peak or causal attribution. Original D7 fresh
+10,440.92/s remains scoped to its different source/config/workload. Smoke passes
+15,000contexts/500SQLtrades; attempt01 interrupted by missing Compose profiles,
+49,100SQLtrades audit pass, no capture qualification. Corrected attempt02 fresh
+cohort; both retained. All owned services stopped, volumes preserved.
+
+## Calcify matched no-cold-restart control — October 11, 2026
+
+[Control/comparison](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) and
+[compact evidence](evidence/calcify-matched-control/comparison.json). Same source
+b9a8756e, exact runtime images/resource settings, normalized Compose and300s
+workload as preceding treatment:64makers,retention0,10,500 offered/s,1,024workers.
+Control generation5/fresh cohort retains financial/SQL start and crash/replay;
+resolver container ID/start time unchanged. No cold restart. Prior state retained.
+
+Capture gate PASS:3,131,951 accepted timed trades,18,049scheduler drops, zero
+HTTP failures/retries; verified lower10,404.61/s, resolved10,321.21–10,349.52/s.
+Aged60–300s resolved lower10,295.95/s. End gap upper35,589; drain upper2,404.86ms
+from conservative HTTP completion, not exact per-trade latency. Full source fact
+parity/ordered uniqueness pass all3,131,951 contexts. SQL replay/balance audit
+passes361,075independent synthetic trades/37domains, including post-load work.
+
+Treatment/control first-minute ranges overlap; control leads382.29–489.73/s
+over0–180s and4,705.65–5,032.88/s over180–300s. Difference after subtracting
+preperiod lead4,215.92–4,650.59/s is descriptive observation bound, not causal
+confidence interval. Timed financial progress higher in control; sequential
+arrivals, different financial recovery prefix/timing, broker/SQL restart, cache/
+disk occupancy and minor observer/host-check differences prevent pure attribution.
+Matching sampled4.71GiB; guest-free minimum15.880GB above8GBreserve. No cold
+recovery qualification, host-loss proof or production financial integration.
+22focusedNode tests and all audits pass; owned services stopped, volumes retained.
