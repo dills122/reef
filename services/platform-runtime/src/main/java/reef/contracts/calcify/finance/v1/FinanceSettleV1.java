@@ -28,6 +28,7 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private FinanceSettleV1() {
+    authority_ = 0;
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -81,6 +82,32 @@ private static final long serialVersionUID = 0L;
     return attempt_;
   }
 
+  public static final int AUTHORITY_FIELD_NUMBER = 3;
+  private int authority_ = 0;
+  /**
+   * <pre>
+   * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+   * @return The enum numeric value on the wire for authority.
+   */
+  @java.lang.Override public int getAuthorityValue() {
+    return authority_;
+  }
+  /**
+   * <pre>
+   * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+   * @return The authority.
+   */
+  @java.lang.Override public reef.contracts.calcify.finance.v1.FinanceAuthorityV1 getAuthority() {
+    reef.contracts.calcify.finance.v1.FinanceAuthorityV1 result = reef.contracts.calcify.finance.v1.FinanceAuthorityV1.forNumber(authority_);
+    return result == null ? reef.contracts.calcify.finance.v1.FinanceAuthorityV1.UNRECOGNIZED : result;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -101,6 +128,9 @@ private static final long serialVersionUID = 0L;
     if (attempt_ != 0) {
       output.writeInt32(2, attempt_);
     }
+    if (authority_ != reef.contracts.calcify.finance.v1.FinanceAuthorityV1.FINANCE_AUTHORITY_V1_UNSPECIFIED.getNumber()) {
+      output.writeEnum(3, authority_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -117,6 +147,10 @@ private static final long serialVersionUID = 0L;
     if (attempt_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(2, attempt_);
+    }
+    if (authority_ != reef.contracts.calcify.finance.v1.FinanceAuthorityV1.FINANCE_AUTHORITY_V1_UNSPECIFIED.getNumber()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeEnumSize(3, authority_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -140,6 +174,7 @@ private static final long serialVersionUID = 0L;
     }
     if (getAttempt()
         != other.getAttempt()) return false;
+    if (authority_ != other.authority_) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -157,6 +192,8 @@ private static final long serialVersionUID = 0L;
     }
     hash = (37 * hash) + ATTEMPT_FIELD_NUMBER;
     hash = (53 * hash) + getAttempt();
+    hash = (37 * hash) + AUTHORITY_FIELD_NUMBER;
+    hash = (53 * hash) + authority_;
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -300,6 +337,7 @@ private static final long serialVersionUID = 0L;
         executionBuilder_ = null;
       }
       attempt_ = 0;
+      authority_ = 0;
       return this;
     }
 
@@ -343,6 +381,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000002) != 0)) {
         result.attempt_ = attempt_;
       }
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.authority_ = authority_;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -363,6 +404,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getAttempt() != 0) {
         setAttempt(other.getAttempt());
+      }
+      if (other.authority_ != 0) {
+        setAuthorityValue(other.getAuthorityValue());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -402,6 +446,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000002;
               break;
             } // case 16
+            case 24: {
+              authority_ = input.readEnum();
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 24
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -568,6 +617,77 @@ private static final long serialVersionUID = 0L;
     public Builder clearAttempt() {
       bitField0_ = (bitField0_ & ~0x00000002);
       attempt_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int authority_ = 0;
+    /**
+     * <pre>
+     * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+     * @return The enum numeric value on the wire for authority.
+     */
+    @java.lang.Override public int getAuthorityValue() {
+      return authority_;
+    }
+    /**
+     * <pre>
+     * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+     * @param value The enum numeric value on the wire for authority to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAuthorityValue(int value) {
+      authority_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+     * @return The authority.
+     */
+    @java.lang.Override
+    public reef.contracts.calcify.finance.v1.FinanceAuthorityV1 getAuthority() {
+      reef.contracts.calcify.finance.v1.FinanceAuthorityV1 result = reef.contracts.calcify.finance.v1.FinanceAuthorityV1.forNumber(authority_);
+      return result == null ? reef.contracts.calcify.finance.v1.FinanceAuthorityV1.UNRECOGNIZED : result;
+    }
+    /**
+     * <pre>
+     * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+     * @param value The authority to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAuthority(reef.contracts.calcify.finance.v1.FinanceAuthorityV1 value) {
+      if (value == null) { throw new NullPointerException(); }
+      bitField0_ |= 0x00000004;
+      authority_ = value.getNumber();
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAuthority() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      authority_ = 0;
       onChanged();
       return this;
     }

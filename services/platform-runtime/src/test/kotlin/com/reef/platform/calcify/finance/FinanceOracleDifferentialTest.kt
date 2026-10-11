@@ -34,7 +34,7 @@ class FinanceOracleDifferentialTest {
             val norm: List<Any> = when (i) {
                 is FinanceInput.Capture -> listOf("C", i.execution, i.buyer.value, i.seller.value, i.quantity, i.priceNanos)
                 is FinanceInput.Fund -> listOf("F", i.authority, i.account.value, i.asset.value, i.amount)
-                is FinanceInput.Settle -> listOf("S", i.execution, i.attempt)
+                is FinanceInput.Settle -> listOf("S", i.authority, i.execution, i.attempt)
             }
             actions[ak]?.let { (n, _) -> return (if (n == norm) "PRIOR_RESULT" else "ACTION_CONFLICT") to null }
             val plan = when (i) { is FinanceInput.Capture -> capture(i); is FinanceInput.Fund -> fund(i); is FinanceInput.Settle -> settle(i) }
@@ -75,6 +75,7 @@ class FinanceOracleDifferentialTest {
         }
 
         private fun settle(i: FinanceInput.Settle): Plan {
+            if (i.authority != Authority.OPERATOR) return Plan("UNAUTHORIZED")
             val k = "${i.execution.runId}|${i.execution.venueSessionId}|${i.execution.instrumentId}|${i.execution.executionId}"
             val o = obl[k] ?: return Plan("UNKNOWN_EXECUTION")
             if (i.attempt < 1) return Plan("INVALID_INPUT")
@@ -129,7 +130,7 @@ class FinanceOracleDifferentialTest {
                 0 -> FinanceInput.Capture(ak, exec(), account(), account(), pick(), if (rnd.nextInt(8) == 0) 0 else pick() % 10_000_000_000L)
                 1 -> FinanceInput.Fund(ak, if (rnd.nextInt(7) == 0) Authority.TRADING else Authority.OPERATOR, account(),
                     AssetId(listOf("USD", "SEC", "SEC", "USD", "EUR")[rnd.nextInt(5)]), pick())
-                else -> FinanceInput.Settle(ak, exec(), rnd.nextInt(4) - if (rnd.nextInt(10) == 0) 1 else 0)
+                else -> FinanceInput.Settle(ak, if (rnd.nextInt(7) == 0) Authority.TRADING else Authority.OPERATOR, exec(), rnd.nextInt(4) - if (rnd.nextInt(10) == 0) 1 else 0)
             }
         }
         repeat(steps) { n ->
@@ -157,12 +158,12 @@ class FinanceOracleDifferentialTest {
             }
             assertSame(oracle, state, "seed=$seed step=$n")
             ledger.checkInvariants(state)
-            if (rnd.nextInt(15) == 0) state = ledger.restore(ledger.checkpoint(state), state.chain)   // random cut and restore
+            if (rnd.nextInt(15) == 0) state = ledger.restore(ledger.checkpoint(state), decisions.lastOrNull())   // random cut and restore
         }
         assertTrue(ledger.verifyChain(decisions), "seed=$seed chain")
     }
 
-    @Test fun fiveThousandSeededSchedulesMatchTheOracleOnSmallBudgets() {
+    @Test fun threeThousandSeededSchedulesMatchTheOracleOnSmallBudgets() {
         for (seed in 1L..3_000L) runSchedule(seed, small = true, steps = 45)
     }
 

@@ -101,4 +101,24 @@ public interface FinanceDecisionV1OrBuilder extends
    */
   com.google.protobuf.ByteString
       getChecksumBytes();
+
+  /**
+   * <pre>
+   * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+   * </pre>
+   *
+   * <code>string state_digest = 8;</code>
+   * @return The stateDigest.
+   */
+  java.lang.String getStateDigest();
+  /**
+   * <pre>
+   * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+   * </pre>
+   *
+   * <code>string state_digest = 8;</code>
+   * @return The bytes for stateDigest.
+   */
+  com.google.protobuf.ByteString
+      getStateDigestBytes();
 }

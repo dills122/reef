@@ -7,6 +7,9 @@ import java.math.BigInteger
  * [Outcome] with a new state and a hash-chained [Decision], or leaves the state untouched (prior result, conflict, budget).
  */
 internal class FinanceLedger(val config: FinanceConfig) {
+    private val recordedDispositions = setOf(Disposition.CAPTURED, Disposition.FUNDED, Disposition.SETTLED, Disposition.INSUFFICIENT_CASH,
+        Disposition.INSUFFICIENT_SHARES, Disposition.BALANCE_OVERFLOW)
+    private val settleDispositions = setOf(Disposition.SETTLED, Disposition.INSUFFICIENT_CASH, Disposition.INSUFFICIENT_SHARES, Disposition.BALANCE_OVERFLOW)
     private val cash get() = config.cashAsset
     private val security get() = config.securityAsset
 
@@ -23,7 +26,8 @@ internal class FinanceLedger(val config: FinanceConfig) {
         }
         val draft = Draft(state)
         val result = evaluate(draft, input)
-        // Refusals and no-ops are neither recorded nor counted: junk cannot consume a budget class (review F2).
+        // Refusals and no-ops are neither recorded nor counted: junk cannot consume a budget class (review F2). By the same policy
+        // they do not claim their action key: the same key may later be reused with different content (documented, review 2 P3).
         if (!result.recorded) return Outcome(state, result.disposition, null)
         val exceeded = when (input) {
             is FinanceInput.Capture -> state.executions.size >= config.maxCaptures || state.obligations.size >= config.maxObligations
@@ -32,13 +36,15 @@ internal class FinanceLedger(val config: FinanceConfig) {
         }
         if (exceeded) return Outcome(state, Disposition.BUDGET_EXCEEDED, null)
         val sequence = state.sequence + 1
-        val checksum = Canon.sha(decisionBytes(sequence, input.action, digest, result.disposition, result.legs, state.chain))
-        val decision = Decision(sequence, input.action, digest, result.disposition, result.legs, state.chain, checksum)
-        val next = FinanceState(
+        val unchained = FinanceState(
             draft.positions, draft.executions, draft.obligations, draft.attempts,
-            state.actions + (input.action to ActionRecord(digest, result.disposition)), sequence, checksum,
+            state.actions + (input.action to ActionRecord(digest, result.disposition)), sequence, "",
             state.controls + if (input is FinanceInput.Fund) 1 else 0,
         )
+        val stateDigest = stateDigest(unchained)
+        val checksum = Canon.sha(decisionBytes(sequence, input.action, digest, result.disposition, result.legs, state.chain, stateDigest))
+        val decision = Decision(sequence, input.action, digest, result.disposition, result.legs, state.chain, stateDigest, checksum)
+        val next = unchained.copy(chain = checksum)
         checkInvariants(next)
         return Outcome(next, result.disposition, decision)
     }
@@ -80,6 +86,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
     }
 
     private fun settle(d: Draft, i: FinanceInput.Settle): Eval {
+        if (i.authority != Authority.OPERATOR) return Eval(Disposition.UNAUTHORIZED)
         val obligation = d.obligations[i.execution] ?: return Eval(Disposition.UNKNOWN_EXECUTION)
         if (i.attempt < 1) return Eval(Disposition.INVALID_INPUT)
         if (obligation.status == ObligationStatus.SETTLED) return Eval(Disposition.ALREADY_SETTLED)
@@ -120,6 +127,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
         for ((key, value) in state.positions) {
             check(key.first == config.openingAccount || value >= 0) { "negative non-opening position" }
             check(key.first == config.openingAccount || key.first in config.accounts) { "position for unknown account" }
+            check(key.second == cash || key.second == security) { "position in unknown asset" }
         }
         for (asset in listOf(cash, security)) {
             val sum = state.positions.filterKeys { it.second == asset }.values.fold(BigInteger.ZERO) { a, v -> a + BigInteger.valueOf(v) }
@@ -138,6 +146,18 @@ internal class FinanceLedger(val config: FinanceConfig) {
         check(state.attempts.size <= config.maxSettleAttempts) { "settle attempt budget exceeded" }
         check(state.controls <= config.maxControls && state.controls == state.actions.values.count { it.disposition == Disposition.FUNDED }) { "control budget or count drift" }
         check(state.sequence <= config.maxCaptures + config.maxSettleAttempts + config.maxControls) { "record budget exceeded" }
+        // Cross-structure consistency: every entity is accounted for by exactly the recorded actions that created it.
+        check(state.actions.values.all { it.disposition in recordedDispositions }) { "action with a disposition that is never recorded" }
+        check(state.actions.values.count { it.disposition == Disposition.CAPTURED } == state.executions.size) { "captures differ from executions" }
+        check(state.actions.values.count { it.disposition in settleDispositions } == state.attempts.size) { "settle actions differ from attempts" }
+        for ((attempt, disposition) in state.attempts) {
+            check(attempt.second >= 1 && attempt.first in state.executions) { "attempt for unknown execution or ordinal" }
+            check(disposition in settleDispositions) { "attempt with an illegal disposition" }
+        }
+        for ((key, obligation) in state.obligations) {
+            val settledAttempts = state.attempts.count { it.key.first == key && it.value == Disposition.SETTLED }
+            check(settledAttempts == if (obligation.status == ObligationStatus.SETTLED) 1 else 0) { "settled attempt differs from obligation status" }
+        }
     }
 
     /** True if every decision's checksum recomputes and links to its predecessor starting from this ledger's [genesisChain]. */
@@ -146,35 +166,46 @@ internal class FinanceLedger(val config: FinanceConfig) {
         var sequence = 0L
         for (d in decisions) {
             if (d.sequence != sequence + 1 || d.priorChain != prior) return false
-            if (d.checksum != Canon.sha(decisionBytes(d.sequence, d.action, d.inputDigest, d.disposition, d.legs, d.priorChain))) return false
+            if (d.checksum != Canon.sha(decisionBytes(d.sequence, d.action, d.inputDigest, d.disposition, d.legs, d.priorChain, d.stateDigest))) return false
             prior = d.checksum; sequence = d.sequence
         }
         return true
     }
 
-    fun checkpoint(state: FinanceState): FinanceCheckpoint = FinanceCheckpoint(state, Canon.sha(stateBytes(state)))
+    fun checkpoint(state: FinanceState): FinanceCheckpoint = FinanceCheckpoint(state, Canon.sha(stateBytes(state, includeChain = true)))
 
     /**
-     * Verifies the checkpoint's own checksum, that it sits at [expectedChainHead] (the head of the decision history the caller
-     * trusts), and the ledger invariants. A forged but internally consistent state with a recomputed checksum is refused unless
-     * its chain head matches the trusted history.
+     * Restores a checkpoint against the trusted history head ([trustedHead] = the last decision of a history the caller has
+     * verified with [verifyChain], or null for genesis). The head decision commits to the full state through its
+     * [Decision.stateDigest], so a state that is internally consistent but was not produced by that history (moved shares,
+     * minted cash, extra entities) is refused. A recomputed checkpoint checksum alone is not authority.
      */
-    fun restore(checkpoint: FinanceCheckpoint, expectedChainHead: String): FinanceState {
-        require(checkpoint.state.chain == expectedChainHead) { "checkpoint is not at the trusted history head" }
-        require(Canon.sha(stateBytes(checkpoint.state)) == checkpoint.checksum) { "checkpoint tamper" }
-        checkInvariants(checkpoint.state)
-        return checkpoint.state
+    fun restore(checkpoint: FinanceCheckpoint, trustedHead: Decision?): FinanceState {
+        val state = checkpoint.state
+        if (trustedHead == null) {
+            require(state == genesis()) { "checkpoint is not the genesis state" }
+        } else {
+            require(trustedHead.checksum == Canon.sha(decisionBytes(trustedHead.sequence, trustedHead.action, trustedHead.inputDigest,
+                trustedHead.disposition, trustedHead.legs, trustedHead.priorChain, trustedHead.stateDigest))) { "trusted head does not verify" }
+            require(state.chain == trustedHead.checksum && state.sequence == trustedHead.sequence) { "checkpoint is not at the trusted history head" }
+            require(stateDigest(state) == trustedHead.stateDigest) { "checkpoint state is not the state committed by the trusted head" }
+        }
+        require(Canon.sha(stateBytes(state, includeChain = true)) == checkpoint.checksum) { "checkpoint tamper" }
+        checkInvariants(state)
+        return state
     }
 
-    private fun decisionBytes(sequence: Long, action: ActionKey, inputDigest: String, disposition: Disposition, legs: List<Leg>, priorChain: String) =
+    private fun decisionBytes(sequence: Long, action: ActionKey, inputDigest: String, disposition: Disposition, legs: List<Leg>, priorChain: String, stateDigest: String) =
         Canon.bytes {
-            str("calcify-finance-decision-v1"); str(priorChain); long(sequence)
+            str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(stateDigest)
             str(action.namespace); str(action.domain); str(action.actionId)
             str(inputDigest); str(disposition.name); int(legs.size); legs.forEach { leg(it) }
         }
 
-    private fun stateBytes(s: FinanceState) = Canon.bytes {
-        str("calcify-finance-state-v1"); long(s.sequence); str(s.chain); int(s.controls)
+    private fun stateDigest(s: FinanceState) = Canon.sha(stateBytes(s, includeChain = false))
+
+    private fun stateBytes(s: FinanceState, includeChain: Boolean) = Canon.bytes {
+        str("calcify-finance-state-v1"); long(s.sequence); if (includeChain) str(s.chain); int(s.controls)
         val positions = s.positions.entries.sortedWith(compareBy({ it.key.first.value }, { it.key.second.value }))
         int(positions.size); positions.forEach { str(it.key.first.value); str(it.key.second.value); long(it.value) }
         val executions = s.executions.entries.sortedWith(compareBy({ it.key.runId }, { it.key.venueSessionId }, { it.key.instrumentId }, { it.key.executionId }))

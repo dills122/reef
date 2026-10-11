@@ -89,55 +89,57 @@ public final class CalcifyFinance extends com.google.protobuf.GeneratedFile {
       "_nanos\030\005 \001(\003\"\217\001\n\rFinanceFundV1\022H\n\tauthor" +
       "ity\030\001 \001(\01625.reef.contracts.calcify.finan" +
       "ce.v1.FinanceAuthorityV1\022\022\n\naccount_id\030\002" +
-      " \001(\t\022\020\n\010asset_id\030\003 \001(\t\022\016\n\006amount\030\004 \001(\003\"o" +
-      "\n\017FinanceSettleV1\022K\n\texecution\030\001 \001(\01328.r" +
+      " \001(\t\022\020\n\010asset_id\030\003 \001(\t\022\016\n\006amount\030\004 \001(\003\"\271" +
+      "\001\n\017FinanceSettleV1\022K\n\texecution\030\001 \001(\01328." +
+      "reef.contracts.calcify.finance.v1.Financ" +
+      "eExecutionKeyV1\022\017\n\007attempt\030\002 \001(\005\022H\n\tauth" +
+      "ority\030\003 \001(\01625.reef.contracts.calcify.fin" +
+      "ance.v1.FinanceAuthorityV1\"\257\002\n\016FinanceIn" +
+      "putV1\022E\n\006action\030\001 \001(\01325.reef.contracts.c" +
+      "alcify.finance.v1.FinanceActionKeyV1\022F\n\007" +
+      "capture\030\002 \001(\01323.reef.contracts.calcify.f" +
+      "inance.v1.FinanceCaptureV1H\000\022@\n\004fund\030\003 \001" +
+      "(\01320.reef.contracts.calcify.finance.v1.F" +
+      "inanceFundV1H\000\022D\n\006settle\030\004 \001(\01322.reef.co" +
+      "ntracts.calcify.finance.v1.FinanceSettle" +
+      "V1H\000B\006\n\004body\"D\n\014FinanceLegV1\022\022\n\naccount_" +
+      "id\030\001 \001(\t\022\020\n\010asset_id\030\002 \001(\t\022\016\n\006amount\030\003 \001" +
+      "(\003\"\314\002\n\021FinanceDecisionV1\022\020\n\010sequence\030\001 \001" +
+      "(\003\022E\n\006action\030\002 \001(\01325.reef.contracts.calc" +
+      "ify.finance.v1.FinanceActionKeyV1\022\024\n\014inp" +
+      "ut_digest\030\003 \001(\t\022L\n\013disposition\030\004 \001(\01627.r" +
       "eef.contracts.calcify.finance.v1.Finance" +
-      "ExecutionKeyV1\022\017\n\007attempt\030\002 \001(\005\"\257\002\n\016Fina" +
-      "nceInputV1\022E\n\006action\030\001 \001(\01325.reef.contra" +
-      "cts.calcify.finance.v1.FinanceActionKeyV" +
-      "1\022F\n\007capture\030\002 \001(\01323.reef.contracts.calc" +
-      "ify.finance.v1.FinanceCaptureV1H\000\022@\n\004fun" +
-      "d\030\003 \001(\01320.reef.contracts.calcify.finance" +
-      ".v1.FinanceFundV1H\000\022D\n\006settle\030\004 \001(\01322.re" +
-      "ef.contracts.calcify.finance.v1.FinanceS" +
-      "ettleV1H\000B\006\n\004body\"D\n\014FinanceLegV1\022\022\n\nacc" +
-      "ount_id\030\001 \001(\t\022\020\n\010asset_id\030\002 \001(\t\022\016\n\006amoun" +
-      "t\030\003 \001(\003\"\266\002\n\021FinanceDecisionV1\022\020\n\010sequenc" +
-      "e\030\001 \001(\003\022E\n\006action\030\002 \001(\01325.reef.contracts" +
-      ".calcify.finance.v1.FinanceActionKeyV1\022\024" +
-      "\n\014input_digest\030\003 \001(\t\022L\n\013disposition\030\004 \001(" +
-      "\01627.reef.contracts.calcify.finance.v1.Fi" +
-      "nanceDispositionV1\022=\n\004legs\030\005 \003(\0132/.reef." +
-      "contracts.calcify.finance.v1.FinanceLegV" +
-      "1\022\023\n\013prior_chain\030\006 \001(\t\022\020\n\010checksum\030\007 \001(\t" +
-      "*\177\n\022FinanceAuthorityV1\022$\n FINANCE_AUTHOR" +
-      "ITY_V1_UNSPECIFIED\020\000\022!\n\035FINANCE_AUTHORIT" +
-      "Y_V1_OPERATOR\020\001\022 \n\034FINANCE_AUTHORITY_V1_" +
-      "TRADING\020\002*\313\006\n\024FinanceDispositionV1\022&\n\"FI" +
-      "NANCE_DISPOSITION_V1_UNSPECIFIED\020\000\022#\n\037FI" +
-      "NANCE_DISPOSITION_V1_CAPTURED\020\001\0225\n1FINAN" +
-      "CE_DISPOSITION_V1_EXECUTION_ALREADY_CAPT" +
-      "URED\020\002\022-\n)FINANCE_DISPOSITION_V1_EXECUTI" +
-      "ON_CONFLICT\020\003\022!\n\035FINANCE_DISPOSITION_V1_" +
-      "FUNDED\020\004\022\"\n\036FINANCE_DISPOSITION_V1_SETTL" +
-      "ED\020\005\022*\n&FINANCE_DISPOSITION_V1_ALREADY_S" +
-      "ETTLED\020\006\022(\n$FINANCE_DISPOSITION_V1_PRIOR" +
-      "_ATTEMPT\020\007\022,\n(FINANCE_DISPOSITION_V1_INS" +
-      "UFFICIENT_CASH\020\010\022.\n*FINANCE_DISPOSITION_" +
-      "V1_INSUFFICIENT_SHARES\020\t\022\'\n#FINANCE_DISP" +
-      "OSITION_V1_UNAUTHORIZED\020\n\022*\n&FINANCE_DIS" +
-      "POSITION_V1_UNKNOWN_ACCOUNT\020\013\022,\n(FINANCE" +
-      "_DISPOSITION_V1_UNKNOWN_EXECUTION\020\014\022(\n$F" +
-      "INANCE_DISPOSITION_V1_INVALID_INPUT\020\r\022*\n" +
-      "&FINANCE_DISPOSITION_V1_AMOUNT_OVERFLOW\020" +
-      "\016\022+\n\'FINANCE_DISPOSITION_V1_BALANCE_OVER" +
-      "FLOW\020\017\022\'\n#FINANCE_DISPOSITION_V1_PRIOR_R" +
-      "ESULT\020\020\022*\n&FINANCE_DISPOSITION_V1_ACTION" +
-      "_CONFLICT\020\021\022*\n&FINANCE_DISPOSITION_V1_BU" +
-      "DGET_EXCEEDED\020\022Bi\n!reef.contracts.calcif" +
-      "y.finance.v1P\001ZBgithub.com/dills122/reef" +
-      "/contracts/proto/orderexecution/v1;order" +
-      "v1b\006proto3"
+      "DispositionV1\022=\n\004legs\030\005 \003(\0132/.reef.contr" +
+      "acts.calcify.finance.v1.FinanceLegV1\022\023\n\013" +
+      "prior_chain\030\006 \001(\t\022\020\n\010checksum\030\007 \001(\t\022\024\n\014s" +
+      "tate_digest\030\010 \001(\t*\177\n\022FinanceAuthorityV1\022" +
+      "$\n FINANCE_AUTHORITY_V1_UNSPECIFIED\020\000\022!\n" +
+      "\035FINANCE_AUTHORITY_V1_OPERATOR\020\001\022 \n\034FINA" +
+      "NCE_AUTHORITY_V1_TRADING\020\002*\313\006\n\024FinanceDi" +
+      "spositionV1\022&\n\"FINANCE_DISPOSITION_V1_UN" +
+      "SPECIFIED\020\000\022#\n\037FINANCE_DISPOSITION_V1_CA" +
+      "PTURED\020\001\0225\n1FINANCE_DISPOSITION_V1_EXECU" +
+      "TION_ALREADY_CAPTURED\020\002\022-\n)FINANCE_DISPO" +
+      "SITION_V1_EXECUTION_CONFLICT\020\003\022!\n\035FINANC" +
+      "E_DISPOSITION_V1_FUNDED\020\004\022\"\n\036FINANCE_DIS" +
+      "POSITION_V1_SETTLED\020\005\022*\n&FINANCE_DISPOSI" +
+      "TION_V1_ALREADY_SETTLED\020\006\022(\n$FINANCE_DIS" +
+      "POSITION_V1_PRIOR_ATTEMPT\020\007\022,\n(FINANCE_D" +
+      "ISPOSITION_V1_INSUFFICIENT_CASH\020\010\022.\n*FIN" +
+      "ANCE_DISPOSITION_V1_INSUFFICIENT_SHARES\020" +
+      "\t\022\'\n#FINANCE_DISPOSITION_V1_UNAUTHORIZED" +
+      "\020\n\022*\n&FINANCE_DISPOSITION_V1_UNKNOWN_ACC" +
+      "OUNT\020\013\022,\n(FINANCE_DISPOSITION_V1_UNKNOWN" +
+      "_EXECUTION\020\014\022(\n$FINANCE_DISPOSITION_V1_I" +
+      "NVALID_INPUT\020\r\022*\n&FINANCE_DISPOSITION_V1" +
+      "_AMOUNT_OVERFLOW\020\016\022+\n\'FINANCE_DISPOSITIO" +
+      "N_V1_BALANCE_OVERFLOW\020\017\022\'\n#FINANCE_DISPO" +
+      "SITION_V1_PRIOR_RESULT\020\020\022*\n&FINANCE_DISP" +
+      "OSITION_V1_ACTION_CONFLICT\020\021\022*\n&FINANCE_" +
+      "DISPOSITION_V1_BUDGET_EXCEEDED\020\022Bi\n!reef" +
+      ".contracts.calcify.finance.v1P\001ZBgithub." +
+      "com/dills122/reef/contracts/proto/ordere" +
+      "xecution/v1;orderv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -172,7 +174,7 @@ public final class CalcifyFinance extends com.google.protobuf.GeneratedFile {
     internal_static_reef_contracts_calcify_finance_v1_FinanceSettleV1_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_calcify_finance_v1_FinanceSettleV1_descriptor,
-        new java.lang.String[] { "Execution", "Attempt", });
+        new java.lang.String[] { "Execution", "Attempt", "Authority", });
     internal_static_reef_contracts_calcify_finance_v1_FinanceInputV1_descriptor =
       getDescriptor().getMessageType(5);
     internal_static_reef_contracts_calcify_finance_v1_FinanceInputV1_fieldAccessorTable = new
@@ -190,7 +192,7 @@ public final class CalcifyFinance extends com.google.protobuf.GeneratedFile {
     internal_static_reef_contracts_calcify_finance_v1_FinanceDecisionV1_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_calcify_finance_v1_FinanceDecisionV1_descriptor,
-        new java.lang.String[] { "Sequence", "Action", "InputDigest", "Disposition", "Legs", "PriorChain", "Checksum", });
+        new java.lang.String[] { "Sequence", "Action", "InputDigest", "Disposition", "Legs", "PriorChain", "Checksum", "StateDigest", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

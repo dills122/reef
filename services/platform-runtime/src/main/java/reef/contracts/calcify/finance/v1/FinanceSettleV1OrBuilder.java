@@ -30,4 +30,23 @@ public interface FinanceSettleV1OrBuilder extends
    * @return The attempt.
    */
   int getAttempt();
+
+  /**
+   * <pre>
+   * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+   * @return The enum numeric value on the wire for authority.
+   */
+  int getAuthorityValue();
+  /**
+   * <pre>
+   * Repair is an operator control (D4): must be OPERATOR or the input is refused UNAUTHORIZED.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceAuthorityV1 authority = 3;</code>
+   * @return The authority.
+   */
+  reef.contracts.calcify.finance.v1.FinanceAuthorityV1 getAuthority();
 }

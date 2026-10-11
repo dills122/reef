@@ -27,17 +27,17 @@ class FinanceWireTest {
     private val ek = ExecutionKey("p3-run", "p3-session", "AAPL", "e1")
     private val capture = FinanceInput.Capture(act, ek, AccountId("buyer-account"), AccountId("seller-account"), 3, 100_000_000_000L)
     private val fund = FinanceInput.Fund(act, Authority.OPERATOR, AccountId("buyer-account"), AssetId("USD"), 6)
-    private val settle = FinanceInput.Settle(act, ek, 1)
+    private val settle = FinanceInput.Settle(act, Authority.OPERATOR, ek, 1)
     private val decision = Decision(7, act, "a".repeat(64), Disposition.SETTLED,
-        listOf(Leg(AccountId("buyer-account"), AssetId("USD"), -300_000_000_000L), Leg(AccountId("seller-account"), AssetId("AAPL"), -3)), "b".repeat(64), "c".repeat(64))
+        listOf(Leg(AccountId("buyer-account"), AssetId("USD"), -300_000_000_000L), Leg(AccountId("seller-account"), AssetId("AAPL"), -3)), "b".repeat(64), "d".repeat(64), "c".repeat(64))
 
     // Goldens produced by a separate Python varint encoder; they pin field numbers and wire types.
     private val goldenCapture = "0a150a0270331207636f6e74726f6c1a066f70656e2d3112480a1e0a0670332d72756e120a70332d73657373696f6e1a044141504c22026531120d62757965722d6163636f756e741a0e73656c6c65722d6163636f756e7420032880d0dbc3f402"
     private val goldenFund = "0a150a0270331207636f6e74726f6c1a066f70656e2d311a180801120d62757965722d6163636f756e741a035553442006"
-    private val goldenSettle = "0a150a0270331207636f6e74726f6c1a066f70656e2d3122220a1e0a0670332d72756e120a70332d73657373696f6e1a044141504c220265311001"
+    private val goldenSettle = "0a150a0270331207636f6e74726f6c1a066f70656e2d3122240a1e0a0670332d72756e120a70332d73657373696f6e1a044141504c2202653110011801"
     private val goldenDecision = "080712150a0270331207636f6e74726f6c1a066f70656e2d311a40" + "61".repeat(64) +
         "20052a1f0a0d62757965722d6163636f756e741203555344188090edb4a2f7ffffff012a210a0e73656c6c65722d6163636f756e7412044141504c18fdffffffffffffffff013240" +
-        "62".repeat(64) + "3a40" + "63".repeat(64)
+        "62".repeat(64) + "3a40" + "63".repeat(64) + "4240" + "64".repeat(64)
 
     @Test fun inputsMatchTheGoldenBytesAndRoundTrip() {
         for ((input, golden) in listOf(capture to goldenCapture, fund to goldenFund, settle to goldenSettle)) {
@@ -67,7 +67,7 @@ class FinanceWireTest {
     @Test fun everyDispositionMapsBothWays() {
         for (d in Disposition.entries) {
             val action = ActionKey("p3", "x", "y")
-            val back = FinanceWire.fromProto(FinanceWire.toProto(Decision(1, action, "d", d.takeUnless { it.neverRecorded } ?: Disposition.CAPTURED, emptyList(), "p", "c")))
+            val back = FinanceWire.fromProto(FinanceWire.toProto(Decision(1, action, "a".repeat(64), d.takeUnless { it.neverRecorded } ?: Disposition.CAPTURED, emptyList(), "b".repeat(64), "d".repeat(64), "c".repeat(64))))
             assertTrue(back.disposition == (d.takeUnless { it.neverRecorded } ?: Disposition.CAPTURED))
         }
         val wire = FinanceDispositionV1.entries.filter { it != FinanceDispositionV1.UNRECOGNIZED && it != FinanceDispositionV1.FINANCE_DISPOSITION_V1_UNSPECIFIED }
@@ -98,9 +98,9 @@ class FinanceWireTest {
         val a = ActionKey(t, t, t); val e = ExecutionKey(t, t, t, t)
         val maxCapture = FinanceInput.Capture(a, e, AccountId(t), AccountId(t), Long.MAX_VALUE, Long.MAX_VALUE)
         val maxFund = FinanceInput.Fund(a, Authority.TRADING, AccountId(t), AssetId(t), Long.MAX_VALUE)
-        val maxSettle = FinanceInput.Settle(a, e, Int.MAX_VALUE)
+        val maxSettle = FinanceInput.Settle(a, Authority.TRADING, e, Int.MAX_VALUE)
         val maxDecision = Decision(Long.MAX_VALUE, a, "f".repeat(64), Disposition.SETTLED,
-            List(4) { Leg(AccountId(t), AssetId(t), Long.MIN_VALUE) }, "f".repeat(64), "f".repeat(64))
+            List(4) { Leg(AccountId(t), AssetId(t), Long.MIN_VALUE) }, "f".repeat(64), "f".repeat(64), "f".repeat(64))
         // Pinned ceilings: a field added or widened without revisiting these bounds fails here.
         assertTrue(FinanceWire.toProto(maxCapture).serializedSize <= 1_400, "capture ${FinanceWire.toProto(maxCapture).serializedSize}")
         assertTrue(FinanceWire.toProto(maxFund).serializedSize <= 1_000, "fund ${FinanceWire.toProto(maxFund).serializedSize}")

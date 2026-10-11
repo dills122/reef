@@ -26,7 +26,7 @@ class FinanceLedgerTest {
         FinanceInput.Capture(action(actionId), key(id), b, s, qty, px)
     private fun fund(id: String, account: AccountId, asset: AssetId, amount: Long, authority: Authority = Authority.OPERATOR) =
         FinanceInput.Fund(action(id, "control"), authority, account, asset, amount)
-    private fun settle(id: String, attempt: Int) = FinanceInput.Settle(action("settle-$id-$attempt", "repair"), key(id), attempt)
+    private fun settle(id: String, attempt: Int) = FinanceInput.Settle(action("settle-$id-$attempt", "repair"), Authority.OPERATOR, key(id), attempt)
 
     private class Run(val ledger: FinanceLedger) {
         var state = ledger.genesis()
@@ -142,7 +142,7 @@ class FinanceLedgerTest {
         assertEquals(Disposition.FUNDED, go(FinanceInput.Fund(action("f1", "control"), Authority.OPERATOR, x, sec, 5)).disposition)
         assertEquals(Disposition.FUNDED, go(FinanceInput.Fund(action("f2", "control"), Authority.OPERATOR, y, eur, 50)).disposition)
         assertEquals(Disposition.CAPTURED, go(FinanceInput.Capture(action("c1"), key("g1"), y, x, 5, 10)).disposition)
-        assertEquals(Disposition.SETTLED, go(FinanceInput.Settle(action("s1", "repair"), key("g1"), 1)).disposition)
+        assertEquals(Disposition.SETTLED, go(FinanceInput.Settle(action("s1", "repair"), Authority.OPERATOR, key("g1"), 1)).disposition)
         assertEquals(5L, s.positions[y to sec]); assertEquals(50L, s.positions[x to eur])
         // A third account is refused, and so are the fixture's asset names.
         assertEquals(Disposition.UNKNOWN_ACCOUNT, go(FinanceInput.Capture(action("c2"), key("g2"), z, x, 1, 1)).disposition)
@@ -185,7 +185,7 @@ class FinanceLedgerTest {
             capture("e1", 9, actionId = "other-economics"), capture("x", 0), fund("neg", buyer, usd, -1),
         ).forEach { assertNull(r.go(it).decision) }
         assertEquals(before, r.state)
-        assertFailsWith<IllegalArgumentException> { Decision(1, action("x"), "d", Disposition.BUDGET_EXCEEDED, emptyList(), "p", "c") }
+        assertFailsWith<IllegalArgumentException> { Decision(1, action("x"), "d", Disposition.BUDGET_EXCEEDED, emptyList(), "p", "s", "c") }
         assertFailsWith<IllegalArgumentException> { ActionRecord("d", Disposition.PRIOR_RESULT) }
     }
 
@@ -217,14 +217,47 @@ class FinanceLedgerTest {
         assertFalse(other.verifyChain(r.decisions), "a history from another configuration must not verify")
         assertNotEquals(ledger.genesisChain, other.genesisChain)
         val cp = ledger.checkpoint(r.state)
-        assertEquals(r.state, ledger.restore(cp, r.state.chain))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, "some-other-head") }
-        // A forged, internally balanced state with a freshly computed checksum is refused unless it is at the trusted head.
-        val forged = r.state.copy(positions = r.state.positions + ((buyer to usd) to 5L) + ((opening to usd) to ((r.state.positions[opening to usd] ?: 0L) - 5L)))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(forged), "the-real-head") }
+        val head = r.decisions.last()
+        assertEquals(r.state, ledger.restore(cp, head))
+        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, r.decisions[r.decisions.size - 2]) }   // an older head
+        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, null) }                                  // genesis head, non-genesis state
+        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, head.copy(checksum = "0".repeat(64))) } // head that does not verify
         // Executions without obligations are a clean refusal, not an unchecked exception.
         val orphan = r.state.copy(obligations = r.state.obligations - key("e2"))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(orphan), orphan.chain) }
+        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(orphan), head) }
+    }
+
+    /** O3a review 2 (P1-1): a state that is balanced, invariant-clean and has a freshly computed checksum, at the REAL head, but that
+     *  the history never produced. The head decision's state digest is what refuses it. */
+    @Test fun forgedButConsistentStateAtTheRealHeadIsRefused() {
+        val r = openedAndCaptured(); r.go(settle("e1", 1))
+        val head = r.decisions.last(); val s = r.state
+        val forgeries = mapOf(
+            "minted cash" to s.copy(positions = s.positions + ((buyer to usd) to ((s.positions[buyer to usd] ?: 0L) + 99)) +
+                ((opening to usd) to ((s.positions[opening to usd] ?: 0L) - 99))),
+            "moved shares without settling" to s.copy(positions = s.positions + ((seller to aapl) to ((s.positions[seller to aapl] ?: 0L) - 1)) +
+                ((buyer to aapl) to ((s.positions[buyer to aapl] ?: 0L) + 1))),
+        )
+        for ((name, forged) in forgeries) {
+            ledger.checkInvariants(forged)                                    // it is invariant-clean: only the commitment can catch it
+            val e = assertFailsWith<IllegalArgumentException>(name) { ledger.restore(ledger.checkpoint(forged), head) }
+            assertTrue(e.message!!.contains("committed by the trusted head"), "$name: ${e.message}")
+        }
+        // Genesis: minting cash into the empty state is refused too.
+        val mint = ledger.genesis().copy(positions = mapOf((buyer to usd) to 99L, (opening to usd) to -99L))
+        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(mint), null) }
+        assertEquals(ledger.genesis(), ledger.restore(ledger.checkpoint(ledger.genesis()), null))
+    }
+
+    @Test fun settleRequiresOperatorAuthorityAndRefusalsDoNotBurnTheAttemptBudget() {
+        val r = openedAndCaptured()
+        repeat(200) { n ->
+            val out = r.go(FinanceInput.Settle(action("trade-settle-$n", "repair"), Authority.TRADING, key("e1"), n + 1))
+            assertEquals(Disposition.UNAUTHORIZED, out.disposition); assertNull(out.decision)
+        }
+        assertEquals(0, r.state.attempts.size)
+        r.go(fund("open-buyer-cash", buyer, usd, 600_000_000_000))
+        assertEquals(Disposition.SETTLED, r.go(settle("e1", 1)).disposition)
     }
 
     @Test fun invariantsHoldAfterEveryDecisionOfAMixedSequence() {
@@ -256,7 +289,7 @@ class FinanceLedgerTest {
         for (cut in 0..inputs.size) {
             val prefix = run().apply { inputs.take(cut).forEach(::go) }
             val checkpoint = ledger.checkpoint(prefix.state)
-            val restored = Run(ledger).apply { state = ledger.restore(checkpoint, prefix.state.chain) }
+            val restored = Run(ledger).apply { state = ledger.restore(checkpoint, prefix.decisions.lastOrNull()) }
             inputs.drop(cut).forEach { restored.go(it) }
             assertEquals(full.state, restored.state, "cut=$cut")
             assertTrue(ledger.verifyChain(prefix.decisions))
@@ -267,7 +300,7 @@ class FinanceLedgerTest {
         val r = openedAndCaptured()
         val checkpoint = ledger.checkpoint(r.state)
         val forged = checkpoint.copy(state = r.state.copy(positions = r.state.positions + ((buyer to usd) to 1L)))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(forged, r.state.chain) }
+        assertFailsWith<IllegalArgumentException> { ledger.restore(forged, r.decisions.last()) }
         assertTrue(ledger.verifyChain(r.decisions))
         val reordered = r.decisions.toMutableList().apply { add(0, removeAt(1)) }
         assertFalse(ledger.verifyChain(reordered))
@@ -288,7 +321,7 @@ class FinanceLedgerTest {
     /** Test-side copy of the decision byte layout, so a forged decision carries a checksum that is valid for its own fields. */
     private fun forge(d: Decision, sequence: Long = d.sequence, priorChain: String = d.priorChain): Decision {
         val bytes = Canon.bytes {
-            str("calcify-finance-decision-v1"); str(priorChain); long(sequence)
+            str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(d.stateDigest)
             str(d.action.namespace); str(d.action.domain); str(d.action.actionId)
             str(d.inputDigest); str(d.disposition.name); int(d.legs.size); d.legs.forEach { leg(it) }
         }
@@ -306,7 +339,7 @@ class FinanceLedgerTest {
     @Test fun repeatedSettleAttemptUnderNewActionKeyIsPriorAttempt() {
         val r = openedAndCaptured()
         assertEquals(Disposition.INSUFFICIENT_CASH, r.go(settle("e1", 1)).disposition)
-        val again = r.go(FinanceInput.Settle(action("other-action-key", "repair"), key("e1"), 1))
+        val again = r.go(FinanceInput.Settle(action("other-action-key", "repair"), Authority.OPERATOR, key("e1"), 1))
         assertEquals(Disposition.PRIOR_ATTEMPT, again.disposition); assertNull(again.decision)
     }
 
@@ -323,7 +356,7 @@ class FinanceLedgerTest {
         val r = openedAndCaptured()
         val positions = r.state.positions; val obligations = r.state.obligations
         assertEquals(Disposition.INVALID_INPUT, r.go(settle("e1", 0)).disposition)
-        assertEquals(Disposition.INVALID_INPUT, r.go(FinanceInput.Settle(action("neg-attempt", "repair"), key("e1"), -1)).disposition)
+        assertEquals(Disposition.INVALID_INPUT, r.go(FinanceInput.Settle(action("neg-attempt", "repair"), Authority.OPERATOR, key("e1"), -1)).disposition)
         assertEquals(Disposition.INVALID_INPUT, r.go(capture("bad-same", 1, b = buyer, s = buyer)).disposition)
         assertEquals(Disposition.INVALID_INPUT, r.go(capture("bad-price", 1, -1)).disposition)
         assertEquals(Disposition.INVALID_INPUT, r.go(capture("bad-zero-qty", 0)).disposition)
@@ -348,8 +381,8 @@ class FinanceLedgerTest {
         assertEquals(Disposition.FUNDED, r.go(FinanceInput.Fund(action("same-key", "control"), Authority.OPERATOR, buyer, usd, 5)).disposition)
         assertEquals(Disposition.ACTION_CONFLICT, r.go(FinanceInput.Fund(action("same-key", "control"), Authority.TRADING, buyer, usd, 5)).disposition)
         r.go(capture("e9", 1))
-        val s1 = FinanceInput.Settle(action("same-settle", "repair"), key("e9"), 1)
-        val s2 = FinanceInput.Settle(action("same-settle", "repair"), key("e9"), 2)
+        val s1 = FinanceInput.Settle(action("same-settle", "repair"), Authority.OPERATOR, key("e9"), 1)
+        val s2 = FinanceInput.Settle(action("same-settle", "repair"), Authority.OPERATOR, key("e9"), 2)
         assertNotEquals(s1.digest(), s2.digest())
         assertEquals(Disposition.INSUFFICIENT_CASH, r.go(s1).disposition)
         assertEquals(Disposition.ACTION_CONFLICT, r.go(s2).disposition)
@@ -381,7 +414,7 @@ class FinanceLedgerTest {
     @Test fun restoreRejectsEveryTamperedStateField() {
         val r = openedAndCaptured(); r.go(settle("e1", 1))
         val cp = ledger.checkpoint(r.state)
-        assertEquals(r.state, ledger.restore(cp, r.state.chain))
+        assertEquals(r.state, ledger.restore(cp, r.decisions.last()))
         val s = r.state
         val tampered = mapOf(
             "positions" to s.positions + ((buyer to usd) to 1L),
@@ -400,14 +433,14 @@ class FinanceLedgerTest {
                 "controls" -> s.copy(controls = value as Int)
                 else -> s.copy(sequence = value as Long)
             }
-            assertFails("tampered $name must be refused") { ledger.restore(cp.copy(state = forged), s.chain) }
+            assertFails("tampered $name must be refused") { ledger.restore(cp.copy(state = forged), r.decisions.last()) }
         }
-        assertFails { ledger.restore(cp.copy(checksum = "0".repeat(64)), s.chain) }
+        assertFails { ledger.restore(cp.copy(checksum = "0".repeat(64)), r.decisions.last()) }
     }
 
     @Test fun restoreRunsInvariantsEvenWithAValidChecksum() {
         val bad = ledger.genesis().copy(positions = mapOf((buyer to usd) to -5L, (opening to usd) to 5L))
-        assertFails { ledger.restore(ledger.checkpoint(bad), bad.chain) }
+        assertFails { ledger.restore(ledger.checkpoint(bad), null) }
     }
 
     @Test fun invariantCheckerRejectsNegativeUnbalancedAndUnknownAccounts() {
@@ -465,6 +498,47 @@ class FinanceLedgerTest {
         refused(g.copy(actions = mapOf(action("a") to funded, action("b") to funded), sequence = 2, controls = 2), small, "control budget or count drift")
         refused(g.copy(actions = mapOf(action("a") to funded), sequence = 1, controls = 0), small, "control budget or count drift")
         refused(g.copy(actions = (1..4).associate { action("a$it") to cap }, sequence = 4), small, "record budget exceeded")
+    }
+
+    /** O3a review 2 (P2-2): persisted histories depend on these encodings. Goldens come from an independent Python encoder
+     *  (length-framed big-endian), so a change to Canon, decisionBytes or stateBytes fails here instead of silently
+     *  invalidating stored history. */
+    @Test fun digestsGenesisDecisionAndCheckpointMatchIndependentGoldens() {
+        assertEquals("2ff64992b6c8b48e41e8e6a215dbbfe2275f0d149e5741a8e688fa385cddebc8", ledger.config.digest())
+        assertEquals("8503a08ffb4b17ea312399af0de8fdb66242a347fa356a7f9135d9501f85d84c", ledger.genesisChain)
+        val input = fund("open-seller-security", seller, aapl, 6)
+        assertEquals("92d081004ada17d9e3a9cd27c3149d072903ccfe606a00574840e04e3508525f", input.digest())
+        val r = run(); r.go(input)
+        val d = r.decisions.single()
+        assertEquals("bb6d9959f179cd4909a4cf3fca487f8aacd3dc31f0dda6d3dac4e172808cf204", d.stateDigest)
+        assertEquals("6169f4ec8be456aa9f5a5f23597ef626247a17ba642371db3d10b7138a2c8613", d.checksum)
+        assertEquals("30ff5c5c585864f81f6b81c3c6b8aa0ee1b5b082dc7af97f2c2a224f5a57612a", ledger.checkpoint(r.state).checksum)
+    }
+
+    @Test fun invariantCheckerRejectsCrossStructureInconsistency() {
+        val g = ledger.genesis()
+        val ek = key("e1")
+        val cap = ActionRecord("d", Disposition.CAPTURED)
+        val captured = Captured(buyer, seller, 3, price)
+        val pending = Obligation(ObligationStatus.PENDING, 3 * price, 3)
+        val one = g.copy(executions = mapOf(ek to captured), obligations = mapOf(ek to pending), actions = mapOf(action("a") to cap), sequence = 1)
+        ledger.checkInvariants(one)
+        refused(g.copy(positions = mapOf((buyer to AssetId("EUR")) to 5L, (opening to AssetId("EUR")) to -5L)), text = "position in unknown asset")
+        refused(g.copy(attempts = mapOf((ek to 1) to Disposition.INSUFFICIENT_CASH), actions = mapOf(action("a") to ActionRecord("d", Disposition.INSUFFICIENT_CASH)), sequence = 1),
+            text = "attempt for unknown execution or ordinal")
+        refused(one.copy(attempts = mapOf((ek to 0) to Disposition.INSUFFICIENT_CASH), actions = one.actions + (action("b") to ActionRecord("d", Disposition.INSUFFICIENT_CASH)), sequence = 2),
+            text = "attempt for unknown execution or ordinal")
+        refused(one.copy(attempts = mapOf((ek to 1) to Disposition.CAPTURED), actions = one.actions + (action("b") to ActionRecord("d", Disposition.INSUFFICIENT_CASH)), sequence = 2),
+            text = "attempt with an illegal disposition")
+        refused(one.copy(actions = mapOf(action("a") to ActionRecord("d", Disposition.CAPTURED), action("b") to ActionRecord("d", Disposition.CAPTURED)), sequence = 2),
+            text = "captures differ from executions")
+        refused(one.copy(actions = mapOf(action("a") to cap, action("b") to ActionRecord("d", Disposition.UNAUTHORIZED)), sequence = 2),
+            text = "never recorded")
+        refused(one.copy(actions = one.actions + (action("b") to ActionRecord("d", Disposition.INSUFFICIENT_CASH)), sequence = 2), text = "settle actions differ from attempts")
+        // An obligation marked SETTLED with no SETTLED attempt, and a SETTLED attempt on a pending obligation.
+        refused(one.copy(obligations = mapOf(ek to Obligation(ObligationStatus.SETTLED, 0, 0))), text = "settled attempt differs from obligation status")
+        refused(one.copy(attempts = mapOf((ek to 1) to Disposition.SETTLED), actions = one.actions + (action("b") to ActionRecord("d", Disposition.SETTLED)), sequence = 2),
+            text = "settled attempt differs from obligation status")
     }
 
     @Test fun configRejectsSharedOpeningAndIdenticalAssets() {

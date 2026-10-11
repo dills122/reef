@@ -37,6 +37,7 @@ private static final long serialVersionUID = 0L;
     legs_ = java.util.Collections.emptyList();
     priorChain_ = "";
     checksum_ = "";
+    stateDigest_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -266,6 +267,53 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int STATE_DIGEST_FIELD_NUMBER = 8;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object stateDigest_ = "";
+  /**
+   * <pre>
+   * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+   * </pre>
+   *
+   * <code>string state_digest = 8;</code>
+   * @return The stateDigest.
+   */
+  @java.lang.Override
+  public java.lang.String getStateDigest() {
+    java.lang.Object ref = stateDigest_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      stateDigest_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+   * </pre>
+   *
+   * <code>string state_digest = 8;</code>
+   * @return The bytes for stateDigest.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getStateDigestBytes() {
+    java.lang.Object ref = stateDigest_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      stateDigest_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -301,6 +349,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(checksum_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 7, checksum_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(stateDigest_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 8, stateDigest_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -335,6 +386,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(checksum_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(7, checksum_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(stateDigest_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(8, stateDigest_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -366,6 +420,8 @@ private static final long serialVersionUID = 0L;
         .equals(other.getPriorChain())) return false;
     if (!getChecksum()
         .equals(other.getChecksum())) return false;
+    if (!getStateDigest()
+        .equals(other.getStateDigest())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -396,6 +452,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getPriorChain().hashCode();
     hash = (37 * hash) + CHECKSUM_FIELD_NUMBER;
     hash = (53 * hash) + getChecksum().hashCode();
+    hash = (37 * hash) + STATE_DIGEST_FIELD_NUMBER;
+    hash = (53 * hash) + getStateDigest().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -555,6 +613,7 @@ private static final long serialVersionUID = 0L;
       bitField0_ = (bitField0_ & ~0x00000010);
       priorChain_ = "";
       checksum_ = "";
+      stateDigest_ = "";
       return this;
     }
 
@@ -623,6 +682,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.checksum_ = checksum_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.stateDigest_ = stateDigest_;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -686,6 +748,11 @@ private static final long serialVersionUID = 0L;
       if (!other.getChecksum().isEmpty()) {
         checksum_ = other.checksum_;
         bitField0_ |= 0x00000040;
+        onChanged();
+      }
+      if (!other.getStateDigest().isEmpty()) {
+        stateDigest_ = other.stateDigest_;
+        bitField0_ |= 0x00000080;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -759,6 +826,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 58
+            case 66: {
+              stateDigest_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 66
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1432,6 +1504,98 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       checksum_ = value;
       bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object stateDigest_ = "";
+    /**
+     * <pre>
+     * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+     * </pre>
+     *
+     * <code>string state_digest = 8;</code>
+     * @return The stateDigest.
+     */
+    public java.lang.String getStateDigest() {
+      java.lang.Object ref = stateDigest_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        stateDigest_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+     * </pre>
+     *
+     * <code>string state_digest = 8;</code>
+     * @return The bytes for stateDigest.
+     */
+    public com.google.protobuf.ByteString
+        getStateDigestBytes() {
+      java.lang.Object ref = stateDigest_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        stateDigest_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+     * </pre>
+     *
+     * <code>string state_digest = 8;</code>
+     * @param value The stateDigest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateDigest(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      stateDigest_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+     * </pre>
+     *
+     * <code>string state_digest = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStateDigest() {
+      stateDigest_ = getDefaultInstance().getStateDigest();
+      bitField0_ = (bitField0_ & ~0x00000080);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
+     * </pre>
+     *
+     * <code>string state_digest = 8;</code>
+     * @param value The bytes for stateDigest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateDigestBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      stateDigest_ = value;
+      bitField0_ |= 0x00000080;
       onChanged();
       return this;
     }

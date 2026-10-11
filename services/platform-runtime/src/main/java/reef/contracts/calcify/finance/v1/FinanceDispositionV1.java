@@ -77,7 +77,9 @@ public enum FinanceDispositionV1
   FINANCE_DISPOSITION_V1_BALANCE_OVERFLOW(15),
   /**
    * <pre>
-   * Never carried by a decision or an action record: PRIOR_RESULT, ACTION_CONFLICT, BUDGET_EXCEEDED (16-18 reserved for replies).
+   * Reply-only dispositions: never carried by a decision or an action record (decoding refuses them there). A future recorded
+   * disposition must take a number from 19 upward; unknown numbers fail loudly on decode, so mixed-version rolling upgrades must
+   * upgrade consumers first.
    * </pre>
    *
    * <code>FINANCE_DISPOSITION_V1_PRIOR_RESULT = 16;</code>
@@ -169,7 +171,9 @@ public enum FinanceDispositionV1
   public static final int FINANCE_DISPOSITION_V1_BALANCE_OVERFLOW_VALUE = 15;
   /**
    * <pre>
-   * Never carried by a decision or an action record: PRIOR_RESULT, ACTION_CONFLICT, BUDGET_EXCEEDED (16-18 reserved for replies).
+   * Reply-only dispositions: never carried by a decision or an action record (decoding refuses them there). A future recorded
+   * disposition must take a number from 19 upward; unknown numbers fail loudly on decode, so mixed-version rolling upgrades must
+   * upgrade consumers first.
    * </pre>
    *
    * <code>FINANCE_DISPOSITION_V1_PRIOR_RESULT = 16;</code>
