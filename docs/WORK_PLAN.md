@@ -34,7 +34,7 @@ financial authority, production adoption or capacity claim follows.
   synthetic bytes, unauthenticated RF1 broker, one run.
 - Re-verified October 11: Go build/vet/test/race, Kotlin `Finite*` including the 10 Postgres-backed
   binding-store and 11 ingress tests, proto regeneration, retention, and local replay of the CI
-  steps O2 touches (two CI breakers fixed: unwired Bun harness tests, migration-list test).
+  steps O2 touches (CI breakers fixed: migration-list test, harness-test wiring as a local make target, Go coverage gate exclusion for the fixture-only probe).
   Results, commands and limits: [O2 verification record](evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
 - Open: independent review 2 of 3 on the final diff (fresh reviewer); G1–G8 and G10 live
   evidence is still Codex's recorded claims (ledger under the snapshot's
