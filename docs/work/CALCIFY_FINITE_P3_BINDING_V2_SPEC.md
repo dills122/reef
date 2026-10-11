@@ -263,7 +263,7 @@ differs; any topic name or id duplicates another; `financeConfigDigest` differs 
 differ from the compiled O3a limits (256/128/160/8); `openingAccountId` collides with a party account; any prefix-distinctness rule
 fails; CONTROL or FINANCE topics non-empty at genesis, or a genesis offset is not zero; the source generation is already registered
 for another binding; the restore cut is incomplete, mismatched or violates section 8 (including `FINANCE_OFFSET_AHEAD_OF_HISTORY`,
-`FINANCE_HISTORY_AHEAD_OF_OFFSET`, a failing `verifyChain`, a failing entry chain, or a state not committed by the head decision);
+`FINANCE_HISTORY_AHEAD_OF_OFFSET`, `FINANCE_GROUP_OFFSETS_EXPIRED`, a failing `verifyChain`, a failing entry chain, or a state not committed by the head decision);
 broker topic UUID differs from the registry.
 
 ## 12. Test plan (O3b)
