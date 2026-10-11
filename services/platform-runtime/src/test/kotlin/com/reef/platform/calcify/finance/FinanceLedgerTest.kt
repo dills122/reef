@@ -418,6 +418,55 @@ class FinanceLedgerTest {
         ledger.checkInvariants(g.copy(positions = mapOf((buyer to usd) to 5L, (opening to usd) to -5L)))
     }
 
+    @Test fun checkpointChecksumCoversActionsChainAndControls() {
+        val r = openedAndCaptured(); r.go(settle("e1", 1))
+        val s = r.state
+        val base = ledger.checkpoint(s).checksum
+        val firstAction = s.actions.entries.first()
+        val variants = mapOf(
+            "actions" to s.copy(actions = s.actions + (firstAction.key to firstAction.value.copy(digest = "0".repeat(64)))),
+            "chain" to s.copy(chain = "0".repeat(64)),
+            "controls" to s.copy(controls = s.controls + 1),
+        )
+        for ((name, v) in variants) assertNotEquals(base, ledger.checkpoint(v).checksum, "checksum must cover $name")
+    }
+
+    private fun refused(state: FinanceState, cfg: FinanceLedger = ledger, text: String) {
+        val e = assertFailsWith<IllegalStateException>(text) { cfg.checkInvariants(state) }
+        assertTrue(e.message!!.contains(text), "expected '$text' but was '${e.message}'")
+    }
+
+    @Test fun invariantCheckerRejectsEachStructuralViolationOnItsOwn() {
+        val g = ledger.genesis()
+        val ek = key("e1")
+        val captured = Captured(buyer, seller, 3, price)
+        val rec = ActionRecord("d", Disposition.CAPTURED)
+        refused(g.copy(obligations = mapOf(ek to Obligation(ObligationStatus.PENDING, 0, 0))), text = "obligation without execution")
+        refused(g.copy(executions = mapOf(ek to captured), obligations = mapOf(ek to Obligation(ObligationStatus.PENDING, 1, 3)),
+            actions = mapOf(action("a") to rec), sequence = 1), text = "pending residual drift")
+        refused(g.copy(executions = mapOf(ek to captured), obligations = mapOf(ek to Obligation(ObligationStatus.PENDING, 3 * price, 2)),
+            actions = mapOf(action("a") to rec), sequence = 1), text = "pending residual drift")
+        refused(g.copy(executions = mapOf(ek to captured), obligations = mapOf(ek to Obligation(ObligationStatus.SETTLED, 1, 0)),
+            actions = mapOf(action("a") to rec), sequence = 1), text = "settled residual not zero")
+        refused(g.copy(sequence = 1), text = "action count differs from sequence")
+        refused(g.copy(actions = mapOf(action("a") to rec)), text = "action count differs from sequence")
+    }
+
+    @Test fun invariantCheckerEnforcesEveryBudgetClassOnItsOwn() {
+        val small = FinanceLedger(FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxObligations = 1, maxCaptures = 1, maxSettleAttempts = 1, maxControls = 1))
+        val g = small.genesis()
+        val captured = Captured(buyer, seller, 1, 1)
+        val pending = Obligation(ObligationStatus.PENDING, 1, 1)
+        val cap = ActionRecord("d", Disposition.CAPTURED)
+        val funded = ActionRecord("d", Disposition.FUNDED)
+        refused(g.copy(executions = mapOf(key("e1") to captured, key("e2") to captured), obligations = mapOf(key("e1") to pending, key("e2") to pending),
+            actions = mapOf(action("a") to cap, action("b") to cap), sequence = 2), small, "capture budget exceeded")
+        refused(g.copy(attempts = mapOf((key("e1") to 1) to Disposition.INSUFFICIENT_CASH, (key("e1") to 2) to Disposition.INSUFFICIENT_CASH)), small, "settle attempt budget exceeded")
+        refused(g.copy(actions = mapOf(action("a") to funded, action("b") to funded), sequence = 2, controls = 2), small, "control budget or count drift")
+        refused(g.copy(actions = mapOf(action("a") to funded), sequence = 1, controls = 0), small, "control budget or count drift")
+        refused(g.copy(actions = (1..4).associate { action("a$it") to cap }, sequence = 4), small, "record budget exceeded")
+    }
+
     @Test fun configRejectsSharedOpeningAndIdenticalAssets() {
         assertFailsWith<IllegalArgumentException> { FinanceConfig(setOf(buyer, seller), usd, aapl, buyer) }
         assertFailsWith<IllegalArgumentException> { FinanceConfig(setOf(buyer, seller), usd, usd, opening) }
