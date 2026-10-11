@@ -243,6 +243,11 @@ class FinanceLedgerTest {
             val e = assertFailsWith<IllegalArgumentException>(name) { ledger.restore(ledger.checkpoint(forged), head) }
             assertTrue(e.message!!.contains("committed by the trusted head"), "$name: ${e.message}")
         }
+        // Attempt bookkeeping is committed too: renumbering a recorded attempt keeps every count and invariant intact.
+        val (attemptKey, attemptResult) = s.attempts.entries.first()
+        val renumbered = s.copy(attempts = (s.attempts - attemptKey) + ((attemptKey.first to attemptKey.second + 7) to attemptResult))
+        ledger.checkInvariants(renumbered)
+        assertTrue(assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(renumbered), head) }.message!!.contains("committed by the trusted head"))
         // The chain head is outside the state digest, so it is bound separately: same content under a different chain is refused,
         // and so is a head decision whose own checksum does not verify even when the state names it.
         val rechained = s.copy(chain = "e".repeat(64))
