@@ -4,6 +4,12 @@ Date: October 2, 2026. Status: **proposed, awaiting proofs and owner decisions**
 Source baseline: `16e15340919bc9330afbbfec0f9b089115f3e57f` (master after #461).
 No runtime implementation or accepted ADR change accompanies this RFC.
 
+October9 source alignment: bounded test-only E1/E3 proofs and empirical E4 now
+recorded in [financial checkpoint](../evidence/calcify-financial-sprint1/README.md).
+Finite source identity/profile gate merged in PR479; production financial
+integration, lifecycle/coverage and durable budgets remain open. RFC remains
+proposed; [current work](../WORK_PLAN.md) owns execution status.
+
 Companions: [research / review reconciliation](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md),
 [supplied proposals](../research/calcify-system-architecture-inputs/README.md),
 [current Phase1/2 wiring](../CALCIFY_PHASES_OVERVIEW.md),
@@ -121,9 +127,12 @@ settlement consumes only obligation's remaining quantity/amount. New action ID,
 attempt ordinal or policy version cannot discharge an already settled obligation
 again. Corrections/reversals are distinct authorized actions with explicit semantics.
 
-PR #461 already supplies authoritative run to resolver lookups. Remaining first
-slice recommendation: prohibit internal order reuse during run, enforce upstream
-before engine acceptance, and test restore/terminal eviction. If owner needs same-
+PR #461 supplies authoritative run to resolver lookups. PR #479 implements
+opt-in finite source profile with retention0, upstream scope/amount/identity guards,
+same-run accepted-ID no-reuse and profile-bound restore. [Finite source contract](../../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
+defines exact limits; command/history/closure budgets and durable broker binding
+remain open. This partially closes P0 identity prerequisite; full lifecycle and
+financial integration proof remain required. If owner needs same-
 run reuse, introduce explicit acceptance incarnation in authoritative outcomes and
 trade references, with temporal/sequential resolution. No guessing from latest row.
 
@@ -621,8 +630,12 @@ history. [DTCC CNS](https://www.dtcc.com/products-and-services/clearing-settleme
 
 ## 10. Proof plan and stop conditions
 
-Proofs below are **unrun** for new financial kernel. Earlier resolver tests are
-prerequisite evidence, not substitute. Each proof is a small reviewable delivery;
+Production financial integration proofs below remain **unrun**. Bounded test-only
+E1 kernel/oracle/reconstruction and E3 RF3/EOS recovery proofs passed; empirical
+E4 measured deadline target miss. [Focused checkpoint](../evidence/calcify-financial-sprint1/README.md)
+owns exact scope and immutable originals. These and earlier resolver tests are
+prerequisite evidence, not production adoption or full P0–P4 qualification.
+Each proof is a small reviewable delivery;
 agree its fixtures/bounds before implementing, retain failed attempts, then decide
 next slice. Pure kernel work can use complete fixtures while source contracts close.
 
@@ -690,8 +703,11 @@ Choose required headroom from outage/SLO, not arbitrary linear partition scaling
 Use existing throughput ledger and harnesses where possible. Source-injected tests
 can isolate financial bottleneck; paired orders need roughly20k commands/s for10k
 trades/s but actual fanout varies. A producer that misses target duration does not
-qualify by draining later. Historical10.16k resolver run failed frozen gate; no new
-financial rate measured. [Research baseline](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md#4-honest-capacity-baseline).
+qualify by draining later. Historical10.16k resolver run failed frozen gate.
+October6 test-only E4 measured63104/60s=1051.73settled/s versus2500/s target;
+eventual150000 settlement parity does not pass deadline target. Production/full-
+path financial capacity remains unqualified. [Financial diagnostic](../evidence/calcify-financial-sprint1/README.md#latest-empirical-checkpoint--october6-utc),
+[research baseline](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md#4-honest-capacity-baseline).
 
 If diagnosed financial commit/state/recovery or total operational cost warrants
 authority comparison, compare same P1 semantics/ordered inputs with Postgres transaction
@@ -703,7 +719,7 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
+**Status:** [Current work checkpoint](../WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
 and [focused verification](../evidence/calcify-financial-sprint1/README.md) own execution status;
 E0 preparation history remains linked from evidence. Acceptance gates below unchanged.
 Decision owner: Reef project owner. Planning checkpoint:

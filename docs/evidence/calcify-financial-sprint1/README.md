@@ -1,6 +1,6 @@
 # Calcify financial sprint1 — bounded correctness pass
 
-October5 UTC / October4 local. Branch `codex/calcify-sprint1-experiments`;
+Historical bounded checkpoint: October5 UTC / October4 local. Branch `codex/calcify-sprint1-experiments`;
 Broker/Kotlin/profile proof remains from `f75b5d61` / `f56b30b1`; JavaScript
 checkpoint and metric fixes postdate round7.
 Test-only experiments. [Focused results](verification.json),
@@ -24,9 +24,19 @@ Historical draft/pending wording below
 predates merged Reef473/474/475/477 and Records6–9. Complete [closed session proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d) and [delivery review](https://github.com/dills122/reef-records/blob/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-review-2026-10-06-1c143125049d/reviews/delivery1/report.md)
 published at Records `2331d97d9f9e6af8638d6ed335adbfac743d2c03`:7628files/1144093245B verified; all three
 journal chunk reassemblies pass. [Records PR10](https://github.com/dills122/reef-records/pull/10)
-draft, not merged. Broker topic volumes retained locally, not exported; archive
+merged October7 at `1419b7e0`; original proof remains pinned above. Broker topic volumes retained locally, not exported; archive
 contains input journals and executed probe receipts, not independently replayable
 raw output topics. No tracked Reef originals removed.
+
+### Current source continuation — October9, 2026
+
+[Current finite P0 checkpoint](../../WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
+and [source contract](../../../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
+route next work after merged PR479: lifecycle/coverage membership, durable finite
+command/history/closure budgets and restore. Matching profile/snapshot identity
+gate partially closes source prerequisites; durable broker profile/budget binding,
+financial admission, SQL/read and funding/repair/restart remain separate gates.
+No production financial authority or full-path capacity qualification.
 
 ### PR478 policy review follow-up — October7, 2026
 
@@ -53,7 +63,7 @@ source scope. Retention no-op: prior raw proof remains pinned above; no new bulk
 evidence or standalone superseded records. Guidance/architecture/contracts unchanged
 because shared digest calculation preserves existing v1 bytes and runtime behavior.
 
-## Current E4 continuation
+## Historical October5 E4 continuation
 
 October5 branch `codex/calcify-e4-readiness`, base `29a8926d`.
 [Focused verification](e4-verification-2026-10-05.json) and
@@ -95,7 +105,7 @@ model and isolated prototype retain original scope; integrated compact actual
 proof above supersedes readiness status, with retained floor still over gate.
 Earlier scopes below unchanged.
 
-## Current heap protection component
+## Historical October5 heap protection component
 
 October5, 2026 UTC; branch `codex/calcify-heap-protection`, base `3ce2bdf2`.
 [Focused verification](heap-verification-2026-10-05.json) and
@@ -110,7 +120,7 @@ Proof published at Records `132dae9d`; [Records PR8](https://github.com/dills122
 
 Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared fixed platform lock preserves Darwin path and exclusivity; final local230/230, independent Attempt1 cycle3 Ready. Kotlin source/build unchanged; original64-test receipt retained. Supplemental correction proof published at Records `2a2abf9e`:63 remote blobs/700,463 bytes verified; combined279/4,332,894. [Final independent review](https://github.com/dills122/reef-records/blob/2a2abf9ea130636daecc2d35dc6c961b08c182f9/records/reef/docs/evidence/calcify-financial-sprint1/heap-ci-correction-2026-10-05-3bf45160ebfa/review/cycle3/report.md); Records PR8 draft, landing pending; actual hosted status follows [Reef PR475](https://github.com/dills122/reef/pull/475), stacked above E3 PR474.
 
-## Current E3 continuation
+## Historical October5 E3 continuation
 
 October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
 [Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
@@ -160,7 +170,7 @@ Cap 7 exhausted; no automatic reset or further review round.
   E2 finite 156 + seeded 128 pass; symbolic bounds only. Rate selfcheck 40 prefixes
   and one-leg mutant rejection; E4 count/byte counterexamples rejected.
 
-## Resource scope and open gates
+## Historical resource scope and open gates
 
 Full matrix elapsed 474.917 seconds; correctness timing, no throughput claim.
 Conservative pilot forecast 8,280,440,832 bytes (7.71 GiB); sampled active maximum
@@ -175,10 +185,11 @@ preallocation reclamation. Historical failure remains immutable. Original 16 MiB
 proposal never applied. Initial metadata and assessment errors preserved with corrections.
 
 At original checkpoint, full E3 majority/stale-owner/producer-failure/committed-before-controller-ACK and
-A10B27 certified activation remained open; current continuation above closes bounded E3.
-Applied heap component passes separately; E4 reviewed costs/ACK membership/physical-byte/
-calibration/supervision gates, reservation acceptance and matcher identity integration remain.
-No full sprint, capacity, production or cutover sign-off.
+A10B27 certified activation remained open; subsequent bounded E3 proof closed those
+scoped gates. At October5 checkpoint, E4 reviewed costs/ACK membership/physical-byte/
+calibration/supervision, reservation acceptance and matcher identity integration
+remained open. Current continuation and latest empirical checkpoint above supersede
+that tasking; no production, full-path capacity or cutover sign-off.
 
 ## Records and continuation
 
@@ -187,5 +198,5 @@ No full sprint, capacity, production or cutover sign-off.
 Bulk only in Records, local-only Reef provenance; no local source removal.
 [Earlier rounds4–6 and failed default-segment run](https://github.com/dills122/reef-records/tree/ad7b60e9512907865785b3ab3723642c9d56dd86/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-f56b30b1),
 [original recovery/startup proof](https://github.com/dills122/reef-records/tree/cfa4217708ff0694a966e3d87acce9585010a65a/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54).
-[Recovery hashes](recovery.json), [active handoff](../../work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
+[Recovery hashes](recovery.json), [current routing and historical handoff](../../work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
 October3 original raw proof lost; subsequent reruns are fresh evidence.

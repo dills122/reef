@@ -32,11 +32,33 @@ Broker acknowledgement basis: [Redpanda topic write caching](https://docs.redpan
 Recovery diagnostic objective:1m full accepted rows, cold local-state loss, same application/changelog, observed RUNNING within120s and exact next-wave reconciliation. One corrected implementation cohort passed19.97s at767MB local state. This objective is a local diagnostic gate, not a production percentile SLO. See evidence ledger for exact cohort and excluded boundaries.
 
 
-## Nightly qualification limits (2026-09-30)
+## Current safety guards and qualification boundary (2026-10-09)
 
-Current source-generation/source-UUID checks do not bind verified/output UUIDs. Review found expired verified checkpoints may reset to earliest, and verified/output recreation may reuse restored checkpoints/completed identities against different history. Both require fail-closed fixes before merge. Planned remedy: explicit verified checkpoint retention validation with reset disabled and pinned classic consumer protocol; persist generation plus names/UUIDs of source, verified and output topics; reject missing output before creation when application changelog exists; extend existing periodic identity check. Existing source-only checkpoints need explicit repair, since prior input/output UUIDs cannot be inferred. These changes are pending, not current guarantees. Simultaneous destruction of changelog and namespace, and atomic malicious cross-topic replacement, remain outside this guard's proof.
+Phase 2 merged in [PR #433](https://github.com/dills122/reef/pull/433), commit
+`1e77575a9`. Current [resolver startup](../../services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/CalcifyResolverRuntime.kt)
+pins `auto.offset.reset=none` and classic consumer protocol. Verified consumer
+retention gate rejects committed offsets outside retained bounds; missing group
+checkpoint explicitly starts at retained beginning. Startup binds or checks verified
+and output names/UUIDs against generation-scoped SQL registration and refuses
+missing output when application changelog survives. Periodic source-reader checks
+cover source UUID; these checks do not provide continuous verified/output identity
+monitoring or atomic cross-topic replacement protection. First-sight registration
+does not reconstruct earlier unregistered topic identity. Simultaneous destruction
+of namespace/changelog remains outside this guard's proof. See [current work](../WORK_PLAN.md)
+for next scope; no new broker qualification accompanies this documentation check.
 
-Final local platform regression/coverage passes. Earlier actual HTTP smoke, nine-boundary RF3 fault matrix and1m-row recovery precede final candidate changes. Latest sustained hot cohort has exact3.15m outputs and10,160.50/s active covering rate but fails actual source-delivery duration310.730s versus301s maximum; remaining profiles unrun. Draft cannot merge until review defects and unchanged-candidate qualification close. [Continuation handoff](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/records/reef/docs/work/handoffs/2026-09-30-calcify-phase2.md).
+### Historical nightly qualification (2026-09-30)
+
+At September30 checkpoint, verified retention and verified/output identity fixes
+were pending and draft merge blocked. Those pending claims are superseded by
+merged guards above; historical test and measurement scope stays unchanged.
+Final local platform regression/coverage passed. Earlier actual HTTP smoke,
+nine-boundary RF3 fault matrix and1m-row recovery preceded final candidate changes.
+Sustained hot cohort had exact3.15m outputs and10,160.50/s active covering rate but
+failed actual source-delivery duration310.730s versus301s maximum; remaining
+profiles unrun at that checkpoint. [Original continuation handoff](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/records/reef/docs/work/handoffs/2026-09-30-calcify-phase2.md).
+Merged safety fixes do not upgrade failed capacity result or transfer old RF3/
+recovery proof to later candidates.
 
 ## Run namespace upgrade and coordinated replay (2026-10-02)
 

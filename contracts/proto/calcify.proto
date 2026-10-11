@@ -73,3 +73,143 @@ message ResolverTargetBatchV1 {
   int64 source_offset = 1;
   repeated TradeSourceV1 trades = 2;
 }
+
+// Additive finite capture contract. Existing Phase 1 links remain unchanged.
+enum LifecycleCommandKindV1 {
+  LIFECYCLE_COMMAND_UNSPECIFIED = 0;
+  LIFECYCLE_COMMAND_SUBMIT = 1;
+  LIFECYCLE_COMMAND_MODIFY = 2;
+  LIFECYCLE_COMMAND_CANCEL = 3;
+}
+message LifecycleSubmitV1 {
+  string client_order_id = 1;
+  reef.contracts.orderexecution.v1.OrderSide side = 2;
+  reef.contracts.orderexecution.v1.OrderType order_type = 3;
+  string quantity_units = 4;
+  string limit_price = 5;
+  string currency = 6;
+  reef.contracts.orderexecution.v1.TimeInForce time_in_force = 7;
+  // Preserve producer spelling, including LIMIT_HIDDEN alias.
+  string source_order_type = 8;
+}
+message LifecycleModifyV1 { string quantity_units = 1; string limit_price = 2; }
+message LifecycleCancelV1 { string reason = 1; }
+message OrderLifecycleCommandV1 {
+  string schema = 1;
+  string source_profile_hash = 2;
+  string finite_binding_digest = 3;
+  LifecycleCommandKindV1 kind = 4;
+  string command_id = 5;
+  string run_id = 6;
+  string venue_session_id = 7;
+  string instrument_id = 8;
+  string order_id = 9;
+  string participant_id = 10;
+  string account_id = 11;
+  string trace_id = 12;
+  string causation_id = 13;
+  string correlation_id = 14;
+  string actor_id = 15;
+  string occurred_at = 16;
+  oneof attempted { LifecycleSubmitV1 submit = 17; LifecycleModifyV1 modify = 18; LifecycleCancelV1 cancel = 19; }
+}
+enum LifecycleMemberKindV1 {
+  LIFECYCLE_MEMBER_UNSPECIFIED = 0;
+  LIFECYCLE_MEMBER_COMMAND = 1;
+  LIFECYCLE_MEMBER_TRADE = 2;
+}
+message LifecycleMemberIdV1 {
+  SourceProvenanceV1 source = 1;
+  LifecycleMemberKindV1 kind = 2;
+  uint32 within_outcome_trade_ordinal = 3;
+  uint32 flattened_trade_ordinal = 4;
+}
+message LifecycleRevisionIdV1 { LifecycleMemberIdV1 command = 1; uint32 revision = 2; }
+message LifecycleDependencyV1 {
+  string order_id = 1;
+  AcceptedOrderSourceV1 acceptance = 2;
+  LifecycleRevisionIdV1 revision = 3;
+  LifecycleMemberIdV1 previous_effect = 4;
+  string quantity_units = 5;
+  string limit_price = 6;
+  string filled_units = 7;
+}
+enum LifecycleDispositionV1 {
+  LIFECYCLE_DISPOSITION_UNSPECIFIED = 0;
+  LIFECYCLE_APPLIED = 1;
+  LIFECYCLE_REJECTED = 2;
+  LIFECYCLE_READY_EXECUTION = 3;
+  LIFECYCLE_REPLAY = 4;
+}
+message LifecycleMemberV1 {
+  LifecycleMemberIdV1 id = 1;
+  LifecycleDispositionV1 disposition = 2;
+  OrderLifecycleCommandV1 command = 3;
+  string command_payload_hash = 4;
+  string outcome_status = 5;
+  reef.contracts.orderexecution.v1.OrderAccepted accepted = 6;
+  reef.contracts.orderexecution.v1.OrderRejected rejected = 7;
+  TradeSourceV1 trade = 8;
+  repeated LifecycleDependencyV1 dependencies = 9;
+  LifecycleRevisionIdV1 resulting_revision = 10;
+  AcceptedOrderSourceV1 immutable_acceptance = 11;
+  LifecycleMemberIdV1 replay_of = 12;
+  // Exact buy/sell execution facts retain canonical maker/taker attribution.
+  repeated reef.contracts.orderexecution.v1.ExecutionCreated executions = 13;
+}
+// Digest is SHA256(domain + NUL + protobuf bytes with content_digest empty).
+// No maps; repeated fields retain deterministic source/reducer ordering.
+message FiniteLifecycleCaptureV1 {
+  string schema = 1;
+  string finite_binding_digest = 2;
+  SourceProvenanceV1 source = 3;
+  repeated LifecycleMemberV1 members = 4;
+  uint32 outcome_count = 5;
+  uint32 trade_count = 6;
+  uint32 member_count = 7;
+  uint64 source_encoded_bytes = 8;
+  string source_content_digest = 9;
+  SourceProvenanceV1 completed_frontier = 10;
+  int64 resume_offset = 11;
+  string content_digest = 12;
+  // Closure is capture coverage, never financial completion.
+  bool prefix_closed = 13;
+}
+enum LifecycleOrderTerminalV1 {
+  LIFECYCLE_ORDER_OPEN = 0;
+  LIFECYCLE_ORDER_FILLED = 1;
+  LIFECYCLE_ORDER_CANCELLED = 2;
+}
+message FiniteLifecycleOrderStateV1 {
+  AcceptedOrderSourceV1 acceptance = 1;
+  LifecycleRevisionIdV1 revision = 2;
+  LifecycleMemberIdV1 previous_effect = 3;
+  string quantity_units = 4;
+  string limit_price = 5;
+  string filled_units = 6;
+  LifecycleOrderTerminalV1 terminal = 7;
+}
+message FiniteLifecycleBatchStateV1 {
+  string batch_id = 1;
+  string batch_checksum = 2;
+  FiniteLifecycleCaptureV1 first_capture = 3;
+}
+message FiniteLifecycleSuffixV1 { int64 offset = 1; bytes payload = 2; int64 resume_offset = 3; }
+// Bounded, rebuildable managed checkpoint. Binding is required even for empty state.
+message FiniteLifecycleStateV1 {
+  string state_version = 1;
+  string finite_binding_digest = 2;
+  string source_profile_hash = 3;
+  repeated FiniteLifecycleOrderStateV1 orders = 4;
+  repeated FiniteLifecycleBatchStateV1 batches = 5;
+  repeated string execution_ids = 6;
+  repeated FiniteLifecycleCaptureV1 completed_records = 7;
+  SourceProvenanceV1 completed_frontier = 8;
+  int64 resume_offset = 9;
+  uint64 source_bytes = 10;
+  uint64 capture_bytes = 11;
+  string fault = 12;
+  repeated FiniteLifecycleSuffixV1 retained_suffix = 13;
+  // Exact source/budget/application/genesis identity supplied by registered O2 binding.
+  bytes binding_identity = 14;
+}

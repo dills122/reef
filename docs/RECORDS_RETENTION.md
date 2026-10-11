@@ -33,6 +33,7 @@ If current work needs a durable lesson, add concise verified fact to current own
 - Latest master Calcify direct-throughput and joined-10k campaign bundles, including failed attempts, corrections, source manifests and current handoff. These are separate profiles from earlier phase diagnostics; campaign outcomes retain their recorded scope.
 - Complete terminal-retention red/green proof and latest PR review pass2.
 - [Runtime order identity](evidence/runtime-order-identity/README.md): final R08 local/real-DB/reviewer verification and CI follow-up with correction companions.
+- [Finite Calcify P3 O1](evidence/calcify-finite-p3/README.md): accepted optional lifecycle/capture model, complete failure/correction/review history in pinned Records proof; live O2 and financial gates remain open.
 - Source fixtures consumed by current scripts, original checksum/provenance manifests and correction notes. These are required companions, not obsolete bulk.
 
 Review retention when adding new evidence. Publish and verify complete bundles, including latest and older success/failure history, in Records before removing local bulk. A current contract or unresolved active plan does not become historical because its filename is old. Imported original Markdown remains unchanged; its relative links refer to source checkout at recorded source commit.
@@ -88,5 +89,32 @@ conservative capacity qualification follows.
 Source checkpoints remain local-only, not pushed to Reef. RocksDB/build/deps and
 retained broker output-topic volumes excluded; complete raw output replay is not
 claimed. No tracked Reef original removed; [Records PR10](https://github.com/dills122/reef-records/pull/10)
-remains draft. Raw local session retained until archive landing. Guidance and
+was draft at October6 checkpoint; merged October7 at `1419b7e0`.
+Archive landing supersedes original local-retention-until-landing tasking; no
+local cleanup performed by this documentation correction. Guidance and
 overviews unchanged for test-only resource permission; affected owners updated.
+
+## October 10 finite Calcify P3 O1 publication
+
+O1 optional lifecycle/source-prefix capture model accepted after combined review3of3
+Ready; exact56-path source committed `0a7df6f85c1f8636fdb74177afc49fa3eb14d8bd`.
+[Focused checkpoint](evidence/calcify-finite-p3/README.md) and
+[retention receipt](records/2026-10-10-calcify-finite-p3-retention.json) stay in Reef.
+[Complete proof](https://github.com/dills122/reef-records/tree/cbf2413db33dc7cb65c339cbc51e0eb98c2633f3/records/reef/docs/evidence/calcify-finite-p3/2026-10-10-o1-proof),
+[manifest](https://github.com/dills122/reef-records/blob/cbf2413db33dc7cb65c339cbc51e0eb98c2633f3/manifests/2026-10-10-calcify-finite-p3-o1-proof.json)
+published at `cbf2413db33dc7cb65c339cbc51e0eb98c2633f3`,
+[Records PR11](https://github.com/dills122/reef-records/pull/11):230 originals,
+7002941bytes, complete baseline/O0/O0D/O1 failures, spikes, reviews and corrections.
+Remote commit/tree plus199 unique blobs verified across230 record+3 metadata paths.
+Full36624-record integrity/hygiene and4tests pass; exact231 record/manifest
+additions all A. Earlier local baseline `--base` passed; final exact-head hosted
+integrity/hygiene/4tests and `--base` against `1419b7e0` passed at15:54:07UTC,
+job114251777460. No local final `--base` rerun claimed.
+
+Proof-source checkpoint `2a0df81f78c03fcdd73bc5f8e5139e8488fb7a95` tracked on
+local-only ref, not pushed/merged into Reef delivery; no tracked source removal.
+Records PR11 landing not claimed by this checkpoint. Current contracts/executable
+fixtures/owner summary remain local; active O2/preflight/O3/session planning stays
+local. No automatic ignored-data cleanup or other-topic sweep. Final delivery
+integration/Reef PR/OCR/Reef hosted CI pending; live binding/ingress/isolation/restore and
+financial authority/capacity remain unqualified.

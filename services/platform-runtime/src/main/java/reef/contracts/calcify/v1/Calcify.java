@@ -61,6 +61,71 @@ public final class Calcify extends com.google.protobuf.GeneratedFile {
   static final
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_reef_contracts_calcify_v1_ResolverTargetBatchV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleSubmitV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleSubmitV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleModifyV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleModifyV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleCancelV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleCancelV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_OrderLifecycleCommandV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_OrderLifecycleCommandV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleMemberIdV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleMemberIdV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleRevisionIdV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleRevisionIdV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleDependencyV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleDependencyV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_LifecycleMemberV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_LifecycleMemberV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleCaptureV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_FiniteLifecycleCaptureV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleOrderStateV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_FiniteLifecycleOrderStateV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleBatchStateV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_FiniteLifecycleBatchStateV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleSuffixV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_FiniteLifecycleSuffixV1_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleStateV1_descriptor;
+  static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_reef_contracts_calcify_v1_FiniteLifecycleStateV1_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -114,9 +179,129 @@ public final class Calcify extends com.google.protobuf.GeneratedFile {
       "ptedOrderSourceV1\"h\n\025ResolverTargetBatch" +
       "V1\022\025\n\rsource_offset\030\001 \001(\003\0228\n\006trades\030\002 \003(" +
       "\0132(.reef.contracts.calcify.v1.TradeSourc" +
-      "eV1Ba\n\031reef.contracts.calcify.v1P\001ZBgith" +
-      "ub.com/dills122/reef/contracts/proto/ord" +
-      "erexecution/v1;orderv1b\006proto3"
+      "eV1\"\310\002\n\021LifecycleSubmitV1\022\027\n\017client_orde" +
+      "r_id\030\001 \001(\t\0229\n\004side\030\002 \001(\0162+.reef.contract" +
+      "s.orderexecution.v1.OrderSide\022?\n\norder_t" +
+      "ype\030\003 \001(\0162+.reef.contracts.orderexecutio" +
+      "n.v1.OrderType\022\026\n\016quantity_units\030\004 \001(\t\022\023" +
+      "\n\013limit_price\030\005 \001(\t\022\020\n\010currency\030\006 \001(\t\022D\n" +
+      "\rtime_in_force\030\007 \001(\0162-.reef.contracts.or" +
+      "derexecution.v1.TimeInForce\022\031\n\021source_or" +
+      "der_type\030\010 \001(\t\"@\n\021LifecycleModifyV1\022\026\n\016q" +
+      "uantity_units\030\001 \001(\t\022\023\n\013limit_price\030\002 \001(\t" +
+      "\"#\n\021LifecycleCancelV1\022\016\n\006reason\030\001 \001(\t\"\355\004" +
+      "\n\027OrderLifecycleCommandV1\022\016\n\006schema\030\001 \001(" +
+      "\t\022\033\n\023source_profile_hash\030\002 \001(\t\022\035\n\025finite" +
+      "_binding_digest\030\003 \001(\t\022?\n\004kind\030\004 \001(\01621.re" +
+      "ef.contracts.calcify.v1.LifecycleCommand" +
+      "KindV1\022\022\n\ncommand_id\030\005 \001(\t\022\016\n\006run_id\030\006 \001" +
+      "(\t\022\030\n\020venue_session_id\030\007 \001(\t\022\025\n\rinstrume" +
+      "nt_id\030\010 \001(\t\022\020\n\010order_id\030\t \001(\t\022\026\n\016partici" +
+      "pant_id\030\n \001(\t\022\022\n\naccount_id\030\013 \001(\t\022\020\n\010tra" +
+      "ce_id\030\014 \001(\t\022\024\n\014causation_id\030\r \001(\t\022\026\n\016cor" +
+      "relation_id\030\016 \001(\t\022\020\n\010actor_id\030\017 \001(\t\022\023\n\013o" +
+      "ccurred_at\030\020 \001(\t\022>\n\006submit\030\021 \001(\0132,.reef." +
+      "contracts.calcify.v1.LifecycleSubmitV1H\000" +
+      "\022>\n\006modify\030\022 \001(\0132,.reef.contracts.calcif" +
+      "y.v1.LifecycleModifyV1H\000\022>\n\006cancel\030\023 \001(\013" +
+      "2,.reef.contracts.calcify.v1.LifecycleCa" +
+      "ncelV1H\000B\013\n\tattempted\"\333\001\n\023LifecycleMembe" +
+      "rIdV1\022=\n\006source\030\001 \001(\0132-.reef.contracts.c" +
+      "alcify.v1.SourceProvenanceV1\022>\n\004kind\030\002 \001" +
+      "(\01620.reef.contracts.calcify.v1.Lifecycle" +
+      "MemberKindV1\022$\n\034within_outcome_trade_ord" +
+      "inal\030\003 \001(\r\022\037\n\027flattened_trade_ordinal\030\004 " +
+      "\001(\r\"j\n\025LifecycleRevisionIdV1\022?\n\007command\030" +
+      "\001 \001(\0132..reef.contracts.calcify.v1.Lifecy" +
+      "cleMemberIdV1\022\020\n\010revision\030\002 \001(\r\"\277\002\n\025Life" +
+      "cycleDependencyV1\022\020\n\010order_id\030\001 \001(\t\022D\n\na" +
+      "cceptance\030\002 \001(\01320.reef.contracts.calcify" +
+      ".v1.AcceptedOrderSourceV1\022B\n\010revision\030\003 " +
+      "\001(\01320.reef.contracts.calcify.v1.Lifecycl" +
+      "eRevisionIdV1\022G\n\017previous_effect\030\004 \001(\0132." +
+      ".reef.contracts.calcify.v1.LifecycleMemb" +
+      "erIdV1\022\026\n\016quantity_units\030\005 \001(\t\022\023\n\013limit_" +
+      "price\030\006 \001(\t\022\024\n\014filled_units\030\007 \001(\t\"\302\006\n\021Li" +
+      "fecycleMemberV1\022:\n\002id\030\001 \001(\0132..reef.contr" +
+      "acts.calcify.v1.LifecycleMemberIdV1\022F\n\013d" +
+      "isposition\030\002 \001(\01621.reef.contracts.calcif" +
+      "y.v1.LifecycleDispositionV1\022C\n\007command\030\003" +
+      " \001(\01322.reef.contracts.calcify.v1.OrderLi" +
+      "fecycleCommandV1\022\034\n\024command_payload_hash" +
+      "\030\004 \001(\t\022\026\n\016outcome_status\030\005 \001(\t\022A\n\010accept" +
+      "ed\030\006 \001(\0132/.reef.contracts.orderexecution" +
+      ".v1.OrderAccepted\022A\n\010rejected\030\007 \001(\0132/.re" +
+      "ef.contracts.orderexecution.v1.OrderReje" +
+      "cted\0227\n\005trade\030\010 \001(\0132(.reef.contracts.cal" +
+      "cify.v1.TradeSourceV1\022F\n\014dependencies\030\t " +
+      "\003(\01320.reef.contracts.calcify.v1.Lifecycl" +
+      "eDependencyV1\022L\n\022resulting_revision\030\n \001(" +
+      "\01320.reef.contracts.calcify.v1.LifecycleR" +
+      "evisionIdV1\022N\n\024immutable_acceptance\030\013 \001(" +
+      "\01320.reef.contracts.calcify.v1.AcceptedOr" +
+      "derSourceV1\022A\n\treplay_of\030\014 \001(\0132..reef.co" +
+      "ntracts.calcify.v1.LifecycleMemberIdV1\022F" +
+      "\n\nexecutions\030\r \003(\01322.reef.contracts.orde" +
+      "rexecution.v1.ExecutionCreated\"\327\003\n\030Finit" +
+      "eLifecycleCaptureV1\022\016\n\006schema\030\001 \001(\t\022\035\n\025f" +
+      "inite_binding_digest\030\002 \001(\t\022=\n\006source\030\003 \001" +
+      "(\0132-.reef.contracts.calcify.v1.SourcePro" +
+      "venanceV1\022=\n\007members\030\004 \003(\0132,.reef.contra" +
+      "cts.calcify.v1.LifecycleMemberV1\022\025\n\routc" +
+      "ome_count\030\005 \001(\r\022\023\n\013trade_count\030\006 \001(\r\022\024\n\014" +
+      "member_count\030\007 \001(\r\022\034\n\024source_encoded_byt" +
+      "es\030\010 \001(\004\022\035\n\025source_content_digest\030\t \001(\t\022" +
+      "I\n\022completed_frontier\030\n \001(\0132-.reef.contr" +
+      "acts.calcify.v1.SourceProvenanceV1\022\025\n\rre" +
+      "sume_offset\030\013 \001(\003\022\026\n\016content_digest\030\014 \001(" +
+      "\t\022\025\n\rprefix_closed\030\r \001(\010\"\372\002\n\033FiniteLifec" +
+      "ycleOrderStateV1\022D\n\nacceptance\030\001 \001(\01320.r" +
+      "eef.contracts.calcify.v1.AcceptedOrderSo" +
+      "urceV1\022B\n\010revision\030\002 \001(\01320.reef.contract" +
+      "s.calcify.v1.LifecycleRevisionIdV1\022G\n\017pr" +
+      "evious_effect\030\003 \001(\0132..reef.contracts.cal" +
+      "cify.v1.LifecycleMemberIdV1\022\026\n\016quantity_" +
+      "units\030\004 \001(\t\022\023\n\013limit_price\030\005 \001(\t\022\024\n\014fill" +
+      "ed_units\030\006 \001(\t\022E\n\010terminal\030\007 \001(\01623.reef." +
+      "contracts.calcify.v1.LifecycleOrderTermi" +
+      "nalV1\"\223\001\n\033FiniteLifecycleBatchStateV1\022\020\n" +
+      "\010batch_id\030\001 \001(\t\022\026\n\016batch_checksum\030\002 \001(\t\022" +
+      "J\n\rfirst_capture\030\003 \001(\01323.reef.contracts." +
+      "calcify.v1.FiniteLifecycleCaptureV1\"Q\n\027F" +
+      "initeLifecycleSuffixV1\022\016\n\006offset\030\001 \001(\003\022\017" +
+      "\n\007payload\030\002 \001(\014\022\025\n\rresume_offset\030\003 \001(\003\"\350" +
+      "\004\n\026FiniteLifecycleStateV1\022\025\n\rstate_versi" +
+      "on\030\001 \001(\t\022\035\n\025finite_binding_digest\030\002 \001(\t\022" +
+      "\033\n\023source_profile_hash\030\003 \001(\t\022F\n\006orders\030\004" +
+      " \003(\01326.reef.contracts.calcify.v1.FiniteL" +
+      "ifecycleOrderStateV1\022G\n\007batches\030\005 \003(\01326." +
+      "reef.contracts.calcify.v1.FiniteLifecycl" +
+      "eBatchStateV1\022\025\n\rexecution_ids\030\006 \003(\t\022N\n\021" +
+      "completed_records\030\007 \003(\01323.reef.contracts" +
+      ".calcify.v1.FiniteLifecycleCaptureV1\022I\n\022" +
+      "completed_frontier\030\010 \001(\0132-.reef.contract" +
+      "s.calcify.v1.SourceProvenanceV1\022\025\n\rresum" +
+      "e_offset\030\t \001(\003\022\024\n\014source_bytes\030\n \001(\004\022\025\n\r" +
+      "capture_bytes\030\013 \001(\004\022\r\n\005fault\030\014 \001(\t\022K\n\017re" +
+      "tained_suffix\030\r \003(\01322.reef.contracts.cal" +
+      "cify.v1.FiniteLifecycleSuffixV1\022\030\n\020bindi" +
+      "ng_identity\030\016 \001(\014*\225\001\n\026LifecycleCommandKi" +
+      "ndV1\022!\n\035LIFECYCLE_COMMAND_UNSPECIFIED\020\000\022" +
+      "\034\n\030LIFECYCLE_COMMAND_SUBMIT\020\001\022\034\n\030LIFECYC" +
+      "LE_COMMAND_MODIFY\020\002\022\034\n\030LIFECYCLE_COMMAND" +
+      "_CANCEL\020\003*s\n\025LifecycleMemberKindV1\022 \n\034LI" +
+      "FECYCLE_MEMBER_UNSPECIFIED\020\000\022\034\n\030LIFECYCL" +
+      "E_MEMBER_COMMAND\020\001\022\032\n\026LIFECYCLE_MEMBER_T" +
+      "RADE\020\002*\243\001\n\026LifecycleDispositionV1\022%\n!LIF" +
+      "ECYCLE_DISPOSITION_UNSPECIFIED\020\000\022\025\n\021LIFE" +
+      "CYCLE_APPLIED\020\001\022\026\n\022LIFECYCLE_REJECTED\020\002\022" +
+      "\035\n\031LIFECYCLE_READY_EXECUTION\020\003\022\024\n\020LIFECY" +
+      "CLE_REPLAY\020\004*o\n\030LifecycleOrderTerminalV1" +
+      "\022\030\n\024LIFECYCLE_ORDER_OPEN\020\000\022\032\n\026LIFECYCLE_" +
+      "ORDER_FILLED\020\001\022\035\n\031LIFECYCLE_ORDER_CANCEL" +
+      "LED\020\002Ba\n\031reef.contracts.calcify.v1P\001ZBgi" +
+      "thub.com/dills122/reef/contracts/proto/o" +
+      "rderexecution/v1;orderv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -165,6 +350,84 @@ public final class Calcify extends com.google.protobuf.GeneratedFile {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_calcify_v1_ResolverTargetBatchV1_descriptor,
         new java.lang.String[] { "SourceOffset", "Trades", });
+    internal_static_reef_contracts_calcify_v1_LifecycleSubmitV1_descriptor =
+      getDescriptor().getMessageType(7);
+    internal_static_reef_contracts_calcify_v1_LifecycleSubmitV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleSubmitV1_descriptor,
+        new java.lang.String[] { "ClientOrderId", "Side", "OrderType", "QuantityUnits", "LimitPrice", "Currency", "TimeInForce", "SourceOrderType", });
+    internal_static_reef_contracts_calcify_v1_LifecycleModifyV1_descriptor =
+      getDescriptor().getMessageType(8);
+    internal_static_reef_contracts_calcify_v1_LifecycleModifyV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleModifyV1_descriptor,
+        new java.lang.String[] { "QuantityUnits", "LimitPrice", });
+    internal_static_reef_contracts_calcify_v1_LifecycleCancelV1_descriptor =
+      getDescriptor().getMessageType(9);
+    internal_static_reef_contracts_calcify_v1_LifecycleCancelV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleCancelV1_descriptor,
+        new java.lang.String[] { "Reason", });
+    internal_static_reef_contracts_calcify_v1_OrderLifecycleCommandV1_descriptor =
+      getDescriptor().getMessageType(10);
+    internal_static_reef_contracts_calcify_v1_OrderLifecycleCommandV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_OrderLifecycleCommandV1_descriptor,
+        new java.lang.String[] { "Schema", "SourceProfileHash", "FiniteBindingDigest", "Kind", "CommandId", "RunId", "VenueSessionId", "InstrumentId", "OrderId", "ParticipantId", "AccountId", "TraceId", "CausationId", "CorrelationId", "ActorId", "OccurredAt", "Submit", "Modify", "Cancel", "Attempted", });
+    internal_static_reef_contracts_calcify_v1_LifecycleMemberIdV1_descriptor =
+      getDescriptor().getMessageType(11);
+    internal_static_reef_contracts_calcify_v1_LifecycleMemberIdV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleMemberIdV1_descriptor,
+        new java.lang.String[] { "Source", "Kind", "WithinOutcomeTradeOrdinal", "FlattenedTradeOrdinal", });
+    internal_static_reef_contracts_calcify_v1_LifecycleRevisionIdV1_descriptor =
+      getDescriptor().getMessageType(12);
+    internal_static_reef_contracts_calcify_v1_LifecycleRevisionIdV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleRevisionIdV1_descriptor,
+        new java.lang.String[] { "Command", "Revision", });
+    internal_static_reef_contracts_calcify_v1_LifecycleDependencyV1_descriptor =
+      getDescriptor().getMessageType(13);
+    internal_static_reef_contracts_calcify_v1_LifecycleDependencyV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleDependencyV1_descriptor,
+        new java.lang.String[] { "OrderId", "Acceptance", "Revision", "PreviousEffect", "QuantityUnits", "LimitPrice", "FilledUnits", });
+    internal_static_reef_contracts_calcify_v1_LifecycleMemberV1_descriptor =
+      getDescriptor().getMessageType(14);
+    internal_static_reef_contracts_calcify_v1_LifecycleMemberV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_LifecycleMemberV1_descriptor,
+        new java.lang.String[] { "Id", "Disposition", "Command", "CommandPayloadHash", "OutcomeStatus", "Accepted", "Rejected", "Trade", "Dependencies", "ResultingRevision", "ImmutableAcceptance", "ReplayOf", "Executions", });
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleCaptureV1_descriptor =
+      getDescriptor().getMessageType(15);
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleCaptureV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_FiniteLifecycleCaptureV1_descriptor,
+        new java.lang.String[] { "Schema", "FiniteBindingDigest", "Source", "Members", "OutcomeCount", "TradeCount", "MemberCount", "SourceEncodedBytes", "SourceContentDigest", "CompletedFrontier", "ResumeOffset", "ContentDigest", "PrefixClosed", });
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleOrderStateV1_descriptor =
+      getDescriptor().getMessageType(16);
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleOrderStateV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_FiniteLifecycleOrderStateV1_descriptor,
+        new java.lang.String[] { "Acceptance", "Revision", "PreviousEffect", "QuantityUnits", "LimitPrice", "FilledUnits", "Terminal", });
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleBatchStateV1_descriptor =
+      getDescriptor().getMessageType(17);
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleBatchStateV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_FiniteLifecycleBatchStateV1_descriptor,
+        new java.lang.String[] { "BatchId", "BatchChecksum", "FirstCapture", });
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleSuffixV1_descriptor =
+      getDescriptor().getMessageType(18);
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleSuffixV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_FiniteLifecycleSuffixV1_descriptor,
+        new java.lang.String[] { "Offset", "Payload", "ResumeOffset", });
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleStateV1_descriptor =
+      getDescriptor().getMessageType(19);
+    internal_static_reef_contracts_calcify_v1_FiniteLifecycleStateV1_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_reef_contracts_calcify_v1_FiniteLifecycleStateV1_descriptor,
+        new java.lang.String[] { "StateVersion", "FiniteBindingDigest", "SourceProfileHash", "Orders", "Batches", "ExecutionIds", "CompletedRecords", "CompletedFrontier", "ResumeOffset", "SourceBytes", "CaptureBytes", "Fault", "RetainedSuffix", "BindingIdentity", });
     descriptor.resolveAllFeaturesImmutable();
     reef.contracts.orderexecution.v1.OrderExecution.getDescriptor();
   }
