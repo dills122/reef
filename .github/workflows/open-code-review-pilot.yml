@@ -24,6 +24,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: alibaba/open-code-review@bccbc15f785269400735d5255540c231e6c02b6d # v1.12.9
+        env:
+          OCR_NO_UPDATE: '1'
         with:
           ocr_version: '1.12.9'
           llm_url: https://openrouter.ai/api/v1
@@ -35,7 +37,7 @@ jobs:
           effort: medium
           # OCR's token budget is checked between rounds, so bound in-flight groups.
           review_concurrency: '2'
-          max_tokens_budget: '500000'
+          max_tokens_budget: '1500000'
           sticky_summary: 'true'
           incremental: 'true'
           checkpoint_range: 'true'
