@@ -685,11 +685,17 @@ jobs:
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/runtime.pw"
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/registrar.pw"
           psql_() { docker compose -f compose.base.yml -f compose.local.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U reef -d reef "$@"; }
-          psql_ -c "CREATE ROLE fin_runtime LOGIN PASSWORD '$(cat "$RUNNER_TEMP/finite-pg/runtime.pw")'" \
-                -c "CREATE ROLE fin_registrar LOGIN PASSWORD '$(cat "$RUNNER_TEMP/finite-pg/registrar.pw")'" \
-                -c "GRANT USAGE ON SCHEMA boundary TO fin_runtime, fin_registrar" \
-                -c "GRANT EXECUTE ON FUNCTION boundary.calcify_finite_register(TEXT,JSONB,BYTEA,TEXT), boundary.calcify_finite_stages(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_release(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_snapshot(TEXT) TO fin_registrar" \
-                -c "GRANT EXECUTE ON FUNCTION boundary.calcify_finite_claim_owner(TEXT,BIGINT,TEXT), boundary.calcify_finite_begin_attempt(TEXT,BIGINT,JSONB), boundary.calcify_finite_authorize_send(TEXT,BIGINT,TEXT), boundary.calcify_finite_ack(TEXT,TEXT,BIGINT,BIGINT,BIGINT), boundary.calcify_finite_unknown(TEXT,TEXT,BIGINT), boundary.calcify_finite_stop(TEXT,BIGINT), boundary.calcify_finite_snapshot(TEXT), boundary.calcify_finite_receipt(TEXT,TEXT) TO fin_runtime"
+          # Secrets reach psql via stdin from shell builtins only: never process arguments, never shell trace.
+          {
+            set +x
+            printf "CREATE ROLE fin_runtime LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/runtime.pw")"
+            printf "CREATE ROLE fin_registrar LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/registrar.pw")"
+            cat <<'SQL'
+          GRANT USAGE ON SCHEMA boundary TO fin_runtime, fin_registrar;
+          GRANT EXECUTE ON FUNCTION boundary.calcify_finite_register(TEXT,JSONB,BYTEA,TEXT), boundary.calcify_finite_stages(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_release(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_snapshot(TEXT) TO fin_registrar;
+          GRANT EXECUTE ON FUNCTION boundary.calcify_finite_claim_owner(TEXT,BIGINT,TEXT), boundary.calcify_finite_begin_attempt(TEXT,BIGINT,JSONB), boundary.calcify_finite_authorize_send(TEXT,BIGINT,TEXT), boundary.calcify_finite_ack(TEXT,TEXT,BIGINT,BIGINT,BIGINT), boundary.calcify_finite_unknown(TEXT,TEXT,BIGINT), boundary.calcify_finite_stop(TEXT,BIGINT), boundary.calcify_finite_snapshot(TEXT), boundary.calcify_finite_receipt(TEXT,TEXT) TO fin_runtime;
+          SQL
+          } | psql_
       - name: Run Calcify tests against real Postgres
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
