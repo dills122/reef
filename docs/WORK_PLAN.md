@@ -30,7 +30,7 @@ in `docs/evidence/` and analysis in the plan.
 | --- | --- | --- |
 | Capture path (Phase 1/2) | Merged, opt-in. D7 10,425/s fresh-state; aged no-restart control 10.3k full contexts/s passes; resolver cold restart 8.1k/s fails the 10k gate | Warm-restart proof, then incremental keyed capture reducer |
 | Finite P3 O1/O2 | Merged after independent review; O2 live evidence for G1-G8/G10 is inherited, not replayed | One approved live replay on master; Records PR11/PR12; role sign-off |
-| Finite P3 O3 | Packet decided (D1-D7); O3a merged, review 1 of 3 Ready with follow-ups | Harden O3a tests and budget policy; bounds, wire, oracle; binding v2 spec and ordering spike; then O3b |
+| Finite P3 O3 | Packet decided (D1-D7); O3a hardened and merged (PR493/494), wire contract merged, binding v2 spec merged as an unaccepted draft (PR495), option-B ordering spike go (PR496) | Final O3a review (3 of 3) and v2 spec review (4 of 4); fix findings; then O3b design and adapter |
 | Arena goalpost and credit | Research and proposals only (10k/s through the API, settlement lags; receivable credit) | Calibrate and adopt by owner decision; no reservation code before |
 
 Authority: relational financial authority (D009) stays accepted; no Calcify financial authority, credit or capacity claim
@@ -122,9 +122,11 @@ aged treatment/control, arena goalpost and credit proof on existing feature bran
 O2 is merged (PR488). O3 (financial admission) has a [packet](work/CALCIFY_FINITE_P3_O3_PACKET.md) with owner decisions D1-D7 recorded
 (D4: operator control actions; D7: option B, order established in the financial processor's own history, which needs a new
 binding schema version before O3b) and a merged first module, **O3a** (PR491): a pure, typed, unreserved gross DvP ledger under
-`com.reef.platform.calcify.finance` with 14 tests. O3a was merged before review; independent review 1 of 3 then returned
-**Ready with non-blocking follow-ups** (no P0/P1; 22 of 36 test mutants survive, and the single attempt counter lets junk refusals starve
-funding). Closing those, plus pinned size bounds, a protobuf wire format and an independent oracle, are the first Sprint 1 tasks.
+`com.reef.platform.calcify.finance` with 14 tests. O3a was merged before review. Review 1 returned **Ready with non-blocking follow-ups**; review 2 returned **Not ready** because `restore`
+could adopt a forged but consistent state. Both are closed in PR493/494: per-class budgets (refusals neither recorded nor counted), every
+decision commits to the state it produced (`restore(checkpoint, trustedHead)` refuses anything else), settle requires operator
+authority, an independent-encoder golden set, a protobuf wire contract (`calcify_finance.proto`), a 5,000-schedule differential oracle and a
+72-mutant check with every mutant killed. Review 3 of 3 and the binding v2 spec review are pending.
 It is unwired, implies no financial authority and no capacity. The O2 follow-up role definition is a
 [draft](work/CALCIFY_FINITE_P3_DB_ROLES.md) with an observed privilege matrix awaiting operator sign-off.
 
@@ -317,7 +319,7 @@ describes the remaining task, not whether the whole subsystem exists.
 
 | Work | Status | Next bounded action |
 | --- | --- | --- |
-| Calcify finite P3 O3 (financial admission) | Packet decided; O3a merged, review 1 of 3 Ready with follow-ups | Close O3a review findings (mutation survivors, budget policy); pin bounds, protobuf wire, oracle; binding v2 spec and ordering spike; then O3b adapter. |
+| Calcify finite P3 O3 (financial admission) | Packet decided; O3a hardened (72/72 mutants killed, 5,000-schedule oracle, state-committing chain), wire contract and ordering spike merged; binding v2 spec is a draft under review | Close final O3a and spec reviews; accept the spec; then O3b adapter. |
 | Calcify O2 evidence debt | Open | One approved live replay of G1-G8/G10 on master; merge Records PR11/PR12 (merge-commit); operator sign-off of the role split. |
 | Calcify 10k arena capacity | Research; recovery gate open | Warm-restart proof at aged state; incremental keyed capture reducer with differential oracle; credit calibration and owner decision. |
 | Settlement read visibility/authorization | Contract and code work | Define run/participant/operator visibility; enforce and test both adapters. |
