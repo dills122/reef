@@ -44,7 +44,9 @@ financial authority, production adoption or capacity claim follows.
   history (snapshot commit `4c5a1f6011dadf2e1bdcd29e67a626e742d781d6`). Records archive
   publication of O2 evidence has **not** been done; retention is incomplete.
 - Test infrastructure: per [delivery policy](ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery),
-  leave the usable harness alone; G9 closed without further harness work.
+  leave the usable harness alone. G9 transport is proven without further harness work; the G9 matrix
+  sub-clauses on pinned images, fresh build hashes and resource observations within the lease remain
+  Codex-recorded, not re-evidenced here.
 
 ## Calcify eight-hour P3 session — October 9–10, 2026
 

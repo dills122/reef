@@ -90,10 +90,20 @@ internal class FiniteIngress(private val opening:FiniteOpening,private val epoch
     fun stop():Boolean {fenced.set(true);return store.stop(opening.digest,epoch)}
     fun pending():Int=inFlight.size
     private fun done(status:Int,disposition:String,id:String,sequence:Long?=null,acceptedAt:String?=null)=CompletableFuture.completedFuture(FiniteIngressResult(status,disposition,id,sequence,acceptedAt))
+    private fun containsNul(node:JsonNode):Boolean = when {
+        node.isTextual -> '\u0000' in node.textValue()
+        node.isObject -> node.properties().any { '\u0000' in it.key || containsNul(it.value) }
+        node.isArray -> node.any(::containsNul)
+        else -> false
+    }
     private fun request(e:StreamCommandEnvelope,refusal:String?):ObjectNode {
         require(e.runId==opening.run && e.venueSessionId==opening.session && e.instrumentId==opening.instrument && e.partition==0){"finite lane"}
         val bytes=e.payloadJson.toByteArray(Charsets.UTF_8)
         val body=FiniteBindingContract.strictObject(bytes,opening.budget.commandBytes)
+        // Postgres JSONB cannot hold U+0000. Such a request cannot be admitted or charged as a refusal, and must not
+        // reach SQL where the failed cast would fence the whole run. Same uncharged class as other malformed input.
+        require(!containsNul(body) && listOf(e.scope,e.clientId,e.idempotencyKey,e.participantId,e.commandId,e.commandType,
+            e.route,e.subject,e.natsMessageId).none{'\u0000' in it}){"finite NUL character"}
         for((key,value) in listOf("commandId" to e.commandId,"runId" to e.runId,"venueSessionId" to e.venueSessionId,"instrumentId" to e.instrumentId,
             "participantId" to e.participantId,"orderId" to e.orderId)) require(FiniteBindingContract.text(body,key,128)==value){"finite command envelope mismatch"}
         require(e.commandId.toByteArray().size<=128 && e.clientId.toByteArray().size in 1..128 && e.idempotencyKey.toByteArray().size in 1..128)

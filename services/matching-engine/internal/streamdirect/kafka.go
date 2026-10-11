@@ -164,8 +164,7 @@ func NewKafkaTransactionalEventBatchPublisher(config KafkaConfig, source *KafkaC
 	}
 	transactionalID := kafkaTransactionalID(source.durableName)
 	clientConfig := kafkaConfiguredClient(config, fmt.Sprintf("reef-matching-engine-transactional-%s", PartitionToken(config.PartitionCount, int(source.partition))))
-	clientConfig.Producer.Transaction.ID = transactionalID
-	clientConfig.Producer.Transaction.Timeout = time.Duration(envInt("MATCHING_ENGINE_KAFKA_TRANSACTION_TIMEOUT_MS", 60000)) * time.Millisecond
+	applyKafkaTransaction(clientConfig, transactionalID)
 	client, err := sarama.NewClient(kafkaBrokers(config), clientConfig)
 	if err != nil {
 		return nil, err
@@ -703,10 +702,16 @@ func newKafkaClientConfig(clientID string) *sarama.Config {
 	return config
 }
 
-func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
-	config := newKafkaClientConfig(clientID)
+// applyKafkaTransaction is the single place transactional identity and timeout are set, shared by the
+// production publisher (over kafkaConfiguredClient) and the ordinary-mode configuration tests.
+func applyKafkaTransaction(config *sarama.Config, transactionalID string) {
 	config.Producer.Transaction.ID = transactionalID
 	config.Producer.Transaction.Timeout = time.Duration(envInt("MATCHING_ENGINE_KAFKA_TRANSACTION_TIMEOUT_MS", 60000)) * time.Millisecond
+}
+
+func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
+	config := newKafkaClientConfig(clientID)
+	applyKafkaTransaction(config, transactionalID)
 	return config
 }
 

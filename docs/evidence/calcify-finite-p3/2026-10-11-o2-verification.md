@@ -11,7 +11,7 @@ No capacity, financial-authority or production-adoption claim follows.
 
 | Finding | State | Evidence |
 | --- | --- | --- |
-| F1 / G9 full managed-state transport | Transport proven for the declared cap | `FiniteG9BrokerTransportTest`, below |
+| F1 / G9 full managed-state transport | Transport proven for the declared cap (resource/hash sub-clauses of the matrix not re-evidenced) | `FiniteG9BrokerTransportTest`, below |
 | F2 finite matcher compression pin | Author fix present; focused tests and full module pass | `calcify_finite_credentials.go:118` sets `CompressionNone`; `TestKafkaConfiguredClientCompression` keeps ordinary-mode codecs |
 
 ## G9 transport (new test, `FiniteG9BrokerTransportTest`)
@@ -44,6 +44,28 @@ operator runbook — the production role split still needs an owner-reviewed def
 attempt failed 8/21 because only migration 0013 was applied (missing
 `boundary.stream_command_intake`); that was fixture setup, not a product defect, and is kept here.
 Container and password files removed after the run.
+
+## Independent review instance 2 of 3 (October 11, 2026)
+
+Fresh cold subagent, blind pass before the author explanation, own detached worktree at head
+`0d8eca82b`, own disposable Redpanda/Postgres. Verdict: **Ready with non-blocking follow-ups**
+(scoped to landing O2 behind its off-by-default switch; does not accept G1-G8/G10 as independently
+proven). No P0/P1. Instance-1 F1 (transport) and F2 (compression) confirmed closed. The reviewer
+reproduced the Finite* suite (81 tests, 0 skipped with both env gates), Go build/vet/test/race,
+the 151 Bun tests and the G9 test (48.8 s). The reviewer's own write of `review/report.md` was
+blocked by the harness; only `.planning/calcify-o2-finish-review2/review/preliminary-ledger.md` exists
+(untracked). Report text was returned in-session.
+
+| Finding | Disposition | Action |
+| --- | --- | --- |
+| P2-1 NUL in unchecked payload string passes Kotlin checks, fails the SQL JSONB cast, fences the run uncharged | Accept | `FiniteIngress.request()` now rejects U+0000 in any payload field name/value and envelope string as an uncharged 400 `INVALID_FINITE_COMMAND`, before SQL. `FiniteIngressTest.nulCharacterInAnyPayloadStringIsUnchargedBadRequestAndNeverFencesTheRun` (6 variants, then a valid command still 202). Negative control: the same test fails on the pre-fix head. SQL left unchanged. |
+| P2-2 Live wiring and SQL ledger lack automated protection; Postgres suite not in CI | Accept (Postgres suite) | `calcify-tests` CI job now provisions the finite fixture (boundary 0001-0013, two roles, generated password files) and passes the `CALCIFY_FINITE_POSTGRES_TEST_*` env to the existing Gradle step. Provisioning script extracted from `ci.yml` and run against a disposable postgres:16: 10/10 Postgres + 12/12 ingress pass. Live broker wiring (`FiniteRuntime`/`FiniteKafka`/`FiniteCaptureLive`) remains unreplayed and labelled so. Hosted run not yet seen; the 30-minute job budget is unverified with the extra tests. |
+| P2-3 WORK_PLAN overstated G9; scope noise | Accept | G9 wording narrowed (transport proven; matrix sub-clauses recorded by Codex only); two `.planning/pr485-comment-*.json` files removed. `AGENTS.md`/delivery-policy edits intentionally left in the PR. |
+| P3-4 `newKafkaTransactionalClientConfig` orphaned | Accept | Production publisher and the test helper now share `applyKafkaTransaction`; streamdirect tests green. |
+| P3-5 `calcify_finite_ack` trusts caller offset/sequence | Defer | Owner: operator role definition (not yet written); detective control is startup byte-correspondence verification. |
+
+Review budget: instance 2 of 3 consumed. P2-1 changes admission behaviour, so a targeted
+instance 3 limited to `FiniteIngress` and the SQL path is warranted before declaring O2 accepted.
 
 ## CI-readiness check (local replay of the `ci.yml` jobs O2 touches)
 

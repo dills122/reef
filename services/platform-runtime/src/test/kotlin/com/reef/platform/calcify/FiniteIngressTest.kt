@@ -139,6 +139,23 @@ class FiniteIngressTest {
             }finally{scheduler.shutdownNow()}
         }
     }
+    @Test fun nulCharacterInAnyPayloadStringIsUnchargedBadRequestAndNeverFencesTheRun() {
+        val original=envelope().payloadJson
+        val cases=listOf(original.dropLast(1)+",\"traceId\":\"a\\u0000\"}",original.dropLast(1)+",\"clientOrderId\":\"\\u0000\"}",
+            original.dropLast(1)+",\"reason\":\"x\\u0000y\"}",original.dropLast(1)+",\"x\\u0000y\":\"1\"}",
+            original.dropLast(1)+",\"nested\":{\"deep\":[\"\\u0000\"]}}",original.replace("\"buyer\"","\"buy\\u0000er\""))
+        val store=Store();val scheduler=Executors.newSingleThreadScheduledExecutor();var sends=0
+        try {
+            val ingress=FiniteIngress(FiniteBindingFixtures.opening(),1,store,FiniteCommandPublisher{sends++;CompletableFuture.completedFuture(FiniteBrokerAck(FiniteBindingFixtures.opening().topic("COMMAND").name,0,0))},scheduler,1000)
+            for(body in cases) {
+                val response=ingress.submit(mutation("/api/v1/orders/submit",body)).get(1,TimeUnit.SECONDS)
+                assertEquals(400,response.status,body);assertEquals("INVALID_FINITE_COMMAND",response.disposition)
+            }
+            assertEquals(0,store.attempts);assertEquals(0,sends);assertEquals(0,store.unknowns)
+            // Not fenced: a valid request after the NUL attempts is still admitted.
+            assertEquals(202,ingress.submit(envelope()).get(1,TimeUnit.SECONDS).status);assertEquals(1,store.attempts);assertEquals(1,sends)
+        }finally{scheduler.shutdownNow()}
+    }
     @Test fun sourcePolicyRefusalsChargeAttemptButNeverPublishUnrepresentableFacts() {
         val original=envelope().payloadJson
         val cases=listOf(original.replace("\"LIMIT\"","\"LIMIT_HIDDEN\""),original.replace("\"p0-1\"","\"p0-9\""),

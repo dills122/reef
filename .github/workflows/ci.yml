@@ -682,11 +682,34 @@ jobs:
         # projection-postgres/boundary-postgres unless told not to, and
         # this job never starts those containers.
         run: JS_RUNTIME=node REEF_PROJECTION_POSTGRES_MIGRATIONS=0 REEF_BOUNDARY_POSTGRES_MIGRATIONS=0 make dev-db-migrate
+      - name: Provision isolated finite binding-store fixture
+        # FiniteBindingStorePostgresTest skips without CALCIFY_FINITE_POSTGRES_TEST_* env. Apply the boundary schema
+        # to this disposable database and create two login roles with per-function EXECUTE only (production roles
+        # are operator-provisioned; this mirrors the test call sites, not a runbook).
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/finite-pg"
+          openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/runtime.pw"
+          openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/registrar.pw"
+          psql_() { docker compose -f compose.base.yml -f compose.local.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U reef -d reef "$@"; }
+          psql_ -c "CREATE SCHEMA IF NOT EXISTS boundary"
+          for f in $(ls scripts/dev/db/migrations/boundary/*.sql | sort); do psql_ < "$f" > /dev/null; done
+          psql_ -c "CREATE ROLE fin_runtime LOGIN PASSWORD '$(cat "$RUNNER_TEMP/finite-pg/runtime.pw")'" \
+                -c "CREATE ROLE fin_registrar LOGIN PASSWORD '$(cat "$RUNNER_TEMP/finite-pg/registrar.pw")'" \
+                -c "GRANT USAGE ON SCHEMA boundary TO fin_runtime, fin_registrar" \
+                -c "GRANT EXECUTE ON FUNCTION boundary.calcify_finite_register(TEXT,JSONB,BYTEA,TEXT), boundary.calcify_finite_stages(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_release(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_snapshot(TEXT) TO fin_registrar" \
+                -c "GRANT EXECUTE ON FUNCTION boundary.calcify_finite_claim_owner(TEXT,BIGINT,TEXT), boundary.calcify_finite_begin_attempt(TEXT,BIGINT,JSONB), boundary.calcify_finite_authorize_send(TEXT,BIGINT,TEXT), boundary.calcify_finite_ack(TEXT,TEXT,BIGINT,BIGINT,BIGINT), boundary.calcify_finite_unknown(TEXT,TEXT,BIGINT), boundary.calcify_finite_stop(TEXT,BIGINT), boundary.calcify_finite_snapshot(TEXT), boundary.calcify_finite_receipt(TEXT,TEXT) TO fin_runtime"
       - name: Run Calcify tests against real Postgres
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
           RUNTIME_POSTGRES_USER_TEST: reef
           RUNTIME_POSTGRES_PASSWORD_TEST: reef
+          CALCIFY_FINITE_POSTGRES_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/reef
+          CALCIFY_FINITE_POSTGRES_TEST_RUNTIME_USER: fin_runtime
+          CALCIFY_FINITE_POSTGRES_TEST_RUNTIME_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/runtime.pw
+          CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_USER: fin_registrar
+          CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/registrar.pw
         run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.calcify.*"
       - name: Run idempotency renewal tests against real Postgres
         env:
