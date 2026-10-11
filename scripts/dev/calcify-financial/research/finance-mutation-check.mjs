@@ -20,6 +20,7 @@ export const MUTANTS = [
   ['quantity <0 instead of <=0', LEDGER, 'i.quantity <= 0', 'i.quantity < 0'],
   ['settle attempt budget off by one', LEDGER, 'state.attempts.size >= config.maxSettleAttempts', 'state.attempts.size > config.maxSettleAttempts'],
   ['control budget off by one', LEDGER, 'state.controls >= config.maxControls', 'state.controls > config.maxControls'],
+  ['controls increment omitted', LEDGER, 'state.controls + if (input is FinanceInput.Fund) 1 else 0', 'state.controls'],
   ['refusals are recorded and counted', LEDGER, 'if (!result.recorded) return Outcome(state, result.disposition, null)', ''],
   ['no capture budget', LEDGER, 'state.executions.size >= config.maxCaptures || state.obligations.size >= config.maxObligations', 'false'],
   ['conflict becomes prior', LEDGER, 'else Outcome(state, Disposition.ACTION_CONFLICT, null)', 'else Outcome(state, Disposition.PRIOR_RESULT, null, prior.disposition)'],

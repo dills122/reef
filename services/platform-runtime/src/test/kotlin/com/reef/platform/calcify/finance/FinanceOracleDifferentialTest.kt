@@ -150,8 +150,10 @@ class FinanceOracleDifferentialTest {
             seen.merge(expected.first, 1, Int::plus)
             if (expected.second == null) assertNull(actual.decision, "seed=$seed step=$n unrecorded")
             else {
-                assertEquals(expected.second, actual.decision!!.legs.map { Triple(it.account.value, it.asset.value, it.amount) }, "seed=$seed step=$n legs")
-                decisions += actual.decision!!
+                val decision = actual.decision
+                assertTrue(decision != null, "seed=$seed step=$n expected a recorded decision")
+                assertEquals(expected.second, decision.legs.map { Triple(it.account.value, it.asset.value, it.amount) }, "seed=$seed step=$n legs")
+                decisions += decision
             }
             assertSame(oracle, state, "seed=$seed step=$n")
             ledger.checkInvariants(state)
