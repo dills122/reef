@@ -191,3 +191,56 @@ separate from future durable O2 registration contract.
 reduction output. Focused tests validate wire bytes, metadata, compatibility,
 counts/dependencies, malformed atomicity, gaps/replay, exact caps, fault suffix,
 managed rollback/reopen and changed/missing restore history.
+
+## Finite O2 binding contract — implementation in progress
+
+[Synthetic opening](finite-binding-v1.json), [canonical bytes](finite-binding-v1.hex),
+[startup witness](finite-startup-v1.json) and [manifest](finite-binding-v1-manifest.json)
+freeze cross-language parser/identity inputs. Synthetic cluster/topic identities
+cannot establish live activation. O2 remains unaccepted until real SQL/broker,
+writer-isolation, stop/drain/restart and independent-review gates pass.
+
+Binding domain is ASCII `calcify-finite-binding-v1` plus NUL. Framed text means
+u32 big-endian UTF-8 byte length followed by exact bytes, without normalization.
+Canonical byte order:
+
+1. Raw32-byte P0 profile digest, raw32-byte finite lifecycle budget digest.
+2. Framed lifecycle schema, policy, run, session, instrument, quote currency and
+   base asset identity.
+3. u32 party count; parties sorted by unsigned UTF-16 code units of participant,
+   then account. Each entry frames participant/account and appends BUY1 or SELL2.
+4. Five topic name/UUID pairs in COMMAND, SOURCE, CAPTURE, OWNERSHIP,
+   CAPTURE_CHANGELOG order. UUID uses canonical22-character unpadded base64url,
+   is nonzero, and differs from every other registered topic UUID.
+5. u32 generation, partition and partition count.
+6. Framed command group, ownership group, matcher shard, command prefix, source
+   prefix, cluster ID, capture application ID, store name and state version.
+7. GENESIS byte1, then four u64 big-endian initial command/source/capture/capture
+   group offsets, all zero. Current restart cuts are separate observations.
+
+Self-digest excluded. Golden786-byte binding SHA256
+`1fe1749dba2b35803eabb41fc1f9106477147a2ad9966ecf2087eb5f78dc2c8a`;
+startup witness11131 bytes excluding file newline, SHA256
+`0d73c1d4718062d0664222cf0e2d64fcebc22edcd48df15e4d3549faf07cca4c`.
+Existing P0 and lifecycle budget bytes remain unchanged.
+
+Authenticated startup witness uses
+`GET /internal/calcify/finite-bindings/{digest}?nonce=...`. Dedicated service
+bearer only; no user-cookie/admin/development fallback. Root fields are schema,
+nonce, bindingDigest, opening, run, cuts and journal. Wire cap32768 bytes,
+nonjournal cap8192, entry cap1024 and at most16 publication entries. Decimal
+counters/offsets use canonical strings; bounded partition/generation use JSON
+integers. Duplicate/unknown/missing fields, invalid Unicode, trailing values,
+noncanonical numbers and changed identity refuse. Offset0 is valid; PUBLISHED
+sequence equals offset+1 for partition0. Other publication states carry null
+offset/sequence. Full retained command history must correspond to journal;
+UNKNOWN absence never establishes safe resend or activation.
+
+Engine readiness uses authenticated
+`GET /internal/calcify/finite-readiness?nonce=...`, capped8192 bytes. Actual
+ownership, current epochs/cuts and committed-prefix replay plus known admitted
+suffix drain precede readiness. Capture readiness requires actual managed-store
+initialization, RUNNING state and committed source/output correspondence.
+Registrar-only SQL release compares fresh receipts with current accounting;
+runtime cannot set ACTIVE. SQL owner epoch fences future authorizations, not
+already-issued broker sends. Defaults and production adoption remain gated.

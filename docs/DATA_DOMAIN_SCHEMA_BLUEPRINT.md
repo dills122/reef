@@ -236,6 +236,27 @@ Full backend/decision detail for every boundary-owned store (idempotency, comman
 - pre-acceptance guardrail rejection audit row: `rejection_id text pk`, `rejected_at timestamptz default now()`, `guardrail_type text`, `scope_type text default ''`, `scope_id text default ''`, `status int`, `code text`, `message text`, `client_id text`, `route text`, `command_type text`, `command_id text`, `idempotency_key text`, `correlation_id text`, `actor_id text`, `participant_id text`, `account_id text`, `bot_id text`, `run_id text`, `venue_session_id text`, `instrument_id text`, `order_id text`, `quantity_units text default ''`, `limit_price text default ''`, `currency text default ''`, `payload_hash text`
 - index `idx_boundary_rejections_guardrail_time (guardrail_type, rejected_at desc)`
 
+### Opt-in Calcify finite ingress (`boundary/0013`)
+
+O2 application source author-tested and re-verified (broker transport, Postgres store);
+independent review 2 of 3 pending. [Current status](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026)
+and [finite contract](../contracts/calcify/README.md) own scope and verification.
+
+| Table | Keys and bounded facts |
+| --- | --- |
+| `boundary.calcify_finite_bindings` | `digest` primary key; immutable opening JSONB and canonical bytes, each at most16384bytes; SHA256 correspondence CHECK. |
+| `boundary.calcify_finite_runs` | `digest` primary key; owner/activation epochs, STOPPED/ACTIVE admission, at most32 eligible attempts/16 possible publications, byte counters and exact staged release witnesses. |
+| `boundary.calcify_finite_attempts` | `(digest, ordinal)` primary key; at most32 durable attempt receipts, each at most4096bytes. |
+| `boundary.calcify_finite_publications` | `(digest, ordinal)` primary key; unique `(digest, command_id)`, immutable request identity, RESERVED/PUBLISHING/UNKNOWN/PUBLISHED/DEFINITELY_NOT_SENT state and typed positive broker offset/sequence. |
+
+Reservation shares transaction with existing `boundary.stream_command_intake`.
+Runtime receives selected SECURITY DEFINER functions; direct table writes,
+registration and stage/release require separate trusted authority. Function
+owner must be trusted, fixed search paths enforced, PUBLIC execution revoked.
+`runtime/0076` adds finite COMMAND/CAPTURE/OWNERSHIP/CAPTURE_CHANGELOG identity roles
+while preserving existing VERIFIED/OUTPUT roles; SOURCE identity remains owned
+by source-generation registry. No financial read-model authority from these rows.
+
 ## Command Log Schema
 
 Append-only durable inbound command capture, independent of `boundary` and `runtime` (see `docs/DB_SPLIT_READINESS.md` guardrail 9). Command intake, active work-queue state, and terminal results are split across three tables so the hot append/claim path avoids scanning terminal history.

@@ -10,7 +10,7 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test test-dev-tooling lint check-scripts check-dependency-alignment check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
+.PHONY: test test-dev-tooling test-finite-o2-harness lint check-scripts check-dependency-alignment check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
@@ -34,6 +34,11 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: do-benchmark do-materializer-10k-gate do-materializer-scaling-gate do-projection-freshness-gate do-arena-pacing-lag-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk test-dev-tooling
+
+# Local macOS live-harness checks for Calcify finite O2. The harness pins /private/tmp lease roots, so these
+# are not run in Linux CI; run them before touching scripts/dev/calcify-financial/finite-o2*.
+test-finite-o2-harness: check-bun-runtime
+	bun test scripts/dev/calcify-financial/finite-o2-engine-adverse.test.mjs scripts/dev/calcify-financial/finite-o2-proof.test.mjs scripts/dev/calcify-financial/finite-o2-resource-monitor.test.mjs
 
 test-dev-tooling:
 	node scripts/dev/doctor.test.mjs

@@ -19,6 +19,26 @@ accordingly. Prioritize the user's throughput objective over validation expansio
 - this applies in every delivery mode
 - test hardening is additive and does not replace tests for new features
 
+## Test Infrastructure Must Serve Delivery
+
+- If existing test infrastructure can run required tests and produce credible
+  evidence for the feature's acceptance criteria, leave it alone. Do not block
+  feature delivery on harness memory or speed optimization, refactors, added
+  instrumentation, or tighter diagnostic budgets unless explicitly requested.
+- Change test infrastructure only to fix a concrete failure that prevents a
+  required test from running or makes its evidence invalid. Use the smallest
+  correction, then return to feature implementation and verification.
+- Distinguish product limits and correctness assertions from diagnostic harness
+  allowances. An unnecessarily tight harness allowance is not a product defect.
+  Adjust an agent-selected diagnostic allowance when appropriate, record the
+  change, and preserve failed evidence; never silently relax an explicit user
+  limit, product contract, correctness assertion, or required review gate.
+- Report the exact blocker, affected acceptance criterion, elapsed time, and
+  smallest next action promptly. Bound cumulative fixture debugging, not just
+  each research spike: repeated failures or a reached timebox require escalation,
+  not another optimization loop. Research spikes are for missing knowledge
+  needed to finish the feature, not a reason to keep tuning a usable harness.
+
 ## Definition of Test Hardening
 
 Test hardening means improving existing test reliability and depth, including:

@@ -17,6 +17,7 @@ const kafkaOffsetSequenceBits = 48
 const kafkaOffsetSequenceMask = (uint64(1) << kafkaOffsetSequenceBits) - 1
 
 type KafkaConfig struct {
+	Finite               *FiniteBrokerCredentials
 	BootstrapServers     string
 	CommandTopic         string
 	CommandSubjectPrefix string
@@ -61,9 +62,13 @@ type kafkaDelivery struct {
 	partition      int32
 	offset         int64
 	streamSequence uint64
+	finiteMessage  *sarama.ConsumerMessage
 }
 
 func EnsureKafkaTopic(config KafkaConfig, topic string) error {
+	if config.Finite != nil {
+		return fmt.Errorf("finite runtime cannot ensure/create/expand topics")
+	}
 	topic = strings.TrimSpace(topic)
 	if topic == "" {
 		return nil
@@ -97,7 +102,7 @@ func EnsureKafkaTopic(config KafkaConfig, topic string) error {
 }
 
 func NewKafkaCommandSource(config KafkaConfig, partition int, durableName string) (*KafkaCommandSource, error) {
-	client, err := sarama.NewClient(kafkaBrokers(config), newKafkaClientConfig("reef-matching-engine-direct-consumer"))
+	client, err := sarama.NewClient(kafkaBrokers(config), kafkaConfiguredClient(config, "reef-matching-engine-direct-consumer"))
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +139,9 @@ func NewKafkaCommandSource(config KafkaConfig, partition int, durableName string
 }
 
 func NewKafkaEventBatchPublisher(config KafkaConfig) (*KafkaEventBatchPublisher, error) {
+	if config.Finite != nil {
+		return nil, fmt.Errorf("finite source requires owned transactional publisher")
+	}
 	client, err := sarama.NewClient(kafkaBrokers(config), newKafkaClientConfig("reef-matching-engine-direct-producer"))
 	if err != nil {
 		return nil, err
@@ -155,10 +163,8 @@ func NewKafkaTransactionalEventBatchPublisher(config KafkaConfig, source *KafkaC
 		return nil, fmt.Errorf("kafka transactional event publisher requires a command source")
 	}
 	transactionalID := kafkaTransactionalID(source.durableName)
-	clientConfig := newKafkaTransactionalClientConfig(
-		fmt.Sprintf("reef-matching-engine-transactional-%s", PartitionToken(config.PartitionCount, int(source.partition))),
-		transactionalID,
-	)
+	clientConfig := kafkaConfiguredClient(config, fmt.Sprintf("reef-matching-engine-transactional-%s", PartitionToken(config.PartitionCount, int(source.partition))))
+	applyKafkaTransaction(clientConfig, transactionalID)
 	client, err := sarama.NewClient(kafkaBrokers(config), clientConfig)
 	if err != nil {
 		return nil, err
@@ -350,6 +356,7 @@ func (s *KafkaCommandSource) deliveryFromMessage(message *sarama.ConsumerMessage
 		partition:      message.Partition,
 		offset:         message.Offset,
 		streamSequence: kafkaStreamSequence(message.Partition, message.Offset),
+		finiteMessage:  message,
 	}
 }
 
@@ -695,10 +702,16 @@ func newKafkaClientConfig(clientID string) *sarama.Config {
 	return config
 }
 
-func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
-	config := newKafkaClientConfig(clientID)
+// applyKafkaTransaction is the single place transactional identity and timeout are set, shared by the
+// production publisher (over kafkaConfiguredClient) and the ordinary-mode configuration tests.
+func applyKafkaTransaction(config *sarama.Config, transactionalID string) {
 	config.Producer.Transaction.ID = transactionalID
 	config.Producer.Transaction.Timeout = time.Duration(envInt("MATCHING_ENGINE_KAFKA_TRANSACTION_TIMEOUT_MS", 60000)) * time.Millisecond
+}
+
+func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
+	config := newKafkaClientConfig(clientID)
+	applyKafkaTransaction(config, transactionalID)
 	return config
 }
 

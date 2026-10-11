@@ -37,6 +37,22 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
+// FiniteRoutes keeps the isolated bound run read-only on the direct engine
+// transport. Mutations must use durable scoped API admission.
+func (s *Server) FiniteRoutes(readiness http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/internal/stream-direct/stats", s.handleStreamDirectStats)
+	mux.HandleFunc("/internal/books/", s.handleBookInternal)
+	mux.HandleFunc("/orders/", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "finite matching mutations require durable API admission"})
+	})
+	if readiness != nil {
+		mux.Handle("/internal/calcify/finite-readiness", readiness)
+	}
+	return mux
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"service": "matching-engine",

@@ -1,0 +1,107 @@
+# Standalone finite O2 fixture. Launcher supplies frozen nonsecret paths/images.
+# No default Reef overlays, public broker ports or shared volumes.
+services:
+  broker:
+    container_name: ${FINITE_PREFIX}-broker
+    image: redpandadata/redpanda@sha256:9e83cfa99278f30d0133271c26bf670cd69c94ffa6ba0b42830dd0c3bd9dcfd9
+    entrypoint: [/usr/bin/redpanda]
+    command: [--redpanda-cfg, /etc/redpanda/redpanda.yaml, --smp, "1", --memory, 1G, --reserve-memory, 0M, --overprovisioned]
+    mem_limit: 2048m
+    cpus: 2
+    labels: {reef.test: calcify-finite-o2}
+    volumes:
+      - broker-data:/var/lib/redpanda/data
+      - ./redpanda.yaml:/etc/redpanda/redpanda.yaml:ro
+      - ${FINITE_PROBE_BINARY:?fresh static probe required}:/fixture/finite-probe:ro
+    networks: [finite]
+    logging: {driver: json-file, options: {max-size: 1m, max-file: "2"}}
+  postgres:
+    container_name: ${FINITE_PREFIX}-postgres
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    command: [postgres, -c, max_connections=32, -c, shared_buffers=64MB, -c, work_mem=4MB, -c, min_wal_size=8MB, -c, max_wal_size=32MB, -c, fsync=on, -c, synchronous_commit=on, -c, full_page_writes=on]
+    mem_limit: 512m
+    cpus: 1
+    labels: {reef.test: calcify-finite-o2}
+    environment:
+      POSTGRES_DB: finite
+      POSTGRES_USER: fixture_installer
+      POSTGRES_PASSWORD_FILE: /run/secrets/installer-password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --wal-segsize=1
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ${FINITE_SECRET_ROOT:?private secret root required}/installer-password:/run/secrets/installer-password:ro
+      - ${FINITE_SECRET_ROOT}/runtime.pgpass:/run/secrets/runtime.pgpass:ro
+      - ${FINITE_SECRET_ROOT}/registrar.pgpass:/run/secrets/registrar.pgpass:ro
+    networks: [finite]
+    logging: {driver: json-file, options: {max-size: 1m, max-file: "2"}}
+  runtime:
+    container_name: ${FINITE_PREFIX}-runtime
+    image: ${FINITE_RUNTIME_IMAGE:?pinned cached Java21 image required}
+    user: ${FINITE_UID:?host UID required}:${FINITE_GID:?host GID required}
+    entrypoint: ["${FINITE_RUNTIME_ENTRYPOINT:-/fixture/platform-runtime/bin/platform-runtime}"]
+    command: ${FINITE_RUNTIME_COMMAND:-}
+    mem_limit: 1024m
+    cpus: 2
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777,exec"]
+    labels: {reef.test: calcify-finite-o2}
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx768m -XX:ActiveProcessorCount=2 -XX:MaxDirectMemorySize=64m -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError
+      CALCIFY_FINITE_BINDING_DIGEST: ${FINITE_BINDING_DIGEST:?real registered digest required}
+      CALCIFY_FINITE_POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/finite
+      CALCIFY_FINITE_POSTGRES_USER: calcify_finite_runtime
+      CALCIFY_FINITE_POSTGRES_PASSWORD_FILE: /run/secrets/db-password
+      CALCIFY_FINITE_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+      CALCIFY_FINITE_KAFKA_USERNAME: ${FINITE_PREFIX:?owned prefix required}-ingress
+      CALCIFY_FINITE_KAFKA_PASSWORD_FILE: /run/secrets/kafka-ingress-password
+      CALCIFY_FINITE_CAPTURE_KAFKA_USERNAME: ${FINITE_PREFIX}-capture
+      CALCIFY_FINITE_CAPTURE_KAFKA_PASSWORD_FILE: /run/secrets/kafka-capture-password
+      CALCIFY_FINITE_SERVICE_TOKEN_FILE: /run/secrets/service-token
+      CALCIFY_FINITE_CLIENT_TOKEN_FILE: /run/secrets/client-token
+      CALCIFY_FINITE_OWNER_INSTANCE_ID: ${FINITE_PREFIX}-api
+      CALCIFY_FINITE_HTTP_PORT: "8080"
+      CALCIFY_FINITE_HTTP_BIND_ADDRESS: 0.0.0.0
+      CALCIFY_FINITE_STATE_DIRECTORY: /fixture/state/capture
+      CALCIFY_FINITE_KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      CALCIFY_FINITE_ACK_TIMEOUT_MS: "1000"
+    volumes:
+      - ${FINITE_RUNTIME_DIST:?fresh installDist required}:/fixture/platform-runtime:ro
+      - ${FINITE_FAULT_DIST:-${FINITE_RUNTIME_DIST}}:/fixture/fault:ro
+      - ${FINITE_STATE_ROOT:?owned state root required}:/fixture/state
+      - ${FINITE_SECRET_ROOT}/runtime-password:/run/secrets/db-password:ro
+      - ${FINITE_SECRET_ROOT}/ingress-password:/run/secrets/kafka-ingress-password:ro
+      - ${FINITE_SECRET_ROOT}/capture-password:/run/secrets/kafka-capture-password:ro
+      - ${FINITE_SECRET_ROOT}/service-token:/run/secrets/service-token:ro
+      - ${FINITE_SECRET_ROOT}/client-token:/run/secrets/client-token:ro
+    networks: [finite]
+    logging: {driver: json-file, options: {max-size: 1m, max-file: "2"}}
+  matcher:
+    container_name: ${FINITE_PREFIX}-matcher
+    image: ${FINITE_MATCHER_IMAGE:?fresh immutable matcher image required}
+    user: ${FINITE_UID}:${FINITE_GID}
+    entrypoint: [/fixture/matching-engine]
+    mem_limit: 128m
+    cpus: 1
+    read_only: true
+    labels: {reef.test: calcify-finite-o2}
+    env_file: ${FINITE_MATCHER_ENV_FILE:?nonsecret verified matcher configuration required}
+    volumes:
+      - ${FINITE_MATCHER_BINARY:?fresh static matcher required}:/fixture/matching-engine:ro
+      - ${FINITE_SECRET_ROOT}/matcher-password:/run/secrets/kafka-password:ro
+      - ${FINITE_SECRET_ROOT}/service-token:/run/secrets/service-token:ro
+    networks: [finite]
+    logging: {driver: json-file, options: {max-size: 1m, max-file: "2"}}
+networks:
+  finite:
+    name: ${FINITE_PREFIX}-private
+    internal: true
+    ipam:
+      config:
+        - subnet: ${FINITE_NETWORK_SUBNET:?researched owned private subnet required}
+volumes:
+  broker-data:
+    name: ${FINITE_PREFIX}-broker-data
+    labels: {reef.test: calcify-finite-o2}
+  postgres-data:
+    name: ${FINITE_PREFIX}-postgres-data
+    labels: {reef.test: calcify-finite-o2}

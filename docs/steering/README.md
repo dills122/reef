@@ -11,7 +11,7 @@ index is not a request to load every linked file for every task.
 - [Architecture](architecture.md) — service boundaries and persistence rules.
 - [Repository](repository.md) — layout, naming, scripting, and documentation.
 - [Engineering delivery policy](../ENGINEERING_DELIVERY_POLICY.md) — tests,
-  refactor triggers, and delivery gates.
+  refactor triggers, delivery gates, and [leaving usable test infrastructure alone](../ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery).
 - [Decisions](../DECISIONS.md) — accepted direction and amendments.
 
 For product framing or system-wide design changes, also read the relevant

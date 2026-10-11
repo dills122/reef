@@ -130,7 +130,7 @@ jobs:
         run: test -z "$(find . -name '*.go' -exec gofmt -l {} +)"
       - name: Run Go tests with coverage
         working-directory: .
-        run: ./scripts/ci/go-coverage.sh services/matching-engine matching-engine coverage/matching-engine 76 "cmd/matching-engine|pb/contracts/proto"
+        run: ./scripts/ci/go-coverage.sh services/matching-engine matching-engine coverage/matching-engine 76 "cmd/matching-engine|pb/contracts/proto|cmd/calcify-finite-probe"
       - name: Add coverage summary
         working-directory: .
         run: cat coverage/matching-engine/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
@@ -673,12 +673,46 @@ jobs:
         # projection-postgres/boundary-postgres unless told not to, and
         # this job never starts those containers.
         run: JS_RUNTIME=node REEF_PROJECTION_POSTGRES_MIGRATIONS=0 REEF_BOUNDARY_POSTGRES_MIGRATIONS=0 make dev-db-migrate
+      - name: Provision isolated finite binding-store fixture
+        # FiniteBindingStorePostgresTest skips without CALCIFY_FINITE_POSTGRES_TEST_* env. The boundary schema
+        # (incl. migration 0013) is already applied to this disposable database by dev-db-migrate; create two
+        # login roles with per-function EXECUTE only (production roles are operator-provisioned; this mirrors
+        # the test call sites, not a runbook).
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/finite-pg"
+          openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/runtime.pw"
+          openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/registrar.pw"
+          psql_() { docker compose -f compose.base.yml -f compose.local.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U reef -d reef "$@"; }
+          # Secrets reach psql via stdin from shell builtins only: never process arguments, never shell trace.
+          {
+            set +x
+            printf "CREATE ROLE fin_runtime LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/runtime.pw")"
+            printf "CREATE ROLE fin_registrar LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/registrar.pw")"
+            cat <<'SQL'
+          GRANT USAGE ON SCHEMA boundary TO fin_runtime, fin_registrar;
+          GRANT EXECUTE ON FUNCTION boundary.calcify_finite_register(TEXT,JSONB,BYTEA,TEXT), boundary.calcify_finite_stages(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_release(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_snapshot(TEXT) TO fin_registrar;
+          GRANT EXECUTE ON FUNCTION boundary.calcify_finite_claim_owner(TEXT,BIGINT,TEXT), boundary.calcify_finite_begin_attempt(TEXT,BIGINT,JSONB), boundary.calcify_finite_authorize_send(TEXT,BIGINT,TEXT), boundary.calcify_finite_ack(TEXT,TEXT,BIGINT,BIGINT,BIGINT), boundary.calcify_finite_unknown(TEXT,TEXT,BIGINT), boundary.calcify_finite_stop(TEXT,BIGINT), boundary.calcify_finite_snapshot(TEXT), boundary.calcify_finite_receipt(TEXT,TEXT) TO fin_runtime;
+          SQL
+          } | psql_
       - name: Run Calcify tests against real Postgres
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
           RUNTIME_POSTGRES_USER_TEST: reef
           RUNTIME_POSTGRES_PASSWORD_TEST: reef
+          CALCIFY_FINITE_POSTGRES_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/reef
+          CALCIFY_FINITE_POSTGRES_TEST_RUNTIME_USER: fin_runtime
+          CALCIFY_FINITE_POSTGRES_TEST_RUNTIME_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/runtime.pw
+          CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_USER: fin_registrar
+          CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/registrar.pw
         run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.calcify.*"
+      - name: Require finite Postgres suite executed, not skipped
+        # Without the CALCIFY_FINITE_POSTGRES_TEST_* env the suite skips and Gradle still reports success.
+        run: |
+          f=services/platform-runtime/build/test-results/test/TEST-com.reef.platform.calcify.FiniteBindingStorePostgresTest.xml
+          test -f "$f"
+          grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$f"
       - name: Run idempotency renewal tests against real Postgres
         env:
           RUNTIME_DB_URL_TEST: jdbc:postgresql://localhost:5432/reef

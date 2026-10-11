@@ -21,6 +21,7 @@ const terminalRetentionPolicy = "book-scoped-v1"
 
 type SnapshotMetadata struct {
 	CalcifySourceProfileHash   string   `json:"calcifySourceProfileHash,omitempty"`
+	CalcifyFiniteBindingDigest string   `json:"calcifyFiniteBindingDigest,omitempty"`
 	SnapshotVersion            string   `json:"snapshotVersion"`
 	EngineVersion              string   `json:"engineVersion"`
 	BookCount                  int      `json:"bookCount"`
@@ -111,6 +112,7 @@ func (s *Service) buildSnapshot(bookIDs []string, books map[string]*orderBook, i
 		TerminalRetentionLimit:     s.terminalRetention.limit,
 		InstrumentQuoteCatalogHash: s.instrumentQuoteCatalogHash(),
 		CalcifySourceProfileHash:   s.calcifySourceProfileHash(),
+		CalcifyFiniteBindingDigest: s.calcifyFiniteBindingDigest,
 		EngineVersion:              "matching-engine-app-v1",
 		BookCount:                  len(snapshot.Books),
 		OrderCount:                 len(snapshot.Orders),
@@ -170,6 +172,9 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 	}
 	service := NewService(options...)
 	if !service.validCalcifySourceSnapshot(snapshot) {
+		return nil, false
+	}
+	if !service.validCalcifyFiniteSnapshot(snapshot) {
 		return nil, false
 	}
 	if snapshot.Metadata.InstrumentQuoteCatalogHash != service.instrumentQuoteCatalogHash() {
@@ -318,6 +323,11 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 	if snapshot.Metadata.CalcifySourceProfileHash != "" {
 		builder.WriteString("calcify-source-profile:")
 		builder.WriteString(snapshot.Metadata.CalcifySourceProfileHash)
+		builder.WriteByte(';')
+	}
+	if snapshot.Metadata.CalcifyFiniteBindingDigest != "" {
+		builder.WriteString("calcify-finite-binding-v1:")
+		builder.WriteString(snapshot.Metadata.CalcifyFiniteBindingDigest)
 		builder.WriteByte(';')
 	}
 	if snapshot.Metadata.InstrumentQuoteCatalogHash != "" {
