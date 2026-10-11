@@ -111,8 +111,8 @@ current owner/activation epochs, counters, journal hash and broker cuts before
 manual release. Same-binding restart retains opening and budgets; capture can
 restore/drain known source while unresolved admission remains stopped. This
 finite synchronous SQL ingress path requires stage-cost evidence before wider
-adoption. O2 author tests and re-verification pass (G9 transport proven); independent review 2 of 3
-pending in [current work plan](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026).
+adoption. O2 is merged (PR488; G9 transport proven; independent reviews 2 and 3 "Ready with non-blocking follow-ups");
+G1-G8/G10 live replay remains open in [current work plan](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026).
 
 ## Configuration Matrix
 

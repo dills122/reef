@@ -20,29 +20,27 @@ have separate runbooks under [`infra/`](../infra/README.md).
 
 ## Change behavior or architecture
 
-### Calcify reading order
+### Calcify map
 
-| Order | Owner | Read for |
+Start with the [program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md): where Calcify
+stands, whether the path is sound, decisions, and the next sprints. The [work board](WORK_PLAN.md#calcify-program--current-state-and-next-actions-october-11-2026)
+carries the short execution view; dated checkpoint essays live in the [history log](work/CALCIFY_HISTORY_LOG.md). No document here
+adopts financial authority: relational authority (D009) stays accepted until a separate decision.
+
+| Role | Document | Status and use |
 | --- | --- | --- |
-| 1 | [Current research](WORK_PLAN.md#calcify-single-server-pressure-test--october-11-2026), [merged O2](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026) and [arena throughput contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) | O2 delivery scope; owner's API-visible10k goal; proposed credit, latency and session gates; integrated qualification remains open |
-| 2 | [Finite P3 source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [O1 checkpoint](evidence/calcify-finite-p3/README.md) | Accepted O1 lifecycle/capture model, complete immutable proof and delivery gates; live activation refused |
-| 3 | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Implemented production flow and source map |
-| 4 | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | Proposed financial authority, experiment acceptance and owner decisions |
-| 5 | [Financial checkpoint](evidence/calcify-financial-sprint1/README.md) and [handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md) | Test-only proof, exact software scope, resources and continuation |
-| 6 | [Throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026) and [financial diagnostic](evidence/calcify-financial-sprint1/README.md#latest-empirical-checkpoint--october6-utc) | Scoped D7 pass; measured financial deadline target miss; production/full-path capacity unqualified |
+| Direction | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | **Proposed** architecture, proof plan and owner decisions; status snapshot at the top |
+| Direction | [Single-server pressure test](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md), [aged contention](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md), [matched control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) | Research: keyed state, recovery as the 10k blocker (8.1k/s with cold restart, 10.3k/s without); component results do not qualify the API-visible goal |
+| Goalpost | [Arena throughput contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md), [arena credit policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) | **Proposed**: 10k/s through the trading API, settlement lags; receivable credit with reference proofs; numbers await calibration and owner adoption |
+| Build contract | [Finite P3 source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md), [contracts README](../contracts/calcify/README.md) | Normative for O1/O2: lifecycle facts, budgets, ingress, binding |
+| Build design | [O3 packet](work/CALCIFY_FINITE_P3_O3_PACKET.md), [DB role definition](work/CALCIFY_FINITE_P3_DB_ROLES.md) | Decisions D1-D7 recorded; role split awaiting operator sign-off |
+| Implemented flow | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Production opt-in flow, source map, finite O1/O2/O3a status |
+| Evidence | [O1 checkpoint](evidence/calcify-finite-p3/README.md), [O2 verification](evidence/calcify-finite-p3/2026-10-11-o2-verification.md), [financial checkpoint](evidence/calcify-financial-sprint1/README.md), [throughput ledger](THROUGHPUT_BASELINES.md#calcify-direct-path-d7-sustained-qualification-october-2-2026), [financial diagnostic](evidence/calcify-financial-sprint1/README.md#latest-empirical-checkpoint--october6-utc) | Scoped, dated results; each states what it does not establish |
+| History and reviews | [Discovery](work/CALCIFY_DISCOVERY.md) (open questions, not an architecture), [research reconciliation](research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md), [independent](research/CALCIFY_SYSTEM_ARCHITECTURE_INDEPENDENT_REVIEW_2026-10-02.md), [blind](research/CALCIFY_SYSTEM_ARCHITECTURE_BLIND_REVIEW_2026-10-02.md) and [final](research/CALCIFY_SYSTEM_ARCHITECTURE_FINAL_REVIEW_2026-10-02.md) reviews, [review author handoff](work/handoffs/2026-10-02-calcify-system-architecture-author.md), [financial handoff](work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md), [overnight plan](work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) | Read-only history of how the design was reviewed and executed; handoffs and the overnight plan describe dated sessions, not current tasks |
 
-Detailed reviews and raw financial proof remain linked from checkpoint to immutable
-Records commits. Execution status stays in `WORK_PLAN.md`; RFC remains proposed.
+Detailed reviews and raw financial proof remain linked from checkpoint to immutable Records commits. Execution status stays in
+`WORK_PLAN.md`; the RFC remains proposed.
 
-- [Arena credit policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) proposes funded reuse, account/run limits and failure rules; small proofs cover double spending and process replay. Runtime adoption and integrated10k qualification remain open.
-- [Matched control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) passes aged capture with independent financial/SQL contention without cold restart; cold recovery still fails. These component results do not qualify new API-visible trading goal.
-- [Single-server pressure test](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md) joins primary-source research, current code and reproducible kernel/budget probes; recommends state-layout and proof changes under initial capture-only10k constraint. Later API-boundary clarification lives in arena contract; capacity and authority adoption remain unqualified.
-- [Calcify Phases 1 and 2](CALCIFY_PHASES_OVERVIEW.md) explains implemented flow, worker wiring, source facts, managed state, and capacity boundaries.
-- [Calcify discovery](work/CALCIFY_DISCOVERY.md) records open post-match redesign questions, proposed logical flow, and phased proof gates; it is not an approved architecture.
-- [Calcify system RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) proposes full post-trade architecture and bounded financial proofs; [research and review reconciliation](research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md) compares authorities and corrects historical findings against October 2 master. Neither accepts a new architecture or claims capacity qualification.
-- [Calcify system independent review](research/CALCIFY_SYSTEM_ARCHITECTURE_INDEPENDENT_REVIEW_2026-10-02.md) retains first fresh-context findings and bounded corrections. Author testimony is separate in [review handoff](work/handoffs/2026-10-02-calcify-system-architecture-author.md).
-- [Calcify full blind review](research/CALCIFY_SYSTEM_ARCHITECTURE_BLIND_REVIEW_2026-10-02.md) records second-pass critique and correction separating delivery history from stable financial identity.
-- [Calcify final review](research/CALCIFY_SYSTEM_ARCHITECTURE_FINAL_REVIEW_2026-10-02.md) checks corrected identity/replay contract, closes review loop at3of3 and retains source-attribution limits. Verdict applies to proposed documentation publication.
 - [AI working context](AI_CONTEXT.md) gives agents a task-specific reading path.
 - [Steering index](steering/README.md) links normative architecture and language
   rules. Read the relevant sections for the area being changed.

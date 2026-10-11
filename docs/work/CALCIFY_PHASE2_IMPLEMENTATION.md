@@ -1,5 +1,8 @@
 # Calcify Phase 2 implementation plan
 
+> **Status (October 11, 2026): implemented; reference.** The managed resolver is merged and opt-in. Current wiring and source map:
+> [Phase 1/2 overview](../CALCIFY_PHASES_OVERVIEW.md). This plan remains the implementation reference for resolver behavior; it is not an open task list.
+
 Implementation basis: [bounded experiment report](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/research/CALCIFY_PHASE2_EXPERIMENTS_2026-09-30.md). User approved six-slice plan on 2026-09-30. Execution status belongs in WORK_PLAN.md.
 
 1. D-042 matching: run/session/instrument books, submit/cancel/modify/rollback, scope-aware reads and snapshot compatibility. Gate: cross-run isolation and deterministic lane replay; existing Go regression/race suites.

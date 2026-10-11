@@ -1,5 +1,8 @@
 # Calcify P3 overnight handoff — October 10, 2026
 
+> **Status (October 11, 2026): historical handoff.** Superseded by the O2 merge (PR488) and the [program plan](../CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md).
+> Do not resume from the "next authorized session" instructions below.
+
 Eight-hour window: 2026-10-10T02:55:41Z–10:55:41Z. Runtime baseline `51cd90eee43d257bad4f973fc9bd81f273bb4ef7`; branch `codex/calcify-p3-overnight-2026-10-09`. Session ended at deadline; completion reported late. Full P3 target not achieved.
 
 ## Resumed O1 delivery checkpoint — October 10
