@@ -69,7 +69,7 @@ class FinanceLedgerTest {
         assertEquals(6L, r.state.positions[buyer to aapl]); assertEquals(0L, r.state.positions[buyer to usd] ?: 0L)
         assertEquals(600_000_000_000L, r.state.positions[seller to usd]); assertEquals(0L, r.state.positions[seller to aapl] ?: 0L)
         // Settled is terminal: another attempt neither moves resources nor settles again.
-        val again = r.go(settle("e1", 3)); assertEquals(Disposition.ALREADY_SETTLED, again.disposition); assertTrue(again.decision!!.legs.isEmpty())
+        val again = r.go(settle("e1", 3)); assertEquals(Disposition.ALREADY_SETTLED, again.disposition); assertNull(again.decision)
         assertEquals(600_000_000_000L, r.state.positions[seller to usd])
         assertTrue(ledger.verifyChain(r.decisions))
     }
@@ -95,7 +95,7 @@ class FinanceLedgerTest {
     @Test fun duplicateBusinessExecutionNeverCreatesSecondObligation() {
         val r = openedAndCaptured()
         val same = r.go(capture("e1", 3, actionId = "replayed-capture"))
-        assertEquals(Disposition.EXECUTION_ALREADY_CAPTURED, same.disposition); assertTrue(same.decision!!.legs.isEmpty())
+        assertEquals(Disposition.EXECUTION_ALREADY_CAPTURED, same.disposition); assertNull(same.decision)
         assertEquals(3, r.state.obligations.size)
         val changedEconomics = r.go(capture("e1", 4, actionId = "changed-capture"))
         assertEquals(Disposition.EXECUTION_CONFLICT, changedEconomics.disposition)
@@ -122,7 +122,7 @@ class FinanceLedgerTest {
         r.go(fund("max", seller, aapl, Long.MAX_VALUE))
         val before = r.state.positions
         val over = r.go(fund("max-plus", seller, aapl, 1))
-        assertEquals(Disposition.BALANCE_OVERFLOW, over.disposition); assertTrue(over.decision!!.legs.isEmpty())
+        assertEquals(Disposition.BALANCE_OVERFLOW, over.disposition); assertNull(over.decision)
         assertEquals(before, r.state.positions)
     }
 
@@ -151,21 +151,80 @@ class FinanceLedgerTest {
         generic.checkInvariants(s)
     }
 
-    @Test fun budgetsAreEnforcedWithoutRecording() {
-        val small = FinanceLedger(FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxObligations = 2, maxAttempts = 3))
+    @Test fun perClassBudgetsAreEnforcedWithoutRecordingAndJunkCannotStarveControls() {
+        val small = FinanceLedger(FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxCaptures = 2, maxSettleAttempts = 2, maxControls = 1))
         var s = small.genesis()
         fun go(i: FinanceInput) = small.decide(s, i).also { s = it.state }
+        // 1,000 unauthorized funds are refused, unrecorded, and consume nothing: the operator can still fund (review F2).
+        repeat(1000) { assertEquals(Disposition.UNAUTHORIZED, go(fund("junk-$it", buyer, usd, 1, Authority.TRADING)).disposition) }
+        assertEquals(0, s.sequence); assertEquals(0, s.controls)
+        assertEquals(Disposition.FUNDED, go(fund("seller-security", seller, aapl, 10)).disposition)
+        val second = go(fund("one-too-many", buyer, usd, 1)); assertEquals(Disposition.BUDGET_EXCEEDED, second.disposition); assertNull(second.decision)
+        assertEquals(1, s.controls)
         assertEquals(Disposition.CAPTURED, go(capture("a", 1)).disposition)
         assertEquals(Disposition.CAPTURED, go(capture("b", 1)).disposition)
-        // Obligation budget exhausted: a new execution is refused, not recorded, and does not use an attempt.
         val third = go(capture("c", 1)); assertEquals(Disposition.BUDGET_EXCEEDED, third.disposition); assertNull(third.decision)
-        assertEquals(2, s.sequence)
-        // A duplicate of an existing execution is still evaluated (not a new obligation).
+        // A duplicate of an existing execution is a no-op, not a new capture, so it is still evaluated.
         assertEquals(Disposition.EXECUTION_ALREADY_CAPTURED, go(capture("a", 1, actionId = "dup-a")).disposition)
-        // Attempt budget exhausted.
-        val fourth = go(fund("f", buyer, usd, 1)); assertEquals(Disposition.BUDGET_EXCEEDED, fourth.disposition); assertNull(fourth.decision)
-        assertEquals(3, s.sequence)
-        assertFailsWith<IllegalArgumentException> { FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxAttempts = 161) }
+        // Settle attempts: two refused attempts are recorded; repeats and no-ops do not count; the third new attempt is over budget.
+        assertEquals(Disposition.INSUFFICIENT_CASH, go(settle("a", 1)).disposition)
+        assertEquals(Disposition.PRIOR_ATTEMPT, go(settle("a", 1).copy(action = action("again", "repair"))).disposition)
+        assertEquals(Disposition.INSUFFICIENT_CASH, go(settle("b", 1)).disposition)
+        val over = go(settle("a", 2)); assertEquals(Disposition.BUDGET_EXCEEDED, over.disposition); assertNull(over.decision)
+        assertEquals(2, s.attempts.size); assertEquals(1 + 2 + 2, s.sequence.toInt())
+        assertFailsWith<IllegalArgumentException> { FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxSettleAttempts = 161) }
+        assertFailsWith<IllegalArgumentException> { FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxControls = 9) }
+        assertFailsWith<IllegalArgumentException> { FinanceConfig(setOf(buyer, seller), usd, aapl, opening, maxCaptures = 129) }
+    }
+
+    @Test fun refusalsNeverReachTheHistory() {
+        val r = openedAndCaptured()
+        val before = r.state
+        listOf(
+            fund("u", buyer, usd, 1, Authority.TRADING), settle("nope", 1), settle("e1", 0), capture("e1", 3, actionId = "same-economics"),
+            capture("e1", 9, actionId = "other-economics"), capture("x", 0), fund("neg", buyer, usd, -1),
+        ).forEach { assertNull(r.go(it).decision) }
+        assertEquals(before, r.state)
+        assertFailsWith<IllegalArgumentException> { Decision(1, action("x"), "d", Disposition.BUDGET_EXCEEDED, emptyList(), "p", "c") }
+        assertFailsWith<IllegalArgumentException> { ActionRecord("d", Disposition.PRIOR_RESULT) }
+    }
+
+    @Test fun zeroAmountLegsAreNotEmitted() {
+        val r = run(); r.go(fund("sec", seller, aapl, 2)); r.go(capture("free", 2, 0))
+        val o = r.go(settle("free", 1))
+        assertEquals(Disposition.SETTLED, o.disposition)
+        assertTrue(o.decision!!.legs.none { it.amount == 0L }); assertEquals(2, o.decision!!.legs.size)
+        // The skipped zero-amount cash legs must not create cash positions for either side.
+        assertNull(r.state.positions[buyer to usd]); assertNull(r.state.positions[seller to usd])
+    }
+
+    @Test fun invalidUnicodeAndControlCharactersAreRejected() {
+        assertFailsWith<IllegalArgumentException> { ExecutionKey("r", "s", "I", "e\uD800") }
+        assertFailsWith<IllegalArgumentException> { AccountId("a\u0000b") }
+        assertFailsWith<IllegalArgumentException> { AssetId("tab\there") }
+        assertFailsWith<IllegalArgumentException> { ActionKey("n", "d", " ") }
+        // Distinct valid strings never share canonical bytes: the replacement-character collision from the review.
+        val a = FinanceInput.Capture(action("x"), ExecutionKey("r", "s", "I", "e?"), buyer, seller, 1, 1)
+        val b = FinanceInput.Capture(action("x"), ExecutionKey("r", "s", "I", "e\uFFFD"), buyer, seller, 1, 1)
+        assertNotEquals(a.digest(), b.digest())
+        assertFailsWith<IllegalArgumentException> { Canon.bytes { str("\uD800") } }
+    }
+
+    @Test fun historyAndCheckpointAreBoundToTheConfigurationAndTrustedHead() {
+        val r = openedAndCaptured(); r.go(settle("e1", 1))
+        assertTrue(ledger.verifyChain(r.decisions))
+        val other = FinanceLedger(FinanceConfig(setOf(buyer, seller), usd, aapl, AccountId("a-different-opening")))
+        assertFalse(other.verifyChain(r.decisions), "a history from another configuration must not verify")
+        assertNotEquals(ledger.genesisChain, other.genesisChain)
+        val cp = ledger.checkpoint(r.state)
+        assertEquals(r.state, ledger.restore(cp, r.state.chain))
+        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, "some-other-head") }
+        // A forged, internally balanced state with a freshly computed checksum is refused unless it is at the trusted head.
+        val forged = r.state.copy(positions = r.state.positions + ((buyer to usd) to 5L) + ((opening to usd) to ((r.state.positions[opening to usd] ?: 0L) - 5L)))
+        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(forged), "the-real-head") }
+        // Executions without obligations are a clean refusal, not an unchecked exception.
+        val orphan = r.state.copy(obligations = r.state.obligations - key("e2"))
+        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(orphan), orphan.chain) }
     }
 
     @Test fun invariantsHoldAfterEveryDecisionOfAMixedSequence() {
@@ -197,7 +256,7 @@ class FinanceLedgerTest {
         for (cut in 0..inputs.size) {
             val prefix = run().apply { inputs.take(cut).forEach(::go) }
             val checkpoint = ledger.checkpoint(prefix.state)
-            val restored = Run(ledger).apply { state = ledger.restore(checkpoint) }
+            val restored = Run(ledger).apply { state = ledger.restore(checkpoint, prefix.state.chain) }
             inputs.drop(cut).forEach { restored.go(it) }
             assertEquals(full.state, restored.state, "cut=$cut")
             assertTrue(ledger.verifyChain(prefix.decisions))
@@ -208,7 +267,7 @@ class FinanceLedgerTest {
         val r = openedAndCaptured()
         val checkpoint = ledger.checkpoint(r.state)
         val forged = checkpoint.copy(state = r.state.copy(positions = r.state.positions + ((buyer to usd) to 1L)))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(forged) }
+        assertFailsWith<IllegalArgumentException> { ledger.restore(forged, r.state.chain) }
         assertTrue(ledger.verifyChain(r.decisions))
         val reordered = r.decisions.toMutableList().apply { add(0, removeAt(1)) }
         assertFalse(ledger.verifyChain(reordered))
@@ -248,7 +307,7 @@ class FinanceLedgerTest {
         val r = openedAndCaptured()
         assertEquals(Disposition.INSUFFICIENT_CASH, r.go(settle("e1", 1)).disposition)
         val again = r.go(FinanceInput.Settle(action("other-action-key", "repair"), key("e1"), 1))
-        assertEquals(Disposition.PRIOR_ATTEMPT, again.disposition); assertTrue(again.decision!!.legs.isEmpty())
+        assertEquals(Disposition.PRIOR_ATTEMPT, again.disposition); assertNull(again.decision)
     }
 
     @Test fun refusedSettleAttemptsAreRecordedPerAttempt() {
@@ -285,13 +344,14 @@ class FinanceLedgerTest {
 
     @Test fun digestCoversAuthorityAndAttempt() {
         val r = run()
-        r.go(FinanceInput.Fund(action("same-key", "control"), Authority.TRADING, buyer, usd, 5))
-        val operator = r.go(FinanceInput.Fund(action("same-key", "control"), Authority.OPERATOR, buyer, usd, 5))
-        assertEquals(Disposition.ACTION_CONFLICT, operator.disposition)
+        // Recorded outcomes establish the action key; a retry that differs only in authority or attempt is a conflict.
+        assertEquals(Disposition.FUNDED, r.go(FinanceInput.Fund(action("same-key", "control"), Authority.OPERATOR, buyer, usd, 5)).disposition)
+        assertEquals(Disposition.ACTION_CONFLICT, r.go(FinanceInput.Fund(action("same-key", "control"), Authority.TRADING, buyer, usd, 5)).disposition)
+        r.go(capture("e9", 1))
         val s1 = FinanceInput.Settle(action("same-settle", "repair"), key("e9"), 1)
         val s2 = FinanceInput.Settle(action("same-settle", "repair"), key("e9"), 2)
         assertNotEquals(s1.digest(), s2.digest())
-        r.go(capture("e9", 1)); r.go(s1)
+        assertEquals(Disposition.INSUFFICIENT_CASH, r.go(s1).disposition)
         assertEquals(Disposition.ACTION_CONFLICT, r.go(s2).disposition)
     }
 
@@ -306,11 +366,14 @@ class FinanceLedgerTest {
         val other = run().apply { go(fund("diverges-from-first", seller, aapl, 7)); go(capture("e1", 3)); go(capture("e2", 1)) }
         val spliced = r.decisions.take(1) + other.decisions.drop(1)
         assertFalse(ledger.verifyChain(spliced), "each decision is self-consistent but the link to the first one is not")
-        // Forged decisions with a checksum that is valid for their own (wrong) fields.
-        val forgedSeq = r.decisions.toMutableList().apply { this[3] = forge(this[3], sequence = 99) }
-        assertFalse(ledger.verifyChain(forgedSeq))
-        val forgedLink = r.decisions.toMutableList().apply { this[3] = forge(this[3], priorChain = "not-the-previous-checksum") }
-        assertFalse(ledger.verifyChain(forgedLink))
+        // Forged last decision whose checksum is valid for its own (wrong) fields: only the explicit checks can catch these,
+        // because there is no successor whose link would expose them.
+        val head = r.decisions.take(4)
+        assertFalse(ledger.verifyChain(head.toMutableList().apply { this[3] = forge(this[3], sequence = 99) }), "forged sequence")
+        assertFalse(ledger.verifyChain(head.toMutableList().apply { this[3] = forge(this[3], priorChain = "not-the-previous-checksum") }), "forged link")
+        // Forged mid-chain decisions are also caught through their successors.
+        assertFalse(ledger.verifyChain(r.decisions.toMutableList().apply { this[3] = forge(this[3], sequence = 99) }))
+        assertFalse(ledger.verifyChain(r.decisions.toMutableList().apply { this[3] = forge(this[3], priorChain = "not-the-previous-checksum") }))
         // The forger's byte layout must equal the production layout, or the forged cases above would pass vacuously.
         assertTrue(ledger.verifyChain(r.decisions.mapIndexed { i, d -> if (i == 3) forge(d) else d }))
     }
@@ -318,7 +381,7 @@ class FinanceLedgerTest {
     @Test fun restoreRejectsEveryTamperedStateField() {
         val r = openedAndCaptured(); r.go(settle("e1", 1))
         val cp = ledger.checkpoint(r.state)
-        assertEquals(r.state, ledger.restore(cp))
+        assertEquals(r.state, ledger.restore(cp, r.state.chain))
         val s = r.state
         val tampered = mapOf(
             "positions" to s.positions + ((buyer to usd) to 1L),
@@ -326,6 +389,7 @@ class FinanceLedgerTest {
             "actions" to s.actions.minus(s.actions.keys.first()),
             "chain" to "forged",
             "sequence" to (s.sequence + 1),
+            "controls" to (s.controls + 1),
         )
         for ((name, value) in tampered) {
             val forged = when (name) {
@@ -333,16 +397,17 @@ class FinanceLedgerTest {
                 "attempts" -> s.copy(attempts = value as Map<Pair<ExecutionKey, Int>, Disposition>)
                 "actions" -> s.copy(actions = value as Map<ActionKey, ActionRecord>)
                 "chain" -> s.copy(chain = value as String)
+                "controls" -> s.copy(controls = value as Int)
                 else -> s.copy(sequence = value as Long)
             }
-            assertFails("tampered $name must be refused") { ledger.restore(cp.copy(state = forged)) }
+            assertFails("tampered $name must be refused") { ledger.restore(cp.copy(state = forged), s.chain) }
         }
-        assertFails { ledger.restore(cp.copy(checksum = "0".repeat(64))) }
+        assertFails { ledger.restore(cp.copy(checksum = "0".repeat(64)), s.chain) }
     }
 
     @Test fun restoreRunsInvariantsEvenWithAValidChecksum() {
         val bad = ledger.genesis().copy(positions = mapOf((buyer to usd) to -5L, (opening to usd) to 5L))
-        assertFails { ledger.restore(ledger.checkpoint(bad)) }
+        assertFails { ledger.restore(ledger.checkpoint(bad), bad.chain) }
     }
 
     @Test fun invariantCheckerRejectsNegativeUnbalancedAndUnknownAccounts() {
