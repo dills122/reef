@@ -1,0 +1,100 @@
+syntax = "proto3";
+package reef.contracts.calcify.finance.v1;
+
+option go_package = "github.com/dills122/reef/contracts/proto/orderexecution/v1;orderv1";
+option java_package = "reef.contracts.calcify.finance.v1";
+option java_multiple_files = true;
+
+// Finite P3 O3 financial admission wire contract (additive; docs/work/CALCIFY_FINITE_P3_O3_PACKET.md).
+// Quantities are whole units and prices are nanos, both int64 exactly as the pure ledger holds them. All text fields are
+// non-blank, free of ISO control characters, strict UTF-8 and at most 128 bytes (enforced by the ledger, not by protobuf).
+
+enum FinanceAuthorityV1 {
+  FINANCE_AUTHORITY_V1_UNSPECIFIED = 0;
+  FINANCE_AUTHORITY_V1_OPERATOR = 1;
+  FINANCE_AUTHORITY_V1_TRADING = 2;
+}
+
+enum FinanceDispositionV1 {
+  FINANCE_DISPOSITION_V1_UNSPECIFIED = 0;
+  FINANCE_DISPOSITION_V1_CAPTURED = 1;
+  FINANCE_DISPOSITION_V1_EXECUTION_ALREADY_CAPTURED = 2;
+  FINANCE_DISPOSITION_V1_EXECUTION_CONFLICT = 3;
+  FINANCE_DISPOSITION_V1_FUNDED = 4;
+  FINANCE_DISPOSITION_V1_SETTLED = 5;
+  FINANCE_DISPOSITION_V1_ALREADY_SETTLED = 6;
+  FINANCE_DISPOSITION_V1_PRIOR_ATTEMPT = 7;
+  FINANCE_DISPOSITION_V1_INSUFFICIENT_CASH = 8;
+  FINANCE_DISPOSITION_V1_INSUFFICIENT_SHARES = 9;
+  FINANCE_DISPOSITION_V1_UNAUTHORIZED = 10;
+  FINANCE_DISPOSITION_V1_UNKNOWN_ACCOUNT = 11;
+  FINANCE_DISPOSITION_V1_UNKNOWN_EXECUTION = 12;
+  FINANCE_DISPOSITION_V1_INVALID_INPUT = 13;
+  FINANCE_DISPOSITION_V1_AMOUNT_OVERFLOW = 14;
+  FINANCE_DISPOSITION_V1_BALANCE_OVERFLOW = 15;
+  // Never carried by a decision or an action record: PRIOR_RESULT, ACTION_CONFLICT, BUDGET_EXCEEDED (16-18 reserved for replies).
+  FINANCE_DISPOSITION_V1_PRIOR_RESULT = 16;
+  FINANCE_DISPOSITION_V1_ACTION_CONFLICT = 17;
+  FINANCE_DISPOSITION_V1_BUDGET_EXCEEDED = 18;
+}
+
+message FinanceActionKeyV1 {
+  string namespace = 1;
+  string domain = 2;
+  string action_id = 3;
+}
+
+// Business execution identity; physical source provenance is audit data and never part of this key.
+message FinanceExecutionKeyV1 {
+  string run_id = 1;
+  string venue_session_id = 2;
+  string instrument_id = 3;
+  string execution_id = 4;
+}
+
+message FinanceCaptureV1 {
+  FinanceExecutionKeyV1 execution = 1;
+  string buyer_account_id = 2;
+  string seller_account_id = 3;
+  int64 quantity = 4;
+  int64 price_nanos = 5;
+}
+
+message FinanceFundV1 {
+  FinanceAuthorityV1 authority = 1;
+  string account_id = 2;
+  string asset_id = 3;
+  int64 amount = 4;
+}
+
+message FinanceSettleV1 {
+  FinanceExecutionKeyV1 execution = 1;
+  int32 attempt = 2;
+}
+
+// Input record on the CONTROL/finance ingress role.
+message FinanceInputV1 {
+  FinanceActionKeyV1 action = 1;
+  oneof body {
+    FinanceCaptureV1 capture = 2;
+    FinanceFundV1 fund = 3;
+    FinanceSettleV1 settle = 4;
+  }
+}
+
+message FinanceLegV1 {
+  string account_id = 1;
+  string asset_id = 2;
+  int64 amount = 3;
+}
+
+// Hash-chained decision on the FINANCE_DECISIONS role. Checksums are lowercase hex SHA-256.
+message FinanceDecisionV1 {
+  int64 sequence = 1;
+  FinanceActionKeyV1 action = 2;
+  string input_digest = 3;
+  FinanceDispositionV1 disposition = 4;
+  repeated FinanceLegV1 legs = 5;
+  string prior_chain = 6;
+  string checksum = 7;
+}
