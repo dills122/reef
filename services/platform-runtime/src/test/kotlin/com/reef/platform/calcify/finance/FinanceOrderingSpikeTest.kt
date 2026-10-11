@@ -37,7 +37,7 @@ class FinanceOrderingSpikeTest {
     private fun fund(id: String, account: AccountId, asset: AssetId, amount: Long) =
         FinanceInput.Fund(ActionKey("p3", "control", id), Authority.OPERATOR, account, asset, amount)
     private fun capture(id: String, qty: Long) = FinanceInput.Capture(ActionKey("p3", "capture", "cap-$id"), ek(id), buyer, seller, qty, price)
-    private fun settle(id: String, attempt: Int) = FinanceInput.Settle(ActionKey("p3", "repair", "settle-$id-$attempt"), ek(id), attempt)
+    private fun settle(id: String, attempt: Int) = FinanceInput.Settle(ActionKey("p3", "repair", "settle-$id-$attempt"), Authority.OPERATOR, ek(id), attempt)
 
     private class FinanceProcessor(val ledger: FinanceLedger) : Processor<String, ByteArray, String, ByteArray> {
         lateinit var ctx: ProcessorContext<String, ByteArray>
