@@ -1,0 +1,25 @@
+{
+  "schema": "calcify-finite-binding-fixture-v1",
+  "scope": "Synthetic cross-language contract golden; no real SQL/broker identity or live readiness claim",
+  "bindingBytes": 786,
+  "bindingSha256": "1fe1749dba2b35803eabb41fc1f9106477147a2ad9966ecf2087eb5f78dc2c8a",
+  "wireWitnessBytesWithoutTrailingNewline": 11131,
+  "wireWitnessSha256": "0d73c1d4718062d0664222cf0e2d64fcebc22edcd48df15e4d3549faf07cca4c",
+  "files": [
+    {
+      "path": "finite-binding-v1.json",
+      "bytes": 2502,
+      "sha256": "e758b5b02d186d223a207edf82990ed974f5e59bfe5918e9f380e6a9a7563c63"
+    },
+    {
+      "path": "finite-binding-v1.hex",
+      "bytes": 1573,
+      "sha256": "56273063f7276de2c068f68d573008187a5bb43557fabb8a8a23acb618c400e0"
+    },
+    {
+      "path": "finite-startup-v1.json",
+      "bytes": 11132,
+      "sha256": "a6f20f966e80da98d443c47bfdd6bc41aa1878b962d65a20da57b950d2146007"
+    }
+  ]
+}

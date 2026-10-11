@@ -87,6 +87,7 @@ type ProcessorConfig struct {
 	StopAfterPublishFail       bool
 	CalcifyLifecycleEnabled    bool
 	CalcifyFiniteBindingDigest string
+	finiteProof                *finiteActivationProof
 }
 
 type Stats struct {
@@ -234,6 +235,11 @@ func (p *Processor) Run(ctx context.Context) error {
 		processed, err := p.ProcessOnce(ctx)
 		if err != nil {
 			p.recordFailure(err)
+			if p.config.finiteProof != nil {
+				// A finite lane never grows retained aborted transactions by
+				// retrying source publication in an unbounded worker loop.
+				return err
+			}
 			var fatal *fatalProcessorError
 			if errors.As(err, &fatal) {
 				return err
@@ -257,6 +263,11 @@ func (p *Processor) Run(ctx context.Context) error {
 func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	if p.lifecycleError != nil {
 		return 0, &fatalProcessorError{cause: p.lifecycleError}
+	}
+	if p.config.finiteProof != nil {
+		if err := p.config.finiteProof.check(p.service); err != nil {
+			return 0, &fatalProcessorError{cause: err}
+		}
 	}
 	deliveries, err := p.source.Fetch(ctx, p.config.BatchSize, p.config.FetchTimeout)
 	if err != nil {
@@ -319,7 +330,12 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 // with the offsets that define the replay boundary.
 func (p *Processor) RestoreCommitted(ctx context.Context, replayer CommittedCommandReplayer) (int, error) {
 	if p.config.CalcifyLifecycleEnabled {
-		return 0, fmt.Errorf("Calcify lifecycle committed replay requires durable bound recovery (O2)")
+		if p.config.finiteProof == nil {
+			return 0, fmt.Errorf("Calcify lifecycle committed replay requires durable bound recovery")
+		}
+		if err := p.config.finiteProof.check(p.service); err != nil {
+			return 0, err
+		}
 	}
 	return replayer.ReplayCommitted(ctx, p.config.BatchSize, func(deliveries []CommandDelivery) error {
 		_, _, rollback, err := p.buildBatchMode(
@@ -353,6 +369,16 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 }
 
 func (p *Processor) buildBatchMode(deliveries []CommandDelivery, createdAt string, recordStats bool) (VenueEventBatch, []CommandDelivery, *app.BatchRollback, error) {
+	if p.config.finiteProof != nil {
+		if err := p.config.finiteProof.check(p.service); err != nil {
+			return VenueEventBatch{}, nil, nil, &fatalProcessorError{cause: err}
+		}
+		for _, delivery := range deliveries {
+			if err := p.config.finiteProof.validateDelivery(delivery); err != nil {
+				return VenueEventBatch{}, nil, nil, &fatalProcessorError{cause: err}
+			}
+		}
+	}
 	ackable := make([]CommandDelivery, 0, len(deliveries))
 	outcomes := make([]CommandOutcomeFact, 0, len(deliveries))
 	firstSeq := uint64(0)

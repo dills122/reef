@@ -238,12 +238,12 @@ sealed class EitherBoundaryError {
 }
 
 object StreamCommandResponse {
-    fun acceptedJson(reference: StreamCommandReference): String {
+    fun acceptedJson(reference: StreamCommandReference, acceptedAt: String = java.time.Instant.now().toString()): String {
         return JsonCodec.writeObject(
             "commandId" to reference.commandId,
             "status" to "ACCEPTED",
             "statusUrl" to "/api/v1/commands/${reference.commandId}",
-            "acceptedAt" to java.time.Instant.now().toString(),
+            "acceptedAt" to acceptedAt,
             "processingMode" to CommandProcessingMode.StreamAck.configValue
         )
     }

@@ -22,7 +22,9 @@ audited checkout; missing local reports do not prove a run never happened.
 
 Research baseline `b9a8756e8d0efc5e8b665a5c62da1ab064d01539` includes merged
 O1/PR485; earlier delivery statements below describe their dated checkpoint.
-Concurrent O2 branch excluded from this review; no global claim about its status.
+O2 was excluded from measured baseline; PR488 subsequently merged at `85115ac80`
+on October11 19:45UTC and was integrated for research publication. Earlier proof
+results do not qualify or review that newer finite path.
 Owner initially confirmed one server, larger size allowed with evidence, and
 hard10k/s capture/context gate with settlement allowed to lag. Later clarification
 extends headline boundary through user-facing trading API; see goalpost update below.
@@ -97,6 +99,42 @@ and [policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) retain current decisions; full
 joins RecordsPR12. Session delivery bundles initial review, kernel/queue probes,
 aged treatment/control, arena goalpost and credit proof on existing feature branch.
 
+## Calcify finite P3 O2 — October 11, 2026
+
+Publication update: [O2 PR488](https://github.com/dills122/reef/pull/488) merged
+October11 19:45UTC at `85115ac80`. Following verification and open follow-ups
+retain their pre-merge evidence scope; this research session did not rerun O2.
+
+O1 is merged (PR485, `b9a8756e8`). O2 (durable finite ingress, binding, stop/drain,
+same-binding restore) was implemented on `claude/calcify-o2-finish`; it is
+Codex's October 10 work, preserved unmodified at `wip/calcify-o2-codex-snapshot-2026-10-11`, plus
+corrections below. Defaults stay off and live activation requires the explicit O2 opening; no
+financial authority, production adoption or capacity claim follows.
+
+- Independent review 1 of 3: **Not ready**. F2 (finite matcher inherited ambient compression):
+  fixed with a finite-only `CompressionNone` pin and tests; ordinary mode unchanged. F1 (G9, full
+  managed-state transport): `FiniteG9BrokerTransportTest` writes the declared 6,307,840-byte
+  state through the production managed store and `liveProperties`, reads it back from the
+  changelog, and restores it after local-state loss on a disposable Redpanda. Transport only —
+  synthetic bytes, unauthenticated RF1 broker, one run.
+- Re-verified October 11: Go build/vet/test/race, Kotlin `Finite*` including the 10 Postgres-backed
+  binding-store and 11 ingress tests, proto regeneration, retention, and local replay of the CI
+  steps O2 touches (CI breakers fixed: migration-list test, harness-test wiring as a local make target, Go coverage gate exclusion for the fixture-only probe).
+  Results, commands and limits: [O2 verification record](evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
+- Independent reviews: instance 2 and 3 of 3 both **Ready with non-blocking follow-ups** (no P0-P2; review budget exhausted).
+  Instance 2's P2-1 (NUL in payload fenced the run uncharged) is fixed with unit and Postgres-backed tests.
+- Open: G1–G8 and G10 live
+  evidence is still Codex's recorded claims (ledger under the snapshot's
+  `.planning/calcify-p3-o2-2026-10-10/`); Postgres role grants used in tests were inferred and
+  need an operator-reviewed definition; hosted CI run. O3–O5 stay gated on accepted O2.
+- Retention: the earlier hour-by-hour O2 checkpoints formerly in this section are preserved in git
+  history (snapshot commit `4c5a1f6011dadf2e1bdcd29e67a626e742d781d6`). Records archive
+  publication of O2 evidence has **not** been done; retention is incomplete.
+- Test infrastructure: per [delivery policy](ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery),
+  leave the usable harness alone. G9 transport is proven without further harness work; the G9 matrix
+  sub-clauses on pinned images, fresh build hashes and resource observations within the lease remain
+  Codex-recorded, not re-evidenced here.
+
 ## Calcify eight-hour P3 session — October 9–10, 2026
 
 Started October9 at22:55:41 America/Toronto; deadline October10 at06:55:41.
@@ -152,7 +190,8 @@ remote blobs verified. Exact-head hosted integrity36814/hygiene/4tests and
 first normalization failure/correction preserved, original230 cbf proof unchanged.
 [Retention receipt](records/2026-10-10-calcify-finite-p3-retention.json) records
 publication checks without recursive archival of future verification. Defaults off;
-O2–O5 unimplemented. Live binding/ingress/isolation/process restart, financial
+O2–O5 unimplemented at O1 delivery checkpoint; newer O2 state above.
+Live binding/ingress/isolation/process restart, financial
 adoption and resource/capacity qualification remain open.
 
 ## Calcify finite P0 source gate — October 7, 2026

@@ -135,10 +135,11 @@ capture checks retained acceptance plus immutable instrument/account binding.
 `MATCHING_ENGINE_CALCIFY_LIFECYCLE_ENABLED` defaults false; optional digest input is
 `MATCHING_ENGINE_CALCIFY_FINITE_BINDING_DIGEST`. Mode off omits field and preserves
 exact legacy JSON bytes/checksums and source-profile-v1 canonical identity. Model
-processor requires valid P0 profile, binding digest and batch1. Live `StartRunner`
-and committed replay explicitly refuse lifecycle mode until O2 durable registration,
-admission fencing and bound producer recovery replace gate; setting env alone
-cannot activate live mode. No default/bootstrap enablement added.
+processor requires valid P0 profile, binding digest and batch1. O2 finite startup
+requires fresh authenticated durable registration, actual broker UUID/config/cuts,
+complete bounded publication journal and matching ownership before bound replay.
+Setting env alone cannot activate live mode. Unbound model committed replay still
+refuses; default lifecycle remains off.
 
 Focused tests run actual processor through fixed12-command DAY/Open fixture:
 8 accepted outcomes,4 explicit rejections,3 trades/6 units,5 retained identities;
@@ -149,6 +150,47 @@ startup/replay refusal. Fixture identities parameterize frozen O0 run/session;
 exact values/profile hash/model-only binding published in tiny fixture manifest.
 No durable activation, live broker/restart, financial adoption or capacity proof.
 Retention no-op: new active contract/producer context; no superseded record removed.
+
+### Bound finite startup and restart (O2)
+
+Opt-in isolated run requires `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`,
+`STREAM_ACK_LOG_PROVIDER=redpanda`, `STREAM_ACK_PARTITION_COUNT=1`,
+`MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0`, and
+`MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE=1`. P0 profile/quote catalog, group,
+topic, shard and subject settings must match immutable registered opening.
+`MATCHING_ENGINE_ENABLE_GRPC=1` refuses finite startup; direct HTTP order routes
+return403. All finite verification/recovery completes before HTTP listener opens.
+
+Provide registered opening digest via `MATCHING_ENGINE_CALCIFY_FINITE_BINDING_DIGEST`
+and API origin via `MATCHING_ENGINE_CALCIFY_BINDING_ENDPOINT`. Dedicated bearer
+comes from `MATCHING_ENGINE_CALCIFY_SERVICE_TOKEN_FILE`. Broker uses SASL PLAIN
+with `MATCHING_ENGINE_CALCIFY_KAFKA_USERNAME` and
+`MATCHING_ENGINE_CALCIFY_KAFKA_PASSWORD_FILE`. Secret files must be private regular
+files, at most4096bytes; direct secret environment settings refuse. Fixture mounts
+only matcher credentials, never registrar credentials. Every finite broker client
+uses same authenticated transport; topic creation/expansion and nontransactional
+source publication refuse. `MATCHING_ENGINE_CALCIFY_KAFKA_TLS_ENABLED=true` verifies
+remote broker peers using system roots plus optional bounded
+`MATCHING_ENGINE_CALCIFY_KAFKA_CA_FILE`. Explicit fixture false uses SASL_PLAINTEXT
+on owned private listener; do not use plaintext across untrusted networks.
+
+Startup challenges `GET /internal/calcify/finite-bindings/{digest}?nonce=...` with
+service bearer, recomputes frozen opening/profile/budget digests, and compares
+actual cluster/topic UUIDs, configurations, stable history, group cuts and all
+registered publications. Broker must retain seeded command/capture group cuts;
+missing offsets cannot represent zero. SQL admission must be STOPPED with no
+unresolved publications. Missing UNKNOWN stays stopped; no absence inference,
+blind republish, budget refund or automatic release.
+
+After matching ownership and transactional source producer fencing, startup
+rechecks witness/history, replays committed prefix without publication, and drains
+known PUBLISHED suffix transactionally to stable command end. Snapshot checksum
+binds optional finite identity; old mode-off snapshots/bytes remain compatible.
+Authenticated `GET /internal/calcify/finite-readiness?nonce=...` returns fresh actual
+epochs, group/source cuts, matching identity and deterministic snapshot checksum.
+It cannot release intake; only trusted registrar can stage/release against current
+engine and managed capture evidence. Model tests do not replace real broker/SQL/
+capture/ACL/resource/restart acceptance gates.
 
 ## Terminal retention and recovery compatibility
 

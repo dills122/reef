@@ -91,6 +91,29 @@ Rationale:
 - the pre-check must remain bounded and measured because it becomes part of the order-entry hot path.
 - final financial correctness belongs to settlement and the account ledger, not to the matching engine.
 
+## Opt-in Calcify finite ingress
+
+`boundary/0013` adds immutable binding, bounded run counters, attempt receipts
+and publication journal; [schema blueprint](DATA_DOMAIN_SCHEMA_BLUEPRINT.md#opt-in-calcify-finite-ingress-boundary0013)
+lists exact tables. [Finite source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md)
+and [owner contract](../contracts/calcify/README.md) define separate finite mode.
+
+Canonical request reservation and `stream_command_intake` identity insertion share
+one transaction. Eligible retries, conflicts and policy refusals consume bounded
+attempts; new reservation also consumes possible-publication capacity. Durable
+PUBLISHING precedes send. Actual topic/partition/offset ACK, durable PUBLISHED
+marker and stable receipt precede `202`. Unknown outcome stays charged and stops
+admission; same-context late positive ACK may repair original journal entry.
+
+Runtime gets scoped function execution, never registration/release or direct
+table mutation. Trusted registrar compares fresh engine/capture observations,
+current owner/activation epochs, counters, journal hash and broker cuts before
+manual release. Same-binding restart retains opening and budgets; capture can
+restore/drain known source while unresolved admission remains stopped. This
+finite synchronous SQL ingress path requires stage-cost evidence before wider
+adoption. O2 author tests and re-verification pass (G9 transport proven); independent review 2 of 3
+pending in [current work plan](WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026).
+
 ## Configuration Matrix
 
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres`

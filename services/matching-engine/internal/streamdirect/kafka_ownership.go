@@ -35,6 +35,10 @@ type KafkaOwnershipLease struct {
 }
 
 func AcquireKafkaOwnershipLease(parent context.Context, config KafkaConfig, shardID string, partitions []int) (*KafkaOwnershipLease, error) {
+	return acquireKafkaOwnershipLease(parent, parent, config, shardID, partitions)
+}
+
+func acquireKafkaOwnershipLease(parent, waitContext context.Context, config KafkaConfig, shardID string, partitions []int) (*KafkaOwnershipLease, error) {
 	requested := make([]int32, 0, len(partitions))
 	requestedSet := make(map[int32]bool, len(partitions))
 	for _, partition := range partitions {
@@ -50,7 +54,7 @@ func AcquireKafkaOwnershipLease(parent context.Context, config KafkaConfig, shar
 	if err != nil {
 		return nil, err
 	}
-	clientConfig := newKafkaClientConfig("reef-matching-engine-ownership-" + shardID)
+	clientConfig := kafkaConfiguredClient(config, "reef-matching-engine-ownership-"+shardID)
 	clientConfig.Version = sarama.V2_3_0_0
 	clientConfig.Consumer.Group.InstanceId = shardID
 	clientConfig.Consumer.Group.Member.UserData = memberData
@@ -76,9 +80,9 @@ func AcquireKafkaOwnershipLease(parent context.Context, config KafkaConfig, shar
 	go lease.run(ctx, config.OwnershipTopic)
 	for {
 		select {
-		case <-parent.Done():
+		case <-waitContext.Done():
 			_ = lease.Close()
-			return nil, parent.Err()
+			return nil, waitContext.Err()
 		case <-lease.done:
 			return nil, lease.terminalError()
 		case <-lease.state:

@@ -7,6 +7,7 @@ import org.apache.kafka.streams.processor.api.Processor
 import org.apache.kafka.streams.processor.api.ProcessorContext
 import org.apache.kafka.streams.processor.api.Record
 import org.apache.kafka.streams.state.KeyValueStore
+import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.state.Stores
 import reef.contracts.calcify.v1.*
 import reef.contracts.orderexecution.v1.OrderSide
@@ -282,6 +283,8 @@ internal object FiniteLifecycleReducer {
 internal class FiniteLifecycleCaptureProcessor(
     private val binding: FiniteLifecycleBinding, private val cut: FiniteLifecycleStartCut,
     private val blocked: (Boolean)->Unit,
+    private val verifiedInitialize: ((FiniteLifecycleStateV1?)->FiniteLifecycleStateV1)? = null,
+    private val observe: (FiniteLifecycleStateV1)->Unit = {},
 ) : Processor<ByteArray,ByteArray,ByteArray,ByteArray> {
     private lateinit var context: ProcessorContext<ByteArray,ByteArray>
     private lateinit var store: KeyValueStore<String,ByteArray>
@@ -290,8 +293,12 @@ internal class FiniteLifecycleCaptureProcessor(
         require(context.taskId().partition() == binding.partition) { "capture task/lane mismatch" }
         val existing = store.get("state")?.let(FiniteLifecycleStateV1::parseFrom)
         require(existing != null || store.all().use { !it.hasNext() }) { "managed state missing; refuse inferred genesis" }
-        val state = FiniteLifecycleCaptureRuntime.initializeModel(binding,cut,existing)
-        store.put("state",state.toByteArray()); blocked(state.fault.isNotEmpty())
+        val state = verifiedInitialize?.invoke(existing) ?: FiniteLifecycleCaptureRuntime.initializeModel(binding,cut,existing)
+        FiniteLifecycleReducer.validateState(state,binding)
+        // Live restore of identical committed state must not append another changelog copy.
+        // Model initialization retains its original behavior.
+        if(verifiedInitialize==null || existing==null || existing!=state) store.put("state",state.toByteArray())
+        blocked(state.fault.isNotEmpty()); observe(state)
     }
     override fun process(record: Record<ByteArray,ByteArray>) {
         // Always re-read managed state: rollback/restore cannot leave an ahead-of-store cache.
@@ -306,6 +313,7 @@ internal class FiniteLifecycleCaptureProcessor(
         // Forward/store failures propagate to Streams and abort transaction; never convert to committed lane fault.
         result.envelope?.let { context.forward(Record(null,it.toByteArray(),record.timestamp())) }
         store.put("state",result.state.toByteArray())
+        observe(result.state)
     }
     private fun retain(state: FiniteLifecycleStateV1, payload: ByteArray, offset: Long, resume: Long, reason: String) {
         check(payload.size <= binding.budget.sourceBytes) { "oversized fault input; abort and retain broker history" }
@@ -317,15 +325,19 @@ internal class FiniteLifecycleCaptureProcessor(
         }.build()
         // Budget overflow aborts rather than checkpointing input past unretained suffix.
         FiniteLifecycleReducer.validateState(next,binding)
-        store.put("state",next.toByteArray()); blocked(true)
+        store.put("state",next.toByteArray()); blocked(true); observe(next)
     }
     override fun close() = Unit
     companion object {
         const val STORE = "finite-lifecycle"
-        fun modelTopology(binding: FiniteLifecycleBinding, cut: FiniteLifecycleStartCut, blocked: (Boolean)->Unit = {}): Topology = Topology().apply {
+        fun managedStoreBuilder(): StoreBuilder<KeyValueStore<String,ByteArray>> =
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(STORE),Serdes.String(),Serdes.ByteArray()).withCachingDisabled()
+        fun modelTopology(binding: FiniteLifecycleBinding, cut: FiniteLifecycleStartCut, blocked: (Boolean)->Unit = {},
+                          verifiedInitialize: ((FiniteLifecycleStateV1?)->FiniteLifecycleStateV1)? = null,
+                          observe: (FiniteLifecycleStateV1)->Unit = {}): Topology = Topology().apply {
             addSource("finite-source",ByteArrayDeserializer(),ByteArrayDeserializer(),binding.sourceTopic)
-            addProcessor("capture",{ FiniteLifecycleCaptureProcessor(binding,cut,blocked) },"finite-source")
-            addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(STORE),Serdes.String(),Serdes.ByteArray()).withCachingDisabled(),"capture")
+            addProcessor("capture",{ FiniteLifecycleCaptureProcessor(binding,cut,blocked,verifiedInitialize,observe) },"finite-source")
+            addStateStore(managedStoreBuilder(),"capture")
             addSink("finite-capture",binding.captureTopic,ByteArraySerializer(),ByteArraySerializer(),
                 org.apache.kafka.streams.processor.StreamPartitioner<ByteArray,ByteArray> { _,_,_,_->java.util.Optional.of(setOf(binding.partition)) },"capture")
         }

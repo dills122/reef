@@ -1,0 +1,27 @@
+{
+  "schema": "calcify-finite-o2-fixture-v1",
+  "venueSessionId": "calcify-p3-session",
+  "instrumentId": "AAPL",
+  "quoteCurrency": "USD",
+  "baseAssetId": "fixture-base-AAPL",
+  "parties": [
+    {"participantId": "p3-buyer", "accountId": "p3-buy-account", "side": "BUY"},
+    {"participantId": "p3-seller", "accountId": "p3-sell-account", "side": "SELL"}
+  ],
+  "budget": {"attempts":"32","publications":"16","commandBytes":"8192","outcomes":"1","trades":"8","openWindows":"1","sourceBytes":"65536","captureBytes":"131072","attemptBytes":"4096","openingBytes":"16384"},
+  "expected": {"commands":12,"applied":8,"rejected":4,"trades":3,"executedUnits":6,"captureMembers":15},
+  "commands": [
+    {"kind":"submit","orderId":"p0-1","party":"SELL","quantityUnits":"3","limitPrice":"100000000000"},
+    {"kind":"submit","orderId":"p0-2","party":"SELL","quantityUnits":"2","limitPrice":"100000000000"},
+    {"kind":"submit","orderId":"p0-3","party":"BUY","quantityUnits":"4","limitPrice":"100000000000"},
+    {"kind":"modify","orderId":"p0-2","party":"SELL","newQuantityUnits":"4","newLimitPrice":"99000000000"},
+    {"kind":"cancel","orderId":"p0-2","party":"SELL","reason":"finite-fixture"},
+    {"kind":"submit","orderId":"p0-4","party":"BUY","quantityUnits":"2","limitPrice":"98000000000"},
+    {"kind":"modify","orderId":"p0-4","party":"BUY","newQuantityUnits":"2","newLimitPrice":"100000000000"},
+    {"kind":"submit","orderId":"p0-5","party":"SELL","quantityUnits":"2","limitPrice":"100000000000"},
+    {"kind":"cancel","orderId":"p0-1","party":"SELL","reason":"already-filled"},
+    {"kind":"submit","orderId":"p0-1","party":"SELL","quantityUnits":"1","limitPrice":"100000000000"},
+    {"kind":"modify","orderId":"p0-8","party":"BUY","newQuantityUnits":"1","newLimitPrice":"100000000000"},
+    {"kind":"cancel","orderId":"p0-8","party":"BUY","reason":"absent-order"}
+  ]
+}

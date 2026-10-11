@@ -19,17 +19,18 @@ import (
 )
 
 type Service struct {
-	booksMu              sync.RWMutex
-	books                map[string]*orderBook
-	orderIndex           *orderIndex
-	now                  func() time.Time
-	orderControls        OrderControls
-	sessionControls      SessionControls
-	matchingProfiles     MatchingProfiles
-	stpMode              SelfTradePreventionMode
-	terminalRetention    terminalOrderRetention
-	calcifySourceProfile *CalcifySourceProfile
-	instrumentQuotes     map[string]string
+	booksMu                    sync.RWMutex
+	books                      map[string]*orderBook
+	orderIndex                 *orderIndex
+	now                        func() time.Time
+	orderControls              OrderControls
+	sessionControls            SessionControls
+	matchingProfiles           MatchingProfiles
+	stpMode                    SelfTradePreventionMode
+	terminalRetention          terminalOrderRetention
+	calcifySourceProfile       *CalcifySourceProfile
+	calcifyFiniteBindingDigest string
+	instrumentQuotes           map[string]string
 }
 
 type restingOrder = hotbook.RestingOrder
