@@ -701,6 +701,12 @@ jobs:
           CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_USER: fin_registrar
           CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/registrar.pw
         run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.calcify.*"
+      - name: Require finite Postgres suite executed, not skipped
+        # Without the CALCIFY_FINITE_POSTGRES_TEST_* env the suite skips and Gradle still reports success.
+        run: |
+          f=services/platform-runtime/build/test-results/test/TEST-com.reef.platform.calcify.FiniteBindingStorePostgresTest.xml
+          test -f "$f"
+          grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$f"
       - name: Run idempotency renewal tests against real Postgres
         env:
           RUNTIME_DB_URL_TEST: jdbc:postgresql://localhost:5432/reef
