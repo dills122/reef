@@ -112,6 +112,21 @@ limited: `calcify-tests` was still pending for `230de260f`.
 | F3 Go coverage exclusion masks 910 low-covered statements; 0.3-point margin | P3 | Disclosed above; no change. Track finite runner/startup coverage. |
 | F4 Bun harness tests no longer run in CI | P3 | Disclosed; `make test-finite-o2-harness` is a manual gate for anyone touching `finite-o2*`. |
 
+## OpenCodeReview pilot on PR 488 (run 38164020914, head `ab4751bbb`)
+
+15 inline findings, all replied to and resolved on the PR. 3 accepted (`1ba433c86`), 12 disputed with code or test
+evidence; no finding changed product behaviour.
+
+| Disposition | Count | Comments |
+| --- | --- | --- |
+| Accepted | 3 | CI role passwords now over stdin with `set +x` (security, medium); monitor-test `result()` helper carries stderr/signal; `SERVICES_FOR_TEST` hoisted |
+| Disputed: factually wrong or already enforced | 8 | coverage summary (step already appends it; probe excluded from the gate by design); engine-adverse mutation loop (fresh object per iteration); `OOMKilled:false` is the accepting case; `monitorLease` overlap check exists; `df` NaN fails `integer()` with `df_value`; `abort()` already re-inspects and `checkOwned` enforces project/service/image; fixture roots deliberately absent (ENOENT path under test); dedup test (production lease roots exercised by every monitor test) |
+| Disputed: suggestion would break behaviour | 3 | Makefile `test` aggregate (harness is macOS-only; would break Linux); SQL early return on intake conflict (a conflict must consume its attempt per the source contract); Go modify/cancel currency check (those commands have no currency field) |
+| Disputed: already verified elsewhere | 1 | CAPTURE/changelog topic identity (opening validation + per-topic UUID/range comparison at startup) |
+
+The reviewer's own warning: dispatch stopped on token budget before reviewing `cmd/calcify-finite-probe/main.go`
+(1.4k lines, fixture-only), so that file received no OCR coverage.
+
 ## Hosted CI correction (first run, head `0d8eca82b`)
 
 The local replay above missed two failures that hosted CI (ubuntu, Node 22, Bun 1.3.14) caught:
