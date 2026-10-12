@@ -703,6 +703,9 @@ jobs:
           GRANT SELECT, INSERT, UPDATE ON boundary.calcify_finance_checkpoint, boundary.calcify_finance_decision, boundary.calcify_finance_position, boundary.calcify_finance_obligation, boundary.calcify_finance_attempt TO fin_projector;
           SQL
           } | psql_
+      - name: Verify binding v2 reference bytes
+        # Independent Python encoder; also re-derives the checked-in v1 hex so the encoder is validated against known-good bytes.
+        run: python3 scripts/dev/calcify-financial/binding_v2_reference.py check
       - name: Run Calcify tests against real Postgres
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef

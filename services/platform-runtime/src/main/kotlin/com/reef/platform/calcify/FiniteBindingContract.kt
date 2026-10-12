@@ -37,25 +37,53 @@ internal class FiniteOpening internal constructor(private val root: ObjectNode) 
         val bytes=ByteArrayOutputStream()
         DataOutputStream(bytes).use { out ->
             out.write("calcify-finite-binding-v1\u0000".toByteArray(Charsets.US_ASCII))
-            out.write(FiniteLifecycleContract.hex(profileHash)); out.write(FiniteLifecycleContract.hex(root["budgetHash"].textValue()))
-            listOf("lifecycleSchema","policyId","runId","venueSessionId","instrumentId","quoteCurrency","baseAssetId").forEach { out.frame(root[it].textValue()) }
-            out.writeInt(parties.size)
-            parties.sortedWith(compareBy<FiniteParty>{it.participant}.thenBy{it.account}).forEach {
-                out.frame(it.participant);out.frame(it.account);out.writeByte(if(it.side==OrderSide.ORDER_SIDE_BUY)1 else 2)
-            }
-            root["topics"].forEach { out.frame(it["name"].textValue());out.frame(it["topicId"].textValue()) }
-            listOf("sourceGeneration","partition","partitionCount").forEach { out.writeInt(root[it].intValue()) }
-            listOf("commandConsumerGroup","ownershipGroup","matcherShardId","commandSubjectPrefix","sourceSubjectPrefix",
-                "brokerClusterId","captureApplicationId","storeName","stateVersion").forEach { out.frame(root[it].textValue()) }
-            out.writeByte(1)
-            FiniteBindingContract.initialOffsets.forEach { out.writeLong(root[it].textValue().toLong()) }
+            writeCanonicalBody(out)
         }
         return bytes.toByteArray()
+    }
+    /** Everything after the schema prefix; v2 reuses it unchanged and appends the finance suffix. */
+    internal fun writeCanonicalBody(out: DataOutputStream) {
+        out.write(FiniteLifecycleContract.hex(profileHash)); out.write(FiniteLifecycleContract.hex(root["budgetHash"].textValue()))
+        listOf("lifecycleSchema","policyId","runId","venueSessionId","instrumentId","quoteCurrency","baseAssetId").forEach { out.frame(root[it].textValue()) }
+        out.writeInt(parties.size)
+        parties.sortedWith(compareBy<FiniteParty>{it.participant}.thenBy{it.account}).forEach {
+            out.frame(it.participant);out.frame(it.account);out.writeByte(if(it.side==OrderSide.ORDER_SIDE_BUY)1 else 2)
+        }
+        root["topics"].forEach { out.frame(it["name"].textValue());out.frame(it["topicId"].textValue()) }
+        listOf("sourceGeneration","partition","partitionCount").forEach { out.writeInt(root[it].intValue()) }
+        listOf("commandConsumerGroup","ownershipGroup","matcherShardId","commandSubjectPrefix","sourceSubjectPrefix",
+            "brokerClusterId","captureApplicationId","storeName","stateVersion").forEach { out.frame(root[it].textValue()) }
+        out.writeByte(1)
+        FiniteBindingContract.initialOffsets.forEach { out.writeLong(root[it].textValue().toLong()) }
     }
     val digest: String get() = FiniteLifecycleContract.sha(canonicalBytes())
     fun toCaptureBinding(): FiniteLifecycleBinding = FiniteLifecycleBinding(digest,profileHash,run,session,instrument,
         root["quoteCurrency"].textValue(),parties,topic("SOURCE").name,topic("SOURCE").id,generation,0,
         topic("COMMAND").name,topic("COMMAND").id,topic("CAPTURE").name,topic("CAPTURE").id,applicationId,0,budget)
+}
+
+/** Binding v2 (docs/work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md): the v1 opening plus a finance block; built only by [FiniteBindingContract.parseOpeningV2]. */
+internal class FiniteOpeningV2 internal constructor(private val root: ObjectNode) {
+    private val core = FiniteOpening(root)
+    fun json(): ObjectNode = root.deepCopy()
+    val financeApplicationId: String get() = root["financeApplicationId"].textValue()
+    val controlTransactionalId: String get() = root["controlTransactionalId"].textValue()
+    val openingAccountId: String get() = root["openingAccountId"].textValue()
+    val financeConfigDigest: String get() = root["financeConfigDigest"].textValue()
+    fun topic(role: String): FiniteTopic = core.topic(role)
+    fun canonicalBytes(): ByteArray {
+        val bytes=ByteArrayOutputStream()
+        DataOutputStream(bytes).use { out ->
+            out.write("calcify-finite-binding-v2\u0000".toByteArray(Charsets.US_ASCII))
+            core.writeCanonicalBody(out)
+            listOf("financeApplicationId","financeStoreName","financeStateVersion","openingAccountId","controlTransactionalId").forEach { out.frame(root[it].textValue()) }
+            out.write(FiniteLifecycleContract.hex(financeConfigDigest))
+            listOf("obligations","captures","settleAttempts","controls").forEach { out.writeInt(root["financeBudget"][it].textValue().toInt()) }
+            FiniteBindingContract.initialOffsetsV2.forEach { out.writeLong(root[it].textValue().toLong()) }
+        }
+        return bytes.toByteArray()
+    }
+    val digest: String get() = FiniteLifecycleContract.sha(canonicalBytes())
 }
 
 internal data class FiniteTopic(val role: String,val name: String,val id: String)
@@ -67,6 +95,12 @@ internal object FiniteBindingContract {
     const val JOURNAL_BYTES=1024
     const val MAX_OFFSET=281474976710655L
     val roles=listOf("COMMAND","SOURCE","CAPTURE","OWNERSHIP","CAPTURE_CHANGELOG")
+    val rolesV2=roles+listOf("CONTROL","FINANCE_DECISIONS","FINANCE_CHANGELOG")
+    val initialOffsetsV2=listOf("initialControlNextOffset","initialFinanceDecisionsNextOffset","initialFinanceCaptureNextOffset","initialFinanceControlNextOffset")
+    private val financeFields=listOf("financeApplicationId","financeStoreName","financeStateVersion","openingAccountId","controlTransactionalId",
+        "financeConfigDigest","financeBudget")+initialOffsetsV2
+    private val asciiIdentifier=Regex("[A-Za-z0-9._:-]{1,128}")
+    private fun prefixRelated(a:String,b:String)=a.startsWith(b)||b.startsWith(a)
     val initialOffsets=listOf("initialCommandNextOffset","initialSourceNextOffset","initialCaptureNextOffset","initialCaptureSourceGroupNextOffset")
     private val mapper=JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
         .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build()
@@ -109,6 +143,58 @@ internal object FiniteBindingContract {
         val n=node[key];require(n!=null && n.isIntegralNumber && n.canConvertToInt() && n.intValue() in min..max){"finite $key integer"};return n.intValue()
     }
     fun parseOpening(bytes:ByteArray):FiniteOpening=opening(strictObject(bytes,16384))
+
+    /** Strict v2 adapter: every v1 rule is applied through the v1 validator on the v1-shaped core; v2 only adds constraints. */
+    fun parseOpeningV2(bytes:ByteArray):FiniteOpeningV2 {
+        val node=strictObject(bytes,16384)
+        fields(node,openingFields+financeFields)
+        require(text(node,"schema")=="calcify-finite-binding-v2"){"finite v2 schema"}
+        val topics=node["topics"]
+        require(topics.isArray && topics.size()==8){"finite v2 topics"}
+        val core=node.deepCopy().apply {
+            put("schema","calcify-finite-binding-v1"); financeFields.forEach { remove(it) }
+            set<JsonNode>("topics",mapper.createArrayNode().apply { (0 until 5).forEach { add(topics[it].deepCopy<JsonNode>()) } })
+        }
+        val v1=opening(core)
+        // Roles 5..7 plus global distinctness over all eight topics.
+        for(i in 5 until 8) {
+            val t=topics[i];fields(t,listOf("role","name","topicId"))
+            require(text(t,"role")==rolesV2[i]){"finite v2 topic role order"};text(t,"name")
+            val id=text(t,"topicId",22);val uuid=try { Uuid.fromString(id) } catch(ex:Exception){throw IllegalArgumentException("finite topic UUID",ex)}
+            require(uuid!=Uuid.ZERO_UUID && uuid.toString()==id){"finite topic UUID spelling"}
+        }
+        require(topics.map{it["name"].textValue()}.distinct().size==8 && topics.map{it["topicId"].textValue()}.distinct().size==8){"finite duplicate topic"}
+        // Finance block.
+        require(text(node,"financeStoreName")=="finite-finance" && text(node,"financeStateVersion")=="calcify-finite-finance-state-v1"){"finite finance version"}
+        val app=text(node,"financeApplicationId");val ctl=text(node,"controlTransactionalId");val opening=text(node,"openingAccountId",128)
+        require(topics[7]["name"].textValue()==app+"-finite-finance-changelog"){"finite finance changelog name"}
+        val baseAsset=v1.json()["baseAssetId"].textValue();val quote=v1.json()["quoteCurrency"].textValue()
+        val accounts=v1.parties.map{it.account}
+        require((accounts+baseAsset+opening).all{asciiIdentifier.matches(it)}){"finite ledger identifiers must be [A-Za-z0-9._:-]{1,128}"}
+        require(quote!=baseAsset && opening !in accounts){"finite ledger identity collision"}
+        val budget=node["financeBudget"];fields(budget,listOf("obligations","captures","settleAttempts","controls"))
+        val limits=listOf("obligations","captures","settleAttempts","controls").map{ number(budget,it) }
+        require(limits==listOf(256L,128L,160L,8L)){"finite finance budget differs from the compiled O3a limits"}
+        initialOffsetsV2.forEach { require(number(node,it,MAX_OFFSET)==0L){"finite genesis offset"} }
+        val digest=text(node,"financeConfigDigest",64)
+        val expected=com.reef.platform.calcify.finance.FinanceConfig(accounts.map{com.reef.platform.calcify.finance.AccountId(it)}.toSet(),
+            com.reef.platform.calcify.finance.AssetId(quote),com.reef.platform.calcify.finance.AssetId(baseAsset),com.reef.platform.calcify.finance.AccountId(opening),
+            limits[0].toInt(),limits[1].toInt(),limits[2].toInt(),limits[3].toInt()).digest()
+        require(hash.matches(digest) && digest==expected){"finite finance config digest"}
+        // Prefix-distinctness: finance principal prefix ACLs must cover only finance resources.
+        val j=v1.json()
+        val others=listOf(j["captureApplicationId"].textValue(),j["commandConsumerGroup"].textValue(),j["ownershipGroup"].textValue(),j["matcherShardId"].textValue(),ctl)
+        require(others.none{prefixRelated(app,it)}){"finite finance application id prefix collision"}
+        require((0 until 8).none{it!=7 && prefixRelated(app,topics[it]["name"].textValue())}){"finite finance application id topic prefix collision"}
+        require(listOf(j["captureApplicationId"].textValue(),j["commandConsumerGroup"].textValue(),j["ownershipGroup"].textValue()).none{prefixRelated(ctl,it)}){"finite control transactional id prefix collision"}
+        // Normalized (party-sorted) full document.
+        val normalized=node.deepCopy().apply { set<JsonNode>("parties",v1.json()["parties"]) }
+        // Measured on the strict JSON bytes of the full v2 document (party order does not change the length), as Go does with json.Marshal.
+        require(encode(node).size<=v1.budget.openingBytes){"finite v2 opening measured bytes"}
+        val result=FiniteOpeningV2(normalized)
+        require(result.canonicalBytes().size<=16384){"finite v2 canonical bytes"}
+        return result
+    }
     private fun opening(node:ObjectNode):FiniteOpening {
         fields(node,openingFields)
         require(text(node,"schema")=="calcify-finite-binding-v1" && text(node,"lifecycleSchema")==FiniteLifecycleContract.COMMAND_SCHEMA &&
