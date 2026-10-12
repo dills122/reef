@@ -83,7 +83,7 @@ class IncrementalLifecycleReducerTest {
 
     @Test fun workPerRecordIsIndependentOfHistoryLength() {
         // The keyed reducer reads only touched entities; count the reads for the last record against the first.
-        class Counting(val inner: MemoryLifecycleKv) : LifecycleKv { var reads = 0; override fun get(key: String): ByteArray? { reads++; return inner.get(key) } }
+        class Counting(val inner: MemoryLifecycleKv) : LifecycleKv { var reads = 0; override fun get(key: String): ByteArray? { reads++; return inner.get(key) }; override fun scan(prefix: String) = inner.scan(prefix) }
         val kv = MemoryLifecycleKv(); kv.apply(IncrementalLifecycleReducer.genesis(binding))
         var firstReads = 0; var lastReads = 0
         bodies.forEachIndexed { i, body ->
