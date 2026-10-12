@@ -104,10 +104,17 @@ class FinanceAclTest {
             fun controlWrite(i: FinanceInput) { control.beginTransaction(); control.send(ProducerRecord(F.CONTROL, 0, ByteArray(0), FinanceWire.toProto(i).toByteArray())).get(); control.commitTransaction() }
             controlWrite(F.fund("seller-shares", F.seller, F.aapl, 1)); controlWrite(F.fund("buyer-cash", F.buyer, F.usd, F.PRICE))
             capture.send(ProducerRecord(F.CAPTURE, 0, ByteArray(0), F.envelope(0).toByteArray())).get(15, TimeUnit.SECONDS)
+            // CAPTURE and CONTROL are different topics, so the app may see a repair before its capture and refuse it (unknown execution,
+            // not recorded). Wait until the capture is processed so the order, and the four recorded decisions, are deterministic.
+            rp.admin("observer").use { o -> F.waitUntil("capture processed before the repair is written", seconds = 120) { (F.committed(o, F.CAPTURE) ?: 0L) >= 1L } }
             controlWrite(F.settle(F.executionId(0), 1))
             rp.admin("observer").use { obs ->
+                // Transactional writes add commit markers to CONTROL, so offsets are not record counts: wait for the group to reach the
+                // read-committed end of both inputs, which is only true once every record (the repair included) has been processed.
+                val observer = rp.auth("observer")
+                val captureEnd = F.readCommittedEnd(rp.bootstrap, F.CAPTURE, observer); val controlEnd = F.readCommittedEnd(rp.bootstrap, F.CONTROL, observer)
                 F.waitUntil("finance app under ACLs processed everything", seconds = 120) {
-                    (F.committed(obs, F.CAPTURE) ?: 0L) >= 1L && (F.committed(obs, F.CONTROL) ?: 0L) >= 3L
+                    (F.committed(obs, F.CAPTURE) ?: 0L) >= captureEnd && (F.committed(obs, F.CONTROL) ?: 0L) >= controlEnd
                 }
                 streams.close(Duration.ofSeconds(30))
                 val evidence = F.evidence(rp.bootstrap, obs, rp.auth("observer"))

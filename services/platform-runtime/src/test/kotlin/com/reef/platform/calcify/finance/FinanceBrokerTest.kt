@@ -111,8 +111,11 @@ class FinanceBrokerTest {
                 committedWrite(F.fund("buyer-cash", F.buyer, F.usd, 4 * F.PRICE))   // offset 4 (+ marker at 5)
                 abortedWrite(F.fund("aborted-2", F.buyer, F.usd, 998))              // TAIL: record at 6, abort marker at 7
                 F.send(producer, F.CAPTURE, F.envelope(0).toByteArray())
-                F.waitUntil("two committed controls and one capture processed", seconds = 90) { (F.committed(admin, F.CAPTURE) ?: 0L) == 1L && (F.committed(admin, F.CONTROL) ?: 0L) >= 5L }
-                Thread.sleep(3000)                                                   // give Streams time to commit past the aborted tail if it ever will
+                // Transactional writes add markers, so wait for the group to reach the read-committed end of both inputs (past the aborted tail).
+                F.waitUntil("controls and capture processed", seconds = 90) {
+                    (F.committed(admin, F.CAPTURE) ?: 0L) >= F.readCommittedEnd(rp.bootstrap, F.CAPTURE) && (F.committed(admin, F.CONTROL) ?: 0L) >= F.readCommittedEnd(rp.bootstrap, F.CONTROL)
+                }
+                Thread.sleep(1000)                                                   // a settled grace period before the app is closed
                 streams.close(Duration.ofSeconds(30))
                 val committedControl = F.committed(admin, F.CONTROL); val end = F.readCommittedEnd(rp.bootstrap, F.CONTROL)
                 println("FINANCE-TAIL committedControl=$committedControl readCommittedEnd=$end uncommittedEnd=${F.uncommittedEnd(rp.bootstrap, F.CONTROL)}")
