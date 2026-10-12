@@ -105,7 +105,7 @@ export const MUTANTS = [
   ['S2A2 history length vs meta removed', STORE, 'require(entries.size.toLong() == meta.historyPosition && entries.size <= MAX_HISTORY_ENTRIES) { "history length differs from meta" }', ''],
   ['S2A2 binding check removed', STORE, 'require(meta.bindingDigest == bindingDigest) { "finance store belongs to a different binding" }', ''],
   ['S2A2 restore skips committed-head check', STORE, 'ledger.restoreAt(ledger.checkpoint(state), head)', ''],
-  ['S2A2 head presence check removed', STORE, 'require((head == null) == (meta.sequence == 0L)) { "head decision presence differs from sequence" }', ''],
+  // 'head presence' in FinanceStore.verifyAndRestore is deliberately redundant with restoreAt (genesis-vs-head); removing it is an equivalent mutant, so it is not listed.
   ['S2A2 orphan entities accepted', STORE, 'require(kv.scan("").isEmpty()) { "finance store has entities but no meta" }', ''],
   ['S2A2 attempts not persisted', STORE, 'for ((k, v) in after.attempts) if (before.attempts[k] != v) out[attemptKey(k.first, k.second)] = encodeAttempt(v)', ''],
   ['S2A2 positions not persisted', STORE, 'for ((k, v) in after.positions) if (before.positions[k] != v) out[positionKey(k.first, k.second)] = encodePosition(v)', ''],
@@ -137,7 +137,7 @@ export const MUTANTS = [
   ['S2A2 mapping skips dependency order match', MAP, 'require(buy.orderId == fact.buyOrderId && sell.orderId == fact.sellOrderId && buy.orderId != sell.orderId) { "dependencies do not match the trade orders" }', ''],
   ['S2A2 mapping allows leading zeros', MAP, ' && (text.length == 1 || text[0] != \'0\')', ''],
   ['S2A2 mapping allows zero amount', MAP, 'require(value > 0) { "amount must be positive" }', ''],
-  ['S2A2 mapping ordinal counts all members', MAP, 'val at = ordinal++', 'val at = out.size'],
+  ['S2A2 mapping ordinal counts all members', MAP, 'val at = ordinal++', 'val at = envelope.membersList.indexOf(member)'],
 ];
 
 function arg(name, fallback) { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : fallback; }
