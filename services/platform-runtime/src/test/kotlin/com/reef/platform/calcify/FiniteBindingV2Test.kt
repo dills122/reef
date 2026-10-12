@@ -30,6 +30,15 @@ class FiniteBindingV2Test {
         assertEquals(manifest["financeConfigDigest"].textValue(), o.financeConfigDigest)
     }
 
+    @Test fun captureBindingCarriesTheSingleV2DigestAndOtherwiseMatchesTheV1Mapping() {
+        val v2 = FiniteBindingContract.parseOpeningV2(raw("finite-binding-v2.json"))
+        val v1 = FiniteBindingContract.parseOpening(raw("finite-binding-v1.json"))
+        val binding = v2.toCaptureBinding()
+        assertEquals(v2.digest, binding.digest)
+        assertNotEquals(v1.digest, binding.digest)
+        assertEquals(v1.toCaptureBinding().copy(digest = v2.digest, generation = v2.generation), binding, "every other capture-lane field equals the v1 mapping (a v2 run uses a fresh source generation)")
+    }
+
     @Test fun v1StaysFrozenAndTheTwoSchemasNeverConfuse() {
         val v1 = FiniteBindingContract.parseOpening(raw("finite-binding-v1.json"))
         assertEquals("1fe1749dba2b35803eabb41fc1f9106477147a2ad9966ecf2087eb5f78dc2c8a", v1.digest)

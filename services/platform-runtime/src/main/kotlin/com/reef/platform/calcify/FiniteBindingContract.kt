@@ -71,9 +71,18 @@ internal class FiniteOpeningV2 internal constructor(private val root: ObjectNode
     val openingAccountId: String get() = root["openingAccountId"].textValue()
     val financeConfigDigest: String get() = root["financeConfigDigest"].textValue()
     val applicationId: String get() = core.applicationId
+    val generation: Int get() = core.generation
     val commandConsumerGroup: String get() = root["commandConsumerGroup"].textValue()
     val budget: FiniteLifecycleBudget get() = core.budget
     fun topic(role: String): FiniteTopic = core.topic(role)
+    /**
+     * The capture lane's binding for a v2 run. A run has exactly one binding digest, the v2 digest: ingress stamps it on every command row
+     * and capture on every envelope. The v1-core mapping must never be used on a v2 opening, because it would hash the v2 document with
+     * the v1 prefix and produce a digest nothing else knows.
+     */
+    fun toCaptureBinding(): FiniteLifecycleBinding = FiniteLifecycleBinding(digest,core.profileHash,core.run,core.session,core.instrument,
+        root["quoteCurrency"].textValue(),core.parties,topic("SOURCE").name,topic("SOURCE").id,core.generation,0,
+        topic("COMMAND").name,topic("COMMAND").id,topic("CAPTURE").name,topic("CAPTURE").id,core.applicationId,0,core.budget)
     fun canonicalBytes(): ByteArray {
         val bytes=ByteArrayOutputStream()
         DataOutputStream(bytes).use { out ->

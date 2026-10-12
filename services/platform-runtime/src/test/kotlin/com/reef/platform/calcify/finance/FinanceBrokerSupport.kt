@@ -24,25 +24,53 @@ import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 internal class DisposableRedpanda : AutoCloseable {
     val port = ServerSocket(0).use { it.localPort }
     val name = "reef-finance-it-${System.nanoTime().toString(36)}"
-    val bootstrap = "localhost:$port"
+    val bootstrap = "127.0.0.1:$port"
 
     fun start(): DisposableRedpanda {
         val run = ProcessBuilder("docker", "run", "-d", "--rm", "--name", name, "-p", "$port:$port", IMAGE, "redpanda", "start",
             "--mode", "dev-container", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--overprovisioned", "--node-id", "0", "--check=false",
-            "--kafka-addr", "0.0.0.0:$port", "--advertise-kafka-addr", "localhost:$port").redirectErrorStream(true).start()
+            "--kafka-addr", "0.0.0.0:$port", "--advertise-kafka-addr", "127.0.0.1:$port").redirectErrorStream(true).start()
         val out = run.inputStream.bufferedReader().readText()
         check(run.waitFor() == 0) { "docker run failed: $out" }
         val deadline = System.nanoTime() + Duration.ofSeconds(90).toNanos()
         while (true) {
-            try { admin().use { it.describeCluster().clusterId().get(5, TimeUnit.SECONDS) }; return this }
-            catch (e: Exception) { check(System.nanoTime() < deadline) { "redpanda not ready: $e" }; Thread.sleep(500) }
+            try { admin().use { it.describeCluster().clusterId().get(5, TimeUnit.SECONDS); it.createTopics(listOf(NewTopic("readiness-probe", 1, 1.toShort()))).all().get(8, TimeUnit.SECONDS); it.deleteTopics(listOf("readiness-probe")).all().get(8, TimeUnit.SECONDS) }; return this }
+            catch (e: Exception) { if (System.nanoTime() >= deadline) { val logs = ProcessBuilder("docker", "logs", "--tail", "30", name).redirectErrorStream(true).start().inputStream.bufferedReader().readText(); error("redpanda not ready: $e\n$logs") }; Thread.sleep(500) }
         }
     }
 
     fun admin(): AdminClient = AdminClient.create(Properties().apply { put("bootstrap.servers", bootstrap); put("request.timeout.ms", 10000); put("default.api.timeout.ms", 15000) })
-    override fun close() { ProcessBuilder("docker", "rm", "-f", name).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
+    override fun close() { ProcessBuilder("docker", "rm", "-f", "-v", name).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
 
     companion object { const val IMAGE = "redpandadata/redpanda:v26.2.3" }
+}
+
+/** Redpanda with SASL/SCRAM and authorization enabled; users are created through rpk inside the container before SASL is switched on. */
+internal class SecuredRedpanda(private val users: List<String>) : AutoCloseable {
+    val broker = DisposableRedpanda()
+    val bootstrap get() = broker.bootstrap
+    fun password(user: String) = "${user}-pw"
+    private fun rpk(vararg args: String): String {
+        val p = ProcessBuilder(listOf("docker", "exec", broker.name, "rpk") + args).redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().readText(); check(p.waitFor() == 0) { "rpk ${args.toList()} failed: $out" }; return out
+    }
+    fun start(): SecuredRedpanda {
+        broker.start()
+        for (u in listOf("admin") + users) rpk("security", "user", "create", u, "-p", password(u), "--mechanism", "SCRAM-SHA-256")
+        rpk("cluster", "config", "set", "superusers", "[\"admin\"]")
+        rpk("cluster", "config", "set", "enable_sasl", "true")
+        val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
+        while (true) {
+            try { AdminClient.create(auth("admin").apply { put("request.timeout.ms", 5000); put("default.api.timeout.ms", 8000); put("bootstrap.servers", bootstrap) }).use { it.describeCluster().clusterId().get(8, TimeUnit.SECONDS); it.createTopics(listOf(NewTopic("readiness-probe", 1, 1.toShort()))).all().get(8, TimeUnit.SECONDS); it.deleteTopics(listOf("readiness-probe")).all().get(8, TimeUnit.SECONDS) }; return this }
+            catch (e: Exception) { check(System.nanoTime() < deadline) { "secured redpanda not ready: $e" }; Thread.sleep(500) }
+        }
+    }
+    fun auth(user: String, password: String = password(user)) = Properties().apply {
+        put("security.protocol", "SASL_PLAINTEXT"); put("sasl.mechanism", "SCRAM-SHA-256")
+        put("sasl.jaas.config", "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$user\" password=\"$password\";")
+    }
+    fun admin(user: String): AdminClient = AdminClient.create(auth(user).apply { put("bootstrap.servers", bootstrap); put("request.timeout.ms", 10000); put("default.api.timeout.ms", 15000) })
+    override fun close() = broker.close()
 }
 
 internal object FinanceBrokerFixture {
@@ -85,28 +113,30 @@ internal object FinanceBrokerFixture {
         put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 6000); put(StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG), 1000)
     }
 
-    fun streams(bootstrap: String, stateDir: String) = KafkaStreams(FinanceTopology.build(config, persistent = true), streamsProperties(bootstrap, stateDir))
+    fun streams(bootstrap: String, stateDir: String, auth: Properties = Properties()) = KafkaStreams(FinanceTopology.build(config, persistent = true), streamsProperties(bootstrap, stateDir).apply { putAll(auth) })
 
     fun createTopics(admin: AdminClient) {
         val history = mapOf("retention.ms" to "-1", "retention.bytes" to "-1", "cleanup.policy" to "delete")
         admin.createTopics(listOf(CAPTURE, CONTROL, DECISIONS).map { NewTopic(it, 1, 1.toShort()).configs(history) }).all().get(30, TimeUnit.SECONDS)
     }
 
-    fun producer(bootstrap: String) = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
+    fun producer(bootstrap: String, auth: Properties = Properties()) = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
+        putAll(auth)
         put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
         put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer::class.java.name); put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer::class.java.name)
     })
 
     fun send(producer: KafkaProducer<ByteArray, ByteArray>, topic: String, value: ByteArray) { producer.send(ProducerRecord(topic, 0, ByteArray(0), value)).get(15, TimeUnit.SECONDS) }
 
-    private fun consumer(bootstrap: String) = KafkaConsumer<ByteArray, ByteArray>(Properties().apply {
+    private fun consumer(bootstrap: String, auth: Properties = Properties()) = KafkaConsumer<ByteArray, ByteArray>(Properties().apply {
+        putAll(auth)
         put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap); put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"); put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
         put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"); put(ConsumerConfig.GROUP_ID_CONFIG, "reader-${System.nanoTime()}")
         put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name); put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name)
     })
 
     /** Every read-committed record of a topic from offset 0 to its read-committed end. */
-    fun readAll(bootstrap: String, topic: String): List<Pair<ByteArray?, ByteArray?>> = consumer(bootstrap).use { c ->
+    fun readAll(bootstrap: String, topic: String, auth: Properties = Properties()): List<Pair<ByteArray?, ByteArray?>> = consumer(bootstrap, auth).use { c ->
         val tp = TopicPartition(topic, 0); c.assign(listOf(tp)); c.seekToBeginning(listOf(tp))
         val end = c.endOffsets(listOf(tp)).getValue(tp)
         val out = ArrayList<Pair<ByteArray?, ByteArray?>>()
@@ -119,12 +149,22 @@ internal object FinanceBrokerFixture {
     }
 
     /** End offset including records of an open (not yet committed or aborted) transaction; greater than the read-committed end while one is in flight. */
-    fun uncommittedEnd(bootstrap: String, topic: String): Long = KafkaConsumer<ByteArray, ByteArray>(Properties().apply {
+    fun uncommittedEnd(bootstrap: String, topic: String, auth: Properties = Properties()): Long = KafkaConsumer<ByteArray, ByteArray>(Properties().apply {
+        putAll(auth)
         put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap); put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
         put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name); put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name)
     }).use { it.endOffsets(listOf(TopicPartition(topic, 0))).getValue(TopicPartition(topic, 0)) }
 
-    fun readCommittedEnd(bootstrap: String, topic: String): Long = consumer(bootstrap).use { it.endOffsets(listOf(TopicPartition(topic, 0))).getValue(TopicPartition(topic, 0)) }
+    /** First record a read-committed consumer sees at or after [offset], or null when none exists before the read-committed end. */
+    fun firstVisible(bootstrap: String, topic: String, offset: Long, auth: Properties = Properties()): Long? = consumer(bootstrap, auth).use { c ->
+        val tp = TopicPartition(topic, 0); c.assign(listOf(tp)); c.seek(tp, offset)
+        val end = c.endOffsets(listOf(tp)).getValue(tp)
+        val deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos()
+        while (c.position(tp) < end && System.nanoTime() < deadline) { c.poll(Duration.ofMillis(200)).firstOrNull()?.let { return@use it.offset() } }
+        null
+    }
+
+    fun readCommittedEnd(bootstrap: String, topic: String, auth: Properties = Properties()): Long = consumer(bootstrap, auth).use { it.endOffsets(listOf(TopicPartition(topic, 0))).getValue(TopicPartition(topic, 0)) }
 
     fun committed(admin: AdminClient, topic: String): Long? =
         admin.listConsumerGroupOffsets(APP_ID).partitionsToOffsetAndMetadata().get(15, TimeUnit.SECONDS)[TopicPartition(topic, 0)]?.offset()
@@ -134,13 +174,9 @@ internal object FinanceBrokerFixture {
         while (!condition()) { check(System.nanoTime() < deadline) { "timed out waiting for $what" }; Thread.sleep(200) }
     }
 
-    /** The real evidence an activation verifier would read: decision log, changelog contents, committed offsets and ends. */
-    fun evidence(bootstrap: String, admin: AdminClient): FinanceRestoreEvidence {
-        val store = com.reef.platform.calcify.MemoryLifecycleKv()
-        for ((k, v) in readAll(bootstrap, changelog)) if (v != null) store.entries[String(k!!, Charsets.UTF_8)] = v else store.entries.remove(String(k!!, Charsets.UTF_8))
-        return FinanceRestoreEvidence(bindingDigest, store, readAll(bootstrap, DECISIONS).map { it.second!! },
-            committed(admin, CAPTURE), committed(admin, CONTROL), readCommittedEnd(bootstrap, CAPTURE), readCommittedEnd(bootstrap, CONTROL))
-    }
+    /** The real evidence an activation verifier reads: production [FinanceEvidenceReader] over the given client properties. */
+    fun evidence(bootstrap: String, @Suppress("UNUSED_PARAMETER") admin: AdminClient, auth: Properties = Properties()): FinanceRestoreEvidence =
+        FinanceEvidenceReader(Properties().apply { putAll(auth); put("bootstrap.servers", bootstrap) }, APP_ID, bindingDigest, CAPTURE, CONTROL, DECISIONS, changelog).read()
 }
 
 /** Child-JVM entry point for the crash test: runs the finance Streams app until it is killed. */

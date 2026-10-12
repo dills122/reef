@@ -732,6 +732,16 @@ jobs:
             test -f "$g"
             grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
           done
+      - name: Run finance real-broker tests (disposable Redpanda in Docker)
+        # Tagged "broker": excluded from the default test run, enabled here. Starts and removes its own containers on the default bridge.
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest"
+      - name: Require broker suites executed, not skipped
+        run: |
+          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest; do
+            g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
+            test -f "$g"
+            grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
+          done
       - name: Run idempotency renewal tests against real Postgres
         env:
           RUNTIME_DB_URL_TEST: jdbc:postgresql://localhost:5432/reef

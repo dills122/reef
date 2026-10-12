@@ -19,6 +19,12 @@ internal class FinanceRestoreEvidence(
     /** The finance group's committed next offsets; null when the broker reports none. */
     val captureCommittedNext: Long?, val controlCommittedNext: Long?,
     val captureReadCommittedEnd: Long, val controlReadCommittedEnd: Long,
+    /**
+     * Offset of the first record a read-committed consumer can see at or after [offset] on the topic ("CAPTURE" or "CONTROL"), or null when
+     * there is none before the read-committed end. Needed because Streams commits its consumer position, which can move past aborted
+     * records and transaction markers that are not in history (observed on a real broker, S2 closeout).
+     */
+    val firstVisibleAtOrAfter: (role: String, offset: Long) -> Long? = { _, _ -> null },
 )
 
 internal data class FinanceRestoredCut(val state: FinanceState, val meta: FinanceStore.Meta, val headDecision: Decision?)
@@ -57,14 +63,16 @@ internal object FinanceRestoreCut {
     private fun checkOffsets(entries: List<FinanceStore.Entry>, e: FinanceRestoreEvidence) {
         for ((role, committed, end) in listOf(Triple("CAPTURE", e.captureCommittedNext, e.captureReadCommittedEnd), Triple("CONTROL", e.controlCommittedNext, e.controlReadCommittedEnd))) {
             val last = entries.filter { it.sourceRole == role }.maxOfOrNull { it.sourceOffset } ?: -1L
-            if (last < 0) {
-                // No history for this topic: an absent committed offset means 0; a present nonzero one is ahead of history.
-                if ((committed ?: 0L) != 0L) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY, "$role committed $committed with no history")
-                continue
-            }
-            if (committed == null || committed == 0L) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_GROUP_OFFSETS_EXPIRED, "$role has history but no committed offset")
-            if (committed < last + 1) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_HISTORY_AHEAD_OF_OFFSET, "$role committed $committed, history through $last")
-            if (committed > last + 1 || committed > end) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY, "$role committed $committed, history through $last, end $end")
+            if (last >= 0 && (committed == null || committed == 0L))
+                throw FinanceRestoreRefused(RestoreRefusal.FINANCE_GROUP_OFFSETS_EXPIRED, "$role has history but no committed offset")
+            // No history: an absent committed offset means 0 (spec 8.4). Otherwise it is the reported value.
+            val next = committed ?: 0L
+            if (next < last + 1) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_HISTORY_AHEAD_OF_OFFSET, "$role committed $next, history through $last")
+            if (next > end) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY, "$role committed $next beyond read-committed end $end")
+            // The group may commit past aborted records and markers, never past a record a read-committed consumer can see.
+            val visible = e.firstVisibleAtOrAfter(role, last + 1)
+            if (visible != null && next > visible)
+                throw FinanceRestoreRefused(RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY, "$role committed $next past unprocessed visible record at $visible (history through $last)")
         }
     }
 }

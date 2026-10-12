@@ -46,7 +46,10 @@ kotlin {
 
 tasks.test {
     // Tests tagged "broker" start a disposable Redpanda container (Docker). Run them with -PbrokerTests; they are excluded from the default run.
-    useJUnitPlatform { if (!project.hasProperty("brokerTests")) excludeTags("broker") }
+    useJUnitPlatform {
+        if (!project.hasProperty("brokerTests")) excludeTags("broker")
+        if (!project.hasProperty("researchTests")) excludeTags("research")
+    }
     dependsOn("verifyNoTestSourceExclusions")
     finalizedBy(tasks.jacocoTestReport)
 }

@@ -205,12 +205,15 @@ Capture body on CONTROL (disposition `INVALID_INPUT`, entry recorded).
    an absent committed offset means `0`, while a present nonzero committed offset with no entries refuses as `FINANCE_OFFSET_AHEAD_OF_HISTORY`; an absent or reset committed offset *with* entries refuses as `FINANCE_GROUP_OFFSETS_EXPIRED`
    (group offsets can expire; the verifier also requires `offsets.retention.minutes` to exceed the intended run lifetime). Streams commits `lastProcessed + 1`, so trailing transaction markers are not in the committed offset
    and no marker arithmetic is needed; a read-committed client cannot see markers and the rule does not require it to.
+   **Amendment (S2 close-out, found on a real broker):** a transaction that aborts at the tail of an input topic leaves records and markers a read-committed consumer never sees, and Streams commits its consumer position past them (observed: committed 12, last positioned 7, read-committed end 12). So the rule is `lastRecorded + 1 <= committedNext <= readCommittedEnd` and **no record visible to a read-committed consumer exists in `[lastRecorded + 1, committedNext)`**; the evidence reader supplies the first visible offset at or after `lastRecorded + 1`, so markers are never inferred by arithmetic (Redpanda also spends offsets on transaction bookkeeping). Committed beyond an unprocessed visible record is `FINANCE_OFFSET_AHEAD_OF_HISTORY`. The "must equal" wording above is superseded by this paragraph.
    `committedNext` less than that value refuses as `FINANCE_HISTORY_AHEAD_OF_OFFSET` (cannot happen under one transaction, so
    it signals corruption, unless the group offsets expired, which has its own code above); greater refuses as `FINANCE_OFFSET_AHEAD_OF_HISTORY`.
 5. **History cross-check.** The `decisionChecksum` values of the recorded (INPUT, recorded-outcome) entries must map one-to-one, in order, onto the decision log; the number of recorded entries must equal `headDecision.sequence`; and the last recorded entry's `decisionChecksum` must equal `headDecision.checksum`. Any mismatch refuses activation.
 6. Replay from the cut reproduces byte-equal decisions; re-consumption never rebuilds order.
 
 **Ledger state persistence.** The O3a `FinanceCheckpoint` is a logical object only. The finance store keeps ledger state per entity (`position/<account>/<asset>`, `execution/<key>`, `obligation/<key>`, `attempt/<key>/<n>`, `action/<key>`, and a small `meta` with sequence, chain and controls); a restore reads those keys, assembles the `FinanceState`, and passes it to `restore(checkpoint, history)`. The entity wire formats and measured record sizes are S2-A2 deliverables; the invariant is C1 (no whole-state value).
+
+**Binding digest identity.** A v2 run has exactly one binding digest, the v2 digest; ingress, capture and finance all carry it (`FiniteOpeningV2.toCaptureBinding()`).
 
 **Capture-to-input mapping.** How a `FiniteLifecycleCaptureV1` ready-execution record becomes a `FinanceCaptureV1` (action key,
 execution key, buyer/seller account from the party map, quantity and nanos price conversion) is a deterministic pure function

@@ -351,9 +351,24 @@ class FinanceProcessorTest {
         code("store lost", evidence(h, store = emptyMap()), RestoreRefusal.FINANCE_STORE_LOST)
         code("store tampered", evidence(h, store = h.snapshot().toMutableMap().also { it.remove(FinanceStore.HEAD) }), RestoreRefusal.FINANCE_STORE_INVALID)
         code("other binding", evidence(h, bindingDigest = FiniteLifecycleContract.sha("other".toByteArray())), RestoreRefusal.FINANCE_STORE_INVALID)
-        code("genesis with committed offset", FinanceRestoreEvidence(bindingDigest, MemoryLifecycleKv(), emptyList(), 5L, null, 5, 0), RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY)
+        code("genesis with committed offset", FinanceRestoreEvidence(bindingDigest, MemoryLifecycleKv(), emptyList(), 5L, null, 0, 0), RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY)
         code("decision log from another run", evidence(h, decisions = Harness().also { x -> x.control(bytes(fund("open-seller", seller, aapl, 7))) }.context.forwarded().map { it.record().value() }),
             RestoreRefusal.FINANCE_STORE_DISAGREES_WITH_DECISIONS)
+    }
+
+    @Test fun theGroupMayCommitPastAbortedRecordsAndMarkersButNeverPastAVisibleOne() {
+        val h = fullRun()
+        fun withVisible(capture: Long, control: Long, end: Long, visible: Long?) = FinanceRestoreEvidence(bindingDigest, MemoryLifecycleKv().also { it.apply(h.snapshot()) },
+            h.context.forwarded().map { it.record().value() }, capture, control, end, end, firstVisibleAtOrAfter = { _, _ -> visible })
+        val c = h.captureOffset; val k = h.controlOffset
+        // Aborted tail: nothing visible after history, committed moved past it (Redpanda/Kafka marker offsets).
+        FinanceRestoreCut.verify(ledger, withVisible(c + 5, k + 5, maxOf(c, k) + 5, null))
+        // The committed offset skips a visible unprocessed record: refused.
+        assertEquals(RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY, refusal(withVisible(c + 5, k, maxOf(c, k) + 5, c + 2)))
+        // A visible record exactly at the committed offset is ordinary lag, not a skip.
+        FinanceRestoreCut.verify(ledger, withVisible(c + 2, k, maxOf(c, k) + 5, c + 2))
+        // Beyond the read-committed end is always refused.
+        assertEquals(RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY, refusal(withVisible(c + 9, k, maxOf(c, k) + 5, null)))
     }
 
     @Test fun anAbsentCommittedOffsetIsZeroOnlyWhenTheTopicHasNoHistory() {
