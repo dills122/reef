@@ -1,0 +1,251 @@
+package com.reef.platform.calcify.finance
+
+import com.reef.platform.calcify.FiniteLifecycleContract
+import com.reef.platform.calcify.FiniteLifecycleFixtures
+import com.reef.platform.calcify.MemoryLifecycleKv
+import com.reef.platform.calcify.StreamsLifecycleKv
+import java.util.Properties
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.common.serialization.Serdes
+import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.streams.StreamsConfig
+import org.apache.kafka.streams.TopologyTestDriver
+import org.apache.kafka.streams.processor.api.MockProcessorContext
+import org.apache.kafka.streams.processor.api.Record
+import org.apache.kafka.streams.state.KeyValueStore
+import reef.contracts.calcify.finance.v1.FinanceDecisionV1
+import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
+
+/** S2-A2: the finance processor on a mock context (restore, tamper, crash, budget) and on TopologyTestDriver (end to end). */
+class FinanceProcessorTest {
+    private val buyer = AccountId("buyer-account"); private val seller = AccountId("seller-account")
+    private val usd = AssetId("USD"); private val aapl = AssetId("fixture-base-AAPL")
+    private val captureBinding = FiniteLifecycleFixtures.binding()
+    private val finance = FinanceConfig(setOf(buyer, seller), usd, aapl, AccountId("p3-opening"))
+    private val bindingDigest = FiniteLifecycleContract.sha("binding-v2".toByteArray())
+    private val cfg = FinanceProcessorConfig(bindingDigest, captureBinding, finance, "CAPTURE", "CONTROL", "DECISIONS")
+    private val ledger = FinanceLedger(finance)
+    private val envelopes = FiniteLifecycleFixtures.sequence().completedRecordsList
+    private val price = 100_000_000_000L
+
+    private fun fund(id: String, account: AccountId, asset: AssetId, amount: Long) = FinanceInput.Fund(ActionKey("p3", "control", id), Authority.OPERATOR, account, asset, amount)
+    private fun settle(exec: String, attempt: Int) = FinanceInput.Settle(ActionKey("p3", "repair", "$exec-$attempt"), Authority.OPERATOR, ExecutionKey("p3-run", "p3-session", "AAPL", exec), attempt)
+    private fun bytes(i: FinanceInput) = FinanceWire.toProto(i).toByteArray()
+    private val executionIds = envelopes.flatMap { FinanceCaptureMapping.map(it, captureBinding) }.map { (it as FinanceCaptureMapping.Mapped.Ready).input.execution.executionId }
+
+    /** A processor on a mock context over an in-memory store that can be pre-populated before init (what a restored changelog gives). */
+    private inner class Harness(preload: Map<String, ByteArray> = emptyMap(), val config: FinanceProcessorConfig = cfg) {
+        val context = MockProcessorContext<String, ByteArray>()
+        val store: KeyValueStore<String, ByteArray> = FinanceTopology.storeBuilder(config, persistent = false).withLoggingDisabled().build()
+        val processor: FinanceProcessor
+        init {
+            store.init(context.getStateStoreContext(), store)
+            context.addStateStore(store)
+            preload.forEach { (k, v) -> store.put(k, v) }
+            processor = FinanceProcessor(config)
+            processor.init(context)
+        }
+        var captureOffset = 0L; var controlOffset = 0L
+        fun send(topic: String, offset: Long, value: ByteArray) {
+            context.setRecordMetadata(topic, 0, offset)
+            processor.process(Record(ByteArray(0), value, 0L))
+        }
+        fun capture(value: ByteArray) = send("CAPTURE", captureOffset++, value)
+        fun control(value: ByteArray) = send("CONTROL", controlOffset++, value)
+        fun decisions(): List<Decision> = context.forwarded().map { FinanceWire.fromProto(FinanceDecisionV1.parseFrom(it.record().value())) }
+        fun snapshot(): Map<String, ByteArray> = store.all().use { it.asSequence().associate { kv -> kv.key to kv.value } }
+        fun kv() = StreamsLifecycleKv(store)
+        fun entries() = FinanceStore.entries(kv())
+    }
+
+    private fun fundBoth(h: Harness) {
+        h.control(bytes(fund("open-seller", seller, aapl, 6)))
+        h.control(bytes(fund("open-buyer", buyer, usd, 6 * price)))
+    }
+    private fun feedAllCaptures(h: Harness) = envelopes.forEach { h.capture(it.toByteArray()) }
+
+    @Test fun packetScenarioFundThenCaptureThenThreeRepairsSettlesEachExecutionOnce() {
+        val h = Harness()
+        fundBoth(h); feedAllCaptures(h)
+        executionIds.forEach { h.control(bytes(settle(it, 1))) }
+        val d = h.decisions()
+        assertEquals(listOf(Disposition.FUNDED, Disposition.FUNDED) + List(3) { Disposition.CAPTURED } + List(3) { Disposition.SETTLED }, d.map { it.disposition })
+        assertTrue(ledger.verifyChain(d))
+        val entries = h.entries()
+        assertEquals(2 + envelopes.size - 2 + 3 + 3, entries.size, "10 NO_INPUT + 3 captures + 2 funds + 3 repairs")
+        assertEquals(10, entries.count { it.kind == FinanceStore.EntryKind.NO_INPUT })
+        assertEquals(listOf(0, 1), entries.filter { it.sourceRole == "CAPTURE" && it.sourceOffset == 2L }.map { it.memberOrdinal })
+        assertEquals(d.size, entries.count { it.decisionChecksum.isNotEmpty() })
+        // The stored state equals the decided state: restoring from the store reproduces the ledger's final state.
+        val restored = Harness(h.snapshot()).entries().size
+        assertEquals(entries.size, restored)
+    }
+
+    @Test fun twoInterleavingsAreBothValidAndEachIsReproducibleFromItsRecordedHistory() {
+        val a = Harness().also { fundBoth(it); feedAllCaptures(it); executionIds.forEach { e -> it.control(bytes(settle(e, 1))) } }
+        val b = Harness().also { feedAllCaptures(it); executionIds.forEach { e -> it.control(bytes(settle(e, 1))) }; fundBoth(it); executionIds.forEach { e -> it.control(bytes(settle(e, 2))) } }
+        assertTrue(a.decisions().all { it.disposition != Disposition.INSUFFICIENT_CASH })
+        assertTrue(b.decisions().any { it.disposition == Disposition.INSUFFICIENT_CASH || it.disposition == Disposition.INSUFFICIENT_SHARES })
+        assertNotEquals(a.decisions().map { it.checksum }, b.decisions().map { it.checksum })
+        for (h in listOf(a, b)) assertTrue(ledger.verifyChain(h.decisions()))
+        // Replay the recorded INPUT history (the decisions' own carried inputs) through a fresh ledger: byte-equal decisions.
+        for (h in listOf(a, b)) {
+            val inputs = h.context.forwarded().map { FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(it.record().value())).second }
+            var s = ledger.genesis(); val replay = mutableListOf<Decision>()
+            for (i in inputs) ledger.decide(s, i).also { s = it.state; it.decision?.let(replay::add) }
+            assertEquals(h.decisions(), replay)
+        }
+    }
+
+    @Test fun restartRestoresVerifiedStateFromTheStoreAndContinuesIdentically() {
+        val straight = Harness().also { fundBoth(it); feedAllCaptures(it); executionIds.forEach { e -> it.control(bytes(settle(e, 1))) } }
+        val first = Harness().also { fundBoth(it); feedAllCaptures(it) }
+        val second = Harness(first.snapshot()).also { it.captureOffset = first.captureOffset; it.controlOffset = first.controlOffset }
+        executionIds.forEach { second.control(bytes(settle(it, 1))) }
+        assertEquals(straight.decisions().map { it.checksum }, (first.decisions() + second.decisions()).map { it.checksum })
+        assertEquals(straight.entries().map { it.entryChain }, second.entries().map { it.entryChain })
+    }
+
+    @Test fun redeliveringARecordIsRecordedAsPriorResultAndChangesNoLedgerState() {
+        val h = Harness()
+        val f = bytes(fund("open-seller", seller, aapl, 6))
+        h.control(f); val after = h.snapshot().filterKeys { !it.startsWith("h/") && it != "meta" }
+        h.send("CONTROL", 0L, f)     // same source position again: a producer-side duplicate or reprocess
+        assertEquals(1, h.decisions().size)
+        assertEquals(listOf("FUNDED", "PRIOR_RESULT"), h.entries().map { it.outcome })
+        assertEquals(after, h.snapshot().filterKeys { !it.startsWith("h/") && it != "meta" })
+    }
+
+    @Test fun badBodiesAreInvalidInputEntriesNotStallsOrSkips() {
+        val h = Harness()
+        val capturedFund = bytes(fund("x", seller, aapl, 1))
+        h.control(byteArrayOf(1, 2, 3))                                                // unparseable
+        h.control(bytes(FinanceInput.Capture(ActionKey("a", "b", "c"), ExecutionKey("p3-run", "p3-session", "AAPL", "e"), buyer, seller, 1, 1)))  // Capture on CONTROL
+        h.capture(capturedFund)                                                         // Fund body on CAPTURE
+        h.capture(envelopes[2].toBuilder().setFiniteBindingDigest("0".repeat(64)).build().toByteArray()) // wrong binding
+        h.capture(envelopes[2].toBuilder().setContentDigest("0".repeat(64)).build().toByteArray())       // wrong content digest
+        assertEquals(0, h.decisions().size)
+        assertEquals(List(5) { "INVALID_INPUT" }, h.entries().map { it.outcome })
+        assertTrue(h.entries().all { it.kind == FinanceStore.EntryKind.INPUT && it.decisionChecksum.isEmpty() })
+        // The processor is still live afterwards.
+        h.control(capturedFund); assertEquals(1, h.decisions().size)
+    }
+
+    @Test fun anInvalidReadyMemberIsAnInvalidEntryAndItsSiblingStillBooks() {
+        val e = envelopes[2]
+        val i = e.membersList.indexOfFirst { it.disposition.name == "LIFECYCLE_READY_EXECUTION" }
+        val broken = e.toBuilder().setMembers(i, e.getMembers(i).toBuilder().also { it.tradeBuilder.factBuilder.quantityBuilder.setUnits("0") }).build()
+        val rebuilt = broken.toBuilder().setContentDigest(FiniteLifecycleContract.digest(broken)).build()
+        val h = Harness(); fundBoth(h); h.capture(ByteArray(0).let { envelopes[0].toByteArray() }); h.capture(envelopes[1].toByteArray()); h.capture(rebuilt.toByteArray())
+        val tail = h.entries().takeLast(2)
+        assertEquals(listOf("INVALID_INPUT", "CAPTURED"), tail.map { it.outcome })
+        assertEquals(listOf(0, 1), tail.map { it.memberOrdinal })
+    }
+
+    @Test fun historyBoundHaltsFailClosedAndTheRejectedRecordLeavesTheStoreUntouched() {
+        val h = Harness()
+        repeat(FinanceStore.MAX_HISTORY_ENTRIES) { h.control(byteArrayOf(it.toByte())) }
+        val before = h.snapshot()
+        assertFailsWith<FinanceHistoryBudgetExceeded> { h.control(byteArrayOf(9)) }
+        assertEquals(before.keys, h.snapshot().keys)
+        assertTrue(before.all { (k, v) -> h.snapshot()[k]!!.contentEquals(v) })
+    }
+
+    @Test fun aRecordThatFailsMidwayLeavesNoPartialWrites() {
+        // Two ready members in one envelope; the second input forces the ledger past a pinned budget by construction is not possible
+        // here, so inject the failure through the history bound: the envelope needs two entries but only one slot remains.
+        val h = Harness()
+        repeat(FinanceStore.MAX_HISTORY_ENTRIES - 1) { h.control(byteArrayOf(it.toByte())) }
+        val before = h.snapshot()
+        assertFailsWith<FinanceHistoryBudgetExceeded> { h.capture(envelopes[2].toByteArray()) }
+        assertEquals(before.keys, h.snapshot().keys, "the first member's entry and entities were not written")
+    }
+
+    @Test fun restoreRefusesEveryTamperedStore() {
+        val h = Harness().also { fundBoth(it); feedAllCaptures(it); executionIds.forEach { e -> it.control(bytes(settle(e, 1))) } }
+        val good = h.snapshot()
+        Harness(good) // clean restore passes
+        fun refuses(name: String, mutate: MutableMap<String, ByteArray>.() -> Unit) {
+            val bad = good.toMutableMap().apply(mutate)
+            assertFailsWith<IllegalArgumentException>(name) { Harness(bad) }
+        }
+        val position = good.keys.first { it.startsWith("position/") }
+        refuses("position changed") { this[position] = FinanceStoreTestSupport.positionBytes(123) }
+        refuses("position removed") { remove(position) }
+        refuses("execution removed") { remove(keys.first { it.startsWith("execution/") }) }
+        refuses("obligation removed") { remove(keys.first { it.startsWith("obligation/") }) }
+        refuses("attempt removed") { remove(keys.first { it.startsWith("attempt/") }) }
+        refuses("action removed") { remove(keys.first { it.startsWith("action/") }) }
+        refuses("head removed") { remove(FinanceStore.HEAD) }
+        refuses("meta removed") { remove(FinanceStore.META) }
+        refuses("history entry removed") { remove(keys.first { it.startsWith("h/") }) }
+        refuses("last history entry removed") { remove(keys.last { it.startsWith("h/") }) }
+        refuses("history entry reordered") { val ks = keys.filter { it.startsWith("h/") }; val a = this[ks[0]]!!; this[ks[0]] = this[ks[1]]!!; this[ks[1]] = a }
+        refuses("history entry rewritten") {
+            val k = keys.first { it.startsWith("h/") }
+            this[k] = FinanceStore.Entry.parse(this[k]!!).let { it.copy(inputDigest = "f".repeat(64)) }.bytes()
+        }
+        refuses("meta controls changed") { this[FinanceStore.META] = FinanceStore.Meta.parse(this[FinanceStore.META]!!).let { it.copy(controls = it.controls + 1) }.bytes() }
+        refuses("meta sequence changed") { this[FinanceStore.META] = FinanceStore.Meta.parse(this[FinanceStore.META]!!).let { it.copy(sequence = it.sequence - 1) }.bytes() }
+        refuses("meta binding changed") { this[FinanceStore.META] = FinanceStore.Meta.parse(this[FinanceStore.META]!!).copy(bindingDigest = "0".repeat(64)).bytes() }
+        refuses("garbage entity") { this[position] = byteArrayOf(0) }
+        refuses("unknown entity version") { this[position] = Canon.bytes { str("calcify-finance-entity-v9"); long(1) } }
+        // An entity-only forgery that recomputes nothing is caught; so is a store with entities and no meta at all.
+        assertFailsWith<IllegalArgumentException> { Harness(good.filterKeys { it.startsWith("position/") }) }
+    }
+
+    @Test fun anotherBindingNeverAdoptsThisStore() {
+        val h = Harness().also { fundBoth(it) }
+        assertFailsWith<IllegalArgumentException> { Harness(h.snapshot(), cfg.copy(bindingDigest = FiniteLifecycleContract.sha("binding-v1".toByteArray()))) }
+    }
+
+    @Test fun entryChainMatchesAnIndependentEncoderGolden() {
+        val h = Harness(); h.control(bytes(fund("open-seller", seller, aapl, 6)))
+        val e = h.entries().single()
+        // Independent framing: big-endian int32 length + UTF-8 for text, int64/int32 raw, exactly as spec section 8 states.
+        val out = java.io.ByteArrayOutputStream(); val d = java.io.DataOutputStream(out)
+        fun frame(s: String) { val b = s.toByteArray(Charsets.UTF_8); d.writeInt(b.size); d.write(b) }
+        val genesis = java.security.MessageDigest.getInstance("SHA-256").digest(java.io.ByteArrayOutputStream().also { o ->
+            java.io.DataOutputStream(o).also { x -> val a = "calcify-finance-history-genesis-v1".toByteArray(); x.writeInt(a.size); x.write(a); val c = ledger.genesisChain.toByteArray(); x.writeInt(c.size); x.write(c) } }.toByteArray())
+        val genesisHex = java.util.HexFormat.of().formatHex(genesis)
+        frame("calcify-finance-history-entry-v1"); frame(genesisHex); d.writeLong(1); frame("CONTROL"); d.writeInt(0); d.writeLong(0); d.writeInt(0)
+        frame("INPUT"); frame(e.inputDigest); frame("FUNDED"); frame(e.decisionChecksum)
+        val expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(out.toByteArray()))
+        assertEquals(expected, e.entryChain)
+        assertEquals(genesisHex, e.prevEntryChain)
+    }
+
+    @Test fun topologyEndToEndOnTheTestDriverProducesTheVerifiedDecisionLog() {
+        val props = Properties().apply { put(StreamsConfig.APPLICATION_ID_CONFIG, "finance-e2e"); put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234") }
+        TopologyTestDriver(FinanceTopology.build(cfg, persistent = false), props).use { driver ->
+            val capture = driver.createInputTopic("CAPTURE", ByteArraySerializer(), ByteArraySerializer())
+            val control = driver.createInputTopic("CONTROL", ByteArraySerializer(), ByteArraySerializer())
+            control.pipeInput(ByteArray(0), bytes(fund("open-seller", seller, aapl, 6)))
+            control.pipeInput(ByteArray(0), bytes(fund("open-buyer", buyer, usd, 6 * price)))
+            envelopes.forEach { capture.pipeInput(ByteArray(0), it.toByteArray()) }
+            executionIds.forEach { control.pipeInput(ByteArray(0), bytes(settle(it, 1))) }
+            val out = driver.createOutputTopic("DECISIONS", StringDeserializer(), ByteArrayDeserializer()).readKeyValuesToList()
+            val decisions = out.map { FinanceWire.fromProto(FinanceDecisionV1.parseFrom(it.value)) }
+            assertEquals(8, decisions.size)
+            assertTrue(ledger.verifyChain(decisions))
+            assertEquals(decisions.map { it.sequence.toString().padStart(20, '0') }, out.map { it.key })
+            assertEquals(Disposition.SETTLED, decisions.last().disposition)
+            val store = driver.getKeyValueStore<String, ByteArray>("finite-finance")
+            val kv = StreamsLifecycleKv(store)
+            val (state, meta) = FinanceStore.verifyAndRestore(ledger, kv, bindingDigest)!!
+            assertEquals(8L, state.sequence); assertEquals(decisions.last().checksum, state.chain)
+            assertEquals(meta.historyPosition, FinanceStore.entries(kv).size.toLong())
+        }
+    }
+}
+
+internal object FinanceStoreTestSupport {
+    fun positionBytes(v: Long) = Canon.bytes { str(FinanceStore.ENTITY_VERSION); long(v) }
+}
