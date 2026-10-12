@@ -78,8 +78,8 @@ class FinanceAclTest {
         putAll(rp.auth(user)); put("bootstrap.servers", rp.bootstrap); put("enable.auto.commit", false); put("auto.offset.reset", "earliest"); put("isolation.level", "read_committed")
         put("key.deserializer", ByteArrayDeserializer::class.java.name); put("value.deserializer", ByteArrayDeserializer::class.java.name); put("default.api.timeout.ms", 10000)
     }).use { c ->
-        c.assign(listOf(TopicPartition(topic, 0)))
-        try { c.poll(Duration.ofSeconds(3)); true } catch (e: AuthorizationException) { false }
+        // Authorization can surface at assign, seek, metadata or poll depending on client version: guard the whole interaction.
+        try { c.assign(listOf(TopicPartition(topic, 0))); c.poll(Duration.ofSeconds(3)); true } catch (e: AuthorizationException) { false }
     }
 
     private fun txInit(rp: SecuredRedpanda, user: String, id: String): Boolean = producerAs(rp, user, transactionalId = id).use { p ->

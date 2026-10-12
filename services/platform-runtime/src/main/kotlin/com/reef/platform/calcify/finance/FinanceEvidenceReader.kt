@@ -68,6 +68,8 @@ internal class FinanceEvidenceReader(
         return FinanceRestoreEvidence(bindingDigest, store, readAll(decisionsTopic).map { requireNotNull(it.second) { "decision record without value" } },
             committed[TopicPartition(captureTopic, 0)]?.offset(), committed[TopicPartition(controlTopic, 0)]?.offset(),
             readCommittedEnd(captureTopic), readCommittedEnd(controlTopic),
-            firstVisibleAtOrAfter = { role, offset -> firstVisibleAtOrAfter(if (role == "CAPTURE") captureTopic else controlTopic, offset) })
+            firstVisibleAtOrAfter = { role, offset ->
+                firstVisibleAtOrAfter(when (role) { "CAPTURE" -> captureTopic; "CONTROL" -> controlTopic; else -> throw IllegalArgumentException("unknown input role $role") }, offset)
+            })
     }
 }
