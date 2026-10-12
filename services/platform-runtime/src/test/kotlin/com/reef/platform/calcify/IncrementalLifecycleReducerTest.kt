@@ -50,7 +50,14 @@ class IncrementalLifecycleReducerTest {
         for (e in frozen.executionIdsList) assertTrue(kv.get("exec/$e") != null, "seed=$seed execution $e")
         for (b in frozen.batchesList) assertEquals(b, FiniteLifecycleBatchStateV1.parseFrom(kv.get("batch/" + b.batchId)), "seed=$seed batch")
         for (r in frozen.completedRecordsList) assertEquals(r, FiniteLifecycleCaptureV1.parseFrom(kv.get(IncrementalLifecycleReducer.doneKey(r.source.sourceOffset))), "seed=$seed completed")
-        assertEquals(frozen.ordersCount + frozen.executionIdsCount + frozen.batchesCount + frozen.completedRecordsCount + 1, kv.entries.size, "no stray keys")
+        val expectedKeys = buildSet {
+            add("meta")
+            frozen.ordersList.forEach { add("order/" + it.acceptance.fact.orderId) }
+            frozen.executionIdsList.forEach { add("exec/$it") }
+            frozen.batchesList.forEach { add("batch/" + it.batchId) }
+            frozen.completedRecordsList.forEach { add(IncrementalLifecycleReducer.doneKey(it.source.sourceOffset)) }
+        }
+        assertEquals(expectedKeys, kv.entries.keys, "seed=$seed unexpected or missing KV keys")
     }
 
     @Test fun twoThousandSeededValidSchedulesMatchTheFrozenReducer() { for (seed in 1L..2_000L) run(seed) }
