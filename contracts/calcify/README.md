@@ -246,3 +246,10 @@ initialization, RUNNING state and committed source/output correspondence.
 Registrar-only SQL release compares fresh receipts with current accounting;
 runtime cannot set ACTIVE. SQL owner epoch fences future authorizations, not
 already-issued broker sends. Defaults and production adoption remain gated.
+
+## Finite binding v2 (S2-A1)
+
+`finite-binding-v2.json` is the v2 opening (v1 plus the finance block and three extra topic roles); `finite-binding-v2.hex` and
+`finite-binding-v2-manifest.json` are produced by `scripts/dev/calcify-financial/binding_v2_reference.py write`, an encoder independent of
+the Go and Kotlin parsers. Go (`ParseFiniteBindingV2`) and Kotlin (`FiniteBindingContract.parseOpeningV2`) must reproduce the hex and digest
+byte for byte. v1 files and digests are unchanged. Specification: `docs/work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md`.
