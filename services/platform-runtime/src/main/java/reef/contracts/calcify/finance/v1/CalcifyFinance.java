@@ -104,7 +104,7 @@ public final class CalcifyFinance extends com.google.protobuf.GeneratedFile {
       "ntracts.calcify.finance.v1.FinanceSettle" +
       "V1H\000B\006\n\004body\"D\n\014FinanceLegV1\022\022\n\naccount_" +
       "id\030\001 \001(\t\022\020\n\010asset_id\030\002 \001(\t\022\016\n\006amount\030\003 \001" +
-      "(\003\"\314\002\n\021FinanceDecisionV1\022\020\n\010sequence\030\001 \001" +
+      "(\003\"\216\003\n\021FinanceDecisionV1\022\020\n\010sequence\030\001 \001" +
       "(\003\022E\n\006action\030\002 \001(\01325.reef.contracts.calc" +
       "ify.finance.v1.FinanceActionKeyV1\022\024\n\014inp" +
       "ut_digest\030\003 \001(\t\022L\n\013disposition\030\004 \001(\01627.r" +
@@ -112,34 +112,36 @@ public final class CalcifyFinance extends com.google.protobuf.GeneratedFile {
       "DispositionV1\022=\n\004legs\030\005 \003(\0132/.reef.contr" +
       "acts.calcify.finance.v1.FinanceLegV1\022\023\n\013" +
       "prior_chain\030\006 \001(\t\022\020\n\010checksum\030\007 \001(\t\022\024\n\014s" +
-      "tate_digest\030\010 \001(\t*\177\n\022FinanceAuthorityV1\022" +
-      "$\n FINANCE_AUTHORITY_V1_UNSPECIFIED\020\000\022!\n" +
-      "\035FINANCE_AUTHORITY_V1_OPERATOR\020\001\022 \n\034FINA" +
-      "NCE_AUTHORITY_V1_TRADING\020\002*\313\006\n\024FinanceDi" +
-      "spositionV1\022&\n\"FINANCE_DISPOSITION_V1_UN" +
-      "SPECIFIED\020\000\022#\n\037FINANCE_DISPOSITION_V1_CA" +
-      "PTURED\020\001\0225\n1FINANCE_DISPOSITION_V1_EXECU" +
-      "TION_ALREADY_CAPTURED\020\002\022-\n)FINANCE_DISPO" +
-      "SITION_V1_EXECUTION_CONFLICT\020\003\022!\n\035FINANC" +
-      "E_DISPOSITION_V1_FUNDED\020\004\022\"\n\036FINANCE_DIS" +
-      "POSITION_V1_SETTLED\020\005\022*\n&FINANCE_DISPOSI" +
-      "TION_V1_ALREADY_SETTLED\020\006\022(\n$FINANCE_DIS" +
-      "POSITION_V1_PRIOR_ATTEMPT\020\007\022,\n(FINANCE_D" +
-      "ISPOSITION_V1_INSUFFICIENT_CASH\020\010\022.\n*FIN" +
-      "ANCE_DISPOSITION_V1_INSUFFICIENT_SHARES\020" +
-      "\t\022\'\n#FINANCE_DISPOSITION_V1_UNAUTHORIZED" +
-      "\020\n\022*\n&FINANCE_DISPOSITION_V1_UNKNOWN_ACC" +
-      "OUNT\020\013\022,\n(FINANCE_DISPOSITION_V1_UNKNOWN" +
-      "_EXECUTION\020\014\022(\n$FINANCE_DISPOSITION_V1_I" +
-      "NVALID_INPUT\020\r\022*\n&FINANCE_DISPOSITION_V1" +
-      "_AMOUNT_OVERFLOW\020\016\022+\n\'FINANCE_DISPOSITIO" +
-      "N_V1_BALANCE_OVERFLOW\020\017\022\'\n#FINANCE_DISPO" +
-      "SITION_V1_PRIOR_RESULT\020\020\022*\n&FINANCE_DISP" +
-      "OSITION_V1_ACTION_CONFLICT\020\021\022*\n&FINANCE_" +
-      "DISPOSITION_V1_BUDGET_EXCEEDED\020\022Bi\n!reef" +
-      ".contracts.calcify.finance.v1P\001ZBgithub." +
-      "com/dills122/reef/contracts/proto/ordere" +
-      "xecution/v1;orderv1b\006proto3"
+      "tate_digest\030\010 \001(\t\022@\n\005input\030\t \001(\01321.reef." +
+      "contracts.calcify.finance.v1.FinanceInpu" +
+      "tV1*\177\n\022FinanceAuthorityV1\022$\n FINANCE_AUT" +
+      "HORITY_V1_UNSPECIFIED\020\000\022!\n\035FINANCE_AUTHO" +
+      "RITY_V1_OPERATOR\020\001\022 \n\034FINANCE_AUTHORITY_" +
+      "V1_TRADING\020\002*\313\006\n\024FinanceDispositionV1\022&\n" +
+      "\"FINANCE_DISPOSITION_V1_UNSPECIFIED\020\000\022#\n" +
+      "\037FINANCE_DISPOSITION_V1_CAPTURED\020\001\0225\n1FI" +
+      "NANCE_DISPOSITION_V1_EXECUTION_ALREADY_C" +
+      "APTURED\020\002\022-\n)FINANCE_DISPOSITION_V1_EXEC" +
+      "UTION_CONFLICT\020\003\022!\n\035FINANCE_DISPOSITION_" +
+      "V1_FUNDED\020\004\022\"\n\036FINANCE_DISPOSITION_V1_SE" +
+      "TTLED\020\005\022*\n&FINANCE_DISPOSITION_V1_ALREAD" +
+      "Y_SETTLED\020\006\022(\n$FINANCE_DISPOSITION_V1_PR" +
+      "IOR_ATTEMPT\020\007\022,\n(FINANCE_DISPOSITION_V1_" +
+      "INSUFFICIENT_CASH\020\010\022.\n*FINANCE_DISPOSITI" +
+      "ON_V1_INSUFFICIENT_SHARES\020\t\022\'\n#FINANCE_D" +
+      "ISPOSITION_V1_UNAUTHORIZED\020\n\022*\n&FINANCE_" +
+      "DISPOSITION_V1_UNKNOWN_ACCOUNT\020\013\022,\n(FINA" +
+      "NCE_DISPOSITION_V1_UNKNOWN_EXECUTION\020\014\022(" +
+      "\n$FINANCE_DISPOSITION_V1_INVALID_INPUT\020\r" +
+      "\022*\n&FINANCE_DISPOSITION_V1_AMOUNT_OVERFL" +
+      "OW\020\016\022+\n\'FINANCE_DISPOSITION_V1_BALANCE_O" +
+      "VERFLOW\020\017\022\'\n#FINANCE_DISPOSITION_V1_PRIO" +
+      "R_RESULT\020\020\022*\n&FINANCE_DISPOSITION_V1_ACT" +
+      "ION_CONFLICT\020\021\022*\n&FINANCE_DISPOSITION_V1" +
+      "_BUDGET_EXCEEDED\020\022Bi\n!reef.contracts.cal" +
+      "cify.finance.v1P\001ZBgithub.com/dills122/r" +
+      "eef/contracts/proto/orderexecution/v1;or" +
+      "derv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -192,7 +194,7 @@ public final class CalcifyFinance extends com.google.protobuf.GeneratedFile {
     internal_static_reef_contracts_calcify_finance_v1_FinanceDecisionV1_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_calcify_finance_v1_FinanceDecisionV1_descriptor,
-        new java.lang.String[] { "Sequence", "Action", "InputDigest", "Disposition", "Legs", "PriorChain", "Checksum", "StateDigest", });
+        new java.lang.String[] { "Sequence", "Action", "InputDigest", "Disposition", "Legs", "PriorChain", "Checksum", "StateDigest", "Input", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

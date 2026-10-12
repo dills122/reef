@@ -96,7 +96,7 @@ schema confusion is refused.
 
 ## 6. Registration and registry
 
-1. **Boundary migration `0014`** (replaces `boundary.calcify_finite_register`, which today raises unless
+1. **Boundary migration (next free number; `0014` is now the O4 projection tables)** (replaces `boundary.calcify_finite_register`, which today raises unless
    `o->>'schema' = 'calcify-finite-binding-v1'`): accept `calcify-finite-binding-v1` **or** `calcify-finite-binding-v2`, keep every
    other check, and leave the table CHECKs at 16,384 (no raise, section 3). `stages` requires the top-level `cuts` keys to be exactly the v1 set (every value except `brokerCuts` a string) and caps `cuts` at
    8,192 bytes; `brokerCuts` is an unconstrained JSON object, so v2 stores the eight ranges and the `financeGroup` cut **inside

@@ -62,6 +62,21 @@ internal object FinanceWire {
         .addAllLegs(d.legs.map { FinanceLegV1.newBuilder().setAccountId(it.account.value).setAssetId(it.asset.value).setAmount(it.amount).build() })
         .setPriorChain(d.priorChain).setStateDigest(d.stateDigest).setChecksum(d.checksum).build()
 
+    /** A decision record as published on FINANCE_DECISIONS: the decision plus the input it answers. */
+    fun toProto(d: Decision, input: FinanceInput): FinanceDecisionV1 {
+        require(input.digest() == d.inputDigest) { "input does not match the decision's input digest" }
+        return toProto(d).toBuilder().setInput(toProto(input)).build()
+    }
+
+    /** Decodes a published record; the carried input must hash to the decision's input digest. */
+    fun recordFromProto(p: FinanceDecisionV1): Pair<Decision, FinanceInput> {
+        require(p.hasInput()) { "decision record without input" }
+        val decision = fromProto(p)
+        val input = fromProto(p.input)
+        require(input.digest() == decision.inputDigest) { "input does not match the decision's input digest" }
+        return decision to input
+    }
+
     fun fromProto(p: FinanceDecisionV1): Decision {
         noUnknownFields(p)
         require(p.hasAction()) { "missing action" }
