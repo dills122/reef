@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -178,6 +179,86 @@ func (o FiniteOpeningV2) validate() error {
 	openingJSON, err := json.Marshal(o)
 	if err != nil || len(openingJSON) > int(o.Budget.OpeningBytes) {
 		return fmt.Errorf("finite opening measured byte budget exceeded")
+	}
+	return nil
+}
+
+// FiniteFinanceGroupCut is the finance consumer group's committed position on its two inputs. An absent committed offset is
+// reported as 0 only when that topic has no history (spec sections 8.4 and 10); v1 groups stay strict.
+type FiniteFinanceGroupCut struct {
+	GroupID           string        `json:"groupId"`
+	CaptureNextOffset FiniteDecimal `json:"captureNextOffset"`
+	ControlNextOffset FiniteDecimal `json:"controlNextOffset"`
+}
+
+type FiniteCutsV2 struct {
+	CommandGroup       FiniteGroupCut        `json:"commandGroup"`
+	CaptureSourceGroup FiniteGroupCut        `json:"captureSourceGroup"`
+	FinanceGroup       FiniteFinanceGroupCut `json:"financeGroup"`
+	Ranges             []FiniteRange         `json:"ranges"`
+}
+
+type FiniteStartupWitnessV2 struct {
+	Schema        string               `json:"schema"`
+	Nonce         string               `json:"nonce"`
+	BindingDigest string               `json:"bindingDigest"`
+	Opening       FiniteOpeningV2      `json:"opening"`
+	Run           FiniteRun            `json:"run"`
+	Cuts          FiniteCutsV2         `json:"cuts"`
+	Journal       []FiniteJournalEntry `json:"journal"`
+}
+
+// ParseFiniteStartupV2 is a strict bounded adapter, not an activation capability. It reuses the v1 run, journal and accounting
+// validation on the shared fields so v2 can only add constraints: eight ranges in role order and the finance group cut.
+func ParseFiniteStartupV2(raw []byte, nonce, digest string) (*FiniteStartupWitnessV2, error) {
+	if len(raw) > finiteStartupLimit {
+		return nil, fmt.Errorf("finite witness exceeds wire limit")
+	}
+	var w FiniteStartupWitnessV2
+	if err := finiteStrictJSON(raw, &w); err != nil {
+		return nil, err
+	}
+	if w.Schema != "calcify-finite-startup-v2" || !finiteNonce(nonce) || w.Nonce != nonce || w.BindingDigest != digest {
+		return nil, fmt.Errorf("finite witness challenge/identity mismatch")
+	}
+	if !reflect.DeepEqual(w.Opening.Parties, finiteSortedParties(w.Opening.Parties)) {
+		return nil, fmt.Errorf("finite witness parties must be comparator-sorted")
+	}
+	binding, err := w.Opening.Digest()
+	if err != nil || binding != digest {
+		return nil, fmt.Errorf("finite witness canonical binding mismatch: %v", err)
+	}
+	if err := w.validate(); err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func (w FiniteStartupWitnessV2) validate() error {
+	if len(w.Cuts.Ranges) != len(finiteRolesV2) {
+		return fmt.Errorf("finite cuts mismatch")
+	}
+	// The v1 view carries the five v1 ranges; v1 validation then covers run accounting, journal and the v1 group cuts.
+	v1 := FiniteStartupWitness{Schema: "calcify-finite-startup-v1", Nonce: w.Nonce, BindingDigest: w.BindingDigest, Opening: w.Opening.FiniteOpening, Run: w.Run, Journal: w.Journal,
+		Cuts: FiniteCuts{CommandGroup: w.Cuts.CommandGroup, CaptureSourceGroup: w.Cuts.CaptureSourceGroup, Ranges: w.Cuts.Ranges[:5]}}
+	if err := v1.validate(); err != nil {
+		return err
+	}
+	for i, r := range w.Cuts.Ranges {
+		if r.Role != finiteRolesV2[i] || r.Partition != 0 || r.BeginningOffset > r.ReadCommittedEndOffset || r.ReadCommittedEndOffset > r.EndOffset || uint64(r.EndOffset) > finiteOffsetLimit {
+			return fmt.Errorf("invalid finite range")
+		}
+	}
+	g := w.Cuts.FinanceGroup
+	if g.GroupID != w.Opening.FinanceApplicationID || uint64(g.CaptureNextOffset) > finiteOffsetLimit || uint64(g.ControlNextOffset) > finiteOffsetLimit ||
+		g.CaptureNextOffset > w.Cuts.Ranges[2].ReadCommittedEndOffset || g.ControlNextOffset > w.Cuts.Ranges[5].ReadCommittedEndOffset {
+		return fmt.Errorf("finite finance group cut mismatch")
+	}
+	// v1 measured the non-journal witness; v2 measures its own, larger, header against the same 8,192-byte cap.
+	w.Journal = []FiniteJournalEntry{}
+	raw, _ := json.Marshal(w)
+	if len(raw) > 8192 {
+		return fmt.Errorf("finite nonjournal witness exceeds limit")
 	}
 	return nil
 }

@@ -70,6 +70,9 @@ internal class FiniteOpeningV2 internal constructor(private val root: ObjectNode
     val controlTransactionalId: String get() = root["controlTransactionalId"].textValue()
     val openingAccountId: String get() = root["openingAccountId"].textValue()
     val financeConfigDigest: String get() = root["financeConfigDigest"].textValue()
+    val applicationId: String get() = core.applicationId
+    val commandConsumerGroup: String get() = root["commandConsumerGroup"].textValue()
+    val budget: FiniteLifecycleBudget get() = core.budget
     fun topic(role: String): FiniteTopic = core.topic(role)
     fun canonicalBytes(): ByteArray {
         val bytes=ByteArrayOutputStream()
@@ -88,6 +91,7 @@ internal class FiniteOpeningV2 internal constructor(private val root: ObjectNode
 
 internal data class FiniteTopic(val role: String,val name: String,val id: String)
 internal data class FiniteStartupWitness(val opening: FiniteOpening,val run: ObjectNode,val cuts: ObjectNode,val journal: List<ObjectNode>)
+internal data class FiniteStartupWitnessV2(val opening: FiniteOpeningV2,val run: ObjectNode,val cuts: ObjectNode,val journal: List<ObjectNode>)
 
 internal object FiniteBindingContract {
     const val WIRE_BYTES=32768
@@ -244,29 +248,14 @@ internal object FiniteBindingContract {
         return result
     }
 
-    fun parseStartup(bytes:ByteArray,expectedDigest:String,nonce:String):FiniteStartupWitness {
-        require(hash.matches(expectedDigest) && validNonce(nonce)){"finite witness expectation"}
-        val root=strictObject(bytes,WIRE_BYTES);fields(root,listOf("schema","nonce","bindingDigest","opening","run","cuts","journal"))
-        require(text(root,"schema")=="calcify-finite-startup-v1" && text(root,"nonce",128)==nonce && text(root,"bindingDigest",64)==expectedDigest){"finite witness challenge"}
-        val rawOpening=root["opening"] as? ObjectNode ?: throw IllegalArgumentException("finite opening object")
-        val o=opening(rawOpening);require(o.digest==expectedDigest){"finite binding digest"}
-        require(rawOpening["parties"]==o.json()["parties"]){"finite witness party order"}
+    /** Run accounting and journal checks shared by the v1 and v2 witnesses. */
+    private fun runAndJournal(root:JsonNode,b:FiniteLifecycleBudget):Pair<ObjectNode,List<ObjectNode>> {
         val r=root["run"];fields(r,listOf("ownerInstanceId","ownerEpoch","activationEpoch","admissionState","recordedAttempts","possiblePublications","commandPayloadBytes","attemptRecordBytes","unresolvedPublications"))
         text(r,"ownerInstanceId",128);val epoch=number(r,"ownerEpoch");require(epoch>0){"finite owner epoch"};number(r,"activationEpoch")
         require(text(r,"admissionState") in listOf("STOPPED","ACTIVE")){"finite admission state"}
-        val b=o.budget;number(r,"recordedAttempts",b.attempts);val publications=number(r,"possiblePublications",b.publications.toLong())
+        number(r,"recordedAttempts",b.attempts);val publications=number(r,"possiblePublications",b.publications.toLong())
         val payloadBytes=number(r,"commandPayloadBytes",b.publications.toLong()*b.commandBytes);number(r,"attemptRecordBytes",b.attempts*b.attemptBytes)
         val unresolved=number(r,"unresolvedPublications",b.publications.toLong())
-        val c=root["cuts"];fields(c,listOf("commandGroup","captureSourceGroup","ranges"))
-        for((key,id) in listOf("commandGroup" to o.json()["commandConsumerGroup"].textValue(),"captureSourceGroup" to o.applicationId)) {
-            fields(c[key],listOf("groupId","nextOffset"));require(text(c[key],"groupId")==id){"finite group identity"};number(c[key],"nextOffset",MAX_OFFSET)
-        }
-        require(c["ranges"].isArray && c["ranges"].size()==5){"finite ranges"}
-        c["ranges"].forEachIndexed { i,v ->
-            fields(v,listOf("role","partition","beginningOffset","endOffset","readCommittedEndOffset"));require(text(v,"role")==roles[i]){"finite range role"};small(v,"partition",0,0)
-            val begin=number(v,"beginningOffset",MAX_OFFSET);val end=number(v,"endOffset",MAX_OFFSET);val committed=number(v,"readCommittedEndOffset",MAX_OFFSET)
-            require(begin<=committed && committed<=end){"finite range cuts"}
-        }
         val j=root["journal"];require(j.isArray && j.size().toLong()==publications){"finite journal count"}
         val ids=HashSet<String>();var unresolvedCount=0L;var byteCount=0L
         j.forEachIndexed { i,v ->
@@ -282,8 +271,60 @@ internal object FiniteBindingContract {
             require(encode(v).size<=JOURNAL_BYTES){"finite journal measured bytes"}
         }
         require(unresolved==unresolvedCount && payloadBytes==byteCount){"finite journal accounting"}
+        return (r as ObjectNode).deepCopy() to j.map{(it as ObjectNode).deepCopy()}
+    }
+
+    fun parseStartup(bytes:ByteArray,expectedDigest:String,nonce:String):FiniteStartupWitness {
+        require(hash.matches(expectedDigest) && validNonce(nonce)){"finite witness expectation"}
+        val root=strictObject(bytes,WIRE_BYTES);fields(root,listOf("schema","nonce","bindingDigest","opening","run","cuts","journal"))
+        require(text(root,"schema")=="calcify-finite-startup-v1" && text(root,"nonce",128)==nonce && text(root,"bindingDigest",64)==expectedDigest){"finite witness challenge"}
+        val rawOpening=root["opening"] as? ObjectNode ?: throw IllegalArgumentException("finite opening object")
+        val o=opening(rawOpening);require(o.digest==expectedDigest){"finite binding digest"}
+        require(rawOpening["parties"]==o.json()["parties"]){"finite witness party order"}
+        val (run,journal)=runAndJournal(root,o.budget)
+        val c=root["cuts"];fields(c,listOf("commandGroup","captureSourceGroup","ranges"))
+        for((key,id) in listOf("commandGroup" to o.json()["commandConsumerGroup"].textValue(),"captureSourceGroup" to o.applicationId)) {
+            fields(c[key],listOf("groupId","nextOffset"));require(text(c[key],"groupId")==id){"finite group identity"};number(c[key],"nextOffset",MAX_OFFSET)
+        }
+        require(c["ranges"].isArray && c["ranges"].size()==5){"finite ranges"}
+        c["ranges"].forEachIndexed { i,v ->
+            fields(v,listOf("role","partition","beginningOffset","endOffset","readCommittedEndOffset"));require(text(v,"role")==roles[i]){"finite range role"};small(v,"partition",0,0)
+            val begin=number(v,"beginningOffset",MAX_OFFSET);val end=number(v,"endOffset",MAX_OFFSET);val committed=number(v,"readCommittedEndOffset",MAX_OFFSET)
+            require(begin<=committed && committed<=end){"finite range cuts"}
+        }
         require(encode(root.deepCopy().apply {set<JsonNode>("journal",mapper.createArrayNode())}).size<=HEADER_BYTES){"finite witness header bytes"}
-        return FiniteStartupWitness(o,(r as ObjectNode).deepCopy(),(c as ObjectNode).deepCopy(),j.map{(it as ObjectNode).deepCopy()})
+        return FiniteStartupWitness(o,run,(c as ObjectNode).deepCopy(),journal)
+    }
+
+    /**
+     * Startup witness v2: run and journal as v1, `cuts` as v1 plus eight ranges in role order and the finance group's committed
+     * positions (spec section 10). An absent committed finance offset is reported as 0; v1 groups stay strict in [parseStartup].
+     */
+    fun parseStartupV2(bytes:ByteArray,expectedDigest:String,nonce:String):FiniteStartupWitnessV2 {
+        require(hash.matches(expectedDigest) && validNonce(nonce)){"finite witness expectation"}
+        val root=strictObject(bytes,WIRE_BYTES);fields(root,listOf("schema","nonce","bindingDigest","opening","run","cuts","journal"))
+        require(text(root,"schema")=="calcify-finite-startup-v2" && text(root,"nonce",128)==nonce && text(root,"bindingDigest",64)==expectedDigest){"finite witness challenge"}
+        val rawOpening=root["opening"] as? ObjectNode ?: throw IllegalArgumentException("finite opening object")
+        val o=parseOpeningV2(encode(rawOpening));require(o.digest==expectedDigest){"finite binding digest"}
+        require(rawOpening["parties"]==o.json()["parties"]){"finite witness party order"}
+        val (run,journal)=runAndJournal(root,o.budget)
+        val c=root["cuts"];fields(c,listOf("commandGroup","captureSourceGroup","financeGroup","ranges"))
+        for((key,id) in listOf("commandGroup" to o.commandConsumerGroup,"captureSourceGroup" to o.applicationId)) {
+            fields(c[key],listOf("groupId","nextOffset"));require(text(c[key],"groupId")==id){"finite group identity"};number(c[key],"nextOffset",MAX_OFFSET)
+        }
+        require(c["ranges"].isArray && c["ranges"].size()==rolesV2.size){"finite ranges"}
+        val committedEnds=LongArray(rolesV2.size)
+        c["ranges"].forEachIndexed { i,v ->
+            fields(v,listOf("role","partition","beginningOffset","endOffset","readCommittedEndOffset"));require(text(v,"role")==rolesV2[i]){"finite range role"};small(v,"partition",0,0)
+            val begin=number(v,"beginningOffset",MAX_OFFSET);val end=number(v,"endOffset",MAX_OFFSET);val committed=number(v,"readCommittedEndOffset",MAX_OFFSET)
+            require(begin<=committed && committed<=end){"finite range cuts"};committedEnds[i]=committed
+        }
+        require(number(c["commandGroup"],"nextOffset")<=committedEnds[0] && number(c["captureSourceGroup"],"nextOffset")<=committedEnds[1]){"finite group cut beyond history"}
+        val finance=c["financeGroup"];fields(finance,listOf("groupId","captureNextOffset","controlNextOffset"))
+        require(text(finance,"groupId")==o.financeApplicationId){"finite finance group identity"}
+        require(number(finance,"captureNextOffset",MAX_OFFSET)<=committedEnds[2] && number(finance,"controlNextOffset",MAX_OFFSET)<=committedEnds[5]){"finite finance group cut beyond history"}
+        require(encode(root.deepCopy().apply {set<JsonNode>("journal",mapper.createArrayNode())}).size<=HEADER_BYTES){"finite witness header bytes"}
+        return FiniteStartupWitnessV2(o,run,(c as ObjectNode).deepCopy(),journal)
     }
 
     private fun validateUnicode(node:JsonNode) {
