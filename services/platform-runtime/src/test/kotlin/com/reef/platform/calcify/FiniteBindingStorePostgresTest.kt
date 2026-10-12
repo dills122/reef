@@ -66,6 +66,24 @@ class FiniteBindingStorePostgresTest {
     private fun begin(o:FiniteOpening,request:ObjectNode):ObjectNode=connection().use {
         FiniteBindingContract.strictObject(sql(it,"SELECT boundary.calcify_finite_begin_attempt(?,1,?::jsonb)",o.digest,FiniteBindingContract.encode(request).toString(Charsets.UTF_8)).toByteArray(),32768)
     }
+    @Test fun registrationAcceptsV2AndStillRefusesUnknownOrMissingSchemas() {
+        val raw=Files.readAllBytes(Path.of("../../contracts/calcify/finite-binding-v2.json"))
+        val node=FiniteBindingContract.strictObject(raw,16384);node.put("brokerClusterId","sql-only-v2-"+UUID.randomUUID())
+        val v2=FiniteBindingContract.parseOpeningV2(FiniteBindingContract.encode(node))
+        connection(true).use { assertEquals("t",sql(it,"SELECT boundary.calcify_finite_register(?,?::jsonb,?,?)",v2.digest,FiniteBindingContract.encode(v2.json()).toString(Charsets.UTF_8),v2.canonicalBytes(),"sql-test-owner-v2")) }
+        // The registrar-held snapshot of a v2 row works like v1 (same run/budget/parties/topics[0] fields).
+        assertTrue(snapshotRaw(v2.digest).isNotEmpty())
+        fun refuse(edit:(ObjectNode)->Unit) {
+            val bad=v2.json().also(edit);val digest=FiniteLifecycleContract.sha((bad.toString()+UUID.randomUUID()).toByteArray())
+            val e=assertFailsWith<SQLException> { connection(true).use { sql(it,"SELECT boundary.calcify_finite_register(?,?::jsonb,?,?)",digest,bad.toString(),v2.canonicalBytes(),"sql-test-owner-bad") } }
+            assertTrue(e.message!!.contains("invalid finite opening"),e.message)
+        }
+        refuse { it.put("schema","calcify-finite-binding-v3") }
+        refuse { it.remove("schema") }
+        refuse { it.remove("openingMode") }
+    }
+    private fun snapshotRaw(digest:String):String=connection().use { sql(it,"SELECT boundary.calcify_finite_snapshot(?)",digest) }
+
     @Test fun permissionsOpeningAndReleaseAreRestricted() {
         val o=opening();register(o)
         connection().use { db ->

@@ -725,9 +725,11 @@ jobs:
           f=services/platform-runtime/build/test-results/test/TEST-com.reef.platform.calcify.FiniteBindingStorePostgresTest.xml
           test -f "$f"
           grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$f"
-          g=services/platform-runtime/build/test-results/test/TEST-com.reef.platform.calcify.finance.FinanceProjectorPostgresTest.xml
-          test -f "$g"
-          grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
+          for suite in com.reef.platform.calcify.finance.FinanceProjectorPostgresTest com.reef.platform.calcify.CalcifyTopicRoleMigrationTest; do
+            g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
+            test -f "$g"
+            grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
+          done
       - name: Run idempotency renewal tests against real Postgres
         env:
           RUNTIME_DB_URL_TEST: jdbc:postgresql://localhost:5432/reef
