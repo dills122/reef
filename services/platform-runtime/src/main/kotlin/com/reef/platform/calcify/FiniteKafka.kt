@@ -50,6 +50,24 @@ internal class FiniteKafka(private val opening:FiniteOpening,private val bootstr
             }
         }
     }
+    /**
+     * v2 verifier over all eight roles. Per-role rules are compiled constants ([FiniteTopicRulesV2]), not opening fields, so the
+     * registered digest does not depend on them (spec section 10).
+     */
+    fun verifyIdentitiesV2(opening2:FiniteOpeningV2) {
+        AdminClient.create(properties()).use { admin ->
+            require(admin.describeCluster().clusterId().get(10,TimeUnit.SECONDS)==opening2.json()["brokerClusterId"].textValue()){"finite broker cluster mismatch"}
+            val names=FiniteBindingContract.rolesV2.map{opening2.topic(it).name}
+            val topics=admin.describeTopics(names).allTopicNames().get(10,TimeUnit.SECONDS)
+            val configs=admin.describeConfigs(names.map{ConfigResource(ConfigResource.Type.TOPIC,it)}).all().get(10,TimeUnit.SECONDS)
+            for(role in FiniteBindingContract.rolesV2) {
+                val expected=opening2.topic(role);val actual=topics.getValue(expected.name)
+                require(actual.topicId().toString()==expected.id && actual.partitions().size==1 && actual.partitions().single().partition()==0){"finite topic identity/partition mismatch"}
+                val config=configs.getValue(ConfigResource(ConfigResource.Type.TOPIC,expected.name))
+                FiniteTopicRulesV2.check(role,opening2.budget,{ config.get(it)?.value() })
+            }
+        }
+    }
     fun consumer():KafkaConsumer<ByteArray,ByteArray> = KafkaConsumer(properties().apply {
         put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,ByteArrayDeserializer::class.java.name)
         put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,ByteArrayDeserializer::class.java.name)
@@ -145,4 +163,32 @@ internal class FiniteKafka(private val opening:FiniteOpening,private val bootstr
     }
     // close(Duration) bounds producer drain; external shutdown must verify callbacks/journal and process exit.
     override fun close() {producer?.close(Duration.ofSeconds(10));producer=null}
+}
+
+/**
+ * Per-role broker topic requirements for binding v2. History topics (everything but the two changelogs) must retain forever: CONTROL
+ * and FINANCE_DECISIONS are read from offset 0 for recovery and `verifyChain`, so retention-based deletion breaks recovery. The two
+ * changelogs are compacted. `max.message.bytes` minimums are provisional verifier constants (S2-A2 measures the real record sizes
+ * and may tighten them); they are NOT opening fields and never enter the canonical bytes or the digest.
+ */
+internal object FiniteTopicRulesV2 {
+    const val CONTROL_MIN_RECORD_BYTES=8192L
+    const val DECISION_MIN_RECORD_BYTES=16384L
+    const val CHANGELOG_SLACK_BYTES=1024L
+
+    fun check(role:String,budget:FiniteLifecycleBudget,config:(String)->String?) {
+        val needed=when(role){
+            "CAPTURE_CHANGELOG"->budget.stateBytes+CHANGELOG_SLACK_BYTES
+            "FINANCE_CHANGELOG"->budget.captureBytes+CHANGELOG_SLACK_BYTES
+            "CONTROL"->CONTROL_MIN_RECORD_BYTES
+            "FINANCE_DECISIONS"->DECISION_MIN_RECORD_BYTES
+            "CAPTURE"->budget.captureBytes+1024L
+            "SOURCE"->budget.sourceBytes+1024L
+            "COMMAND","OWNERSHIP"->budget.commandBytes+1024L
+            else->throw IllegalArgumentException("finite unknown topic role")
+        }
+        require((config("max.message.bytes")?.toLongOrNull() ?: -1L)>=needed){"finite topic transport limit"}
+        if(role=="CAPTURE_CHANGELOG" || role=="FINANCE_CHANGELOG") require(config("cleanup.policy")=="compact"){"finite managed changelog configuration"}
+        else require(config("retention.ms")=="-1" && config("retention.bytes")=="-1" && config("cleanup.policy")=="delete"){"finite retained history configuration"}
+    }
 }
