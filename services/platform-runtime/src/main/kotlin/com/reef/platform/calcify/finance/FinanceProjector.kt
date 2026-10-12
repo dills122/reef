@@ -31,7 +31,10 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
     fun apply(bindingDigest: String, epoch: Long, records: List<Pair<Decision, FinanceInput>>): Int = tx { c ->
         var (lastSequence, lastChain) = fence(c, bindingDigest, epoch)
         var applied = 0
+        var previous = 0L
         for ((decision, input) in records) {
+            require(decision.sequence > previous) { "records must arrive in strictly increasing sequence order" }
+            previous = decision.sequence
             require(input.digest() == decision.inputDigest) { "input does not match the decision's input digest" }
             if (decision.sequence <= lastSequence) {
                 val stored = storedChecksum(c, bindingDigest, decision.sequence)

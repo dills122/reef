@@ -95,7 +95,8 @@ class FinanceProjectorPostgresTest {
         projector.apply(binding, 1, records.take(2))
         val before = rows(ds, "SELECT last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?", binding)
         assertFailsWith<IllegalArgumentException> { projector.apply(binding, 1, listOf(records[2], records[4])) }       // gap after a valid record
-        assertFailsWith<IllegalArgumentException> { projector.apply(binding, 1, listOf(records[2], records[3].first to records[2].second)) }  // wrong input
+        assertFailsWith<IllegalArgumentException> { projector.apply(binding, 1, listOf(records[2], records[3].first to records[2].second)) }
+        assertFailsWith<IllegalArgumentException> { projector.apply(binding, 1, listOf(records[1], records[0])) }                        // out of order  // wrong input
         val tampered = records[2].first.copy(checksum = "0".repeat(64))
         assertFailsWith<IllegalArgumentException> { projector.apply(binding, 1, listOf(tampered to records[2].second)) }
         val replayedDifferent = records[1].first.copy(checksum = "1".repeat(64))
