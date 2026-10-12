@@ -94,7 +94,7 @@ internal class FinanceProcessor(private val config: FinanceProcessorConfig) : Pr
         }
         headDecision?.let { writes[FinanceStore.HEAD] = FinanceWire.toProto(it).toByteArray() }
         writes[FinanceStore.META] = FinanceStore.Meta(config.bindingDigest, position, head, staged.sequence, staged.chain, staged.controls).bytes()
-        writes.forEach { (k, v) -> kv.apply(mapOf(k to v)) }
+        kv.apply(writes)
         state = staged; historyPosition = position; entryHead = head
         forwards.forEach { (key, value) -> context.forward(record.withKey(key).withValue(value)) }
     }
