@@ -123,7 +123,7 @@ export const MUTANTS = [
   ['S2A2 NO_INPUT entry dropped', PROC, 'if (mapped.isEmpty()) return listOf(Item.None)', 'if (mapped.isEmpty()) return emptyList()'],
   ['S2A2 offset-ahead refusal removed', CUT, 'if (committed > last + 1 || committed > end) throw', 'if (false) throw'],
   ['S2A2 history-ahead refusal removed', CUT, 'if (committed < last + 1) throw', 'if (false) throw'],
-  ['S2A2 expired-offsets refusal removed', CUT, 'if (committed == null || committed == 0L) throw', 'if (false) throw'],
+  ['S2A2 reset committed offset not refused', CUT, 'if (committed == null || committed == 0L) throw', 'if (committed == null) throw'],
   ['S2A2 no-history offset rule removed', CUT, 'if ((committed ?: 0L) != 0L) throw', 'if (false) throw'],
   ['S2A2 cross-check removed', CUT, 'if (recorded.size != log.size || recorded.zip(log).any { (e, d) -> e.decisionChecksum != d.checksum || e.inputDigest != d.inputDigest })', 'if (false)'],
   ['S2A2 cross-check ignores input digest', CUT, ' || e.inputDigest != d.inputDigest', ''],

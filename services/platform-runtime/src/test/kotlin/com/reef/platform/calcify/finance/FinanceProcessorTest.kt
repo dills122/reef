@@ -201,6 +201,79 @@ class FinanceProcessorTest {
         assertFailsWith<IllegalArgumentException> { Harness(good.filterKeys { it.startsWith("position/") }) }
     }
 
+    /** Rewrites one history entry and re-chains everything after it, so the store stays internally consistent (chain, meta head) but differs from the truth. */
+    private fun forge(snapshot: Map<String, ByteArray>, index: Int, transform: (FinanceStore.Entry) -> FinanceStore.Entry): MutableMap<String, ByteArray> {
+        val out = snapshot.toMutableMap()
+        val keys = out.keys.filter { it.startsWith("h/") }.sorted()
+        var prev = if (index == 0) FinanceStore.genesisEntryChain(ledger) else FinanceStore.Entry.parse(out[keys[index - 1]]!!).entryChain
+        for (i in index until keys.size) {
+            val original = FinanceStore.Entry.parse(out[keys[i]]!!)
+            val e = (if (i == index) transform(original) else original).copy(prevEntryChain = prev)
+            val chain = FinanceStore.entryChain(prev, e.position, e.sourceRole, e.sourcePartition, e.sourceOffset, e.memberOrdinal, e.kind, e.inputDigest, e.outcome, e.decisionChecksum)
+            out[keys[i]] = e.copy(entryChain = chain).bytes(); prev = chain
+        }
+        out[FinanceStore.META] = FinanceStore.Meta.parse(out[FinanceStore.META]!!).copy(entryChainHead = prev).bytes()
+        return out
+    }
+
+    @Test fun historyVerificationChecksEachRuleIndependently() {
+        val h = fullRun(); val good = h.snapshot(); val kv = MemoryLifecycleKv().also { it.apply(good) }
+        val meta = FinanceStore.Meta.parse(good[FinanceStore.META]!!)
+        val head = FinanceWire.fromProto(FinanceDecisionV1.parseFrom(good[FinanceStore.HEAD]!!))
+        val entries = FinanceStore.entries(kv)
+        FinanceStore.verifyHistory(ledger, entries, meta, head)
+        fun refuses(name: String, e: List<FinanceStore.Entry> = entries, m: FinanceStore.Meta = meta, d: Decision? = head) =
+            assertFailsWith<IllegalArgumentException>(name) { FinanceStore.verifyHistory(ledger, e, m, d) }
+        refuses("meta head", m = meta.copy(entryChainHead = "0".repeat(64)))
+        refuses("meta length", m = meta.copy(historyPosition = meta.historyPosition - 1))
+        refuses("recorded vs sequence", m = meta.copy(sequence = meta.sequence - 1))
+        refuses("head decision", d = null)
+        refuses("prev link only", e = entries.toMutableList().also { it[3] = it[3].copy(prevEntryChain = "1".repeat(64)) })
+        refuses("position only", e = entries.toMutableList().also { it[3] = it[3].copy(position = 99) })
+        refuses("chain value only", e = entries.toMutableList().also { it[3] = it[3].copy(entryChain = "2".repeat(64)) })
+        refuses("NO_INPUT with a decision", e = entries.toMutableList().also { val i = it.indexOfFirst { x -> x.kind == FinanceStore.EntryKind.NO_INPUT }; it[i] = it[i].copy(decisionChecksum = "3".repeat(64)) })
+        refuses("NO_INPUT with wrong outcome", e = entries.toMutableList().also { val i = it.indexOfFirst { x -> x.kind == FinanceStore.EntryKind.NO_INPUT }; it[i] = it[i].copy(outcome = "FUNDED") })
+    }
+
+    @Test fun entityDecodingIsStrictAboutVersionAndTrailingBytes() {
+        val good = fullRun().snapshot()
+        val key = good.keys.first { it.startsWith("position/") }
+        val value = good[key]!!
+        assertFailsWith<IllegalArgumentException>("trailing byte") { Harness(good.toMutableMap().also { it[key] = value + byteArrayOf(0) }) }
+        val original = java.io.DataInputStream(java.io.ByteArrayInputStream(value)).let { it.readNBytes(it.readInt()); it.readLong() }
+        assertFailsWith<IllegalArgumentException>("other version, same payload") {
+            Harness(good.toMutableMap().also { it[key] = Canon.bytes { str("calcify-finance-entity-v9"); long(original) } })
+        }
+    }
+
+    @Test fun historyBoundIsExactlyThreeHundredTwelve() {
+        assertEquals(312, FinanceStore.MAX_HISTORY_ENTRIES)
+        val h = Harness()
+        repeat(312) { h.control(byteArrayOf(it.toByte())) }
+        assertEquals(312, h.entries().size)
+        assertFailsWith<FinanceHistoryBudgetExceeded> { h.control(byteArrayOf(1)) }
+    }
+
+    @Test fun captureEnvelopeIdentityIsCheckedIndependentlyOfItsContentDigest() {
+        fun resealed(e: reef.contracts.calcify.v1.FiniteLifecycleCaptureV1) = e.toBuilder().setContentDigest(FiniteLifecycleContract.digest(e)).build()
+        val h = Harness(); fundBoth(h)
+        h.capture(resealed(envelopes[2].toBuilder().setFiniteBindingDigest("0".repeat(64)).build()).toByteArray())
+        h.capture(resealed(envelopes[2].toBuilder().setSchema("calcify-finite-lifecycle-capture-v0").build()).toByteArray())
+        assertEquals(listOf("INVALID_INPUT", "INVALID_INPUT"), h.entries().takeLast(2).map { it.outcome })
+        assertEquals(2, h.decisions().size, "only the two funds were decided")
+        h.capture(envelopes[2].toByteArray())      // the genuine envelope still books
+        assertEquals(4, h.decisions().size)
+    }
+
+    @Test fun restoreCutCrossChecksHistoryAgainstTheDecisionLogEvenWhenTheStoreIsInternallyConsistent() {
+        val h = fullRun()
+        val index = FinanceStore.entries(MemoryLifecycleKv().also { it.apply(h.snapshot()) }).indexOfFirst { it.decisionChecksum.isNotEmpty() }
+        val inputForged = forge(h.snapshot(), index) { it.copy(inputDigest = "a".repeat(64)) }
+        assertEquals(RestoreRefusal.FINANCE_HISTORY_CROSS_CHECK, refusal(evidence(h, store = inputForged)), "input digest differs from the decision's")
+        val checksumForged = forge(h.snapshot(), index) { it.copy(decisionChecksum = "b".repeat(64)) }
+        assertEquals(RestoreRefusal.FINANCE_HISTORY_CROSS_CHECK, refusal(evidence(h, store = checksumForged)), "decision checksum differs from the log")
+    }
+
     @Test fun anotherBindingNeverAdoptsThisStore() {
         val h = Harness().also { fundBoth(it) }
         assertFailsWith<IllegalArgumentException> { Harness(h.snapshot(), cfg.copy(bindingDigest = FiniteLifecycleContract.sha("binding-v1".toByteArray()))) }
