@@ -7,11 +7,16 @@ import java.io.DataOutputStream
 import reef.contracts.calcify.v1.*
 
 /** Read-only view of the keyed lifecycle state. Keys: `meta`, `order/<id>`, `exec/<id>`, `batch/<id>`, `done/<20-digit offset>`. */
-internal interface LifecycleKv { fun get(key: String): ByteArray? }
+internal interface LifecycleKv {
+    fun get(key: String): ByteArray?
+    /** All entries whose key starts with [prefix], ascending by key. Used only by the once-per-restore verification, never per record. */
+    fun scan(prefix: String): List<Pair<String, ByteArray>>
+}
 
 internal class MemoryLifecycleKv : LifecycleKv {
     val entries = sortedMapOf<String, ByteArray>()
     override fun get(key: String): ByteArray? = entries[key]
+    override fun scan(prefix: String): List<Pair<String, ByteArray>> = entries.tailMap(prefix).entries.takeWhile { it.key.startsWith(prefix) }.map { it.key to it.value }
     fun apply(writes: Map<String, ByteArray>) { entries.putAll(writes) }
 }
 
@@ -28,6 +33,15 @@ internal class MemoryLifecycleKv : LifecycleKv {
  *    byte totals are enforced instead.
  * Differential tests assert byte-equal envelopes and equal entity content against the frozen reducer on valid schedules.
  */
+/** Adapter over a Kafka Streams key-value store (the changelog-backed managed store) behind the same keyed view. */
+internal class StreamsLifecycleKv(private val store: org.apache.kafka.streams.state.KeyValueStore<String, ByteArray>) : LifecycleKv {
+    override fun get(key: String): ByteArray? = store.get(key)
+    override fun scan(prefix: String): List<Pair<String, ByteArray>> =
+        store.range(prefix, prefix + "\uffff").use { it.asSequence().map { kv -> kv.key to kv.value }.toList() }
+    /** Applies one reduction's write batch; the surrounding Streams transaction makes it atomic with the output record. */
+    fun apply(writes: Map<String, ByteArray>) = writes.forEach { (k, v) -> store.put(k, v) }
+}
+
 internal object IncrementalLifecycleReducer {
     data class Meta(val base: FiniteLifecycleStateV1, val orders: Int, val executions: Int, val batches: Int, val completed: Int) {
         fun bytes(): ByteArray {
@@ -148,4 +162,27 @@ internal object IncrementalLifecycleReducer {
         writes["meta"] = next.bytes()
         return Reduction(envelope, writes)
     }
+
+    /**
+     * Once-per-restore verification: assembles the frozen whole-state view from the keys and runs the frozen certified-history
+     * validation over it, so a corrupt, missing or tampered keyed history is refused before the first record is reduced. This is
+     * the cost the per-record path avoids; it runs at activation, not per record.
+     */
+    fun assemble(kv: LifecycleKv, binding: FiniteLifecycleBinding): FiniteLifecycleStateV1 {
+        val meta = Meta.parse(requireNotNull(kv.get("meta")) { "managed state missing; refuse inferred genesis" })
+        val completed = kv.scan("done/").map { FiniteLifecycleCaptureV1.parseFrom(it.second) }
+        val batches = kv.scan("batch/").associate { FiniteLifecycleBatchStateV1.parseFrom(it.second).let { b -> b.batchId to b } }
+        val ordered = LinkedHashMap<String, FiniteLifecycleBatchStateV1>()
+        for (record in completed) batches[record.source.batchId]?.let { ordered.putIfAbsent(record.source.batchId, it) }
+        val state = meta.base.toBuilder()
+            .addAllOrders(kv.scan("order/").map { FiniteLifecycleOrderStateV1.parseFrom(it.second) })
+            .addAllExecutionIds(kv.scan("exec/").map { it.first.removePrefix("exec/") })
+            .addAllBatches(ordered.values).addAllCompletedRecords(completed).build()
+        require(state.ordersCount == meta.orders && state.executionIdsCount == meta.executions &&
+            batches.size == meta.batches && ordered.size == meta.batches && state.completedRecordsCount == meta.completed) { "keyed counts differ from meta" }
+        return state
+    }
+
+    fun verifyHistory(kv: LifecycleKv, binding: FiniteLifecycleBinding): FiniteLifecycleStateV1 =
+        assemble(kv, binding).also { FiniteLifecycleReducer.validateState(it, binding) }
 }
