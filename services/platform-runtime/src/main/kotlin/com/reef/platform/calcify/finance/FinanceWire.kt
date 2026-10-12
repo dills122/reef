@@ -30,7 +30,17 @@ internal object FinanceWire {
         return b.build()
     }
 
+    /** Several byte strings must not decode to one value: unknown fields are refused at every nesting level. */
+    private fun noUnknownFields(m: com.google.protobuf.Message) {
+        require(m.unknownFields.serializedSize == 0) { "unknown protobuf fields" }
+        for ((field, value) in m.allFields) {
+            if (field.javaType != com.google.protobuf.Descriptors.FieldDescriptor.JavaType.MESSAGE) continue
+            if (field.isRepeated) (value as List<*>).forEach { noUnknownFields(it as com.google.protobuf.Message) } else noUnknownFields(value as com.google.protobuf.Message)
+        }
+    }
+
     fun fromProto(p: FinanceInputV1): FinanceInput {
+        noUnknownFields(p)
         require(p.hasAction()) { "missing action" }
         val action = fromProto(p.action)
         return when (p.bodyCase) {
@@ -53,6 +63,7 @@ internal object FinanceWire {
         .setPriorChain(d.priorChain).setStateDigest(d.stateDigest).setChecksum(d.checksum).build()
 
     fun fromProto(p: FinanceDecisionV1): Decision {
+        noUnknownFields(p)
         require(p.hasAction()) { "missing action" }
         require(p.sequence >= 1) { "non-positive sequence" }
         require(listOf(p.inputDigest, p.priorChain, p.stateDigest, p.checksum).all { HEX64.matches(it) }) { "digest is not lowercase hex SHA-256" }

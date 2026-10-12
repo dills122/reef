@@ -126,6 +126,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
     fun checkInvariants(state: FinanceState) {
         for ((key, value) in state.positions) {
             check(key.first == config.openingAccount || value >= 0) { "negative non-opening position" }
+            check(key.first != config.openingAccount || value <= 0) { "opening account position is positive" }
             check(key.first == config.openingAccount || key.first in config.accounts) { "position for unknown account" }
             check(key.second == cash || key.second == security) { "position in unknown asset" }
         }
@@ -137,7 +138,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
         for ((key, obligation) in state.obligations) {
             val e = state.executions.getValue(key)
             when (obligation.status) {
-                ObligationStatus.PENDING -> check(obligation.cashResidual == Math.multiplyExact(e.quantity, e.priceNanos) && obligation.shareResidual == e.quantity) { "pending residual drift" }
+                ObligationStatus.PENDING -> check(obligation.cashResidual == (try { Math.multiplyExact(e.quantity, e.priceNanos) } catch (_: ArithmeticException) { error("pending residual overflow") }) && obligation.shareResidual == e.quantity) { "pending residual drift" }
                 ObligationStatus.SETTLED -> check(obligation.cashResidual == 0L && obligation.shareResidual == 0L) { "settled residual not zero" }
             }
         }
@@ -164,8 +165,10 @@ internal class FinanceLedger(val config: FinanceConfig) {
     fun verifyChain(decisions: List<Decision>): Boolean {
         var prior = genesisChain
         var sequence = 0L
+        val actions = HashSet<ActionKey>()
         for (d in decisions) {
             if (d.sequence != sequence + 1 || d.priorChain != prior) return false
+            if (d.disposition !in recordedDispositions || !actions.add(d.action)) return false
             if (d.checksum != Canon.sha(decisionBytes(d.sequence, d.action, d.inputDigest, d.disposition, d.legs, d.priorChain, d.stateDigest))) return false
             prior = d.checksum; sequence = d.sequence
         }
@@ -180,7 +183,18 @@ internal class FinanceLedger(val config: FinanceConfig) {
      * [Decision.stateDigest], so a state that is internally consistent but was not produced by that history (moved shares,
      * minted cash, extra entities) is refused. A recomputed checkpoint checksum alone is not authority.
      */
-    fun restore(checkpoint: FinanceCheckpoint, trustedHead: Decision?): FinanceState {
+    /**
+     * Public restore: verifies the complete decision [history] from this ledger's genesis ([verifyChain]) and then restores at its
+     * head. This is an **integrity** check (hash linkage and state commitment), not authenticity: whoever can write a self-consistent
+     * history and checkpoint can make them verify, so the history source must itself be trusted or anchored (keyed MAC, signature or
+     * an externally held chain root; an O3b requirement).
+     */
+    fun restore(checkpoint: FinanceCheckpoint, history: List<Decision>): FinanceState {
+        require(verifyChain(history)) { "decision history does not verify" }
+        return restoreAt(checkpoint, history.lastOrNull())
+    }
+
+    internal fun restoreAt(checkpoint: FinanceCheckpoint, trustedHead: Decision?): FinanceState {
         val state = checkpoint.state
         if (trustedHead == null) {
             require(state == genesis()) { "checkpoint is not the genesis state" }
@@ -206,17 +220,17 @@ internal class FinanceLedger(val config: FinanceConfig) {
 
     private fun stateBytes(s: FinanceState, includeChain: Boolean) = Canon.bytes {
         str("calcify-finance-state-v1"); long(s.sequence); if (includeChain) str(s.chain); int(s.controls)
-        val positions = s.positions.entries.sortedWith(compareBy({ it.key.first.value }, { it.key.second.value }))
+        val positions = s.positions.entries.sortedWith(Canon.utf8Order({ it.key.first.value }, { it.key.second.value }))
         int(positions.size); positions.forEach { str(it.key.first.value); str(it.key.second.value); long(it.value) }
-        val executions = s.executions.entries.sortedWith(compareBy({ it.key.runId }, { it.key.venueSessionId }, { it.key.instrumentId }, { it.key.executionId }))
+        val executions = s.executions.entries.sortedWith(Canon.utf8Order({ it.key.runId }, { it.key.venueSessionId }, { it.key.instrumentId }, { it.key.executionId }))
         int(executions.size)
         executions.forEach {
             execution(it.key); str(it.value.buyer.value); str(it.value.seller.value); long(it.value.quantity); long(it.value.priceNanos)
             val o = s.obligations[it.key] ?: throw IllegalArgumentException("execution without obligation"); str(o.status.name); long(o.cashResidual); long(o.shareResidual)
         }
-        val attempts = s.attempts.entries.sortedWith(compareBy({ it.key.first.runId }, { it.key.first.venueSessionId }, { it.key.first.instrumentId }, { it.key.first.executionId }, { it.key.second }))
+        val attempts = s.attempts.entries.sortedWith(Canon.utf8Order({ it.key.first.runId }, { it.key.first.venueSessionId }, { it.key.first.instrumentId }, { it.key.first.executionId }, { it.key.second }))
         int(attempts.size); attempts.forEach { execution(it.key.first); int(it.key.second); str(it.value.name) }
-        val actions = s.actions.entries.sortedWith(compareBy({ it.key.namespace }, { it.key.domain }, { it.key.actionId }))
+        val actions = s.actions.entries.sortedWith(Canon.utf8Order({ it.key.namespace }, { it.key.domain }, { it.key.actionId }))
         int(actions.size); actions.forEach { str(it.key.namespace); str(it.key.domain); str(it.key.actionId); str(it.value.digest); str(it.value.disposition.name) }
     }
 
