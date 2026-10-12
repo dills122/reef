@@ -1,257 +1,402 @@
 # Calcify finance: scalable state commitment and O(touched) transitions (design)
 
-Status: **DRAFT revision 1, not reviewed.** No code exists for this design beyond the cost spike in `IncrementalCommitmentSpikeTest`.
-Scope: the successor to the O3a ledger for a *capacity* profile. The finite P3 path (O3a, binding v2, its goldens and digests) is frozen
-and is not changed by anything here. Owner: Dylan. Written 2026-10-12.
+Status: **DRAFT revision 2, not accepted.** Revision 1 went through a three-lens independent design review (cryptography, ledger
+semantics and verification, performance and operations): all three returned *Not ready* (section 14). This revision answers every P1 and
+P2, replaces the commitment structure the cryptography review broke, and corrects a cost model that a research spike showed was wrong by two
+orders of magnitude. It needs a second review round before anything is built.
+Scope: the successor to the O3a ledger for a *capacity* profile. The finite P3 path (O3a, binding v2, its goldens and digests) is frozen and
+is not changed by anything here. Owner: Dylan. Written 2026-10-12.
 
-## 0. What this document decides, and what it asks the owner to decide
+## 0. Summary, and the recommendation
 
-Decides (pending review): a definition of the state commitment as a **pure function of the state**; a recommended instantiation; the
-rules for an **O(touched)** transition engine and its incremental invariants; versioning and compatibility with finite P3; the
-verification plan that makes the incremental engine provably equal to a simple reference.
+- The O3a ledger is O(n) per decision in at least **seven** places, not four, and the dominant one is not the digest. Measured on synthetic
+  states (section 1): one whole-state digest costs **2.6 ms at 1,000 entities, 27 ms at 10,000 and 277 ms at 100,000**; the part of
+  `checkInvariants` that is not bounded by the pins costs **2.0 ms, 177 ms and 16.4 s** at the same sizes (it is quadratic).
+- Revision 1's cost figures (17.7 us at 700 entities) came from hashing a zero-filled byte array; they were a floor, not a measurement,
+  and must not be cited.
+- The fix is therefore not "an incremental digest". It is a successor engine whose transition, invariants, commitment, restore and audit
+  are all O(touched) (or linear with a small constant for restore), specified so that an independent reference can prove it correct.
+- The commitment instantiation changes from flat hash buckets (broken by chosen identifiers: 165 us per touch at 2,000 colliding ids and
+  linear in the bucket) to a **path-compressed binary trie over the 256-bit hash of the entity key**, with a multiset accumulator as the
+  documented alternative. At the measured sizes both cost 27 to 46 us for a 7-entity decision, flat in n.
+- **Recommendation.** Accept sections 3 and 4 as the commitment specification once a second review round passes, because they are neutral to
+  the open reservation/credit decision (P-5). **Do not start the engine work (sections 5, 6; stages S3 and S4) until the owner has made
+  Decision 0 in section 11**: whether a capacity profile is wanted, by when, with what lifetime budget and what end-to-end target. Finite P3
+  does not need any of this.
 
-Asks the owner (section 11): the capacity profile's size caps, the acceptance thresholds, and whether this successor ledger is the one
-the product will adopt, which depends on the open reservation/credit decision (P-5).
+## 1. The cost model, measured
 
-## 1. Problem, with the evidence we have and the evidence we do not
+### 1.1 What was measured, and how
 
-The O3a `decide` is correct and reviewed, and it was built as a *booking kernel for a bounded proof run*. For a state of `n` entities one
-decision costs O(n) in four independent places:
+`StateCommitmentCostSpikeTest` (research, excluded from the default run, enabled with `-PresearchTests`) builds synthetic `FinanceState`
+values of 10^3, 10^4 and 10^5 entities that bypass the pins in `FinanceConfig` and times the real internal functions: `stateDigest`,
+`checkpoint`, `FinanceStore.entityWrites` and the map copies the `Draft` makes, plus a transcription of the unbounded loops of
+`checkInvariants`. One JVM, warmed, single thread, in memory, on a development laptop. Numbers are indicative, not capacity claims.
 
-1. **State digest.** `stateDigest(unchained)` re-encodes and hashes every entity (sorting included).
-2. **Map copies.** `Draft` copies the positions, executions, obligations and attempts maps, and `state.actions + (key to ...)` copies the
-   action map, for every decision, including decisions that touch two entities.
-3. **Invariant check.** `checkInvariants(next)` walks every entity, folds per-asset position sums with `BigInteger`, counts dispositions
-   across all actions, and so on.
-4. **Entity diff for persistence.** `FinanceStore.entityWrites` compares whole maps to find the changed entities.
+| Entities | `stateDigest` | `checkpoint` encode | map copies | `entityWrites` diff | `checkInvariants` unbounded loops |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 2.6 ms | 2.5 ms | 48 us | 95 us | 2.0 ms |
+| 10,000 | 27 ms | 27 ms | 274 us | 0.70 ms | 177 ms |
+| 100,000 | 277 ms | 291 ms | 4.4 ms | 6.5 ms | 16.4 s |
 
-Measured: the whole-state digest alone is 17.7 us at 700 entities, 232 us at 10,000 and 2.3 ms at 100,000 (spike, lower bound because the
-real encoder also sorts). **Not measured, and now known to be necessary:** terms 2 to 4. They cannot be measured at scale on the current
-code because `FinanceConfig` pins the profile (`maxCaptures <= 128`, `maxObligations <= 256`, at most 16 accounts) and `checkInvariants`
-enforces the pins, so a state beyond ~700 entities cannot be constructed. This matters: **an incremental digest alone would not raise
-the ceiling.** The earlier research note (S2 close-out, section 2) called the incremental commitment "the prerequisite for any capacity
-claim"; that was incomplete. The prerequisite is an O(touched) *transition*, of which the commitment is one part.
+Reading: the digest is linear but its constant is large (the canonical sort re-encodes both strings as strict UTF-8 on every comparison, then the whole
+state is hashed); the invariant check is **quadratic** (`attempts.count` inside the loop over obligations); map copies and the persistence diff are
+cheap by comparison. At the finite P3 ceiling (about 620 entities) the digest is about 1.5 ms, which is harmless there.
 
-At the finite P3 profile none of this is a defect: n is bounded by construction. The design below therefore does not touch finite P3.
+### 1.2 Every O(n) or O(history) term on the path, not only the four in revision 1
+
+| # | Term | Where | Measured |
+| --- | --- | --- | --- |
+| 1 | Whole-state digest per decision | `FinanceLedger.stateDigest` | yes |
+| 2 | Map copies, including for **refused and no-op inputs** (the `Draft` is built before `evaluate`) | `Draft`, `apply`, `actions +` | yes |
+| 3 | Full invariant check per decision, containing an O(obligations x attempts) loop | `checkInvariants` | yes |
+| 4 | Whole-map diff to find changed entities | `FinanceStore.entityWrites` | yes |
+| 5 | Restore: decode and chain-verify the **whole decision log from offset 0**, re-read all history entries, three full encodes, a quadratic check | `FinanceRestoreCut`, `FinanceStore.verifyAndRestore`, `restoreAt` | encode part yes; Kafka read no |
+| 6 | History cap of 312 entries, enforced in the processor and the store, and the O(history) `verifyHistory` | `FinanceStore.MAX_HISTORY_ENTRIES` | n/a (a hard ceiling) |
+| 7 | Read routes: unpaginated full reads per request (worst for the operator route) | `FinanceReadStore` | no |
+| 8 | Projector: about 5 to 8 SQL statements per decision under a `FOR UPDATE` checkpoint lock | `FinanceProjector` | **not measured** |
+| 9 | One Streams thread: any long in-thread work (a full audit, a restore) blocks all input and can exceed `max.poll.interval.ms` | topology | n/a |
+
+### 1.3 Consequences
+
+1. **Revision 1's claim that the earlier research note was merely "incomplete" understated the problem.** Even a perfect incremental digest
+   leaves terms 2 to 9. Revision 1 also *proposed to update an accumulator "by the entity diff `entityWrites` already computes"*, which is itself
+   a whole-map comparison; that would not have raised the ceiling at all.
+2. **`maxEntities` is a lifetime cap, not a capacity.** Every recorded decision adds an action entity that is never removed
+   (`entities >= sequence`). With 2^20 entities the ledger is exhausted after 2^20 decisions: about 17 minutes at 1,000 decisions/s and 21
+   seconds at 50,000/s. "Rate-based limits" (revision 1, section 11) are impossible without retiring entities. This is an owner decision
+   (section 11, Decision 1), not an implementation detail.
+3. **Whether the ledger, rather than Streams, Postgres or restore, is the bottleneck is unproven.** Term 8 was not measured; if the projector
+   or restore dominates, this whole effort is not what limits throughput. The cheapest experiment that would change the decision is to
+   measure terms 5, 7 and 8 end to end before funding the engine (section 10, S0 exit).
 
 ## 2. Requirements
 
-- **R1 Cost.** Time and allocation per decision are O(k log n) in the number `k` of entities the decision touches (k <= 6 for every
-  current input), independent of n apart from the log term.
-- **R2 Binding.** The commitment binds the *entire* state: any change to any entity, to the entity set, or to a scalar changes it, except
-  with probability at most 2^-128 for an adversary who chooses both states (collision resistance, not preimage).
-- **R3 Canonical.** The commitment is a deterministic function of the abstract state alone: independent of insertion order, history,
-  hash-map iteration order, JVM, or language. An independent encoder (Python, as for binding v2) must reproduce goldens.
-- **R4 Restorable.** The full structure is rebuilt from an entity scan in O(n log n) at most, and the rebuilt commitment is checked against
-  the head decision's `stateDigest` (this is the O3a `restoreAt` property, kept).
-- **R5 Compatible.** Finite P3 artifacts (ledger bytes, decision bytes, chains, goldens, registered digests) are byte-identical. A v2 chain
-  can never verify as v1 or the reverse (domain separation).
-- **R6 Verifiable.** The incremental engine is *specified by* a simple reference implementation, and equality with it is tested over
-  large randomized schedules, with mutation testing, before anything depends on it.
-- **R7 Not authenticity.** The commitment is unkeyed: whoever can write the decision log can recompute it. It must not preclude later
-  signing or anchoring the head (it is a fixed-size value that fits a signature or a transparency log), but providing that is a non-goal.
+- **R1 Cost, worst case.** Per decision, time and allocation are O(k * L) where `k` is the number of entities written (at most **7** for
+  every current input: a settle writes four positions, the execution's obligation, the attempt and the action; it also reads the
+  execution) and `L` is the number of hashes on a commitment update path. `L` has a hard bound of 256 and an expected value near
+  `log2(entities)`. The state of the art must not depend on the identifiers being well distributed.
+- **R2 Binding.** The commitment binds the whole state: any change to any entity, the entity set, or a scalar changes it, except with the work
+  of a SHA-256 collision (about 2^128) for an adversary who chooses both states.
+- **R3 Canonical.** The commitment is a deterministic function of the abstract state alone and has an independent encoder that reproduces
+  goldens byte for byte.
+- **R4 Restorable.** Rebuild from an entity scan in O(n log n) hashing; verify against the head decision's `stateDigest`. The decision-log
+  and history parts of restore are bounded separately (section 6.3); this document does not claim restore is O(n log n) overall.
+- **R5 Compatible.** Finite P3 artifacts are byte-identical and untouched (the stage gates in section 10 enforce this mechanically).
+- **R6 Verifiable.** The new engine is *specified by* simple references and proved equal by differential, metamorphic and mutation tests.
+- **R7 Not authenticity.** Unkeyed integrity only. What it does and does not prove is stated in section 3.5.
+- **R8 Cheap refusals.** Refused, no-op and prior-result inputs cost O(1) (no state copy), so junk input cannot amplify cost.
+- **R9 Abortable.** An uncommitted stage of several decisions can be discarded at no O(n) cost, leaving the live commitment and counters equal
+  to their pre-stage values (section 5.3).
 
-Non-goals: a capacity claim; reservation or credit semantics (section 11); the persistence engine; the keyed chain; inclusion proofs
-for readers (supported by the structure, not built).
+Non-goals: a capacity claim; reservation or credit semantics; the persistence engine; the keyed chain; reader-facing inclusion proofs.
 
 ## 3. The commitment as a pure function
 
-Let a *state* be the O3a abstract state: positions, executions with their obligations, attempts, actions, and the scalars `sequence` and
-`controls` (the decision chain head is **excluded**, exactly as `stateDigest` excludes it today, because the head is the decision's own
-checksum). Define the **entity set** `E(S)`, one canonical record per map entry:
+### 3.1 State, entities and encodings
 
-| Tag | Key (framed) | Value (framed) |
+Let a *state* be the O3a abstract state minus the chain head (the head is the decision's own checksum): positions, executions, obligations,
+attempts, actions, and the scalars `sequence` and `controls`. The entity set `E(S)` has one record per map entry, in **five** classes
+(revision 1 merged execution and obligation; they are separate here so that an orphan obligation is bound by the commitment, a settle writes
+smaller entities, and the store's two key families map one-to-one):
+
+| Tag | Key fields (each individually framed) | Value fields (each individually framed) |
 | --- | --- | --- |
-| `P` position | account, asset | amount |
-| `X` execution (with its obligation) | run, session, instrument, execution | buyer, seller, quantity, priceNanos, status, cashResidual, shareResidual |
-| `A` attempt | run, session, instrument, execution, attempt | disposition |
-| `K` action | namespace, domain, actionId | input digest, disposition |
+| `P` position | account, asset | amount (int64) |
+| `X` execution | run, session, instrument, execution | buyer, seller, quantity (int64), priceNanos (int64) |
+| `O` obligation | run, session, instrument, execution | status, cashResidual (int64), shareResidual (int64) |
+| `A` attempt | run, session, instrument, execution, attempt (int32) | disposition |
+| `K` action | namespace, domain, actionId | input digest (64 lowercase hex, as text), disposition |
 
-Framing is the O3a `Canon` framing (int32 length plus strict UTF-8 for text, big-endian integers). A zero-amount position that exists in
-the map is an entity like any other (the O3a state does keep such entries; a different canonicalization would be a different state
-definition and is rejected so that the reference stays a transcription of today's encoder). `entityBytes(e) = frame(tag) || frame(key) || frame(value)`.
+Encoding is the O3a `Canon` framing and nothing else: **text is `int32(length)` plus strict UTF-8; `int64` and `int32` are big-endian
+fixed width.** Every field is framed on its own (there is no "wrap the whole key in one frame"), each tag has a fixed field count, and
+therefore the encoding is injective. A zero-amount position that exists in the map is an entity like any other (the O3a state keeps such
+entries and the store writes them back; a different canonicalization would be a different state definition).
+`keyBytes(e)` is the concatenation of the framed key fields; `valueBytes(e)` of the framed value fields.
 
-The commitment is
+### 3.2 The commitment
 
 ```
-C(S) = SHA-256( frame("calcify-finance-state-v2") || int64(sequence) || int32(controls) || T(E(S)) )
+LABEL = "calcify-finance-state-v2-patricia"                       (instantiation label; the accumulator alternative has its own)
+K(e)  = SHA-256( frame("calcify-finance-key-v2") || frame(tag) || keyBytes(e) )        256-bit trie key, bit 0 = most significant
+L(e)  = SHA-256( 0x00 || K(e) || SHA-256(valueBytes(e)) )                              leaf digest
+T     = digest of the trie over { (K(e), L(e)) }, defined in section 4.1
+C(S)  = SHA-256( frame(LABEL) || int64(sequence) || int32(controls) || T )             T is the 32 raw bytes (the empty set has T = SHA-256(0x03))
 ```
 
-where `T` is the structure-specific digest of the entity set defined in section 4. The decision's `stateDigest` field carries `C(S)`
-(64 lowercase hex, unchanged field and type), so **no protobuf change** is needed.
+`C(S)` is the decision's `stateDigest` (64 lowercase hex, unchanged field and type), so **no protobuf change** is needed. Because the trie
+is keyed by a hash of the entity key, **nothing is sorted**: the structure is a pure function of the key set, which removes the strict-UTF-8
+re-encoding comparator (a large part of the measured digest cost) from the hot path.
 
-## 4. Instantiation (recommended: bucketed Merkle tree; alternative: multiset accumulator)
+### 3.3 Instantiation label and parameters
 
-### 4.1 Recommended: fixed-depth sparse binary Merkle tree over hash buckets
+The label names the instantiation. The accumulator alternative uses `calcify-finance-state-v2-adhash`; a different label can never
+produce the same outer hash, and switching instantiation is a new version. The trie needs no depth parameter. (Revision 1's `D` is gone.)
 
-- Parameter `D` (tree depth, a profile constant committed in the config digest). There are `2^D` buckets.
-- `bucket(e) = first D bits of SHA-256(frame("bucket-key") || frame(tag) || frame(key))` (big-endian bit order).
-- `leafDigest(e) = SHA-256(0x00 || entityBytes(e))`. A bucket's digest is
-  `SHA-256(0x01 || int32(m) || leafDigest(e_1) || ... || leafDigest(e_m))` with the bucket's entities sorted by unsigned bytes of
-  `entityBytes`; an empty bucket's digest is the constant `Z_0 = SHA-256(0x01 || int32(0))`.
-- An internal node is `SHA-256(0x02 || left || right)`; the digest of an empty subtree at height `h` is `Z_h = SHA-256(0x02 || Z_{h-1} || Z_{h-1})`.
-  `T(E)` is the root. (The 0x00/0x01/0x02 prefixes are the standard leaf/node domain separation that blocks second-preimage splicing.)
-- Security: finding two entity sets with the same root requires a SHA-256 collision (2^128 work), with no assumption about the number of
-  entities. This is the property the review should hold the design to.
-- Cost per touched entity: one bucket re-digest (m is O(1) at load factor <= 1) plus `D` node hashes of 65 bytes. Touched entities in the
-  same subtree share upper nodes, so recompute level by level over the union of dirty nodes (measured in the spike: 19 us per 5-entity
-  decision at 700 entities and 25 us at 100,000, D = 16).
-- `D` choice: `D = ceil(log2(maxEntities))` so the expected bucket load is <= 1; a profile with `maxEntities` = 2^20 uses `D = 20`. The
-  finite-sized test profile uses `D = 10`.
+### 3.4 Domain separation
+
+Leaf `0x00`, branch `0x02`, empty `0x03`; outer frame starts with a length prefix. The prefixes do not collide: a leaf input is
+`00 || 32 || 32`, a branch input `02 || u16 || 32 || 32`, the outer input starts with the four-byte length of the label. Per layer the
+encoding is injective (fixed-width fields), checked by review lens A.
+
+### 3.5 What `C(S)` does and does not prove
+
+It proves that a restored or presented state **is the state the head decision committed to** (R2 and the O3a `restoreAt` property). It
+does **not** prove that the head was reached by valid transitions: `verifyChain` verifies links and checksums, not transitions, and the chain
+is unkeyed, so whoever can write FINANCE_DECISIONS can forge a self-consistent chain with any state and recompute `C(S)`. Transition validity
+needs replay of the inputs (O(history)) or a signed or externally anchored head, which is out of scope and not precluded. The field keeps the
+name `stateDigest`; documentation and projector comments must call it an *unkeyed integrity digest*, and no reader-facing proof may be presented
+as authentic until the head is signed or anchored.
+
+## 4. Instantiation
+
+### 4.1 Recommended: path-compressed binary trie over K(e)
+
+- **Shape.** A binary trie where each entity is a leaf at the shortest unique prefix of `K(e)`; a branch stores the bit index at which its
+  two subtrees first differ. The shape is a pure function of the key set (R3).
+- **Digests.** `leaf = L(e)` as above. `branch = SHA-256( 0x02 || u16(bitIndex) || left || right )`, so a branch commits to *where* it splits
+  (this is what prevents splicing). `T` is the root's digest, or `SHA-256(0x03)` if the set is empty.
+- **Security.** Two different entity sets with the same `T` require a SHA-256 collision, with no assumption on the number of entities.
+- **Cost, worst case.** An update recomputes one path: at most 256 branch hashes. An attacker who grinds identifiers whose key hashes share
+  `b` bits must do about `2^b` hashes to gain one extra level per branch point, so reaching depth `L` costs about `2^L`; the practical
+  worst case is the low tens of levels, hard-bounded by 256 (about 0.9 ms for a 7-entity decision). Revision 1's flat buckets had no such bound
+  (measured: 165 us per touch with 2,000 colliding identifiers, linear in the bucket).
+- **Measured** (7 entities written, exact structures, mean over random touches): 27 us at 1,000 entities, 34 us at 10,000, 46 us at
+  100,000, with mean depth 11.3, 14.6 and 18.0. Adversarial: 50 identifiers sharing at least 18 leading hash bits (14.6 million grinding
+  trials) raised the maximum depth to 8 and cost 3 us per touch, because compression makes depth depend on branching, not on shared prefix length. (That measurement shows the compression effect; the claim that depth `L` costs about `2^L` to force is an argument, not a measurement.)
+- **Memory.** About 2n nodes of an object plus 32 bytes each, on top of the entity table. To be measured at the S3 exit; the store-view
+  alternative (section 5.4) is the mitigation.
 
 ### 4.2 Alternative: multiset accumulator (AdHash style)
 
-`T(E) = sum over e of Expand_3072(entityBytes(e)) mod 2^3072`, where `Expand` is SHA-256 in counter mode. Update: `acc += Expand(new) - Expand(old)`.
-Smaller code, same measured cost (13 to 16 us), no tree to maintain. Security is **conditional**: the generalized-birthday attack on modular
-subset sums costs about `2^(n/(1+lg k))` for `k` differing entities, so with `n = 3072` the 128-bit bound holds only if `k <= 2^23`, i.e. it
-needs an enforced cap on the number of entities by which two reachable states can differ (here, `maxEntities`). The proof therefore rests on
-a size cap plus the random-oracle behavior of `Expand`. No inclusion proofs. MuHash (multiplicative) is rejected: updates need modular
-inverses, which cost orders of magnitude more per update.
+`T = sum over e of Expand(e) mod 2^3072`, with `Expand(e)_i = SHA-256( frame("calcify-finance-adhash-v2") || int32(i) || valueBytes'(e) )` for
+`i = 0..11` concatenated, where `valueBytes'` is `frame(tag) || keyBytes || valueBytes`; the outer hash additionally binds the entity count.
+Update: `acc += Expand(new) - Expand(old)`. Measured 29 us for 7 entities at 1,000 entities and 27 us at 100,000: the same as the trie, constant
+in n and independent of identifier distribution (no worst case to attack), with 384 bytes of state and no structure to maintain.
+Security is **conditional**: the generalized-birthday attack on modular subset sums costs about `2^(n/(1+lg k))` where `k` is the number of
+entities by which two reachable states differ, counting a changed entity as a removal plus an addition, so `k <= 2 * maxEntities`. With `n = 3072`
+the 128-bit bound holds for `k <= 2^23`, i.e. for `maxEntities <= 2^22`, and it relies on `Expand` behaving like a random oracle (the standard
+heuristic; SHA-256 is Merkle-Damgard, so this is not a proof). No inclusion proofs. MuHash (multiplicative) is rejected: updates need modular
+inverses, orders of magnitude slower.
 
-### 4.3 Why the tree is recommended despite more code
+### 4.3 Why the trie is recommended
 
-Its security argument is one line (SHA-256 collision resistance), it needs no assumed cap, it composes with later per-entity inclusion
-proofs against a signed head (R7), and the cost is within a small constant of the accumulator. This **reverses the AdHash recommendation in the
-S2 close-out research note**, after working out the Wagner bound above and finding that it creates a hard dependency on a size cap. The
-choice remains a review question (section 12, Q1).
+Not because the accumulator needs a cap and the trie does not: both need an enforced `maxEntities` (the profile already enforces caps, and
+section 1.3 shows a lifetime cap is needed regardless). The reasons are a proof that rests on SHA-256 collision resistance alone, no
+random-oracle step, and the ability to produce inclusion proofs against a future signed head. The accumulator is smaller and has no
+adversarial path; if the second review round prefers it, switching changes section 4 and the labels only. This remains open question Q1.
 
-### 4.4 Rejected alternatives
+### 4.4 Rejected
 
-- **Whole-state digest every K decisions.** Amortizes the O(n) hash but weakens "every decision commits its state"; restore would need to
-  replay to the next checkpoint; does not address terms 2 to 4. Kept only as a fallback if the tree is rejected.
-- **History-only commitment (hash chain of deltas).** Cheap, but it commits the inputs and not the state; the O3a review (P1-1) required that
-  a restored state be provably *the* state of the head, which needs a state commitment.
-- **Merkle-Patricia or other keyed tries.** More general than needed; variable shape makes R3 harder to specify and test.
+- **Flat 2^D buckets (revision 1).** Cost O(m) per touch in the bucket size; the adversarial measurement above; a public salt does not help
+  (the attacker computes buckets after seeing it) and a hard bucket cap lets an attacker deny specific identifiers.
+- **Whole-state digest every K decisions.** Weakens "every decision commits its state", does not touch terms 2 to 9.
+- **History-only commitment.** Commits inputs, not state; the O3a review (P1-1) requires state commitment.
+- **Merkle-Patricia with variable node encodings.** More general than needed.
 
-## 5. O(touched) transition engine
+## 5. The O(touched) transition engine
 
-### 5.1 Interfaces
+### 5.1 It is a new engine; frozen files do not change
+
+The engine is a **new class in new files**; `FinanceLedger.kt`, `FinanceModel.kt`, `FinanceStore.kt` and `FinanceWire.kt` keep an empty
+`git diff` against `master` at every stage (a mechanical stage gate, section 10), so the frozen O3a remains the oracle, the goldens and the
+mutation harness (which patches `FinanceLedger.kt` by exact source strings) keep working. Anything shared (for example moving `Canon`) must be
+proven byte-neutral by the existing goldens and is itself a separate PR. A `FinanceLedgerEngine` interface (genesis chain, `decide`, `verifyChain`,
+`verifyLink`, restore) is introduced so the processor, projector, store and restore cut stop depending on the concrete `FinanceLedger`; it is
+selected by the registered profile, not by `financeStateVersion` (which names the capture-to-input mapping and must not be reused).
+
+### 5.2 The decision sequence
+
+Revision 1's pure `decide` returning a `Decision` was circular: the `Decision` carries `C(S')` and the checksum covers it, and `C(S')` needs the
+post-delta trie. The contract is:
 
 ```
-interface StateView {            // read-only, point lookups only
-  position(account, asset): Long?          execution(key): Captured?          obligation(key): Obligation?
-  attempt(key, n): Disposition?            action(key): ActionRecord?         scalars: sequence, controls
-  aggregates: per-asset position sum, counts (executions, obligations, attempts, controls, actions by class)
-}
-data class Delta(puts: List<EntityPut>, scalarDelta, aggregateDelta)   // entities never disappear (kept from O3a)
-decide(view: StateView, input): Outcome(delta, disposition, decision?)
-apply(state, delta) -> state'    // updates entity storage, the commitment tree and the aggregates in O(k log n)
+evaluate(view, input)  -> Delta (entity puts + scalar delta + aggregate delta) | refusal            reads only named entities; O(1) refusals
+root' = trie.preview(delta)                                                                          path copy / overlay; nothing visible
+Decision(sequence', action, inputDigest, disposition, legs, priorChain, C(S'), checksum)              pure function of the above
+commit(delta, root', aggregates')                                                                      the only mutation; atomic
 ```
 
-`decide` reads at most the entities the input names plus those it derives (the two accounts' positions, the execution and its obligation,
-the action key, the attempt key). It must not enumerate. The existing `Draft`-and-copy code is replaced by building a `Delta`.
+### 5.3 Staging and abort are semantic requirements
 
-### 5.2 Incremental invariants
+The processor stages several decisions per Kafka record (a capture envelope maps to several members; later members read earlier members' staged
+state) and moves its cached state only after the store write succeeds. Therefore the engine must provide a **record-granularity overlay or
+undo journal**: reads see staged writes, `commit` of the record applies them together, and discarding the overlay is O(staged) and leaves the
+trie root, counters and entity tables exactly as before. This is required for the processor's all-or-nothing property to survive, and is
+tested by failure injection at every point of a multi-decision record (section 9).
 
-Every O3a packet invariant is either *local* (checked on the touched entities only) or *aggregate* (maintained as a running counter in the
-state and checked from the counters). `checkInvariants` over the whole state stays as the **reference check** used at restore, in
-differential tests, and at a configurable audit interval; it is not on the per-decision path.
+### 5.4 Storage
 
-| O3a invariant | Incremental form |
-| --- | --- |
-| No negative non-opening position; opening account never positive | local: touched positions |
-| Position only in the two assets; known accounts | local |
-| Per-asset positions sum to zero (balance) | aggregate: per-asset running sum, updated by the legs (legs sum to zero by construction; a nonzero leg-sum is a bug) |
-| Every obligation has an execution; execution has an obligation | local on capture (both created together) |
-| Pending obligation residuals equal execution economics | local on capture and settle |
-| Settled obligation has zero residuals and exactly one settled attempt | local on settle |
-| `sequence == actions.size`; `controls == count(FUNDED actions)`; `executions.size == count(CAPTURED actions)`; `attempts.size == count(settle-class actions)` | aggregate counters per disposition class, updated per recorded decision |
-| Budget limits (captures, obligations, attempts, controls) | counters |
-| Only recorded dispositions in actions | local |
+Whether `StateView` is in-memory or a read-through over the persistent store is the real architectural fork and is decided **before S3**, not at
+S4: in-memory is simpler and faster but costs 300 to 600 bytes of JVM heap per entity (boxed keys, three strings per action key, the cached
+`valueBytes`, leaf digests, trie nodes), to be measured; store-backed bounds memory but makes `decide` do point reads through the staged overlay.
+Both implement the same `StateView`, and the engine is tested against a trivial map-backed view and the indexed view to separate storage bugs
+from logic bugs.
 
-Equivalence of "local plus counters" with the full check is itself a test obligation (section 9): after every step of every randomized
-schedule the counters equal a full recount and the full check passes.
+### 5.5 Incremental invariants
 
-### 5.3 Concurrency and purity
+Every O3a invariant is either *local* (checked on touched entities), an *aggregate counter* (maintained per recorded decision), or a
+*transition rule* (enforced where the transition is made). The full check stays as the **reference check**, rewritten as a linear single pass
+(group attempts by execution once), and proven to give the same verdict as `checkInvariants` on the shared profile. It runs at restore, in
+differential tests, and as an audit; it is not on the per-decision path. Complete table, against `FinanceLedger.checkInvariants` and packet C4:
 
-The engine remains single-writer and deterministic. `decide` does not mutate; `apply` is the only mutation and is atomic per decision.
-State is a value for restore and tests purposes: either persistent (path-copying) structures or an explicit snapshot/undo journal. This is an
-implementation choice for Stage 3, not a spec choice, as long as the observable behavior equals the reference.
+| Source | Rule | Form |
+| --- | --- | --- |
+| L127-132 | no negative non-opening position; opening never positive; position only in the two assets; known accounts | local on touched positions |
+| L133-136 | per-asset positions sum to zero | aggregate: running sum per asset, **128-bit or BigInteger width** (the opening position can be `Long.MIN_VALUE`) |
+| L137 | every obligation has an execution (and the converse) | local: created together on capture |
+| L138-143 | pending residuals equal execution economics | local on capture and settle |
+| L144 | settled obligation has zero residuals | local on settle |
+| L145 | `sequence == actions.size` | counter |
+| L146-147 | executions, obligations within caps | counters |
+| L148 | `controls <= maxControls` and `controls == count(FUNDED actions)` | counters |
+| L149 | record budget `sequence <= caps sum` | counter (replaced by the lifetime budget in the capacity profile) |
+| L150-153 | only recorded dispositions in actions; captures == executions; settle-class actions == attempts | local plus per-class counters |
+| L154-157 | attempt well-formed: number >= 1, execution exists, disposition in the settle class | local on settle |
+| L158-161 | a settled obligation has exactly one SETTLED attempt, **a pending one has none** | local on settle |
+| packet C4 | residuals never increase; settled is terminal; an execution key is captured at most once; a key never rebinds to different content | transition rules in `evaluate` (already how O3a decides), each with a named test |
 
-## 6. Processor, store and restore
+**Coverage weakens between audits, deliberately.** O3a re-checks the whole state after every decision as defence in depth against bugs in its own
+`apply`. The aggregates here are updated by the same code they check, and a running balance sum cannot detect corruption of the position table.
+The detection that remains is the restore-time and audit-time full reference check. The audit runs **deterministically every N decisions and
+always at restore and clean shutdown**, over an immutable snapshot **off the processing thread** so a long audit cannot exceed
+`max.poll.interval.ms`; it can only halt further decisions, and it must not halt in the middle of a record (it runs between records, before or
+after commit as decided in Q5).
 
-- The finance store already keeps one key per entity. A v2 store also keeps the aggregate counters and `sequence/controls` in `meta`.
-  The tree's internal nodes are **not persisted**: they are rebuilt on restore (O(n log n) once) and kept in memory; losing them is
-  harmless and unverifiable-by-assumption data is never read back.
-- Restore (R4): scan entities, rebuild buckets and the tree, compute `C(S)`, require it equals the head decision's `stateDigest`, recount
-  aggregates and require equality with `meta`. A mismatch refuses activation with the existing `FINANCE_STORE_INVALID` code.
-- `entityWrites` is replaced by the `Delta` the engine already produced (no diff).
-- History entries, the entry chain, the decision record, the projector and the read routes are **unchanged**: the projector verifies the
-  hash link and the input digest and never reads `stateDigest`.
+## 6. Processor, store, restore, projection
+
+### 6.1 Store
+
+A v2 store has a new `META_VERSION` and parser (aggregate counters and `sequence/controls` live in `meta`); a v1 binary opening a v2 store (or the
+reverse) fails with a distinct version refusal, not the generic `FINANCE_STORE_INVALID`. The trie is not persisted; it is rebuilt on restore.
+`entityWrites` is replaced by the `Delta` the engine already produced. The store must not drop zero-amount positions (a store test pins this).
+
+### 6.2 Restore of state
+
+Scan entities, rebuild the trie and aggregates, require `C(S)` equals the head decision's `stateDigest` and the recounted aggregates equal
+`meta`. The extra `checkpoint` checksum (a second full encode in `restoreAt`) is **dropped**: the head commitment already covers it; its
+mutants are replaced by commitment-mismatch mutants.
+
+### 6.3 What bounds a capacity profile outside the state (previously hidden)
+
+- **History entries.** `MAX_HISTORY_ENTRIES = 312`, the 296 record bound and the O(history) `verifyHistory` are properties of the finite P3 run. A
+  capacity profile needs either a lifetime budget with the history sized to it, or a checkpointed history with an anchor; it cannot reuse
+  the finite cap. Restore cost is therefore stated as **O(n log n + H)** where H is history plus decision-log length.
+- **Decision-log read.** `FinanceRestoreCut` decodes and chain-verifies the entire FINANCE_DECISIONS log from offset 0 and needs infinite
+  retention. A capacity profile needs an owner-set restore-time objective (RTO) and a checkpointed chain anchor, or restore is O(N) forever.
+- **Read routes.** Unpaginated full-table reads are O(n) per request; a capacity profile paginates or bounds them.
+- **Projector.** Several SQL statements per decision under one checkpoint lock; end-to-end throughput is capped by it unless it is batched or
+  the capacity target is defined for the ledger path only. This is an owner decision (11.2).
+
+The projector (hash link, input digest, continuity), the history entry chain and the read routes are otherwise unchanged by *this* design.
 
 ## 7. Versioning and compatibility
 
-- New domain strings: `calcify-finance-state-v2` (commitment), `calcify-finance-config-v2` (profile: caps, `D`), `calcify-finance-genesis-v2`.
-  Because the genesis chain is derived from the config digest, a v2 decision log can never verify under a v1 ledger and the reverse (R5).
-- The proto and the wire are unchanged; `FinanceStateVersion` selects the ledger. Finite P3's registered digests do not change.
-- The capacity profile is a separate binding schema/version when it is registered; this document does not define that binding.
+Domain strings `calcify-finance-state-v2-patricia`, `calcify-finance-config-v2` (profile: caps, lifetime budget), `calcify-finance-genesis-v2`.
+The decision domain `calcify-finance-decision-v1` is kept; v1 and v2 chains still never cross-verify, **because the genesis chain is derived from
+the config digest and `verifyChain` fails on the first `priorChain`** (`verifyLink` alone takes the prior chain as a parameter and is not
+genesis-bound, so every consumer must start from genesis). The wire and proto are unchanged. The capacity profile is registered as its own
+binding version; this document does not define that binding.
 
-## 8. Failure and operational behavior
+## 8. Failure and operations
 
-- A commitment mismatch at restore is a refusal, never a repair. An aggregate mismatch (running counter versus recount) at an audit interval
-  halts the processor fail-closed (same family as the history-budget halt).
-- Memory: entities are held in the in-memory structure for lookups; for 2^20 entities of about 150 bytes this is a few hundred MB and must be
-  measured, with the store-view alternative (point lookups against the persistent store, section 10 Stage 4) as the mitigation.
+- A commitment mismatch at restore is a refusal, never a repair. An aggregate-versus-recount mismatch at audit halts the processor between records.
+- **Halt runbook (required before S4):** stop the app; export the decision log, history and entities read-only with the evidence reader;
+  verify with the reference implementation to locate the divergent entity; archive; open a new run with a new binding and a corrected engine.
+  Recovery is never in place. A halt stops further decisions only; decisions already forwarded were computed from the pre-halt counters.
+- **Memory:** an estimate of 300 to 600 bytes per entity in-memory plus trie nodes is **to be measured at the S3 exit**; the store-view
+  alternative bounds it.
+- **Single thread:** no in-thread work longer than the poll interval; audits and restores are off-thread or between polls.
 
-## 9. Verification plan (this is the evidence the owner should require)
+## 9. Verification plan
 
-1. **Reference.** `StateCommitment.reference(state)`: a direct transcription of sections 3 and 4.1, no incrementality, written for clarity.
-2. **Independent encoder.** A Python implementation of the same function with goldens for a fixed set of small states (empty, one of each
-   entity class, a bucket collision, both zero and nonzero positions, UTF-8 and boundary-length identifiers). Kotlin must reproduce them.
-3. **Differential, commitment.** The incremental tree equals the reference after *every* step of at least 10,000 randomized schedules,
-   including permuted application orders reaching the same state.
-4. **Differential, engine.** On the O3a profile (budgets inside the pins), the new `decide/apply` produces the same dispositions, legs,
-   sequences, entity maps and aggregates as the frozen O3a ledger for the same inputs; the *commitment* differs by design and is compared
-   against the reference. At least the 5,000-schedule oracle used for O3a is reused.
-5. **Invariant equivalence.** After each step, running aggregates equal a full recount and `checkInvariants` passes.
-6. **Mutation.** A mutant set for the tree (wrong bucket bits, missing domain prefix, unsorted bucket, stale sibling, dropped dirty node,
-   off-by-one depth, scalars omitted) and for the incremental invariants, with a kill rate requirement matching O3a (all non-equivalent killed).
-7. **Restore.** Property test: rebuild from entities equals the incrementally maintained root at every point; tampering with any entity,
-   the set, or a scalar is refused.
-8. **Scale evidence.** Cost per decision at 10^3, 10^4, 10^5, 10^6 entities on the real processor path including the store; reported, with
-   thresholds from the owner (section 11), not claimed in advance.
+1. **Reference.** `StateCommitment.reference(state)`: a direct transcription of section 3 and 4.1 with a naive trie, no incrementality.
+2. **Independent encoder and goldens.** A Python implementation with goldens for small states (empty; one entity of each of the five classes;
+   zero and nonzero positions; UTF-8 and boundary-length identifiers) **and a large generated golden of about 10^3 entities**. Kotlin reproduces them.
+3. **Crowding tests.** The differential runs with an injectable key-hash that forces long shared prefixes (so deep and unbalanced tries occur at
+   test sizes), plus the real hash at production size.
+4. **Differential, commitment.** The incremental trie equals the reference after every step of at least 10,000 randomized schedules, including
+   permuted application orders reaching the same state, and at random restore cuts (restore equals continuing).
+5. **Differential, engine, two oracles.** On the pinned profile the new engine produces the same dispositions, legs, sequences, entity tables
+   and aggregates as (a) the frozen O3a ledger and (b) the independent naive oracle `FinanceOracleDifferentialTest` (string keys, BigInteger,
+   plan-then-apply), **generalized to parameterized caps and many accounts and extended to compare zero-amount positions** (it currently drops
+   them). The commitment itself is compared against the reference. Beyond the pins (lifted caps, a lifetime budget) there is no existing oracle:
+   it is specified in the profile before S3 and is a metamorphic suite (conservation, idempotent replay, restore at random cuts).
+6. **Invariant equivalence.** After each step the counters equal a full recount, the linear reference check passes, and its verdict equals
+   `checkInvariants` on the shared profile.
+7. **Abort and failure injection.** An exception at every point of a multi-decision record (including the store write) leaves the live root,
+   counters and tables equal to their pre-record values.
+8. **Adversarial cost.** Per-touch cost with ground identifiers stays within the stated worst case; refusal paths are O(1) regardless of n.
+9. **R5 gate (every stage).** `git diff master -- FinanceLedger.kt FinanceModel.kt FinanceStore.kt FinanceWire.kt` is empty; all existing finite P3
+   goldens, the Go and Python binding references and the mutation baseline pass unchanged.
+10. **Mutation.** Mutants for the trie (wrong bit order, branch hash missing the bit index, missing domain prefix, stale sibling, dropped dirty
+   node, scalars or the label omitted, key-hash omitting the tag), for `entityBytes` (a tag, key or value field dropped; zero position dropped), for the
+   incremental invariants and aggregates (counter drift, restore skipping the recount), and an orphan obligation. All non-equivalent mutants
+   killed, with an equivalent-mutant adjudication procedure written down first, as for O3a.
+11. **Scale evidence with pass/fail.** Cost per decision at 10^3 to 10^6 entities on the real processor path including the store, against
+    thresholds the owner sets **before S2** (11.2); no claim without them.
 
-## 10. Staging
+## 10. Staging, with gates
 
 | Stage | Output | Gate |
 | --- | --- | --- |
-| S0 | this document reviewed (rigorous, multi-lens) and accepted | review verdicts Ready |
-| S1 | reference commitment, Python goldens, unit tests | goldens match, mutation on the reference encoder |
-| S2 | incremental tree, differential vs reference | 10,000 schedules, mutants killed |
-| S3 | O(touched) engine (`StateView`/`Delta`) with differential vs O3a | oracle equality, invariant equivalence |
-| S4 | processor/store integration, restore rebuild, scale measurement | restore property tests; numbers recorded |
+| S0 | this document, second review round accepted; **plus the end-to-end cost experiment**: terms 5, 7 and 8 measured (restore with a persistent store, a projector transaction, the read routes) so we know whether the ledger is the bottleneck at all | reviewers Ready; experiment recorded |
+| S1 | `StateCommitment.reference`, Python encoder, goldens (small and large), tests, mutants on the reference | goldens match; R5 gate |
+| S2 | incremental trie, differential vs reference, crowding and adversarial tests | 10,000 schedules; mutants killed; thresholds set |
+| S3a | `FinanceLedgerEngine` interface and `StateView`/`Delta` on the existing maps (semantically identical, still O(n)) | differential equals O3a; R5 gate |
+| S3b | aggregates, incremental invariants, linear reference check, overlay/journal | invariant equivalence; abort tests |
+| S3c | O(touched) structures; **S3 exit measurement** at 10^4 and 10^5 entities in memory including restore rebuild | numbers recorded; shape confirmed before store work |
+| S4 | store integration, `META_VERSION`, restore, audit, scale evidence, runbook | restore property tests; thresholds met or the owner re-decides |
 
-Each stage is its own PR, reviewed as a declared unit.
+S1 and S2 are neutral to P-5 (the commitment is generic over tagged entities) and can proceed after S0 and Decision 0. **S3 and S4 wait for
+P-5**, because the invariant table and entity model change if reservation or credit is adopted. S3 does not depend on the commitment (its
+oracle compares everything except the commitment), so S3a to S3c may also run in parallel with S1 and S2 once P-5 is decided.
 
 ## 11. Decisions requested from the owner
 
-1. **Profile caps** for the capacity profile: `maxEntities` (drives `D`), maximum accounts, whether the O3a pins (128/256/160/8) are lifted
-   or replaced by rate-based limits.
-2. **Acceptance thresholds** for S4 (decisions/s at which entity count, and the hardware class). The earlier 50,000 decisions/s figure was a
-   placeholder for the finite fixture and was waived for P3.
-3. **Adoption.** The O3a economics are unreserved gross DvP. If the product adopts reservation/credit (P-5, open until calibration), the entity
-   model in section 3 changes, and this design should be revisited before S1. The commitment and transition-engine structure (sections 3 to 6)
-   are intended to carry over; the invariant table (5.2) would not.
+**Decision 0 (gates everything beyond S2).** Is a capacity profile wanted at all, by when, and does it depend on the reservation/credit decision
+(P-5, open until calibration)? If P-5 changes the economics, stop after S2 and revisit the entity model. If no capacity profile is needed
+soon, this document is complete as a design record and the work waits.
 
-## 12. Open questions for review
+1. **Lifetime budget or retirement.** Is the capacity ledger a bounded-lifetime ledger with a stated total decision budget per binding (simple,
+   consistent with "one run, one binding"), or does it need to retire actions and other entities (a much larger design: tombstone deltas, trie
+   deletes, restore of pruned history)? `D` is gone, but `maxEntities` and the history size follow from this.
+2. **Target and scope.** End-to-end decisions/s on named hardware, including or excluding the projector and read routes, and at what entity
+   count; the earlier 50,000/s figure was a placeholder for the finite fixture and was waived for P3.
+3. **Restore.** A restore-time objective and the retention of FINANCE_DECISIONS (infinite retention plus full read versus a checkpointed anchor).
+4. **Audit.** Cadence (every N decisions) and what the operator does on a halt (the runbook in section 8).
+5. **Memory and hardware envelope** for the in-memory versus store-backed `StateView`.
+6. **A stop condition:** the measured number or finding at which this effort is abandoned (for example, "if the end-to-end bottleneck is the
+   projector or restore, not the ledger").
 
-- **Q1.** Tree versus accumulator (4.1 versus 4.2): is a size-cap-conditional proof acceptable for a unkeyed integrity commitment, or should the
-  one-line SHA-256 argument win? Is the code and memory cost of the tree justified?
-- **Q2.** Is excluding the decision chain head and including `sequence`/`controls` as scalars the right split, and should the *aggregates*
-  (counts) also be in the commitment or are they derivable from the entities (they are, so they are excluded)?
-- **Q3.** Is "zero-amount positions are entities" the right canonicalization given that a persistence layer may drop zeros?
-- **Q4.** Is the bucket load assumption (`D = ceil(log2 maxEntities)`) adequate against adversarially chosen identifiers (an attacker who can
-  choose account or execution ids can concentrate entities in one bucket, making that bucket O(m))? Identifier length is capped at 128 bytes
-  and the input channel is operator/capture controlled, but this is a cost-attack surface to assess; salting the bucket hash with a
-  per-binding secret is not possible for an unkeyed commitment (everyone must be able to recompute it).
-- **Q5.** Should the audit interval for full invariant checks be part of the profile (deterministic) or operational (non-deterministic timing is
-  fine because it can only halt, never change state)?
-- **Q6.** Is the staging adequate, in particular building the O(touched) engine (S3) before the store integration (S4), and is differential
-  equality with the *frozen* O3a on the shared profile a sufficient semantic oracle for a ledger whose capacity profile has no other oracle?
-- **Q7.** Anything in section 1's claim ("an incremental digest alone would not raise the ceiling") that the reviewer can falsify.
+## 12. Open questions for the second review round
 
-## 13. Review ledger
+- **Q1.** Trie versus accumulator, now on equal measured cost (27 to 46 us for 7 entities at 10^5): is the SHA-256-only argument worth the trie's
+  code, memory and the 256-hash worst case, or does the accumulator's constant cost and absence of an adversarial path win, given an enforced cap of
+  `2 * maxEntities <= 2^23`?
+- **Q2.** Is `Expand` and the accumulator spec in 4.2 precise enough for an independent encoder?
+- **Q3.** Does the five-class split plus per-field framing in 3.1 match what an implementer in another language would produce, and is sorting by
+  nothing (trie keyed by hash) acceptable as the canonical order?
+- **Q4.** Is the S3a/b/c split small enough to review, and is running S3 only after P-5 the right ordering?
+- **Q5.** Should the audit run before or after the record's commit? (After commit means a bad decision may already be forwarded; before commit
+  puts O(n) work on the hot path unless the audit is incremental.)
+- **Q6.** Is differential equality with O3a plus the independent oracle plus the metamorphic suite sufficient for behavior beyond the pins, where no
+  oracle exists, or must the capacity profile's semantics be specified and reviewed first as a separate document?
+- **Q7.** Is the claim "the ledger may not be the bottleneck" (1.3, item 3) strong enough that S0 should block on the end-to-end experiment?
 
-| Date | Reviewer lens | Verdict | Disposition |
-| --- | --- | --- | --- |
-| (none yet) | | | |
+## 13. Rejected framing
+
+"Incremental digest is the prerequisite for any capacity claim" (S2 close-out research, section 2, and revision 1 of this document) is withdrawn.
+It is one of nine terms, and not the largest.
+
+## 14. Review ledger
+
+| Date | Round | Lens | Verdict | Findings (summary) | Disposition |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-12 | 1 of 3 | A: cryptography and security argument | Not ready | P1: flat buckets attackable by grinding (O(m) per touch); P2: AdHash reasoning imprecise (cap is 2 x maxEntities, tree also needs a cap, RO caveat, Expand unspecified); no "what C(S) proves"; labels and encodings underspecified; execution/obligation merge loses orphan obligations; k is 7 | Flat buckets replaced by the compressed trie (4.1), measured; 4.2 and 4.3 rewritten; 3.5 added; 3.1 and 3.2 specify labels, framing, widths, key hash; five classes; k = 7 |
+| 2026-10-12 | 2 of 3 | B: ledger semantics, compatibility, verification | Not ready | P1: `decide` circular with the `Decision`; "replaced" contradicts frozen O3a; staging/rollback; quadratic reference check; hidden history cap and O(history) restore; P2: incomplete invariant table, weakened coverage, no ledger interface, `checkpoint`, `META_VERSION`, shared-lineage oracle, untested crowded buckets | 5.1 (new engine, empty-diff gate), 5.2 (sequence), 5.3, 5.5 (linear reference, complete table, weakened coverage stated), 6.1 to 6.3, 9.3 to 9.9, 10 gates |
+| 2026-10-12 | 3 of 3 | C: performance, systems, operations, process | Not ready | P1: entities equal lifetime decisions (lifetime cap); O(n) terms outside the ledger; abort granularity; P2: spike not the design; "cannot be measured" false; memory; adversarial bucket; staging; gates without thresholds; owner decisions incomplete and mis-ordered | 1 (measured, all nine terms), 1.3, 5.3, 5.4, 6.3, 8, 9, 10 (S3 split, exit measurement), 11 (Decision 0 first, new decisions, stop condition) |
+
+The unit reached its first-three limit with three *Not ready* verdicts. Per the owner's rule, a research spike (`StateCommitmentCostSpikeTest`,
+section 1) was done before this revision to find out why the design kept failing: the cost model had been inferred from a floor and from the
+four terms in the ledger, not measured. A second round (declared separately, with a new limit) reviews this revision.
