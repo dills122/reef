@@ -228,34 +228,39 @@ func (o FiniteOpening) CanonicalBytes() ([]byte, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
-	profile, _ := finiteDigest(o.ProfileHash)
-	budget, _ := finiteDigest(o.BudgetHash)
 	var w bytes.Buffer
 	w.WriteString("calcify-finite-binding-v1\x00")
-	w.Write(profile)
-	w.Write(budget)
-	for _, s := range []string{o.LifecycleSchema, o.PolicyID, o.RunID, o.VenueSessionID, o.InstrumentID, o.QuoteCurrency, o.BaseAssetID} {
-		finiteFrame(&w, s)
-	}
-	finiteWriteParties(&w, o.Parties)
-	for _, t := range o.Topics {
-		finiteFrame(&w, t.Name)
-		finiteFrame(&w, t.TopicID)
-	}
-	for _, n := range []int{o.SourceGeneration, o.Partition, o.PartitionCount} {
-		_ = binary.Write(&w, binary.BigEndian, uint32(n))
-	}
-	for _, s := range []string{o.CommandConsumerGroup, o.OwnershipGroup, o.MatcherShardID, o.CommandSubjectPrefix, o.SourceSubjectPrefix, o.BrokerClusterID, o.CaptureApplicationID, o.StoreName, o.StateVersion} {
-		finiteFrame(&w, s)
-	}
-	w.WriteByte(1)
-	for _, n := range []FiniteDecimal{o.InitialCommandNextOffset, o.InitialSourceNextOffset, o.InitialCaptureNextOffset, o.InitialCaptureSourceGroupNextOffset} {
-		_ = binary.Write(&w, binary.BigEndian, uint64(n))
-	}
+	o.writeCanonicalBody(&w)
 	if w.Len() > 16384 {
 		return nil, fmt.Errorf("finite opening exceeds limit")
 	}
 	return w.Bytes(), nil
+}
+
+// writeCanonicalBody writes everything after the schema prefix; v1 and v2 share it unchanged (v2 appends a finance suffix).
+func (o FiniteOpening) writeCanonicalBody(w *bytes.Buffer) {
+	profile, _ := finiteDigest(o.ProfileHash)
+	budget, _ := finiteDigest(o.BudgetHash)
+	w.Write(profile)
+	w.Write(budget)
+	for _, s := range []string{o.LifecycleSchema, o.PolicyID, o.RunID, o.VenueSessionID, o.InstrumentID, o.QuoteCurrency, o.BaseAssetID} {
+		finiteFrame(w, s)
+	}
+	finiteWriteParties(w, o.Parties)
+	for _, t := range o.Topics {
+		finiteFrame(w, t.Name)
+		finiteFrame(w, t.TopicID)
+	}
+	for _, n := range []int{o.SourceGeneration, o.Partition, o.PartitionCount} {
+		_ = binary.Write(w, binary.BigEndian, uint32(n))
+	}
+	for _, s := range []string{o.CommandConsumerGroup, o.OwnershipGroup, o.MatcherShardID, o.CommandSubjectPrefix, o.SourceSubjectPrefix, o.BrokerClusterID, o.CaptureApplicationID, o.StoreName, o.StateVersion} {
+		finiteFrame(w, s)
+	}
+	w.WriteByte(1)
+	for _, n := range []FiniteDecimal{o.InitialCommandNextOffset, o.InitialSourceNextOffset, o.InitialCaptureNextOffset, o.InitialCaptureSourceGroupNextOffset} {
+		_ = binary.Write(w, binary.BigEndian, uint64(n))
+	}
 }
 func (o FiniteOpening) Digest() (string, error) {
 	b, err := o.CanonicalBytes()
@@ -279,7 +284,12 @@ func finiteText(value string, limit int) bool {
 var finiteRoles = []string{"COMMAND", "SOURCE", "CAPTURE", "OWNERSHIP", "CAPTURE_CHANGELOG"}
 
 func (o FiniteOpening) validate() error {
-	if o.Schema != "calcify-finite-binding-v1" || o.LifecycleSchema != "calcify-order-lifecycle-command-v1" || o.PolicyID != "calcify-limit-day-v1" || o.StateVersion != "calcify-finite-capture-state-v1" || o.StoreName != "finite-lifecycle" || o.OpeningMode != "GENESIS" {
+	return o.validateCore("calcify-finite-binding-v1", finiteRoles)
+}
+
+// validateCore is the v1 rule set parameterized by schema id and expected topic roles, so v2 reuses every v1 check unchanged.
+func (o FiniteOpening) validateCore(schema string, roles []string) error {
+	if o.Schema != schema || o.LifecycleSchema != "calcify-order-lifecycle-command-v1" || o.PolicyID != "calcify-limit-day-v1" || o.StateVersion != "calcify-finite-capture-state-v1" || o.StoreName != "finite-lifecycle" || o.OpeningMode != "GENESIS" {
 		return fmt.Errorf("finite opening version/policy mismatch")
 	}
 	if o.SourceGeneration < 1 || o.SourceGeneration > 2147483647 || o.Partition != 0 || o.PartitionCount != 1 {
@@ -327,13 +337,13 @@ func (o FiniteOpening) validate() error {
 	if !reflect.DeepEqual(o.Parties, finiteSortedParties(o.Parties)) {
 		return fmt.Errorf("finite parties must be comparator-sorted")
 	}
-	if len(o.Topics) != 5 {
+	if len(o.Topics) != len(roles) {
 		return fmt.Errorf("finite topic roles missing")
 	}
 	names, ids := map[string]bool{}, map[string]bool{}
 	for i, t := range o.Topics {
 		id, err := base64.RawURLEncoding.DecodeString(t.TopicID)
-		if t.Role != finiteRoles[i] || !finiteText(t.Name, 256) || err != nil || len(id) != 16 || bytes.Equal(id, make([]byte, 16)) || base64.RawURLEncoding.EncodeToString(id) != t.TopicID || names[t.Name] || ids[t.TopicID] {
+		if t.Role != roles[i] || !finiteText(t.Name, 256) || err != nil || len(id) != 16 || bytes.Equal(id, make([]byte, 16)) || base64.RawURLEncoding.EncodeToString(id) != t.TopicID || names[t.Name] || ids[t.TopicID] {
 			return fmt.Errorf("invalid finite topic identity")
 		}
 		names[t.Name], ids[t.TopicID] = true, true
@@ -572,6 +582,12 @@ func finiteRequired(value any, t reflect.Type) error {
 		}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
+			if f.Anonymous && f.Tag.Get("json") == "" {
+				if err := finiteRequired(value, f.Type); err != nil {
+					return err
+				}
+				continue
+			}
 			key := strings.Split(f.Tag.Get("json"), ",")[0]
 			v, ok := object[key]
 			if !ok {
