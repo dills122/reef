@@ -189,6 +189,7 @@ internal object FiniteBindingContract {
         require(listOf(j["captureApplicationId"].textValue(),j["commandConsumerGroup"].textValue(),j["ownershipGroup"].textValue()).none{prefixRelated(ctl,it)}){"finite control transactional id prefix collision"}
         // Normalized (party-sorted) full document.
         val normalized=node.deepCopy().apply { set<JsonNode>("parties",v1.json()["parties"]) }
+        // Measured on the strict JSON bytes of the full v2 document (party order does not change the length), as Go does with json.Marshal.
         require(encode(node).size<=v1.budget.openingBytes){"finite v2 opening measured bytes"}
         val result=FiniteOpeningV2(normalized)
         require(result.canonicalBytes().size<=16384){"finite v2 canonical bytes"}

@@ -73,10 +73,13 @@ func TestFiniteBindingV2RefusesEveryStructuralViolation(t *testing.T) {
 		"duplicate topic id": func(m map[string]any) {
 			topics(m)[6].(map[string]any)["topicId"] = topics(m)[5].(map[string]any)["topicId"]
 		},
-		"finance changelog name":  func(m map[string]any) { topics(m)[7].(map[string]any)["name"] = "other-changelog" },
-		"config digest":           func(m map[string]any) { m["financeConfigDigest"] = strings.Repeat("0", 64) },
-		"budget captures":         func(m map[string]any) { m["financeBudget"].(map[string]any)["captures"] = "127" },
-		"nonzero genesis offset":  func(m map[string]any) { m["initialFinanceControlNextOffset"] = "1" },
+		"finance changelog name": func(m map[string]any) { topics(m)[7].(map[string]any)["name"] = "other-changelog" },
+		"config digest":          func(m map[string]any) { m["financeConfigDigest"] = strings.Repeat("0", 64) },
+		"budget captures":        func(m map[string]any) { m["financeBudget"].(map[string]any)["captures"] = "127" },
+		"nonzero genesis offset": func(m map[string]any) { m["initialFinanceControlNextOffset"] = "1" },
+		"duplicate party account": func(m map[string]any) {
+			m["parties"].([]any)[1].(map[string]any)["accountId"] = m["parties"].([]any)[0].(map[string]any)["accountId"]
+		},
 		"opening is a party":      func(m map[string]any) { m["openingAccountId"] = "buyer-account" },
 		"non-ascii opening":       func(m map[string]any) { m["openingAccountId"] = "ópening" },
 		"assets equal":            func(m map[string]any) { m["baseAssetId"] = m["quoteCurrency"] },
