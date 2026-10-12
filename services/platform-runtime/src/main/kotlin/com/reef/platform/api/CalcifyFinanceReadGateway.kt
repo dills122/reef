@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.calcify.finance.FinanceAttemptRow
+import com.reef.platform.calcify.finance.FinanceCheckpointRow
 import com.reef.platform.calcify.finance.FinanceDecisionRow
 import com.reef.platform.calcify.finance.FinanceObligationRow
 import com.reef.platform.calcify.finance.FinancePositionRow
@@ -65,21 +66,27 @@ internal class CalcifyFinanceReadGateway(private val store: FinanceReadStore?, p
         try { block() } catch (_: Exception) { error(503, "UNAVAILABLE", "finance read failed") }   // no SQL or driver text leaves the process
 
     private fun render(s: FinanceReadStore, binding: String, resource: String, accounts: Set<String>?, query: String?): PlatformHotPathResponse {
-        val body: Pair<String, Any?> = when (resource) {
+        fun respond(name: String, progress: FinanceCheckpointRow?, rows: List<Map<String, Any?>>): PlatformHotPathResponse {
+            // Every resource carries the progress it reflects, read in the same snapshot as its rows; a binding with no projection is 404 everywhere.
+            val p = progress ?: return error(404, "UNKNOWN_BINDING", "no projection for this binding")
+            return PlatformHotPathResponse(200, JsonCodec.writeObject("bindingDigest" to binding,
+                "progress" to mapOf("lastSequence" to p.lastSequence, "lastChain" to p.lastChain), name to rows))
+        }
+        return when (resource) {
             "checkpoint" -> {
                 val row = s.checkpoint(binding) ?: return error(404, "UNKNOWN_BINDING", "no projection for this binding")
-                "checkpoint" to mapOf("ownerEpoch" to row.ownerEpoch, "lastSequence" to row.lastSequence, "lastChain" to row.lastChain)
+                PlatformHotPathResponse(200, JsonCodec.writeObject("bindingDigest" to binding, "ownerEpoch" to row.ownerEpoch,
+                    "progress" to mapOf("lastSequence" to row.lastSequence, "lastChain" to row.lastChain), "checkpoint" to mapOf("ownerEpoch" to row.ownerEpoch, "lastSequence" to row.lastSequence, "lastChain" to row.lastChain)))
             }
             "decisions" -> {
                 val after = queryValue(query, "afterSequence").ifBlank { "0" }.toLongOrNull()?.takeIf { it >= 0 } ?: return error(400, "BAD_QUERY", "afterSequence must be a non-negative integer")
                 val limit = queryValue(query, "limit").ifBlank { MAX_DECISIONS.toString() }.toIntOrNull()?.takeIf { it in 1..MAX_DECISIONS } ?: return error(400, "BAD_QUERY", "limit must be 1..$MAX_DECISIONS")
-                "decisions" to s.decisions(binding, after, limit).map(::decision)
+                s.decisions(binding, after, limit).let { respond("decisions", it.progress, it.rows.map(::decision)) }
             }
-            "positions" -> "positions" to s.positions(binding, accounts).map(::position)
-            "obligations" -> "obligations" to s.obligations(binding, accounts).map(::obligation)
-            else -> "attempts" to s.attempts(binding, accounts).map(::attempt)
+            "positions" -> s.positions(binding, accounts).let { respond("positions", it.progress, it.rows.map(::position)) }
+            "obligations" -> s.obligations(binding, accounts).let { respond("obligations", it.progress, it.rows.map(::obligation)) }
+            else -> s.attempts(binding, accounts).let { respond("attempts", it.progress, it.rows.map(::attempt)) }
         }
-        return PlatformHotPathResponse(200, JsonCodec.writeObject("bindingDigest" to binding, body))
     }
 
     private fun decision(r: FinanceDecisionRow) = mapOf("sequence" to r.sequence, "action" to mapOf("namespace" to r.actionNamespace, "domain" to r.actionDomain, "id" to r.actionId),

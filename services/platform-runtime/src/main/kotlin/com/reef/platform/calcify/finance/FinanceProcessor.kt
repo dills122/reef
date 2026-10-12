@@ -23,8 +23,11 @@ internal class FinanceHistoryBudgetExceeded : IllegalStateException("FINANCE_HIS
 /** Everything the finance Streams app is bound to; derived from the registered v2 opening plus the topic names. */
 internal data class FinanceProcessorConfig(
     val bindingDigest: String, val captureBinding: FiniteLifecycleBinding, val finance: FinanceConfig,
-    val captureTopic: String, val controlTopic: String, val decisionsTopic: String, val storeName: String = "finite-finance",
+    val captureTopic: String, val controlTopic: String, val decisionsTopic: String, val applicationId: String, val storeName: String = "finite-finance",
 ) {
+    /** Streams names the store's changelog `<application.id>-<store>-changelog`; the registered binding topic must equal it. */
+    val changelogTopic: String get() = "$applicationId-$storeName-changelog"
+
     init {
         // A run has exactly one binding digest (spec section 8): the store, the projection and the envelope check must all use it.
         require(bindingDigest == captureBinding.digest) { "finance binding digest must equal the capture lane's binding digest" }
@@ -34,8 +37,8 @@ internal data class FinanceProcessorConfig(
         /** Derives everything from a registered v2 opening, so no digest or topic name can be supplied independently of it. */
         fun fromOpening(opening: FiniteOpeningV2): FinanceProcessorConfig = FinanceProcessorConfig(
             opening.digest, opening.toCaptureBinding(), opening.financeConfig(),
-            opening.topic("CAPTURE").name, opening.topic("CONTROL").name, opening.topic("FINANCE_DECISIONS").name,
-        )
+            opening.topic("CAPTURE").name, opening.topic("CONTROL").name, opening.topic("FINANCE_DECISIONS").name, opening.financeApplicationId,
+        ).also { require(opening.topic("FINANCE_CHANGELOG").name == it.changelogTopic) { "registered changelog topic differs from the one Streams will use" } }
     }
 }
 

@@ -116,4 +116,19 @@ class FinanceProjectorPostgresTest {
             bad("INSERT INTO boundary.calcify_finance_position VALUES ('" + "0".repeat(64) + "','a','USD',1)")                          // unknown binding
         }
     }
+
+    @Test fun runnerRefusesAProjectionThatIsAheadOfOrForkedFromTheDecisionLog() {
+        val ds = dataSource(); val projector = FinanceProjector(ledger, ds)
+        val (records, _) = run(11); val (fork, _) = run(12)
+        assertTrue(records.size >= 4 && fork.size >= 4 && records[1].first.checksum != fork[1].first.checksum)
+        val binding = digest(); projector.open(binding, 1)
+        fun runner(log: List<Pair<Decision, FinanceInput>>) = FinanceProjectionRunner({ log }, projector, binding, 1)
+        assertEquals(records.size, runner(records).runOnce())
+        assertEquals(0, runner(records).runOnce(), "a log equal to the projection is a clean no-op")
+        assertFailsWith<FinanceProjectionDiverged>("projection ahead of a truncated log") { runner(records.take(records.size - 2)).runOnce() }
+        assertFailsWith<FinanceProjectionDiverged>("projection on a different chain than the log") { runner(fork).runOnce() }
+        assertFailsWith<FinanceProjectionDiverged>("a log with a gap") { runner(records.filterIndexed { i, _ -> i != 1 }).runOnce() }
+        val unopened = digest()
+        assertFailsWith<FinanceProjectionDiverged>("never opened") { FinanceProjectionRunner({ records }, projector, unopened, 1).runOnce() }
+    }
 }

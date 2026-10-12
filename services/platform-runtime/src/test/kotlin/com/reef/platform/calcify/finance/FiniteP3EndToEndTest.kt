@@ -69,6 +69,9 @@ class FiniteP3EndToEndTest {
 
     @Test fun threeTradesPendingThenFundedThenRepairedOnceThroughProjectionAndRoutes() {
         val projectorDs = pg("PROJECTOR"); val readerDs = pg("READER")
+        // One binding digest per run means a re-run against the same database would find the previous run's projection (and the roles cannot
+        // delete it). CI databases are fresh; locally, recreate the database.
+        assumeTrue(FinanceProjector(F.ledger, projectorDs).checkpoint(binding) == null, "a projection for the fixture binding already exists in this database; use a fresh one")
         val envelopes = FiniteLifecycleFixtures.sequence().completedRecordsList
         val inputsInOrder = ArrayList<FinanceInput>()
         DisposableRedpanda().start().use { rp ->
@@ -76,7 +79,7 @@ class FiniteP3EndToEndTest {
                 F.createTopics(admin)
                 val reader = FinanceEvidenceReader(Properties().apply { put("bootstrap.servers", rp.bootstrap) }, F.APP_ID, F.bindingDigest, F.CAPTURE, F.CONTROL, F.DECISIONS, F.changelog)
                 val stateDir = Files.createTempDirectory("finance-o5-state").toFile()
-                fun launcher() = FiniteFinanceLauncher(F.config, F.APP_ID, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, stateDir.path,
+                fun launcher() = FiniteFinanceLauncher(F.config, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, stateDir.path,
                     { FinanceProjector(F.ledger, projectorDs) }, ownerEpoch = 1, projectionIntervalMs = 200)
                 val server = PlatformHttpServer(port = 0, api = PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence())), boundary = ExternalApiBoundary(authHook = authHook),
                     idempotencyStore = InMemoryIdempotencyStore(), idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(), financeReadStore = JdbcFinanceReadStore(readerDs)).start()
@@ -143,6 +146,7 @@ class FiniteP3EndToEndTest {
                     assertEquals(null, running.projectionFailure())
                     running.close()
                     assertEquals(oracle, FinanceRestoreCut.verify(F.ledger, reader.read()).state)
+
                     stateDir.deleteRecursively(); stateDir.mkdirs()
                     running = launcher().start()
                     val fourth = F.envelope(100)
@@ -155,6 +159,14 @@ class FiniteP3EndToEndTest {
                     assertEquals(4, after.size()); assertEquals(1, after.count { it["status"].asText() == "PENDING" }, "the post-restart trade is booked and pending")
                     running.close()
                     assertEquals(oracle, FinanceRestoreCut.verify(F.ledger, reader.read()).state)
+
+                    // 5. A dead app must be visible. The 312-entry history bound halts the processor asynchronously, after start() returned;
+                    //    healthy() has to turn false rather than leave a frozen projection looking alive.
+                    running = launcher().start()
+                    assertTrue(running.healthy())
+                    repeat(300) { F.send(producer, F.CONTROL, byteArrayOf(1)) }
+                    F.waitUntil("the halted app is visible through healthy()", seconds = 120) { !running.healthy() }
+                    assertTrue(running.streamsState() != org.apache.kafka.streams.KafkaStreams.State.RUNNING)
                 } finally {
                     runCatching { running.close() }; producer.close(); server.stop(0)
                 }

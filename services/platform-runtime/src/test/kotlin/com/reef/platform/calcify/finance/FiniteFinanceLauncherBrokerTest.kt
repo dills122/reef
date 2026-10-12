@@ -20,7 +20,7 @@ class FiniteFinanceLauncherBrokerTest {
                 val producer = F.producer(rp.bootstrap)
                 F.send(producer, F.DECISIONS, byteArrayOf(1, 2, 3))                       // a decision log that cannot be decoded
                 val projectorRequested = AtomicInteger()
-                val launcher = FiniteFinanceLauncher(F.config, F.APP_ID, Properties().apply { put("bootstrap.servers", rp.bootstrap) },
+                val launcher = FiniteFinanceLauncher(F.config, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, Properties().apply { put("bootstrap.servers", rp.bootstrap) },
                     Files.createTempDirectory("finance-launcher-state").toString(), { projectorRequested.incrementAndGet(); error("projector must not be built") }, ownerEpoch = 1)
                 val refused = assertFailsWith<FinanceRestoreRefused> { launcher.start() }
                 assertEquals(RestoreRefusal.FINANCE_DECISION_LOG_INVALID, refused.code)
@@ -36,7 +36,7 @@ class FiniteFinanceLauncherBrokerTest {
         DisposableRedpanda().start().use { rp ->
             rp.admin().use { F.createTopics(it) }
             val failures = AtomicInteger()
-            val launcher = FiniteFinanceLauncher(F.config, F.APP_ID, Properties().apply { put("bootstrap.servers", rp.bootstrap) },
+            val launcher = FiniteFinanceLauncher(F.config, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, Properties().apply { put("bootstrap.servers", rp.bootstrap) },
                 Files.createTempDirectory("finance-launcher-state").toString(), { failures.incrementAndGet(); error("no database in this test") }, ownerEpoch = 1)
             // The cut passes at genesis, so the launcher proceeds to build the projector; the stand-in fails there, before the app exists.
             val e = assertFailsWith<IllegalStateException> { launcher.start().close() }

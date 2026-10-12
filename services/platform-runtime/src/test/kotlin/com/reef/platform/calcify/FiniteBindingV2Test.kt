@@ -44,6 +44,8 @@ class FiniteBindingV2Test {
         val config = com.reef.platform.calcify.finance.FinanceProcessorConfig.fromOpening(o)
         assertEquals(o.digest, config.bindingDigest); assertEquals(o.digest, config.captureBinding.digest)
         assertEquals(o.financeConfigDigest, config.finance.digest(), "the derived FinanceConfig is the one the opening committed to")
+        assertEquals(o.financeApplicationId, config.applicationId, "the application id comes from the opening, never from a separate argument")
+        assertEquals(o.topic("FINANCE_CHANGELOG").name, config.changelogTopic, "the registered changelog is the one Streams will use")
         assertEquals(o.topic("CAPTURE").name, config.captureTopic); assertEquals(o.topic("CONTROL").name, config.controlTopic); assertEquals(o.topic("FINANCE_DECISIONS").name, config.decisionsTopic)
     }
 

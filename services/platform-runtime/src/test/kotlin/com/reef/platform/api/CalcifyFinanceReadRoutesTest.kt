@@ -7,6 +7,7 @@ import com.reef.platform.calcify.finance.FinanceDecisionRow
 import com.reef.platform.calcify.finance.FinanceObligationRow
 import com.reef.platform.calcify.finance.FinancePositionRow
 import com.reef.platform.calcify.finance.FinanceReadStore
+import com.reef.platform.calcify.finance.FinanceSnapshot
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import java.net.HttpURLConnection
 import java.util.concurrent.atomic.AtomicInteger
@@ -24,19 +25,23 @@ class CalcifyFinanceReadRoutesTest {
     private class FakeStore : FinanceReadStore {
         val calls = AtomicInteger()
         var fail = false
-        private fun <T> counted(block: () -> T): T { calls.incrementAndGet(); if (fail) throw IllegalStateException("jdbc:postgresql://secret-host/reef password=hunter2"); return block() }
-        override fun checkpoint(bindingDigest: String) = counted { if (bindingDigest == "a".repeat(64)) FinanceCheckpointRow(bindingDigest, 1, 3, "c".repeat(64)) else null }
-        override fun decisions(bindingDigest: String, afterSequence: Long, limit: Int) = counted {
+        private val progress = FinanceCheckpointRow("a".repeat(64), 1, 3, "c".repeat(64))
+        private fun <T> counted(binding: String, block: () -> List<T>): FinanceSnapshot<T> {
+            calls.incrementAndGet(); if (fail) throw IllegalStateException("jdbc:postgresql://secret-host/reef password=hunter2")
+            return if (binding == progress.bindingDigest) FinanceSnapshot(progress, block()) else FinanceSnapshot(null, emptyList())
+        }
+        override fun checkpoint(bindingDigest: String): FinanceCheckpointRow? { calls.incrementAndGet(); if (fail) throw IllegalStateException("jdbc:postgresql://secret-host/reef password=hunter2"); return progress.takeIf { it.bindingDigest == bindingDigest } }
+        override fun decisions(bindingDigest: String, afterSequence: Long, limit: Int) = counted(bindingDigest) {
             (1L..3L).filter { it > afterSequence }.take(limit).map { FinanceDecisionRow(it, "ns", "dom", "act-$it", "FUNDED", "d".repeat(64), "e".repeat(64), "f".repeat(64)) }
         }
-        override fun positions(bindingDigest: String, accounts: Set<String>?) = counted {
+        override fun positions(bindingDigest: String, accounts: Set<String>?) = counted(bindingDigest) {
             listOf(FinancePositionRow("acct-1", "USD", 100), FinancePositionRow("acct-2", "USD", -100)).filter { accounts == null || it.accountId in accounts }
         }
-        override fun obligations(bindingDigest: String, accounts: Set<String>?) = counted {
+        override fun obligations(bindingDigest: String, accounts: Set<String>?) = counted(bindingDigest) {
             listOf(FinanceObligationRow("r", "s", "AAPL", "e1", "acct-1", "acct-2", 3, 100, "PENDING", 300, 3), FinanceObligationRow("r", "s", "AAPL", "e2", "acct-3", "acct-2", 1, 100, "SETTLED", 0, 0))
                 .filter { accounts == null || it.buyerAccountId in accounts || it.sellerAccountId in accounts }
         }
-        override fun attempts(bindingDigest: String, accounts: Set<String>?) = counted {
+        override fun attempts(bindingDigest: String, accounts: Set<String>?) = counted(bindingDigest) {
             listOf(FinanceAttemptRow("r", "s", "AAPL", "e1", 1, "INSUFFICIENT_CASH"), FinanceAttemptRow("r", "s", "AAPL", "e2", 1, "SETTLED"))
                 .filter { accounts == null || (it.executionId == "e1" && ("acct-1" in accounts || "acct-2" in accounts)) || (it.executionId == "e2" && ("acct-3" in accounts || "acct-2" in accounts)) }
         }
@@ -85,6 +90,13 @@ class CalcifyFinanceReadRoutesTest {
         assertContains(get(port, "$op/$binding/obligations").body, "\"executionId\":\"e2\"")
         assertContains(get(port, "$op/$binding/attempts").body, "INSUFFICIENT_CASH")
         assertEquals(404, get(port, "$op/$other/checkpoint").status, "$adapter unknown binding")
+        for (resource in listOf("decisions", "positions", "obligations", "attempts")) assertEquals(404, get(port, "$op/$other/$resource").status, "$adapter unknown binding on $resource")
+        // Every resource reports the projection progress it reflects, so clients can reconcile responses with each other.
+        for (resource in listOf("decisions", "positions", "obligations", "attempts")) {
+            val body = get(port, "$op/$binding/$resource").body
+            assertTrue(body.contains("\"progress\":{\"lastSequence\":3,\"lastChain\":\"${"c".repeat(64)}\"}"), "$adapter $resource")
+        }
+        assertTrue(get(port, "$pt/$binding/positions?accountId=acct-1", "trader-1").body.contains("\"progress\":{\"lastSequence\":3"), adapter)
     }
 
     @Test fun operatorRoutesRefuseMalformedRequests() = eachAdapter(FakeStore()) { adapter, port ->
