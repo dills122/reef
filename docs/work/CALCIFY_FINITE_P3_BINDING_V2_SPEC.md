@@ -1,10 +1,10 @@
 # Calcify Finite P3: Binding v2 Specification (S1-B1)
 
-Status: **revision 4. **Review budget exhausted (3 of 3); the last verdict was Not ready with one P1, fixed here but not independently re-reviewed. The owner decides whether to accept this revision or authorize a further review.**** (reviews 1, 2 and 3 returned Not ready; every P0/P1 finding is addressed
-below and listed in section 14). Specification only; no code, no schema change, no migration is made by this document. It
-discharges the [O3 packet](CALCIFY_FINITE_P3_O3_PACKET.md) section 5 requirement that the binding v2 specification be accepted
-before O3b starts. Inputs: D7 (option B), P-3 (new schema version), P-4 (budget classes); see the
-[program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md).
+Status: **revision 5, reviewed four times** (reviews 1-3 Not ready, each finding fixed; review 4, authorized by the owner beyond
+the default three, returned **Ready with non-blocking follow-ups**, applied in this revision). Specification only; no code, no schema
+change, no migration is made by this document. It discharges the [O3 packet](CALCIFY_FINITE_P3_O3_PACKET.md) section 5 requirement
+that the binding v2 specification be accepted before O3b. Inputs: D7 (option B), P-3 (new schema version), P-4 (budget classes); see
+the [program plan](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md). Owner acceptance is still required.
 
 ## 1. Scope and non-goals
 
@@ -32,7 +32,7 @@ v2 is the v1 opening plus a finance block; every v1 field keeps its name, type a
 | `financeStoreName` | absent | fixed `finite-finance` |
 | `financeStateVersion` | absent | fixed `calcify-finite-finance-state-v1` |
 | `openingAccountId` | absent | text, distinct from every `parties[].accountId` (the ledger's source of funds; O3a `FinanceConfig.openingAccount`) |
-| `controlTransactionalId` | absent | text; the control writer's transactional id; **no prefix relation in either direction** with `financeApplicationId`, `captureApplicationId`, or any group id or other transactional id (including the ingress adapter's, if it has one) |
+| `controlTransactionalId` | absent | text; the control writer's transactional id; **no prefix relation in either direction** with `financeApplicationId`, `captureApplicationId`, or any group id or other transactional id the parser can see in the opening (the matcher's transactional id derives from `commandConsumerGroup`, so the group rule covers it; the ingress adapter's is covered by an ACL-provisioning test, not by the parser) |
 | `financeConfigDigest` | absent | 64 lowercase hex; must equal the O3a `FinanceConfig.digest()` recomputed from the opening (section 4) |
 | `financeBudget` | absent | decimal-string object `{obligations, captures, settleAttempts, controls}` = `{"256","128","160","8"}`; the record bound (296 = 128 + 160 + 8) is **derived**, not stored |
 | `initialControlNextOffset`, `initialFinanceDecisionsNextOffset`, `initialFinanceCaptureNextOffset`, `initialFinanceControlNextOffset` | absent | decimal strings, genesis value `"0"` (topic end offsets for CONTROL and FINANCE_DECISIONS; the finance application group's next offsets on CAPTURE and CONTROL) |
@@ -174,20 +174,21 @@ SHA-256(frame("calcify-finance-history-genesis-v1") frame(genesisChain))`. An in
 of the O3b test plan (section 12). Refused and prior-result entries are chained, hence tamper-evident, and operators/O4 read
 dispositions by action key from history.
 
-**History bound.** Entries <= 128 (ledger capture inputs, `maxCaptures`) + at most 16 `NO_INPUT` entries (one per envelope, bounded
+**History bound and overflow.** `INVALID_INPUT` and `PRIOR_RESULT` entries count. The 128 term follows from the v1 source budget (16 publications x 8 trades), not from the ledger's `maxCaptures`; `NO_INPUT` entries are bounded by one per source record, and replayed envelopes are new source records, so that term is bounded by the **source publication budget** (the v1 completed-record limit of 16), not by an engine re-emission assumption. If an entry would exceed 312, the processor **halts fail-closed** with `FINANCE_HISTORY_BUDGET_EXCEEDED` (no entry, no offset commit) rather than skipping a record. Entries <= 128 (ledger capture inputs, `maxCaptures`) + at most 16 `NO_INPUT` entries (one per envelope, bounded
 by the v1 publication budget of 16) + 168 CONTROL writes (section 7) = **312 entries**, within the packet's 320 envelope. The
 ledger's own record bound stays 296 (recorded decisions only). Redelivery cannot occur inside EOS (consume and record are atomic);
 a producer-side duplicate is excluded by the writer's idempotence, and any that still arrives is an entry with disposition
 `PRIOR_RESULT`.
 
 **Pinned error handling.** The topology uses raw byte serdes and parses inside the processor; a record that fails to parse, or
-whose body kind is wrong, becomes an `INVALID_INPUT` entry (never a stalled app or a skipped record), so the one-entry-per-record
-invariant holds. `commit.interval.ms` and `max.task.idle.ms` are pinned in the topology configuration and named by the
+whose body kind is wrong, becomes an `INVALID_INPUT` entry (never a stalled app or a skipped record), so every consumed record has at least one entry. `commit.interval.ms` and `max.task.idle.ms` are pinned in the topology configuration and named by the
 crash-window test.
+
+**Entry fields for non-ledger entries.** A `NO_INPUT` entry has `kind=NO_INPUT`, `inputDigest` = SHA-256 of the source record's raw bytes, `outcome=NO_INPUT`, no `decisionChecksum`; an `INVALID_INPUT` entry (unparseable or wrong body kind) has `kind=INPUT`, `inputDigest` = SHA-256 of the raw bytes, `outcome=INVALID_INPUT`. `memberOrdinal` is the index among the envelope's ready members (0-based). `position` is 1-based. In every framing above, `prevEntryChain`, `genesisChain`, `inputDigest` and `decisionChecksum` are framed as their **lowercase hex text** (as the O3a `genesisChain` does), not raw bytes.
 
 **Decisions.** `FINANCE_DECISIONS` carries `FinanceDecisionV1` (with `stateDigest`) for **recorded** outcomes only (the ledger
 returns no decision for refusals, no-ops and prior results). `headDecision.sequence` equals the ledger sequence; the history
-`position` is >= that sequence, equality holding exactly when nothing was refused.
+`position` is >= that sequence; equality holds exactly when no entry is refused, `INVALID_INPUT`, `NO_INPUT` or `PRIOR_RESULT`. (Section 4's "history chain head at genesis" means the *decision* chain, `genesisChain`; the entry chain has its own genesis below.)
 
 **Topic-kind check.** The processor refuses, at history level and without calling the ledger, a Fund/Settle body on CAPTURE or a
 Capture body on CONTROL (disposition `INVALID_INPUT`, entry recorded).
@@ -200,13 +201,16 @@ Capture body on CONTROL (disposition `INVALID_INPUT`, entry recorded).
    refuses any other state, even an invariant-clean one with a recomputed checksum (O3a review 2, P1-1).
 3. `bindingDigest` equals the active v2 digest; v1/v2 confusion refuses.
 4. **Offsets versus history.** For each input partition let `lastRecorded` be the highest `sourceOffset` among its entries (all
-   `memberOrdinal`s). `committedNext` must equal `lastRecorded + 1`, and `<= readCommittedEndOffset`. With **no** entries for the topic
-   an absent committed offset means `0`; an absent or reset committed offset *with* entries refuses as `FINANCE_GROUP_OFFSETS_EXPIRED`
+   `memberOrdinal`s). `committedNext` must equal `lastRecorded + 1`, and `<= readCommittedEndOffset`. With **no** entries for the topic, `lastRecorded = -1` and
+   an absent committed offset means `0`, while a present nonzero committed offset with no entries refuses as `FINANCE_OFFSET_AHEAD_OF_HISTORY`; an absent or reset committed offset *with* entries refuses as `FINANCE_GROUP_OFFSETS_EXPIRED`
    (group offsets can expire; the verifier also requires `offsets.retention.minutes` to exceed the intended run lifetime). Streams commits `lastProcessed + 1`, so trailing transaction markers are not in the committed offset
    and no marker arithmetic is needed; a read-committed client cannot see markers and the rule does not require it to.
    `committedNext` less than that value refuses as `FINANCE_HISTORY_AHEAD_OF_OFFSET` (cannot happen under one transaction, so
    it signals corruption, unless the group offsets expired, which has its own code above); greater refuses as `FINANCE_OFFSET_AHEAD_OF_HISTORY`.
-5. Replay from the cut reproduces byte-equal decisions; re-consumption never rebuilds order.
+5. **History cross-check.** The `decisionChecksum` values of the recorded (INPUT, recorded-outcome) entries must map one-to-one, in order, onto the decision log; the number of recorded entries must equal `headDecision.sequence`; and the last recorded entry's `decisionChecksum` must equal `headDecision.checksum`. Any mismatch refuses activation.
+6. Replay from the cut reproduces byte-equal decisions; re-consumption never rebuilds order.
+
+**Ledger state persistence.** The O3a `FinanceCheckpoint` is a logical object only. The finance store keeps ledger state per entity (`position/<account>/<asset>`, `execution/<key>`, `obligation/<key>`, `attempt/<key>/<n>`, `action/<key>`, and a small `meta` with sequence, chain and controls); a restore reads those keys, assembles the `FinanceState`, and passes it to `restore(checkpoint, history)`. The entity wire formats and measured record sizes are S2-A2 deliverables; the invariant is C1 (no whole-state value).
 
 **Capture-to-input mapping.** How a `FiniteLifecycleCaptureV1` ready-execution record becomes a `FinanceCaptureV1` (action key,
 execution key, buyer/seller account from the party map, quantity and nanos price conversion) is a deterministic pure function
@@ -215,7 +219,7 @@ before the processor is written; it does not affect the opening's canonical byte
 
 ## 9. Isolation and ACL matrix
 
-Principals: `calcify_finite_ingress` (existing COMMAND writer), `calcify_finite_capture` (existing capture Streams app, reads
+Principals (nominal names; the O2 harness derives them as `User:<prefix>-ingress`, `-capture`, `-matcher`, `-observer`, and O3b maps the new ones the same way): `calcify_finite_ingress` (existing COMMAND writer), `calcify_finite_capture` (existing capture Streams app, reads
 SOURCE, writes CAPTURE), `calcify_finite_control` (new, section 7), `calcify_finite_finance` (new, the finance Streams app),
 operators (read only).
 
@@ -227,7 +231,9 @@ operators (read only).
 | CAPTURE topic | Write: `capture` (unchanged); Read: `finance` | `finance` and `control` cannot write |
 | TransactionalId `controlTransactionalId` (LITERAL) | Write/Describe: `control` | refused (**including `finance`**) |
 | TransactionalId prefix `financeApplicationId` | `finance` | refused |
-| Group `financeApplicationId` | Read: `finance` | refused |
+| Group `financeApplicationId` | Read: `finance`; Describe: `observer` | refused |
+| Activation verifier / witness builder (`observer`) | Describe on all eight topics and on the group; Read on CONTROL, FINANCE_DECISIONS and FINANCE_CHANGELOG (`listConsumerGroupOffsets`, begin/end offsets, history and decision replay) | no write anywhere |
+| `matcher` (existing) | unchanged; must be **denied** on CONTROL and FINANCE_* (tested) | refused |
 
 The `controlTransactionalId` prefix-distinctness rule (section 3) guarantees the finance principal's prefixed transactional-id
 ACL does not cover the control writer's id. Proof (extends the O2 pattern): a negative produce/consume test for every denied
@@ -237,7 +243,7 @@ CAPTURE/COMMAND nor fence the control writer, and the transactional-id fencing t
 ## 10. Parser plan and startup witness
 
 - Go `services/matching-engine/internal/streamdirect/calcify_finite_binding.go`: `ParseFiniteBindingV2` and dispatch by schema; v1
-  path untouched. Kotlin `FiniteBindingContract.kt`: v2 opening type and `canonicalBytes()`.
+  path untouched. The Go startup-witness parser also hard-codes five ranges, five topics and the group-versus-range checks; a Go `ParseFiniteStartupV2` with the eight ranges and the `financeGroup` checks is part of S2-A1. Kotlin `FiniteBindingContract.kt`: v2 opening type and `canonicalBytes()`.
 - **Explicit v2 validators** (each is hard-coded for v1 today): `topics.size == 8` and 8 distinct names and ids; the eight-role
   order of section 3; changelog-name checks at index 4 (capture) and index 7 (finance); the exact `openingFields` set including
   the new fields; per-field text validation; ASCII/length tightening and `quoteCurrency != baseAssetId` (section 3);
@@ -247,7 +253,7 @@ CAPTURE/COMMAND nor fence the control writer, and the transactional-id fencing t
   `retention.ms = -1`, `retention.bytes = -1`, `cleanup.policy = delete` (both are read from offset 0 for recovery and `verifyChain`, so
   any retention-based deletion breaks recovery), and FINANCE_CHANGELOG as `cleanup.policy = compact` like CAPTURE_CHANGELOG, each with
   `max.message.bytes` >= the largest encoded record (the decision record and finance entries are bounded by section 8 and the O3a size pins; the
-  exact per-role bytes are derived in the S2-A2 measurement and written into the v2 opening's budget before O3b merges). The
+  exact per-role byte values are **verifier constants** compiled into `FiniteKafka.verifyIdentities`, derived in the S2-A2 measurement; they are NOT opening fields and do not enter the canonical bytes or the digest, so the golden can be frozen now). The
   verifier and its tests are part of S2-A1.
 - **Startup witness `calcify-finite-startup-v2`**: `opening` (v2), `run`, `journal` as v1; `cuts` as v1 (`commandGroup`,
   `captureSourceGroup`) with `ranges` extended to 8 entries in role order (same per-range invariants `begin <= committed <= end`)
@@ -255,6 +261,8 @@ CAPTURE/COMMAND nor fence the control writer, and the transactional-id fencing t
   absent committed offset is reported as `"0"` **only when the history has no entry for that topic** (otherwise section 8.4 refuses).
   Both of these (absent offset as 0, and a group cut for the finance group) differ deliberately from v1, whose `cuts()` refuses a
   group with no committed offset; the v1 regression tests must prove v1 stays strict. The ranges and `financeGroup` are stored inside `brokerCuts` (section 6); the 8,192-byte `cuts` cap and wire 32,768 and witness header 8,192 are unchanged and O3b measures v2 against them.
+
+**Stop receipt.** `stages` and `release` take engine and capture receipts only. The finance processor deliberately produces no stop receipt in v2; its evidence is the verified decision log head and the history entry-chain head, read through the O4 seam. (Revisit if O5 needs a finance receipt.)
 
 ## 11. Refusal rules (activation)
 
@@ -275,15 +283,15 @@ broker topic UUID differs from the registry.
 5. Isolation matrix (section 9) on the real broker harness, including producer fencing and the prefix-ACL separation.
 6. Restore-cut refusal table (section 8), including a forged-but-consistent checkpoint, a tampered refused history entry, and an
    absent committed offset.
-7. Real-broker crash test between poll and commit, and control-writer recovery (zombie with an open transaction) per section 7.
+7. Real-broker crash test between poll and commit, and control-writer recovery (zombie with an open transaction) per section 7. Cases required: the last records on CAPTURE or CONTROL are aborted or marker-only and the app restarts; Streams commits only one of the two partitions; EOS v2 commit timing is demonstrated, not assumed.
 8. History-entry golden (independent encoder) and envelope-to-entries cases (several ready members, none, replay-only).
 9. Capture-to-input mapping golden (the S2-A2 mapping).
 
 ## 13. Decisions recorded and open items
 
 Decided here (confirm in the final review): fresh source generation for v2; separate control writer with no database; one finance
-group = `financeApplicationId`; `openingBytes` held at 16,384; input history with one entry per consumed record, chained, bounded
-at 296; recorded-only `FINANCE_DECISIONS`; v2 identifiers restricted to printable ASCII.
+group = `financeApplicationId`; `openingBytes` held at 16,384; input history with one entry per ledger input (plus `NO_INPUT`), chained, bounded
+at 312, fail-closed on overflow; recorded-only `FINANCE_DECISIONS`; v2 identifiers restricted to printable ASCII.
 
 Open (O3b design, not blocking the binding bytes): **P-5** operator authentication for the control writer; **the S2-A2 mapping** the
 capture-to-input mapping and its version string; the exact Kafka ACL provisioning mechanism for the new principals.
@@ -308,3 +316,5 @@ Review 3 (Not ready; review budget exhausted, so these fixes are NOT independent
 inside `brokerCuts`, no change to `stages`); P2-2 prefix distinctness -> sections 3, 10; P2-3 topic configuration -> section 10; P2-4 entry
 encoding and golden -> sections 8, 12; P2-5 offset expiry -> section 8.4 (`FINANCE_GROUP_OFFSETS_EXPIRED`); P2-6 v1/v2 strictness
 difference -> section 10; P3 error handling, commit interval, funding typo cost, ingress transactional id -> sections 3, 7, 8.
+
+Review 4 (owner-authorized, Ready with non-blocking follow-ups; applied in revision 5): P2-1 verifier constants not opening fields -> section 10; P2-2 verifier/observer/matcher ACL rows and principal-name mapping -> section 9; P2-3 `NO_INPUT` bound source and overflow behavior -> section 8; P2-4 history/decision cross-check -> section 8.5; P2-5 per-entity ledger persistence -> section 8; P3 genesis wording, hex framing, non-ledger entry fields, `lastRecorded = -1`, Go witness parser, ingress transactional-id clause, principal names, stop receipt, test-plan cases, stale section 13 and status line -> sections 3, 8, 9, 10, 12, 13.

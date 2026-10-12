@@ -116,7 +116,7 @@ and the packet's O3b cannot start until the binding v2 specification is accepted
 
 | Item | Source | To pin in review |
 | --- | --- | --- |
-| Source executions / controls / admitted attempts / history records | contract: 128 / 8 / 160 / 320 | confirm D5 |
+| Source executions / controls / admitted attempts / history records | contract: 128 / 8 / 160 / 320 | confirm D5. Implemented in O3a as per-class limits (captures 128, controls 8, settle attempts 160) with a derived ledger record bound of **296** (= 128 + 160 + 8, recorded decisions only); the binding v2 spec's input history is bounded separately at 312 entries, both inside the 320 envelope. Pending owner confirmation of the 296 reading. |
 | Positions / obligations | 4 / 256 | confirm |
 | Serialized decision record (max) | **not yet derived** | derive with a max-field reflection test; reference kernel used 64 KiB and 64 changes, which is not a requirement |
 | Per-entity store entry bytes and total managed state | **not yet derived** | derive; target well under the default broker record ceiling without a bespoke transport proof |
