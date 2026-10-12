@@ -77,6 +77,17 @@ internal sealed interface FinanceInput {
 
 /** Length-framed canonical encoding; never delimiter concatenation. */
 internal object Canon {
+    /** Canonical ordering: strings compare as unsigned UTF-8 bytes (equal to code point order), never UTF-16 code units, so any
+     *  implementation that sorts bytes or code points reproduces the same digest. Non-string selectors compare naturally. */
+    fun <T> utf8Order(vararg selectors: (T) -> Comparable<*>): Comparator<T> = Comparator { a, b ->
+        for (selector in selectors) {
+            val x = selector(a); val y = selector(b)
+            val c = if (x is String && y is String) java.util.Arrays.compareUnsigned(strictUtf8(x), strictUtf8(y))
+            else @Suppress("UNCHECKED_CAST") (x as Comparable<Any>).compareTo(y)
+            if (c != 0) return@Comparator c
+        }
+        0
+    }
     class Writer(private val out: DataOutputStream) {
         fun str(v: String) { val b = strictUtf8(v); out.writeInt(b.size); out.write(b) }
         fun long(v: Long) = out.writeLong(v)
@@ -145,7 +156,7 @@ internal data class FinanceConfig(
     /** Binds every history and checkpoint to the configuration it was produced under. */
     fun digest(): String = Canon.sha(Canon.bytes {
         str("calcify-finance-config-v1")
-        val sorted = accounts.map { it.value }.sorted(); int(sorted.size); sorted.forEach { str(it) }
+        val sorted = accounts.map { it.value }.sortedWith(Canon.utf8Order<String>({ it })); int(sorted.size); sorted.forEach { str(it) }
         str(cashAsset.value); str(securityAsset.value); str(openingAccount.value)
         int(maxObligations); int(maxCaptures); int(maxSettleAttempts); int(maxControls)
     })

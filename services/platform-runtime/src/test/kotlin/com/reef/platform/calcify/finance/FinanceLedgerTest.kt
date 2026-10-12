@@ -218,13 +218,13 @@ class FinanceLedgerTest {
         assertNotEquals(ledger.genesisChain, other.genesisChain)
         val cp = ledger.checkpoint(r.state)
         val head = r.decisions.last()
-        assertEquals(r.state, ledger.restore(cp, head))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, r.decisions[r.decisions.size - 2]) }   // an older head
-        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, null) }                                  // genesis head, non-genesis state
-        assertFailsWith<IllegalArgumentException> { ledger.restore(cp, head.copy(checksum = "0".repeat(64))) } // head that does not verify
+        assertEquals(r.state, ledger.restoreAt(cp, head))
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(cp, r.decisions[r.decisions.size - 2]) }   // an older head
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(cp, null) }                                  // genesis head, non-genesis state
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(cp, head.copy(checksum = "0".repeat(64))) } // head that does not verify
         // Executions without obligations are a clean refusal, not an unchecked exception.
         val orphan = r.state.copy(obligations = r.state.obligations - key("e2"))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(orphan), head) }
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(ledger.checkpoint(orphan), head) }
     }
 
     /** O3a review 2 (P1-1): a state that is balanced, invariant-clean and has a freshly computed checksum, at the REAL head, but that
@@ -240,28 +240,28 @@ class FinanceLedgerTest {
         )
         for ((name, forged) in forgeries) {
             ledger.checkInvariants(forged)                                    // it is invariant-clean: only the commitment can catch it
-            val e = assertFailsWith<IllegalArgumentException>(name) { ledger.restore(ledger.checkpoint(forged), head) }
+            val e = assertFailsWith<IllegalArgumentException>(name) { ledger.restoreAt(ledger.checkpoint(forged), head) }
             assertTrue(e.message!!.contains("committed by the trusted head"), "$name: ${e.message}")
         }
         // Attempt bookkeeping is committed too: renumbering a recorded attempt keeps every count and invariant intact.
         val (attemptKey, attemptResult) = s.attempts.entries.first()
         val renumbered = s.copy(attempts = (s.attempts - attemptKey) + ((attemptKey.first to attemptKey.second + 7) to attemptResult))
         ledger.checkInvariants(renumbered)
-        assertTrue(assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(renumbered), head) }.message!!.contains("committed by the trusted head"))
+        assertTrue(assertFailsWith<IllegalArgumentException> { ledger.restoreAt(ledger.checkpoint(renumbered), head) }.message!!.contains("committed by the trusted head"))
         // The chain head is outside the state digest, so it is bound separately: same content under a different chain is refused,
         // and so is a head decision whose own checksum does not verify even when the state names it.
         val rechained = s.copy(chain = "e".repeat(64))
-        val e1 = assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(rechained), head) }
+        val e1 = assertFailsWith<IllegalArgumentException> { ledger.restoreAt(ledger.checkpoint(rechained), head) }
         assertTrue(e1.message!!.contains("trusted history head"), e1.message)
         val badHead = head.copy(checksum = "0".repeat(64))
-        val e2 = assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(s.copy(chain = badHead.checksum)), badHead) }
+        val e2 = assertFailsWith<IllegalArgumentException> { ledger.restoreAt(ledger.checkpoint(s.copy(chain = badHead.checksum)), badHead) }
         assertTrue(e2.message!!.contains("trusted head does not verify"), e2.message)
         val shifted = s.copy(sequence = s.sequence + 1)
-        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(shifted), head) }
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(ledger.checkpoint(shifted), head) }
         // Genesis: minting cash into the empty state is refused too.
         val mint = ledger.genesis().copy(positions = mapOf((buyer to usd) to 99L, (opening to usd) to -99L))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(mint), null) }
-        assertEquals(ledger.genesis(), ledger.restore(ledger.checkpoint(ledger.genesis()), null))
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(ledger.checkpoint(mint), null) }
+        assertEquals(ledger.genesis(), ledger.restoreAt(ledger.checkpoint(ledger.genesis()), null))
     }
 
     @Test fun settleRequiresOperatorAuthorityAndRefusalsDoNotBurnTheAttemptBudget() {
@@ -304,7 +304,7 @@ class FinanceLedgerTest {
         for (cut in 0..inputs.size) {
             val prefix = run().apply { inputs.take(cut).forEach(::go) }
             val checkpoint = ledger.checkpoint(prefix.state)
-            val restored = Run(ledger).apply { state = ledger.restore(checkpoint, prefix.decisions.lastOrNull()) }
+            val restored = Run(ledger).apply { state = ledger.restoreAt(checkpoint, prefix.decisions.lastOrNull()) }
             inputs.drop(cut).forEach { restored.go(it) }
             assertEquals(full.state, restored.state, "cut=$cut")
             assertTrue(ledger.verifyChain(prefix.decisions))
@@ -315,7 +315,7 @@ class FinanceLedgerTest {
         val r = openedAndCaptured()
         val checkpoint = ledger.checkpoint(r.state)
         val forged = checkpoint.copy(state = r.state.copy(positions = r.state.positions + ((buyer to usd) to 1L)))
-        assertFailsWith<IllegalArgumentException> { ledger.restore(forged, r.decisions.last()) }
+        assertFailsWith<IllegalArgumentException> { ledger.restoreAt(forged, r.decisions.last()) }
         assertTrue(ledger.verifyChain(r.decisions))
         val reordered = r.decisions.toMutableList().apply { add(0, removeAt(1)) }
         assertFalse(ledger.verifyChain(reordered))
@@ -429,7 +429,7 @@ class FinanceLedgerTest {
     @Test fun restoreRejectsEveryTamperedStateField() {
         val r = openedAndCaptured(); r.go(settle("e1", 1))
         val cp = ledger.checkpoint(r.state)
-        assertEquals(r.state, ledger.restore(cp, r.decisions.last()))
+        assertEquals(r.state, ledger.restoreAt(cp, r.decisions.last()))
         val s = r.state
         val tampered = mapOf(
             "positions" to s.positions + ((buyer to usd) to 1L),
@@ -448,9 +448,9 @@ class FinanceLedgerTest {
                 "controls" -> s.copy(controls = value as Int)
                 else -> s.copy(sequence = value as Long)
             }
-            assertFails("tampered $name must be refused") { ledger.restore(cp.copy(state = forged), r.decisions.last()) }
+            assertFails("tampered $name must be refused") { ledger.restoreAt(cp.copy(state = forged), r.decisions.last()) }
         }
-        assertFails { ledger.restore(cp.copy(checksum = "0".repeat(64)), r.decisions.last()) }
+        assertFails { ledger.restoreAt(cp.copy(checksum = "0".repeat(64)), r.decisions.last()) }
     }
 
     @Test fun restoreRunsInvariantsEvenWhenTheHeadCommitsToTheBadState() {
@@ -460,7 +460,7 @@ class FinanceLedgerTest {
         val bad = ledger.genesis().copy(positions = mapOf((buyer to usd) to -5L, (opening to usd) to 5L))
         val head = forge(r.decisions.single(), sequence = 0, stateDigest = ledger.stateDigest(bad))
         val committed = bad.copy(chain = head.checksum)
-        val e = assertFailsWith<IllegalStateException> { ledger.restore(ledger.checkpoint(committed), head) }
+        val e = assertFailsWith<IllegalStateException> { ledger.restoreAt(ledger.checkpoint(committed), head) }
         assertTrue(e.message!!.contains("negative non-opening position"), e.message)
     }
 
@@ -560,6 +560,50 @@ class FinanceLedgerTest {
         refused(one.copy(obligations = mapOf(ek to Obligation(ObligationStatus.SETTLED, 0, 0))), text = "settled attempt differs from obligation status")
         refused(one.copy(attempts = mapOf((ek to 1) to Disposition.SETTLED), actions = one.actions + (action("b") to ActionRecord("d", Disposition.SETTLED)), sequence = 2),
             text = "settled attempt differs from obligation status")
+    }
+
+    // ---- O3a review 3 follow-ups ----
+
+    @Test fun canonicalOrderIsUtf8ByteOrderNotUtf16() {
+        // U+FFFF sorts after U+1F600 in UTF-16 (surrogates are D83D..) but before it in UTF-8 / code point order.
+        val cfg = FinanceConfig(setOf(AccountId("\uFFFF"), AccountId("\uD83D\uDE00")), usd, AssetId("SEC"), AccountId("op"))
+        assertEquals("95e4fdc9fa27c3b3b4104f6a79284aab3ec3d86bf8aff5a31c9cfca7c705f200", cfg.digest())   // independent Python encoder, byte order
+    }
+
+    @Test fun publicRestoreVerifiesTheWholeHistoryAndRefusesALoneForgedHead() {
+        val r = openedAndCaptured(); r.go(settle("e1", 1))
+        val cp = ledger.checkpoint(r.state)
+        assertEquals(r.state, ledger.restore(cp, r.decisions))
+        assertEquals(ledger.genesis(), ledger.restore(ledger.checkpoint(ledger.genesis()), emptyList()))
+        // A self-consistent forged head + checkpoint passes restoreAt but cannot pass a full-history verification.
+        val mint = r.state.copy(positions = r.state.positions + ((buyer to usd) to 99L) + ((opening to usd) to ((r.state.positions[opening to usd] ?: 0L) - 99)))
+        val forgedHead = forge(r.decisions.last(), stateDigest = ledger.stateDigest(mint))
+        val forgedState = mint.copy(chain = forgedHead.checksum)
+        assertEquals(forgedState, ledger.restoreAt(ledger.checkpoint(forgedState), forgedHead))
+        assertFailsWith<IllegalArgumentException> { ledger.restore(ledger.checkpoint(forgedState), listOf(forgedHead)) }
+        // Integrity, not authenticity: a forged LAST decision that links correctly to the real history still verifies. Defeating that
+        // needs a keyed MAC/signature or an externally anchored chain root at O3b (documented on restore).
+        assertEquals(forgedState, ledger.restore(ledger.checkpoint(forgedState), r.decisions.dropLast(1) + forgedHead))
+    }
+
+    @Test fun verifyChainRejectsHashValidButNonsensicalDecisions() {
+        val r = openedAndCaptured()
+        val last = r.decisions.lastIndex
+        assertTrue(ledger.verifyChain(r.decisions))
+        // The forged decision is last, so it links and hashes correctly; only the semantic checks can refuse it.
+        val unrecorded = r.decisions.toMutableList().also { it[last] = forge(it[last].copy(disposition = Disposition.UNAUTHORIZED)) }
+        assertFalse(ledger.verifyChain(unrecorded))
+        val repeated = r.decisions.toMutableList().also { it[last] = forge(it[last].copy(action = it[1].action)) }
+        assertFalse(ledger.verifyChain(repeated))
+    }
+
+    @Test fun invariantsRejectAPositiveOpeningAccountAndSurfaceResidualOverflowAsAStateError() {
+        val g = ledger.genesis()
+        refused(g.copy(positions = mapOf((opening to usd) to 5L)), text = "opening account position is positive")
+        val ek = key("e1")
+        val huge = Captured(buyer, seller, Long.MAX_VALUE, Long.MAX_VALUE)
+        refused(g.copy(executions = mapOf(ek to huge), obligations = mapOf(ek to Obligation(ObligationStatus.PENDING, 1, 1)),
+            actions = mapOf(action("a") to ActionRecord("d", Disposition.CAPTURED)), sequence = 1), text = "pending residual overflow")
     }
 
     @Test fun configRejectsSharedOpeningAndIdenticalAssets() {

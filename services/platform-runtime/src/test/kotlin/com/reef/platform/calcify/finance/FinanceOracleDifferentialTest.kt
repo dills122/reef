@@ -158,7 +158,7 @@ class FinanceOracleDifferentialTest {
             }
             assertSame(oracle, state, "seed=$seed step=$n")
             ledger.checkInvariants(state)
-            if (rnd.nextInt(15) == 0) state = ledger.restore(ledger.checkpoint(state), decisions.lastOrNull())   // random cut and restore
+            if (rnd.nextInt(15) == 0) state = ledger.restoreAt(ledger.checkpoint(state), decisions.lastOrNull())   // random cut and restore
         }
         assertTrue(ledger.verifyChain(decisions), "seed=$seed chain")
     }

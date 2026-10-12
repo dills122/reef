@@ -85,6 +85,11 @@ export const MUTANTS = [
   ['no attempt-execution invariant', LEDGER, 'check(attempt.second >= 1 && attempt.first in state.executions)', 'check(true)'],
   ['no attempt-disposition invariant', LEDGER, 'check(disposition in settleDispositions)', 'check(true)'],
   ['no settled-attempt invariant', LEDGER, 'check(settledAttempts == if (obligation.status == ObligationStatus.SETTLED) 1 else 0)', 'check(true)'],
+  ['verifyChain allows unrecorded dispositions', LEDGER, 'd.disposition !in recordedDispositions || ', ''],
+  ['verifyChain allows repeated actions', LEDGER, '!actions.add(d.action)', 'false'],
+  ['restore skips history verification', LEDGER, 'require(verifyChain(history))', 'require(true)'],
+  ['no opening-account sign invariant', LEDGER, 'check(key.first != config.openingAccount || value <= 0)', 'check(true)'],
+  ['UTF-16 order instead of UTF-8 bytes', MODEL, 'java.util.Arrays.compareUnsigned(strictUtf8(x), strictUtf8(y))', 'x.compareTo(y)'],
   ['fund overflow recorded', LEDGER, 'if (it.disposition == Disposition.FUNDED) it.copy(recorded = true) else it', 'it.copy(recorded = true)'],
 ];
 

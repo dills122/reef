@@ -92,6 +92,19 @@ class FinanceWireTest {
         assertFailsWith<IllegalArgumentException> { FinanceWire.fromProto(neverRecorded) }
     }
 
+    @Test fun unknownFieldsAreRefusedAtEveryLevel() {
+        val clean = FinanceWire.toProto(capture)
+        val top = FinanceInputV1.newBuilder(clean).setUnknownFields(com.google.protobuf.UnknownFieldSet.newBuilder()
+            .addField(15, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(1).build()).build()).build()
+        assertFailsWith<IllegalArgumentException> { FinanceWire.fromProto(top) }
+        val nested = clean.toBuilder().apply { captureBuilder.executionBuilder.setUnknownFields(com.google.protobuf.UnknownFieldSet.newBuilder()
+            .addField(9, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(7).build()).build()) }.build()
+        assertFailsWith<IllegalArgumentException> { FinanceWire.fromProto(nested) }
+        val dec = FinanceDecisionV1.newBuilder(FinanceWire.toProto(decision)).apply { getLegsBuilder(0).setUnknownFields(com.google.protobuf.UnknownFieldSet.newBuilder()
+            .addField(9, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(7).build()).build()) }.build()
+        assertFailsWith<IllegalArgumentException> { FinanceWire.fromProto(dec) }
+    }
+
     @Test fun maximumSizedMessagesStayWithinThePinnedWireBounds() {
         val t = "é".repeat(64)   // 128 UTF-8 bytes, the per-field maximum
         assertEquals(128, t.toByteArray(Charsets.UTF_8).size)
