@@ -80,6 +80,15 @@ class FiniteControlWriterBrokerTest {
         }
     }
 
+    @Test fun aMultiPartitionControlTopicIsRefusedAtRecovery() {
+        DisposableRedpanda().start().use { rp ->
+            rp.admin().use { it.createTopics(listOf(org.apache.kafka.clients.admin.NewTopic(F.CONTROL, 2, 1.toShort()))).all().get(30, java.util.concurrent.TimeUnit.SECONDS) }
+            FiniteControlWriter(props(rp.bootstrap), F.CONTROL, txId).use { w ->
+                assertFailsWith<IllegalStateException> { w.recover() }
+            }
+        }
+    }
+
     @Test fun callsBeforeRecoverAreRefused() {
         FiniteControlWriter(props("127.0.0.1:1"), F.CONTROL, txId).use { w ->
             assertFailsWith<IllegalStateException> { w.fund(key("x"), F.buyer, F.usd, 1) }

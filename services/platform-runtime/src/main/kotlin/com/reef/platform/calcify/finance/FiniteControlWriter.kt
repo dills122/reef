@@ -106,6 +106,8 @@ internal class FiniteControlWriter(
         put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name)
         put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer::class.java.name)
     }).use { c ->
+        // The finite binding pins one partition; a different layout would hide records from recovery and deduplication, so refuse it.
+        check(c.partitionsFor(controlTopic, timeout).size == 1) { "$controlTopic must have exactly one partition" }
         val tp = TopicPartition(controlTopic, 0)
         c.assign(listOf(tp)); c.seekToBeginning(listOf(tp))
         val end = c.endOffsets(listOf(tp), timeout).getValue(tp)

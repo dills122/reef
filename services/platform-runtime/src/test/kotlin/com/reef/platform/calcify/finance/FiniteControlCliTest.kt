@@ -15,8 +15,15 @@ class FiniteControlCliTest {
 
     @Test fun refusesMalformedCommandsBeforeAnyNetworkWork() {
         for (bad in listOf(emptyList(), listOf("capture", "o.json"), listOf("fund", "o.json", "f", "a", "USD"), listOf("fund", "o.json", "f", "a", "USD", "x"),
-            listOf("settle", "o.json", "r", "e", "one"), listOf("settle", "o.json", "r", "e"), listOf("fund"))) {
+            listOf("settle", "o.json", "r", "e", "one"), listOf("settle", "o.json", "r", "e"), listOf("fund"), listOf("settle"))) {
             assertFailsWith<IllegalArgumentException>(bad.toString()) { FiniteControlCli.parse(bad) }
+        }
+    }
+
+    @Test fun aWrongArityReportsTheUsageNotAMissingOpeningFile() {
+        for (args in listOf(listOf("fund"), listOf("settle"), listOf("fund", "o.json"))) {
+            val message = assertFailsWith<IllegalArgumentException> { FiniteControlCli.parse(args) }.message.orEmpty()
+            assertTrue(message.startsWith("usage:"), "$args -> $message")
         }
     }
 

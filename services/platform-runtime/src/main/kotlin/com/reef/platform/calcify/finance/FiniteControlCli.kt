@@ -27,12 +27,11 @@ internal object FiniteControlCli {
 
     fun parse(args: List<String>): Pair<Path, ControlCommand> {
         require(args.isNotEmpty()) { "usage: fund|settle <opening.json> ..." }
-        val opening = Path.of(args.getOrNull(1) ?: throw IllegalArgumentException("missing opening file"))
         return when (args[0]) {
             "fund" -> { require(args.size == 6) { "usage: fund <opening.json> <actionId> <accountId> <assetId> <amount>" }
-                opening to ControlCommand.Fund(ActionKey(NAMESPACE, FUND_DOMAIN, args[2]), AccountId(args[3]), AssetId(args[4]), args[5].toLongOrNull() ?: throw IllegalArgumentException("amount must be an integer")) }
+                Path.of(args[1]) to ControlCommand.Fund(ActionKey(NAMESPACE, FUND_DOMAIN, args[2]), AccountId(args[3]), AssetId(args[4]), args[5].toLongOrNull() ?: throw IllegalArgumentException("amount must be an integer")) }
             "settle" -> { require(args.size == 5) { "usage: settle <opening.json> <actionId> <executionId> <attempt>" }
-                opening to ControlCommand.Settle(ActionKey(NAMESPACE, REPAIR_DOMAIN, args[2]), args[3], args[4].toIntOrNull() ?: throw IllegalArgumentException("attempt must be an integer")) }
+                Path.of(args[1]) to ControlCommand.Settle(ActionKey(NAMESPACE, REPAIR_DOMAIN, args[2]), args[3], args[4].toIntOrNull() ?: throw IllegalArgumentException("attempt must be an integer")) }
             else -> throw IllegalArgumentException("unknown command ${args[0]}")
         }
     }
@@ -52,11 +51,17 @@ internal object FiniteControlCli {
         val (openingPath, command) = parse(args)
         val opening = FiniteBindingContract.parseOpeningV2(Files.readAllBytes(openingPath))
         FiniteControlWriter(clientProperties(env), opening.topic("CONTROL").name, opening.controlTransactionalId).use { writer ->
-            writer.recover()
-            return when (command) {
+            fun attempt(): ControlSubmission = when (command) {
                 is ControlCommand.Fund -> writer.fund(command.action, command.account, command.asset, command.amount)
                 is ControlCommand.Settle -> writer.settle(command.action,
                     ExecutionKey(opening.json()["runId"].textValue(), opening.json()["venueSessionId"].textValue(), opening.json()["instrumentId"].textValue(), command.executionId), command.attempt)
+            }
+            writer.recover()
+            return try { attempt() } catch (e: IllegalStateException) {
+                // Outcome unknown (the commit may have landed). Fence, re-read the log, and ask again once: a write that did land is
+                // reported as AlreadySubmitted, one that did not is written now. A second failure is surfaced to the operator.
+                writer.recover()
+                attempt()
             }
         }
     }
