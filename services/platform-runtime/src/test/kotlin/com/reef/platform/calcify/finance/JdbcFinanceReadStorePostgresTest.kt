@@ -7,7 +7,6 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.postgresql.ds.PGSimpleDataSource
 
@@ -79,10 +78,11 @@ class JdbcFinanceReadStorePostgresTest {
                 "TRUNCATE boundary.calcify_finance_obligation",
             )) {
                 val e = assertFailsWith<SQLException>(sql) { c.createStatement().use { it.execute(sql) } }
-                assertTrue(e.message.orEmpty().contains("permission denied"), "unexpected failure for $sql: ${e.message}")
+                assertEquals("42501", e.sqlState, "expected insufficient_privilege for $sql: ${e.message}")
             }
             // And it cannot see the ingress or registrar tables at all.
-            assertFailsWith<SQLException> { c.createStatement().use { it.executeQuery("SELECT 1 FROM boundary.calcify_finite_bindings").close() } }
+            val denied = assertFailsWith<SQLException> { c.createStatement().use { it.executeQuery("SELECT 1 FROM boundary.calcify_finite_bindings").close() } }
+            assertEquals("42501", denied.sqlState)
         }
     }
 }
