@@ -222,6 +222,74 @@ class FinanceProcessorTest {
         assertEquals(genesisHex, e.prevEntryChain)
     }
 
+    // ---- restore cut (spec section 8): evidence in, stable refusal code out ----
+    private fun evidence(h: Harness, store: Map<String, ByteArray> = h.snapshot(), decisions: List<ByteArray> = h.context.forwarded().map { it.record().value() },
+                         capture: Long? = h.captureOffset, control: Long? = h.controlOffset, bindingDigest: String = this.bindingDigest) =
+        FinanceRestoreEvidence(bindingDigest, MemoryLifecycleKv().also { it.apply(store) }, decisions, capture, control, h.captureOffset, h.controlOffset)
+    private fun refusal(evidence: FinanceRestoreEvidence) = assertFailsWith<FinanceRestoreRefused> { FinanceRestoreCut.verify(ledger, evidence) }.code
+    private fun fullRun() = Harness().also { fundBoth(it); feedAllCaptures(it); executionIds.forEach { e -> it.control(bytes(settle(e, 1))) } }
+
+    @Test fun restoreCutAcceptsTheConsistentEvidenceAndReturnsTheHeadDecision() {
+        val h = fullRun()
+        val cut = FinanceRestoreCut.verify(ledger, evidence(h))
+        assertEquals(8L, cut.state.sequence); assertEquals(h.decisions().last(), cut.headDecision)
+        val genesis = FinanceRestoreCut.verify(ledger, FinanceRestoreEvidence(bindingDigest, MemoryLifecycleKv(), emptyList(), null, null, 0, 0))
+        assertEquals(ledger.genesis(), genesis.state); assertEquals(null, genesis.headDecision)
+    }
+
+    @Test fun restoreCutRefusesEveryInconsistentEvidenceWithAStableCode() {
+        val h = fullRun()
+        val log = h.context.forwarded().map { it.record().value() }
+        fun code(name: String, e: FinanceRestoreEvidence, expected: RestoreRefusal) = assertEquals(expected, refusal(e), name)
+        code("offset ahead", evidence(h, capture = h.captureOffset + 1), RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY)
+        code("control ahead", evidence(h, control = h.controlOffset + 3), RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY)
+        code("history ahead", evidence(h, capture = h.captureOffset - 1), RestoreRefusal.FINANCE_HISTORY_AHEAD_OF_OFFSET)
+        code("control history ahead", evidence(h, control = h.controlOffset - 1), RestoreRefusal.FINANCE_HISTORY_AHEAD_OF_OFFSET)
+        code("expired absent", evidence(h, capture = null), RestoreRefusal.FINANCE_GROUP_OFFSETS_EXPIRED)
+        code("expired reset", evidence(h, control = 0L), RestoreRefusal.FINANCE_GROUP_OFFSETS_EXPIRED)
+        code("decision truncated", evidence(h, decisions = log.dropLast(1)), RestoreRefusal.FINANCE_STORE_DISAGREES_WITH_DECISIONS)
+        code("decision removed from middle", evidence(h, decisions = log.filterIndexed { i, _ -> i != 3 }), RestoreRefusal.FINANCE_DECISION_LOG_INVALID)
+        code("decision reordered", evidence(h, decisions = log.toMutableList().also { val t = it[0]; it[0] = it[1]; it[1] = t }), RestoreRefusal.FINANCE_DECISION_LOG_INVALID)
+        code("decision garbage", evidence(h, decisions = log + byteArrayOf(1, 2)), RestoreRefusal.FINANCE_DECISION_LOG_INVALID)
+        code("store lost", evidence(h, store = emptyMap()), RestoreRefusal.FINANCE_STORE_LOST)
+        code("store tampered", evidence(h, store = h.snapshot().toMutableMap().also { it.remove(FinanceStore.HEAD) }), RestoreRefusal.FINANCE_STORE_INVALID)
+        code("other binding", evidence(h, bindingDigest = FiniteLifecycleContract.sha("other".toByteArray())), RestoreRefusal.FINANCE_STORE_INVALID)
+        code("genesis with committed offset", FinanceRestoreEvidence(bindingDigest, MemoryLifecycleKv(), emptyList(), 5L, null, 5, 0), RestoreRefusal.FINANCE_OFFSET_AHEAD_OF_HISTORY)
+        code("decision log from another run", evidence(h, decisions = Harness().also { x -> x.control(bytes(fund("open-seller", seller, aapl, 7))) }.context.forwarded().map { it.record().value() }),
+            RestoreRefusal.FINANCE_STORE_DISAGREES_WITH_DECISIONS)
+    }
+
+    @Test fun anAbsentCommittedOffsetIsZeroOnlyWhenTheTopicHasNoHistory() {
+        val h = Harness().also { it.control(bytes(fund("open-seller", seller, aapl, 6))) }   // CONTROL history only; CAPTURE untouched
+        val cut = FinanceRestoreCut.verify(ledger, evidence(h, capture = null))
+        assertEquals(1L, cut.state.sequence)
+        assertEquals(RestoreRefusal.FINANCE_GROUP_OFFSETS_EXPIRED, refusal(evidence(h, control = null)))
+    }
+
+    /**
+     * S2-A2 measurement: the per-entity store cost on the real processor path (in-memory store, mock context). Harness construction is
+     * excluded; only the feed loop is timed. Reported; the only assertion is a sanity floor, not a capacity claim.
+     */
+    @Test fun measuresDecisionsPerSecondAndBytesPerKeyOnTheStoreBackedPath() {
+        val funds = listOf(bytes(fund("open-seller", seller, aapl, 6)), bytes(fund("open-buyer", buyer, usd, 6 * price)))
+        val captures = envelopes.map { it.toByteArray() }
+        val settles = executionIds.map { bytes(settle(it, 1)) }
+        fun feed(h: Harness) { funds.forEach(h::control); captures.forEach(h::capture); settles.forEach(h::control) }
+        repeat(3000) { feed(Harness()) }   // warm-up: JIT needs tens of thousands of records to reach steady state
+        var decisions = 0; var records = 0; var nanos = 0L
+        repeat(3000) {
+            val h = Harness()
+            val started = System.nanoTime(); feed(h); nanos += System.nanoTime() - started
+            decisions += h.context.forwarded().size; records += funds.size + captures.size + settles.size
+        }
+        val seconds = nanos / 1e9
+        val snapshot = Harness().also { feed(it) }.snapshot()
+        val byPrefix = snapshot.entries.groupBy { it.key.substringBefore('/') }.mapValues { (_, v) -> v.size to v.sumOf { it.value.size + it.key.length } }
+        println("FINANCE-MEASURE records=$records decisions=$decisions seconds=%.3f recordsPerSecond=%.0f decisionsPerSecond=%.0f".format(seconds, records / seconds, decisions / seconds))
+        println("FINANCE-MEASURE keys=${snapshot.size} totalBytes=${snapshot.entries.sumOf { it.value.size + it.key.length }} byPrefix=$byPrefix")
+        assertTrue(decisions / seconds > 1_000, "store-backed path far below any plausible floor")
+    }
+
     @Test fun topologyEndToEndOnTheTestDriverProducesTheVerifiedDecisionLog() {
         val props = Properties().apply { put(StreamsConfig.APPLICATION_ID_CONFIG, "finance-e2e"); put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234") }
         TopologyTestDriver(FinanceTopology.build(cfg, persistent = false), props).use { driver ->

@@ -10,6 +10,10 @@ import { join, resolve } from 'node:path';
 const MAIN = 'services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/finance/';
 const LEDGER = MAIN + 'FinanceLedger.kt';
 const MODEL = MAIN + 'FinanceModel.kt';
+const STORE = MAIN + 'FinanceStore.kt';
+const PROC = MAIN + 'FinanceProcessor.kt';
+const CUT = MAIN + 'FinanceRestoreCut.kt';
+const MAP = MAIN + 'FinanceCaptureMapping.kt';
 
 // [name, file, from, to]. 'from' must occur in the file; the first occurrence is replaced.
 export const MUTANTS = [
@@ -91,6 +95,49 @@ export const MUTANTS = [
   ['no opening-account sign invariant', LEDGER, 'check(key.first != config.openingAccount || value <= 0)', 'check(true)'],
   ['UTF-16 order instead of UTF-8 bytes', MODEL, 'java.util.Arrays.compareUnsigned(strictUtf8(x), strictUtf8(y))', 'x.compareTo(y)'],
   ['fund overflow recorded', LEDGER, 'if (it.disposition == Disposition.FUNDED) it.copy(recorded = true) else it', 'it.copy(recorded = true)'],
+  // Added with S2-A2 (store, processor, restore cut, mapping).
+  ['S2A2 entry chain omits offset', STORE, 'long(position); str(role); int(partition); long(offset); int(ordinal)', 'long(position); str(role); int(partition); int(ordinal)'],
+  ['S2A2 history link check removed', STORE, 'require(e.position == i + 1L && e.prevEntryChain == prev) { "history position/link" }', ''],
+  ['S2A2 history chain recompute removed', STORE, 'require(e.entryChain == entryChain(prev, e.position, e.sourceRole, e.sourcePartition, e.sourceOffset, e.memberOrdinal, e.kind, e.inputDigest, e.outcome, e.decisionChecksum)) { "history entry chain" }', ''],
+  ['S2A2 history head vs meta removed', STORE, 'require(prev == meta.entryChainHead) { "history head differs from meta" }', ''],
+  ['S2A2 recorded entries vs sequence removed', STORE, 'require(recorded == meta.sequence) { "recorded history entries differ from the ledger sequence" }', ''],
+  ['S2A2 last recorded vs head removed', STORE, 'require(lastChecksum == (head?.checksum ?: "")) { "last recorded entry is not the head decision" }', ''],
+  ['S2A2 history length vs meta removed', STORE, 'require(entries.size.toLong() == meta.historyPosition && entries.size <= MAX_HISTORY_ENTRIES) { "history length differs from meta" }', ''],
+  ['S2A2 binding check removed', STORE, 'require(meta.bindingDigest == bindingDigest) { "finance store belongs to a different binding" }', ''],
+  ['S2A2 restore skips committed-head check', STORE, 'ledger.restoreAt(ledger.checkpoint(state), head)', ''],
+  ['S2A2 head presence check removed', STORE, 'require((head == null) == (meta.sequence == 0L)) { "head decision presence differs from sequence" }', ''],
+  ['S2A2 orphan entities accepted', STORE, 'require(kv.scan("").isEmpty()) { "finance store has entities but no meta" }', ''],
+  ['S2A2 attempts not persisted', STORE, 'for ((k, v) in after.attempts) if (before.attempts[k] != v) out[attemptKey(k.first, k.second)] = encodeAttempt(v)', ''],
+  ['S2A2 positions not persisted', STORE, 'for ((k, v) in after.positions) if (before.positions[k] != v) out[positionKey(k.first, k.second)] = encodePosition(v)', ''],
+  ['S2A2 history bound off by one', STORE, 'const val MAX_HISTORY_ENTRIES = 312', 'const val MAX_HISTORY_ENTRIES = 313'],
+  ['S2A2 trailing entity bytes accepted', STORE, 'require(input.available() == 0) { "trailing entity bytes" }', ''],
+  ['S2A2 entity version unchecked', STORE, 'require(str() == version) { "unknown entity version" }', 'str()'],
+  ['S2A2 history bound removed', PROC, 'if (position + 1 > FinanceStore.MAX_HISTORY_ENTRIES) throw FinanceHistoryBudgetExceeded()', ''],
+  ['S2A2 capture body accepted on control', PROC, 'if (input is FinanceInput.Capture) return bad', ''],
+  ['S2A2 binding digest unchecked', PROC, 'envelope.finiteBindingDigest != config.captureBinding.digest ||', ''],
+  ['S2A2 content digest unchecked', PROC, ' ||\n            envelope.contentDigest != FiniteLifecycleContract.digest(envelope)', ''],
+  ['S2A2 schema unchecked', PROC, 'envelope.schema != FiniteLifecycleContract.CAPTURE_SCHEMA || ', ''],
+  ['S2A2 head not persisted', PROC, 'headDecision?.let { writes[FinanceStore.HEAD] = FinanceWire.toProto(it).toByteArray() }', ''],
+  ['S2A2 cached state not advanced', PROC, 'state = staged; historyPosition = position; entryHead = head', 'historyPosition = position; entryHead = head'],
+  ['S2A2 cached history not advanced', PROC, 'state = staged; historyPosition = position; entryHead = head', 'state = staged; entryHead = head'],
+  ['S2A2 NO_INPUT entry dropped', PROC, 'if (mapped.isEmpty()) return listOf(Item.None)', 'if (mapped.isEmpty()) return emptyList()'],
+  ['S2A2 offset-ahead refusal removed', CUT, 'if (committed > last + 1 || committed > end) throw', 'if (false) throw'],
+  ['S2A2 history-ahead refusal removed', CUT, 'if (committed < last + 1) throw', 'if (false) throw'],
+  ['S2A2 expired-offsets refusal removed', CUT, 'if (committed == null || committed == 0L) throw', 'if (false) throw'],
+  ['S2A2 no-history offset rule removed', CUT, 'if ((committed ?: 0L) != 0L) throw', 'if (false) throw'],
+  ['S2A2 cross-check removed', CUT, 'if (recorded.size != log.size || recorded.zip(log).any { (e, d) -> e.decisionChecksum != d.checksum || e.inputDigest != d.inputDigest })', 'if (false)'],
+  ['S2A2 cross-check ignores input digest', CUT, ' || e.inputDigest != d.inputDigest', ''],
+  ['S2A2 store-lost refusal removed', CUT, 'if (log.isNotEmpty()) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_STORE_LOST', 'if (false) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_STORE_LOST'],
+  ['S2A2 decision chain unverified', CUT, 'if (!ledger.verifyChain(log))', 'if (false)'],
+  ['S2A2 store/decision head check removed', CUT, 'if (state.sequence != log.size.toLong() || state.chain != (head?.checksum ?: ledger.genesisChain))', 'if (false)'],
+  ['S2A2 replay members mapped', MAP, 'if (member.disposition != LifecycleDispositionV1.LIFECYCLE_READY_EXECUTION) continue', ''],
+  ['S2A2 mapping skips account check', MAP, 'require(buyFact.accountId == buyer.account && buyFact.participantId == buyer.participant &&\n            sellFact.accountId == seller.account && sellFact.participantId == seller.participant) { "dependency accounts differ from the bound parties" }', ''],
+  ['S2A2 mapping skips currency check', MAP, 'require(fact.price.currency == binding.currency) { "trade currency differs from the bound quote currency" }', ''],
+  ['S2A2 mapping skips run/instrument check', MAP, 'require(trade.runId == binding.run && fact.instrumentId == binding.instrument) { "trade outside the bound run/instrument" }', ''],
+  ['S2A2 mapping skips dependency order match', MAP, 'require(buy.orderId == fact.buyOrderId && sell.orderId == fact.sellOrderId && buy.orderId != sell.orderId) { "dependencies do not match the trade orders" }', ''],
+  ['S2A2 mapping allows leading zeros', MAP, ' && (text.length == 1 || text[0] != \'0\')', ''],
+  ['S2A2 mapping allows zero amount', MAP, 'require(value > 0) { "amount must be positive" }', ''],
+  ['S2A2 mapping ordinal counts all members', MAP, 'val at = ordinal++', 'val at = out.size'],
 ];
 
 function arg(name, fallback) { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : fallback; }
