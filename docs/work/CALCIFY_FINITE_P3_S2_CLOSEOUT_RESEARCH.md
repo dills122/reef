@@ -118,6 +118,11 @@ partitions. It is an environment fault, not a test or code fault; freeing 9 GB o
 action:** `docker volume ls` shows the old O2 volumes (127 GB reclaimable); I did not delete any volume because they may hold proof
 evidence. Hosted CI runners start clean and are not affected.
 
+**Root cause refined.** The test fixture removed its container with `docker rm -f` and no `-v`, and Redpanda's image declares an anonymous
+data volume that grows to about 1.7 GB per run; each local run leaked one. I removed the 24 anonymous volumes this session created
+(all dated today) and changed the fixture to `docker rm -f -v`; a full broker run now leaves the volume count unchanged (170 before
+and after). The remaining 94 dangling volumes (about 97 GB) predate this session and are the owner's to clear.
+
 Test hardening made while investigating: readiness now requires a successful topic create and delete (not only `describeCluster`), the
 broker is addressed as `127.0.0.1` (no `localhost` IPv4/IPv6 ambiguity), and a readiness failure prints the container log tail. The
 image is still pinned by tag; pin by digest when the owner chooses the production Redpanda version.
