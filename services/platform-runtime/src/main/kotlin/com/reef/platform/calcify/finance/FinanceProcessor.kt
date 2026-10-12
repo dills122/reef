@@ -1,6 +1,7 @@
 package com.reef.platform.calcify.finance
 
 import com.reef.platform.calcify.FiniteLifecycleBinding
+import com.reef.platform.calcify.FiniteOpeningV2
 import com.reef.platform.calcify.FiniteLifecycleContract
 import com.reef.platform.calcify.StreamsLifecycleKv
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -23,7 +24,20 @@ internal class FinanceHistoryBudgetExceeded : IllegalStateException("FINANCE_HIS
 internal data class FinanceProcessorConfig(
     val bindingDigest: String, val captureBinding: FiniteLifecycleBinding, val finance: FinanceConfig,
     val captureTopic: String, val controlTopic: String, val decisionsTopic: String, val storeName: String = "finite-finance",
-)
+) {
+    init {
+        // A run has exactly one binding digest (spec section 8): the store, the projection and the envelope check must all use it.
+        require(bindingDigest == captureBinding.digest) { "finance binding digest must equal the capture lane's binding digest" }
+    }
+
+    companion object {
+        /** Derives everything from a registered v2 opening, so no digest or topic name can be supplied independently of it. */
+        fun fromOpening(opening: FiniteOpeningV2): FinanceProcessorConfig = FinanceProcessorConfig(
+            opening.digest, opening.toCaptureBinding(), opening.financeConfig(),
+            opening.topic("CAPTURE").name, opening.topic("CONTROL").name, opening.topic("FINANCE_DECISIONS").name,
+        )
+    }
+}
 
 /**
  * S2-A2 finance processor (option B ordering): consumes CAPTURE and CONTROL, assigns every consumed ledger input the next position

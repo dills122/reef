@@ -86,7 +86,7 @@ internal object FinanceBrokerFixture {
     const val PRICE = 100_000_000_000L
     val captureBinding = FiniteLifecycleFixtures.binding()
     val finance = FinanceConfig(setOf(buyer, seller), usd, aapl, AccountId("p3-opening"))
-    val bindingDigest = FiniteLifecycleContract.sha("binding-v2-it".toByteArray())
+    val bindingDigest = captureBinding.digest      // one digest per run: the store, the projection and the envelope check share it
     val config = FinanceProcessorConfig(bindingDigest, captureBinding, finance, CAPTURE, CONTROL, DECISIONS)
     val ledger = FinanceLedger(finance)
 
@@ -117,7 +117,9 @@ internal object FinanceBrokerFixture {
 
     fun createTopics(admin: AdminClient) {
         val history = mapOf("retention.ms" to "-1", "retention.bytes" to "-1", "cleanup.policy" to "delete")
-        admin.createTopics(listOf(CAPTURE, CONTROL, DECISIONS).map { NewTopic(it, 1, 1.toShort()).configs(history) }).all().get(30, TimeUnit.SECONDS)
+        // The changelog is a registered binding topic provisioned up front (compacted), not something the app creates on first start.
+        admin.createTopics(listOf(CAPTURE, CONTROL, DECISIONS).map { NewTopic(it, 1, 1.toShort()).configs(history) } +
+            NewTopic(changelog, 1, 1.toShort()).configs(mapOf("cleanup.policy" to "compact"))).all().get(30, TimeUnit.SECONDS)
     }
 
     fun producer(bootstrap: String, auth: Properties = Properties()) = KafkaProducer<ByteArray, ByteArray>(Properties().apply {

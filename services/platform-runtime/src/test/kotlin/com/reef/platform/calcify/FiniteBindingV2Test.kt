@@ -39,6 +39,14 @@ class FiniteBindingV2Test {
         assertEquals(v1.toCaptureBinding().copy(digest = v2.digest, generation = v2.generation), binding, "every other capture-lane field equals the v1 mapping (a v2 run uses a fresh source generation)")
     }
 
+    @Test fun processorConfigIsDerivedFromTheOpeningWithOneDigestAndTheCheckedFinanceConfig() {
+        val o = FiniteBindingContract.parseOpeningV2(raw("finite-binding-v2.json"))
+        val config = com.reef.platform.calcify.finance.FinanceProcessorConfig.fromOpening(o)
+        assertEquals(o.digest, config.bindingDigest); assertEquals(o.digest, config.captureBinding.digest)
+        assertEquals(o.financeConfigDigest, config.finance.digest(), "the derived FinanceConfig is the one the opening committed to")
+        assertEquals(o.topic("CAPTURE").name, config.captureTopic); assertEquals(o.topic("CONTROL").name, config.controlTopic); assertEquals(o.topic("FINANCE_DECISIONS").name, config.decisionsTopic)
+    }
+
     @Test fun v1StaysFrozenAndTheTwoSchemasNeverConfuse() {
         val v1 = FiniteBindingContract.parseOpening(raw("finite-binding-v1.json"))
         assertEquals("1fe1749dba2b35803eabb41fc1f9106477147a2ad9966ecf2087eb5f78dc2c8a", v1.digest)

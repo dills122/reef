@@ -104,3 +104,22 @@ tests that isolate each rule (forged consistent history, direct `verifyHistory` 
 replaced. Second run (with the new tests): see the final line below.
 
 Second run: **41 of 41 killed, 0 survivors** (run on commit e07296c8c; later commits changed no mutated logic beyond a one-line apply refactor).
+
+## S3 integration (review 1 of 3 of the integrated path)
+
+What the integrated path now is: `FiniteFinanceLauncher` activates a run in the only safe order (read-only evidence, restore cut, and only if it
+verifies the pinned-EOS Streams app, then the owner-fenced projection loop), `FinanceProcessorConfig.fromOpening` derives every digest and topic
+from the registered v2 opening (one binding digest per run, enforced in the constructor and tested), and `FiniteP3EndToEndTest` drives the
+plan's O5 scenario on real Redpanda and Postgres including a restart that processes **new input** on the restored state.
+
+Evidence limits to keep in mind: the Postgres-backed suites (`FinanceProjectorPostgresTest`, `JdbcFinanceReadStorePostgresTest`, the O5
+fixture) skip without the fixture and so run only in hosted CI or against a locally provisioned Postgres; the O5 ledger oracle is the same
+ledger (the O3a had three independent reviews), so the exact-row assertions prove projection equals ledger, not that the ledger is right.
+
+Deferred, with owner Dylan, before any capacity or authority claim:
+- **Authenticity of the decision log.** The projector verifies hash link, input digest and continuity but trusts a chain-valid record; the
+  chain is unkeyed (integrity, not authenticity). A keyed or externally anchored chain and a re-deciding projector are required first.
+- **Real ownership-epoch integration.** The projector's owner epoch is supplied by the caller (a constant in the fixture); tying it to the
+  O2 ownership claim is part of the product launcher.
+- **Single approved live recording** and finite stage costs (S3-A2 live part; owner-gated).
+- The plan's "progress" read is served by the checkpoint route (last sequence and chain); there is no separate progress route.

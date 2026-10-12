@@ -746,10 +746,10 @@ jobs:
           CALCIFY_FINITE_POSTGRES_TEST_PROJECTOR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/projector.pw
           CALCIFY_FINITE_POSTGRES_TEST_READER_USER: fin_reader
           CALCIFY_FINITE_POSTGRES_TEST_READER_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/reader.pw
-        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest" --tests "com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest" --tests "com.reef.platform.calcify.finance.FiniteP3EndToEndTest"
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest" --tests "com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest" --tests "com.reef.platform.calcify.finance.FiniteP3EndToEndTest" --tests "com.reef.platform.calcify.finance.FiniteFinanceLauncherBrokerTest"
       - name: Require broker suites executed, not skipped
         run: |
-          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest com.reef.platform.calcify.finance.FiniteP3EndToEndTest; do
+          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest com.reef.platform.calcify.finance.FiniteP3EndToEndTest com.reef.platform.calcify.finance.FiniteFinanceLauncherBrokerTest; do
             g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
             test -f "$g"
             grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"

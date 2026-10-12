@@ -235,7 +235,7 @@ operators (read only).
 | TransactionalId `controlTransactionalId` (LITERAL) | Write/Describe: `control` | refused (**including `finance`**) |
 | TransactionalId prefix `financeApplicationId` | `finance` | refused |
 | Group `financeApplicationId` | Read: `finance`; Describe: `observer` | refused |
-| Activation verifier / witness builder (`observer`) | Describe on all eight topics and on the group; Read on CONTROL, FINANCE_DECISIONS and FINANCE_CHANGELOG (`listConsumerGroupOffsets`, begin/end offsets, history and decision replay) | no write anywhere |
+| Activation verifier / witness builder (`observer`) | Describe on all eight topics and on the group; Read on CAPTURE (the section 8.4 first-visible probe), CONTROL, FINANCE_DECISIONS and FINANCE_CHANGELOG (`listConsumerGroupOffsets`, begin/end offsets, history and decision replay) | no write anywhere |
 | `matcher` (existing) | unchanged; must be **denied** on CONTROL and FINANCE_* (tested) | refused |
 
 The `controlTransactionalId` prefix-distinctness rule (section 3) guarantees the finance principal's prefixed transactional-id
