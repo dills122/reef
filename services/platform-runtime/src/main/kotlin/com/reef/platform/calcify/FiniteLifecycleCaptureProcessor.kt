@@ -205,10 +205,10 @@ internal object FiniteLifecycleReducer {
         require(state.sourceBytes == state.completedRecordsList.sumOf { it.sourceEncodedBytes } &&
             state.captureBytes == state.completedRecordsList.sumOf { it.serializedSize.toLong() }) { "checkpoint byte accounting missing/changed" }
     }
-    private fun amount(value: String, cap: Long) = FiniteLifecycleContract.amount(value,cap)
+    internal fun amount(value: String, cap: Long) = FiniteLifecycleContract.amount(value,cap)
 
     /** New physical identity is exact; nested original facts and dependency/effect identities stay original. */
-    private fun replayMember(first: LifecycleMemberV1, source: SourceProvenanceV1): LifecycleMemberV1 {
+    internal fun replayMember(first: LifecycleMemberV1, source: SourceProvenanceV1): LifecycleMemberV1 {
         val replaySource = source.toBuilder().setOutcomeOrdinal(first.id.source.outcomeOrdinal)
             .setCommandId(first.id.source.commandId).build()
         return first.toBuilder().setId(first.id.toBuilder().setSource(replaySource))
@@ -216,7 +216,7 @@ internal object FiniteLifecycleReducer {
     }
 
     /** Fresh reduction and receipt reconstruction share accepted command transition semantics. */
-    private fun appliedOrder(cmd: OrderLifecycleCommandV1, id: LifecycleMemberIdV1,
+    internal fun appliedOrder(cmd: OrderLifecycleCommandV1, id: LifecycleMemberIdV1,
                              accepted: reef.contracts.orderexecution.v1.OrderAccepted,
                              acceptance: AcceptedOrderSourceV1?, row: FiniteLifecycleOrderStateV1?,
                              orderCount: Int, binding: FiniteLifecycleBinding): FiniteLifecycleOrderStateV1 {
@@ -247,7 +247,7 @@ internal object FiniteLifecycleReducer {
             else -> throw IllegalArgumentException("unsupported accepted command")
         }
     }
-    private fun validateCurrentTrade(cmd: OrderLifecycleCommandV1, source: SourceProvenanceV1, trade: TradeSourceV1,
+    internal fun validateCurrentTrade(cmd: OrderLifecycleCommandV1, source: SourceProvenanceV1, trade: TradeSourceV1,
                                      pair: List<reef.contracts.orderexecution.v1.ExecutionCreated>, buy: FiniteLifecycleOrderStateV1?,
                                      sell: FiniteLifecycleOrderStateV1?, executions: MutableSet<String>, flat: Int,
                                      binding: FiniteLifecycleBinding): Long {
@@ -262,7 +262,7 @@ internal object FiniteLifecycleReducer {
         require(executions.add(trade.fact.executionId)) { "execution reused outside identical batch replay" }
         return amount(trade.fact.quantity.units,binding.budget.quantity)
     }
-    private fun fillTrade(orders: MutableMap<String,FiniteLifecycleOrderStateV1>, buy: FiniteLifecycleOrderStateV1,
+    internal fun fillTrade(orders: MutableMap<String,FiniteLifecycleOrderStateV1>, buy: FiniteLifecycleOrderStateV1,
                           sell: FiniteLifecycleOrderStateV1, id: LifecycleMemberIdV1, quantity: Long) {
         for(order in listOf(buy,sell)) {
             val filled = Math.addExact(order.filledUnits.toLong(),quantity)
@@ -271,10 +271,10 @@ internal object FiniteLifecycleReducer {
                 .setTerminal(if(filled == order.quantityUnits.toLong()) LifecycleOrderTerminalV1.LIFECYCLE_ORDER_FILLED else LifecycleOrderTerminalV1.LIFECYCLE_ORDER_OPEN).build()
         }
     }
-    private fun revision(id: LifecycleMemberIdV1, number: Int) = LifecycleRevisionIdV1.newBuilder().setCommand(id).setRevision(number).build()
-    private fun memberId(source: SourceProvenanceV1, kind: LifecycleMemberKindV1, within: Int, flat: Int) = LifecycleMemberIdV1.newBuilder()
+    internal fun revision(id: LifecycleMemberIdV1, number: Int) = LifecycleRevisionIdV1.newBuilder().setCommand(id).setRevision(number).build()
+    internal fun memberId(source: SourceProvenanceV1, kind: LifecycleMemberKindV1, within: Int, flat: Int) = LifecycleMemberIdV1.newBuilder()
         .setSource(source).setKind(kind).setWithinOutcomeTradeOrdinal(within).setFlattenedTradeOrdinal(flat).build()
-    private fun dependency(state: FiniteLifecycleOrderStateV1) = LifecycleDependencyV1.newBuilder()
+    internal fun dependency(state: FiniteLifecycleOrderStateV1) = LifecycleDependencyV1.newBuilder()
         .setOrderId(state.acceptance.fact.orderId).setAcceptance(state.acceptance).setRevision(state.revision)
         .setPreviousEffect(state.previousEffect).setQuantityUnits(state.quantityUnits).setLimitPrice(state.limitPrice).setFilledUnits(state.filledUnits).build()
 }
