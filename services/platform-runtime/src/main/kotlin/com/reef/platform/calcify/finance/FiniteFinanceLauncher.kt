@@ -32,17 +32,23 @@ internal class FiniteFinanceLauncher(
         val properties = FinanceTopology.streamsProperties(applicationId, requireNotNull(clientProperties["bootstrap.servers"]) { "bootstrap.servers required" }.toString(), stateDir)
             .apply { clientProperties.forEach { (k, v) -> if (k != "bootstrap.servers") put(k, v) } }
         FinanceTopology.verifyPinned(properties)
+
+        // Everything that can fail before the app exists is done first, so a failure here leaves nothing running.
+        val runner = FinanceProjectionRunner(reader, projectorFactory(), config.bindingDigest, ownerEpoch, config.decisionsTopic).also { it.open() }
         val streams = KafkaStreams(FinanceTopology.build(config, persistent = true), properties)
         streams.setUncaughtExceptionHandler { org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }
-        streams.start()
-
-        val runner = FinanceProjectionRunner(reader, projectorFactory(), config.bindingDigest, ownerEpoch, config.decisionsTopic).also { it.open() }
         val failure = AtomicReference<Throwable?>(null)
-        val loop = Thread {
-            try { while (!Thread.currentThread().isInterrupted) { runner.runOnce(); Thread.sleep(projectionIntervalMs) } }
-            catch (_: InterruptedException) { /* closing */ }
-            catch (e: Throwable) { failure.set(e) }
-        }.apply { isDaemon = true; name = "finance-projection"; start() }
-        return Running(streams, loop, failure)
+        try {
+            streams.start()
+            val loop = Thread {
+                try { while (!Thread.currentThread().isInterrupted) { runner.runOnce(); Thread.sleep(projectionIntervalMs) } }
+                catch (_: InterruptedException) { /* closing */ }
+                catch (e: Throwable) { failure.set(e) }
+            }.apply { isDaemon = true; name = "finance-projection"; start() }
+            return Running(streams, loop, failure)
+        } catch (e: Throwable) {
+            runCatching { streams.close(java.time.Duration.ofSeconds(10)) }       // no half-started service
+            throw e
+        }
     }
 }

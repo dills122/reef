@@ -38,10 +38,11 @@ class FiniteFinanceLauncherBrokerTest {
             val failures = AtomicInteger()
             val launcher = FiniteFinanceLauncher(F.config, F.APP_ID, Properties().apply { put("bootstrap.servers", rp.bootstrap) },
                 Files.createTempDirectory("finance-launcher-state").toString(), { failures.incrementAndGet(); error("no database in this test") }, ownerEpoch = 1)
-            // The cut passes at genesis, so the launcher proceeds to build the projector; the stand-in fails there, proving the order.
+            // The cut passes at genesis, so the launcher proceeds to build the projector; the stand-in fails there, before the app exists.
             val e = assertFailsWith<IllegalStateException> { launcher.start().close() }
             assertEquals("no database in this test", e.message)
             assertEquals(1, failures.get())
+            rp.admin().use { admin -> assertTrue(admin.listConsumerGroups().all().get().none { it.groupId() == F.APP_ID }, "a failed start leaves no running app behind") }
         }
     }
 }
