@@ -125,6 +125,23 @@ internal class FinanceProcessor(private val config: FinanceProcessorConfig) : Pr
 }
 
 internal object FinanceTopology {
+    /**
+     * Spec section 8 pinned Streams configuration. The processor's all-or-nothing-per-record claim holds only under exactly-once, so
+     * the launcher must take its properties from here; [verifyPinned] refuses anything weaker.
+     */
+    fun streamsProperties(applicationId: String, bootstrap: String, stateDir: String): java.util.Properties = java.util.Properties().apply {
+        put("application.id", applicationId); put("bootstrap.servers", bootstrap); put("state.dir", stateDir)
+        put("processing.guarantee", "exactly_once_v2"); put("num.stream.threads", 1); put("num.standby.replicas", 0)
+        put("commit.interval.ms", 100); put("max.task.idle.ms", 0); put("auto.offset.reset", "earliest")
+        put("replication.factor", 1)
+    }
+
+    fun verifyPinned(props: java.util.Properties) {
+        val pinned = mapOf("processing.guarantee" to "exactly_once_v2", "num.stream.threads" to "1", "num.standby.replicas" to "0", "auto.offset.reset" to "earliest")
+        for ((k, v) in pinned) require(props[k]?.toString() == v) { "finance Streams property $k must be $v" }
+        require(props["commit.interval.ms"] != null && props["max.task.idle.ms"] != null) { "commit.interval.ms and max.task.idle.ms must be pinned" }
+    }
+
     fun storeBuilder(config: FinanceProcessorConfig, persistent: Boolean): StoreBuilder<KeyValueStore<String, ByteArray>> =
         Stores.keyValueStoreBuilder(
             if (persistent) Stores.persistentKeyValueStore(config.storeName) else Stores.inMemoryKeyValueStore(config.storeName),

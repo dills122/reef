@@ -274,6 +274,30 @@ class FinanceProcessorTest {
         assertEquals(RestoreRefusal.FINANCE_HISTORY_CROSS_CHECK, refusal(evidence(h, store = checksumForged)), "decision checksum differs from the log")
     }
 
+    @Test fun pinnedStreamsConfigurationIsEnforcedAndRefusesWeakerSettings() {
+        val good = FinanceTopology.streamsProperties("finance", "localhost:1", "/tmp/x")
+        FinanceTopology.verifyPinned(good)
+        for ((k, v) in mapOf("processing.guarantee" to "at_least_once", "num.stream.threads" to 2, "num.standby.replicas" to 1, "auto.offset.reset" to "latest")) {
+            assertFailsWith<IllegalArgumentException>(k) { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); put(k, v) }) }
+        }
+        assertFailsWith<IllegalArgumentException> { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); remove("max.task.idle.ms") }) }
+    }
+
+    @Test fun storeKeysAreLocaleIndependent() {
+        val saved = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ar-SA-u-nu-arab"))
+            assertEquals("h/00000000000000000007", FinanceStore.historyKey(7))
+            assertTrue(FinanceStore.attemptKey(ExecutionKey("r", "s", "i", "e"), 3).endsWith("/0000000003"))
+        } finally { java.util.Locale.setDefault(saved) }
+    }
+
+    @Test fun anUndecodableHeadOrMalformedKeyIsAStableRefusalNotAnUncodedCrash() {
+        val h = fullRun(); val good = h.snapshot()
+        assertEquals(RestoreRefusal.FINANCE_STORE_INVALID, refusal(evidence(h, store = good.toMutableMap().also { it[FinanceStore.HEAD] = byteArrayOf(0x0a, 0x7f) })))
+        assertEquals(RestoreRefusal.FINANCE_STORE_INVALID, refusal(evidence(h, store = good.toMutableMap().also { it["position/zz"] = good[good.keys.first { k -> k.startsWith("position/") }]!! })))
+    }
+
     @Test fun anotherBindingNeverAdoptsThisStore() {
         val h = Harness().also { fundBoth(it) }
         assertFailsWith<IllegalArgumentException> { Harness(h.snapshot(), cfg.copy(bindingDigest = FiniteLifecycleContract.sha("binding-v1".toByteArray()))) }

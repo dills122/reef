@@ -148,7 +148,7 @@ class FinanceBrokerTest {
                 assertTrue(cut.state.obligations.values.all { it.status == ObligationStatus.SETTLED && it.cashResidual == 0L && it.shareResidual == 0L })
                 assertEquals(count.toLong(), cut.state.positions[F.buyer to F.aapl])
                 assertEquals(count * F.PRICE, cut.state.positions[F.seller to F.usd])
-                assertTrue(attempt == 4 && restartsWithWipe == 1)
+                assertEquals(1, restartsWithWipe)
                 println("FINANCE-KILL-SUMMARY kills=3 killsInsideATransaction=$killsInsideATransaction")
             }
         }

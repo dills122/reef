@@ -71,13 +71,6 @@ internal class FiniteOpeningV2 internal constructor(private val root: ObjectNode
     val openingAccountId: String get() = root["openingAccountId"].textValue()
     val financeConfigDigest: String get() = root["financeConfigDigest"].textValue()
     fun topic(role: String): FiniteTopic = core.topic(role)
-    /** The O3a configuration this opening pins; its digest is [financeConfigDigest] (checked by the parser). */
-    fun financeConfig(): com.reef.platform.calcify.finance.FinanceConfig {
-        val b=root["financeBudget"]; fun n(k:String)=b[k].textValue().toInt()
-        return com.reef.platform.calcify.finance.FinanceConfig(core.parties.map{com.reef.platform.calcify.finance.AccountId(it.account)}.toSet(),
-            com.reef.platform.calcify.finance.AssetId(root["quoteCurrency"].textValue()),com.reef.platform.calcify.finance.AssetId(root["baseAssetId"].textValue()),
-            com.reef.platform.calcify.finance.AccountId(openingAccountId),n("obligations"),n("captures"),n("settleAttempts"),n("controls"))
-    }
     fun canonicalBytes(): ByteArray {
         val bytes=ByteArrayOutputStream()
         DataOutputStream(bytes).use { out ->

@@ -37,7 +37,7 @@ internal object FinanceRestoreCut {
         val head = log.lastOrNull()
 
         val restored = try { FinanceStore.verifyAndRestore(ledger, evidence.store, evidence.bindingDigest) }
-        catch (e: IllegalArgumentException) { throw FinanceRestoreRefused(RestoreRefusal.FINANCE_STORE_INVALID, e.message ?: "store verification failed", e) }
+        catch (e: Exception) { if (e is FinanceRestoreRefused) throw e; throw FinanceRestoreRefused(RestoreRefusal.FINANCE_STORE_INVALID, e.message ?: "store verification failed", e) }
         if (restored == null) {
             if (log.isNotEmpty()) throw FinanceRestoreRefused(RestoreRefusal.FINANCE_STORE_LOST, "decisions exist but the finance store is empty")
             checkOffsets(emptyList(), evidence)

@@ -29,9 +29,9 @@ internal object FinanceStore {
     fun positionKey(a: AccountId, s: AssetId) = "position/${hex(a.value)}/${hex(s.value)}"
     fun executionKey(k: ExecutionKey) = "execution/${ek(k)}"
     fun obligationKey(k: ExecutionKey) = "obligation/${ek(k)}"
-    fun attemptKey(k: ExecutionKey, n: Int) = "attempt/${ek(k)}/%010d".format(n)
+    fun attemptKey(k: ExecutionKey, n: Int) = "attempt/${ek(k)}/${n.toString().padStart(10, '0')}"
     fun actionKey(k: ActionKey) = "action/${hex(k.namespace)}/${hex(k.domain)}/${hex(k.actionId)}"
-    fun historyKey(position: Long) = "h/%020d".format(position)
+    fun historyKey(position: Long) = "h/${position.toString().padStart(20, '0')}"
     const val META = "meta"
     const val HEAD = "head"
 

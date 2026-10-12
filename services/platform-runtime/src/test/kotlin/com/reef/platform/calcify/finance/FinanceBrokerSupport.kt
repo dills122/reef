@@ -80,12 +80,7 @@ internal object FinanceBrokerFixture {
         return one.toBuilder().setContentDigest(FiniteLifecycleContract.digest(one)).build()
     }
 
-    fun streamsProperties(bootstrap: String, stateDir: String) = Properties().apply {
-        put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID); put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap)
-        put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2); put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1)
-        put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 0); put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1); put(StreamsConfig.STATE_DIR_CONFIG, stateDir)
-        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100); put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 0)
-        put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    fun streamsProperties(bootstrap: String, stateDir: String) = FinanceTopology.streamsProperties(APP_ID, bootstrap, stateDir).apply {
         // A SIGKILLed member must be evicted quickly, or the next start waits out the default session timeout before it owns the partition.
         put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 6000); put(StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG), 1000)
     }
