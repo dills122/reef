@@ -25,6 +25,7 @@ import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementConfirmationGeneratedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.calcify.finance.FinanceReadStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
 import com.reef.platform.application.settlement.SettlementLedgerDirectionCredit
 import com.reef.platform.application.settlement.SettlementLedgerDirectionDebit
@@ -318,6 +319,7 @@ class PlatformHttpServer(
     private val adminIdentityService: AdminIdentityService? = null,
     private val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
     private val settlementFactStore: SettlementFactStore? = null,
+    private val financeReadStore: FinanceReadStore? = null,
     private val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     private val defaultPostTradeProfileId: String =
         RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
@@ -453,6 +455,8 @@ class PlatformHttpServer(
         internalHttpExposureMode = internalHttpExposureMode,
         localDevAdminUiBaseUrl = localDevAdminUiBaseUrl
     )
+    private val calcifyFinanceReadGateway = CalcifyFinanceReadGateway(financeReadStore, boundary)
+
     private val settlementAdminGateway = SettlementAdminGateway(
         settlementFactStore = settlementFactStore,
         settlementObligationMaterializer = settlementObligationMaterializer,
@@ -642,6 +646,7 @@ class PlatformHttpServer(
         adminIdentityService = deps.adminIdentityService,
         adminGitHubOAuthClient = deps.adminGitHubOAuthClient,
         settlementFactStore = deps.settlementFactStore,
+        financeReadStore = deps.financeReadStore,
         settlementObligationMaterializer = deps.settlementObligationMaterializer,
         postTradeProfileResolver = deps.postTradeProfileResolver,
         scenarioRunPostTradeProfileLookup = deps.scenarioRunPostTradeProfileLookup,
@@ -994,6 +999,23 @@ class PlatformHttpServer(
             val marketDataProjectionName = exchange.queryValue("marketDataProjectionName").ifBlank { "market-data-top-of-book" }
             val source = exchange.queryValue("source").ifBlank { "venue-event-batch" }
             adminSessionAuth.writeJson(exchange, 200, api.dataAvailability(venueProjectionName, marketDataProjectionName, source))
+        }
+
+        server.createContext(CalcifyFinanceReadGateway.OPERATOR_PREFIX) { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "GET") {
+                adminSessionAuth.methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeHotPathResponse(exchange, calcifyFinanceReadGateway.operatorResponse(exchange.requestURI.path, exchange.requestURI.rawQuery))
+        }
+
+        server.createContext(CalcifyFinanceReadGateway.PARTICIPANT_PREFIX) { exchange ->
+            if (exchange.requestMethod != "GET") {
+                adminSessionAuth.methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeHotPathResponse(exchange, calcifyFinanceReadGateway.participantResponse(exchange.requestHeaders, exchange.requestURI.path, exchange.requestURI.rawQuery))
         }
 
         server.createContext("/api/v1/settlement/facts/") { exchange ->
@@ -1643,6 +1665,10 @@ class PlatformHttpServer(
             adminDataRoutes.handle(request.method, request.path, request.query, request.body)
         }
         return diagnosticResponse ?: when {
+            calcifyFinanceReadGateway.isOperatorPath(request.path) ->
+                if (request.method == "GET") calcifyFinanceReadGateway.operatorResponse(request.path, request.query) else methodNotAllowedResponse()
+            calcifyFinanceReadGateway.isParticipantPath(request.path) ->
+                if (request.method == "GET") calcifyFinanceReadGateway.participantResponse(request.headers, request.path, request.query) else methodNotAllowedResponse()
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
             request.path == "/api/v1/orders/submit" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }
@@ -3579,6 +3605,7 @@ data class ServerBoundaryDeps(
     val adminIdentityService: AdminIdentityService? = null,
     val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
     val settlementFactStore: SettlementFactStore? = null,
+    val financeReadStore: FinanceReadStore? = null,
     val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     val postTradeProfileResolver: PostTradeProfileResolver =
         PostTradeProfileResolver.envOnly(

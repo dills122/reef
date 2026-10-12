@@ -1715,6 +1715,20 @@ class ExternalApiBoundary(
         return null
     }
 
+    /**
+     * Strict account-scoped read: the principal must be explicitly scoped to [accountId]. Unlike [requireScope], an empty account scope
+     * is a refusal, never "unrestricted", so a principal with no account mapping cannot enumerate other participants' accounts.
+     */
+    fun checkAccountRead(headers: Headers, route: String, accountId: String): BoundaryError? {
+        val baseError = checkRead(headers, route)
+        if (baseError != null) return baseError
+        val principal = authHook.principal(clientId(headers).orEmpty())
+        if (principal.accountIds.isEmpty()) return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "principal has no account scope")
+        if (accountId.isBlank()) return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "missing account identity")
+        if (accountId !in principal.accountIds) return BoundaryError(403, "OBJECT_AUTH_DENIED", "account scope does not match authenticated principal")
+        return null
+    }
+
     fun checkOrderMutationIdentity(headers: Headers, command: JsonDocument): BoundaryError? {
         val clientId = clientId(headers)
             ?: return BoundaryError(401, "CLIENT_ID_REQUIRED", "missing X-Client-Id header")

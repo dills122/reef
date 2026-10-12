@@ -688,6 +688,7 @@ jobs:
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/runtime.pw"
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/registrar.pw"
           openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/projector.pw"
+          openssl rand -hex 16 > "$RUNNER_TEMP/finite-pg/reader.pw"
           psql_() { docker compose -f compose.base.yml -f compose.local.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U reef -d reef "$@"; }
           # Secrets reach psql via stdin from shell builtins only: never process arguments, never shell trace.
           {
@@ -695,11 +696,13 @@ jobs:
             printf "CREATE ROLE fin_runtime LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/runtime.pw")"
             printf "CREATE ROLE fin_registrar LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/registrar.pw")"
             printf "CREATE ROLE fin_projector LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/projector.pw")"
+            printf "CREATE ROLE fin_reader LOGIN PASSWORD '%s';\n" "$(cat "$RUNNER_TEMP/finite-pg/reader.pw")"
             cat <<'SQL'
           GRANT USAGE ON SCHEMA boundary TO fin_runtime, fin_registrar;
           GRANT EXECUTE ON FUNCTION boundary.calcify_finite_register(TEXT,JSONB,BYTEA,TEXT), boundary.calcify_finite_stages(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_release(TEXT,BIGINT,TEXT,TEXT,JSONB), boundary.calcify_finite_snapshot(TEXT) TO fin_registrar;
           GRANT EXECUTE ON FUNCTION boundary.calcify_finite_claim_owner(TEXT,BIGINT,TEXT), boundary.calcify_finite_begin_attempt(TEXT,BIGINT,JSONB), boundary.calcify_finite_authorize_send(TEXT,BIGINT,TEXT), boundary.calcify_finite_ack(TEXT,TEXT,BIGINT,BIGINT,BIGINT), boundary.calcify_finite_unknown(TEXT,TEXT,BIGINT), boundary.calcify_finite_stop(TEXT,BIGINT), boundary.calcify_finite_snapshot(TEXT), boundary.calcify_finite_receipt(TEXT,TEXT) TO fin_runtime;
-          GRANT USAGE ON SCHEMA boundary TO fin_projector;
+          GRANT USAGE ON SCHEMA boundary TO fin_projector, fin_reader;
+          GRANT SELECT ON boundary.calcify_finance_checkpoint, boundary.calcify_finance_decision, boundary.calcify_finance_position, boundary.calcify_finance_obligation, boundary.calcify_finance_attempt TO fin_reader;
           GRANT SELECT, INSERT, UPDATE ON boundary.calcify_finance_checkpoint, boundary.calcify_finance_decision, boundary.calcify_finance_position, boundary.calcify_finance_obligation, boundary.calcify_finance_attempt TO fin_projector;
           SQL
           } | psql_
@@ -720,6 +723,8 @@ jobs:
           CALCIFY_FINITE_POSTGRES_TEST_REGISTRAR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/registrar.pw
           CALCIFY_FINITE_POSTGRES_TEST_PROJECTOR_USER: fin_projector
           CALCIFY_FINITE_POSTGRES_TEST_PROJECTOR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/projector.pw
+          CALCIFY_FINITE_POSTGRES_TEST_READER_USER: fin_reader
+          CALCIFY_FINITE_POSTGRES_TEST_READER_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/reader.pw
         run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test --tests "com.reef.platform.calcify.*"
       - name: Require finite Postgres suite executed, not skipped
         # Without the CALCIFY_FINITE_POSTGRES_TEST_* env the suite skips and Gradle still reports success.
@@ -727,7 +732,7 @@ jobs:
           f=services/platform-runtime/build/test-results/test/TEST-com.reef.platform.calcify.FiniteBindingStorePostgresTest.xml
           test -f "$f"
           grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$f"
-          for suite in com.reef.platform.calcify.finance.FinanceProjectorPostgresTest com.reef.platform.calcify.CalcifyTopicRoleMigrationTest; do
+          for suite in com.reef.platform.calcify.finance.FinanceProjectorPostgresTest com.reef.platform.calcify.finance.JdbcFinanceReadStorePostgresTest com.reef.platform.calcify.CalcifyTopicRoleMigrationTest; do
             g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
             test -f "$g"
             grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"

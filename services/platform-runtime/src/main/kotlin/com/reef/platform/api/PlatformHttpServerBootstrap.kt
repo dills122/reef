@@ -56,6 +56,7 @@ internal fun defaultBoundary(): ServerBoundaryDeps {
         environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
     )
     val settlementFactStore = defaultSettlementFactStore()
+    val financeReadStore = defaultFinanceReadStore()
     val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
         StreamCommandIntakeFactory.defaultPublisher()
     } else {
@@ -78,6 +79,7 @@ internal fun defaultBoundary(): ServerBoundaryDeps {
         adminIdentityService = adminHttpAuth?.identityService,
         adminGitHubOAuthClient = adminHttpAuth?.githubOAuthClient,
         settlementFactStore = settlementFactStore,
+        financeReadStore = financeReadStore,
         settlementObligationMaterializer = settlementFactStore?.let {
             TradeSettlementObligationMaterializer(
                 runtimePersistence = runtimePersistence,
@@ -165,5 +167,22 @@ private fun defaultSettlementFactStore(): SettlementFactStore? {
             poolName = "settlement-facts"
         ),
         names = PostgresSettlementSqlNames(schema)
+    )
+}
+
+/**
+ * O4 finance read seam. Enabled only when CALCIFY_FINANCE_READ_JDBC_URL is set; it must use a dedicated read-only role with SELECT on the
+ * five boundary.calcify_finance_* projection tables (never the runtime or projector role).
+ */
+private fun defaultFinanceReadStore(): com.reef.platform.calcify.finance.FinanceReadStore? {
+    val jdbcUrl = RuntimeEnv.string("CALCIFY_FINANCE_READ_JDBC_URL", "")
+    if (jdbcUrl.isBlank()) return null
+    return com.reef.platform.calcify.finance.JdbcFinanceReadStore(
+        postgresDataSourceFromEnv(
+            jdbcUrl = jdbcUrl,
+            userKey = "CALCIFY_FINANCE_READ_USER", userFallback = "",
+            passwordKey = "CALCIFY_FINANCE_READ_PASSWORD", passwordFallback = "",
+            poolName = "calcify-finance-read"
+        )
     )
 }
