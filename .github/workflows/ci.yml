@@ -734,10 +734,10 @@ jobs:
           done
       - name: Run finance real-broker tests (disposable Redpanda in Docker)
         # Tagged "broker": excluded from the default test run, enabled here. Starts and removes its own containers on the default bridge.
-        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest"
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest" --tests "com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest"
       - name: Require broker suites executed, not skipped
         run: |
-          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest; do
+          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest; do
             g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
             test -f "$g"
             grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
