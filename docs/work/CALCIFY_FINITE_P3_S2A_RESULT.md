@@ -123,3 +123,21 @@ Deferred, with owner Dylan, before any capacity or authority claim:
   O2 ownership claim is part of the product launcher.
 - **Single approved live recording** and finite stage costs (S3-A2 live part; owner-gated).
 - The plan's "progress" read is served by the checkpoint route (last sequence and chain); there is no separate progress route.
+
+### Integration review 2 of 3 and what changed
+
+Review 2 (Ready with follow-ups) found gaps after launch, now closed: the application id and changelog name come from the registered opening via
+`FinanceProcessorConfig` (F1); the launcher exposes `healthy()` and the Streams state, so an asynchronous app death (a restore refusal, the history
+bound) is visible, and the O5 fixture drives the 312-entry halt to prove it (F2); the projection loop retries transient failures with backoff and
+stops only on fatal ones (stale epoch, diverged projection, a bad record), ignoring the interrupt that `close()` delivers (F3); the runner checks the
+**SQL cut** before every pass, so a projection that is ahead of the decision log, on a different chain, or fed a log with a gap is refused
+(`FinanceProjectionDiverged`) (F4); every read response carries the `progress` (`lastSequence`, `lastChain`) it reflects, read with its rows in one
+repeatable-read transaction, and an unknown binding is 404 on every resource (F5); the evidence reader and the Streams app take separate client
+properties so the read-only `observer` principal and the `finance` principal stay separate (F7).
+
+Still open, with owner Dylan: F6 (the projection loop re-verifies the whole bounded log each pass; fine for a finite binding, not for rate) and F8
+(restart through the launcher with intact local RocksDB state, and a SIGKILL through the launcher plus projector, are not covered; the SIGKILL loop
+covers the processor, and the wiped-state restart covers the launcher).
+
+Note on fixtures: because a run has one binding digest, the O5 fixture uses a fixed binding and so needs a database without a previous run's
+projection (hosted CI is fresh; locally recreate the database). The test reports itself skipped rather than failing confusingly otherwise.

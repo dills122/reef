@@ -87,7 +87,7 @@ internal object FinanceBrokerFixture {
     val captureBinding = FiniteLifecycleFixtures.binding()
     val finance = FinanceConfig(setOf(buyer, seller), usd, aapl, AccountId("p3-opening"))
     val bindingDigest = captureBinding.digest      // one digest per run: the store, the projection and the envelope check share it
-    val config = FinanceProcessorConfig(bindingDigest, captureBinding, finance, CAPTURE, CONTROL, DECISIONS)
+    val config = FinanceProcessorConfig(bindingDigest, captureBinding, finance, CAPTURE, CONTROL, DECISIONS, APP_ID)
     val ledger = FinanceLedger(finance)
 
     fun fund(id: String, account: AccountId, asset: AssetId, amount: Long) = FinanceInput.Fund(ActionKey("it", "control", id), Authority.OPERATOR, account, asset, amount)

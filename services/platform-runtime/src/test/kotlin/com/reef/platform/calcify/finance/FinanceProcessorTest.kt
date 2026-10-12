@@ -30,7 +30,7 @@ class FinanceProcessorTest {
     private val captureBinding = FiniteLifecycleFixtures.binding()
     private val finance = FinanceConfig(setOf(buyer, seller), usd, aapl, AccountId("p3-opening"))
     private val bindingDigest = captureBinding.digest
-    private val cfg = FinanceProcessorConfig(bindingDigest, captureBinding, finance, "CAPTURE", "CONTROL", "DECISIONS")
+    private val cfg = FinanceProcessorConfig(bindingDigest, captureBinding, finance, "CAPTURE", "CONTROL", "DECISIONS", "finance-test")
     private val ledger = FinanceLedger(finance)
     private val envelopes = FiniteLifecycleFixtures.sequence().completedRecordsList
     private val price = 100_000_000_000L

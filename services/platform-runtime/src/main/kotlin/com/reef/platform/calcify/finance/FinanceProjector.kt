@@ -4,6 +4,9 @@ import java.sql.Connection
 import java.sql.SQLException
 import javax.sql.DataSource
 
+/** The projection (checkpoint) is not a prefix of the decision log it is being fed: ahead of it, or on a different chain. Never repaired. */
+internal class FinanceProjectionDiverged(message: String) : IllegalStateException(message)
+
 /** A projection write from an owner whose epoch is older than the stored one; nothing was written. */
 internal class StaleProjectionEpoch(message: String) : IllegalStateException(message)
 
@@ -17,6 +20,14 @@ internal class StaleProjectionEpoch(message: String) : IllegalStateException(mes
  * its input digest and the checkpoint continuity verify.
  */
 internal class FinanceProjector(private val ledger: FinanceLedger, private val dataSource: DataSource) {
+    /** The stored progress `(lastSequence, lastChain)`, or null before [open]. */
+    fun checkpoint(bindingDigest: String): Pair<Long, String>? = dataSource.connection.use { c ->
+        c.prepareStatement("SELECT last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
+            ps.setString(1, bindingDigest)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) to rs.getString(2) else null }
+        }
+    }
+
     /** Creates the checkpoint at genesis for [bindingDigest]; repeated calls with an equal or newer epoch only advance the fence. */
     fun open(bindingDigest: String, epoch: Long) {
         require(epoch > 0) { "epoch must be positive" }
