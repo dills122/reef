@@ -314,6 +314,47 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int INPUT_FIELD_NUMBER = 9;
+  private reef.contracts.calcify.finance.v1.FinanceInputV1 input_;
+  /**
+   * <pre>
+   * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+   * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+   * @return Whether the input field is set.
+   */
+  @java.lang.Override
+  public boolean hasInput() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+   * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+   * @return The input.
+   */
+  @java.lang.Override
+  public reef.contracts.calcify.finance.v1.FinanceInputV1 getInput() {
+    return input_ == null ? reef.contracts.calcify.finance.v1.FinanceInputV1.getDefaultInstance() : input_;
+  }
+  /**
+   * <pre>
+   * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+   * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+   */
+  @java.lang.Override
+  public reef.contracts.calcify.finance.v1.FinanceInputV1OrBuilder getInputOrBuilder() {
+    return input_ == null ? reef.contracts.calcify.finance.v1.FinanceInputV1.getDefaultInstance() : input_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -352,6 +393,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(stateDigest_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 8, stateDigest_);
     }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      output.writeMessage(9, getInput());
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -389,6 +433,10 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(stateDigest_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(8, stateDigest_);
     }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(9, getInput());
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -422,6 +470,11 @@ private static final long serialVersionUID = 0L;
         .equals(other.getChecksum())) return false;
     if (!getStateDigest()
         .equals(other.getStateDigest())) return false;
+    if (hasInput() != other.hasInput()) return false;
+    if (hasInput()) {
+      if (!getInput()
+          .equals(other.getInput())) return false;
+    }
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -454,6 +507,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getChecksum().hashCode();
     hash = (37 * hash) + STATE_DIGEST_FIELD_NUMBER;
     hash = (53 * hash) + getStateDigest().hashCode();
+    if (hasInput()) {
+      hash = (37 * hash) + INPUT_FIELD_NUMBER;
+      hash = (53 * hash) + getInput().hashCode();
+    }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -590,6 +647,7 @@ private static final long serialVersionUID = 0L;
               .alwaysUseFieldBuilders) {
         internalGetActionFieldBuilder();
         internalGetLegsFieldBuilder();
+        internalGetInputFieldBuilder();
       }
     }
     @java.lang.Override
@@ -614,6 +672,11 @@ private static final long serialVersionUID = 0L;
       priorChain_ = "";
       checksum_ = "";
       stateDigest_ = "";
+      input_ = null;
+      if (inputBuilder_ != null) {
+        inputBuilder_.dispose();
+        inputBuilder_ = null;
+      }
       return this;
     }
 
@@ -685,6 +748,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000080) != 0)) {
         result.stateDigest_ = stateDigest_;
       }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.input_ = inputBuilder_ == null
+            ? input_
+            : inputBuilder_.build();
+        to_bitField0_ |= 0x00000002;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -754,6 +823,9 @@ private static final long serialVersionUID = 0L;
         stateDigest_ = other.stateDigest_;
         bitField0_ |= 0x00000080;
         onChanged();
+      }
+      if (other.hasInput()) {
+        mergeInput(other.getInput());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -831,6 +903,13 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000080;
               break;
             } // case 66
+            case 74: {
+              input.readMessage(
+                  internalGetInputFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 74
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1598,6 +1677,172 @@ private static final long serialVersionUID = 0L;
       bitField0_ |= 0x00000080;
       onChanged();
       return this;
+    }
+
+    private reef.contracts.calcify.finance.v1.FinanceInputV1 input_;
+    private com.google.protobuf.SingleFieldBuilder<
+        reef.contracts.calcify.finance.v1.FinanceInputV1, reef.contracts.calcify.finance.v1.FinanceInputV1.Builder, reef.contracts.calcify.finance.v1.FinanceInputV1OrBuilder> inputBuilder_;
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     * @return Whether the input field is set.
+     */
+    public boolean hasInput() {
+      return ((bitField0_ & 0x00000100) != 0);
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     * @return The input.
+     */
+    public reef.contracts.calcify.finance.v1.FinanceInputV1 getInput() {
+      if (inputBuilder_ == null) {
+        return input_ == null ? reef.contracts.calcify.finance.v1.FinanceInputV1.getDefaultInstance() : input_;
+      } else {
+        return inputBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    public Builder setInput(reef.contracts.calcify.finance.v1.FinanceInputV1 value) {
+      if (inputBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        input_ = value;
+      } else {
+        inputBuilder_.setMessage(value);
+      }
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    public Builder setInput(
+        reef.contracts.calcify.finance.v1.FinanceInputV1.Builder builderForValue) {
+      if (inputBuilder_ == null) {
+        input_ = builderForValue.build();
+      } else {
+        inputBuilder_.setMessage(builderForValue.build());
+      }
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    public Builder mergeInput(reef.contracts.calcify.finance.v1.FinanceInputV1 value) {
+      if (inputBuilder_ == null) {
+        if (((bitField0_ & 0x00000100) != 0) &&
+          input_ != null &&
+          input_ != reef.contracts.calcify.finance.v1.FinanceInputV1.getDefaultInstance()) {
+          getInputBuilder().mergeFrom(value);
+        } else {
+          input_ = value;
+        }
+      } else {
+        inputBuilder_.mergeFrom(value);
+      }
+      if (input_ != null) {
+        bitField0_ |= 0x00000100;
+        onChanged();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    public Builder clearInput() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      input_ = null;
+      if (inputBuilder_ != null) {
+        inputBuilder_.dispose();
+        inputBuilder_ = null;
+      }
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    public reef.contracts.calcify.finance.v1.FinanceInputV1.Builder getInputBuilder() {
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return internalGetInputFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    public reef.contracts.calcify.finance.v1.FinanceInputV1OrBuilder getInputOrBuilder() {
+      if (inputBuilder_ != null) {
+        return inputBuilder_.getMessageOrBuilder();
+      } else {
+        return input_ == null ?
+            reef.contracts.calcify.finance.v1.FinanceInputV1.getDefaultInstance() : input_;
+      }
+    }
+    /**
+     * <pre>
+     * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+     * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+     * </pre>
+     *
+     * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        reef.contracts.calcify.finance.v1.FinanceInputV1, reef.contracts.calcify.finance.v1.FinanceInputV1.Builder, reef.contracts.calcify.finance.v1.FinanceInputV1OrBuilder>
+        internalGetInputFieldBuilder() {
+      if (inputBuilder_ == null) {
+        inputBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            reef.contracts.calcify.finance.v1.FinanceInputV1, reef.contracts.calcify.finance.v1.FinanceInputV1.Builder, reef.contracts.calcify.finance.v1.FinanceInputV1OrBuilder>(
+                getInput(),
+                getParentForChildren(),
+                isClean());
+        input_ = null;
+      }
+      return inputBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:reef.contracts.calcify.finance.v1.FinanceDecisionV1)

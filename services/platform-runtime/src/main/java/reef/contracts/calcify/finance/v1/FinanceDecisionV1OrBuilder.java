@@ -121,4 +121,34 @@ public interface FinanceDecisionV1OrBuilder extends
    */
   com.google.protobuf.ByteString
       getStateDigestBytes();
+
+  /**
+   * <pre>
+   * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+   * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+   * @return Whether the input field is set.
+   */
+  boolean hasInput();
+  /**
+   * <pre>
+   * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+   * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+   * @return The input.
+   */
+  reef.contracts.calcify.finance.v1.FinanceInputV1 getInput();
+  /**
+   * <pre>
+   * The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+   * input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+   * </pre>
+   *
+   * <code>.reef.contracts.calcify.finance.v1.FinanceInputV1 input = 9;</code>
+   */
+  reef.contracts.calcify.finance.v1.FinanceInputV1OrBuilder getInputOrBuilder();
 }

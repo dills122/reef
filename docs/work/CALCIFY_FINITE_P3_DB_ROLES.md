@@ -87,3 +87,12 @@ third query found no `calcify_finite_*` function that was not `SECURITY DEFINER`
 
 1. Choose the owner role and confirm no service uses it. 2. Credential delivery and rotation for the two login roles.
 3. Whether to add per-role connection limits or `pg_hba` source restrictions. 4. Sign-off of the matrix above.
+
+## O4 projection role (S2-B2, proposed; operator provisions, no migration creates it)
+
+`calcify_finite_projector` (CI fixture name `fin_projector`) is the only writer of the `boundary.calcify_finance_*` projection tables
+(`checkpoint`, `decision`, `position`, `obligation`, `attempt`, migration `boundary/0014`). It needs `USAGE` on schema `boundary` and
+`SELECT, INSERT, UPDATE` on those five tables only; no `DELETE`, no `TRUNCATE`, no access to the `calcify_finite_*` ingress tables, and
+no `EXECUTE` on the registrar or runtime functions. Read routes (O4 S3-A1) use a separate read-only role with `SELECT` on the same five
+tables. Writes are fenced by `calcify_finance_checkpoint.owner_epoch`; a stale epoch is refused with no write. Pending operator sign-off
+together with the O2 role matrix.

@@ -92,6 +92,17 @@ class FinanceWireTest {
         assertFailsWith<IllegalArgumentException> { FinanceWire.fromProto(neverRecorded) }
     }
 
+    @Test fun publishedRecordCarriesTheInputAndRefusesAMismatchedOne() {
+        val ledger = FinanceLedger(FinanceConfig(setOf(AccountId("buyer-account"), AccountId("seller-account")), AssetId("USD"), AssetId("fixture-base-AAPL"), AccountId("opening")))
+        val out = ledger.decide(ledger.genesis(), fund)
+        val record = FinanceWire.toProto(out.decision!!, fund)
+        val (decision, input) = FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(record.toByteArray()))
+        assertEquals(out.decision, decision); assertEquals(fund, input)
+        assertFailsWith<IllegalArgumentException> { FinanceWire.toProto(out.decision!!, settle) }
+        assertFailsWith<IllegalArgumentException> { FinanceWire.recordFromProto(record.toBuilder().setInput(FinanceWire.toProto(settle)).build()) }
+        assertFailsWith<IllegalArgumentException> { FinanceWire.recordFromProto(FinanceWire.toProto(out.decision!!)) }
+    }
+
     @Test fun unknownFieldsAreRefusedAtEveryLevel() {
         val clean = FinanceWire.toProto(capture)
         val top = FinanceInputV1.newBuilder(clean).setUnknownFields(com.google.protobuf.UnknownFieldSet.newBuilder()

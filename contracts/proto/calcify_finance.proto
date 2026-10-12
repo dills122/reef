@@ -103,4 +103,7 @@ message FinanceDecisionV1 {
   string checksum = 7;
   // SHA-256 of the ledger state this decision produced (chain head excluded); lets a restore prove a checkpoint belongs to the history.
   string state_digest = 8;
+  // The input this decision answers, so a projector can apply row deltas without the processor. Consumers MUST verify that the
+  // input's canonical digest equals input_digest; the field is not covered by the checksum on its own.
+  FinanceInputV1 input = 9;
 }

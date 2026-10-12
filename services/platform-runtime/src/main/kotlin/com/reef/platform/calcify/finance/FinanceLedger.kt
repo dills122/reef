@@ -162,6 +162,11 @@ internal class FinanceLedger(val config: FinanceConfig) {
     }
 
     /** True if every decision's checksum recomputes and links to its predecessor starting from this ledger's [genesisChain]. */
+    /** True if [d] is the decision at [expectedSequence] that follows [priorChain], with a checksum that recomputes. */
+    fun verifyLink(priorChain: String, expectedSequence: Long, d: Decision): Boolean =
+        d.sequence == expectedSequence && d.priorChain == priorChain && d.disposition in recordedDispositions &&
+            d.checksum == Canon.sha(decisionBytes(d.sequence, d.action, d.inputDigest, d.disposition, d.legs, d.priorChain, d.stateDigest))
+
     fun verifyChain(decisions: List<Decision>): Boolean {
         var prior = genesisChain
         var sequence = 0L
