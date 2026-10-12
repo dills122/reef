@@ -101,4 +101,6 @@ entities), with a differential test against the current digest. Recommend record
 41 S2-A2 mutants (store, processor, restore cut, mapping). First run: 27 killed, 14 survived. Survivors were closed with
 tests that isolate each rule (forged consistent history, direct `verifyHistory` calls, resealed envelopes, trailing bytes, literal
 312 bound). One mutant (head presence) is deliberately redundant with `restoreAt` and is not listed; one mutant was equivalent and was
-replaced. Second-run result: see the PR description.
+replaced. Second run (with the new tests): see the final line below.
+
+Second run: **41 of 41 killed, 0 survivors** (run on commit e07296c8c; later commits changed no mutated logic beyond a one-line apply refactor).
