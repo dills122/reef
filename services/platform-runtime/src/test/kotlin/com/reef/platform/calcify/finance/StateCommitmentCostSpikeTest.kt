@@ -23,17 +23,17 @@ class StateCommitmentCostSpikeTest {
     private fun synthetic(n: Int): FinanceState {
         val executions = HashMap<ExecutionKey, Captured>(); val obligations = HashMap<ExecutionKey, Obligation>()
         val attempts = HashMap<Pair<ExecutionKey, Int>, Disposition>(); val actions = HashMap<ActionKey, ActionRecord>()
-        val perClass = n / 4
+        val perClass = (n - 32) / 5   // 3 x perClass + 2 x perClass actions + 32 positions = n entities exactly (round 2 lens C found the earlier 1.25n)
         for (i in 0 until perClass) {
             val k = ExecutionKey("run", "session", "AAPL", "exec-$i")
             executions[k] = Captured(AccountId("acct-${i % 16}"), AccountId("acct-${(i + 1) % 16}"), 3, 100)
             obligations[k] = Obligation(if (i % 2 == 0) ObligationStatus.SETTLED else ObligationStatus.PENDING, if (i % 2 == 0) 0 else 300, if (i % 2 == 0) 0 else 3)
             attempts[k to 1] = Disposition.SETTLED
         }
-        for (i in 0 until n / 2) actions[ActionKey("ns", "dom", "action-$i")] = ActionRecord("d".repeat(64), Disposition.CAPTURED)
+        for (i in 0 until 2 * perClass) actions[ActionKey("ns", "dom", "action-$i")] = ActionRecord("d".repeat(64), Disposition.CAPTURED)
         val positions = HashMap<Pair<AccountId, AssetId>, Long>()
         for (a in 0 until 16) { positions[AccountId("acct-$a") to usd] = 1000L + a; positions[AccountId("acct-$a") to aapl] = 10L + a }
-        return FinanceState(positions, executions, obligations, attempts, actions, (n / 2).toLong(), "c".repeat(64), 0)
+        return FinanceState(positions, executions, obligations, attempts, actions, (2 * perClass).toLong(), "c".repeat(64), 0)
     }
 
     private inline fun time(iterations: Int, block: () -> Unit): Long {
@@ -79,7 +79,7 @@ class StateCommitmentCostSpikeTest {
     /** Path-compressed binary trie over the 256-bit key hash: shape is a pure function of the key set; worst case 256 levels, typical log2 n. */
     private class Patricia {
         sealed class N { abstract var hash: ByteArray }
-        class Leaf(val key: ByteArray, var leaf: ByteArray) : N() { override var hash = sha0(key, leaf) }
+        class Leaf(val key: ByteArray, var leaf: ByteArray) : N() { override var hash = leaf }  // the leaf digest L(e) IS the node hash (round 2: the earlier spike hashed it a second time)
         class Branch(val bit: Int, var left: N, var right: N) : N() { override var hash = ByteArray(0) }
         var root: N? = null
         var lastDepth = 0
@@ -93,7 +93,7 @@ class StateCommitmentCostSpikeTest {
             if (n == null) return Leaf(key, leaf)
             lastDepth++
             val any = keyOf(n); val d = firstDiff(any, key)
-            if (n is Leaf) { if (d < 0) { n.leaf = leaf; n.hash = sha0(key, leaf); return n }; val nl = Leaf(key, leaf); val b = if (bit(key, d) == 0) Branch(d, nl, n) else Branch(d, n, nl); rehash(b); return b }
+            if (n is Leaf) { if (d < 0) { n.leaf = leaf; n.hash = leaf; return n }; val nl = Leaf(key, leaf); val b = if (bit(key, d) == 0) Branch(d, nl, n) else Branch(d, n, nl); rehash(b); return b }
             n as Branch
             if (d in 0 until n.bit) { val nl = Leaf(key, leaf); val b = if (bit(key, d) == 0) Branch(d, nl, n) else Branch(d, n, nl); rehash(b); return b }
             if (bit(key, n.bit) == 0) n.left = insert(n.left, key, leaf) else n.right = insert(n.right, key, leaf)
@@ -116,7 +116,7 @@ class StateCommitmentCostSpikeTest {
             val ent = keys.map { entity("K", it, "v0-" + "x".repeat(40)) }
             val d = Math.ceil(Math.log(n.toDouble()) / Math.log(2.0)).toInt().coerceAtLeast(4)
             val flat = FlatBuckets(d); flat.put(keys.indices.associate { keys[it] to ent[it] })
-            val pat = Patricia(); keys.indices.forEach { pat.put(sha(keys[it].toByteArray()), sha(byteArrayOf(0), ent[it])) }
+            val pat = Patricia(); keys.indices.forEach { pat.put(sha(keys[it].toByteArray()), Patricia.sha0(sha(keys[it].toByteArray()), sha(ent[it]))) }
             val ad = Ad(); ent.forEach { ad.replace(null, it) }
             var version = 0
             fun touched(k: Int) = (0 until k).map { rnd.nextInt(n) }.distinct()
@@ -124,7 +124,7 @@ class StateCommitmentCostSpikeTest {
             for (k in listOf(3, 7)) {
                 val flatNs = time(reps) { version++; flat.put(touched(k).associate { keys[it] to entity("K", keys[it], "v$version-" + "x".repeat(40)) }) }
                 var depth = 0L
-                val patNs = time(reps) { version++; touched(k).forEach { pat.put(sha(keys[it].toByteArray()), sha(byteArrayOf(0), entity("K", keys[it], "v$version-" + "x".repeat(40)))); depth += pat.lastDepth } }
+                val patNs = time(reps) { version++; touched(k).forEach { val kh = sha(keys[it].toByteArray()); pat.put(kh, Patricia.sha0(kh, sha(entity("K", keys[it], "v$version-" + "x".repeat(40))))); depth += pat.lastDepth } }
                 val adNs = time(reps) { version++; touched(k).forEach { ad.replace(ent[it], entity("K", keys[it], "v$version-" + "x".repeat(40))) } }
                 println("COST-SPIKE candidates n=$n D=$d touched=$k: flatBuckets=${flatNs / 1000}us patricia=${patNs / 1000}us (avg depth ${"%.1f".format(depth.toDouble() / ((reps + maxOf(2, reps / 5)) * k))}) adhash3072=${adNs / 1000}us")
             }
