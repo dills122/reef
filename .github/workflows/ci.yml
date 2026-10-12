@@ -739,10 +739,17 @@ jobs:
           done
       - name: Run finance real-broker tests (disposable Redpanda in Docker)
         # Tagged "broker": excluded from the default test run, enabled here. Starts and removes its own containers on the default bridge.
-        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest" --tests "com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest"
+        # FiniteP3EndToEndTest also needs the Postgres fixture roles provisioned above (projector writes, reader serves the routes).
+        env:
+          CALCIFY_FINITE_POSTGRES_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/reef
+          CALCIFY_FINITE_POSTGRES_TEST_PROJECTOR_USER: fin_projector
+          CALCIFY_FINITE_POSTGRES_TEST_PROJECTOR_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/projector.pw
+          CALCIFY_FINITE_POSTGRES_TEST_READER_USER: fin_reader
+          CALCIFY_FINITE_POSTGRES_TEST_READER_PASSWORD_FILE: ${{ runner.temp }}/finite-pg/reader.pw
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests --tests "com.reef.platform.calcify.finance.FinanceBrokerTest" --tests "com.reef.platform.calcify.finance.FinanceAclTest" --tests "com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest" --tests "com.reef.platform.calcify.finance.FiniteP3EndToEndTest"
       - name: Require broker suites executed, not skipped
         run: |
-          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest; do
+          for suite in com.reef.platform.calcify.finance.FinanceBrokerTest com.reef.platform.calcify.finance.FinanceAclTest com.reef.platform.calcify.finance.FiniteControlWriterBrokerTest com.reef.platform.calcify.finance.FiniteP3EndToEndTest; do
             g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
             test -f "$g"
             grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
