@@ -588,13 +588,13 @@ class FinanceLedgerTest {
 
     @Test fun verifyChainRejectsHashValidButNonsensicalDecisions() {
         val r = openedAndCaptured()
-        // Re-chain the second decision with a disposition that is never recorded in a decision log (UNAUTHORIZED).
-        val chain = r.decisions.toMutableList()
-        chain[1] = forge(chain[1].copy(disposition = Disposition.UNAUTHORIZED))
-        assertFalse(ledger.verifyChain(chain))
-        // Repeating an action key is not a valid history.
-        val dup = r.decisions.toMutableList(); dup[2] = forge(dup[2].copy(action = dup[1].action), priorChain = dup[2].priorChain)
-        assertFalse(ledger.verifyChain(dup))
+        val last = r.decisions.lastIndex
+        assertTrue(ledger.verifyChain(r.decisions))
+        // The forged decision is last, so it links and hashes correctly; only the semantic checks can refuse it.
+        val unrecorded = r.decisions.toMutableList().also { it[last] = forge(it[last].copy(disposition = Disposition.UNAUTHORIZED)) }
+        assertFalse(ledger.verifyChain(unrecorded))
+        val repeated = r.decisions.toMutableList().also { it[last] = forge(it[last].copy(action = it[1].action)) }
+        assertFalse(ledger.verifyChain(repeated))
     }
 
     @Test fun invariantsRejectAPositiveOpeningAccountAndSurfaceResidualOverflowAsAStateError() {
