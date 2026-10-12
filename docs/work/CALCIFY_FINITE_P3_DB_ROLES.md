@@ -96,3 +96,19 @@ third query found no `calcify_finite_*` function that was not `SECURITY DEFINER`
 no `EXECUTE` on the registrar or runtime functions. Read routes (O4 S3-A1) use a separate read-only role with `SELECT` on the same five
 tables. Writes are fenced by `calcify_finance_checkpoint.owner_epoch`; a stale epoch is refused with no write. Pending operator sign-off
 together with the O2 role matrix.
+
+## O4 read role and read routes (S3-A1, proposed; operator provisions, no migration creates it)
+
+`calcify_finite_reader` (CI fixture name `fin_reader`) backs the finance read routes. It needs `USAGE` on schema `boundary` and `SELECT` on
+the same five projection tables and nothing else: no write privilege of any kind (the Postgres suite asserts INSERT, UPDATE, DELETE and
+TRUNCATE are refused) and no access to the `calcify_finite_*` ingress tables. The platform reads it through `CALCIFY_FINANCE_READ_JDBC_URL`,
+`CALCIFY_FINANCE_READ_USER` and `CALCIFY_FINANCE_READ_PASSWORD`; with the URL unset the routes answer 503 and nothing else changes.
+
+| Route | Audience | Notes |
+| --- | --- | --- |
+| `GET /internal/boundary/calcify/finance/{bindingDigest}/{checkpoint\|decisions\|positions\|obligations\|attempts}` | operators (internal-HTTP exposure mode applies) | any binding; `decisions` takes `afterSequence` and `limit` (1..320) |
+| `GET /api/v1/calcify/finance/{bindingDigest}/{positions\|obligations\|attempts}?accountId=` | trading clients | the principal must be explicitly scoped to `accountId`; no account scope, another account, or a missing `accountId` is 403 (an empty scope is never "unrestricted" here) |
+| `GET /api/v1/calcify/finance/{bindingDigest}/{checkpoint\|decisions}` | trading clients | always 403 (operator-only: decisions carry other participants' action keys) |
+
+Each route is one store query; refusals never reach the store; store errors are 503 with no driver text. Both HTTP adapters (the JDK server
+and the Netty hot-path server) serve the same gateway and are tested with the same assertions.
