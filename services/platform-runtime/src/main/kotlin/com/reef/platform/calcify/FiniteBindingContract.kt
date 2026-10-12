@@ -83,6 +83,13 @@ internal class FiniteOpeningV2 internal constructor(private val root: ObjectNode
     fun toCaptureBinding(): FiniteLifecycleBinding = FiniteLifecycleBinding(digest,core.profileHash,core.run,core.session,core.instrument,
         root["quoteCurrency"].textValue(),core.parties,topic("SOURCE").name,topic("SOURCE").id,core.generation,0,
         topic("COMMAND").name,topic("COMMAND").id,topic("CAPTURE").name,topic("CAPTURE").id,core.applicationId,0,core.budget)
+    /** The O3a configuration this opening pins; the parser has already checked it against [financeConfigDigest]. */
+    fun financeConfig(): com.reef.platform.calcify.finance.FinanceConfig {
+        val b=root["financeBudget"]; fun n(k:String)=b[k].textValue().toInt()
+        return com.reef.platform.calcify.finance.FinanceConfig(core.parties.map{com.reef.platform.calcify.finance.AccountId(it.account)}.toSet(),
+            com.reef.platform.calcify.finance.AssetId(root["quoteCurrency"].textValue()),com.reef.platform.calcify.finance.AssetId(root["baseAssetId"].textValue()),
+            com.reef.platform.calcify.finance.AccountId(openingAccountId),n("obligations"),n("captures"),n("settleAttempts"),n("controls"))
+    }
     fun canonicalBytes(): ByteArray {
         val bytes=ByteArrayOutputStream()
         DataOutputStream(bytes).use { out ->

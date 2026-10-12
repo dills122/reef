@@ -48,11 +48,15 @@ internal class FinanceEvidenceReader(
         out
     }
 
+    /** First record a read-committed consumer sees at or after [offset], or null when there is none before the end. A timeout is a failure, never "none". */
     fun firstVisibleAtOrAfter(topic: String, offset: Long): Long? = withConsumer(topic) { c, tp ->
         c.seek(tp, offset)
         val end = c.endOffsets(listOf(tp), readTimeout).getValue(tp)
         val deadline = System.nanoTime() + readTimeout.toNanos()
-        while (c.position(tp, readTimeout) < end && System.nanoTime() < deadline) c.poll(Duration.ofMillis(200)).firstOrNull()?.let { return@withConsumer it.offset() }
+        while (c.position(tp, readTimeout) < end) {
+            c.poll(Duration.ofMillis(200)).firstOrNull()?.let { return@withConsumer it.offset() }
+            check(System.nanoTime() < deadline) { "timed out probing $topic for a visible record at or after $offset" }
+        }
         null
     }
 

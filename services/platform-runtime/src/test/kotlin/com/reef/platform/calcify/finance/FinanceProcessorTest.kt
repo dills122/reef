@@ -29,7 +29,7 @@ class FinanceProcessorTest {
     private val usd = AssetId("USD"); private val aapl = AssetId("fixture-base-AAPL")
     private val captureBinding = FiniteLifecycleFixtures.binding()
     private val finance = FinanceConfig(setOf(buyer, seller), usd, aapl, AccountId("p3-opening"))
-    private val bindingDigest = FiniteLifecycleContract.sha("binding-v2".toByteArray())
+    private val bindingDigest = captureBinding.digest
     private val cfg = FinanceProcessorConfig(bindingDigest, captureBinding, finance, "CAPTURE", "CONTROL", "DECISIONS")
     private val ledger = FinanceLedger(finance)
     private val envelopes = FiniteLifecycleFixtures.sequence().completedRecordsList
@@ -300,7 +300,13 @@ class FinanceProcessorTest {
 
     @Test fun anotherBindingNeverAdoptsThisStore() {
         val h = Harness().also { fundBoth(it) }
-        assertFailsWith<IllegalArgumentException> { Harness(h.snapshot(), cfg.copy(bindingDigest = FiniteLifecycleContract.sha("binding-v1".toByteArray()))) }
+        val other = FiniteLifecycleContract.sha("binding-v1".toByteArray())
+        val otherConfig = cfg.copy(bindingDigest = other, captureBinding = captureBinding.copy(digest = other))
+        assertFailsWith<IllegalArgumentException> { Harness(h.snapshot(), otherConfig) }
+    }
+
+    @Test fun theFinanceBindingDigestMustEqualTheCaptureLanesDigest() {
+        assertFailsWith<IllegalArgumentException> { cfg.copy(bindingDigest = FiniteLifecycleContract.sha("different".toByteArray())) }
     }
 
     @Test fun entryChainMatchesAnIndependentEncoderGolden() {

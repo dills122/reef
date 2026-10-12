@@ -112,3 +112,7 @@ TRUNCATE are refused) and no access to the `calcify_finite_*` ingress tables. Th
 
 Each route is one store query; refusals never reach the store; store errors are 503 with no driver text. Both HTTP adapters (the JDK server
 and the Netty hot-path server) serve the same gateway and are tested with the same assertions.
+
+**Runbook note (exposure mode).** The operator routes carry every participant's balances and action keys and are protected only by the
+internal-HTTP exposure mode (default local-only, like the other `/internal/boundary` reads). Do not run a finite P3 proof with
+`PLATFORM_INTERNAL_HTTP_MODE=enabled` on a reachable interface unless something in front of it authenticates operators.

@@ -157,7 +157,7 @@ financial authority, production adoption or capacity claim follows.
 - Open: G1–G8 and G10 live
   evidence is still Codex's recorded claims (ledger under the snapshot's
   `.planning/calcify-p3-o2-2026-10-10/`); Postgres role grants used in tests were inferred and
-  need an operator-reviewed definition; hosted CI run. O3–O5 stay gated on accepted O2.
+  need an operator-reviewed definition; hosted CI run. O3b/O4/O5 components and fixtures are built and tested ahead of O2 acceptance (see `docs/work/CALCIFY_FINITE_P3_S2A_RESULT.md`); their *acceptance* stays gated on accepted O2.
 - Retention: the earlier hour-by-hour O2 checkpoints formerly in this section are preserved in git
   history (snapshot commit `4c5a1f6011dadf2e1bdcd29e67a626e742d781d6`). Records archive
   publication of O2 evidence has **not** been done; retention is incomplete.
