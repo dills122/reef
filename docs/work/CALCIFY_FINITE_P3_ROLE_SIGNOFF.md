@@ -46,10 +46,7 @@ All four are `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE` with secrets from a sec
 
 1. **Approve the matrices above** as the finite P3 provisioning list (Kafka and Postgres). If yes, the DB roles document stops being a "draft for operator review" and the
    open item 4 in it is closed.
-2. **Finance app `session.timeout.ms`.** Production `FinanceTopology.streamsProperties` sets none, so a crashed finance app (SIGKILL, not a clean stop) holds its partition
-   for the default 45 s before a restart can take over. The test fixture and the resolver runtime (`CALCIFY_RESOLVER_SESSION_TIMEOUT_MS`, 6,000) already lower it. **Measured 2026-10-12** (child JVM running the real finance topology, SIGKILL, same application id restarted): **44.1 s** to RUNNING on the production properties, **6.1 s** with `session.timeout.ms` 6,000 and heartbeat 1,000 (one run each). Pinning
-   a lower value (for example 6,000 with a 1,000 ms heartbeat) speeds crash recovery and raises rebalance sensitivity; static membership is the alternative. Clean
-   stops are already fixed (PR 516). Recommendation: **pin 6,000 for the finance app** and add it to the section 8 pinned properties. The remaining risk is rebalance sensitivity if processing ever stalls longer than the timeout; the finance processor does no long in-thread work by design.
+2. **Finance app `session.timeout.ms`: decided 2026-10-13, pinned at 6,000** (heartbeat 1,000), in `FinanceTopology.streamsProperties` (PR 519) and the binding v2 spec section 8. Measured 2026-10-12: a SIGKILL restart took 44.1 s on the Kafka 45 s default and 6.1 s at 6,000 (one run each). The remaining risk is rebalance sensitivity if processing ever stalls longer than the timeout; the finance processor does no long in-thread work by design. `CALCIFY_FINANCE_SESSION_TIMEOUT_MS` can only raise it.
 3. **Transport.** The fixtures use SASL_PLAINTEXT and the Go matcher's TLS defaults off. A real proof run needs TLS on the broker listener and Postgres, or a stated reason it is
    a closed network. This is a deployment decision, not a code change.
 4. **Operator route exposure.** The internal finance read routes carry every participant's balances and action keys and rely on the internal-HTTP exposure mode (default
