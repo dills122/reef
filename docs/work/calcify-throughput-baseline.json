@@ -52,6 +52,16 @@
       "value": 42,
       "better": "lower",
       "unit": "s"
+    },
+    "projector.batchedDecisionsPerSec.plain.batch120": {
+      "value": 3688,
+      "better": "higher",
+      "unit": "decisions/s"
+    },
+    "projector.batchedDecisionsPerSec.rewriteBatchedInserts.batch120": {
+      "value": 4313,
+      "better": "higher",
+      "unit": "decisions/s"
     }
   }
 }

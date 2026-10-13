@@ -1665,6 +1665,13 @@ Projector (`FinanceProjector.apply`, Postgres 16, local socket, fresh tables, 10
 batch 1 106 decisions/s (9.47 ms each) at 20,000-input scale and 103 at the 5,000-input scale; batch 10 427 and 413; batch 120 740 and 698. The migration pins
 `last_sequence <= 320` per binding, so volume came from many bindings. One checkpoint `FOR UPDATE` lock per call.
 
+Projector, JDBC-batched research variant (test code only; same SQL, `addBatch` per statement class in one transaction, positions pre-aggregated per account and asset,
+the in-memory link and digest checks omitted since they cost microseconds): 10 bindings x 120 decisions, 120 per call: 3,688 decisions/s (0.27 ms each) with the plain
+driver and 4,313/s with `reWriteBatchedInserts=true`; 10 per call: 676 and 761/s. 100 bindings x 120 decisions (12,000 decisions, tables growing): as written 78/s at 1 per
+call, 335/s at 10, 579/s at 120; batched 616 and 572/s at 10, **2,651/s plain and 3,413/s rewrite at 120**. So batching gives about 4.6x to 5.9x over the as-written projector
+at 120 per call, the rate falls as the tables grow (740 to 579/s as written), and the batched figure is still about 2.7x below the 9,091/s settlement service rate the
+arena contract proposes (a different, finite-lane workload, so a scale comparison only).
+
 Ledger spike (same branch, corrected after review: exact entity counts, leaf hashed once; indicative, one JVM, in-memory): whole-state digest 2.7 ms at 1,000
 entities, 25 ms at 10,000, 344 ms at 100,000; the unbounded part of `checkInvariants` 1.3 ms, 118 ms, 9.6 s (quadratic); seven-entity incremental path-compressed
 trie update 27, 45, 44 us. Attempts retained: the first spike (1.25n entities, leaf double-hashed) was superseded by the corrected run; the first S0 Streams

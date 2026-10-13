@@ -180,13 +180,62 @@ class S0ProjectorCostSpikeTest {
             val recs = script(); val projector = FinanceProjector(ledger, ds)
             val log = StringBuilder("\nS0 projector (${recs.size} decisions per binding; capture+settle pairs, Postgres 16 in Docker, local socket)\n")
             for (batch in listOf(1, 10, 120)) {
-                val bindings = 10; var total = 0; val digests = (0 until bindings).map { (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "").take(64) }
+                val bindings = (System.getenv("S0_BINDINGS") ?: "10").toInt(); var total = 0; val digests = (0 until bindings).map { (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "").take(64) }
                 digests.forEach { projector.open(it, 1) }
                 val t0 = System.nanoTime()
                 for (d in digests) for (chunk in recs.chunked(batch)) total += projector.apply(d, 1, chunk)
                 val secs = (System.nanoTime() - t0) / 1e9
                 S0Metrics.record("projector.decisionsPerSec.batch$batch", Math.round(total / secs))
                 log.append("C  batch=$batch  $total decisions in ${"%.2f".format(secs)} s = ${"%.0f".format(total / secs)} decisions/s (${"%.2f".format(secs * 1000 / total)} ms/decision)\n")
+            }
+            // Batched variant (research only; the product projector is untouched): the same rows written with JDBC batches per statement class in one
+            // transaction, positions pre-aggregated per (account, asset) because ON CONFLICT DO UPDATE cannot touch a row twice in one statement.
+            // It omits the in-memory link/digest checks of FinanceProjector.apply (hashing, microseconds per decision); it measures the database cost.
+            val settleSet = setOf(Disposition.SETTLED, Disposition.INSUFFICIENT_CASH, Disposition.INSUFFICIENT_SHARES, Disposition.BALANCE_OVERFLOW)
+            fun batched(source: PGSimpleDataSource, digest: String, chunk: List<Pair<Decision, FinanceInput>>) = source.connection.use { c ->
+                c.autoCommit = false
+                val (last, _) = c.prepareStatement("SELECT last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ? FOR UPDATE").use { ps ->
+                    ps.setString(1, digest); ps.executeQuery().use { r -> check(r.next()); r.getLong(1) to r.getString(2) } }
+                val dec = c.prepareStatement("INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id, disposition, input_digest, prior_chain, checksum) VALUES (?,?,?,?,?,?,?,?,?)")
+                val pos = c.prepareStatement("INSERT INTO boundary.calcify_finance_position(binding_digest, account_id, asset_id, amount) VALUES (?,?,?,?) ON CONFLICT (binding_digest, account_id, asset_id) DO UPDATE SET amount = boundary.calcify_finance_position.amount + EXCLUDED.amount")
+                val obl = c.prepareStatement("INSERT INTO boundary.calcify_finance_obligation(binding_digest, run_id, venue_session_id, instrument_id, execution_id, buyer_account_id, seller_account_id, quantity, price_nanos, status, cash_residual, share_residual) VALUES (?,?,?,?,?,?,?,?,?,'PENDING',?,?)")
+                val att = c.prepareStatement("INSERT INTO boundary.calcify_finance_attempt(binding_digest, run_id, venue_session_id, instrument_id, execution_id, attempt, disposition) VALUES (?,?,?,?,?,?,?)")
+                val upd = c.prepareStatement("UPDATE boundary.calcify_finance_obligation SET status = 'SETTLED', cash_residual = 0, share_residual = 0 WHERE binding_digest = ? AND run_id = ? AND venue_session_id = ? AND instrument_id = ? AND execution_id = ? AND status = 'PENDING'")
+                val net = LinkedHashMap<Pair<String, String>, Long>(); var lastSeq = last; var lastChain = ""
+                for ((d, input) in chunk) {
+                    if (d.sequence <= last) continue
+                    dec.setString(1, digest); dec.setLong(2, d.sequence); dec.setString(3, d.action.namespace); dec.setString(4, d.action.domain); dec.setString(5, d.action.actionId)
+                    dec.setString(6, d.disposition.name); dec.setString(7, d.inputDigest); dec.setString(8, d.priorChain); dec.setString(9, d.checksum); dec.addBatch()
+                    for (leg in d.legs) net.merge(leg.account.value to leg.asset.value, leg.amount, Long::plus)
+                    when (input) {
+                        is FinanceInput.Capture -> if (d.disposition == Disposition.CAPTURED) { val e = input.execution
+                            obl.setString(1, digest); obl.setString(2, e.runId); obl.setString(3, e.venueSessionId); obl.setString(4, e.instrumentId); obl.setString(5, e.executionId)
+                            obl.setString(6, input.buyer.value); obl.setString(7, input.seller.value); obl.setLong(8, input.quantity); obl.setLong(9, input.priceNanos)
+                            obl.setLong(10, Math.multiplyExact(input.quantity, input.priceNanos)); obl.setLong(11, input.quantity); obl.addBatch() }
+                        is FinanceInput.Settle -> if (d.disposition in settleSet) { val e = input.execution
+                            att.setString(1, digest); att.setString(2, e.runId); att.setString(3, e.venueSessionId); att.setString(4, e.instrumentId); att.setString(5, e.executionId)
+                            att.setInt(6, input.attempt); att.setString(7, d.disposition.name); att.addBatch()
+                            if (d.disposition == Disposition.SETTLED) { upd.setString(1, digest); upd.setString(2, e.runId); upd.setString(3, e.venueSessionId); upd.setString(4, e.instrumentId); upd.setString(5, e.executionId); upd.addBatch() } }
+                        is FinanceInput.Fund -> Unit
+                    }
+                    lastSeq = d.sequence; lastChain = d.checksum
+                }
+                for ((k, v) in net) { pos.setString(1, digest); pos.setString(2, k.first); pos.setString(3, k.second); pos.setLong(4, v); pos.addBatch() }
+                dec.executeBatch(); obl.executeBatch(); att.executeBatch(); pos.executeBatch()
+                check(upd.executeBatch().all { it == 1 }) { "settled decision for a missing or already settled obligation" }
+                c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = ?, last_chain = ? WHERE binding_digest = ?").use { it.setLong(1, lastSeq); it.setString(2, lastChain); it.setString(3, digest); it.executeUpdate() }
+                c.commit()
+            }
+            for ((label, source) in listOf("plain" to ds, "rewriteBatchedInserts" to PGSimpleDataSource().apply { setUrl("jdbc:postgresql://127.0.0.1:$port/reef?reWriteBatchedInserts=true"); user = "postgres"; password = "s0" })) {
+                for (batch in listOf(10, 120)) {
+                    val digests = (0 until (System.getenv("S0_BINDINGS") ?: "10").toInt()).map { (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "").take(64) }
+                    digests.forEach { projector.open(it, 1) }
+                    val t0 = System.nanoTime(); var total = 0
+                    for (d in digests) for (chunk in recs.chunked(batch)) { batched(source, d, chunk); total += chunk.size }
+                    val secs = (System.nanoTime() - t0) / 1e9
+                    S0Metrics.record("projector.batchedDecisionsPerSec.$label.batch$batch", Math.round(total / secs))
+                    log.append("C2 JDBC-batched ($label) batch=$batch  $total decisions in ${"%.2f".format(secs)} s = ${"%.0f".format(total / secs)} decisions/s (${"%.2f".format(secs * 1000 / total)} ms/decision)\n")
+                }
             }
             println(log); Files.writeString(S0Metrics.file("s0-projector.txt"), log)
         } finally { ProcessBuilder("docker", "rm", "-f", "-v", name).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }

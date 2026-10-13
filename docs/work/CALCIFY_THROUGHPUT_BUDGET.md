@@ -26,7 +26,7 @@ rate), **unmeasured**. "Gap" is the target divided by the last measured rate whe
 | Legacy full projection path | 10,000/s through projection | 2.5k/5m recorded baseline; 5k fails freshness; 10k full-system diagnostics fail (C4 to C43, F02) | C4 to C43, F02 | measured, **misses** | 4x |
 | Settlement service (Calcify financial, not the finite lane) | at least about 9,091/s sustained | 1,051.73 settled/s empirical, under a different profile than the 2,500/s target; synthetic contender runs are not integrated | `docs/evidence/calcify-financial-sprint1/README.md`, as cited by the contract | partial | about 9x |
 | **Finite P3 finance lane: Streams/RocksDB/changelog (free ledger)** | n/a (not a capacity lane) | about 14,000 inputs/s with ten 300-byte puts per input, 100,000-input run; 47,900/s with none. Short runs are ramp-limited (see Cautions) | CAL-FIN-S0 | partial, diagnostic | n/a |
-| **Finite P3 finance lane: projector to Postgres** | n/a (not a capacity lane) | 106 decisions/s one per call; 740/s at 120 per call | CAL-FIN-S0 | partial, diagnostic | about 13x below the settlement need at best |
+| **Finite P3 finance lane: projector to Postgres** | n/a (not a capacity lane) | as written: 106 decisions/s one per call, 740/s at 120 per call (579/s after 12,000 decisions). With JDBC batches per statement class in one transaction (research variant, not product code): 3,688 to 4,313/s at 120 per call, 2,651 to 3,413/s after 12,000 decisions | CAL-FIN-S0 | partial, diagnostic | as written about 12x below the settlement need; batched about 2.7x below |
 | Finite P3 finance lane: ledger `decide` at the pinned size (about 700 entities) | n/a | about 1.5 ms digest per decision at the ceiling; about 9 us per decision at about 20 entities (S2-A result) | `CALCIFY_FINITE_P3_S2A_RESULT.md` | partial, synthetic | n/a |
 | Ledger `decide` at scale (10^4 to 10^5 entities) | would be required of any capacity engine | 25 to 344 ms digest and 118 ms to 9.6 s invariants per decision | `CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md` section 1.1 (research spike) | measured, synthetic, **misses by orders of magnitude** | n/a |
 | Restore | to be set by the owner (RTO) | store restore 1.8 s per 1,000,000 changelog records; changelog read 1.9 s and about 337 MB; restart to running about 42 s (cause unknown) | CAL-FIN-S0 | partial | unknown |
@@ -67,7 +67,7 @@ the projector, not the ledger or Streams.
 ## Next measurements, in order of value
 
 1. A sustained-duration (minutes) version of the S0 Streams and projector runs, so the baseline stops being a short-run number.
-2. The projector with JDBC batching (`addBatch`) at the same scale, since it is the binding term.
+2. The projector beyond JDBC batching (larger batches, `COPY`, fewer indexes, several bindings in parallel), since it is still the binding term at about 3k/s; and the research batching variant promoted to a reviewed product change if the finance lane is to be a capacity lane at all.
 3. The real `FinanceProcessor` pre-aged to 10^4 to 10^5 entities (needs the lifted caps from the design's profile spec).
 4. Finance read routes under a frozen concurrent read mix.
 5. Explain the 42 s restart floor, then set the owner's restore-time objective.
