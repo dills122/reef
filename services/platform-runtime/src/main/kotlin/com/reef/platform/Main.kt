@@ -6,6 +6,14 @@ import com.reef.platform.api.PlatformHttpServer
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 fun main() {
+    if (RuntimeEnv.string("CALCIFY_FINANCE_BINDING_DIGEST", "").isNotBlank()) {
+        // The finite finance role is its own process: it must not share a JVM (or credentials) with finite ingress or a Calcify stage.
+        require(RuntimeEnv.string("CALCIFY_STAGE", "").isBlank() && RuntimeEnv.string("CALCIFY_FINITE_BINDING_DIGEST", "").isBlank()) {
+            "CALCIFY_FINANCE_BINDING_DIGEST must not be set with CALCIFY_STAGE or CALCIFY_FINITE_BINDING_DIGEST"
+        }
+        com.reef.platform.calcify.finance.FiniteFinanceRuntime.run()
+        return
+    }
     if (RuntimeEnv.string("CALCIFY_FINITE_BINDING_DIGEST", "").isNotBlank()) {
         // Finite P3 is its own process role: a leftover CALCIFY_STAGE must not silently pick a different mode.
         require(RuntimeEnv.string("CALCIFY_STAGE", "").isBlank()) { "CALCIFY_STAGE must not be set with CALCIFY_FINITE_BINDING_DIGEST" }
