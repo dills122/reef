@@ -13,7 +13,7 @@ snapshot and scoped performance claims. Use newer source and evidence for curren
 Last aligned: 2026-09-04 against `master` at `cebbffc1`; hosted release gates
 were not re-run during this documentation check.
 Calcify entries were re-aligned on 2026-10-11 against `master` at `778ae5da8` (see the
-Calcify program section); non-Calcify sections remain as of 2026-09-04.
+Calcify program section); the finite P3 financial-path section was refreshed on 2026-10-13 against `fd8f3ef6a`; non-Calcify sections remain as of 2026-09-04.
 
 Source/test/artifact reconciliation:
 [`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
@@ -126,9 +126,30 @@ binding schema version before O3b) and a merged first module, **O3a** (PR491): a
 could adopt a forged but consistent state. Both are closed in PR493/494: per-class budgets (refusals neither recorded nor counted), every
 decision commits to the state it produced (`restore(checkpoint, trustedHead)` refuses anything else), settle requires operator
 authority, an independent-encoder golden set, a protobuf wire contract (`calcify_finance.proto`), a 5,000-schedule differential oracle and a
-72-mutant check with every mutant killed. Review 3 of 3 and the binding v2 spec review are pending.
-It is unwired, implies no financial authority and no capacity. The O2 follow-up role definition is a
-[draft](work/CALCIFY_FINITE_P3_DB_ROLES.md) with an observed privilege matrix awaiting operator sign-off.
+72-mutant check with every mutant killed. Review 3 of 3 returned follow-ups that PR499 closed, and the binding v2 spec was implemented in PR502-506 (see the next section).
+O3a on its own implies no financial authority and no capacity. The O2 follow-up role definition is a
+[draft](work/CALCIFY_FINITE_P3_DB_ROLES.md); the consolidated sign-off packet is [below](#calcify-finite-p3-financial-path--october-13-2026).
+
+## Calcify finite P3 financial path — October 13, 2026
+
+Refreshed against `master` at `fd8f3ef6a` (PR519). The finite P3 financial path is **built, tested on real infrastructure and independently reviewed, but not run live**; it implies
+no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite profile, owner decision 2026-10-12).
+
+- **Delivered (PR numbers):** O4 projection schema and projector (501); binding v2 openings, registration and startup witnesses (502, 504, 505); finance processor, per-entity store, restore cut
+  and real-broker tests (506); S2 close-out: aborted-tail offset rule, ACL isolation test, evidence reader, broker CI step (507, 508, 511); operator control writer and CLI (509); finance read routes
+  (510); O5 end-to-end fixture and projection runner (512); launcher hardening from integration review 2 (513); launcher leaves the consumer group on a clean stop (516); projector-role refusal test
+  (518); the opt-in **finance process role** that gives the launcher a production caller, with the consumer session timeout pinned at 6,000 ms (519). PR520 (launcher and projector under SIGKILL with
+  data flowing, closing F8) is open.
+- **Reviews:** three independent integration reviews; the third (on the PR516/518/519 set) returned **Ready with non-blocking follow-ups**, no P0 or P1, and its fixes are in PR519.
+- **Owner decisions in force:** no processor "auto attempt 1" (every settle attempt is an operator Settle input); operator CLI holds the control credential; one binding digest per v2 run; session timeout 6,000 ms.
+- **Operator documents:** [role sign-off packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (awaiting sign-off), [finance runtime runbook](work/CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
+  [binding v2 spec](work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md), [S2 close-out research](work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md).
+- **Open, recorded limits:** the owner epoch is operator-supplied (not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
+  F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; no live run.
+- **Owner-gated:** sign-off of the role matrix, the live recording window, warm-restart proof approval, the O2 replay, and Decision 0 for any capacity profile.
+- **Throughput:** stage targets and last measurements are indexed in [Calcify throughput budget](work/CALCIFY_THROUGHPUT_BUDGET.md); every measurement belongs in the append-only
+  [throughput ledger](THROUGHPUT_BASELINES.md) (entry CAL-FIN-S0). A scalable-commitment design exists but is **not accepted** and is gated on Decision 0:
+  [state commitment design](work/CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md).
 
 ## Calcify finite P3 O2 — October 11, 2026
 
