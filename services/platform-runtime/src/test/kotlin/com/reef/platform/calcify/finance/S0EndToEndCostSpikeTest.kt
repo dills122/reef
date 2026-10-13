@@ -24,6 +24,21 @@ import org.postgresql.ds.PGSimpleDataSource
 import java.util.Random
 import kotlin.test.Test
 
+/** Child process for the crash-restart measurement: the real finance topology on the production Streams properties, optionally with a lower session timeout. */
+internal object S0CrashApp {
+    @JvmStatic fun main(args: Array<String>) {
+        val props = FinanceTopology.streamsProperties(FinanceBrokerFixture.APP_ID, args[0], args[1])
+        if (args[2] != "default") {
+            props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = args[2].toInt()
+            props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = 1000
+        }
+        val streams = KafkaStreams(FinanceTopology.build(FinanceBrokerFixture.config, persistent = true), props)
+        streams.start()
+        println("S0-CRASH-APP-STARTED")
+        Thread.currentThread().join()
+    }
+}
+
 /** Appends `key=value` lines to $S0_OUT_DIR/s0-metrics.properties (default: java.io.tmpdir) so a scheduled run can compare against the budget. */
 internal object S0Metrics {
     private val dir: Path get() = Path.of(System.getenv("S0_OUT_DIR") ?: System.getProperty("java.io.tmpdir"))
@@ -110,6 +125,35 @@ class S0EndToEndCostSpikeTest {
             current.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true))
         }
         println(log); Files.writeString(S0Metrics.file("s0-restart-floor.txt"), log)
+    }
+
+    /** Crash (SIGKILL) restart time on the production properties versus a 6 s session timeout; the clean-stop fix does not help a crash. */
+    @Test
+    fun crashRestart() {
+        val log = StringBuilder("\nS0 crash restart (SIGKILL of a child finance app, then the same app id restarts)\n")
+        for (session in listOf("default", "6000")) {
+            DisposableRedpanda().start().use { rp ->
+                rp.admin().use { FinanceBrokerFixture.createTopics(it) }
+                val stateDir = Files.createTempDirectory("s0-crash").toFile()
+                val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+                val child = ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "com.reef.platform.calcify.finance.S0CrashApp", rp.bootstrap, stateDir.path, session)
+                    .redirectErrorStream(true).start()
+                val out = child.inputStream.bufferedReader()
+                val seen = ArrayList<String>()
+                while (true) { val line = out.readLine() ?: error("child exited before starting: ${seen.takeLast(15)}"); seen += line; if (line.contains("S0-CRASH-APP-STARTED")) break }
+                Thread.sleep(8000)                                   // let it join the group and take the partition
+                child.destroyForcibly().waitFor()                    // SIGKILL: no shutdown hooks, no LeaveGroup
+                val props = FinanceTopology.streamsProperties(FinanceBrokerFixture.APP_ID, rp.bootstrap, stateDir.path)
+                if (session != "default") { props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = session.toInt(); props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = 1000 }
+                val t0 = System.nanoTime()
+                val streams = KafkaStreams(FinanceTopology.build(FinanceBrokerFixture.config, persistent = true), props).also { it.start(); waitRunning(it) }
+                val secs = (System.nanoTime() - t0) / 1e9
+                log.append("E  session.timeout.ms=$session: restart after SIGKILL reached RUNNING in ${"%.1f".format(secs)} s\n")
+                S0Metrics.record("crashRestart.sec.session$session", Math.round(secs))
+                streams.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true))
+            }
+        }
+        println(log); Files.writeString(S0Metrics.file("s0-crash-restart.txt"), log)
     }
 
     @Test

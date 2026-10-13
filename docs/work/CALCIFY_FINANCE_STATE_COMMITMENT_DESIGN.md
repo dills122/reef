@@ -527,7 +527,7 @@ demoted; **Q3** (per-field framing, order) acceptable once the byte rules of 3.1
 - **Q8.** Is rotation with a small bound enough that S3c and the trie can be dropped (1.4, last table)? This is answered by Decision 1 and the S0 extension, not by review.
 - **Q9.** Can the Streams lane reach the goalpost's about 19k inputs/s (it sustained 11.1k over 90 s with a free ledger) with the real ledger, once `commit.interval.ms`, batch size and changelog settings are tuned? (Pinned
   settings are part of the spec; tuning needs a spec change.)
-- **Q10 (answered).** The 43 s restart floor is the previous member's 45 s session timeout: `KafkaStreams.close(Duration)` does not leave the consumer group. With `close(CloseOptions().leaveGroup(true))` a restart reached RUNNING in 0.4 to 0.5 s (CAL-FIN-S0). Crash restart time and the finance app's `session.timeout.ms` or static membership remain open.
+- **Q10 (answered).** The 43 s restart floor is the previous member's 45 s session timeout: `KafkaStreams.close(Duration)` does not leave the consumer group. With `close(CloseOptions().leaveGroup(true))` a restart reached RUNNING in 0.4 to 0.5 s (CAL-FIN-S0). A crash (SIGKILL) restarted in 44.1 s on the production properties and 6.1 s with `session.timeout.ms` 6,000; the finance app's session timeout or static membership is an owner decision.
 
 ## 13. Rejected framing
 
