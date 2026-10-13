@@ -5,6 +5,7 @@ import java.nio.file.Path
 import java.util.Random
 import java.util.UUID
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import java.sql.SQLException
 import org.postgresql.ds.PGSimpleDataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -130,5 +131,24 @@ class FinanceProjectorPostgresTest {
         assertFailsWith<FinanceProjectionDiverged>("a log with a gap") { runner(records.filterIndexed { i, _ -> i != 1 }).runOnce() }
         val unopened = digest()
         assertFailsWith<FinanceProjectionDiverged>("never opened") { FinanceProjectionRunner({ records }, projector, unopened, 1).runOnce() }
+    }
+
+    /** The projector is the only writer of the projection and must hold nothing else (docs/work/CALCIFY_FINITE_P3_DB_ROLES.md, O4 projection role). */
+    @Test fun theProjectorRoleCannotDeleteTruncateOrTouchTheIngressTablesAndFunctions() {
+        dataSource().connection.use { c ->
+            for (sql in listOf("DELETE FROM boundary.calcify_finance_decision", "TRUNCATE boundary.calcify_finance_obligation", "DELETE FROM boundary.calcify_finance_position")) {
+                val e = assertFailsWith<SQLException>(sql) { c.createStatement().use { it.execute(sql) } }
+                assertEquals("42501", e.sqlState, "expected insufficient_privilege for $sql: ${e.message}")
+            }
+            for (table in listOf("calcify_finite_bindings", "calcify_finite_runs", "calcify_finite_attempts", "calcify_finite_publications")) {
+                val e = assertFailsWith<SQLException>(table) { c.createStatement().use { it.executeQuery("SELECT 1 FROM boundary.$table").close() } }
+                assertEquals("42501", e.sqlState, "the projector must not read $table")
+            }
+            val canExecute = c.createStatement().use { st ->
+                st.executeQuery("SELECT p.proname, has_function_privilege(current_user, p.oid, 'EXECUTE') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace " +
+                    "WHERE n.nspname = 'boundary' AND p.proname LIKE 'calcify_finite_%'").use { rs -> buildList { while (rs.next()) if (rs.getBoolean(2)) add(rs.getString(1)) } }
+            }
+            assertTrue(canExecute.isEmpty(), "the projector holds EXECUTE on finite registrar/runtime functions: $canExecute")
+        }
     }
 }
