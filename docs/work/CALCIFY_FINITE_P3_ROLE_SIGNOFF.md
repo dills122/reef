@@ -35,12 +35,14 @@ Proven by `FiniteBindingStorePostgresTest`, `CalcifyTopicRoleMigrationTest`, `Fi
 | --- | --- | --- |
 | `calcify_finite_registrar` | EXECUTE on `register`, `stages`, `release`, `snapshot` | admit, send, acknowledge |
 | `calcify_finite_runtime` | EXECUTE on `claim_owner`, `begin_attempt`, `authorize_send`, `ack`, `unknown`, `stop`, `snapshot`, `receipt` | register an opening, release a stopped run |
-| `calcify_finite_projector` | USAGE on schema `boundary`; SELECT, INSERT, UPDATE on the five `calcify_finance_*` tables | DELETE, TRUNCATE, the ingress tables, the registrar/runtime functions; a stale owner epoch writes nothing |
-| `calcify_finite_reader` | USAGE on schema `boundary`; SELECT on the same five tables | INSERT, UPDATE, DELETE, TRUNCATE, the ingress tables |
+| `calcify_finite_projector` | USAGE on schema `boundary`; SELECT, INSERT, UPDATE on the five `calcify_finance_*` tables | a stale owner epoch writes nothing (tested). **Not asserted by any test (gap):** that DELETE, TRUNCATE, the ingress tables and the registrar/runtime functions are refused; that follows from the grant list only |
+| `calcify_finite_reader` | USAGE on schema `boundary`; SELECT on the same five tables | INSERT, UPDATE, DELETE, TRUNCATE and the ingress tables (all asserted in `JdbcFinanceReadStorePostgresTest`) |
 
 All four are `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE` with secrets from a secret store. The function owner is trusted and must not be used by a service.
 
 ## Decisions for you
+
+0. **Close the projector-role test gap?** A small Postgres test that the projector role is refused DELETE, TRUNCATE and the ingress tables would make the matrix fully proven. Recommended; not done in this packet.
 
 1. **Approve the matrices above** as the finite P3 provisioning list (Kafka and Postgres). If yes, the DB roles document stops being a "draft for operator review" and the
    open item 4 in it is closed.
