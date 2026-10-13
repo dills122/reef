@@ -1656,6 +1656,12 @@ windows, so none of these is a capacity or ceiling and the 100,000-input figures
 argue a single partition could not carry the goalpost. That inference is withdrawn; the original figures are retained above as superseded by run length, and the
 design document carries the correction (section 1.4).
 
+**Sustained run:** 1,000,000 inputs, P=10, the same settings, one run: **90.0 s = 11,111 inputs/s (111,108 puts/s)**. So the 100,000-input figure (14,079/s) also
+overstated steady state by about 27%, and the steady-state rate of this stand-in is about 11k inputs/s. Unit caution: a booked and settled trade is **two** finance inputs (a
+capture and a settle, each about 6 to 10 store puts), so this is about 5.5k trades/s through this stand-in, against the arena contract's 10,000 trades/s booking and
+about 9,091/s settlement proposals (about 19k inputs/s for both). A fresh-lane stand-in with no ledger, no encoding, one partition and one thread; not a ceiling, because
+partitioning and tuning were not tried.
+
 Restore: changelog read into the heap (`FinanceBrokerFixture.readAll`, what `FinanceEvidenceReader` does) 200,000 records 1.2 s and 26 to 56 MB held;
 1,000,000 records 1.9 s and about 337 MB. Store restore phase (Streams restore listener): 345 ms for 200,000 records; 1,764 ms for 1,000,000; warm restart with an
 intact state directory 9 to 12 ms for 0 records. Restart to RUNNING wall clock was 40 to 43 s in every cold and warm case, so it is not restore time; cause not

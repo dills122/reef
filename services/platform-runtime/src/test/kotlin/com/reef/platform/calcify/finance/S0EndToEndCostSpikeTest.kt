@@ -116,7 +116,7 @@ class S0EndToEndCostSpikeTest {
         val n = (System.getenv("S0_RECORDS") ?: "20000").toInt()
         val log = StringBuilder("\nS0 results (records per run = $n, 300-byte values, EOS v2, 1 thread, commit 100 ms, caching off)\n")
         DisposableRedpanda().start().use { rp ->
-            for (puts in listOf(0, 1, 10)) {
+            for (puts in (System.getenv("S0_PUTS") ?: "0,1,10").split(",").map { it.trim().toInt() }) {
                 val app = "s0-app-p$puts"; val dir = Files.createTempDirectory("s0-state-$puts").toString()
                 rp.admin().use { a -> a.createTopics(listOf(NewTopic("S0_IN", 1, 1.toShort()), NewTopic("S0_OUT", 1, 1.toShort()))).all().get(30, TimeUnit.SECONDS) }
                 val props = FinanceTopology.streamsProperties(app, rp.bootstrap, dir)
@@ -127,11 +127,11 @@ class S0EndToEndCostSpikeTest {
                 val t0 = System.nanoTime()
                 repeat(n) { producer.send(ProducerRecord("S0_IN", 0, ByteArray(0), ByteArray(120))) }
                 producer.flush()
-                val seen = countOutput(rp.bootstrap, n.toLong(), 300)
+                val seen = countOutput(rp.bootstrap, n.toLong(), 900)
                 val secs = (System.nanoTime() - t0) / 1e9
                 S0Metrics.record("streams.inputsPerSec.puts$puts", Math.round(seen / secs))
                 log.append("A  puts/record=$puts  processed=$seen in ${"%.1f".format(secs)} s = ${"%.0f".format(seen / secs)} records/s  (${"%.0f".format(seen * puts / secs)} puts/s)\n")
-                if (puts == 10) {
+                if (puts == 10 && System.getenv("S0_RESTORE") != "false") {
                     streams.close(Duration.ofSeconds(30))
                     val cl = "$app-s0-store-changelog"
                     val before = heapMb(); val r0 = System.nanoTime()
