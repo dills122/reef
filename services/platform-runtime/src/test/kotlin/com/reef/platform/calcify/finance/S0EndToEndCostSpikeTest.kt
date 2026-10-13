@@ -24,6 +24,16 @@ import org.postgresql.ds.PGSimpleDataSource
 import java.util.Random
 import kotlin.test.Test
 
+/** Appends `key=value` lines to $S0_OUT_DIR/s0-metrics.properties (default: java.io.tmpdir) so a scheduled run can compare against the budget. */
+internal object S0Metrics {
+    private val dir: Path get() = Path.of(System.getenv("S0_OUT_DIR") ?: System.getProperty("java.io.tmpdir"))
+    @Synchronized fun record(key: String, value: Number) {
+        Files.createDirectories(dir)
+        Files.writeString(dir.resolve("s0-metrics.properties"), "$key=$value\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
+    }
+    fun file(name: String): Path = dir.also { Files.createDirectories(it) }.resolve(name)
+}
+
 /**
  * S0 end-to-end cost experiment for docs/work/CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md (review round 2: lens C Q7, lens B 9.x).
  * Not product code; run with `-PbrokerTests -PresearchTests`. It answers whether a faster ledger would matter at all, by measuring the
@@ -97,6 +107,7 @@ class S0EndToEndCostSpikeTest {
                 producer.flush()
                 val seen = countOutput(rp.bootstrap, n.toLong(), 300)
                 val secs = (System.nanoTime() - t0) / 1e9
+                S0Metrics.record("streams.inputsPerSec.puts$puts", Math.round(seen / secs))
                 log.append("A  puts/record=$puts  processed=$seen in ${"%.1f".format(secs)} s = ${"%.0f".format(seen / secs)} records/s  (${"%.0f".format(seen * puts / secs)} puts/s)\n")
                 if (puts == 10) {
                     streams.close(Duration.ofSeconds(30))
@@ -104,6 +115,7 @@ class S0EndToEndCostSpikeTest {
                     val before = heapMb(); val r0 = System.nanoTime()
                     val all = FinanceBrokerFixture.readAll(rp.bootstrap, cl)
                     val readSecs = (System.nanoTime() - r0) / 1e9; System.gc(); val held = heapMb() - before
+                    S0Metrics.record("restore.changelogReadMs", Math.round(readSecs * 1000)); S0Metrics.record("restore.changelogRecords", all.size)
                     log.append("B1 changelog read into heap: ${all.size} records in ${"%.1f".format(readSecs)} s, about $held MB held\n")
                     val dir2 = Files.createTempDirectory("s0-state-fresh").toString()
                     for ((label, d) in listOf("cold (state dir deleted: rebuild RocksDB from changelog)" to dir2, "warm (intact state dir)" to dir)) {
@@ -116,6 +128,7 @@ class S0EndToEndCostSpikeTest {
                             override fun onRestoreEnd(tp: TopicPartition, store: String, totalRestored: Long) { restoreMs.set((System.nanoTime() - start) / 1_000_000) }
                         })
                         val t1 = System.nanoTime(); s.start(); waitRunning(s)
+                        S0Metrics.record("restore.storeRestoreMs." + (if (d == dir2) "cold" else "warm"), restoreMs.get()); S0Metrics.record("restore.toRunningSec." + (if (d == dir2) "cold" else "warm"), Math.round((System.nanoTime() - t1) / 1e9))
                         log.append("B2 restart $label: RUNNING after ${"%.1f".format((System.nanoTime() - t1) / 1e9)} s total; store restore phase ${restoreMs.get()} ms for ${restored.get()} changelog records\n")
                         s.close(Duration.ofSeconds(30))
                     }
@@ -125,7 +138,7 @@ class S0EndToEndCostSpikeTest {
             }
         }
         println(log)
-        Files.writeString(Path.of(System.getProperty("java.io.tmpdir"), "s0-streams.txt"), log)
+        Files.writeString(S0Metrics.file("s0-streams.txt"), log)
     }
 }
 
@@ -172,9 +185,10 @@ class S0ProjectorCostSpikeTest {
                 val t0 = System.nanoTime()
                 for (d in digests) for (chunk in recs.chunked(batch)) total += projector.apply(d, 1, chunk)
                 val secs = (System.nanoTime() - t0) / 1e9
+                S0Metrics.record("projector.decisionsPerSec.batch$batch", Math.round(total / secs))
                 log.append("C  batch=$batch  $total decisions in ${"%.2f".format(secs)} s = ${"%.0f".format(total / secs)} decisions/s (${"%.2f".format(secs * 1000 / total)} ms/decision)\n")
             }
-            println(log); Files.writeString(Path.of(System.getProperty("java.io.tmpdir"), "s0-projector.txt"), log)
+            println(log); Files.writeString(S0Metrics.file("s0-projector.txt"), log)
         } finally { ProcessBuilder("docker", "rm", "-f", "-v", name).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
     }
 }

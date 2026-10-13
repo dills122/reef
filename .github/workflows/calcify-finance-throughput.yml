@@ -1,0 +1,61 @@
+name: Calcify Finance Throughput Baseline
+
+# Scheduled, warn-only measurement of the finance lane's non-ledger costs (Streams/RocksDB/changelog, restore, projector) on a real
+# Redpanda and Postgres in Docker. It compares against docs/work/calcify-throughput-baseline.json and appends nothing to the ledger by
+# itself: a human records any real change in docs/THROUGHPUT_BASELINES.md. Hosted runners are noisier than the recorded laptop run, so
+# the check warns at 30% and never fails the workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      records:
+        description: Inputs per Streams run (S0_RECORDS); the baseline is for 100000, short runs are ramp-limited.
+        required: false
+        default: '100000'
+  schedule:
+    - cron: '23 6 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calcify-finance-throughput-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  finance-throughput:
+    name: Finance lane throughput baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      S0_OUT_DIR: ${{ github.workspace }}/s0-results
+      S0_RECORDS: ${{ inputs.records || '100000' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Run the S0 finance-lane spikes (disposable Redpanda and Postgres containers)
+        run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests -PresearchTests --tests "com.reef.platform.calcify.finance.S0EndToEndCostSpikeTest" --tests "com.reef.platform.calcify.finance.S0ProjectorCostSpikeTest"
+      - name: Require both spikes executed, not skipped
+        run: |
+          for suite in com.reef.platform.calcify.finance.S0EndToEndCostSpikeTest com.reef.platform.calcify.finance.S0ProjectorCostSpikeTest; do
+            g="services/platform-runtime/build/test-results/test/TEST-$suite.xml"
+            test -f "$g"
+            grep -Eq 'tests="[1-9][0-9]*" skipped="0" failures="0" errors="0"' "$g"
+          done
+          test -s "$S0_OUT_DIR/s0-metrics.properties"
+      - name: Compare with the recorded baseline (warn only)
+        run: node scripts/dev/calcify-throughput-check.mjs "$S0_OUT_DIR/s0-metrics.properties"
+      - name: Upload throughput results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: calcify-finance-throughput
+          path: s0-results
+          if-no-files-found: warn

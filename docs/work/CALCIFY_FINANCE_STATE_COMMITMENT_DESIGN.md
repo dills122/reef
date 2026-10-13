@@ -15,14 +15,15 @@ is not changed by anything here. Owner: Dylan. Written 2026-10-12.
   and 344 ms at 100,000**; the part of `checkInvariants` not bounded by the pins costs **1.3 ms, 118 ms and 9.6 s** (it is quadratic).
 - Revision 1's 17.7 us figure came from hashing a zero-filled array; it was a floor and must not be cited.
 - **S0 (section 1.4) says the ledger is necessary but not sufficient.** On a real Redpanda with the production Streams settings, a processor that
-  does nothing but ten 300-byte store puts per input tops out near **7,600 inputs/s** on one thread and one partition (11,000/s with no puts), and the
-  projector as written does **106 decisions/s** one call at a time and **740/s** at best when batched. Restore is cheap (a 200,000-record changelog
-  rebuilds RocksDB in 0.35 s and reads into the heap in 1.2 s). So a ledger that is O(touched) lifts the ledger from a few decisions/s at 10^5
-  entities to tens of thousands/s, and then the projector and the single Streams partition bind.
+  does nothing but ten 300-byte store puts per input ran at **about 14,000 inputs/s** on one thread and one partition in a 100,000-record run (about
+  47,900/s with no puts; the first 20,000-record run showed 7,600 and 11,000, which were ramp-up limited, see the correction in 1.4), and the
+  projector as written does **106 decisions/s** one call at a time and **740/s** at best when batched. Restore is cheap (a 1,000,000-record changelog
+  rebuilds RocksDB in 1.8 s and reads into the heap in 1.9 s, holding about 337 MB). So a ledger that is O(touched) lifts the ledger from a few
+  decisions/s at 10^5 entities to tens of thousands/s, and then the **projector** binds first, with the Streams lane next.
 - **The repo's own throughput goalpost changes the question.** `CALCIFY_ARENA_THROUGHPUT_CONTRACT.md` recommends 10,000 booked trades/s, which is
   about 50,000 new entities/s (five per settled trade) and 15 million entities in a 5-minute session. No single lifetime budget survives that, and
-  one Streams partition cannot carry it even with a free ledger. **Rotation (one ledger per session or slice, sealed by a cut) is therefore the
-  recommended answer to Decision 1, not retirement or a huge budget**, and the 10k/s target belongs to the keyed lane, not to this lane.
+  the projector as written is two orders of magnitude below it. **Rotation (one ledger per session or slice, sealed by a cut) is therefore the
+  recommended answer to Decision 1, not retirement or a huge budget**, and the settlement lane's required service rate (about 9.1k/s for a 5-minute session, `CALCIFY_ARENA_THROUGHPUT_CONTRACT.md`) is a gate this lane has not yet shown it can meet.
 - The commitment is a **path-compressed binary trie** over the hash of each entity key (sections 3 and 4.1), now specified byte-exactly. The
   multiset accumulator is demoted to a one-paragraph "not selected" note (4.2): its bound has zero margin at 3072 bits and its spec was incomplete.
 - The engine is **new files only**, and the R5 gate is a pinned content hash over every finite-path file, with `-PbrokerTests` required (5.1).
@@ -70,7 +71,7 @@ Counted once, here: **ten** (revisions 1 and 2 said four, seven and nine in diff
 | 6 | History cap of 312 entries, enforced in the processor and the store, and the O(history) `verifyHistory`. **History grows with every consumed input, including refusals, duplicates and prior-result inputs, not only with recorded decisions** | `FinanceStore.MAX_HISTORY_ENTRIES`, `FinanceProcessor` position++ per item | n/a (a hard ceiling) |
 | 7 | Read routes: the positions, obligations and attempts routes are unpaginated full reads; only `decisions()` is paginated | `FinanceReadStore` | no |
 | 8 | Projector: 2 (capture), 3 (fund) or 7 (settle) un-batched SQL statements per decision; the checkpoint `FOR UPDATE` lock is **per `apply` call (batch)**, not per decision; **the projection DDL itself is pinned at the finite size** (`last_sequence <= 320`, 256 obligations) | `FinanceProjector`, migration 0014 | **yes (S0: 106/s unbatched, 740/s at batch 120)** |
-| 9 | Streams and RocksDB: every `kv.put` is a changelog record (about ten puts per decision: seven entities, the history entry, `head` and `meta`), caching is disabled, EOS v2 commits every 100 ms | `FinanceTopology.storeBuilder`, `streamsProperties` | **yes (S0: about 7,600 inputs/s with 10 puts per input)** |
+| 9 | Streams and RocksDB: every `kv.put` is a changelog record (about ten puts per decision: seven entities, the history entry, `head` and `meta`), caching is disabled, EOS v2 commits every 100 ms | `FinanceTopology.storeBuilder`, `streamsProperties` | **yes (S0: about 14,000 inputs/s with 10 puts per input at 100,000 inputs; 7,600 at 20,000 was ramp-limited)** |
 | 10 | One Streams thread **and one partition**: no long in-thread work (a full audit, a restore) and a hard parallelism ceiling no ledger work moves | topology | n/a, see S0 |
 
 ### 1.3 Consequences
@@ -98,17 +99,25 @@ indicative, with the caveats below.
 
 | Test | Setup | Result |
 | --- | --- | --- |
-| A. Streams ceiling | production `FinanceTopology.streamsProperties` (EOS v2, 1 thread, `commit.interval.ms` 100), persistent store, caching off, default changelog, one partition; a processor doing P puts of 300 bytes per input and forwarding one 100-byte output; 20,000 inputs sent at once, clock started after Streams reports RUNNING | P=0: 11,054 inputs/s; P=1: 10,701/s; P=10: **7,643 inputs/s (76,425 puts/s)** |
-| B1. Evidence read | `FinanceBrokerFixture.readAll` (what `FinanceEvidenceReader` does) of the 200,000-record changelog | 1.2 s; 26 to 56 MB of heap held |
-| B2. Store restore | stop Streams, delete the state dir, restart: store restore phase (restore listener) | **345 ms for 200,000 changelog records** (warm restart with an intact dir: 9 ms, 0 records) |
+| A. Streams ceiling | production `FinanceTopology.streamsProperties` (EOS v2, 1 thread, `commit.interval.ms` 100), persistent store, caching off, default changelog, one partition; a processor doing P puts of 300 bytes per input and forwarding one 100-byte output; inputs sent at once, clock started after Streams reports RUNNING (first run 20,000 inputs, rerun 100,000, see the correction below) | 20,000 inputs: P=0 11,054/s; P=1 10,701/s; P=10 7,643/s (superseded). **100,000 inputs: P=0 47,880/s; P=1 43,498/s; P=10 14,079 inputs/s (76,425 puts/s)** |
+| B1. Evidence read | `FinanceBrokerFixture.readAll` (what `FinanceEvidenceReader` does) of the 200,000-record changelog | 200,000 records: 1.2 s, 26 to 56 MB held. **1,000,000 records: 1.9 s, about 337 MB held (about 340 bytes per record, linear)** |
+| B2. Store restore | stop Streams, delete the state dir, restart: store restore phase (restore listener) | 345 ms for 200,000 changelog records; **1,764 ms for 1,000,000** (warm restart with an intact dir: 9 to 10 ms, 0 records) |
 | B3. Restart to RUNNING | the same restarts, wall clock | **43 s in both cold and warm cases**: this is not restore. It equals neither store time, so it is a fixed rejoin delay (suspected previous-member session timeout); unexplained and **must be understood before any restore-time objective is set** |
 | C. Projector | `FinanceProjector.apply` against Postgres 16 in Docker, 10 bindings x 120 capture-and-settle decisions; 1, 10 and 120 decisions per call | **106/s (9.5 ms each) at batch 1; 427/s at 10; 740/s (1.35 ms) at 120** |
 
 Caveats, so these are not over-read: nothing in A to C includes the ledger; the store is small (at most 2x10^5 entries, nothing about a
 multi-gigabyte RocksDB); inputs are produced in one burst (favourable to batching); one run each on a laptop with Docker's VM; C uses a local
 socket and a fresh table (no index growth). A therefore bounds the *non-ledger Streams path from above*, and C is the figure most likely to
-dominate. The two numbers that matter: **no single-partition EOS Streams lane gets near 10,000 inputs/s once the ledger's own work is added
-(7,600/s with a free ledger), and the projector as written is two orders of magnitude below it.**
+dominate. The numbers that matter: **the Streams lane with a free ledger sustained about 14,000 inputs/s at ten puts each in the 100,000-record run, so it is
+not shown to be the bottleneck, but the margin over 10,000 is thin once the ledger's own work is added; the projector as written is two orders of magnitude
+below the goalpost.**
+
+**Correction, 2026-10-12 (later the same day).** The first S0 run used 20,000 inputs (about a 2.6 s window) and I reported its 7,600 inputs/s as a
+"ceiling". A rerun at 5,000 inputs gave 2,500 to 2,900/s and one at 100,000 gave 14,000 to 47,900/s: the measured rate rises steeply with run length
+because ramp-up (consumer join, first commit intervals, JIT) dominates short runs. The 20,000-record figures were therefore **under-estimates of
+steady-state**, and the earlier claim that a single Streams partition cannot carry the goalpost is **withdrawn**. Even 100,000 inputs is a 2 to 7 s window and
+may still understate steady state; a longer run (and a sustained-duration profile) is part of the S0 extension. The projector figures were not
+sensitive to size (103 to 106/s at batch 1 at both sizes). Original figures are kept above, marked superseded, per the throughput ledger's append-only rule.
 
 **Ceiling after each fix, at 10^5 entities** (from the corrected 1.1 and S0; one thread; decisions/s, order of magnitude):
 
@@ -117,7 +126,7 @@ dominate. The two numbers that matter: **no single-partition EOS Streams lane ge
 | today | 344 ms digest + 9.6 s invariants | about 0.1 | invariants |
 | + linear reference invariant (still per decision) | 344 ms | about 3 | digest |
 | + incremental commitment, today's map copies and diff | about 9 ms (copies 3.3 + diff 5.6) | about 110 | copies and diff |
-| + overlay/`Delta`, incremental invariants (full O(touched) engine) | tens of microseconds | tens of thousands | **Streams, about 7,600/s; projector, 740/s at best** |
+| + overlay/`Delta`, incremental invariants (full O(touched) engine) | tens of microseconds | tens of thousands | **projector, 740/s at best; then the Streams lane (14,000 inputs/s measured at 100,000 inputs, may be an under-estimate)** |
 
 The middle rows matter for a *rotating* ledger (Decision 1): a ledger that holds at most a few 10^4 entities needs only the middle rows, and
 the full engine may not be justified.
@@ -392,7 +401,7 @@ mutants are replaced by commitment-mismatch mutants.
 - **Projector.** 2 to 7 un-batched statements per decision; the checkpoint lock is per batch. S0 measured 106/s at one decision per call and 740/s at
   120 per call; the projection tables themselves are pinned at the finite size (`last_sequence <= 320`, 256 obligations), so a capacity profile needs
   its own tables. End-to-end throughput is capped here unless it is batched and re-schemed, or the target is defined for the ledger path only (11.2).
-- **Streams.** One thread and one partition with a changelog record per put cap the lane near 7,600 inputs/s with a free ledger (S0).
+- **Streams.** One thread and one partition with a changelog record per put measured about 14,000 inputs/s at ten puts each with a free ledger (S0 rerun at 100,000 inputs; the 20,000-input figure of 7,600 was ramp-limited and is superseded).
 
 The projector's *behaviour* (hash link, input digest, continuity) and the read routes' contracts are unchanged, but the projector holds `FinanceLedger`
 (`genesisChain`, `verifyLink`), so a v2 profile gets its own projector class (5.1), not a re-typed one.
@@ -487,7 +496,7 @@ incremental invariants and the overlay) may be all that is needed and S3c and th
 
 **Decision 0 (gates everything beyond S2).** Is a capacity profile wanted at all, by when, and does it depend on the reservation/credit decision
 (P-5, open until calibration)? **Recommended: not now.** The 50k decisions/s gate is waived for finite P3; the finite profile needs none of this; and
-S0 shows a single lane cannot meet the repo's 10,000 booked trades/s goalpost even with a free ledger (7,600/s Streams ceiling, 740/s projector). If P-5
+S0 shows the projector as written is two orders of magnitude below the repo's 10,000 booked trades/s goalpost, and the Streams lane's margin over it (about 14,000 inputs/s with a free ledger) is thin (the first 7,600/s figure was superseded). If P-5
 changes the economics, stop after S2 and revisit the entity model. If no capacity profile is needed soon, this document is complete as a design record.
 
 1. **Run duration and rotation (D7, replaces the earlier lifetime-or-retirement question).** Recommended: **rotation**, one ledger per session or slice,
@@ -513,7 +522,7 @@ demoted; **Q3** (per-field framing, order) acceptable once the byte rules of 3.1
 (profile spec, 9.11); **Q7** (does S0 block) yes, and the extension is the next deliverable. Still open:
 
 - **Q8.** Is rotation with a small bound enough that S3c and the trie can be dropped (1.4, last table)? This is answered by Decision 1 and the S0 extension, not by review.
-- **Q9.** Can the Streams lane carry more than about 7,600 inputs/s with a stand-in ledger once `commit.interval.ms`, batch size and changelog settings are tuned? (Pinned
+- **Q9.** Can the Streams lane sustain its measured 14,000 inputs/s (100,000-input run) over minutes, and with the real ledger, once `commit.interval.ms`, batch size and changelog settings are tuned? (Pinned
   settings are part of the spec; tuning needs a spec change.)
 - **Q10.** What explains the 43 s restart floor?
 
