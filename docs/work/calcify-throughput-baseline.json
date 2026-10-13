@@ -1,0 +1,67 @@
+{
+  "recorded": "S0 rerun at 100,000 inputs, 2026-10-12 (docs/THROUGHPUT_BASELINES.md, entry CAL-FIN-S0)",
+  "warnFraction": 0.3,
+  "scope": "Finance Streams lane stand-in (no ledger), 100,000 inputs per run, Redpanda v26.2.3 and Postgres 16 in Docker on a development laptop, one run each. Short runs are ramp-limited: 5,000 inputs gave ~2.5k/s and 20,000 gave 7.6k/s for the same code. Diagnostic, not a qualification.",
+  "metrics": {
+    "streams.inputsPerSec.puts0": {
+      "value": 47880,
+      "better": "higher",
+      "unit": "inputs/s"
+    },
+    "streams.inputsPerSec.puts1": {
+      "value": 43498,
+      "better": "higher",
+      "unit": "inputs/s"
+    },
+    "streams.inputsPerSec.puts10": {
+      "value": 14079,
+      "better": "higher",
+      "unit": "inputs/s"
+    },
+    "projector.decisionsPerSec.batch1": {
+      "value": 106,
+      "better": "higher",
+      "unit": "decisions/s"
+    },
+    "projector.decisionsPerSec.batch10": {
+      "value": 427,
+      "better": "higher",
+      "unit": "decisions/s"
+    },
+    "projector.decisionsPerSec.batch120": {
+      "value": 740,
+      "better": "higher",
+      "unit": "decisions/s"
+    },
+    "restore.changelogReadMs": {
+      "value": 1900,
+      "better": "lower",
+      "unit": "ms for 1,000,000 records"
+    },
+    "restore.storeRestoreMs.cold": {
+      "value": 1764,
+      "better": "lower",
+      "unit": "ms for 1,000,000 records"
+    },
+    "restore.toRunningSec.cold": {
+      "value": 42,
+      "better": "lower",
+      "unit": "s"
+    },
+    "restore.toRunningSec.warm": {
+      "value": 42,
+      "better": "lower",
+      "unit": "s"
+    },
+    "projector.batchedDecisionsPerSec.plain.batch120": {
+      "value": 3688,
+      "better": "higher",
+      "unit": "decisions/s"
+    },
+    "projector.batchedDecisionsPerSec.rewriteBatchedInserts.batch120": {
+      "value": 4313,
+      "better": "higher",
+      "unit": "decisions/s"
+    }
+  }
+}
