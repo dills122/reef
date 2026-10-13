@@ -45,4 +45,26 @@ class FiniteFinanceLauncherBrokerTest {
             rp.admin().use { admin -> assertTrue(admin.listConsumerGroups().all().get().none { it.groupId() == F.APP_ID }, "a failed start leaves no running app behind") }
         }
     }
+
+    /** A clean stop leaves the consumer group, so a restart is not delayed by the previous member's 45 s session timeout (measured 43 s before, 0.5 s after). */
+    @Test fun aCleanStopLeavesTheGroupSoARestartIsNotDelayed() {
+        DisposableRedpanda().start().use { rp ->
+            rp.admin().use { F.createTopics(it) }
+            val stateDir = Files.createTempDirectory("finance-restart-state").toString()
+            // Production properties on purpose: the shared fixture lowers session.timeout.ms to 6 s (for SIGKILL tests), which would hide the delay this test guards.
+            fun start() = org.apache.kafka.streams.KafkaStreams(FinanceTopology.build(F.config, persistent = true), FinanceTopology.streamsProperties(F.APP_ID, rp.bootstrap, stateDir)).also { s ->
+                s.start()
+                val deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos()
+                while (s.state() != org.apache.kafka.streams.KafkaStreams.State.RUNNING && System.nanoTime() < deadline) Thread.sleep(50)
+                assertEquals(org.apache.kafka.streams.KafkaStreams.State.RUNNING, s.state(), "the app reaches RUNNING")
+            }
+            val first = start()
+            FinanceTopology.closeLeavingGroup(first, java.time.Duration.ofSeconds(30))
+            val t0 = System.nanoTime()
+            val second = start()
+            val seconds = (System.nanoTime() - t0) / 1e9
+            FinanceTopology.closeLeavingGroup(second, java.time.Duration.ofSeconds(30))
+            assertTrue(seconds < 20, "restart after a clean stop took $seconds s; waiting out the session timeout takes about 43 s")
+        }
+    }
 }

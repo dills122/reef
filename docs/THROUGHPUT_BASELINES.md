@@ -32,6 +32,8 @@ Throughput PRs/handoffs must cite baseline IDs, prior attempts considered,
 changed variable, actual result/artifact location, limitations and next decision.
 Read-only evidence review is not a new approval gate for already authorized work.
 
+Stage-by-stage index of targets, last measurements and unmeasured stages: [Calcify throughput budget](work/CALCIFY_THROUGHPUT_BUDGET.md). It copies from this ledger; this ledger wins on any disagreement.
+
 Current goal clarification, October11: owner now requires10k distinct trades/s
 through user-facing trading API after Calcify, with settlement allowed to lag.
 [Proposed arena contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) defines complete
@@ -1636,3 +1638,55 @@ disk occupancy and minor observer/host-check differences prevent pure attributio
 Matching sampled4.71GiB; guest-free minimum15.880GB above8GBreserve. No cold
 recovery qualification, host-loss proof or production financial integration.
 22focusedNode tests and all audits pass; owned services stopped, volumes retained.
+
+## Calcify finite finance lane non-ledger costs, CAL-FIN-S0 (October 12, 2026)
+
+Diagnostic, finance lane stand-in only; **no ledger, no capture, no financial 10k claim**. Source: branch of PR 514 (`S0EndToEndCostSpikeTest`,
+`S0ProjectorCostSpikeTest`, `StateCommitmentCostSpikeTest`; research and broker tags, `-PbrokerTests -PresearchTests`). Host: development MacBook,
+Docker Desktop VM, one run per row, local sockets; Redpanda v26.2.3 (single node, `--smp 1`, 1G) and Postgres 16-alpine in disposable containers removed with
+`docker rm -f -v`. Streams settings are the production pins (`FinanceTopology.streamsProperties`: EOS v2, one thread, one partition,
+`commit.interval.ms` 100, `max.task.idle.ms` 0), persistent RocksDB store with caching disabled and the default changelog. Processor: P puts of 300 bytes per
+input and one 100-byte forward; inputs produced in one burst; the clock starts after Streams reports RUNNING.
+
+Streams, inputs per second by run length (same code, same host): **5,000 inputs**: P=0 2,867, P=1 2,927, P=10 2,491. **20,000 inputs**: P=0 11,054, P=1
+10,701, P=10 7,643. **100,000 inputs**: P=0 47,880, P=1 43,498, P=10 14,079 (140,788 puts/s). Rates rise steeply with run length because ramp-up dominates short
+windows, so none of these is a capacity or ceiling and the 100,000-input figures may still understate steady state.
+
+**Correction (same day):** the 20,000-input result was first reported as "about 7,600 inputs/s, a ceiling" in chat and in design revision 3 (PR 514) and used to
+argue a single partition could not carry the goalpost. That inference is withdrawn; the original figures are retained above as superseded by run length, and the
+design document carries the correction (section 1.4).
+
+**Sustained run:** 1,000,000 inputs, P=10, the same settings, one run: **90.0 s = 11,111 inputs/s (111,108 puts/s)**. So the 100,000-input figure (14,079/s) also
+overstated steady state by about 27%, and the steady-state rate of this stand-in is about 11k inputs/s. Unit caution: a booked and settled trade is **two** finance inputs (a
+capture and a settle, each about 6 to 10 store puts), so this is about 5.5k trades/s through this stand-in, against the arena contract's 10,000 trades/s booking and
+about 9,091/s settlement proposals (about 19k inputs/s for both). A fresh-lane stand-in with no ledger, no encoding, one partition and one thread; not a ceiling, because
+partitioning and tuning were not tried.
+
+Restore: changelog read into the heap (`FinanceBrokerFixture.readAll`, what `FinanceEvidenceReader` does) 200,000 records 1.2 s and 26 to 56 MB held;
+1,000,000 records 1.9 s and about 337 MB. Store restore phase (Streams restore listener): 345 ms for 200,000 records; 1,764 ms for 1,000,000; warm restart with an
+intact state directory 9 to 12 ms for 0 records. Restart to RUNNING wall clock was 40 to 43 s in every cold and warm case, so it is not restore time; cause not
+established (suspected previous group member's session timeout). Not tested: a multi-gigabyte store, a minutes-long sustained run, SIGKILL.
+
+Projector (`FinanceProjector.apply`, Postgres 16, local socket, fresh tables, 10 bindings x 120 capture-and-settle decisions, no JDBC batching inside a call):
+batch 1 106 decisions/s (9.47 ms each) at 20,000-input scale and 103 at the 5,000-input scale; batch 10 427 and 413; batch 120 740 and 698. The migration pins
+`last_sequence <= 320` per binding, so volume came from many bindings. One checkpoint `FOR UPDATE` lock per call.
+
+Projector, JDBC-batched research variant (test code only; same SQL, `addBatch` per statement class in one transaction, positions pre-aggregated per account and asset,
+the in-memory link and digest checks omitted since they cost microseconds): 10 bindings x 120 decisions, 120 per call: 3,688 decisions/s (0.27 ms each) with the plain
+driver and 4,313/s with `reWriteBatchedInserts=true`; 10 per call: 676 and 761/s. 100 bindings x 120 decisions (12,000 decisions, tables growing): as written 78/s at 1 per
+call, 335/s at 10, 579/s at 120; batched 616 and 572/s at 10, **2,651/s plain and 3,413/s rewrite at 120**. So batching gives about 4.6x to 5.9x over the as-written projector
+at 120 per call, the rate falls as the tables grow (740 to 579/s as written), and the batched figure is still about 2.7x below the 9,091/s settlement service rate the
+arena contract proposes (a different, finite-lane workload, so a scale comparison only).
+
+Restart floor explained (`S0EndToEndCostSpikeTest.restartFloor`, 1,000 inputs, same state directory and application id, Redpanda v26.2.3): after the default
+`KafkaStreams.close(Duration)` a restarted instance took **43.1 s** to reach RUNNING; after `close(CloseOptions().timeout(30 s).leaveGroup(true))` it took **0.5 s** and
+**0.4 s** (two repeats). Cause: the default close does not send LeaveGroup, so the restarted member waits for the previous member's 45 s consumer session timeout to
+expire. This does not cover a crash or SIGKILL, where the session timeout still applies (the resolver runtime pins `session.timeout.ms` at 6,000 as a precedent; the
+finance app does not set one). Crash restart (`S0EndToEndCostSpikeTest.crashRestart`, a child JVM running the real finance topology on the production properties, SIGKILL after 8 s, same
+application id restarted in-process): **44.1 s** to RUNNING with the production default session timeout, **6.1 s** with `session.timeout.ms` 6,000 and heartbeat 1,000 (one run each).
+Not yet tested: static membership, rebalance behaviour under a 6 s timeout with a slow processing step.
+
+Ledger spike (same branch, corrected after review: exact entity counts, leaf hashed once; indicative, one JVM, in-memory): whole-state digest 2.7 ms at 1,000
+entities, 25 ms at 10,000, 344 ms at 100,000; the unbounded part of `checkInvariants` 1.3 ms, 118 ms, 9.6 s (quadratic); seven-entity incremental path-compressed
+trie update 27, 45, 44 us. Attempts retained: the first spike (1.25n entities, leaf double-hashed) was superseded by the corrected run; the first S0 Streams
+run (20,000 inputs) is superseded by the 100,000-input run. A scheduled warn-only re-measurement and its baseline are described in the stage index.

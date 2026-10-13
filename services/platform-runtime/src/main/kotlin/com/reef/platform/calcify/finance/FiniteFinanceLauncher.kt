@@ -30,7 +30,7 @@ internal class FiniteFinanceLauncher(
         fun streamsState(): KafkaStreams.State = streams.state()
         /** True only while the app is alive and the projection loop has not failed. A caller or supervisor must poll this: death is otherwise silent. */
         fun healthy(): Boolean = failure.get() == null && !streamsFailed.get() && streams.state().let { it == KafkaStreams.State.RUNNING || it == KafkaStreams.State.REBALANCING || it == KafkaStreams.State.CREATED }
-        override fun close() { closing.set(true); loop.interrupt(); loop.join(10_000); streams.close(java.time.Duration.ofSeconds(30)) }
+        override fun close() { closing.set(true); loop.interrupt(); loop.join(10_000); FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30)) }
     }
 
     fun start(): Running {
@@ -68,7 +68,7 @@ internal class FiniteFinanceLauncher(
             }.apply { isDaemon = true; name = "finance-projection"; start() }
             return Running(streams, loop, failure, streamsFailed, closing)
         } catch (e: Throwable) {
-            runCatching { streams.close(java.time.Duration.ofSeconds(10)) }       // no half-started service
+            runCatching { FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(10)) }       // no half-started service
             throw e
         }
     }
