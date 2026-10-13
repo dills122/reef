@@ -32,7 +32,14 @@ internal class FiniteFinanceLauncher(
         fun healthy(): Boolean = failure.get() == null && !streamsFailed.get() && streams.state().let { it == KafkaStreams.State.RUNNING || it == KafkaStreams.State.REBALANCING || it == KafkaStreams.State.CREATED }
         /** True once [close] has started: a supervisor must treat an unhealthy state after this as a clean stop, not a failure. */
         fun isClosing(): Boolean = closing.get()
-        override fun close() { if (closing.getAndSet(true)) return; loop.interrupt(); loop.join(10_000); runCatching { log.close() }; FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30)) }
+        override fun close() {
+            if (closing.getAndSet(true)) return
+            // Both resources are released even if waiting for the loop is interrupted; the log reader goes first because only the loop thread uses it.
+            try { loop.interrupt(); loop.join(10_000) } finally {
+                runCatching { log.close() }
+                FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30))
+            }
+        }
     }
 
     fun start(): Running {
