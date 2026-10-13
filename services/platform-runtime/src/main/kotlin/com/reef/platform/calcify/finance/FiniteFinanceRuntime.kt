@@ -73,31 +73,50 @@ internal object FiniteFinanceRuntime {
 
         val stateDir = Path.of(required("CALCIFY_FINANCE_STATE_DIRECTORY"))
         require(Files.isDirectory(stateDir, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(stateDir)) { "CALCIFY_FINANCE_STATE_DIRECTORY must be a private directory, not a link" }
+        require(Files.getPosixFilePermissions(stateDir, LinkOption.NOFOLLOW_LINKS).none { it.name.startsWith("GROUP_") || it.name.startsWith("OTHERS_") }) { "CALCIFY_FINANCE_STATE_DIRECTORY must be owner-only (the state holds the full ledger)" }
         val epoch = required("CALCIFY_FINANCE_OWNER_EPOCH").toLongOrNull()?.takeIf { it > 0 } ?: error("CALCIFY_FINANCE_OWNER_EPOCH must be a positive integer")
         val interval = lookup("CALCIFY_FINANCE_PROJECTION_INTERVAL_MS")?.takeIf { it.isNotBlank() }?.let { raw ->
             raw.toLongOrNull()?.takeIf { it in 50..10_000 } ?: error("CALCIFY_FINANCE_PROJECTION_INTERVAL_MS must be an integer in 50..10000")
         } ?: 500L
 
+        val jdbcUrl = required("CALCIFY_FINANCE_POSTGRES_JDBC_URL")
+        // A password in the URL would bypass the *_FILE rule and end up in process listings and logs.
+        require(!Regex("(?i)[?&;]password=").containsMatchIn(jdbcUrl)) { "CALCIFY_FINANCE_POSTGRES_JDBC_URL must not carry a password; use CALCIFY_FINANCE_POSTGRES_PASSWORD_FILE" }
         val dataSource = PGSimpleDataSource().apply {
-            setURL(required("CALCIFY_FINANCE_POSTGRES_JDBC_URL")); user = required("CALCIFY_FINANCE_POSTGRES_USER")
+            setURL(jdbcUrl); user = required("CALCIFY_FINANCE_POSTGRES_USER")
             password = secret("CALCIFY_FINANCE_POSTGRES_PASSWORD"); connectTimeout = 5; socketTimeout = 30
         }
         return FiniteFinanceLauncher(config, evidenceProps, streamsProps, stateDir.toString(), { FinanceProjector(FinanceLedger(config.finance), dataSource) }, epoch, interval)
     }
 
+    /** The finance role is its own process: it must not share a JVM (or credentials) with finite ingress or a Calcify stage. Pure so it is testable. */
+    internal fun requireExclusive(lookup: (String) -> String?) =
+        require(lookup("CALCIFY_STAGE").isNullOrBlank() && lookup("CALCIFY_FINITE_BINDING_DIGEST").isNullOrBlank()) {
+            "CALCIFY_FINANCE_BINDING_DIGEST must not be set with CALCIFY_STAGE or CALCIFY_FINITE_BINDING_DIGEST"
+        }
+
+    /**
+     * Blocks while [running] is healthy. Returns true if it stopped because it was closed (a clean stop, including SIGTERM), false if it became
+     * unhealthy on its own (the app or the projection died), in which case [onUnhealthy] has been called and the app closed.
+     */
+    internal fun supervise(running: FiniteFinanceLauncher.Running, pollMs: Long = 1_000, onUnhealthy: (String) -> Unit): Boolean {
+        try { while (running.healthy()) Thread.sleep(pollMs) } catch (_: InterruptedException) { runCatching { running.close() }; return true }
+        if (running.isClosing()) return true                      // the shutdown hook (or a caller) closed it: not a failure
+        onUnhealthy("finance runtime unhealthy: streams=${running.streamsState()} projection=${running.projectionFailure()}")
+        runCatching { running.close() }
+        return false
+    }
+
     /**
      * Starts the launcher and supervises it. Fail closed: if the restore cut is refused, start throws and the process exits non-zero with
      * nothing started; if the app or the projection later dies the process closes and exits 1, so the supervisor restarts it and the
-     * restore cut runs again.
+     * restore cut runs again. A clean stop exits 0.
      */
     fun run() {
         // The hook exists before start(), so a SIGTERM while the app is starting or just after it has started still closes (and leaves the group).
         val started = java.util.concurrent.atomic.AtomicReference<FiniteFinanceLauncher.Running?>(null)
         Runtime.getRuntime().addShutdownHook(Thread { started.get()?.let { runCatching { it.close() } } })
         val running = create().start().also { started.set(it) }
-        try { while (running.healthy()) Thread.sleep(1_000) } catch (_: InterruptedException) { runCatching { running.close() }; return }
-        System.err.println("finance runtime unhealthy: streams=${running.streamsState()} projection=${running.projectionFailure()}")
-        runCatching { running.close() }
-        kotlin.system.exitProcess(1)
+        if (!supervise(running) { System.err.println(it) }) kotlin.system.exitProcess(1)
     }
 }

@@ -30,7 +30,9 @@ internal class FiniteFinanceLauncher(
         fun streamsState(): KafkaStreams.State = streams.state()
         /** True only while the app is alive and the projection loop has not failed. A caller or supervisor must poll this: death is otherwise silent. */
         fun healthy(): Boolean = failure.get() == null && !streamsFailed.get() && streams.state().let { it == KafkaStreams.State.RUNNING || it == KafkaStreams.State.REBALANCING || it == KafkaStreams.State.CREATED }
-        override fun close() { closing.set(true); loop.interrupt(); loop.join(10_000); FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30)) }
+        /** True once [close] has started: a supervisor must treat an unhealthy state after this as a clean stop, not a failure. */
+        fun isClosing(): Boolean = closing.get()
+        override fun close() { if (closing.getAndSet(true)) return; loop.interrupt(); loop.join(10_000); FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30)) }
     }
 
     fun start(): Running {

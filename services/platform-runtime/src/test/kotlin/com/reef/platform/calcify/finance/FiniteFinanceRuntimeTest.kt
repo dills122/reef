@@ -21,7 +21,7 @@ class FiniteFinanceRuntimeTest {
     /** A complete valid environment; [edit] mutates it. */
     private fun env(edit: (MutableMap<String, String>, Path) -> Unit = { _, _ -> }): Map<String, String> {
         val dir = Files.createTempDirectory("finance-runtime-env")
-        val state = Files.createDirectory(dir.resolve("state"))
+        val state = Files.createDirectory(dir.resolve("state")).also { Files.setPosixFilePermissions(it, PosixFilePermissions.fromString("rwx------")) }
         val m = mutableMapOf(
             "CALCIFY_FINANCE_BINDING_DIGEST" to digest,
             "CALCIFY_FINANCE_OPENING_FILE" to private(dir, "opening.json", Files.readAllBytes(fixture)).toString(),
@@ -87,6 +87,8 @@ class FiniteFinanceRuntimeTest {
         refused("interval too small") { m, _ -> m["CALCIFY_FINANCE_PROJECTION_INTERVAL_MS"] = "1" }
         refused("plaintext protocol") { m, _ -> m["CALCIFY_FINANCE_KAFKA_SECURITY_PROTOCOL"] = "PLAINTEXT" }
         refused("unknown mechanism") { m, _ -> m["CALCIFY_FINANCE_KAFKA_SASL_MECHANISM"] = "GSSAPI" }
+        refused("state dir readable by others") { m, dir -> m["CALCIFY_FINANCE_STATE_DIRECTORY"] = Files.createDirectory(dir.resolve("open-state")).also { Files.setPosixFilePermissions(it, PosixFilePermissions.fromString("rwxr-xr-x")) }.toString() }
+        refused("password in the JDBC URL") { m, _ -> m["CALCIFY_FINANCE_POSTGRES_JDBC_URL"] = "jdbc:postgresql://127.0.0.1:5432/reef?user=x&Password=secret" }
         refused("state dir is a file") { m, dir -> m["CALCIFY_FINANCE_STATE_DIRECTORY"] = private(dir, "notadir", ByteArray(1)).toString() }
         refused("state dir is a link") { m, dir -> m["CALCIFY_FINANCE_STATE_DIRECTORY"] = Files.createSymbolicLink(dir.resolve("statelink"), Path.of(m.getValue("CALCIFY_FINANCE_STATE_DIRECTORY"))).toString() }
     }
@@ -99,5 +101,12 @@ class FiniteFinanceRuntimeTest {
         assertEquals("org.apache.kafka.common.security.scram.ScramLoginModule required username=\"u\" password=\"pw\";", scram["sasl.jaas.config"])
         assertEquals("https", scram["ssl.endpoint.identification.algorithm"])
         assertFailsWith<IllegalArgumentException> { FiniteFinanceRuntime.clientProperties("b:9092", "SASL_PLAINTEXT", "PLAIN", "", "pw") }
+    }
+
+    @Test fun theFinanceRoleRefusesToShareAProcessWithIngressOrAStage() {
+        FiniteFinanceRuntime.requireExclusive { null }
+        FiniteFinanceRuntime.requireExclusive { if (it == "CALCIFY_FINANCE_BINDING_DIGEST") digest else "" }
+        assertFailsWith<IllegalArgumentException> { FiniteFinanceRuntime.requireExclusive { if (it == "CALCIFY_STAGE") "resolver" else null } }
+        assertFailsWith<IllegalArgumentException> { FiniteFinanceRuntime.requireExclusive { if (it == "CALCIFY_FINITE_BINDING_DIGEST") digest else null } }
     }
 }
