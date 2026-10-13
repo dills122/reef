@@ -1690,3 +1690,19 @@ Ledger spike (same branch, corrected after review: exact entity counts, leaf has
 entities, 25 ms at 10,000, 344 ms at 100,000; the unbounded part of `checkInvariants` 1.3 ms, 118 ms, 9.6 s (quadratic); seven-entity incremental path-compressed
 trie update 27, 45, 44 us. Attempts retained: the first spike (1.25n entities, leaf double-hashed) was superseded by the corrected run; the first S0 Streams
 run (20,000 inputs) is superseded by the 100,000-input run. A scheduled warn-only re-measurement and its baseline are described in the stage index.
+
+## Calcify finite finance lane stand-in on the hosted runner, CAL-FIN-S0-HOSTED (October 13, 2026)
+
+Diagnostic, same stand-in and tests as CAL-FIN-S0 (no ledger, no capture, no financial claim), run by the `calcify-finance-throughput` workflow on the GitHub-hosted `ubuntu-latest`
+runner: run 38334113934 (master `f0d5adaec`, before the session-timeout pin) and run 38482491956 (master `f7b27717b`, after it), 100,000 inputs per Streams run, Redpanda v26.2.3 and
+Postgres 16 in Docker, one run each. Different host from CAL-FIN-S0, so the two are observations, not a causal comparison.
+
+Streams, inputs per second at ten 300-byte puts per input: **8,976 and 8,822** (laptop 14,079); no puts 37,677 and 37,008 (laptop 47,880); one put 36,233 and 34,111 (laptop 43,498).
+Projector as written, decisions per second at 1, 10 and 120 per call: 93/469/969 and 97/499/1,087 (laptop 106/427/740). JDBC-batched research variant at 120 per call: 2,782 and
+3,147 plain, 3,084 and 3,398 with `reWriteBatchedInserts` (laptop 3,688 and 4,313). Restore: changelog read of 1,000,000 records 1,914 and 1,811 ms (laptop 1,900); store restore phase
+3,769 and 4,265 ms (laptop 1,764, so about 2x slower here). **Restart to RUNNING: 43 s cold and warm in the first run, 7 s cold and 4 s warm in the second**: the drop is the consumer
+session timeout pinned at 6,000 ms in between (PR519); the default close still does not leave the group, so the remaining seconds are the 6 s eviction plus startup.
+
+Interpretation limits: two runs on a shared runner; the spread between them is 2 to 14 percent per metric, so the workflow's 30 percent warn threshold is wider than the noise. The hosted
+figures are now the workflow's comparison baseline (`docs/work/calcify-throughput-baseline.json`, mean of the two runs; restart rows from the second run only). No new capacity claim.
+
