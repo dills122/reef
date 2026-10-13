@@ -35,21 +35,21 @@ Proven by `FiniteBindingStorePostgresTest`, `CalcifyTopicRoleMigrationTest`, `Fi
 | --- | --- | --- |
 | `calcify_finite_registrar` | EXECUTE on `register`, `stages`, `release`, `snapshot` | admit, send, acknowledge |
 | `calcify_finite_runtime` | EXECUTE on `claim_owner`, `begin_attempt`, `authorize_send`, `ack`, `unknown`, `stop`, `snapshot`, `receipt` | register an opening, release a stopped run |
-| `calcify_finite_projector` | USAGE on schema `boundary`; SELECT, INSERT, UPDATE on the five `calcify_finance_*` tables | a stale owner epoch writes nothing (tested). **Not asserted by any test (gap):** that DELETE, TRUNCATE, the ingress tables and the registrar/runtime functions are refused; that follows from the grant list only |
+| `calcify_finite_projector` | USAGE on schema `boundary`; SELECT, INSERT, UPDATE on the five `calcify_finance_*` tables | a stale owner epoch writes nothing (tested). DELETE, TRUNCATE, the ingress tables and the registrar/runtime functions refused (asserted in PR 518, `FinanceProjectorPostgresTest`) |
 | `calcify_finite_reader` | USAGE on schema `boundary`; SELECT on the same five tables | INSERT, UPDATE, DELETE, TRUNCATE and the ingress tables (all asserted in `JdbcFinanceReadStorePostgresTest`) |
 
 All four are `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE` with secrets from a secret store. The function owner is trusted and must not be used by a service.
 
 ## Decisions for you
 
-0. **Close the projector-role test gap?** A small Postgres test that the projector role is refused DELETE, TRUNCATE and the ingress tables would make the matrix fully proven. Recommended; not done in this packet.
+0. **Projector-role test gap: closed in PR 518** (DELETE, TRUNCATE, the ingress tables and the finite functions are asserted refused; checked against two mutants). Review PR 518 with this packet.
 
 1. **Approve the matrices above** as the finite P3 provisioning list (Kafka and Postgres). If yes, the DB roles document stops being a "draft for operator review" and the
    open item 4 in it is closed.
 2. **Finance app `session.timeout.ms`.** Production `FinanceTopology.streamsProperties` sets none, so a crashed finance app (SIGKILL, not a clean stop) holds its partition
-   for the default 45 s before a restart can take over. The test fixture and the resolver runtime (`CALCIFY_RESOLVER_SESSION_TIMEOUT_MS`, 6,000) already lower it. Pinning
+   for the default 45 s before a restart can take over. The test fixture and the resolver runtime (`CALCIFY_RESOLVER_SESSION_TIMEOUT_MS`, 6,000) already lower it. **Measured 2026-10-12** (child JVM running the real finance topology, SIGKILL, same application id restarted): **44.1 s** to RUNNING on the production properties, **6.1 s** with `session.timeout.ms` 6,000 and heartbeat 1,000 (one run each). Pinning
    a lower value (for example 6,000 with a 1,000 ms heartbeat) speeds crash recovery and raises rebalance sensitivity; static membership is the alternative. Clean
-   stops are already fixed (PR 516). Recommendation: **pin 6,000 for the finance app** and add it to the section 8 pinned properties, but only after a crash-restart measurement.
+   stops are already fixed (PR 516). Recommendation: **pin 6,000 for the finance app** and add it to the section 8 pinned properties. The remaining risk is rebalance sensitivity if processing ever stalls longer than the timeout; the finance processor does no long in-thread work by design.
 3. **Transport.** The fixtures use SASL_PLAINTEXT and the Go matcher's TLS defaults off. A real proof run needs TLS on the broker listener and Postgres, or a stated reason it is
    a closed network. This is a deployment decision, not a code change.
 4. **Operator route exposure.** The internal finance read routes carry every participant's balances and action keys and rely on the internal-HTTP exposure mode (default
