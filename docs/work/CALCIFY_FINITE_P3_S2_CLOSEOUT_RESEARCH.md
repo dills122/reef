@@ -89,7 +89,7 @@ FINANCE_DECISIONS Write+Describe; topics with prefix `<financeApplicationId>` Al
 `<financeApplicationId>` Read+Describe; transactional id prefix `<financeApplicationId>` Write+Describe. No cluster-level
 IdempotentWrite was needed for the transactional finance app. `control`: CONTROL Write+Read+Describe and its literal transactional id
 Write+Describe. `observer`: Read+Describe on the four topics and Describe on the group. The `capture` and `ingress` idempotent
-producers were granted cluster IdempotentWrite in the test; whether Redpanda requires it was not separately tested.
+producers were granted cluster IdempotentWrite in the test; whether Redpanda requires it was not separately tested at the time. **Tested 2026-10-12:** with both cluster grants removed, `FinanceAclTest` passes unchanged on Redpanda v26.2.3 (see `CALCIFY_FINITE_P3_ROLE_SIGNOFF.md`); the grant is not required on that broker and is kept for portability.
 
 ## 6. Aborted tails and the offset rule (spec section 8.4 amendment)
 
