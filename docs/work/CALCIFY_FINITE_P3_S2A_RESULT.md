@@ -135,7 +135,7 @@ stops only on fatal ones (stale epoch, diverged projection, a bad record), ignor
 repeatable-read transaction, and an unknown binding is 404 on every resource (F5); the evidence reader and the Streams app take separate client
 properties so the read-only `observer` principal and the `finance` principal stay separate (F7).
 
-Still open, with owner Dylan: F6 (the projection loop re-verifies the whole bounded log each pass; fine for a finite binding, not for rate) and F8
+Still open, with owner Dylan: F6 (the projection loop re-verifies the whole bounded log each pass; fine for a finite binding, not for rate; **the per-pass connection and SASL handshake churn was removed 2026-10-13** by reusing one consumer, the whole-log re-read remains) and F8
 (restart through the launcher with intact local RocksDB state, and a SIGKILL through the launcher plus projector, were not covered; the SIGKILL loop
 covered the processor, and the wiped-state restart covered the launcher). **F8 closed 2026-10-13** by `FiniteFinanceLauncherCrashTest`: the real launcher in a child JVM
 is SIGKILLed three times while decisions flow (how many land inside an open transaction on the decision topic varies by run: 2 of 3 in one recorded run, 0 of 3 in another, always after decisions were flowing), warm restarts reuse the intact RocksDB, one restart follows a wiped store

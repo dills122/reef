@@ -13,8 +13,13 @@ internal class FinanceProjectionRunner(
     private val bindingDigest: String, private val ownerEpoch: Long,
 ) {
     constructor(reader: FinanceEvidenceReader, projector: FinanceProjector, bindingDigest: String, ownerEpoch: Long, decisionsTopic: String) :
-        this({ reader.readAll(decisionsTopic).map { (_, value) ->
-            FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(requireNotNull(value) { "decision record without value" })) } }, projector, bindingDigest, ownerEpoch)
+        this({ decode(reader.readAll(decisionsTopic)) }, projector, bindingDigest, ownerEpoch)
+
+    companion object {
+        fun decode(records: List<Pair<ByteArray?, ByteArray?>>): List<Pair<Decision, FinanceInput>> = records.map { (_, value) ->
+            FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(requireNotNull(value) { "decision record without value" }))
+        }
+    }
 
     /** Creates the checkpoint at genesis (or advances the owner fence). Call once before the first pass. */
     fun open() = projector.open(bindingDigest, ownerEpoch)

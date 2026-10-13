@@ -22,7 +22,7 @@ internal class FiniteFinanceLauncher(
 ) {
     class Running internal constructor(
         private val streams: KafkaStreams, private val loop: Thread, private val failure: AtomicReference<Throwable?>,
-        private val streamsFailed: AtomicBoolean, private val closing: AtomicBoolean,
+        private val streamsFailed: AtomicBoolean, private val closing: AtomicBoolean, private val log: AutoCloseable,
     ) : AutoCloseable {
         /** The fatal failure that stopped the projection loop, if any (a stale owner epoch, a diverged projection, a broken log, or too many transient errors). */
         fun projectionFailure(): Throwable? = failure.get()
@@ -32,7 +32,14 @@ internal class FiniteFinanceLauncher(
         fun healthy(): Boolean = failure.get() == null && !streamsFailed.get() && streams.state().let { it == KafkaStreams.State.RUNNING || it == KafkaStreams.State.REBALANCING || it == KafkaStreams.State.CREATED }
         /** True once [close] has started: a supervisor must treat an unhealthy state after this as a clean stop, not a failure. */
         fun isClosing(): Boolean = closing.get()
-        override fun close() { if (closing.getAndSet(true)) return; loop.interrupt(); loop.join(10_000); FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30)) }
+        override fun close() {
+            if (closing.getAndSet(true)) return
+            // Both resources are released even if waiting for the loop is interrupted; the log reader goes first because only the loop thread uses it.
+            try { loop.interrupt(); loop.join(10_000) } finally {
+                runCatching { log.close() }
+                FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(30))
+            }
+        }
     }
 
     fun start(): Running {
@@ -45,8 +52,11 @@ internal class FiniteFinanceLauncher(
         FinanceTopology.verifyPinned(properties)
 
         // Everything that can fail before the app exists is done first, so a failure here leaves nothing running.
-        val runner = FinanceProjectionRunner(reader, projectorFactory(), config.bindingDigest, ownerEpoch, config.decisionsTopic).also { it.open() }
-        val streams = KafkaStreams(FinanceTopology.build(config, persistent = true), properties)
+        val log = reader.logReader(config.decisionsTopic)
+        val (runner, streams) = try {
+            val r = FinanceProjectionRunner({ FinanceProjectionRunner.decode(log.readAll()) }, projectorFactory(), config.bindingDigest, ownerEpoch).also { it.open() }
+            r to KafkaStreams(FinanceTopology.build(config, persistent = true), properties)
+        } catch (e: Throwable) { runCatching { log.close() }; throw e }
         val streamsFailed = AtomicBoolean(false)
         val closing = AtomicBoolean(false)
         streams.setUncaughtExceptionHandler { streamsFailed.set(true); org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }
@@ -68,9 +78,10 @@ internal class FiniteFinanceLauncher(
                     }
                 }
             }.apply { isDaemon = true; name = "finance-projection"; start() }
-            return Running(streams, loop, failure, streamsFailed, closing)
+            return Running(streams, loop, failure, streamsFailed, closing, log)
         } catch (e: Throwable) {
             runCatching { FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(10)) }       // no half-started service
+            runCatching { log.close() }
             throw e
         }
     }

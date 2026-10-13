@@ -41,5 +41,5 @@ Secrets are read only from `*_FILE` paths (private regular files, owner read/wri
 - Not run live. The proof is `FiniteFinanceRuntimeTest` (the environment contract and every refusal; mutation-checked) and `FiniteFinanceRuntimeBrokerTest` (a SASL/SCRAM Redpanda with
   authorization on, the finance app under its minimal grants, a real Postgres projector role; a wrong observer credential starts nothing). Both run in the `calcify-tests` CI job.
 - The Streams client pins `replication.factor=1` (a single-broker proof). A multi-broker deployment needs that changed in the spec section 8 pins first.
-- Each projection pass opens fresh evidence consumers (about two SASL connections per pass); reusing one consumer per pass, or polling only when the log end advanced, is the deferred F6 item.
+- Each projection pass still re-reads the whole bounded decision log (so the per-pass SQL-cut and divergence checks are unchanged), but on ONE consumer kept for the life of the loop (`FinanceEvidenceReader.LogReader`), not a new connection and SASL handshake per pass. Skipping a pass when the log end has not moved was not done: it would also skip the divergence check, which is a design choice for the owner.
 - The Kafka transport defaults to `SASL_PLAINTEXT` like the other finite roles; TLS is a deployment decision (see the role sign-off packet).
