@@ -29,7 +29,7 @@ rate), **unmeasured**. "Gap" is the target divided by the last measured rate whe
 | **Finite P3 finance lane: projector to Postgres** | n/a (not a capacity lane) | as written: 106 decisions/s one per call, 740/s at 120 per call (579/s after 12,000 decisions). With JDBC batches per statement class in one transaction (research variant, not product code): 3,688 to 4,313/s at 120 per call, 2,651 to 3,413/s after 12,000 decisions | CAL-FIN-S0 | partial, diagnostic | as written about 12x below the settlement need; batched about 2.7x below |
 | Finite P3 finance lane: ledger `decide` at the pinned size (about 700 entities) | n/a | about 1.5 ms digest per decision at the ceiling; about 9 us per decision at about 20 entities (S2-A result) | `CALCIFY_FINITE_P3_S2A_RESULT.md` | partial, synthetic | n/a |
 | Ledger `decide` at scale (10^4 to 10^5 entities) | would be required of any capacity engine | 25 to 344 ms digest and 118 ms to 9.6 s invariants per decision | `CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md` section 1.1 (research spike) | measured, synthetic, **misses by orders of magnitude** | n/a |
-| Restore | to be set by the owner (RTO) | store restore 1.8 s per 1,000,000 changelog records; changelog read 1.9 s and about 337 MB; restart to running about 42 s (cause unknown) | CAL-FIN-S0 | partial | unknown |
+| Restore | to be set by the owner (RTO) | store restore 1.8 s per 1,000,000 changelog records; changelog read 1.9 s and about 337 MB; restart to running 42 s after a default close (waiting out the 45 s session timeout) but **0.4 to 0.5 s with `leaveGroup(true)`**; crash restart not measured | CAL-FIN-S0 | partial | unknown |
 | Finance read routes under load | API p99 250 ms, 99.9% success | none | n/a | **unmeasured** | unknown |
 | Trading-view visibility p99 | 1 s (p99.9 2 s) | none integrated | n/a | **unmeasured** | unknown |
 | Eligible settlement to settlement-visible, p99 | 5 s (oldest 30 s) | none integrated | n/a | **unmeasured** | unknown |
@@ -70,4 +70,4 @@ the projector, not the ledger or Streams.
 2. The projector beyond JDBC batching (larger batches, `COPY`, fewer indexes, several bindings in parallel), since it is still the binding term at about 3k/s; and the research batching variant promoted to a reviewed product change if the finance lane is to be a capacity lane at all.
 3. The real `FinanceProcessor` pre-aged to 10^4 to 10^5 entities (needs the lifted caps from the design's profile spec).
 4. Finance read routes under a frozen concurrent read mix.
-5. Explain the 42 s restart floor, then set the owner's restore-time objective.
+5. ~~Explain the 42 s restart floor~~ (done: the default close does not leave the group; see CAL-FIN-S0). Remaining: measure crash and SIGKILL restart time, decide `session.timeout.ms` or static membership for the finance app, then set the owner's restore-time objective.

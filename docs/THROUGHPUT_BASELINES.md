@@ -1672,6 +1672,12 @@ call, 335/s at 10, 579/s at 120; batched 616 and 572/s at 10, **2,651/s plain an
 at 120 per call, the rate falls as the tables grow (740 to 579/s as written), and the batched figure is still about 2.7x below the 9,091/s settlement service rate the
 arena contract proposes (a different, finite-lane workload, so a scale comparison only).
 
+Restart floor explained (`S0EndToEndCostSpikeTest.restartFloor`, 1,000 inputs, same state directory and application id, Redpanda v26.2.3): after the default
+`KafkaStreams.close(Duration)` a restarted instance took **43.1 s** to reach RUNNING; after `close(CloseOptions().timeout(30 s).leaveGroup(true))` it took **0.5 s** and
+**0.4 s** (two repeats). Cause: the default close does not send LeaveGroup, so the restarted member waits for the previous member's 45 s consumer session timeout to
+expire. This does not cover a crash or SIGKILL, where the session timeout still applies (the resolver runtime pins `session.timeout.ms` at 6,000 as a precedent; the
+finance app does not set one). Not yet tested: crash restart time, static membership.
+
 Ledger spike (same branch, corrected after review: exact entity counts, leaf hashed once; indicative, one JVM, in-memory): whole-state digest 2.7 ms at 1,000
 entities, 25 ms at 10,000, 344 ms at 100,000; the unbounded part of `checkInvariants` 1.3 ms, 118 ms, 9.6 s (quadratic); seven-entity incremental path-compressed
 trie update 27, 45, 44 us. Attempts retained: the first spike (1.25n entities, leaf double-hashed) was superseded by the corrected run; the first S0 Streams

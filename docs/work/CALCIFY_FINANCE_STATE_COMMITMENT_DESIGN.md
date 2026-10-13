@@ -102,7 +102,7 @@ indicative, with the caveats below.
 | A. Streams ceiling | production `FinanceTopology.streamsProperties` (EOS v2, 1 thread, `commit.interval.ms` 100), persistent store, caching off, default changelog, one partition; a processor doing P puts of 300 bytes per input and forwarding one 100-byte output; inputs sent at once, clock started after Streams reports RUNNING (first run 20,000 inputs, rerun 100,000, see the correction below) | 20,000 inputs: P=0 11,054/s; P=1 10,701/s; P=10 7,643/s (superseded). **100,000 inputs: P=0 47,880/s; P=1 43,498/s; P=10 14,079 inputs/s (76,425 puts/s)** |
 | B1. Evidence read | `FinanceBrokerFixture.readAll` (what `FinanceEvidenceReader` does) of the 200,000-record changelog | 200,000 records: 1.2 s, 26 to 56 MB held. **1,000,000 records: 1.9 s, about 337 MB held (about 340 bytes per record, linear)** |
 | B2. Store restore | stop Streams, delete the state dir, restart: store restore phase (restore listener) | 345 ms for 200,000 changelog records; **1,764 ms for 1,000,000** (warm restart with an intact dir: 9 to 10 ms, 0 records) |
-| B3. Restart to RUNNING | the same restarts, wall clock | **43 s in both cold and warm cases**: this is not restore. It equals neither store time, so it is a fixed rejoin delay (suspected previous-member session timeout); unexplained and **must be understood before any restore-time objective is set** |
+| B3. Restart to RUNNING | the same restarts, wall clock | **43 s in both cold and warm cases**: this is not restore. It equals neither store time, so it is a fixed rejoin delay (suspected previous-member session timeout); **explained afterwards: the default `close` does not leave the group, so the restart waits out the 45 s session timeout; `leaveGroup(true)` gives 0.4 to 0.5 s** (crash restart still open) |
 | C. Projector | `FinanceProjector.apply` against Postgres 16 in Docker, 10 bindings x 120 capture-and-settle decisions; 1, 10 and 120 decisions per call | **106/s (9.5 ms each) at batch 1; 427/s at 10; 740/s (1.35 ms) at 120** (579/s at 120 after 12,000 decisions). A research variant with JDBC batches per statement class in one transaction: **3,688 to 4,313/s at 120** (2,651 to 3,413/s after 12,000 decisions), so batching gives about 5x and the projector is still about 2.7x below the arena contract's 9,091/s settlement rate |
 
 Caveats, so these are not over-read: nothing in A to C includes the ledger; the store is small (at most 2x10^5 entries, nothing about a
@@ -428,7 +428,8 @@ document does not define that binding, nor how the config-v2 and binding classes
   alternative bounds it.
 - **Single thread:** no in-thread work longer than the poll interval; audits and restores are off-thread or between polls.
 - **Restart latency.** S0 measured 43 s from process start to RUNNING for both a cold and a warm restart, of which store restore is under 0.4 s. The cause is
-  unexplained (suspected previous-member session timeout); it is a fixed floor on any restore-time objective until understood.
+  the default `close` not leaving the consumer group (the next member waits out the 45 s session timeout); with `leaveGroup(true)` it is 0.4 to 0.5 s. A crash still
+  waits out the session timeout unless it is lowered or static membership is used; that is a restore-time-objective input, not a ledger cost.
 
 ## 9. Verification plan
 
@@ -524,7 +525,7 @@ demoted; **Q3** (per-field framing, order) acceptable once the byte rules of 3.1
 - **Q8.** Is rotation with a small bound enough that S3c and the trie can be dropped (1.4, last table)? This is answered by Decision 1 and the S0 extension, not by review.
 - **Q9.** Can the Streams lane sustain its measured 14,000 inputs/s (100,000-input run) over minutes, and with the real ledger, once `commit.interval.ms`, batch size and changelog settings are tuned? (Pinned
   settings are part of the spec; tuning needs a spec change.)
-- **Q10.** What explains the 43 s restart floor?
+- **Q10 (answered).** The 43 s restart floor is the previous member's 45 s session timeout: `KafkaStreams.close(Duration)` does not leave the consumer group. With `close(CloseOptions().leaveGroup(true))` a restart reached RUNNING in 0.4 to 0.5 s (CAL-FIN-S0). Crash restart time and the finance app's `session.timeout.ms` or static membership remain open.
 
 ## 13. Rejected framing
 

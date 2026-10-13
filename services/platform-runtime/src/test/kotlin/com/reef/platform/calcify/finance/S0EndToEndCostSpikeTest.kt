@@ -89,6 +89,28 @@ class S0EndToEndCostSpikeTest {
 
     private fun heapMb() = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024 * 1024)
 
+    /** Q10: why does restart to RUNNING take about 42 s? Default `KafkaStreams.close()` does not leave the consumer group; test leaveGroup(true). */
+    @Test
+    fun restartFloor() {
+        val log = StringBuilder("\nS0 restart floor (small state, same state dir, same application id)\n")
+        DisposableRedpanda().start().use { rp ->
+            rp.admin().use { a -> a.createTopics(listOf(NewTopic("S0_IN", 1, 1.toShort()), NewTopic("S0_OUT", 1, 1.toShort()))).all().get(30, TimeUnit.SECONDS) }
+            val app = "s0-floor"; val dir = Files.createTempDirectory("s0-floor").toString()
+            val producer = FinanceBrokerFixture.producer(rp.bootstrap)
+            repeat(1000) { producer.send(ProducerRecord("S0_IN", 0, ByteArray(0), ByteArray(120))) }; producer.flush(); producer.close()
+            fun start(): KafkaStreams = KafkaStreams(topology(app, 1), FinanceTopology.streamsProperties(app, rp.bootstrap, dir)).also { it.start(); waitRunning(it) }
+            val first = start()
+            for ((label, leave) in listOf("default close (no LeaveGroup)" to false, "close with leaveGroup=true" to true, "close with leaveGroup=true again" to true)) {
+                if (leave) first.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true)) else first.close(Duration.ofSeconds(30))
+                val t0 = System.nanoTime(); val next = start(); val secs = (System.nanoTime() - t0) / 1e9
+                log.append("D  restart after $label: RUNNING after ${"%.1f".format(secs)} s\n")
+                S0Metrics.record("restartFloor.sec." + (if (leave) "leaveGroup" else "default"), Math.round(secs))
+                next.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true)) // leave cleanly so the next label starts from an empty group
+            }
+        }
+        println(log); Files.writeString(S0Metrics.file("s0-restart-floor.txt"), log)
+    }
+
     @Test
     fun streamsCeilingAndRestore() {
         val n = (System.getenv("S0_RECORDS") ?: "20000").toInt()
