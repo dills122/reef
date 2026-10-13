@@ -76,9 +76,9 @@ class FiniteFinanceRuntimeBrokerTest {
                 assertTrue(running.healthy())
                 rp.admin("observer").use { assertTrue(it.listConsumerGroups().all().get(15, TimeUnit.SECONDS).any { g -> g.groupId() == config.applicationId }, "the finance group exists") }
                 DriverManager.getConnection(pg.first, pg.second, java.nio.file.Files.readString(Path.of(pg.third)).trim()).use { c ->
-                    c.prepareStatement("SELECT owner_epoch, last_sequence FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
+                    c.prepareStatement("SELECT owner_epoch, last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
                         ps.setString(1, opening.digest)
-                        ps.executeQuery().use { r -> assertTrue(r.next(), "the projection was opened for this binding"); assertEquals(1L, r.getLong(1)); assertEquals(0L, r.getLong(2)) }
+                        ps.executeQuery().use { r -> assertTrue(r.next(), "the projection was opened for this binding"); assertEquals(1L, r.getLong(1)); assertEquals(0L, r.getLong(2)); assertEquals(FinanceLedger(config.finance).genesisChain, r.getString(3), "the checkpoint starts at the genesis chain of this binding") }
                     }
                 }
             } finally { running.close() }
