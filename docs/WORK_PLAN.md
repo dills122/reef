@@ -144,7 +144,7 @@ no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite 
 - **Owner decisions in force:** no processor "auto attempt 1" (every settle attempt is an operator Settle input); operator CLI holds the control credential; one binding digest per v2 run; session timeout 6,000 ms.
 - **Operator documents:** [role sign-off packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (awaiting sign-off), [finance runtime runbook](work/CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
   [binding v2 spec](work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md), [S2 close-out research](work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md).
-- **Open, recorded limits:** the owner epoch is operator-supplied (not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
+- **Open, recorded limits:** the owner epoch is claimed by the finance process at start (a newer instance fences the older one loudly; not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
   F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; no live run.
 - **Owner-gated:** sign-off of the role matrix, the live recording window, warm-restart proof approval, the O2 replay, and Decision 0 for any capacity profile.
 - **Throughput:** stage targets and last measurements are indexed in [Calcify throughput budget](work/CALCIFY_THROUGHPUT_BUDGET.md); every measurement belongs in the append-only

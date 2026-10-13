@@ -38,6 +38,19 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         }
     }
 
+    /**
+     * Claims the projection for this process and returns the owner epoch every write of this process must carry. The first claim for a binding
+     * creates the checkpoint at genesis with epoch 1; every later claim atomically raises the stored epoch by one. A process holding an older epoch
+     * is refused with [StaleProjectionEpoch] on its next write, so two instances are never silent: the older one dies. (Docs: CALCIFY_FINITE_P3_OWNER_EPOCH_DESIGN.md, option B.)
+     */
+    fun claim(bindingDigest: String): Long = tx { c ->
+        val created = c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain)
+            VALUES (?, 1, 0, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, ledger.genesisChain); it.executeUpdate() }
+        if (created == 1) 1L else c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET owner_epoch = owner_epoch + 1 WHERE binding_digest = ? RETURNING owner_epoch").use { ps ->
+            ps.setString(1, bindingDigest); ps.executeQuery().use { r -> check(r.next()) { "checkpoint vanished during claim" }; r.getLong(1) }
+        }
+    }
+
     /** Returns the number of records newly applied (replayed records that match the stored decision are skipped). */
     fun apply(bindingDigest: String, epoch: Long, records: List<Pair<Decision, FinanceInput>>): Int = tx { c ->
         var (lastSequence, lastChain) = fence(c, bindingDigest, epoch)

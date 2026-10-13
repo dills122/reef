@@ -74,7 +74,8 @@ internal object FiniteFinanceRuntime {
         val stateDir = Path.of(required("CALCIFY_FINANCE_STATE_DIRECTORY"))
         require(Files.isDirectory(stateDir, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(stateDir)) { "CALCIFY_FINANCE_STATE_DIRECTORY must be a private directory, not a link" }
         require(Files.getPosixFilePermissions(stateDir, LinkOption.NOFOLLOW_LINKS).none { it.name.startsWith("GROUP_") || it.name.startsWith("OTHERS_") }) { "CALCIFY_FINANCE_STATE_DIRECTORY must be owner-only (the state holds the full ledger)" }
-        val epoch = required("CALCIFY_FINANCE_OWNER_EPOCH").toLongOrNull()?.takeIf { it > 0 } ?: error("CALCIFY_FINANCE_OWNER_EPOCH must be a positive integer")
+        // The process claims the projection epoch itself at start (FinanceProjector.claim). The old operator-supplied variable would be silently ignored, so it is refused.
+        require(lookup("CALCIFY_FINANCE_OWNER_EPOCH").isNullOrBlank()) { "CALCIFY_FINANCE_OWNER_EPOCH is no longer used: the process claims the owner epoch itself at start" }
         val interval = lookup("CALCIFY_FINANCE_PROJECTION_INTERVAL_MS")?.takeIf { it.isNotBlank() }?.let { raw ->
             raw.toLongOrNull()?.takeIf { it in 50..10_000 } ?: error("CALCIFY_FINANCE_PROJECTION_INTERVAL_MS must be an integer in 50..10000")
         } ?: 500L
@@ -86,7 +87,7 @@ internal object FiniteFinanceRuntime {
             setURL(jdbcUrl); user = required("CALCIFY_FINANCE_POSTGRES_USER")
             password = secret("CALCIFY_FINANCE_POSTGRES_PASSWORD"); connectTimeout = 5; socketTimeout = 30
         }
-        return FiniteFinanceLauncher(config, evidenceProps, streamsProps, stateDir.toString(), { FinanceProjector(FinanceLedger(config.finance), dataSource) }, epoch, interval)
+        return FiniteFinanceLauncher(config, evidenceProps, streamsProps, stateDir.toString(), { FinanceProjector(FinanceLedger(config.finance), dataSource) }, interval)
     }
 
     /** The finance role is its own process: it must not share a JVM (or credentials) with finite ingress or a Calcify stage. Pure so it is testable. */

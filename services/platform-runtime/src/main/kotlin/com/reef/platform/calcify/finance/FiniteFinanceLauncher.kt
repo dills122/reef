@@ -17,7 +17,7 @@ import org.apache.kafka.streams.KafkaStreams
  */
 internal class FiniteFinanceLauncher(
     private val config: FinanceProcessorConfig, private val evidenceProperties: Properties, private val streamsClientProperties: Properties,
-    private val stateDir: String, private val projectorFactory: () -> FinanceProjector, private val ownerEpoch: Long,
+    private val stateDir: String, private val projectorFactory: () -> FinanceProjector,
     private val projectionIntervalMs: Long = 500, private val maxTransientProjectionFailures: Int = 10,
 ) {
     class Running internal constructor(
@@ -45,7 +45,9 @@ internal class FiniteFinanceLauncher(
         FinanceTopology.verifyPinned(properties)
 
         // Everything that can fail before the app exists is done first, so a failure here leaves nothing running.
-        val runner = FinanceProjectionRunner(reader, projectorFactory(), config.bindingDigest, ownerEpoch, config.decisionsTopic).also { it.open() }
+        val projector = projectorFactory()
+        val ownerEpoch = projector.claim(config.bindingDigest)       // the first database access, after the restore cut; an older instance is fenced by this
+        val runner = FinanceProjectionRunner(reader, projector, config.bindingDigest, ownerEpoch, config.decisionsTopic).also { it.open() }
         val streams = KafkaStreams(FinanceTopology.build(config, persistent = true), properties)
         val streamsFailed = AtomicBoolean(false)
         val closing = AtomicBoolean(false)

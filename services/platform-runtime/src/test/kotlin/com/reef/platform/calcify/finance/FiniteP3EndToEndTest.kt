@@ -80,7 +80,7 @@ class FiniteP3EndToEndTest {
                 val reader = FinanceEvidenceReader(Properties().apply { put("bootstrap.servers", rp.bootstrap) }, F.APP_ID, F.bindingDigest, F.CAPTURE, F.CONTROL, F.DECISIONS, F.changelog)
                 val stateDir = Files.createTempDirectory("finance-o5-state").toFile()
                 fun launcher() = FiniteFinanceLauncher(F.config, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, Properties().apply { put("bootstrap.servers", rp.bootstrap) }, stateDir.path,
-                    { FinanceProjector(F.ledger, projectorDs) }, ownerEpoch = 1, projectionIntervalMs = 200)
+                    { FinanceProjector(F.ledger, projectorDs) }, projectionIntervalMs = 200)
                 val server = PlatformHttpServer(port = 0, api = PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence())), boundary = ExternalApiBoundary(authHook = authHook),
                     idempotencyStore = InMemoryIdempotencyStore(), idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(), financeReadStore = JdbcFinanceReadStore(readerDs)).start()
                 val port = server.address.port

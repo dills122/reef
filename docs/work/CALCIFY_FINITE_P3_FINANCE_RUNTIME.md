@@ -28,7 +28,7 @@ or reader credentials. The read routes are served by the platform server (a diff
 | `CALCIFY_FINANCE_OBSERVER_KAFKA_USERNAME`, `CALCIFY_FINANCE_OBSERVER_KAFKA_PASSWORD_FILE` | yes | the read-only `observer` principal; must differ from `finance` |
 | `CALCIFY_FINANCE_POSTGRES_JDBC_URL`, `CALCIFY_FINANCE_POSTGRES_USER`, `CALCIFY_FINANCE_POSTGRES_PASSWORD_FILE` | yes | the projector role. A URL containing a `password=` parameter is refused (use the file). Database TLS (`sslmode=`) is not required by the code; it is a deployment decision |
 | `CALCIFY_FINANCE_STATE_DIRECTORY` | yes | owner-only directory for the RocksDB state (not a symlink; group or other permission bits are refused, because the state holds the full ledger) |
-| `CALCIFY_FINANCE_OWNER_EPOCH` | yes | positive integer; the projection's owner fence (see below) |
+| ~~`CALCIFY_FINANCE_OWNER_EPOCH`~~ | removed | The process now **claims** the owner epoch itself at start (`FinanceProjector.claim`, after the restore cut): the first claim for a binding creates the checkpoint with epoch 1, each later start raises it by one, and an older instance is fenced on its next write. Setting the old variable is refused so it cannot be silently ignored |
 | `CALCIFY_FINANCE_PROJECTION_INTERVAL_MS` | no | 50 to 10000, default 500 |
 | `CALCIFY_FINANCE_SESSION_TIMEOUT_MS` | no | 6000 to 45000; unset keeps the pinned **6,000** (owner decision 2026-10-13: a SIGKILL restart took 44.1 s at the Kafka 45 s default and 6.1 s at 6,000, CAL-FIN-S0). This can only raise it |
 
@@ -36,8 +36,7 @@ Secrets are read only from `*_FILE` paths (private regular files, owner read/wri
 
 ## Known limits (recorded, not hidden)
 
-- **The owner epoch is operator-supplied.** It is not derived from the ingress owner claim, so two instances started with the same epoch are not told apart by the projection
-  fence; run exactly one instance per binding and raise the epoch on every deliberate takeover. Integrating it with the ingress owner CAS is a separate item.
+- **The owner epoch is claimed by the process** (decision record `CALCIFY_FINITE_P3_OWNER_EPOCH_DESIGN.md`, option B). Two live instances are no longer silent: the newer claim fences the older one, which exits with a fatal `StaleProjectionEpoch`, and a supervisor restart steals the projection back, so a misconfigured pair shows up as churn rather than as quiet duplicate work. The decision log is protected separately by Kafka (one application id, EOS transactional fencing). Still not authenticity: the chain is unkeyed.
 - Not run live. The proof is `FiniteFinanceRuntimeTest` (the environment contract and every refusal; mutation-checked) and `FiniteFinanceRuntimeBrokerTest` (a SASL/SCRAM Redpanda with
   authorization on, the finance app under its minimal grants, a real Postgres projector role; a wrong observer credential starts nothing). Both run in the `calcify-tests` CI job.
 - The Streams client pins `replication.factor=1` (a single-broker proof). A multi-broker deployment needs that changed in the spec section 8 pins first.
