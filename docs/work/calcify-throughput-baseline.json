@@ -1,67 +1,132 @@
 {
-  "recorded": "S0 rerun at 100,000 inputs, 2026-10-12 (docs/THROUGHPUT_BASELINES.md, entry CAL-FIN-S0)",
+  "recorded": "GitHub-hosted ubuntu-latest runner, mean of workflow runs 38334113934 and 38482491956 (2026-10-13); restart rows from the second run only (after the 6,000 ms session pin). Ledger entry CAL-FIN-S0-HOSTED in docs/THROUGHPUT_BASELINES.md",
   "warnFraction": 0.3,
-  "scope": "Finance Streams lane stand-in (no ledger), 100,000 inputs per run, Redpanda v26.2.3 and Postgres 16 in Docker on a development laptop, one run each. Short runs are ramp-limited: 5,000 inputs gave ~2.5k/s and 20,000 gave 7.6k/s for the same code. Diagnostic, not a qualification.",
+  "scope": "Finance lane stand-in (no ledger), 100,000 inputs per Streams run, Redpanda v26.2.3 and Postgres 16 in Docker on a hosted runner. Diagnostic, not a qualification. Hosted runners run 20 to 40 percent below the laptop reference for Streams and about 2x slower for store restore.",
   "metrics": {
     "streams.inputsPerSec.puts0": {
-      "value": 47880,
+      "value": 37300,
       "better": "higher",
       "unit": "inputs/s"
     },
     "streams.inputsPerSec.puts1": {
-      "value": 43498,
+      "value": 35200,
       "better": "higher",
       "unit": "inputs/s"
     },
     "streams.inputsPerSec.puts10": {
-      "value": 14079,
+      "value": 8900,
       "better": "higher",
       "unit": "inputs/s"
     },
     "projector.decisionsPerSec.batch1": {
-      "value": 106,
+      "value": 95,
       "better": "higher",
       "unit": "decisions/s"
     },
     "projector.decisionsPerSec.batch10": {
-      "value": 427,
+      "value": 484,
       "better": "higher",
       "unit": "decisions/s"
     },
     "projector.decisionsPerSec.batch120": {
-      "value": 740,
+      "value": 1028,
       "better": "higher",
       "unit": "decisions/s"
     },
     "restore.changelogReadMs": {
-      "value": 1900,
+      "value": 1860,
       "better": "lower",
       "unit": "ms for 1,000,000 records"
     },
     "restore.storeRestoreMs.cold": {
-      "value": 1764,
+      "value": 4000,
       "better": "lower",
       "unit": "ms for 1,000,000 records"
     },
     "restore.toRunningSec.cold": {
-      "value": 42,
+      "value": 7,
       "better": "lower",
       "unit": "s"
     },
     "restore.toRunningSec.warm": {
-      "value": 42,
+      "value": 4,
       "better": "lower",
       "unit": "s"
     },
     "projector.batchedDecisionsPerSec.plain.batch120": {
-      "value": 3688,
+      "value": 2965,
       "better": "higher",
       "unit": "decisions/s"
     },
     "projector.batchedDecisionsPerSec.rewriteBatchedInserts.batch120": {
-      "value": 4313,
+      "value": 3241,
       "better": "higher",
       "unit": "decisions/s"
+    }
+  },
+  "laptopReference": {
+    "note": "Development laptop, one run each (docs/THROUGHPUT_BASELINES.md CAL-FIN-S0). Not compared by the workflow; kept so the two environments stay distinguishable. The restart rows predate the 6,000 ms session pin.",
+    "metrics": {
+      "streams.inputsPerSec.puts0": {
+        "value": 47880,
+        "better": "higher",
+        "unit": "inputs/s"
+      },
+      "streams.inputsPerSec.puts1": {
+        "value": 43498,
+        "better": "higher",
+        "unit": "inputs/s"
+      },
+      "streams.inputsPerSec.puts10": {
+        "value": 14079,
+        "better": "higher",
+        "unit": "inputs/s"
+      },
+      "projector.decisionsPerSec.batch1": {
+        "value": 106,
+        "better": "higher",
+        "unit": "decisions/s"
+      },
+      "projector.decisionsPerSec.batch10": {
+        "value": 427,
+        "better": "higher",
+        "unit": "decisions/s"
+      },
+      "projector.decisionsPerSec.batch120": {
+        "value": 740,
+        "better": "higher",
+        "unit": "decisions/s"
+      },
+      "restore.changelogReadMs": {
+        "value": 1900,
+        "better": "lower",
+        "unit": "ms for 1,000,000 records"
+      },
+      "restore.storeRestoreMs.cold": {
+        "value": 1764,
+        "better": "lower",
+        "unit": "ms for 1,000,000 records"
+      },
+      "restore.toRunningSec.cold": {
+        "value": 42,
+        "better": "lower",
+        "unit": "s"
+      },
+      "restore.toRunningSec.warm": {
+        "value": 42,
+        "better": "lower",
+        "unit": "s"
+      },
+      "projector.batchedDecisionsPerSec.plain.batch120": {
+        "value": 3688,
+        "better": "higher",
+        "unit": "decisions/s"
+      },
+      "projector.batchedDecisionsPerSec.rewriteBatchedInserts.batch120": {
+        "value": 4313,
+        "better": "higher",
+        "unit": "decisions/s"
+      }
     }
   }
 }
