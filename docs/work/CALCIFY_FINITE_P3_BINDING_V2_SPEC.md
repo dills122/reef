@@ -148,7 +148,7 @@ memory domain with the COMMAND writer).
 ## 8. Determinism, history and restore cut (option B)
 
 **Streams configuration (pinned)**: one Kafka Streams application, `processing.guarantee=exactly_once_v2`,
-`num.stream.threads=1`, `num.standby.replicas=0`, single partition (partition 0, as v1), `auto.offset.reset=earliest`. The
+`num.stream.threads=1`, `num.standby.replicas=0`, single partition (partition 0, as v1), `auto.offset.reset=earliest`, consumer `session.timeout.ms=6000` and `heartbeat.interval.ms=1000` (owner decision 2026-10-13: a crashed member is evicted in about 6 s instead of the 45 s default; `CALCIFY_FINANCE_SESSION_TIMEOUT_MS` may only raise it). The
 application's single group `financeApplicationId` consumes CAPTURE and CONTROL. Streams commits `lastProcessedOffset + 1` per
 input partition together with the state-store and output writes in one transaction per commit interval; one transaction may span
 many records, and atomicity (all or none of: offsets, history entries, changelog writes, decisions) is Kafka's EOS property,

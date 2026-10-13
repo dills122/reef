@@ -30,7 +30,7 @@ or reader credentials. The read routes are served by the platform server (a diff
 | `CALCIFY_FINANCE_STATE_DIRECTORY` | yes | owner-only directory for the RocksDB state (not a symlink; group or other permission bits are refused, because the state holds the full ledger) |
 | `CALCIFY_FINANCE_OWNER_EPOCH` | yes | positive integer; the projection's owner fence (see below) |
 | `CALCIFY_FINANCE_PROJECTION_INTERVAL_MS` | no | 50 to 10000, default 500 |
-| `CALCIFY_FINANCE_SESSION_TIMEOUT_MS` | no | 6000 to 45000; unset keeps the 45 s default. A crash restarted in 44 s at the default and 6 s at 6,000 (CAL-FIN-S0). Owner decision, see the role sign-off packet |
+| `CALCIFY_FINANCE_SESSION_TIMEOUT_MS` | no | 6000 to 45000; unset keeps the pinned **6,000** (owner decision 2026-10-13: a SIGKILL restart took 44.1 s at the Kafka 45 s default and 6.1 s at 6,000, CAL-FIN-S0). This can only raise it |
 
 Secrets are read only from `*_FILE` paths (private regular files, owner read/write only); an inline secret variable (for example `CALCIFY_FINANCE_KAFKA_PASSWORD`) is refused.
 

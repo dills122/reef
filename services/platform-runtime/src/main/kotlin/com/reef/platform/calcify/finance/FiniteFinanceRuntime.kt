@@ -65,7 +65,7 @@ internal object FiniteFinanceRuntime {
         val streamsProps = clientProperties(bootstrap, protocol, mechanism, financeUser, secret("CALCIFY_FINANCE_KAFKA_PASSWORD"))
         val evidenceProps = clientProperties(bootstrap, protocol, mechanism, observerUser, secret("CALCIFY_FINANCE_OBSERVER_KAFKA_PASSWORD"))
         lookup("CALCIFY_FINANCE_SESSION_TIMEOUT_MS")?.takeIf { it.isNotBlank() }?.let { raw ->
-            // Optional: a lower session timeout shortens crash recovery (measured 44 s at the 45 s default, 6 s at 6,000). Unset keeps the default.
+            // Optional override. The default is FinanceTopology.SESSION_TIMEOUT_MS (6,000, owner decision 2026-10-13); this can only raise it, for example on a slow network.
             val session = raw.toIntOrNull()?.takeIf { it in 6_000..45_000 } ?: error("CALCIFY_FINANCE_SESSION_TIMEOUT_MS must be an integer in 6000..45000")
             streamsProps[StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = session
             streamsProps[StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = maxOf(1_000, session / 6)

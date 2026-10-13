@@ -51,8 +51,8 @@ class FiniteFinanceLauncherBrokerTest {
         DisposableRedpanda().start().use { rp ->
             rp.admin().use { F.createTopics(it) }
             val stateDir = Files.createTempDirectory("finance-restart-state").toString()
-            // Production properties on purpose: the shared fixture lowers session.timeout.ms to 6 s (for SIGKILL tests), which would hide the delay this test guards.
-            fun start() = org.apache.kafka.streams.KafkaStreams(FinanceTopology.build(F.config, persistent = true), FinanceTopology.streamsProperties(F.APP_ID, rp.bootstrap, stateDir)).also { s ->
+            // Production properties, but with the pre-decision 45 s session timeout put back on purpose: the production default is now 6 s, which would hide the delay this test guards.
+            fun start() = org.apache.kafka.streams.KafkaStreams(FinanceTopology.build(F.config, persistent = true), FinanceTopology.streamsProperties(F.APP_ID, rp.bootstrap, stateDir).apply { put("consumer.session.timeout.ms", 45_000); put("consumer.heartbeat.interval.ms", 3_000) }).also { s ->
                 s.start()
                 val deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos()
                 while (s.state() != org.apache.kafka.streams.KafkaStreams.State.RUNNING && System.nanoTime() < deadline) Thread.sleep(50)

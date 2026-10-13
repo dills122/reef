@@ -143,6 +143,9 @@ internal class FinanceProcessor(private val config: FinanceProcessorConfig) : Pr
 }
 
 internal object FinanceTopology {
+    const val SESSION_TIMEOUT_MS = 6_000
+    const val HEARTBEAT_INTERVAL_MS = 1_000
+
     /**
      * Spec section 8 pinned Streams configuration. The processor's all-or-nothing-per-record claim holds only under exactly-once, so
      * the launcher must take its properties from here; [verifyPinned] refuses anything weaker.
@@ -152,6 +155,8 @@ internal object FinanceTopology {
         put("processing.guarantee", "exactly_once_v2"); put("num.stream.threads", 1); put("num.standby.replicas", 0)
         put("commit.interval.ms", 100); put("max.task.idle.ms", 0); put("auto.offset.reset", "earliest")
         put("replication.factor", 1)
+        // Owner decision 2026-10-13: a crashed member is evicted after 6 s, not the 45 s default (measured SIGKILL restart: 44.1 s default, 6.1 s at 6,000).
+        put("consumer.session.timeout.ms", SESSION_TIMEOUT_MS); put("consumer.heartbeat.interval.ms", HEARTBEAT_INTERVAL_MS)
     }
 
     /**

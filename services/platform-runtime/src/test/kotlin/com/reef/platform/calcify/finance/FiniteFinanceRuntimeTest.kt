@@ -109,4 +109,12 @@ class FiniteFinanceRuntimeTest {
         assertFailsWith<IllegalArgumentException> { FiniteFinanceRuntime.requireExclusive { if (it == "CALCIFY_STAGE") "resolver" else null } }
         assertFailsWith<IllegalArgumentException> { FiniteFinanceRuntime.requireExclusive { if (it == "CALCIFY_FINITE_BINDING_DIGEST") digest else null } }
     }
+
+    /** Owner decision 2026-10-13: a crashed finance member is evicted after 6 s, not the 45 s Kafka default (SIGKILL restart measured 44.1 s vs 6.1 s). */
+    @Test fun theProductionStreamsPinsEvictACrashedMemberAfterSixSeconds() {
+        val p = FinanceTopology.streamsProperties("app", "127.0.0.1:9092", "/tmp/state")
+        assertEquals(6_000, p["consumer.session.timeout.ms"]); assertEquals(1_000, p["consumer.heartbeat.interval.ms"])
+        assertTrue((p["consumer.heartbeat.interval.ms"] as Int) * 3 <= (p["consumer.session.timeout.ms"] as Int), "Kafka requires the heartbeat to be at most a third of the session timeout")
+        FinanceTopology.verifyPinned(p)
+    }
 }
