@@ -182,6 +182,24 @@ internal object FinanceBrokerFixture {
 }
 
 /** Child-JVM entry point for the crash test: runs the finance Streams app until it is killed. */
+/** The minimal broker grants of the finance Streams app and the read-only observer (docs/work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md section 9), shared by every test that provisions them. */
+internal object FinanceGrants {
+    private fun allow(user: String, type: org.apache.kafka.common.resource.ResourceType, name: String, pattern: org.apache.kafka.common.resource.PatternType, vararg ops: org.apache.kafka.common.acl.AclOperation) =
+        ops.map { org.apache.kafka.common.acl.AclBinding(org.apache.kafka.common.resource.ResourcePattern(type, name, pattern), org.apache.kafka.common.acl.AccessControlEntry("User:$user", "*", it, org.apache.kafka.common.acl.AclPermissionType.ALLOW)) }
+
+    fun financeAndObserver(finance: String, observer: String, app: String, capture: String, control: String, decisions: String, changelog: String): List<org.apache.kafka.common.acl.AclBinding> = buildList {
+        val topic = org.apache.kafka.common.resource.ResourceType.TOPIC; val literal = org.apache.kafka.common.resource.PatternType.LITERAL; val prefixed = org.apache.kafka.common.resource.PatternType.PREFIXED
+        val read = org.apache.kafka.common.acl.AclOperation.READ; val describe = org.apache.kafka.common.acl.AclOperation.DESCRIBE; val write = org.apache.kafka.common.acl.AclOperation.WRITE
+        for (t in listOf(capture, control)) addAll(allow(finance, topic, t, literal, read, describe))
+        addAll(allow(finance, topic, decisions, literal, write, describe))
+        addAll(allow(finance, topic, app, prefixed, org.apache.kafka.common.acl.AclOperation.ALL))
+        addAll(allow(finance, org.apache.kafka.common.resource.ResourceType.GROUP, app, prefixed, read, describe))
+        addAll(allow(finance, org.apache.kafka.common.resource.ResourceType.TRANSACTIONAL_ID, app, prefixed, write, describe))
+        for (t in listOf(capture, control, decisions, changelog)) addAll(allow(observer, topic, t, literal, read, describe))
+        addAll(allow(observer, org.apache.kafka.common.resource.ResourceType.GROUP, app, literal, describe))
+    }
+}
+
 internal object FinanceStreamsApp {
     @JvmStatic fun main(args: Array<String>) {
         val streams = FinanceBrokerFixture.streams(args[0], args[1])

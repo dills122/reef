@@ -50,14 +50,7 @@ class FinanceAclTest {
         addAll(allow("capture", ResourceType.CLUSTER, "kafka-cluster", PatternType.LITERAL, AclOperation.IDEMPOTENT_WRITE))
         topic("control", F.CONTROL, AclOperation.WRITE, AclOperation.READ, AclOperation.DESCRIBE)
         addAll(allow("control", ResourceType.TRANSACTIONAL_ID, controlTx, PatternType.LITERAL, AclOperation.WRITE, AclOperation.DESCRIBE))
-        topic("finance", F.CAPTURE, AclOperation.READ, AclOperation.DESCRIBE)
-        topic("finance", F.CONTROL, AclOperation.READ, AclOperation.DESCRIBE)
-        topic("finance", F.DECISIONS, AclOperation.WRITE, AclOperation.DESCRIBE)
-        addAll(allow("finance", ResourceType.TOPIC, app, PatternType.PREFIXED, AclOperation.ALL))
-        addAll(allow("finance", ResourceType.GROUP, app, PatternType.PREFIXED, AclOperation.READ, AclOperation.DESCRIBE))
-        addAll(allow("finance", ResourceType.TRANSACTIONAL_ID, app, PatternType.PREFIXED, AclOperation.WRITE, AclOperation.DESCRIBE))
-        for (t in listOf(F.CAPTURE, F.CONTROL, F.DECISIONS, F.changelog)) topic("observer", t, AclOperation.READ, AclOperation.DESCRIBE)
-        addAll(allow("observer", ResourceType.GROUP, app, PatternType.LITERAL, AclOperation.DESCRIBE))
+        addAll(FinanceGrants.financeAndObserver("finance", "observer", app, F.CAPTURE, F.CONTROL, F.DECISIONS, F.changelog))
         // "matcher" (existing principal) deliberately receives nothing on the new topics.
         topic("matcher", commandTopic, AclOperation.READ, AclOperation.DESCRIBE)
     }

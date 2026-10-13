@@ -28,10 +28,10 @@ import kotlin.test.Test
 internal object S0CrashApp {
     @JvmStatic fun main(args: Array<String>) {
         val props = FinanceTopology.streamsProperties(FinanceBrokerFixture.APP_ID, args[0], args[1])
-        if (args[2] != "default") {
-            props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = args[2].toInt()
-            props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = 1000
-        }
+        // "default" means the Kafka default of 45 s (the production pin became 6 s on 2026-10-13), so the measurement stays comparable.
+        val session = if (args[2] == "default") 45_000 else args[2].toInt()
+        props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = session
+        props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = if (session >= 30_000) 3_000 else 1_000
         val streams = KafkaStreams(FinanceTopology.build(FinanceBrokerFixture.config, persistent = true), props)
         streams.start()
         println("S0-CRASH-APP-STARTED")
@@ -113,7 +113,8 @@ class S0EndToEndCostSpikeTest {
             val app = "s0-floor"; val dir = Files.createTempDirectory("s0-floor").toString()
             val producer = FinanceBrokerFixture.producer(rp.bootstrap)
             repeat(1000) { producer.send(ProducerRecord("S0_IN", 0, ByteArray(0), ByteArray(120))) }; producer.flush(); producer.close()
-            fun start(): KafkaStreams = KafkaStreams(topology(app, 1), FinanceTopology.streamsProperties(app, rp.bootstrap, dir)).also { it.start(); waitRunning(it) }
+            // 45 s session timeout put back explicitly (the production pin is now 6 s) so the default-close delay this experiment explains stays visible.
+            fun start(): KafkaStreams = KafkaStreams(topology(app, 1), FinanceTopology.streamsProperties(app, rp.bootstrap, dir).apply { put("consumer.session.timeout.ms", 45_000); put("consumer.heartbeat.interval.ms", 3_000) }).also { it.start(); waitRunning(it) }
             var current = start()
             for ((label, leave) in listOf("default close (no LeaveGroup)" to false, "close with leaveGroup=true" to true, "close with leaveGroup=true again" to true)) {
                 // Each label closes the instance that is running now, with that label's close, and times the next start.
@@ -144,7 +145,8 @@ class S0EndToEndCostSpikeTest {
                 Thread.sleep(8000)                                   // let it join the group and take the partition
                 child.destroyForcibly().waitFor()                    // SIGKILL: no shutdown hooks, no LeaveGroup
                 val props = FinanceTopology.streamsProperties(FinanceBrokerFixture.APP_ID, rp.bootstrap, stateDir.path)
-                if (session != "default") { props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = session.toInt(); props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = 1000 }
+                val sessionMs = if (session == "default") 45_000 else session.toInt()
+                props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = sessionMs; props[org.apache.kafka.streams.StreamsConfig.consumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)] = if (sessionMs >= 30_000) 3_000 else 1_000
                 val t0 = System.nanoTime()
                 val streams = KafkaStreams(FinanceTopology.build(FinanceBrokerFixture.config, persistent = true), props).also { it.start(); waitRunning(it) }
                 val secs = (System.nanoTime() - t0) / 1e9

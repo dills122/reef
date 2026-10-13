@@ -6,6 +6,11 @@ import com.reef.platform.api.PlatformHttpServer
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 fun main() {
+    if (RuntimeEnv.string("CALCIFY_FINANCE_BINDING_DIGEST", "").isNotBlank()) {
+        com.reef.platform.calcify.finance.FiniteFinanceRuntime.requireExclusive { RuntimeEnv.string(it, "") }
+        com.reef.platform.calcify.finance.FiniteFinanceRuntime.run()
+        return
+    }
     if (RuntimeEnv.string("CALCIFY_FINITE_BINDING_DIGEST", "").isNotBlank()) {
         // Finite P3 is its own process role: a leftover CALCIFY_STAGE must not silently pick a different mode.
         require(RuntimeEnv.string("CALCIFY_STAGE", "").isBlank()) { "CALCIFY_STAGE must not be set with CALCIFY_FINITE_BINDING_DIGEST" }

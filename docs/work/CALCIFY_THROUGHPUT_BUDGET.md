@@ -71,4 +71,4 @@ the projector, not the ledger or Streams.
 2. The projector beyond JDBC batching (larger batches, `COPY`, fewer indexes, several bindings in parallel), since it is still the binding term at about 3k/s; and the research batching variant promoted to a reviewed product change if the finance lane is to be a capacity lane at all.
 3. The real `FinanceProcessor` pre-aged to 10^4 to 10^5 entities (needs the lifted caps from the design's profile spec).
 4. Finance read routes under a frozen concurrent read mix.
-5. ~~Explain the 42 s restart floor~~ (done: the default close does not leave the group; see CAL-FIN-S0). Crash restart is now measured (44.1 s default, 6.1 s at 6,000). Remaining: the owner decides `session.timeout.ms` or static membership for the finance app, then sets the restore-time objective.
+5. ~~Explain the 42 s restart floor~~ (done: the default close does not leave the group; see CAL-FIN-S0). Crash restart is now measured (44.1 s default, 6.1 s at 6,000). The owner decided on 2026-10-13 to pin `session.timeout.ms` at 6,000 for the finance app. Remaining: the owner sets the restore-time objective.
