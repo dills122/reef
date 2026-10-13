@@ -5,8 +5,13 @@ import { compare, parseProperties, render } from "./calcify-throughput-check.mjs
 const baseline = { recorded: "t", warnFraction: 0.3, metrics: {
   rate: { value: 1000, better: "higher", unit: "/s" }, lat: { value: 100, better: "lower", unit: "ms" } } };
 
-test("parses key=value lines and ignores noise", () => {
-  assert.deepEqual(parseProperties("rate=1200\nbad line\nlat=80.5\n"), { rate: 1200, lat: 80.5 });
+test("parses key=value lines and skips blank lines", () => {
+  assert.deepEqual(parseProperties("rate=1200\n\nlat=80.5\n"), { rate: 1200, lat: 80.5 });
+});
+
+test("a malformed line or a duplicate key is an error, never silently dropped", () => {
+  assert.throws(() => parseProperties("rate=1200\nbad line\n"), /invalid metrics line/);
+  assert.throws(() => parseProperties("rate=1200\nrate=900\n"), /duplicate metrics key/);
 });
 
 test("higher-is-better regression only when more than the threshold worse", () => {

@@ -99,14 +99,15 @@ class S0EndToEndCostSpikeTest {
             val producer = FinanceBrokerFixture.producer(rp.bootstrap)
             repeat(1000) { producer.send(ProducerRecord("S0_IN", 0, ByteArray(0), ByteArray(120))) }; producer.flush(); producer.close()
             fun start(): KafkaStreams = KafkaStreams(topology(app, 1), FinanceTopology.streamsProperties(app, rp.bootstrap, dir)).also { it.start(); waitRunning(it) }
-            val first = start()
+            var current = start()
             for ((label, leave) in listOf("default close (no LeaveGroup)" to false, "close with leaveGroup=true" to true, "close with leaveGroup=true again" to true)) {
-                if (leave) first.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true)) else first.close(Duration.ofSeconds(30))
-                val t0 = System.nanoTime(); val next = start(); val secs = (System.nanoTime() - t0) / 1e9
+                // Each label closes the instance that is running now, with that label's close, and times the next start.
+                if (leave) current.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true)) else current.close(Duration.ofSeconds(30))
+                val t0 = System.nanoTime(); current = start(); val secs = (System.nanoTime() - t0) / 1e9
                 log.append("D  restart after $label: RUNNING after ${"%.1f".format(secs)} s\n")
-                S0Metrics.record("restartFloor.sec." + (if (leave) "leaveGroup" else "default"), Math.round(secs))
-                next.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true)) // leave cleanly so the next label starts from an empty group
+                S0Metrics.record("restartFloor.sec." + (if (leave) "leaveGroup" else "default") + (if (label.endsWith("again")) ".repeat" else ""), Math.round(secs))
             }
+            current.close(KafkaStreams.CloseOptions().timeout(Duration.ofSeconds(30)).leaveGroup(true))
         }
         println(log); Files.writeString(S0Metrics.file("s0-restart-floor.txt"), log)
     }

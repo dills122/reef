@@ -7,8 +7,12 @@ import { readFileSync, appendFileSync } from "node:fs";
 export function parseProperties(text) {
   const out = {};
   for (const line of text.split("\n")) {
-    const m = /^([A-Za-z0-9_.-]+)=(-?[0-9.]+)\s*$/.exec(line.trim());
-    if (m) out[m[1]] = Number(m[2]);
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const m = /^([A-Za-z0-9_.-]+)=(-?[0-9.]+)$/.exec(trimmed);
+    if (!m) throw new Error(`invalid metrics line: ${line}`);
+    if (Object.hasOwn(out, m[1])) throw new Error(`duplicate metrics key (stale file from an earlier run?): ${m[1]}`);
+    out[m[1]] = Number(m[2]);
   }
   return out;
 }

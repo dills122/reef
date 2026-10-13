@@ -40,6 +40,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Start from an empty results directory
+        run: rm -rf "$S0_OUT_DIR"
       - name: Run the S0 finance-lane spikes (disposable Redpanda and Postgres containers)
         run: ./services/platform-runtime/gradlew --no-daemon -p services/platform-runtime test -PbrokerTests -PresearchTests --tests "com.reef.platform.calcify.finance.S0EndToEndCostSpikeTest" --tests "com.reef.platform.calcify.finance.S0ProjectorCostSpikeTest"
       - name: Require both spikes executed, not skipped
