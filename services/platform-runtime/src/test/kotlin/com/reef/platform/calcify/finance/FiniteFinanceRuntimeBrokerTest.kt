@@ -102,7 +102,8 @@ class FiniteFinanceRuntimeBrokerTest {
         val pg = postgres()
         SecuredRedpanda(listOf("finance", "observer")).start().use { rp ->
             provision(rp)
-            assertFailsWith<Exception>("evidence cannot be read, so the restore cut cannot run") { FiniteFinanceRuntime.create(env(rp, pg, "wrong-password").let { m -> m::get }).start().close() }
+            val failure = assertFailsWith<Exception>("evidence cannot be read, so the restore cut cannot run") { FiniteFinanceRuntime.create(env(rp, pg, "wrong-password").let { m -> m::get }).start().close() }
+            assertTrue(generateSequence<Throwable>(failure) { it.cause }.any { it is org.apache.kafka.common.errors.SaslAuthenticationException }, "the failure is the broker refusing the observer credential, not some unrelated startup error: $failure")
             rp.admin("observer").use { assertTrue(it.listConsumerGroups().all().get(15, TimeUnit.SECONDS).none { g -> g.groupId() == config.applicationId }, "no app was started") }
         }
     }

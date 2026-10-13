@@ -91,8 +91,10 @@ internal object FiniteFinanceRuntime {
      * restore cut runs again.
      */
     fun run() {
-        val running = create().start()
-        Runtime.getRuntime().addShutdownHook(Thread { runCatching { running.close() } })
+        // The hook exists before start(), so a SIGTERM while the app is starting or just after it has started still closes (and leaves the group).
+        val started = java.util.concurrent.atomic.AtomicReference<FiniteFinanceLauncher.Running?>(null)
+        Runtime.getRuntime().addShutdownHook(Thread { started.get()?.let { runCatching { it.close() } } })
+        val running = create().start().also { started.set(it) }
         try { while (running.healthy()) Thread.sleep(1_000) } catch (_: InterruptedException) { runCatching { running.close() }; return }
         System.err.println("finance runtime unhealthy: streams=${running.streamsState()} projection=${running.projectionFailure()}")
         runCatching { running.close() }
