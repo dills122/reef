@@ -10,7 +10,7 @@ finite ingress/capture JVM: it runs only when `CALCIFY_FINANCE_BINDING_DIGEST` i
 3. `FiniteFinanceLauncher.start()`: evidence under the read-only `observer` principal, restore-cut verification (a refusal starts nothing and exits non-zero), the owner-fenced
    projection opened with the projector database role, then the Streams app under the `finance` principal, then projection passes.
 4. Supervises: if the Streams app or the projection loop dies, it closes and exits 1 so the supervisor restarts it and the restore cut runs again. A clean stop (SIGTERM)
-   closes the app and leaves the consumer group, so the restart does not wait out the session timeout.
+   closes the app; once PR 516 (`closeLeavingGroup`) is merged that also leaves the consumer group, so the restart does not wait out the 45 s session timeout.
 
 It holds exactly two broker credentials (`finance`, `observer`) and one database credential (the projector role). It does not hold the control-writer, registrar, runtime
 or reader credentials. The read routes are served by the platform server (a different role) from the projection this role writes.
