@@ -35,8 +35,8 @@ internal class FinanceEvidenceReader(
 
     fun readCommittedEnd(topic: String): Long = withConsumer(topic) { c, tp -> c.endOffsets(listOf(tp), readTimeout).getValue(tp) }
 
-    /** Every read-committed record from offset 0 to the read-committed end. A topic that is shorter than its end after the timeout is a failure, not a partial read. */
-    fun readAll(topic: String): List<Pair<ByteArray?, ByteArray?>> = withConsumer(topic) { c, tp ->
+    /** Drains every read-committed record from offset 0 to the read-committed end on an already assigned consumer. A topic shorter than its end after the timeout is a failure, not a partial read. */
+    private fun drain(c: KafkaConsumer<ByteArray, ByteArray>, tp: TopicPartition, topic: String): List<Pair<ByteArray?, ByteArray?>> {
         c.seekToBeginning(listOf(tp))
         val end = c.endOffsets(listOf(tp), readTimeout).getValue(tp)
         val out = ArrayList<Pair<ByteArray?, ByteArray?>>()
@@ -45,8 +45,24 @@ internal class FinanceEvidenceReader(
             c.poll(Duration.ofMillis(200)).forEach { out += it.key() to it.value() }
             check(System.nanoTime() < deadline) { "timed out reading $topic" }
         }
-        out
+        return out
     }
+
+    /** Every read-committed record from offset 0 to the read-committed end, on a fresh consumer (activation-time use). */
+    fun readAll(topic: String): List<Pair<ByteArray?, ByteArray?>> = withConsumer(topic) { c, tp -> drain(c, tp, topic) }
+
+    /**
+     * The same whole-log read, but on ONE consumer kept for the life of the projection loop, so each pass costs a seek and a fetch instead of a
+     * new connection and SASL handshake (review 3, P3-1 / F6). Every pass still re-reads the whole bounded log, so the per-pass SQL-cut and
+     * divergence checks are unchanged. Not thread-safe: the projection loop is its only user; close it after the loop has stopped.
+     */
+    inner class LogReader(private val topic: String) : AutoCloseable {
+        private val tp = TopicPartition(topic, 0)
+        private val c = consumer().also { it.assign(listOf(tp)) }
+        fun readAll(): List<Pair<ByteArray?, ByteArray?>> = drain(c, tp, topic)
+        override fun close() = c.close()
+    }
+    fun logReader(topic: String): LogReader = LogReader(topic)
 
     /** First record a read-committed consumer sees at or after [offset], or null when there is none before the end. A timeout is a failure, never "none". */
     fun firstVisibleAtOrAfter(topic: String, offset: Long): Long? = withConsumer(topic) { c, tp ->
