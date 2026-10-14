@@ -172,7 +172,9 @@ class FinanceProjectorPostgresTest {
 
     @Test fun concurrentClaimsAreSerializedIntoDistinctEpochs() {
         val binding = digest(); val results = java.util.Collections.synchronizedList(ArrayList<Long>())
-        val threads = (0 until 6).map { Thread { results += FinanceProjector(ledger, dataSource()).claim(binding) }.also { it.start() } }
+        // Build the projectors on the test thread: dataSource() skips the test (assumeTrue) when the fixture is absent, and that must not happen inside a worker thread.
+        val projectors = (0 until 6).map { FinanceProjector(ledger, dataSource()) }
+        val threads = projectors.map { p -> Thread { results += p.claim(binding) }.also { it.start() } }
         threads.forEach { it.join() }
         assertEquals((1L..6L).toList(), results.sorted(), "six simultaneous claims get six distinct, consecutive epochs")
     }
