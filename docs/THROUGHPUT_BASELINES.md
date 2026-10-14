@@ -1793,3 +1793,20 @@ settled-obligation count equals, and the checkpoint is at the last decision.
 
 Interpretation limits: one machine shares CPU between Redpanda, Postgres, the JVM and the load generator, so every figure is a lower bound for dedicated hosts and an upper bound for nothing; the ledger is the prototype (no overlay or abort journal, no store-backed view), the projector skips `verifyLink`, the decision log is read as a stream, there is no restore cut, and the fixture binding has two accounts so buyers and sellers are re-drawn from a pool after the real mapping.
 Run-to-run spread in the repeated cells is up to 15 percent (the lane alone ranged 11.4k to 13.3k). The 10,000 booked trades/s of the arena contract is 20,000 inputs/s for this chain (a trade is a capture plus a settle). No capacity claim.
+
+## Calcify finite finance sharded lanes and CPU cost per decision, CAL-FIN-P5 (October 14, 2026)
+
+Diagnostic, same machine and test as CAL-FIN-P4 (`S4EndToEndSpikeTest`, now with `S4_LANES`): N independent shards in one JVM, each with its own topics, Streams application, ledger prototype, tailer, projector and binding digest, **disjoint accounts** (the best case for sharding: no cross-shard trade), sharing one Redpanda
+(`--smp 1 --memory 1G` unless named) and one Postgres. 100,000 trades per lane, 1,000 accounts per lane, K=100 with the commitment on a second thread, projector without the four binding foreign keys. Each lane's projection equals its own ledger after every run.
+**The machine was not quiet.** Other work on it (other agent sessions and test suites) held the load average between 8 and 50 during these runs (recorded per run in the output); treat every figure as a lower bound for dedicated hardware, and the spread as real.
+
+First matrix, one run each, lanes together (inputs/s): 1 lane 9,600; 2 lanes 17,962; 3 lanes 20,260; 4 lanes 18,332; 2 lanes on a broker with `--smp 2 --memory 2G` 19,186; 4 lanes on that broker 8,442 (load average then 40 to 50, an outlier); 2 lanes with the candidate savings 15,548; 3 lanes with them 8,877 (outlier); 2 lanes with the commitment on the deciding thread 9,596.
+Interleaved repeat matrix (three rounds, whole chain, projected decisions/s; medians in brackets): 1 lane 11,134 / 9,235 / 11,968 (**11,134**); 2 lanes 14,779 / 15,340 / 19,485 (**15,340**); 3 lanes 15,445 / 17,532 / 17,992 (**17,532**). With the cached pointer store and the content-digest check on a verifier thread ("free"): 1 lane 11,692 / 10,839 / 11,973 (11,692); 2 lanes 15,161 / 15,246 / 17,451 (15,246); 3 lanes
+11,366 / 15,139 / 14,944 (14,944). **The free variant showed no clear gain on this machine** (the verifier is one more thread competing for cores).
+So adding lanes helps but sublinearly on this host: about 1.4x at two lanes and 1.6x at three, and only one run (19,485 at two lanes, load average 14.8) reached the 20k need.
+
+**CPU cost per decision, which does not depend on the neighbours' load as much as the rate does** (microseconds of CPU for the JVM including producers and tailers, the Redpanda container, the Postgres container; container CPU read from cgroup `usage_usec`): 1 lane 203 + 19 + 81 = 303 and 206 + 20 + 67 = 292; 2 lanes 220 + 21 + 88 = 329. At 20,000 decisions/s that is **about 5.8 to 6.6 cores** of this machine's cores for the whole chain,
+with the load generator (producers) and Docker VM overhead included in those figures.
+
+Interpretation limits: see CAL-FIN-P4 (prototype ledger, no restore, no overlay, stream-read decision log, two-account fixture binding re-drawn from a pool). Disjoint accounts do not model the cross-shard problem that real sharding has to solve (a trade between participants in different shards); sharding by instrument still shares cash. Lanes share one JVM, so GC and JIT are shared (GC 0.5 to 2.7 s per run).
+The CPU figures include the in-JVM load generator and one untimed warm-up; a deployment with separate producers would show less JVM CPU. No capacity claim.
