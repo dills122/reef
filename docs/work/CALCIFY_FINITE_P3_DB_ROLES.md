@@ -1,6 +1,6 @@
 # Calcify finite P3 — production database role definition (DRAFT for operator review)
 
-Date: October 11, 2026. Status: **draft; not operator-approved**. Closes the O2 follow-up "operator-reviewed role
+Date: October 11, 2026. Status: **draft; the role matrix was signed off by the owner on 2026-10-13** (see `CALCIFY_FINITE_P3_ROLE_SIGNOFF.md`; credential delivery and rotation, and connection limits / `pg_hba`, remain open for a non-closed-network deployment). Closes the O2 follow-up "operator-reviewed role
 definition" (the CI/test fixture inferred its grants from test call sites; this document states the intended split and a
 verification query). Applies to migration `scripts/dev/db/migrations/boundary/0013_calcify_finite_ingress.sql`, which
 deliberately creates **no roles**.
@@ -86,7 +86,7 @@ third query found no `calcify_finite_*` function that was not `SECURITY DEFINER`
 ## Open items for the operator
 
 1. Choose the owner role and confirm no service uses it. 2. Credential delivery and rotation for the two login roles.
-3. Whether to add per-role connection limits or `pg_hba` source restrictions. 4. Sign-off of the matrix above.
+3. Whether to add per-role connection limits or `pg_hba` source restrictions. 4. ~~Sign-off of the matrix above.~~ **Signed off by the owner, 2026-10-13.**
 
 ## O4 projection role (S2-B2, proposed; operator provisions, no migration creates it)
 

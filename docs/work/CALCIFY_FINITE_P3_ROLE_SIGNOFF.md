@@ -1,6 +1,6 @@
 # Calcify finite P3 role sign-off packet (for the owner)
 
-Status: proposed for owner sign-off, 2026-10-12. This page gathers every principal and grant the finite P3 financial path needs, the test that proves each,
+Status: **signed off by the owner on 2026-10-13** (decisions below). Written 2026-10-12 as a proposal. This page gathers every principal and grant the finite P3 financial path needs, the test that proves each,
 and the points that need a decision. It adds no new requirement: the sources are [`CALCIFY_FINITE_P3_DB_ROLES.md`](CALCIFY_FINITE_P3_DB_ROLES.md),
 [`CALCIFY_FINITE_P3_BINDING_V2_SPEC.md`](CALCIFY_FINITE_P3_BINDING_V2_SPEC.md) section 9 and
 [`CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md`](CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md) section 5. Nothing here is provisioned by a migration; the operator creates every role.
@@ -40,7 +40,14 @@ Proven by `FiniteBindingStorePostgresTest`, `CalcifyTopicRoleMigrationTest`, `Fi
 
 All four are `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE` with secrets from a secret store. The function owner is trusted and must not be used by a service.
 
-## Decisions for you
+## Owner decisions, 2026-10-13
+
+- **Decision 1, the matrices: approved.** The Kafka and Postgres matrices above are the finite P3 provisioning list.
+- **Decision 2, session timeout: decided earlier, 6,000 ms** (see below).
+- **Decision 3, transport: the proof run is a closed network.** Plaintext transport is acceptable for it. TLS is filed as a follow-up: GitHub issue 527.
+- **Decisions 4 and 5 (operator-route exposure, credential delivery and rotation): not decided.** For the closed-network local recording they are covered by construction (the routes stay local-only; the credentials are random disposable files, created and deleted by `scripts/dev/calcify-financial/finite-p3-live-fixture.sh`). They must be decided before any non-disposable deployment.
+
+## Decisions for you (as originally posed)
 
 0. **Projector-role test gap: closed in PR 518** (DELETE, TRUNCATE, the ingress tables and the finite functions are asserted refused; checked against two mutants). Review PR 518 with this packet.
 
