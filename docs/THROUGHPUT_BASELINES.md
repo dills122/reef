@@ -1923,3 +1923,20 @@ Settles the size of the gain behind design section 5.6 (lagged commitment), rais
 | 3 | 14,567 (60.6) | 18,405 (46.0; 3 waits) |
 
 Means 13,683 and 18,551: **a second thread is 1.35x faster end to end** (processor path 64.7 against 45.4 microseconds per record), against 1.5x to 1.8x in the S3d stand-in lane and about 1.3x in the one CAL-FIN-P4 pair. The lane with the root on a second thread is within 8 percent of 20,000 inputs/s on this machine; the same lane with the root on the deciding thread is 32 percent short. Not measured: the undo ring's put, the worker's wait share at higher rates, any restore. Limits: one machine, three pairs, 15 percent spread elsewhere in this ledger; a one-lane, projector-off lane isolates the commitment term and is not the whole chain. No capacity claim.
+
+## Calcify finance projector: set-based writes in product code, CAL-FIN-P13 (October 14, 2026)
+
+First product-code change from the capacity work: `FinanceProjector.apply` now verifies every record in memory (order, input digest, replay equality, hash link) and writes the batch with one `INSERT ... SELECT FROM unnest(arrays)` statement per table (decisions, positions with net deltas, obligations, attempts) and one set-based update for settled obligations, instead of up to five prepared statements per record. Behaviour is unchanged: the same fence, the same replay check (now one query for all replayed sequences), the same rollback of the whole batch on any failure. Measured with `FinanceProjectorThroughputSpikeTest` (new, research-tagged) on the product class, the laptop's Docker Postgres 16 (load average 5 to 7, not quiet), decisions from the real `FinanceLedger`, 40 bindings of 207 decisions per batch size, the 320-sequence bound of migration 0014 lifted as in the capacity spikes:
+
+| Schema | Batch | Before (per-record statements) | After (set-based) |
+| --- | --- | --- | --- |
+| product constraints | 1 | 98 decisions/s | 92 |
+| product constraints | 10 | 417 | 665 |
+| product constraints | 120 | **690** | **4,894** (7.1x) |
+| without the four binding foreign keys | 1 | 97 | 86 |
+| without the four binding foreign keys | 10 | 426 | 703 |
+| without the four binding foreign keys | 120 | 792 | 4,410 |
+
+A call of one record is bound by its commit and does not move; the gain grows with the batch. With the foreign keys kept (the product's schema) the projector is not measurably slower here (4,894 against 4,410, within the spread), so they stay. Existing suites pass against real Postgres: `FinanceProjectorPostgresTest` (8, including random batching with redelivery, rollback of a bad batch and the role-restriction test), `JdbcFinanceReadStorePostgresTest`, `FiniteP3EndToEndTest`, the launcher and runtime broker tests.
+
+**What this does not change.** The runner (`FinanceProjectionRunner`) re-reads the whole decision log on every pass and the product migration still bounds a binding to 320 sequences, both correct for the finite profile and both incompatible with the capacity profile; the next projector step is an incremental runner that tails the log in batches of hundreds to thousands and a capacity-profile schema decision (lifting the bound, keeping or dropping foreign keys). Batch sizes above 120 were not measured (a ledger run admits at most 128 captures). The 4,894 decisions/s is the projector alone; it is below the 20,000 decisions/s need by itself, and the Postgres side of the chain reached 15,000 to 31,000 projected decisions/s in CAL-FIN-P4 to P11 only with the test projector's larger batches and a lifted bound. No capacity claim.
