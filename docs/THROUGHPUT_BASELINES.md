@@ -1879,3 +1879,15 @@ Host: single-thread microbenchmark 3.8 M ops/s (as the c-16), 16 threads togethe
 **Not run:** session B (the fast g5 line with a 100 GB block-storage volume holding both stores) stopped at volume creation, 403 "not authorized" for the benchmark token; the droplet was destroyed within two minutes (about $0.02). No volume was created.
 
 Interpretation limits: see CAL-FIN-P4, P5, P7, P8, P9. One droplet, single runs except the repeat; fixture runs of seconds to 160 s, not minutes to an hour; sizes are encoded volume in this fixture and include the changelog before compaction. The server did not meet the 20,000 decisions/s need in this configuration; no capacity claim.
+
+## Calcify arena baseline C: the same 32 vCPU server with the stores on tmpfs, CAL-FIN-P11 (October 14, 2026)
+
+Control for CAL-FIN-P10 (same droplet size `c-32`, `sfo2`, Xeon Platinum 8168, same test, settings and matrix, `droplet-chain-run.sh baseline` with `REEF_BASELINE_STORE=tmpfs`): Redpanda and Postgres data on tmpfs (24 GB and 12 GB; **not durable**, it measures what the server does when storage costs nothing), everything else unchanged. 16 minutes (about $0.27), destroyed, API check clean.
+
+**Rate (lanes together inputs/s; projected decisions/s through the whole chain, projector lag after the lanes; CPU per decision in microseconds):** 4 lanes 24,693; 20,302 (7.0 s); 524. 6 lanes 32,507 and 32,949; **27,115 and 27,473** (7.3 s); 571 and 564. 8 lanes 35,281; **31,368** (5.7 s); 618. **Sustained, 6 lanes with 250,000 trades each (3,000,000 decisions): 29,596 inputs/s over 101 s, 27,581 projected through the whole chain**; 601. A four-core broker (`--smp 4 --memory 4G`) at six lanes: 32,424; 26,611, no gain over one core (32.5k to 32.9k; 27.1k to 27.5k).
+Against CAL-FIN-P10 (same server, root disk, 10 ms synchronous writes): **+53 to +67 percent at the same lane count** (6 lanes 17.1k to 27.1k and 27.5k projected, 8 lanes 18.5k to 31.4k, sustained 18.7k to 27.6k). Total CPU at 20,000 decisions/s is 10.5 to 12.4 vCPUs of the 32. The processor time per record is no better with tmpfs (127 to 184 microseconds against 119 to 155): the lanes were waiting on the disk, not computing.
+
+**What this establishes:** on this CPU class a 32 vCPU server meets the 20,000 decisions/s need with margin (1.35x to 1.55x projected) **when the stores are fast**, and misses it by 6 to 8 percent when they are on the slow disk. The limit in baseline A was storage latency, not CPU, not the broker's core count, not the JVM. Four lanes just reach the need on tmpfs (20.3k); six give about 1.35x.
+It does not establish that a durable disk delivers this: tmpfs has no write cost at all. What is needed is a durable volume with synchronous writes in the low milliseconds or below (the c-16's root disk measured 1.5 ms; the c-32's 10 ms; the g5 line's 43 to 57 ms; local NVMe and block-storage volumes are untested) and a capacity of about 380 GB for a 60-minute session (CAL-FIN-P10).
+
+Interpretation limits: see CAL-FIN-P10 and earlier. One droplet, single runs except one repeat (six lanes within 1.4 percent); runs of 36 to 101 s; tmpfs is not a deployment. No capacity claim.
