@@ -56,7 +56,7 @@ internal class FiniteFinanceLauncher(
         val (runner, streams) = try {
             val projector = projectorFactory()
             val ownerEpoch = projector.claim(config.bindingDigest)       // the first database access, after the restore cut; an older instance is fenced by this
-            val r = FinanceProjectionRunner({ FinanceProjectionRunner.decode(log.readAll()) }, projector, config.bindingDigest, ownerEpoch).also { it.open() }
+            val r = FinanceProjectionRunner.tailing({ FinanceProjectionRunner.decode(log.readNext()) }, projector, config.bindingDigest, ownerEpoch).also { it.open() }
             r to KafkaStreams(FinanceTopology.build(config, persistent = true), properties)
         } catch (e: Throwable) { runCatching { log.close() }; throw e }
         val streamsFailed = AtomicBoolean(false)
