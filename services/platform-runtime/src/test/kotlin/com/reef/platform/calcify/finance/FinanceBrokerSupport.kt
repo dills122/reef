@@ -20,14 +20,18 @@ import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.streams.StreamsConfig
 import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 
+/** Extra `docker run` options for the research spikes from an environment variable (for example `--tmpfs=/var/lib/redpanda/data:rw,size=6g,uid=101,gid=101,mode=0777` to take the volume out of a measurement); empty when unset. Split on whitespace with no quoting, so write each option as one token (`--tmpfs=/path:rw,size=6g`, not `--tmpfs /path`). */
+internal fun dockerExtraArgs(variable: String): Array<String> = (System.getenv(variable) ?: "").trim().split(Regex("\\s+")).filter { it.isNotBlank() }.toTypedArray()
+
 /** A single-node Redpanda in a throwaway container on a host port; removed on close. Docker CLI only, default bridge network. */
+
 internal class DisposableRedpanda(private val smp: Int = 1, private val memory: String = "1G") : AutoCloseable {
     val port = ServerSocket(0).use { it.localPort }
     val name = "reef-finance-it-${System.nanoTime().toString(36)}"
     val bootstrap = "127.0.0.1:$port"
 
     fun start(): DisposableRedpanda {
-        val run = ProcessBuilder("docker", "run", "-d", "--rm", "--name", name, "-p", "$port:$port", IMAGE, "redpanda", "start",
+        val run = ProcessBuilder("docker", "run", "-d", "--rm", "--name", name, "-p", "$port:$port", *dockerExtraArgs("S4_RP_DOCKER"), IMAGE, "redpanda", "start",
             "--mode", "dev-container", "--smp", smp.toString(), "--memory", memory, "--reserve-memory", "0M", "--overprovisioned", "--node-id", "0", "--check=false",
             "--kafka-addr", "0.0.0.0:$port", "--advertise-kafka-addr", "127.0.0.1:$port").redirectErrorStream(true).start()
         val out = run.inputStream.bufferedReader().readText()

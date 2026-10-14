@@ -157,7 +157,10 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
         if (i.authority != Authority.OPERATOR) return ScaleResult(Disposition.UNAUTHORIZED, false, emptyList())
         if (i.account !in accounts) return ScaleResult(Disposition.UNKNOWN_ACCOUNT, false, emptyList())
         if ((i.asset != cash && i.asset != security) || i.amount <= 0) return ScaleResult(Disposition.INVALID_INPUT, false, emptyList())
-        val plan = planLegs(listOf(Leg(opening, i.asset, -i.amount), Leg(i.account, i.asset, i.amount))) ?: return ScaleResult(Disposition.BALANCE_OVERFLOW, false, emptyList())
+        // Prototype-only (S1 sharding spike): a Fund whose action domain is "defund" is the donor half of a cross-shard cash move, the reverse of a fund. The product ledger has no such input; it would need a Release control.
+        val defund = i.action.domain == "defund"
+        if (defund && pos(i.account, i.asset) < i.amount) return ScaleResult(Disposition.INSUFFICIENT_CASH, false, emptyList())
+        val plan = planLegs(if (defund) listOf(Leg(opening, i.asset, i.amount), Leg(i.account, i.asset, -i.amount)) else listOf(Leg(opening, i.asset, -i.amount), Leg(i.account, i.asset, i.amount))) ?: return ScaleResult(Disposition.BALANCE_OVERFLOW, false, emptyList())
         if (controls >= budgets.controls) return ScaleResult(Disposition.BUDGET_EXCEEDED, false, emptyList())
         val applied = commitLegs(plan)
         controls++; fundedActions++
