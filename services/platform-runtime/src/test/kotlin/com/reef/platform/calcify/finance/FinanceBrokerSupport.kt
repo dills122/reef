@@ -20,9 +20,10 @@ import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.streams.StreamsConfig
 import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 
+/** Extra `docker run` options for the research spikes from an environment variable (for example `--tmpfs=/var/lib/redpanda/data:rw,size=6g,uid=101,gid=101,mode=0777` to take the volume out of a measurement); empty when unset. Split on whitespace with no quoting, so write each option as one token (`--tmpfs=/path:rw,size=6g`, not `--tmpfs /path`). */
+internal fun dockerExtraArgs(variable: String): Array<String> = (System.getenv(variable) ?: "").trim().split(Regex("\\s+")).filter { it.isNotBlank() }.toTypedArray()
+
 /** A single-node Redpanda in a throwaway container on a host port; removed on close. Docker CLI only, default bridge network. */
-/** Extra `docker run` options for the research spikes from an environment variable (for example `--tmpfs /var/lib/redpanda/data:rw,size=6g,uid=101,gid=101,mode=0777` to take the volume out of a measurement); empty when unset. */
-internal fun dockerExtraArgs(variable: String): Array<String> = (System.getenv(variable) ?: "").split(" ").filter { it.isNotBlank() }.toTypedArray()
 
 internal class DisposableRedpanda(private val smp: Int = 1, private val memory: String = "1G") : AutoCloseable {
     val port = ServerSocket(0).use { it.localPort }

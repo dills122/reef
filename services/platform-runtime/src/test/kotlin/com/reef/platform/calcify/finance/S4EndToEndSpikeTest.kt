@@ -203,7 +203,7 @@ class S4EndToEndSpikeTest {
                             val polled = cons.poll(Duration.ofMillis(100)); if (polled.isEmpty) continue
                             val batch = ArrayList<Pair<Decision, FinanceInput>>(polled.count())
                             for (r in polled) { val rec = FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(r.value())); batch += rec; if (rec.first.disposition == Disposition.CAPTURED) captured.incrementAndGet() }
-                            if (seenMoves != null) for (rec in batch) { val a = rec.first.action; if (a.domain == "defund") seenMoves.add(a.actionId) else if (a.domain == "control" && a.actionId.endsWith("-in")) seenMoves.add("in:" + a.actionId.removeSuffix("-in")) }
+                            if (seenMoves != null) for (rec in batch) { val a = rec.first.action; if (rec.first.disposition != Disposition.FUNDED) continue; if (a.domain == "defund") seenMoves.add(a.actionId) else if (a.domain == "control" && a.actionId.endsWith("-in")) seenMoves.add("in:" + a.actionId.removeSuffix("-in")) }
                             seen.addAndGet(batch.size.toLong()); lastSeenNanos.set(System.nanoTime())
                             if (project) { queue.put(batch); maxBacklog.accumulateAndGet(seen.get() - applied.get()) { a, b -> maxOf(a, b) } }
                         }
