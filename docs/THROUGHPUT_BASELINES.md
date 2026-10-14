@@ -1706,3 +1706,25 @@ session timeout pinned at 6,000 ms in between (PR519); the default close still d
 Interpretation limits: two runs on a shared runner; the spread between them is 2 to 14 percent per metric, so the workflow's 30 percent warn threshold is wider than the noise. The hosted
 figures are now the workflow's comparison baseline (`docs/work/calcify-throughput-baseline.json`, mean of the two runs; restart rows from the second run only). No new capacity claim.
 
+
+## Calcify finite finance projector capacity spike, CAL-FIN-P1 (October 13, 2026)
+
+Diagnostic, laptop (Apple M1 Max, 64 GiB, Docker 29.7.2, Postgres 16-alpine, local socket, `synchronous_commit` on, `fsync` on unless named), `S0ProjectorCapacitySpikeTest`
+(research tag, branch `claude/calcify-projector-capacity-spike`, head `a9c948e74` plus the spike). Synthetic rows of the product shape (decision per input, obligation on capture, attempt, obligation
+update and four position deltas on settle), 30,000 trades = 60,000 decisions on **one uncapped binding** (migration 0014 with its two 320 bounds lifted), 1,000 accounts, one connection, one
+transaction per call, checkpoint row locked and advanced per call. No ledger, no hash-link or input-digest checks, no Kafka read side, no concurrent readers. One run per cell unless a repeat
+is listed; the same cell repeated varied by up to 10 percent. Trade = capture + settle = 2 decisions, so the arena contract's 10,000 booked trades/s is 20,000 decisions/s.
+
+Write strategy, decisions per second overall (decisions per call 120 / 1,000 / 5,000): **A. JDBC batches** with `reWriteBatchedInserts` 2,678 / 4,588 / 6,004; **B. set-based `unnest()` arrays,
+one statement per table** 3,858 / 5,967 / 9,242; **C. `COPY` into session staging tables then one INSERT SELECT per table** 1,941 / 6,268 / 7,236. Per-call time grows with batch size
+(p50 for B: 29 ms at 120, 149 ms at 1,000, 569 ms at 5,000), so the cost is work inside Postgres, not round trips. Strategy B at 5,000 per call repeated: 11,783, 12,425, 12,678 and 12,486
+(db-only excluding row construction 12,899 to 12,976); the 9,242 above was the first run of the matrix and is an outlier to the low side.
+
+What the floor is made of (strategy B, 5,000 per call, one run each unless noted): `synchronous_commit=off` 12,448 and `fsync=off, full_page_writes=off, synchronous_commit=off` 12,487 against
+12,486 default, so **commit durability is not the cost**. Dropping the four foreign keys to the checkpoint table: **17,350** (+39 percent); dropping the attempt-to-obligation key: 13,424 (+7);
+dropping the decision `UNIQUE (binding, action)`: 13,166 (+5); dropping all foreign keys and that unique: **20,195** (21,017 with the durability settings off too). At 1,000 per call the
+same sequence is 7,222 default and 9,602 without the keys. Last-quarter rates matched the overall rates (no visible fall as the tables reached 60,000 decisions; 120,000 not tried).
+
+Interpretation limits: constraint removal is a diagnostic, not a recommendation; the binding foreign keys are redundant with the per-call `FOR UPDATE` on the checkpoint, the attempt key and the
+action unique are integrity guards that would need a replacement argument before removal. The figures are the projector's database cost only; the Streams lane stand-in measured
+11.1k inputs/s (about 5.5k trades/s) and shares the machine, so end to end is lower than either. Hosted-runner and Linux-native Postgres figures not taken. No capacity claim.
