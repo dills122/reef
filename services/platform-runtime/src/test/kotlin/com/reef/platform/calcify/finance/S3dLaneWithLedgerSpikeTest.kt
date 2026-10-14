@@ -132,11 +132,12 @@ class S3dLaneWithLedgerSpikeTest {
                 val seen = countOutput(rp.bootstrap, n.toLong(), 900)
                 val secs = (System.nanoTime() - t0) / 1e9
                 val gcSecs = (java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().sumOf { it.collectionTime } - gc0) / 1000.0; val rotations = processors.sumOf { it.rotations }; val waited = processors.sumOf { it.totalBlockedCount }; val waitedSecs = processors.sumOf { it.totalBlockedNanos } / 1e9
-                streams.close(Duration.ofSeconds(30)); stateDir.toFile().deleteRecursively()
+                try { streams.close(Duration.ofSeconds(30)) } finally { stateDir.toFile().deleteRecursively() }
                 S0Metrics.record("laneWithLedger.${v.label}.inputsPerSec", Math.round(seen / secs))
                 log.append("%-16s processed=%d in %.1f s = %.0f inputs/s (rotations %d, commitment thread waited for %d times, %.2f s; gc %.1f s)\n".format(v.label, seen, secs, seen / secs, rotations, waited, waitedSecs, gcSecs))
                 check(seen == n.toLong()) { "${v.label}: processed $seen of $n" }
-                if (v.async && v.rotateAt != Int.MAX_VALUE) check(rotations == 0 || processors.any { it.lastSealRoot?.size == 32 }) { "${v.label}: rotation sealed without a root" }
+                if (v.rotateAt != Int.MAX_VALUE) check(rotations > 0) { "${v.label}: a rotation point is set but the run never rotated; raise S3D_INPUTS" }
+                if (v.async && rotations > 0) check(processors.any { it.lastSealRoot?.size == 32 }) { "${v.label}: rotation sealed without a root" }
             }
         }
         println(log); Files.writeString(S0Metrics.file("s3d-lane-with-ledger.txt"), log)
