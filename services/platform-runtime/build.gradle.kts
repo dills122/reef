@@ -50,6 +50,8 @@ tasks.test {
         if (!project.hasProperty("brokerTests")) excludeTags("broker")
         if (!project.hasProperty("researchTests")) excludeTags("research")
     }
+    // Research runs hold millions of entities in memory (S3c scale spike); the default 512 MiB test heap cannot.
+    if (project.hasProperty("researchTests")) maxHeapSize = "12g"
     dependsOn("verifyNoTestSourceExclusions")
     finalizedBy(tasks.jacocoTestReport)
 }
