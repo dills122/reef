@@ -54,6 +54,19 @@ class CapacityStoreTest {
         assertTrue(restores > 40, "restores=$restores")
     }
 
+    @Test fun restoreInAdmitModeDerivesTheAdmittedAccountsFromThePositions() {
+        val admit = CapacityConfig(null, usd, aapl, opening, 60, 60, 120, 30)
+        for (seed in 1..40L) {
+            val rnd = Random(seed); val inputs = (0 until 140).map { input(rnd) }; val cut = rnd.nextInt(10, inputs.size)
+            val stopped = CapacityLedger(admit); val kv = MemoryLifecycleKv()
+            inputs.take(cut).forEach { i -> stopped.decide(i).decision?.let { d -> kv.apply(CapacityStore.writes(stopped, d, binding)) } }
+            val restored = CapacityStore.restore(admit, kv, binding) ?: continue
+            val never = CapacityLedger(admit); inputs.take(cut).forEach { never.decide(it) }
+            assertEquals(never.snapshot(), restored.snapshot(), "seed $seed")
+            assertEquals(inputs.drop(cut).map { never.decide(it).decision }, inputs.drop(cut).map { restored.decide(it).decision }, "seed $seed: admission survives a restore")
+        }
+    }
+
     @Test fun anEmptyStoreIsGenesisAndAStoreWithEntriesButNoMetaIsRefused() {
         assertNull(CapacityStore.restore(config, MemoryLifecycleKv(), binding))
         val stray = MemoryLifecycleKv().also { it.entries["e/P/00"] = ByteArray(1) }

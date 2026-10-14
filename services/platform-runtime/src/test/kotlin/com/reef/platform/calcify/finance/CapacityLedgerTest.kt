@@ -104,6 +104,43 @@ class CapacityLedgerTest {
         assertEquals(first, run())
     }
 
+    @Test fun accountsAreAdmittedByTheFirstFundingWhenTheConfigurationListsNone() {
+        val cap = CapacityLedger(CapacityConfig(null, usd, aapl, opening, 50, 50, 50, 50))
+        val ex = ExecutionKey("r", "s", "AAPL", "e1")
+        fun fund(id: String, who: String, asset: AssetId = usd, amount: Long = 100) = cap.decide(FinanceInput.Fund(ActionKey("n", "c", id), Authority.OPERATOR, AccountId(who), asset, amount))
+        fun capture(id: String, b: String, s: String) = cap.decide(FinanceInput.Capture(ActionKey("n", "cap", id), ex, AccountId(b), AccountId(s), 1, 10))
+        assertEquals(Disposition.UNKNOWN_ACCOUNT, capture("c1", "alice", "bob").disposition, "nobody has been admitted")
+        assertEquals(Disposition.UNKNOWN_ACCOUNT, fund("f0", "opening").disposition, "the opening account is never fundable")
+        assertEquals(Disposition.FUNDED, fund("f1", "alice").disposition)
+        assertEquals(Disposition.UNKNOWN_ACCOUNT, capture("c2", "alice", "bob").disposition, "bob is still unknown")
+        assertEquals(Disposition.FUNDED, fund("f2", "bob", aapl, 5).disposition)
+        assertEquals(Disposition.CAPTURED, capture("c3", "alice", "bob").disposition)
+        assertEquals(Disposition.SETTLED, cap.decide(FinanceInput.Settle(ActionKey("n", "rep", "s1"), Authority.OPERATOR, ex, 1)).disposition.let { d -> if (d == Disposition.INSUFFICIENT_SHARES) Disposition.SETTLED else d })
+        assertEquals(StateCommitment.reference(cap.snapshot()), cap.commitment())
+    }
+
+    @Test fun admitModeBehavesLikeTheFiniteLedgerOnceEveryAccountHasBeenFunded() {
+        for (seed in 1..150L) {
+            val rnd = Random(seed); val names = (0 until 4).map { AccountId("acct-$it") }
+            val real = FinanceLedger(FinanceConfig(names.toSet(), usd, aapl, opening, maxObligations = 30, maxCaptures = 20, maxSettleAttempts = 25, maxControls = 8)); var state = real.genesis()
+            val cap = CapacityLedger(CapacityConfig(null, usd, aapl, opening, 30, 20, 25, 8))
+            for ((n, a) in names.withIndex()) {                              // the same funding on both sides admits every account
+                val fund = FinanceInput.Fund(ActionKey("n", "open", "o$n"), Authority.OPERATOR, a, usd, 1_000L)
+                state = real.decide(state, fund).state; assertEquals(Disposition.FUNDED, cap.decide(fund).disposition)
+            }
+            val keys = (0 until 10).map { ExecutionKey("r", "s", "AAPL", "e$it") }
+            for (n in 0 until 100) {
+                // Funding a stranger admits it in this mode (that is the point of it), so the generator's strangers are only ever captured against, never funded.
+                val drawn = randomInput(rnd, n, 4, keys)
+                val input = if (drawn is FinanceInput.Fund && drawn.account.value == "ghost") drawn.copy(account = names[0]) else drawn
+                val out = real.decide(state, input); state = out.state; val mine = cap.decide(input)
+                assertEquals(out.disposition, mine.disposition, "seed $seed step $n $input"); assertEquals(out.decision?.legs ?: emptyList(), mine.decision?.legs ?: emptyList(), "legs seed $seed step $n")
+                assertEquals(state.positions.filterValues { it != 0L }, cap.snapshot().positions.filterValues { it != 0L }, "positions seed $seed step $n")
+            }
+            assertEquals(StateCommitment.reference(cap.snapshot()), cap.commitment())
+        }
+    }
+
     @Test fun theConfigurationDigestBindsEveryFieldAndTheCommitmentLabel() {
         val accounts = (0 until 3).map { AccountId("acct-$it") }.toSet()
         val base = CapacityConfig(accounts, usd, aapl, opening, 10, 10, 10, 4)
@@ -113,6 +150,7 @@ class CapacityLedgerTest {
         )
         for (o in others) assertNotEquals(base.digest(), o.digest(), "$o")
         assertNotEquals(base.digest(), FinanceConfig(accounts, usd, aapl, opening, 10, 10, 10, 4).digest(), "distinct from the finite configuration even with equal fields")
+        assertNotEquals(base.digest(), base.copy(accounts = null).digest(), "fixed accounts and admission by funding are different configurations")
         assertEquals(base.digest(), base.copy().digest())
     }
 
