@@ -74,7 +74,11 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         }
         if (replays.isNotEmpty()) {
             val stored = storedChecksums(c, bindingDigest, replays.map { it.sequence })
-            for (d in replays) require(stored[d.sequence] == d.checksum) { "replayed record differs from the stored decision" }
+            for (d in replays) {
+                val checksum = stored[d.sequence]
+                require(checksum != null) { "replayed record is missing from the stored decisions" }
+                require(checksum == d.checksum) { "replayed record differs from the stored decision" }
+            }
         }
         val applied = rows.count
         if (applied > 0) {

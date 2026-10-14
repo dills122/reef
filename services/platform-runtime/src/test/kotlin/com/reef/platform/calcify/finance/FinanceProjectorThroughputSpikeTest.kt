@@ -53,7 +53,10 @@ class FinanceProjectorThroughputSpikeTest {
         val log = StringBuilder()
         try {
             val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
-            while (true) { try { sh("docker", "exec", pgName, "pg_isready", "-U", "postgres", "-d", "reef"); Thread.sleep(1500); sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-c", "select 1"); break } catch (e: Exception) { check(System.nanoTime() < deadline) { "postgres not ready" }; Thread.sleep(500) } }
+            while (true) {
+                try { sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-c", "select 1"); break }
+                catch (e: Exception) { check(System.nanoTime() < deadline) { "postgres not ready" }; Thread.sleep(500) }
+            }
             sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "CREATE SCHEMA boundary;\n$migration")
             if (pgMode == "nobindingfk") sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """
                 DO ${'$'}${'$'} DECLARE r record; BEGIN
@@ -76,10 +79,12 @@ class FinanceProjectorThroughputSpikeTest {
                 S0Metrics.record("projectorProduct.$pgMode.batch$batch.decisionsPerSec", Math.round(total / secs))
                 log.append("  batch %d: %.0f decisions/s (%d decisions in %.1f s)\n".format(batch, total / secs, total, secs))
                 ds.connection.use { c ->
-                    val last = digests.last()
-                    val positions = HashMap<Pair<String, String>, Long>(); c.prepareStatement("SELECT account_id, asset_id, amount FROM boundary.calcify_finance_position WHERE binding_digest = ?").use { ps -> ps.setString(1, last); ps.executeQuery().use { r -> while (r.next()) positions[r.getString(1) to r.getString(2)] = r.getLong(3) } }
-                    assertEquals(finalState.positions.filterValues { it != 0L }.mapKeys { it.key.first.value to it.key.second.value }, positions.filterValues { it != 0L }, "projected positions equal the ledger's")
-                    assertEquals(perBinding.toLong(), c.prepareStatement("SELECT last_sequence FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps -> ps.setString(1, last); ps.executeQuery().use { r -> r.next(); r.getLong(1) } })
+                    val expected = finalState.positions.filterValues { it != 0L }.mapKeys { it.key.first.value to it.key.second.value }
+                    for (binding in digests) {
+                        val positions = HashMap<Pair<String, String>, Long>(); c.prepareStatement("SELECT account_id, asset_id, amount FROM boundary.calcify_finance_position WHERE binding_digest = ?").use { ps -> ps.setString(1, binding); ps.executeQuery().use { r -> while (r.next()) positions[r.getString(1) to r.getString(2)] = r.getLong(3) } }
+                        assertEquals(expected, positions.filterValues { it != 0L }, "projected positions equal the ledger's")
+                        assertEquals(perBinding.toLong(), c.prepareStatement("SELECT last_sequence FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps -> ps.setString(1, binding); ps.executeQuery().use { r -> r.next(); r.getLong(1) } })
+                    }
                 }
             }
             println(log); Files.writeString(S0Metrics.file("projector-product-throughput.txt"), log)
