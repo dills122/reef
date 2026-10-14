@@ -5,6 +5,7 @@ lenses; the unit's first-three limit is now spent) returned A *Ready with follow
 S0 only* (section 14). Between rounds, as the owner directed, a second research spike (**S0**, section 1.4) measured the costs that are not the
 ledger. This revision answers every round-2 finding. **No further review instance starts until the owner decides section 11 and approves a new
 limit**; the next evidence is S0 and its extension, not another reading of the prose.
+**Revision 4 (2026-10-13)** adds section 1.5 (S3c and S3d spike results) and section 5.6 (lagged commitment rules). Both are unreviewed; the first-three review limit was spent in round 2 and no new instance has been approved.
 Scope: the successor to the O3a ledger for a *capacity* profile. The finite P3 path (O3a, binding v2, its goldens and digests) is frozen and
 is not changed by anything here. Owner: Dylan. Written 2026-10-12.
 
@@ -246,6 +247,7 @@ as authentic until the head is signed or anchored. Two further limits, stated so
 data** (the genesis chain derives from the config digest), so anyone can compute a valid commitment for a fabricated state; and a **prefix of a
 genuine chain also verifies**, so rollback, truncation and fork are not detected even by a signed head, only by an external freshness anchor.
 Read-model labels and docs should therefore say `integrityDigest` or "unkeyed integrity digest" even though the proto field keeps its name.
+In the lagged profile (5.6) the head decision commits to the state `K` to `2K - 1` decisions earlier, so the statement above holds for the head only after a further `K` to `2K - 1` decisions, and restore uses the undo ring and a bounded replay to cover the gap.
 
 ## 4. Instantiation
 
@@ -395,6 +397,51 @@ would publish wrong digests until the next restore). It runs after commit, so it
 further decisions only (Q5 is closed this way). The cheap local invariants and counters run synchronously before `context.forward`; a thrown exception
 aborts the store write and the forwards together under EOS and the processor is rebuilt through restore, so no extra abort mechanism is needed.
 
+### 5.6 Lagged commitment: the commitment computed off the processing thread (revision 4, unreviewed)
+
+Status: **specification of a profile option, written 2026-10-13 after the S3c and S3d spikes ([CAL-FIN-P3](../THROUGHPUT_BASELINES.md), section 1.5); not reviewed, not accepted.** The owner directed it ("go after taking the commitment off the thread").
+The measurement it rests on: with the trie on a second thread the lane ran at about 31k to 32k inputs/s against about 19k to 20k with the same K on the deciding thread (1.5x to 1.8x). It is selected by the registered profile, never by `financeStateVersion`, and changes nothing in the finite P3 path.
+
+**Parameters (bound into config-v2, so into genesis-v2 and every chain).** `commitmentMode = LAGGED` and `K`, the commitment batch size, an integer in 1..1000 (measured: 100 and 1,000). A chain built under one `(mode, K)` cannot verify under another.
+
+**Definitions.**
+- A *boundary* is a sequence `b` that is a positive multiple of `K`; `S_b` is the state after decision `b`; `S_0` is genesis; `C(S_b)` is section 3.2's commitment of `S_b` (it already includes `sequence = b` and `controls`). `C(S_0)` is a pure function of the config.
+- `B(s) = max(0, K * floor(s / K) - K)`. For `s = jK + r` with `0 <= r < K` and `j >= 1` this is `(j-1)K`, so the lag `s - B(s)` is between `K` and `2K - 1`; for `s < K` it is 0.
+- **Decision `s` carries `stateDigest = C(S_{B(s)})`** (64 lowercase hex, same field and type). A decision therefore attests the state `s - B(s)` decisions before its own, not its own post-state. The decision checksum still covers `stateDigest`, the sequence, the action, the input digest, the disposition and the legs, so the hash chain commits to every decision's content exactly as before.
+- `S_b` is **first committed by decision `b + K`** and carried unchanged by decisions `b + K .. b + 2K - 1`. Those `K` decisions all carry the same value (the `verifyChain` rule below).
+
+**Production rules.**
+1. When decision `b` (a boundary) is recorded, the engine hands the commitment worker the batch of entity writes for decisions `(b - K, b]`, **last write per entity key**, in order. One worker, FIFO; only the worker touches the trie. Decisions between boundaries do not touch it.
+2. Decision `s` needs `C(S_{B(s)})`. If the worker has not finished that batch, **the deciding thread waits**. A decision never carries a placeholder, a stale value or `C(S_0)` in place of a missing one.
+3. A worker failure, or a wait longer than `T_halt` (a profile parameter, default 30 s), is fatal: the processor throws, the Streams transaction aborts, and the processor restarts through restore (section 6.2 as amended below). There is no degraded mode.
+4. The digest is a **pure function of the decision log and the config**: it does not depend on thread timing, restarts, or where a batch boundary fell relative to a Streams commit. A processor that restores must produce the identical `stateDigest` for the next decision as one that never stopped (tested).
+5. The queue is bounded: at most two batches are outstanding in steady state (the worker must finish `C(S_b)` before decision `b + K` is produced, and receives the next batch at `b + K`). The wait is measured and exported (count and total time); a sustained wait share above a profile threshold is an operations alarm, not a correctness event.
+6. **Clean stop** drains the worker, then writes a *commitment anchor* `(h, C(S_h))` for the head `h` into `meta` in the same transaction. **Rotation** drains the worker and seals with `(f, C(S_f), chain head)` for the final sequence `f`; the seal carries the exact final commitment, not a lagged one, and the next ledger's genesis references it (Decision 1).
+
+**What is and is not attested (replaces section 3.5's "the head decision committed to the state" for this profile).**
+- Attested by decision `s`: its own input, disposition and legs, its link in the chain, and the full state `S_{B(s)}` up to the limits of section 3.5.
+- **Not attested at decision `s`: its own post-state.** The state at the head is attested only by decisions that do not exist yet, up to `2K - 1` decisions later. The exposure window is the last `2K - 1` decisions. In the finite profile the window is zero.
+- `verifyChain` gains a rule: decisions `1 .. 2K - 1` carry `C(S_0)`, and from `s = 2K` on the carried value may differ from the previous decision's only when `s` is a multiple of `K`. This catches a log whose carried digests change at the wrong places; it does not check the values.
+- Everything in 3.5's limits still holds: the digest is unkeyed, public and deterministic; rollback, truncation and fork are not detected.
+
+**Restore (amends 6.2 for this profile).** The store holds, besides the entity table and `meta`, an **undo ring**: for each of the last `2K - 1` decisions one entry `undo/(s mod (2K-1))` holding `s` and, for every entity that decision wrote, the key and its value **before** the decision (absent encoded explicitly). It is written in the same transaction as the decision's entity writes: one extra put per decision, no change to the entity puts. (Its cost in the lane is not yet measured; S3d did not write it.)
+Given head `h`, with the stored table equal to `S_h`:
+1. **Boundary to verify.** `b* = K * floor((h - K) / K)` if `h >= K`, else `0` (so `b*` is the largest boundary with `b* + K <= h`, and `h - b* <= 2K - 1`). The digest `C(S_{b*})` is the `stateDigest` of decision `min(b* + K, h)` in the decision log, or `C(S_0)` if `b* = 0`.
+2. **Roll back** a copy of the table from `h` to `b*` by applying the ring's before-images for decisions `h, h-1, ..., b*+1` in that order. Refuse unless the ring holds exactly those decisions, contiguous, each entry's `s` matching its slot.
+3. **Verify the past:** rebuild the trie from the rolled-back table (the full O(n) rebuild restore already pays; the sequence is `b*` and `controls` and the aggregates are recounted from that table) and require `C(S_{b*})` equals the log's value. A mismatch is a restore refusal.
+4. **Replay the window:** run the engine from `S_{b*}` over the logged inputs of decisions `b*+1 .. h` and require each replayed decision to equal the logged one (checksum, including the carried `stateDigest`; for a decision whose `B(s) = b*` the carried value must also equal the value step 3 recomputed, and for older `B(s)` the logged value is taken as given because the older state no longer exists), and the replayed final table to equal the stored table. At most `2K - 1` decisions; the replay also yields the batches the worker needs for `C(S_{b1})`, `b1 = b* + K` if `b1 <= h`.
+5. **Resume:** the trie, aggregates (recounted, equal to `meta`) and boundary roots now belong to `S_h`; the next decision `h + 1` carries `C(S_{B(h+1)})`, which is either the value decision `h` carried or the boundary root step 4 produced.
+6. **If a commitment anchor `(h, C)` is present** (clean stop), additionally require `C(S_h)` from the full rebuild to equal it. The ring path is the crash path; the anchor path is the common one.
+What this detects: any tamper of the entity table or ring that changes `S_{b*}`; any inconsistency between the logged inputs and the table inside the window. What it cannot: a forged table **and** ring **and** log that agree with each other. That is section 3.5's limit, unchanged, but the window is where an attacker who can write only the store (not the log) is caught by the replay rather than by the digest.
+
+**Audit (amends 5.5).** The audit cadence is a multiple of `K`. At a boundary `b` chosen for audit the engine takes an immutable snapshot of `S_b` (copy-on-write view or a rebuilt copy) and an off-thread audit rebuilds `C(S_b)` from the entity tables with the reference implementation and compares it with the worker's incremental value. Because `S_b` is first carried by decision `b + K`, an audit that finishes before that decision is produced **gates it** (a mismatch halts before the bad digest is published); an audit that finishes later detects after publication, with exposure bounded by the audit cadence plus `2K - 1`. The linear reference invariant check runs on the same snapshot.
+
+**Consumers.** A read model, API or UI that shows `stateDigest` must also show **the sequence it is the digest of** (`B(s)`, a pure function of `s` and `K`), or the pair is misleading. The projector stores the digest per decision only if it also stores that sequence. No consumer may treat `stateDigest(s)` as the post-state commitment of `s`.
+
+**Why not the alternatives (so the next reader does not reopen them).** (a) *Commit to the post-state with a one-decision lag (`K = 1`)* is the same rules with the smallest window and the same restore procedure; it needs the worker on the critical path every decision (measured: K=1 on a second thread was not run; K=100 and 1,000 were). (b) *No undo ring, replay the log from genesis* is O(history). (c) *Snapshot at boundaries in the store* needs a second copy of a state that is hundreds of megabytes at 10^6 entities. (d) *Let a restored processor trust the table* gives no detection at all inside the window.
+
+**Not decided here.** `K` (profile parameter; 100 measured and 1,000 measured), `T_halt`, the audit cadence, the ring's real cost, and whether the anchor should also be written periodically rather than only at clean stop.
+
 ## 6. Processor, store, restore, projection
 
 ### 6.1 Store
@@ -403,6 +450,8 @@ A v2 store has a new `META_VERSION` and parser (aggregate counters and `sequence
 `entityWrites` is replaced by the `Delta` the engine already produced. The store must not drop zero-amount positions (the v2 store test copies the existing FinanceStore behaviour test that a position reaching 0 persists).
 
 ### 6.2 Restore of state
+
+(For the lagged profile the restore procedure is the one in 5.6 and replaces the paragraph below.)
 
 Scan entities, rebuild the trie and aggregates, require `C(S)` equals the head decision's `stateDigest` and the recounted aggregates equal
 `meta`. The extra `checkpoint` checksum (a second full encode in `restoreAt`) is **dropped**: the head commitment already covers it; its
@@ -444,6 +493,7 @@ document does not define that binding, nor how the config-v2 and binding classes
 - **Halt runbook (required before S4):** stop the app; export the decision log, history and entities read-only with the evidence reader;
   verify with the reference implementation to locate the divergent entity; archive; open a new run with a new binding and a corrected engine.
   Recovery is never in place. A halt stops further decisions only; decisions already forwarded (at most N, the audit cadence) were computed before the audit detected the fault.
+- **Lagged profile (5.6) additions.** A commitment-worker failure, a wait beyond `T_halt`, an undo ring that is missing, non-contiguous or mismatched at restore, a window replay that differs from the log, and a boundary digest that differs from the log are all refusals or halts, never repairs. The exposure window of a fault in the entity table is up to `2K - 1` decisions plus the audit cadence. Operators watch the commitment-wait share and the worker queue depth.
 - **Memory:** an estimate of 300 to 600 bytes per entity in-memory plus trie nodes is **to be measured at the S3 exit**; the store-view
   alternative bounds it.
 - **Single thread:** no in-thread work longer than the poll interval; audits and restores are off-thread or between polls.
@@ -494,6 +544,8 @@ document does not define that binding, nor how the config-v2 and binding classes
     restore test drops entities (the `restoreAt` checkpoint checksum is tautological on the store path, so this test replaces it).
 14. **Scale evidence with pass/fail.** Cost per decision at 10^3 to 10^6 entities on the real processor path including the store, against
     thresholds the owner sets **before S2** (11.2); no claim without them.
+
+15. **Lagged commitment (5.6), required if the option is built.** (a) *Determinism:* identical decisions and digests with the worker artificially delayed, stalled and run at full speed; restore-then-continue equals never-stopped at every cut of at least 1,000 randomized schedules, including cuts at `h < K`, `h = K`, `h = 2K - 1`, `h` a multiple of `K`, and `h` one past a multiple. (b) *Equality:* the carried digest equals the synchronous `C(S_b)` for every decision (the prototype checks more than 1,000). (c) *Restore detection:* tamper of any table entity outside the window is refused by the boundary digest; tamper inside the window is refused by the replay; a missing, short, reordered or wrong-slot ring is refused. (d) *Failure injection:* worker exception, worker stall past `T_halt`, a crash between boundary hand-off and the next decision, a crash mid-restore. (e) *Seal:* rotation at a partial batch seals the exact final commitment. (f) *Chain rule:* a log whose carried digest changes at a non-multiple of `K` fails `verifyChain`. (g) *Mutants:* lag off by one in either direction, restore boundary `b*` off by one, ring one entry short, worker not drained at seal, last-write-wins replaced by first-write, digest placeholder instead of waiting. (h) *Cost:* the ring put and the wait share are measured in the lane and recorded in the throughput ledger before any capacity claim.
 
 ## 10. Staging, with gates
 
@@ -552,6 +604,10 @@ demoted; **Q3** (per-field framing, order) acceptable once the byte rules of 3.1
 - **Q9.** Can the Streams lane reach the goalpost's about 19k inputs/s (it sustained 11.1k over 90 s with a free ledger) with the real ledger, once `commit.interval.ms`, batch size and changelog settings are tuned? (Pinned
   settings are part of the spec; tuning needs a spec change.)
 - **Q10 (answered).** The 43 s restart floor is the previous member's 45 s session timeout: `KafkaStreams.close(Duration)` does not leave the consumer group. With `close(CloseOptions().leaveGroup(true))` a restart reached RUNNING in 0.4 to 0.5 s (CAL-FIN-S0). A crash (SIGKILL) restarted in 44.1 s on the production properties and 6.1 s with `session.timeout.ms` 6,000; the owner pinned the finance app's session timeout at 6,000 on 2026-10-13.
+
+- **Q11 (new, 5.6).** What is `K`? 100 and 1,000 were measured; the trade is exposure window (`2K - 1` decisions) against worker slack. Needs an owner-set maximum acceptable exposure in decisions or milliseconds.
+- **Q12 (new, 5.6).** Is the undo ring's one extra put per decision acceptable, or does the lane need the cheaper variant (anchor-only, restore trusts the table inside the window)? Measure before deciding.
+- **Q13 (new, 5.6).** The trie is the bottleneck at about 34k decisions/s above 5x10^6 entities (CAL-FIN-P3); is that ceiling acceptable with rotation, or does the commitment need sharding?
 
 ## 13. Rejected framing
 
