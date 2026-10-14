@@ -77,7 +77,11 @@ log "host bootstrap ready"
 if [ "$VOLUME_GB" -gt 0 ]; then
   VOLNAME="$(outputs volume_name)"
   log "mounting volume $VOLNAME ($VOLUME_GB GB) at /mnt/pgvol"
+  # The attachment can lag the Tofu apply: wait for the device node before mounting.
+  remote "for _ in \$(seq 1 60); do test -e /dev/disk/by-id/scsi-0DO_Volume_$VOLNAME && break; sleep 2; done; test -e /dev/disk/by-id/scsi-0DO_Volume_$VOLNAME" || { log "volume device did not appear"; exit 1; }
   remote "sudo mkdir -p /mnt/pgvol && sudo mount -o noatime,discard /dev/disk/by-id/scsi-0DO_Volume_$VOLNAME /mnt/pgvol && sudo mkdir -p /mnt/pgvol/pg /mnt/pgvol/rp && sudo chown 70:70 /mnt/pgvol/pg && sudo chown 101:101 /mnt/pgvol/rp && df -h /mnt/pgvol | tail -1 && for i in 1 2; do dd if=/dev/zero of=/mnt/pgvol/fs.test bs=4k count=200 oflag=dsync 2>&1 | tail -1; done; sudo rm -f /mnt/pgvol/fs.test" | tee "$OUT_DIR/volume.txt"
+  # A silent fall back to the root disk would invalidate every volume result: refuse to run the matrix without the mount.
+  remote "mountpoint -q /mnt/pgvol && test -d /mnt/pgvol/pg && test -d /mnt/pgvol/rp" || { log "volume mount verification failed"; exit 1; }
 fi
 
 log "shipping tracked files only (git archive HEAD)"
