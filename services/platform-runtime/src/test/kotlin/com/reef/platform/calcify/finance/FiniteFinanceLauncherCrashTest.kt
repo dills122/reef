@@ -32,7 +32,7 @@ internal object FinanceLauncherChild {
         val ds = LauncherCrashConfig.datasource(url, user, pwFile)
         val evidence = Properties().apply { put("bootstrap.servers", bootstrap) }
         val streams = Properties().apply { put("bootstrap.servers", bootstrap); put("consumer.session.timeout.ms", 6000); put("consumer.heartbeat.interval.ms", 1000) }
-        val running = FiniteFinanceLauncher(config, evidence, streams, stateDir, { FinanceProjector(FinanceLedger(config.finance), ds) }, ownerEpoch = 1, projectionIntervalMs = 100).start()
+        val running = FiniteFinanceLauncher(config, evidence, streams, stateDir, { FinanceProjector(FinanceLedger(config.finance), ds) }, projectionIntervalMs = 100).start()
         println("CHILD-STARTED")       // printed only after the restore cut verified and the projection opened
         while (running.healthy()) Thread.sleep(100)
         System.err.println("CHILD-UNHEALTHY streams=${running.streamsState()} projection=${running.projectionFailure()}")
@@ -161,6 +161,9 @@ class FiniteFinanceLauncherCrashTest {
                 val open = c.prepareStatement("SELECT count(*) FROM boundary.calcify_finance_obligation WHERE binding_digest = ? AND status <> 'SETTLED'").use { ps -> ps.setString(1, digest); ps.executeQuery().use { r -> r.next(); r.getInt(1) } }
                 assertEquals(0, open, "every obligation settled exactly once")
             }
+            // 2b. Every start claimed the projection: the stored epoch counts the children that got past the restore cut (4: three killed, one final).
+            ds.connection.use { c -> c.prepareStatement("SELECT owner_epoch FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
+                ps.setString(1, digest); ps.executeQuery().use { r -> r.next(); assertEquals(spawned.toLong(), r.getLong(1), "each launcher start claims the owner epoch exactly once") } } }
             // 3. The restore cut still verifies over the final broker state.
             FinanceRestoreCut.verify(ledger, FinanceEvidenceReader(Properties().apply { put("bootstrap.servers", rp.bootstrap) }, F.APP_ID, digest, F.CAPTURE, F.CONTROL, F.DECISIONS, F.changelog).read())
             println("F8 OK kills=3 afterProgress=$killsAfterProgress insideTransaction=$killsInsideATransaction children=$spawned decisions=$total")

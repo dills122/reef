@@ -34,7 +34,6 @@ class FiniteFinanceRuntimeTest {
             "CALCIFY_FINANCE_POSTGRES_USER" to "calcify_finite_projector",
             "CALCIFY_FINANCE_POSTGRES_PASSWORD_FILE" to private(dir, "projector.pw", "projector-secret".toByteArray()).toString(),
             "CALCIFY_FINANCE_STATE_DIRECTORY" to state.toString(),
-            "CALCIFY_FINANCE_OWNER_EPOCH" to "1",
         )
         edit(m, dir)
         return m
@@ -80,8 +79,7 @@ class FiniteFinanceRuntimeTest {
     }
 
     @Test fun numericAndEnumSettingsAreRangeChecked() {
-        refused("epoch zero") { m, _ -> m["CALCIFY_FINANCE_OWNER_EPOCH"] = "0" }
-        refused("epoch text") { m, _ -> m["CALCIFY_FINANCE_OWNER_EPOCH"] = "one" }
+        refused("the retired operator-supplied epoch would be silently ignored") { m, _ -> m["CALCIFY_FINANCE_OWNER_EPOCH"] = "1" }
         refused("session below the floor") { m, _ -> m["CALCIFY_FINANCE_SESSION_TIMEOUT_MS"] = "1000" }
         refused("session above the default") { m, _ -> m["CALCIFY_FINANCE_SESSION_TIMEOUT_MS"] = "60000" }
         refused("interval too small") { m, _ -> m["CALCIFY_FINANCE_PROJECTION_INTERVAL_MS"] = "1" }

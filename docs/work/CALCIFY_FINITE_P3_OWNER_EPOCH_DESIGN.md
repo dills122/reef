@@ -1,6 +1,6 @@
 # Finite P3 finance projection: where the owner epoch comes from (decision record, proposed)
 
-Status: proposed for owner decision, 2026-10-13. Nothing here is implemented. It closes the review-3 finding P2-2 ("the owner fence is an operator-supplied monotone counter and protects little")
+Status: **decided 2026-10-13: option B** (owner approved in chat; implemented in the PR that carries this edit). Original text follows; "proposed" and "nothing is implemented" below describe the state before the decision. It closes the review-3 finding P2-2 ("the owner fence is an operator-supplied monotone counter and protects little")
 and the recorded open item in [`CALCIFY_FINITE_P3_FINANCE_RUNTIME.md`](CALCIFY_FINITE_P3_FINANCE_RUNTIME.md).
 
 ## What the epoch protects, and what it does not

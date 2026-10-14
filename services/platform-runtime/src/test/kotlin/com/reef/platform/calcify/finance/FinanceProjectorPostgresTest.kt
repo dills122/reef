@@ -151,4 +151,31 @@ class FinanceProjectorPostgresTest {
             assertTrue(canExecute.isEmpty(), "the projector holds EXECUTE on finite registrar/runtime functions: $canExecute")
         }
     }
+
+    /** Owner-epoch design option B: the process claims the epoch; an older claimant is fenced on its next write. */
+    @Test fun claimingRaisesTheOwnerEpochAndFencesTheOlderClaimant() {
+        val projector = FinanceProjector(ledger, dataSource()); val binding = digest()
+        assertEquals(null, projector.checkpoint(binding))
+        assertEquals(1L, projector.claim(binding), "the first claim creates the checkpoint at genesis with epoch 1")
+        assertEquals(0L to ledger.genesisChain, projector.checkpoint(binding))
+        val records = run(7, 60).first
+        assertTrue(records.size >= 8, "the schedule yields enough recorded decisions")
+        assertEquals(5, projector.apply(binding, 1, records.take(5)), "the first claimant projects five decisions")
+        assertEquals(2L, projector.claim(binding), "a later claim raises the epoch by one")
+        assertEquals(3L, projector.claim(binding))
+        val stale = assertFailsWith<StaleProjectionEpoch>("the instance holding epoch 1 is fenced") { projector.apply(binding, 1, records) }
+        assertTrue(stale.message!!.contains("stale"))
+        assertEquals(5L, projector.checkpoint(binding)!!.first, "the fenced write changed nothing")
+        assertEquals(records.size - 5, projector.apply(binding, 3, records), "the newest claimant projects the rest")
+        assertEquals(records.size.toLong(), projector.checkpoint(binding)!!.first)
+    }
+
+    @Test fun concurrentClaimsAreSerializedIntoDistinctEpochs() {
+        val binding = digest(); val results = java.util.Collections.synchronizedList(ArrayList<Long>())
+        // Build the projectors on the test thread: dataSource() skips the test (assumeTrue) when the fixture is absent, and that must not happen inside a worker thread.
+        val projectors = (0 until 6).map { FinanceProjector(ledger, dataSource()) }
+        val threads = projectors.map { p -> Thread { results += p.claim(binding) }.also { it.start() } }
+        threads.forEach { it.join() }
+        assertEquals((1L..6L).toList(), results.sorted(), "six simultaneous claims get six distinct, consecutive epochs")
+    }
 }
