@@ -18,6 +18,21 @@ resource "digitalocean_droplet" "benchmark" {
   })
 }
 
+resource "digitalocean_volume" "benchmark" {
+  count                   = var.volume_size_gb > 0 ? 1 : 0
+  name                    = "${var.droplet_name}-vol"
+  region                  = var.region
+  size                    = var.volume_size_gb
+  initial_filesystem_type = "ext4"
+  description             = "Optional benchmark data volume; destroyed with the Droplet."
+}
+
+resource "digitalocean_volume_attachment" "benchmark" {
+  count      = var.volume_size_gb > 0 ? 1 : 0
+  droplet_id = digitalocean_droplet.benchmark.id
+  volume_id  = digitalocean_volume.benchmark[0].id
+}
+
 resource "digitalocean_firewall" "benchmark" {
   name        = "${var.droplet_name}-fw"
   droplet_ids = [digitalocean_droplet.benchmark.id]
