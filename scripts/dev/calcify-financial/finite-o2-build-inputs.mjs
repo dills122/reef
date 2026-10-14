@@ -19,11 +19,16 @@ export const SOURCES = [
   'contracts/calcify/finite-binding-v1.hex',
 ];
 
+export const BUILD_PATHS = ['services/matching-engine', 'services/platform-runtime/src', 'services/platform-runtime/build.gradle.kts', 'scripts/dev/db/migrations/boundary', 'scripts/dev/calcify-financial', 'contracts'];
+
 const sha = b => createHash('sha256').update(b).digest('hex');
 
 export async function sourceEntries(root = ROOT, paths = SOURCES) {
   const out = [];
-  for (const path of paths) { const b = await readFile(join(root, path)); out.push({ path, bytes: b.length, sha256: sha(b) }); }
+  for (const path of paths) {
+    const b = await readFile(join(root, path)).catch(e => { throw Error(`manifest source ${path} is missing under ${root}: ${e.code ?? e.message}`); });
+    out.push({ path, bytes: b.length, sha256: sha(b) });
+  }
   return out;
 }
 
@@ -52,7 +57,9 @@ async function main() {
   const o = {}; const a = process.argv.slice(2);
   for (let i = 0; i < a.length; i += 2) { if (!a[i].startsWith('--') || !a[i + 1]) throw Error('usage: --id NAME --subnet 10.x.y.z/28 [--runtime-image REF] [--matcher-image REF]'); o[a[i].slice(2)] = a[i + 1]; }
   if (!/^[a-z0-9-]{1,40}$/.test(o.id ?? '') || !o.subnet) throw Error('usage: --id NAME --subnet 10.x.y.z/28 [--runtime-image REF] [--matcher-image REF]');
+  // Tracked changes anywhere, or untracked files under any path that feeds the build or the harness, would change the artifacts the manifest vouches for.
   if (run('git', ['status', '--porcelain', '--untracked-files=no']).trim()) throw Error('tracked changes present; the replay must run on a clean checkout');
+  if (run('git', ['status', '--porcelain', '--untracked-files=all', '--', ...BUILD_PATHS]).trim()) throw Error(`untracked files under ${BUILD_PATHS.join(', ')}; remove them before building`);
   const sourceRevision = run('git', ['rev-parse', 'HEAD']).trim();
   const project = `calcify-o2-${o.id}`;
   const base = await realpath('/private/tmp');
@@ -62,6 +69,10 @@ async function main() {
   const probePath = join(out, 'finite-probe'), matcherPath = join(out, 'matching-engine'), distribution = join(out, 'platform-runtime');
   const goEnv = { ...process.env, CGO_ENABLED: '0', GOOS: 'linux', GOARCH: process.arch === 'arm64' ? 'arm64' : 'amd64' };
   const logs = [];
+  // The toolchain that produced the binaries is part of the receipt, next to each command line and its output.
+  const envLog = join(out, 'build-environment.log');
+  await writeFile(envLog, [run('go', ['version']), run('git', ['rev-parse', 'HEAD']), run('docker', ['--version']), process.version, process.platform + '/' + process.arch, run('./gradlew', ['--version', '--no-daemon'], { cwd: join(ROOT, 'services/platform-runtime') }), ''].join('\n'));
+  logs.push(envLog);
   const build = async (name, cmd, args, opts) => { const text = run(cmd, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] }); const p = join(out, `build-${name}.log`); await writeFile(p, `$ ${cmd} ${args.join(' ')}\n${text}`); logs.push(p); };
   await build('probe', 'go', ['build', '-trimpath', '-o', probePath, './cmd/calcify-finite-probe'], { cwd: join(ROOT, 'services/matching-engine'), env: goEnv });
   await build('matcher', 'go', ['build', '-trimpath', '-o', matcherPath, './cmd/matching-engine'], { cwd: join(ROOT, 'services/matching-engine'), env: goEnv });

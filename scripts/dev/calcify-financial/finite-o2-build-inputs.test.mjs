@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm, realpath, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ROOT, Supervisor, RP_IMAGE, PG_IMAGE } from './finite-o2-proof.mjs';
-import { SOURCES, sourceEntries, buildManifest, buildLease } from './finite-o2-build-inputs.mjs';
+import { SOURCES, BUILD_PATHS, sourceEntries, buildManifest, buildLease } from './finite-o2-build-inputs.mjs';
 
 const project = `calcify-o2-buildtest-${process.pid}`;
 const revision = 'a'.repeat(40);
@@ -64,4 +64,13 @@ test('lease builder refuses an unsafe subnet and expiry in the past', () => {
   const args = { project, sourceRevision: revision, subnet: '192.168.1.0/28', roots: { proof: `/private/tmp/${project}-p`, secret: `/private/tmp/${project}-s`, state: `/private/tmp/${project}-t` }, images: { runtime: imageId, matcher: imageId }, artifacts: { sourceManifest: 'm', distribution: 'd', matcherBinary: 'b', probeBinary: 'p' } };
   assert.throws(() => buildLease(args));
   assert.throws(() => buildLease({ ...args, subnet: '10.1.2.0/28', ttlMs: -1 }));
+});
+
+test('a missing manifest source fails with the path named, not a bare ENOENT', async () => {
+  await assert.rejects(() => sourceEntries(ROOT, ['scripts/dev/calcify-financial/does-not-exist.mjs']), /does-not-exist\.mjs is missing/);
+});
+
+test('every path that feeds the build or the harness is checked for untracked files', () => {
+  for (const p of ['services/matching-engine', 'services/platform-runtime/src', 'scripts/dev/db/migrations/boundary', 'scripts/dev/calcify-financial', 'contracts']) assert.ok(BUILD_PATHS.includes(p), p);
+  for (const source of SOURCES) assert.ok(BUILD_PATHS.some(p => source === p || source.startsWith(p + '/')), `${source} is outside the checked paths`);
 });
