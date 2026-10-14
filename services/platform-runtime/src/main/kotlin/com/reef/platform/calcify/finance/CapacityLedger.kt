@@ -8,14 +8,15 @@ import java.math.BigInteger
  * state commitment is bound into the digest, so a chain built under one commitment can never verify as another's.
  */
 internal data class CapacityConfig(
+    /** [securities] are the tradable instruments' security assets: the asset of an execution is `AssetId(execution.instrumentId)`, which must be in the set. */
     /** The fixed account set (as in the finite profile), or null: accounts are then admitted by the first recorded Fund and exist as state, so a configuration never lists thousands of them. */
-    val accounts: Set<AccountId>?, val cashAsset: AssetId, val securityAsset: AssetId, val openingAccount: AccountId,
+    val accounts: Set<AccountId>?, val cashAsset: AssetId, val securities: Set<AssetId>, val openingAccount: AccountId,
     val maxObligations: Int, val maxCaptures: Int, val maxSettleAttempts: Int, val maxControls: Int,
 ) {
     init {
         require(accounts == null || accounts.size >= 2) { "at least two accounts" }
         require(accounts == null || openingAccount !in accounts) { "opening account must be distinct" }
-        require(cashAsset != securityAsset) { "distinct assets" }
+        require(securities.isNotEmpty() && cashAsset !in securities) { "at least one security asset, distinct from cash" }
         require(maxObligations >= 1 && maxCaptures >= 1 && maxSettleAttempts >= 1 && maxControls >= 1) { "budgets are positive" }
         require(maxCaptures <= maxObligations) { "captures cannot exceed obligations" }
     }
@@ -25,7 +26,7 @@ internal data class CapacityConfig(
         if (accounts == null) str("accounts-admitted-by-funding") else {
             str("accounts-fixed"); val sorted = accounts.map { it.value }.sortedWith(Canon.utf8Order<String>({ it })); int(sorted.size); sorted.forEach { str(it) }
         }
-        str(cashAsset.value); str(securityAsset.value); str(openingAccount.value)
+        str(cashAsset.value); val secs = securities.map { it.value }.sortedWith(Canon.utf8Order<String>({ it })); int(secs.size); secs.forEach { str(it) }; str(openingAccount.value)
         int(maxObligations); int(maxCaptures); int(maxSettleAttempts); int(maxControls)
     })
 }
@@ -125,15 +126,16 @@ internal class CapacityLedger(val config: CapacityConfig) {
         val priorChain = chain
         chain = checksumOf(sequence, input.action, digest, disposition, legs, priorChain, stateDigest)
         // Local invariants in place of the whole-state check (design 5.5).
-        var cash = BigInteger.ZERO; var security = BigInteger.ZERO
-        for (l in legs) if (l.asset == config.cashAsset) cash += BigInteger.valueOf(l.amount) else security += BigInteger.valueOf(l.amount)
-        check(cash.signum() == 0 && security.signum() == 0) { "legs do not balance" }
+        val net = HashMap<AssetId, BigInteger>()
+        for (l in legs) net.merge(l.asset, BigInteger.valueOf(l.amount), BigInteger::add)
+        check(net.values.all { it.signum() == 0 }) { "legs do not balance" }
         check(sequence == actions.size.toLong()) { "action count differs from sequence" }
         return CapacityOutcome(disposition, Decision(sequence, input.action, digest, disposition, legs, priorChain, stateDigest, chain))
     }
 
     private fun capture(i: FinanceInput.Capture, digest: String): CapacityOutcome {
         if (!known(i.buyer) || !known(i.seller)) return refused(Disposition.UNKNOWN_ACCOUNT)
+        if (AssetId(i.execution.instrumentId) !in config.securities) return refused(Disposition.INVALID_INPUT)
         if (i.buyer == i.seller || i.quantity <= 0 || i.priceNanos < 0) return refused(Disposition.INVALID_INPUT)
         val amount = try { Math.multiplyExact(i.quantity, i.priceNanos) } catch (_: ArithmeticException) { return refused(Disposition.AMOUNT_OVERFLOW) }
         val captured = Captured(i.buyer, i.seller, i.quantity, i.priceNanos)
@@ -148,7 +150,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
     private fun fund(i: FinanceInput.Fund, digest: String): CapacityOutcome {
         if (i.authority != Authority.OPERATOR) return refused(Disposition.UNAUTHORIZED)
         if (!fundable(i.account)) return refused(Disposition.UNKNOWN_ACCOUNT)
-        if ((i.asset != config.cashAsset && i.asset != config.securityAsset) || i.amount <= 0) return refused(Disposition.INVALID_INPUT)
+        if ((i.asset != config.cashAsset && i.asset !in config.securities) || i.amount <= 0) return refused(Disposition.INVALID_INPUT)
         val plan = planLegs(listOf(Leg(config.openingAccount, i.asset, -i.amount), Leg(i.account, i.asset, i.amount))) ?: return refused(Disposition.BALANCE_OVERFLOW)
         if (controls >= config.maxControls) return refused(Disposition.BUDGET_EXCEEDED)
         val applied = apply(plan)
@@ -164,14 +166,15 @@ internal class CapacityLedger(val config: CapacityConfig) {
         val attemptKey = i.execution to i.attempt
         if (attemptKey in attempts) return refused(Disposition.PRIOR_ATTEMPT)
         val execution = executions.getValue(i.execution)
+        val security = AssetId(i.execution.instrumentId)
         val shortfall = when {
             pos(execution.buyer, config.cashAsset) < obligation.cashResidual -> Disposition.INSUFFICIENT_CASH
-            pos(execution.seller, config.securityAsset) < obligation.shareResidual -> Disposition.INSUFFICIENT_SHARES
+            pos(execution.seller, security) < obligation.shareResidual -> Disposition.INSUFFICIENT_SHARES
             else -> null
         }
         if (attempts.size >= config.maxSettleAttempts) return refused(Disposition.BUDGET_EXCEEDED)
         if (shortfall != null) { attempts[attemptKey] = shortfall; commitAttempt(i.execution, i.attempt, shortfall); return record(i, digest, shortfall, emptyList()) }
-        val cash = config.cashAsset; val security = config.securityAsset
+        val cash = config.cashAsset
         val plan = planLegs(listOf(
             Leg(execution.buyer, cash, -obligation.cashResidual), Leg(execution.seller, cash, obligation.cashResidual),
             Leg(execution.seller, security, -obligation.shareResidual), Leg(execution.buyer, security, obligation.shareResidual)))
@@ -234,14 +237,15 @@ internal class CapacityLedger(val config: CapacityConfig) {
     }
 
     private fun checkRestoredPositions() {
-        var cash = BigInteger.ZERO; var security = BigInteger.ZERO
+        val net = HashMap<AssetId, BigInteger>()
         for ((k, v) in positions) {
             require(k.first == config.openingAccount || v >= 0) { "negative non-opening position" }
             require(k.first != config.openingAccount || v <= 0) { "opening account position is positive" }
             require(k.first == config.openingAccount || config.accounts == null || k.first in config.accounts) { "position for an unknown account" }
-            when (k.second) { config.cashAsset -> cash += BigInteger.valueOf(v); config.securityAsset -> security += BigInteger.valueOf(v); else -> throw IllegalArgumentException("position in an unknown asset") }
+            require(k.second == config.cashAsset || k.second in config.securities) { "position in an unknown asset" }
+            net.merge(k.second, BigInteger.valueOf(v), BigInteger::add)
         }
-        require(cash.signum() == 0 && security.signum() == 0) { "positions do not balance per asset" }
+        require(net.values.all { it.signum() == 0 }) { "positions do not balance per asset" }
     }
 
     /** Strict reader of the Canon framing: text is int32 length plus strict UTF-8, integers are big-endian; trailing bytes are an error. */

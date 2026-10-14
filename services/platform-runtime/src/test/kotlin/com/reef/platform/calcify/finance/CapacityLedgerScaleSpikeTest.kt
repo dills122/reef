@@ -21,7 +21,7 @@ class CapacityLedgerScaleSpikeTest {
         val accounts = (0 until accountCount).map { AccountId("acct-$it") }.toSet()
         val log = StringBuilder("\nCapacityLedger (product code), synchronous commitment, $accountCount accounts, one thread, in memory\n")
         val heap0 = heapMb()
-        val cap = CapacityLedger(CapacityConfig(accounts, usd, aapl, AccountId("opening"), 10_000_000, 10_000_000, 20_000_000, 100_000))
+        val cap = CapacityLedger(CapacityConfig(accounts, usd, setOf(aapl), AccountId("opening"), 10_000_000, 10_000_000, 20_000_000, 100_000))
         for (a in accounts) { cap.decide(FinanceInput.Fund(ActionKey("n", "fu", a.value), Authority.OPERATOR, a, usd, Long.MAX_VALUE / 4)); cap.decide(FinanceInput.Fund(ActionKey("n", "fa", a.value), Authority.OPERATOR, a, aapl, Long.MAX_VALUE / 4)) }
         val rnd = Random(1); var next = 0
         fun trade(t: Int) {

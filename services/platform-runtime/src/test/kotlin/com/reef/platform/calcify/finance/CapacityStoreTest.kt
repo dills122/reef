@@ -17,7 +17,7 @@ class CapacityStoreTest {
     private val usd = AssetId("USD"); private val aapl = AssetId("AAPL"); private val opening = AccountId("opening")
     private val binding = "b".repeat(64)
     private val accounts = (0 until 6).map { AccountId("acct-$it") }.toSet()
-    private val config = CapacityConfig(accounts, usd, aapl, opening, 60, 60, 120, 30)
+    private val config = CapacityConfig(accounts, usd, setOf(aapl), opening, 60, 60, 120, 30)
     private val keys = (0 until 15).map { ExecutionKey("r", "s", "AAPL", "e$it") }
 
     private fun input(rnd: Random): FinanceInput {
@@ -55,7 +55,7 @@ class CapacityStoreTest {
     }
 
     @Test fun restoreInAdmitModeDerivesTheAdmittedAccountsFromThePositions() {
-        val admit = CapacityConfig(null, usd, aapl, opening, 60, 60, 120, 30)
+        val admit = CapacityConfig(null, usd, setOf(aapl), opening, 60, 60, 120, 30)
         for (seed in 1..40L) {
             val rnd = Random(seed); val inputs = (0 until 140).map { input(rnd) }; val cut = rnd.nextInt(10, inputs.size)
             val stopped = CapacityLedger(admit); val kv = MemoryLifecycleKv()

@@ -34,7 +34,7 @@ class CapacityLedgerTest {
             val accounts = (0 until 5).map { AccountId("acct-$it") }.toSet()
             val finite = FinanceConfig(accounts, usd, aapl, opening, maxObligations = 30, maxCaptures = 20, maxSettleAttempts = 25, maxControls = 6)
             val real = FinanceLedger(finite); var state = real.genesis()
-            val cap = CapacityLedger(CapacityConfig(accounts, usd, aapl, opening, maxObligations = 30, maxCaptures = 20, maxSettleAttempts = 25, maxControls = 6))
+            val cap = CapacityLedger(CapacityConfig(accounts, usd, setOf(aapl), opening, maxObligations = 30, maxCaptures = 20, maxSettleAttempts = 25, maxControls = 6))
             val keys = (0 until 12).map { ExecutionKey("r", "s", "AAPL", "e$it") }
             var previousChain = cap.genesisChain
             for (n in 0 until 120) {
@@ -63,7 +63,7 @@ class CapacityLedgerTest {
 
     @Test fun aRefusedInputChangesNothing() {
         val accounts = (0 until 3).map { AccountId("acct-$it") }.toSet()
-        val cap = CapacityLedger(CapacityConfig(accounts, usd, aapl, opening, 10, 10, 10, 4))
+        val cap = CapacityLedger(CapacityConfig(accounts, usd, setOf(aapl), opening, 10, 10, 10, 4))
         assertNotNull(cap.decide(FinanceInput.Fund(ActionKey("n", "c", "f1"), Authority.OPERATOR, AccountId("acct-0"), usd, 100)).decision)
         val before = StateCommitment.reference(cap.snapshot()); val sequence = cap.sequence; val chain = cap.chain; val entities = cap.entityCount
         val refusals = listOf(
@@ -80,7 +80,7 @@ class CapacityLedgerTest {
     @Test fun thereIsNoCeilingBelowTheProfilesOwnBudgetsAndTheCommitmentStaysTheReference() {
         val accountCount = 400
         val accounts = (0 until accountCount).map { AccountId("acct-$it") }.toSet()
-        val cap = CapacityLedger(CapacityConfig(accounts, usd, aapl, opening, maxObligations = 20_000, maxCaptures = 20_000, maxSettleAttempts = 40_000, maxControls = 5_000))
+        val cap = CapacityLedger(CapacityConfig(accounts, usd, setOf(aapl), opening, maxObligations = 20_000, maxCaptures = 20_000, maxSettleAttempts = 40_000, maxControls = 5_000))
         for (a in accounts) { cap.decide(FinanceInput.Fund(ActionKey("n", "fund-usd", a.value), Authority.OPERATOR, a, usd, 1_000_000_000_000L)); cap.decide(FinanceInput.Fund(ActionKey("n", "fund-aapl", a.value), Authority.OPERATOR, a, aapl, 1_000_000L)) }
         val rnd = Random(9); var last: Decision? = null
         for (t in 0 until 6_000) {
@@ -96,7 +96,7 @@ class CapacityLedgerTest {
     }
 
     @Test fun theSameInputsGiveTheSameDecisionsOnAFreshLedger() {
-        val accounts = (0 until 4).map { AccountId("acct-$it") }.toSet(); val config = CapacityConfig(accounts, usd, aapl, opening, 50, 50, 80, 20)
+        val accounts = (0 until 4).map { AccountId("acct-$it") }.toSet(); val config = CapacityConfig(accounts, usd, setOf(aapl), opening, 50, 50, 80, 20)
         val keys = (0 until 10).map { ExecutionKey("r", "s", "AAPL", "e$it") }; val rnd = Random(4)
         val inputs = (0 until 150).map { randomInput(rnd, it, 4, keys, actionSpace = 100) }
         fun run(): List<Decision> { val l = CapacityLedger(config); return inputs.mapNotNull { l.decide(it).decision } }
@@ -105,7 +105,7 @@ class CapacityLedgerTest {
     }
 
     @Test fun accountsAreAdmittedByTheFirstFundingWhenTheConfigurationListsNone() {
-        val cap = CapacityLedger(CapacityConfig(null, usd, aapl, opening, 50, 50, 50, 50))
+        val cap = CapacityLedger(CapacityConfig(null, usd, setOf(aapl), opening, 50, 50, 50, 50))
         val ex = ExecutionKey("r", "s", "AAPL", "e1")
         fun fund(id: String, who: String, asset: AssetId = usd, amount: Long = 100) = cap.decide(FinanceInput.Fund(ActionKey("n", "c", id), Authority.OPERATOR, AccountId(who), asset, amount))
         fun capture(id: String, b: String, s: String) = cap.decide(FinanceInput.Capture(ActionKey("n", "cap", id), ex, AccountId(b), AccountId(s), 1, 10))
@@ -123,7 +123,7 @@ class CapacityLedgerTest {
         for (seed in 1..150L) {
             val rnd = Random(seed); val names = (0 until 4).map { AccountId("acct-$it") }
             val real = FinanceLedger(FinanceConfig(names.toSet(), usd, aapl, opening, maxObligations = 30, maxCaptures = 20, maxSettleAttempts = 25, maxControls = 8)); var state = real.genesis()
-            val cap = CapacityLedger(CapacityConfig(null, usd, aapl, opening, 30, 20, 25, 8))
+            val cap = CapacityLedger(CapacityConfig(null, usd, setOf(aapl), opening, 30, 20, 25, 8))
             for ((n, a) in names.withIndex()) {                              // the same funding on both sides admits every account
                 val fund = FinanceInput.Fund(ActionKey("n", "open", "o$n"), Authority.OPERATOR, a, usd, 1_000L)
                 state = real.decide(state, fund).state; assertEquals(Disposition.FUNDED, cap.decide(fund).disposition)
@@ -143,9 +143,9 @@ class CapacityLedgerTest {
 
     @Test fun theConfigurationDigestBindsEveryFieldAndTheCommitmentLabel() {
         val accounts = (0 until 3).map { AccountId("acct-$it") }.toSet()
-        val base = CapacityConfig(accounts, usd, aapl, opening, 10, 10, 10, 4)
+        val base = CapacityConfig(accounts, usd, setOf(aapl), opening, 10, 10, 10, 4)
         val others = listOf(
-            base.copy(accounts = accounts + AccountId("acct-3")), base.copy(cashAsset = AssetId("EUR")), base.copy(securityAsset = AssetId("MSFT")), base.copy(openingAccount = AccountId("ops")),
+            base.copy(accounts = accounts + AccountId("acct-3")), base.copy(cashAsset = AssetId("EUR")), base.copy(securities = setOf(AssetId("MSFT"))), base.copy(securities = setOf(aapl, AssetId("MSFT"))), base.copy(openingAccount = AccountId("ops")),
             base.copy(maxObligations = 11), base.copy(maxCaptures = 9), base.copy(maxSettleAttempts = 11), base.copy(maxControls = 5),
         )
         for (o in others) assertNotEquals(base.digest(), o.digest(), "$o")
@@ -156,10 +156,40 @@ class CapacityLedgerTest {
 
     @Test fun invalidConfigurationsAreRefused() {
         val accounts = (0 until 3).map { AccountId("acct-$it") }.toSet()
-        assertFailsWith<IllegalArgumentException> { CapacityConfig(setOf(AccountId("only")), usd, aapl, opening, 1, 1, 1, 1) }
-        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, usd, opening, 1, 1, 1, 1) }
-        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, aapl, AccountId("acct-0"), 1, 1, 1, 1) }
-        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, aapl, opening, 1, 2, 1, 1) }
-        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, aapl, opening, 0, 0, 1, 1) }
+        assertFailsWith<IllegalArgumentException> { CapacityConfig(setOf(AccountId("only")), usd, setOf(aapl), opening, 1, 1, 1, 1) }
+        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, setOf(usd), opening, 1, 1, 1, 1) }
+        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, setOf(aapl), AccountId("acct-0"), 1, 1, 1, 1) }
+        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, setOf(aapl), opening, 1, 2, 1, 1) }
+        assertFailsWith<IllegalArgumentException> { CapacityConfig(accounts, usd, setOf(aapl), opening, 0, 0, 1, 1) }
+    }
+
+    @Test fun manyInstrumentsTradeInOneLedgerAndEachBalances() {
+        val instruments = (0 until 8).map { AssetId("INS$it") }
+        val config = CapacityConfig(null, usd, instruments.toSet(), opening, 4_000, 4_000, 8_000, 400)
+        val cap = CapacityLedger(config); val rnd = Random(11)
+        val traders = (0 until 20).map { AccountId("t$it") }
+        var n = 0
+        fun next() = ActionKey("n", "a", "a${n++}")
+        for (a in traders) { cap.decide(FinanceInput.Fund(next(), Authority.OPERATOR, a, usd, 1_000_000_000L)); for (i in instruments) cap.decide(FinanceInput.Fund(next(), Authority.OPERATOR, a, i, 10_000)) }
+        var settled = 0
+        for (t in 0 until 1_500) {
+            val ins = instruments[rnd.nextInt(instruments.size)]; val key = ExecutionKey("r", "s", ins.value, "e$t")
+            val b = traders[rnd.nextInt(traders.size)]; var s = traders[rnd.nextInt(traders.size)]; if (s == b) s = traders[(traders.indexOf(b) + 1) % traders.size]
+            assertEquals(Disposition.CAPTURED, cap.decide(FinanceInput.Capture(next(), key, b, s, 1L + rnd.nextInt(5), 1L + rnd.nextInt(50))).disposition)
+            if (cap.decide(FinanceInput.Settle(next(), Authority.OPERATOR, key, 1)).disposition == Disposition.SETTLED) settled++
+        }
+        assertTrue(settled > 1_000, "most trades settle: $settled")
+        val state = cap.snapshot()
+        for (asset in instruments + usd) assertEquals(0L, state.positions.filterKeys { it.second == asset }.values.sum(), "$asset nets to zero")
+        assertEquals(StateCommitment.reference(state), cap.commitment())
+        val restored = CapacityLedger.restore(config, StateCommitment.entities(state), cap.sequence, cap.controls, cap.chain)
+        assertEquals(cap.commitment(), restored.commitment())
+    }
+
+    @Test fun anInstrumentOutsideTheConfiguredSetIsRefused() {
+        val cap = CapacityLedger(CapacityConfig(null, usd, setOf(aapl), opening, 10, 10, 10, 10))
+        for (a in listOf("x", "y")) cap.decide(FinanceInput.Fund(ActionKey("n", "f", a), Authority.OPERATOR, AccountId(a), usd, 100))
+        assertEquals(Disposition.INVALID_INPUT, cap.decide(FinanceInput.Capture(ActionKey("n", "c", "c"), ExecutionKey("r", "s", "MSFT", "e"), AccountId("x"), AccountId("y"), 1, 1)).disposition)
+        assertEquals(Disposition.INVALID_INPUT, cap.decide(FinanceInput.Fund(ActionKey("n", "f", "m"), Authority.OPERATOR, AccountId("x"), AssetId("MSFT"), 1)).disposition)
     }
 }
