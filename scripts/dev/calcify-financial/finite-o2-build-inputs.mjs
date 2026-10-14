@@ -3,7 +3,7 @@
 // Builds only; it starts no container and touches no broker or database. The lease it writes is for ONE owner-approved attempt.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile, readFile, copyFile, cp, realpath, chmod } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, copyFile, cp, realpath, chmod, access } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROOT, PG_IMAGE, RP_IMAGE, freezeArtifacts, hashArtifactFile, validateLease } from './finite-o2-proof.mjs';
@@ -56,8 +56,8 @@ function imageId(ref) { return run('docker', ['image', 'inspect', '--format', '{
 
 async function main() {
   const o = {}; const a = process.argv.slice(2);
-  for (let i = 0; i < a.length; i += 2) { if (!a[i].startsWith('--') || !a[i + 1]) throw Error('usage: --id NAME --subnet 10.x.y.z/28 [--runtime-image REF] [--matcher-image REF]'); o[a[i].slice(2)] = a[i + 1]; }
-  if (!/^[a-z0-9-]{1,40}$/.test(o.id ?? '') || !o.subnet) throw Error('usage: --id NAME --subnet 10.x.y.z/28 [--runtime-image REF] [--matcher-image REF]');
+  for (let i = 0; i < a.length; i += 2) { if (!a[i].startsWith('--') || !a[i + 1]) throw Error('usage: --id NAME --subnet 10.x.y.z/28 --runtime-image REF [--matcher-image REF]'); o[a[i].slice(2)] = a[i + 1]; }
+  if (!/^[a-z0-9-]{1,40}$/.test(o.id ?? '') || !o.subnet || !o['runtime-image']) throw Error('usage: --id NAME --subnet 10.x.y.z/28 --runtime-image REF [--matcher-image REF]');
   // Tracked changes anywhere, or untracked files under any path that feeds the build or the harness, would change the artifacts the manifest vouches for.
   if (run('git', ['status', '--porcelain', '--untracked-files=no']).trim()) throw Error('tracked changes present; the replay must run on a clean checkout');
   if (run('git', ['status', '--porcelain', '--untracked-files=all', '--', ...BUILD_PATHS]).trim()) throw Error(`untracked files under ${BUILD_PATHS.join(', ')}; remove them before building`);
@@ -78,14 +78,17 @@ async function main() {
   await build('probe', 'go', ['build', '-trimpath', '-o', probePath, './cmd/calcify-finite-probe'], { cwd: join(ROOT, 'services/matching-engine'), env: goEnv });
   await build('matcher', 'go', ['build', '-trimpath', '-o', matcherPath, './cmd/matching-engine'], { cwd: join(ROOT, 'services/matching-engine'), env: goEnv });
   await build('runtime', './gradlew', ['installDist', '--no-daemon'], { cwd: join(ROOT, 'services/platform-runtime') });
-  await cp(join(ROOT, 'services/platform-runtime/build/install/platform-runtime'), distribution, { recursive: true });
+  const installed = join(ROOT, 'services/platform-runtime/build/install/platform-runtime');
+  await access(join(installed, 'bin/platform-runtime')).catch(() => { throw Error(`installDist did not produce ${installed}/bin/platform-runtime; see ${join(out, 'build-runtime.log')}`); });
+  await cp(installed, distribution, { recursive: true });
+  await chmod(join(distribution, 'bin/platform-runtime'), 0o755);
   for (const f of [probePath, matcherPath]) await chmod(f, 0o755);
   const manifest = await buildManifest({ sourceRevision, sources: await sourceEntries(), probePath, matcherPath, distribution, receiptPaths: logs });
   const manifestPath = join(out, 'artifact-manifest.json');
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
   const lease = buildLease({
     project, sourceRevision, subnet: o.subnet, roots,
-    images: { runtime: imageId(o['runtime-image'] ?? 'reef-platform-runtime:latest'), matcher: imageId(o['matcher-image'] ?? 'alpine:latest') },
+    images: { runtime: imageId(o['runtime-image']), matcher: imageId(o['matcher-image'] ?? 'alpine:latest') },
     artifacts: { sourceManifest: manifestPath, distribution, matcherBinary: matcherPath, probeBinary: probePath },
   });
   const leasePath = join(out, 'lease.json');
