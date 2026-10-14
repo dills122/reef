@@ -29,11 +29,27 @@ internal sealed interface CapacityItem {
  */
 internal fun interface CapacityInputDecoder { fun decode(role: String, partition: Int, offset: Long, raw: ByteArray): List<CapacityItem> }
 
-/** Everything the capacity Streams app is bound to. */
-internal data class CapacityProcessorConfig(
-    val bindingDigest: String, val capacity: CapacityConfig,
+/**
+ * Everything the capacity Streams app is bound to. A lane is a partition: task N of the app runs lane N, over partition N of the capture and control topics,
+ * with its own store partition, and writes partition N of the decisions topic. [spec] gives each lane its binding and configuration.
+ */
+internal class CapacityProcessorConfig(
+    val lanes: Int, val spec: (Int) -> CapacityLaneSpec,
     val captureTopic: String, val controlTopic: String, val decisionsTopic: String, val applicationId: String, val storeName: String = "capacity-finance",
+    /**
+     * The last decision of each lane's published log as `(sequence, checksum)`, or null for an empty log, read by the launcher before the app starts. When supplied, a lane
+     * whose restored store is not exactly at that head refuses to run (lost or rolled-back store, or a tampered one). Exactly-once makes the two agree whenever nothing
+     * has been lost; null for the function itself means "not checked" (tests).
+     */
+    val logHead: ((Int) -> Pair<Long, String>?)? = null,
 ) {
+    /** One lane, lane 0. */
+    constructor(bindingDigest: String, capacity: CapacityConfig, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance") :
+        this(1, { lane -> require(lane == 0) { "single-lane configuration" }; CapacityLaneSpec(bindingDigest, capacity) }, captureTopic, controlTopic, decisionsTopic, applicationId, storeName)
+
+    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Pair<Long, String>?)? = null) :
+        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead)
+
     /** Streams names the store's changelog `<application.id>-<store>-changelog`. */
     val changelogTopic: String get() = "$applicationId-$storeName-changelog"
 }
@@ -49,7 +65,9 @@ internal data class CapacityProcessorConfig(
  * cut against committed offsets arrives with the launcher stage.
  */
 internal class CapacityProcessor(private val config: CapacityProcessorConfig, private val decoder: CapacityInputDecoder) : Processor<ByteArray, ByteArray, String, ByteArray> {
-    private var ledger = CapacityLedger(config.capacity)
+    private lateinit var ledger: CapacityLedger
+    private var lane = 0
+    private lateinit var laneSpec: CapacityLaneSpec
     private lateinit var context: ProcessorContext<String, ByteArray>
     private lateinit var kv: StreamsLifecycleKv
 
@@ -60,13 +78,22 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     override fun init(context: ProcessorContext<String, ByteArray>) {
         this.context = context
         kv = StreamsLifecycleKv(context.getStateStore(config.storeName))
-        CapacityStore.restore(config.capacity, kv, config.bindingDigest)?.let { ledger = it }
+        lane = context.taskId().partition()
+        require(lane in 0 until config.lanes) { "partition $lane is outside the ${config.lanes} configured lanes" }
+        laneSpec = config.spec(lane)
+        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest) ?: CapacityLedger(laneSpec.capacity)
+        config.logHead?.let { head ->
+            val expected = head(lane)
+            check(if (expected == null) ledger.sequence == 0L else ledger.sequence == expected.first && ledger.chain == expected.second) {
+                "lane $lane: the restored store (sequence ${ledger.sequence}) is not the head of the decision log (${expected?.first ?: 0})"
+            }
+        }
     }
 
     override fun process(record: Record<ByteArray, ByteArray>) {
         val metadata = context.recordMetadata().orElseThrow { IllegalStateException("record metadata unavailable") }
         val role = when (metadata.topic()) { config.captureTopic -> "CAPTURE"; config.controlTopic -> "CONTROL"; else -> throw IllegalStateException("unexpected input topic") }
-        require(metadata.partition() == 0) { "capacity finance is single partition" }
+        require(metadata.partition() == lane) { "record from partition ${metadata.partition()} reached lane $lane" }
         val items = decoder.decode(role, metadata.partition(), metadata.offset(), record.value() ?: ByteArray(0))
         val writes = LinkedHashMap<String, ByteArray>()
         val forwards = ArrayList<Pair<String, ByteArray>>()
@@ -80,14 +107,14 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
                     val d = outcome.decision
                     if (d == null) { refusals++; continue }
                     for (e in ledger.lastWrites) writes[CapacityStore.entityKey(e)] = CapacityStore.entityValue(e)
-                    forwards += d.sequence.toString().padStart(20, '0') to FinanceWire.toProto(d, item.input).toByteArray()
+                    forwards += LaneByKey.key(lane, d.sequence) to FinanceWire.toProto(d, item.input).toByteArray()
                     head = d
                 }
             }
         }
         head?.let {
             writes[CapacityStore.HEAD] = FinanceWire.toProto(it).toByteArray()
-            writes[CapacityStore.META] = CapacityStore.Meta(config.bindingDigest, config.capacity.digest(), ledger.sequence, ledger.chain, ledger.controls).bytes()
+            writes[CapacityStore.META] = CapacityStore.Meta(laneSpec.bindingDigest, laneSpec.capacity.digest(), ledger.sequence, ledger.chain, ledger.controls).bytes()
             kv.apply(writes)
         }
         forwards.forEach { (key, value) -> context.forward(record.withKey(key).withValue(value)) }
@@ -108,6 +135,14 @@ internal object CapacityTopology {
         addSource("control-in", ByteArrayDeserializer(), ByteArrayDeserializer(), config.controlTopic)
         addProcessor("capacity", { CapacityProcessor(config, decoder) }, "capture-in", "control-in")
         addStateStore(storeBuilder(config, persistent), "capacity")
-        addSink("decisions-out", config.decisionsTopic, org.apache.kafka.common.serialization.StringSerializer(), ByteArraySerializer(), "capacity")
+        addSink("decisions-out", config.decisionsTopic, org.apache.kafka.common.serialization.StringSerializer(), ByteArraySerializer(), LaneByKey, "capacity")
     }
+}
+
+/** Decision keys are `<lane>/<sequence>`; the decision log partition is the lane, so each lane's log is read, projected and replayed on its own. */
+internal object LaneByKey : org.apache.kafka.streams.processor.StreamPartitioner<String, ByteArray> {
+    fun key(lane: Int, sequence: Long): String = "${lane.toString().padStart(4, '0')}/${sequence.toString().padStart(20, '0')}"
+    fun laneOf(key: String): Int = key.substring(0, key.indexOf('/')).toInt()
+    override fun partitions(topic: String, key: String, value: ByteArray, numPartitions: Int): java.util.Optional<Set<Int>> =
+        java.util.Optional.of(setOf(laneOf(key)))
 }

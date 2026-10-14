@@ -24,7 +24,7 @@ import reef.contracts.calcify.finance.v1.FinanceInputV1
 class CapacityProcessorTest {
     private val usd = AssetId("USD"); private val aapl = AssetId("AAPL"); private val opening = AccountId("opening")
     private val accounts = (0 until 6).map { AccountId("acct-$it") }.toSet()
-    private val capacity = CapacityConfig(accounts, usd, aapl, opening, 80, 80, 160, 40)
+    private val capacity = CapacityConfig(accounts, usd, setOf(aapl), opening, 80, 80, 160, 40)
     private val binding = "b".repeat(64)
     private val cfg = CapacityProcessorConfig(binding, capacity, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test")
     private val keys = (0 until 15).map { ExecutionKey("r", "s", "AAPL", "e$it") }
@@ -122,7 +122,7 @@ class CapacityProcessorTest {
             val out = driver.createOutputTopic("DECISIONS", StringDeserializer(), ByteArrayDeserializer()).readKeyValuesToList()
             val records = out.map { FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(it.value)) }
             val (ledger, expected) = direct(inputs)
-            assertEquals(expected, records.map { it.first }); assertEquals(expected.map { it.sequence.toString().padStart(20, '0') }, out.map { it.key })
+            assertEquals(expected, records.map { it.first }); assertEquals(expected.map { LaneByKey.key(0, it.sequence) }, out.map { it.key })
             records.forEach { (d, i) -> assertEquals(d.inputDigest, i.digest(), "the decision carries the input it answers") }
             assertEquals(StateCommitment.reference(ledger.snapshot()), records.last().first.stateDigest, "the last decision commits to the reference state")
         }

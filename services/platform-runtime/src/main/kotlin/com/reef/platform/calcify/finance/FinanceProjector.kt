@@ -19,7 +19,15 @@ internal class StaleProjectionEpoch(message: String) : IllegalStateException(mes
  * Projection only: it carries no financial authority, never re-decides, and a record is trusted only as far as its hash link,
  * its input digest and the checkpoint continuity verify.
  */
-internal class FinanceProjector(private val ledger: FinanceLedger, private val dataSource: DataSource) {
+internal class FinanceProjector(private val chain: DecisionChain, private val dataSource: DataSource) {
+    constructor(ledger: FinanceLedger, dataSource: DataSource) : this(FiniteChain(ledger), dataSource)
+    companion object {
+        /** Migration 0014's bound: 128 captures + 160 settle attempts + 8 controls inside 320. Every finite binding. */
+        const val FINITE_SEQUENCE_BOUND = 320L
+        /** Migration 0016's ceiling for a capacity binding. */
+        const val MAX_SEQUENCE_BOUND = 1_000_000_000L
+    }
+
     /** The stored progress `(lastSequence, lastChain)`, or null before [open]. */
     fun checkpoint(bindingDigest: String): Pair<Long, String>? = dataSource.connection.use { c ->
         c.prepareStatement("SELECT last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
@@ -28,12 +36,18 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         }
     }
 
-    /** Creates the checkpoint at genesis for [bindingDigest]; repeated calls with an equal or newer epoch only advance the fence. */
-    fun open(bindingDigest: String, epoch: Long) {
+    /**
+     * Creates the checkpoint at genesis for [bindingDigest]; repeated calls with an equal or newer epoch only advance the fence. [sequenceBound] is the
+     * most decisions the projection of this binding will ever hold: 320 for a finite binding (migration 0014), larger for a capacity binding (migration 0016).
+     * It is fixed at creation, and a call that names a different bound for an existing binding is refused.
+     */
+    fun open(bindingDigest: String, epoch: Long, sequenceBound: Long = FINITE_SEQUENCE_BOUND) {
         require(epoch > 0) { "epoch must be positive" }
+        require(sequenceBound in FINITE_SEQUENCE_BOUND..MAX_SEQUENCE_BOUND) { "sequence bound must be in $FINITE_SEQUENCE_BOUND..$MAX_SEQUENCE_BOUND" }
         tx { c ->
-            c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain)
-                VALUES (?, ?, 0, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setLong(2, epoch); it.setString(3, ledger.genesisChain); it.executeUpdate() }
+            c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain, sequence_bound)
+                VALUES (?, ?, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setLong(2, epoch); it.setString(3, chain.genesisChain); it.setLong(4, sequenceBound); it.executeUpdate() }
+            requireBound(c, bindingDigest, sequenceBound)
             fence(c, bindingDigest, epoch)
         }
     }
@@ -43,9 +57,11 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
      * creates the checkpoint at genesis with epoch 1; every later claim atomically raises the stored epoch by one. A process holding an older epoch
      * is refused with [StaleProjectionEpoch] on its next write, so two instances are never silent: the older one dies. (Docs: CALCIFY_FINITE_P3_OWNER_EPOCH_DESIGN.md, option B.)
      */
-    fun claim(bindingDigest: String): Long = tx { c ->
-        val created = c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain)
-            VALUES (?, 1, 0, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, ledger.genesisChain); it.executeUpdate() }
+    fun claim(bindingDigest: String, sequenceBound: Long = FINITE_SEQUENCE_BOUND): Long = tx { c ->
+        require(sequenceBound in FINITE_SEQUENCE_BOUND..MAX_SEQUENCE_BOUND) { "sequence bound must be in $FINITE_SEQUENCE_BOUND..$MAX_SEQUENCE_BOUND" }
+        val created = c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain, sequence_bound)
+            VALUES (?, 1, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, chain.genesisChain); it.setLong(3, sequenceBound); it.executeUpdate() }
+        requireBound(c, bindingDigest, sequenceBound)
         if (created == 1) 1L else c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET owner_epoch = owner_epoch + 1 WHERE binding_digest = ? RETURNING owner_epoch").use { ps ->
             ps.setString(1, bindingDigest); ps.executeQuery().use { r -> check(r.next()) { "checkpoint vanished during claim" }; r.getLong(1) }
         }
@@ -68,7 +84,7 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
             previous = decision.sequence
             require(input.digest() == decision.inputDigest) { "input does not match the decision's input digest" }
             if (decision.sequence <= lastSequence) { replays += decision; continue }
-            require(ledger.verifyLink(lastChain, lastSequence + 1, decision)) { "decision does not continue the checkpoint chain" }
+            require(chain.verifyLink(lastChain, lastSequence + 1, decision)) { "decision does not continue the checkpoint chain" }
             rows.add(decision, input)
             lastSequence = decision.sequence; lastChain = decision.checksum
         }
@@ -87,6 +103,14 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
                 .use { it.setLong(1, lastSequence); it.setString(2, lastChain); it.setString(3, bindingDigest); it.executeUpdate() }
         }
         applied
+    }
+
+    /** The projection of a binding keeps the sequence bound it was created with; a caller that expects another is looking at the wrong profile. */
+    private fun requireBound(c: Connection, bindingDigest: String, expected: Long) {
+        val stored = c.prepareStatement("SELECT sequence_bound FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
+            ps.setString(1, bindingDigest); ps.executeQuery().use { r -> check(r.next()) { "checkpoint vanished" }; r.getLong(1) }
+        }
+        check(stored == expected) { "the projection of this binding was created with sequence bound $stored, not $expected" }
     }
 
     private fun fence(c: Connection, bindingDigest: String, epoch: Long): Pair<Long, String> =
@@ -114,7 +138,9 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         val seq = ArrayList<Long>(); val ns = ArrayList<String>(); val dom = ArrayList<String>(); val aid = ArrayList<String>(); val disp = ArrayList<String>()
         val inDigest = ArrayList<String>(); val prior = ArrayList<String>(); val sum = ArrayList<String>()
         val oRun = ArrayList<String>(); val oVen = ArrayList<String>(); val oIns = ArrayList<String>(); val oEx = ArrayList<String>(); val oBuy = ArrayList<String>(); val oSell = ArrayList<String>()
-        val oQty = ArrayList<Long>(); val oPx = ArrayList<Long>(); val oCash = ArrayList<Long>()
+        val oQty = ArrayList<Long>(); val oPx = ArrayList<Long>(); val oCash = ArrayList<Long>(); val oShares = ArrayList<Long>(); val oStatus = ArrayList<String>()
+        /** Obligations inserted by this batch, by execution, so a settlement in the same batch inserts the row already settled instead of updating it afterwards. */
+        private val inBatch = HashMap<ExecutionKey, Int>()
         val aRun = ArrayList<String>(); val aVen = ArrayList<String>(); val aIns = ArrayList<String>(); val aEx = ArrayList<String>(); val aNo = ArrayList<Int>(); val aDisp = ArrayList<String>()
         val uRun = ArrayList<String>(); val uVen = ArrayList<String>(); val uIns = ArrayList<String>(); val uEx = ArrayList<String>()
         val net = LinkedHashMap<Pair<String, String>, Long>()
@@ -128,12 +154,17 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
                 is FinanceInput.Capture -> if (d.disposition == Disposition.CAPTURED) {
                     val e = input.execution
                     oRun += e.runId; oVen += e.venueSessionId; oIns += e.instrumentId; oEx += e.executionId; oBuy += input.buyer.value; oSell += input.seller.value
-                    oQty += input.quantity; oPx += input.priceNanos; oCash += Math.multiplyExact(input.quantity, input.priceNanos)
+                    oQty += input.quantity; oPx += input.priceNanos; oCash += Math.multiplyExact(input.quantity, input.priceNanos); oShares += input.quantity; oStatus += "PENDING"
+                    inBatch[e] = oEx.size - 1
                 }
                 is FinanceInput.Settle -> if (d.disposition in settleDispositions) {
                     val e = input.execution
                     aRun += e.runId; aVen += e.venueSessionId; aIns += e.instrumentId; aEx += e.executionId; aNo += input.attempt; aDisp += d.disposition.name
-                    if (d.disposition == Disposition.SETTLED) { uRun += e.runId; uVen += e.venueSessionId; uIns += e.instrumentId; uEx += e.executionId }
+                    if (d.disposition == Disposition.SETTLED) {
+                        val row = inBatch[e]
+                        if (row != null) { oStatus[row] = "SETTLED"; oCash[row] = 0L; oShares[row] = 0L }
+                        else { uRun += e.runId; uVen += e.venueSessionId; uIns += e.instrumentId; uEx += e.executionId }
+                    }
                 }
                 is FinanceInput.Fund -> Unit
             }
@@ -155,10 +186,10 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         }
         if (r.oEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_obligation(binding_digest, run_id, venue_session_id, instrument_id, execution_id, buyer_account_id,
             seller_account_id, quantity, price_nanos, status, cash_residual, share_residual)
-            SELECT ?, t.r, t.v, t.i, t.e, t.b, t.s, t.q, t.p, 'PENDING', t.c, t.q FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::bigint[], ?::bigint[], ?::bigint[])
-            AS t(r,v,i,e,b,s,q,p,c)""").use {
+            SELECT ?, t.r, t.v, t.i, t.e, t.b, t.s, t.q, t.p, t.st, t.c, t.sh FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::bigint[], ?::bigint[], ?::bigint[], ?::bigint[], ?::text[])
+            AS t(r,v,i,e,b,s,q,p,c,sh,st)""").use {
             it.setString(1, digest); it.setArray(2, text(r.oRun)); it.setArray(3, text(r.oVen)); it.setArray(4, text(r.oIns)); it.setArray(5, text(r.oEx)); it.setArray(6, text(r.oBuy))
-            it.setArray(7, text(r.oSell)); it.setArray(8, big(r.oQty)); it.setArray(9, big(r.oPx)); it.setArray(10, big(r.oCash)); it.executeUpdate()
+            it.setArray(7, text(r.oSell)); it.setArray(8, big(r.oQty)); it.setArray(9, big(r.oPx)); it.setArray(10, big(r.oCash)); it.setArray(11, big(r.oShares)); it.setArray(12, text(r.oStatus)); it.executeUpdate()
         }
         if (r.aEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_attempt(binding_digest, run_id, venue_session_id, instrument_id, execution_id, attempt, disposition)
             SELECT ?, t.r, t.v, t.i, t.e, t.n, t.d FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::int[], ?::text[]) AS t(r,v,i,e,n,d)""").use {
