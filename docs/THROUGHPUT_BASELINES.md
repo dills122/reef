@@ -1728,3 +1728,26 @@ same sequence is 7,222 default and 9,602 without the keys. Last-quarter rates ma
 Interpretation limits: constraint removal is a diagnostic, not a recommendation; the binding foreign keys are redundant with the per-call `FOR UPDATE` on the checkpoint, the attempt key and the
 action unique are integrity guards that would need a replacement argument before removal. The figures are the projector's database cost only; the Streams lane stand-in measured
 11.1k inputs/s (about 5.5k trades/s) and shares the machine, so end to end is lower than either. Hosted-runner and Linux-native Postgres figures not taken. No capacity claim.
+
+## Calcify finite finance ledger at scale, CAL-FIN-P3 (October 13, 2026)
+
+Diagnostic, laptop (Apple M1 Max, 64 GiB, JVM test heap 12 GiB), `S3cLedgerScaleSpikeTest` (research tag; branch `claude/calcify-ledger-scale-spike`, base master `7cea03270` plus PR 531). In-memory prototype in test code: O3a's decision
+semantics for capture, fund and settle, O(touched) work per decision (aggregates and local invariants instead of the whole-state check, one lookup per touched entity), and a path-compressed binary trie over SHA-256 of the entity key as the
+incremental commitment (design section 4.1). One thread, no overlay or abort journal, no store, no changelog, no Kafka. 5,000 accounts, random buyer and seller, one capture plus one settle per trade, which is **5 entities per pair and 2 decisions**.
+Rates are decisions per second over each growth step; "window" is 20,000 decisions.
+
+Correctness first: the prototype and the real `FinanceLedger` agree on disposition, recorded-or-not and legs for **48,000 inputs over 400 seeds (all 18 dispositions seen, per-class budgets enforced)**, and on positions after every input. The trie root after
+3,000 trades equals a full rebuild from the entity tables in two shuffled insertion orders; at 100,002 and 1,000,002 entities the incremental root equals the rebuild (0.4 s and 2.1 s). Two mutants (an off-by-one in the cash check, a trie that forgets to
+mark a path dirty) fail the differential and the rebuild test respectively.
+
+State digest on **every** decision (as O3a does), decisions per second at 100,002 / 1,000,002 / 5,000,002 entities: **23,208 / 21,720 / 19,062**; worst 20,000-decision window 22,114 / 17,367 / 13,778; heap 366 / 369 / 371 bytes per entity (1.77 GiB at 5,000,002);
+GC 0.1 / 0.5 / 2.6 s inside the steps. Root computed every 100 decisions (the decision then commits to a state digest only on those, a design change, not O3a): **40,291 / 34,477 / 26,912**, worst window 39,522 / 28,727 / 20,035. With no commitment at all (maps, aggregates, decision hash chain):
+129,527 / 225,646 / 199,195 and about 160 bytes per entity, so **the commitment is about 90 percent of the cost at 10^6 entities**. For comparison the current ledger's whole-state digest alone is 25 ms at 10,000 entities and 344 ms at 100,000 (CAL-FIN-S0, section 1.1 of the design),
+about 3 to 40 decisions/s, so the prototype is more than a 500x gain at 10^6 entities.
+
+Corrections kept: the first run of this spike (eager path hashing, an O(depth squared) descent to find a representative key) measured 22,992 / 17,847 / 12,701 at the same sizes and 33.2k / 23.6k / 16.2k with the root every 10 decisions; removing the descent and
+hashing lazily (each dirty branch once per root) gave the figures above. Hashing lazily alone moved the per-decision case from 17.8k to 17.2k at 10^6 entities, so the descent, not path hashing, was most of the avoidable cost.
+
+Interpretation limits: the prototype is not the design's engine (no staging overlay for multi-decision records, no store-backed view, no strict canonical encodings, no config-v2 pins), and the trie is the spike's transcription, not a reviewed specification.
+One run per cell. **The lane stand-in (CAL-FIN-P2, 24k to 35k inputs/s) and this ledger both run on the same Streams thread, so their costs add: serial composition is an estimate, about 11k to 17k decisions/s, below the 19k to 20k need, and was not measured together.**
+Heap of 370 bytes per entity makes the 15 million entities of a 5-minute session at 10,000 trades/s about 5.5 GiB in one ledger, which is why rotation is still needed. No capacity claim.

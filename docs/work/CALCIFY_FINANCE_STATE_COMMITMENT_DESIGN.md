@@ -133,6 +133,23 @@ sensitive to size (103 to 106/s at batch 1 at both sizes). Original figures are 
 The middle rows matter for a *rotating* ledger (Decision 1): a ledger that holds at most a few 10^4 entities needs only the middle rows, and
 the full engine may not be justified.
 
+### 1.5 S3c shape spike (2026-10-13): the O(touched) ledger, measured in memory
+
+After Decision 0 (a capacity profile is wanted), `S3cLedgerScaleSpikeTest` ([CAL-FIN-P3](../THROUGHPUT_BASELINES.md)) built a test-code prototype: the O3a semantics for capture, fund and settle with O(touched) work, aggregates and local invariants (section 5.5) in place of the
+whole-state check, and the section 4.1 trie as the commitment. It agrees with the real `FinanceLedger` on 48,000 random inputs (all dispositions, budgets, positions) and its incremental root equals a full rebuild in shuffled order at 10^5 and 10^6 entities.
+
+| Entities | Decisions/s, state digest every decision | Decisions/s, root every 100 | Heap per entity |
+| ---: | ---: | ---: | ---: |
+| 100,002 | 23,208 | 40,291 | 366 B |
+| 1,000,002 | 21,720 (worst window 17,367) | 34,477 | 369 B |
+| 5,000,002 | 19,062 (worst window 13,778) | 26,912 | 371 B |
+
+What it settles and what it does not:
+- **The shape holds.** The ledger stops being the term that scales with state: 21.7k decisions/s at 10^6 entities against about 3 to 40/s for the current whole-state digest. Rate falls slowly (about 12 percent over a 5x growth), and heap is linear at about 370 bytes per entity.
+- **The commitment is the cost** (about 90 percent at 10^6 entities). A state digest in every decision is what O3a does and is what costs the margin; committing the root every K decisions (K = 100: 34.5k/s) is a Decision-D question about what a decision commits to, not an engineering detail.
+- **Not shown:** the staging overlay and abort journal (section 5.3), a store-backed view, and the ledger and the Streams puts on one thread. The lane stand-in sustains 24k to 35k inputs/s (CAL-FIN-P2) without a ledger; with this ledger on the same thread the estimate is about 11k to 17k decisions/s, below the 19k to 20k need.
+  So one ledger, one thread, one partition does not reach the goalpost by itself; the open choices are (a) a cheaper commitment cadence (K), (b) rotation sized so the heap and the trie stay small (about 370 bytes per entity: 15 million entities per 5-minute session is about 5.5 GiB), (c) sharding into several lanes, which D8 and the account/instrument partitioning question govern.
+
 ## 2. Requirements
 
 - **R1 Cost, worst case.** Per decision, time and allocation are O(k * L) where `k` is the number of entities written (at most **7** for
